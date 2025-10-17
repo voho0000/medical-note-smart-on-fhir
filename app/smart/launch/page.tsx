@@ -1,3 +1,4 @@
+// app/smart/launch/page.tsx
 "use client"
 import { useEffect } from "react"
 
@@ -5,19 +6,26 @@ export default function SmartLaunchPage() {
   useEffect(() => {
     (async () => {
       const FHIR = (await import("fhirclient")).default
-      const url = new URL(location.href)
+
+      const url = new URL(window.location.href)
       const iss = url.searchParams.get("iss") || undefined
       const launch = url.searchParams.get("launch") || undefined
+
+      // baseUrl: dev= http://localhost:3000
+      //          GH Pages= https://<you>.github.io/<your-repo>
+      const assetPrefix =
+        ((window as any).__NEXT_DATA__?.assetPrefix as string | undefined) || ""
+      const baseUrl = `${window.location.origin}${assetPrefix}`.replace(/\/+$/, "")
 
       await FHIR.oauth2.authorize({
         clientId: "my_web_app",
         scope: "launch openid fhirUser patient/*.read online_access",
-        redirectUri: "/smart/callback",   // ← 只導到 callback
+        redirectUri: `${baseUrl}/smart/callback`.replace(/([^:]\/)\/+/g, "$1"),
         iss,
         launch,
         completeInTarget: true,
       })
-      // 注意：authorize() 會立刻 redirect，後面不會執行
+      // authorize() 會 redirect，後面不會執行
     })()
   }, [])
 
