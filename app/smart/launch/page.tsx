@@ -10,17 +10,16 @@ export default function SmartLaunchPage() {
       const iss = url.searchParams.get("iss") || undefined
       const launch = url.searchParams.get("launch") || undefined
 
-      // 🔧 堅固版 baseUrl 推導：
-      // 1) 若在 github.io（專案頁），固定加上 repo 路徑
-      // 2) 其他環境（localhost/自家域名）維持空字串
+      // 🔒 最穩：直接看 pathname 是否在 repo 子路徑底下
       const repoBase = "/medical-note-smart-on-fhir"
-      const isGithubPages = window.location.hostname.endsWith("github.io")
-      const prefix = isGithubPages ? repoBase : ""
+      const onRepoBase = window.location.pathname.startsWith(`${repoBase}/`)
+      const prefix = onRepoBase ? repoBase : "" // 本機(或根域名)為空字串
 
       const baseUrl = `${window.location.origin}${prefix}`.replace(/\/+$/, "")
-      const redirectUri = `${baseUrl}/smart/callback` // 無結尾斜線
+      const redirectUri = `${baseUrl}/smart/callback` // 無結尾斜線（和 Pages 設定一致）
 
-      // Debug 一下實際送出的值
+      console.log("[SMART] href=", window.location.href)
+      console.log("[SMART] pathname=", window.location.pathname)
       console.log("[SMART] baseUrl=", baseUrl, "redirectUri=", redirectUri)
 
       await FHIR.oauth2.authorize({
