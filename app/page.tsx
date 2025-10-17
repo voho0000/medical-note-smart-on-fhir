@@ -1,9 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import dynamic from "next/dynamic"
 import { PatientInfoCard } from "../components/PatientInfoCard"
 import { ApiKeyField } from "../components/ApiKeyField"
-import { AsrPanel } from "../components/AsrPanel"
+// ⬇️ 以動態載入並停用 SSR 的方式載入會用到瀏覽器 API 的元件
+const AsrPanel = dynamic(
+  () => import("../components/AsrPanel").then((m) => m.AsrPanel),
+  { ssr: false }
+)
 import { PromptEditor } from "../components/PromptEditor"
 import { GptPanel } from "../components/GptPanel"
 import { useSmartPatient } from "../lib/useSmartPatient"
