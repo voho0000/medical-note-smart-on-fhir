@@ -19,7 +19,7 @@ function calculateAge(b?: string) {
 }
 
 export function GptPanel({
-  prompt, asrText, gptResponse, setGptResponse, model = "gpt-4o", patient
+  prompt, asrText, gptResponse, setGptResponse, model = "gpt-4.1", patient
 }: {
   prompt: string; asrText: string; gptResponse: string; setGptResponse: (v: string) => void; model?: string; patient?: PatientLite | null
 }) {

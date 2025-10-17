@@ -4,37 +4,41 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 
 type StorageMode = "session" | "local"
-
-type Ctx = {
-  apiKey: string
-  setApiKey: (k: string) => void
-  clearApiKey: () => void
-}
+type Ctx = { apiKey: string; setApiKey: (k: string) => void; clearApiKey: () => void }
 
 const ApiKeyContext = createContext<Ctx | null>(null)
 
 export function ApiKeyProvider({
   children,
-  storage = "session",     // "session" | "local"
-  storageKey = "OPENAI_API_KEY"
+  storage = "session",
+  storageKey = "OPENAI_API_KEY",
 }: {
   children: React.ReactNode
   storage?: StorageMode
   storageKey?: string
 }) {
-  const store = storage === "local" ? localStorage : sessionStorage
+  const isBrowser = typeof window !== "undefined"
+
+  // 只在瀏覽器端決定要用哪個 storage；SSR 時為 null
+  const store: Storage | null = useMemo(() => {
+    if (!isBrowser) return null
+    return storage === "local" ? window.localStorage : window.sessionStorage
+  }, [isBrowser, storage])
+
   const [apiKey, setApiKeyState] = useState("")
 
+  // 初始載入：僅在瀏覽器讀 storage
   useEffect(() => {
+    if (!store) return
     try {
       const v = store.getItem(storageKey)
       if (v) setApiKeyState(v)
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storage, storageKey])
+  }, [store, storageKey])
 
   const setApiKey = (k: string) => {
     setApiKeyState(k)
+    if (!store) return
     try {
       if (k) store.setItem(storageKey, k)
       else store.removeItem(storageKey)
