@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Medical Note · SMART on FHIR (Next.js)
 
-## Getting Started
+Minimal SMART on FHIR demo built with **Next.js App Router**, **shadcn/ui (Radix)**, and **fhirclient**.  
+Fetch Patient data from a SMART sandbox, record audio (Whisper), and generate GPT summaries.
 
-First, run the development server:
+> Status: WIP — interfaces and APIs may change.
+
+---
+
+## Features
+- SMART on FHIR OAuth (PKCE): `/smart/launch` → `/smart/callback`
+- Fetch **Patient** via `fhirclient` (`useSmartPatient` hook)
+- Audio recording + Whisper transcription
+- GPT-based summary generation
+- API key input stored in browser (session/local storage)
+
+---
+
+## Prerequisites
+- Node **18.18+** or **20.x LTS**
+- npm / pnpm / yarn (examples use npm)
+
+---
+
+## Install & Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# install deps
+npm i
+
+# development (webpack — recommended for this repo)
+npm run dev:webpack
+
+# production build
+npm run build
+
+# start production server
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
+```json
+{
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "dev:webpack": "next dev",
+    "build": "next build --turbopack",
+    "start": "next start"
+  }
+}
+```
+Use npm run dev:webpack during development. Turbopack scripts are available if you want to try them.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Use with SMART Sandbox
 
-## Learn More
+1. Start dev server: http://localhost:3000
 
-To learn more about Next.js, take a look at the following resources:
+2. In the SMART App Launcher (or your sandbox app registration), set:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+   - Launch URL: http://localhost:3000/smart/launch
+   - Redirect URL: http://localhost:3000/smart/callback
+   - Client Type: Public (PKCE)
+   - Client ID: my_web_app (or your registered ID)
+   - Scopes: launch openid fhirUser patient/*.read online_access
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. Launch → complete auth → redirected back to the app → Patient info loads on the home page.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Don’t refresh /smart/callback directly; always start from /smart/launch.

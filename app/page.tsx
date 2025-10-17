@@ -16,7 +16,9 @@ export default function Page() {
 
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-6">
-      <h1 className="text-3xl font-semibold text-center">SMART on FHIR App</h1>
+    <h1 className="text-3xl font-semibold text-center">
+      Medical Note · SMART on FHIR
+    </h1>
       {loading ? (
         <div className="rounded-md border p-4 text-sm text-muted-foreground">Loading patient…</div>
       ) : (
