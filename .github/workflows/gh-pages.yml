@@ -1,9 +1,8 @@
 name: Deploy to GitHub Pages
-
 on:
   push:
-    branches: [ main ]   # 如果你的預設分支不是 main，改成你的分支
-  workflow_dispatch: {}  # 可手動觸發
+    branches: [ main ]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -28,6 +27,7 @@ jobs:
         run: npm run build:gh
         env:
           GITHUB_PAGES: "true"
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"   # 👈 disable lightningcss in CI
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
