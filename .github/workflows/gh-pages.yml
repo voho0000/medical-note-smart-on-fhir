@@ -2,7 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ] # 你主要開發的分支
+    branches: [ main ]   # 如果你的預設分支不是 main，改成你的分支
+  workflow_dispatch: {}  # 可手動觸發
 
 permissions:
   contents: read
@@ -17,28 +18,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build (GH Pages)
-        run: |
-          export GITHUB_PAGES=true
-          npm run build
-        # 如果需要公開環境變數，這裡可以加 (範例)
-        # env:
-        #   NEXT_PUBLIC_SOMETHING: ${{ secrets.NEXT_PUBLIC_SOMETHING }}
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - run: npm ci
+      - name: Build static export for GH Pages
+        run: npm run build:gh
+        env:
+          GITHUB_PAGES: "true"
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
 
@@ -49,6 +39,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
