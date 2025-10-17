@@ -15,11 +15,15 @@ export default function SmartLaunchPage() {
         ((window as any).__NEXT_DATA__?.assetPrefix as string | undefined) || ""
       const baseUrl = `${window.location.origin}${assetPrefix}`.replace(/\/+$/, "")
 
+      const redirectUri = `${baseUrl}/smart/callback` // ← 無結尾斜線
+
+      // 小工具：在瀏覽器 console 看看實際送出去的是什麼
+      console.log("[SMART] baseUrl=", baseUrl, "redirectUri=", redirectUri)
+
       await FHIR.oauth2.authorize({
         clientId: "my_web_app",
         scope: "launch openid fhirUser patient/*.read online_access",
-        // 這裡改成帶結尾斜線
-        redirectUri: `${baseUrl}/smart/callback/`.replace(/([^:]\/)\/+/g, "$1"),
+        redirectUri,
         iss,
         launch,
         completeInTarget: true,
