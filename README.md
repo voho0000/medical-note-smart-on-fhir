@@ -49,7 +49,7 @@ npm start
   }
 }
 ```
-Use npm run dev:webpack during development. Turbopack scripts are available if you want to try them.
+Use `npm run dev:webpack` during development. Turbopack scripts are available if you want to try them.
 
 ---
 
