@@ -1,30 +1,26 @@
 // app/page.tsx
 "use client"
 
+import { PatientProvider } from "@/lib/providers/PatientProvider"
 import ClinicalSummaryFeature from "@/features/clinical-summary/Feature"
 import MedicalNoteFeature from "@/features/medical-note/Feature"
-import { PatientProvider } from "@/lib/providers/PatientProvider"
-import { ApiKeyProvider } from "@/lib/providers/ApiKeyProvider"
 
 export default function Page() {
   return (
     <PatientProvider>
-      <ApiKeyProvider storage="session">
-        <div className="mx-auto max-w-6xl p-6">
-          <h1 className="mb-6 text-2xl font-semibold text-center">
-            SMART on FHIR · Clinical Summary & Medical Note
-          </h1>
-
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div>
-              <ClinicalSummaryFeature />
-            </div>
-            <div>
-              <MedicalNoteFeature />
-            </div>
-          </div>
-        </div>
-      </ApiKeyProvider>
+      <div className="flex h-svh flex-col overflow-hidden">
+        <header className="shrink-0 border-b px-6 py-3">
+          <h1 className="text-xl font-semibold">Clinical Summary | Medical Note</h1>
+        </header>
+        <main className="grid flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">
+          <section className="min-h-0 overflow-y-auto">
+            <ClinicalSummaryFeature />
+          </section>
+          <section className="min-h-0 overflow-y-auto">
+            <MedicalNoteFeature />
+          </section>
+        </main>
+      </div>
     </PatientProvider>
   )
 }
