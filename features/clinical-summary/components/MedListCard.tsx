@@ -1,121 +1,181 @@
+// features/clinical-summary/components/MedListCard.tsx
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { usePatient } from "@/lib/providers/PatientProvider"
 
-type MedItem = {
+type Coding = { system?: string; code?: string; display?: string }
+type CodeableConcept = { text?: string; coding?: Coding[] }
+
+type MedicationRequest = {
+  resourceType: "MedicationRequest"
   id?: string
-  display?: string
-  authoredOn?: string
   status?: string
-  source?: "MedicationRequest" | "MedicationStatement"
+  intent?: string
+  medicationCodeableConcept?: CodeableConcept
+  authoredOn?: string
+  dosageInstruction?: {
+    text?: string
+    route?: CodeableConcept
+    timing?: { repeat?: { frequency?: number; period?: number; periodUnit?: string } }
+  }[]
+}
+
+type MedicationStatement = {
+  resourceType: "MedicationStatement"
+  id?: string
+  status?: string
+  effectiveDateTime?: string
+  medicationCodeableConcept?: CodeableConcept
+  dosage?: {
+    text?: string
+    route?: CodeableConcept
+    timing?: { repeat?: { frequency?: number; period?: number; periodUnit?: string } }
+  }[]
+}
+
+type Row = {
+  id: string
+  title: string
+  status: string
+  detail?: string
+  when?: string
+}
+
+function ccText(cc?: CodeableConcept) {
+  return cc?.text || cc?.coding?.[0]?.display || cc?.coding?.[0]?.code || "—"
+}
+
+function fmtDate(d?: string) {
+  if (!d) return ""
+  try { return new Date(d).toLocaleString() } catch { return d }
 }
 
 export function MedListCard() {
   const { patient } = usePatient()
-  const [items, setItems] = useState<MedItem[]>([])
+  const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    let mounted = true
+    let alive = true
     ;(async () => {
       if (!patient?.id) return
       setLoading(true)
-      setError(null)
+      setErr(null)
+
       try {
         const FHIR = (await import("fhirclient")).default
         const client = await FHIR.oauth2.ready()
+        const pid = encodeURIComponent(patient.id)
 
-        const result: MedItem[] = []
+        // 1) 只取 active 的 MedicationRequest
+        const reqBundle = await client.request(
+          `MedicationRequest?patient=${pid}&status=active&_count=100&_sort=-authoredon`,
+          { flat: true }
+        ).catch(() => []) as any[]
 
-        // Primary: MedicationRequest
-        try {
-          const mr = await client.request(`MedicationRequest?patient=${patient.id}&_count=50`)
-          const entries = mr?.entry ?? []
-          for (const e of entries) {
-            const r = e.resource
-            if (r?.resourceType === "MedicationRequest") {
-              const medDisp =
-                r.medicationCodeableConcept?.text ||
-                r.medicationCodeableConcept?.coding?.[0]?.display ||
-                r.medicationReference?.display
-              result.push({
-                id: r.id,
-                display: medDisp || "Medication",
-                authoredOn: r.authoredOn,
-                status: r.status,
-                source: "MedicationRequest",
-              })
-            }
-          }
-        } catch { /* ignore */ }
+        let rowsTmp: Row[] = []
 
-        // Fallback: MedicationStatement
-        if (result.length === 0) {
-          try {
-            const ms = await client.request(`MedicationStatement?patient=${patient.id}&_count=50`)
-            const entries = ms?.entry ?? []
-            for (const e of entries) {
-              const r = e.resource
-              if (r?.resourceType === "MedicationStatement") {
-                const medDisp =
-                  r.medicationCodeableConcept?.text ||
-                  r.medicationCodeableConcept?.coding?.[0]?.display ||
-                  r.medicationReference?.display
-                result.push({
-                  id: r.id,
-                  display: medDisp || "Medication",
-                  authoredOn: r.effectiveDateTime,
-                  status: r.status,
-                  source: "MedicationStatement",
-                })
+        const reqs = (reqBundle || []).filter(r => r.resourceType === "MedicationRequest") as MedicationRequest[]
+        if (reqs.length > 0) {
+          rowsTmp = reqs
+            // 以防萬一再保險過濾一次 active
+            .filter(r => (r.status || "").toLowerCase() === "active")
+            .map(r => {
+              const dose = r.dosageInstruction?.[0]
+              const doseTxt = dose?.text
+              const route = ccText(dose?.route)
+              const timing = dose?.timing?.repeat
+                ? `${dose.timing.repeat.frequency ?? ""} / ${dose.timing.repeat.period ?? ""}${dose.timing.repeat.periodUnit ?? ""}`.trim()
+                : ""
+
+              const detail = [doseTxt, route !== "—" ? `Route: ${route}` : "", timing !== " / " ? `Freq: ${timing}` : ""]
+                .filter(Boolean)
+                .join(" · ")
+
+              return {
+                id: r.id || Math.random().toString(36),
+                title: ccText(r.medicationCodeableConcept),
+                status: r.status || "active",
+                detail: detail || undefined,
+                when: fmtDate(r.authoredOn),
               }
-            }
-          } catch { /* ignore */ }
+            })
+        } else {
+          // 2) 沒有 MR 時，退回 MedicationStatement（同樣只拿 active）
+          const stmBundle = await client.request(
+            `MedicationStatement?patient=${pid}&status=active&_count=100&_sort=-_lastUpdated`,
+            { flat: true }
+          ).catch(() => []) as any[]
+
+          const stms = (stmBundle || []).filter(r => r.resourceType === "MedicationStatement") as MedicationStatement[]
+          rowsTmp = stms
+            .filter(s => (s.status || "").toLowerCase() === "active")
+            .map(s => {
+              const dose = s.dosage?.[0]
+              const doseTxt = dose?.text
+              const route = ccText(dose?.route)
+              const timing = dose?.timing?.repeat
+                ? `${dose.timing.repeat.frequency ?? ""} / ${dose.timing.repeat.period ?? ""}${dose.timing.repeat.periodUnit ?? ""}`.trim()
+                : ""
+
+              const detail = [doseTxt, route !== "—" ? `Route: ${route}` : "", timing !== " / " ? `Freq: ${timing}` : ""]
+                .filter(Boolean)
+                .join(" · ")
+
+              return {
+                id: s.id || Math.random().toString(36),
+                title: ccText(s.medicationCodeableConcept),
+                status: s.status || "active",
+                detail: detail || undefined,
+                when: fmtDate(s.effectiveDateTime),
+              }
+            })
         }
 
-        if (mounted) setItems(result)
+        if (alive) setRows(rowsTmp)
       } catch (e: any) {
-        if (mounted) setError(e?.message || "Failed to load medications")
+        console.error(e)
+        if (alive) setErr(e?.message || "Failed to load medications")
       } finally {
-        if (mounted) setLoading(false)
+        if (alive) setLoading(false)
       }
     })()
-    return () => { mounted = false }
+    return () => { alive = false }
   }, [patient?.id])
 
-  return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
-      <div className="mb-2 text-base font-semibold">Medications</div>
+  const body = useMemo(() => {
+    if (loading) return <div className="text-sm text-muted-foreground">Loading medications…</div>
+    if (err) return <div className="text-sm text-red-600">{err}</div>
+    if (rows.length === 0) return <div className="text-sm text-muted-foreground">No active medications.</div>
 
-      {loading ? (
-        <div className="text-sm text-muted-foreground">Loading medications…</div>
-      ) : error ? (
-        <div className="text-sm text-red-500">{error}</div>
-      ) : items.length === 0 ? (
-        <div className="text-sm text-muted-foreground">No medications.</div>
-      ) : (
-        <ul className="divide-y">
-          {items.map((m) => (
-            <li key={m.id || Math.random()} className="py-2">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{m.display}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {m.source} {m.status ? `• ${m.status}` : ""}
-                  </div>
-                </div>
-                {m.authoredOn && (
-                  <div className="ml-2 shrink-0 text-xs text-muted-foreground">
-                    {new Date(m.authoredOn).toLocaleDateString()}
-                  </div>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    return (
+      <ul className="space-y-2">
+        {rows.map(r => (
+          <li key={r.id} className="rounded-md border p-3">
+            <div className="flex items-baseline justify-between">
+              <div className="font-medium">{r.title}</div>
+              <div className="text-xs text-muted-foreground">{r.when}</div>
+            </div>
+            {r.detail && <div className="text-sm text-muted-foreground mt-1">{r.detail}</div>}
+            {/* status 幾乎都會是 active，保留顯示以利除錯 */}
+            <div className="mt-1 text-xs">
+              <span className="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-emerald-700 ring-1 ring-emerald-200">
+                {r.status}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )
+  }, [rows, loading, err])
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Medications (Active)</CardTitle></CardHeader>
+      <CardContent>{body}</CardContent>
+    </Card>
   )
 }
