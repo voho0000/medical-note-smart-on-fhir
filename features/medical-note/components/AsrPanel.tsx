@@ -1,17 +1,15 @@
-// components/AsrPanel.tsx
+// features/medical-note/components/AsrPanel.tsx
 "use client"
-
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ReactMediaRecorder } from "react-media-recorder"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { useApiKey } from "./ApiKeyProvider"
+import { useApiKey } from "@/lib/providers/ApiKeyProvider"
+import { useNote } from "../providers/NoteProvider"
 
-export function AsrPanel({ asrText, setAsrText }: {
-  asrText: string
-  setAsrText: Dispatch<SetStateAction<string>>
-}) {
+export function AsrPanel() {
+  const { asrText, setAsrText } = useNote()
   const { apiKey } = useApiKey()
   const [isRecording, setIsRecording] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -33,12 +31,11 @@ export function AsrPanel({ asrText, setAsrText }: {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}` },
         body: fd,
-    })
+      })
       const j = await r.json()
       const text = j?.text || "Failed to transcribe audio."
       setAsrText(prev => (prev ? prev + "\n" : "") + text)
-    } catch (e) {
-      console.error(e)
+    } catch {
       setAsrText(prev => (prev ? prev + "\n" : "") + "Failed to transcribe audio. Please try again.")
     } finally { setIsLoading(false) }
   }, [apiKey, setAsrText])
@@ -66,7 +63,7 @@ export function AsrPanel({ asrText, setAsrText }: {
             </div>
           )}
         />
-        <Textarea value={asrText} onChange={(e) => setAsrText(e.target.value)} placeholder="ASR text will appear here" className="min-h-[160px]" spellCheck={false} />
+        <Textarea value={asrText} onChange={(e) => setAsrText(e.target.value)} className="min-h-[160px]" spellCheck={false} />
       </CardContent>
     </Card>
   )

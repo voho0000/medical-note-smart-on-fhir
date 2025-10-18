@@ -1,4 +1,4 @@
-// components/ApiKeyProvider.tsx
+// lib/providers/ApiKeyProvider.tsx
 "use client"
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
@@ -19,7 +19,6 @@ export function ApiKeyProvider({
 }) {
   const isBrowser = typeof window !== "undefined"
 
-  // 只在瀏覽器端決定要用哪個 storage；SSR 時為 null
   const store: Storage | null = useMemo(() => {
     if (!isBrowser) return null
     return storage === "local" ? window.localStorage : window.sessionStorage
@@ -27,7 +26,6 @@ export function ApiKeyProvider({
 
   const [apiKey, setApiKeyState] = useState("")
 
-  // 初始載入：僅在瀏覽器讀 storage
   useEffect(() => {
     if (!store) return
     try {
