@@ -1,9 +1,10 @@
 // features/clinical-summary/components/ReportsCard.tsx
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
 
 type Coding = { system?: string; code?: string; display?: string }
 type Quantity = { value?: number; unit?: string }
@@ -34,15 +35,17 @@ type Observation = {
   encounter?: { reference?: string }
 }
 
-type DiagnosticReport = {
-  resourceType: "DiagnosticReport"
-  id?: string
-  category?: CodeableConcept[]
-  code?: CodeableConcept
-  status?: string
-  issued?: string
-  effectiveDateTime?: string
-  result?: { reference?: string }[]
+interface DiagnosticReport {
+  id?: string;
+  resourceType: "DiagnosticReport";
+  code?: CodeableConcept;
+  status?: string;
+  issued?: string;
+  effectiveDateTime?: string;
+  result?: { reference?: string }[];
+  category?: CodeableConcept | CodeableConcept[];
+  // provider 會塞進來的展開欄位
+  _observations?: Observation[];
 }
 
 type Row = { id: string; title: string; meta: string; obs: Observation[] }
@@ -83,170 +86,104 @@ function getInterpTag(concept?: CodeableConcept) {
   if (!code) return null
   let label = code
   let style = "bg-muted text-muted-foreground"
-  if (["H", "HI", "HIGH", "ABOVE", ">", "HH", "CRIT-HI"].includes(code)) {
-    label = code === "HH" ? "Critical High" : "High"
-    style = "bg-red-100 text-red-700 border border-red-200"
-  } else if (["L", "LO", "LOW", "BELOW", "<", "LL", "CRIT-LO"].includes(code)) {
-    label = code === "LL" ? "Critical Low" : "Low"
-    style = "bg-blue-100 text-blue-700 border border-blue-200"
-  } else if (["A", "ABN", "ABNORMAL"].includes(code)) {
-    label = "Abnormal"
-    style = "bg-amber-100 text-amber-700 border border-amber-200"
-  } else if (["POS", "POSITIVE", "DETECTED", "REACTIVE"].includes(code)) {
-    label = "Positive"
-    style = "bg-orange-100 text-orange-700 border border-orange-200"
-  } else if (["NEG", "NEGATIVE", "NOT DETECTED", "NONREACTIVE"].includes(code)) {
-    label = "Negative"
-    style = "bg-emerald-100 text-emerald-700 border border-emerald-200"
-  } else if (["N", "NORMAL"].includes(code)) {
-    label = "Normal"
-    style = "bg-gray-100 text-gray-600 border border-gray-200"
-  }
+  if (["H","HI","HIGH","ABOVE",">","HH","CRIT-HI"].includes(code)) { label = code==="HH"?"Critical High":"High"; style="bg-red-100 text-red-700 border border-red-200" }
+  else if (["L","LO","LOW","BELOW","<","LL","CRIT-LO"].includes(code)) { label = code==="LL"?"Critical Low":"Low"; style="bg-blue-100 text-blue-700 border border-blue-200" }
+  else if (["A","ABN","ABNORMAL"].includes(code)) { label="Abnormal"; style="bg-amber-100 text-amber-700 border border-amber-200" }
+  else if (["POS","POSITIVE","DETECTED","REACTIVE"].includes(code)) { label="Positive"; style="bg-orange-100 text-orange-700 border border-orange-200" }
+  else if (["NEG","NEGATIVE","NOT DETECTED","NONREACTIVE"].includes(code)) { label="Negative"; style="bg-emerald-100 text-emerald-700 border border-emerald-200" }
+  else if (["N","NORMAL"].includes(code)) { label="Normal"; style="bg-gray-100 text-gray-600 border border-gray-200" }
   return { label, style }
 }
 
 export function ReportsCard() {
-  const [rows, setRows] = useState<Row[]>([])
-  const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  const { diagnosticReports = [], observations = [], isLoading, error } = useClinicalData()
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      setLoading(true); setErr(null)
-      try {
-        const FHIR = (await import("fhirclient")).default
-        const client = await FHIR.oauth2.ready()
-        const pid = await client.getPatientId()
-        if (!pid) { if (alive) setErr("No patient id from session."); return }
-        const pidQ = encodeURIComponent(pid)
+  // 將 DR 轉成 rows，並記錄已出現之 Observation IDs
+  const { reportRows, seenIds } = useMemo(() => {
+    const rows: Row[] = [];
+    const seen = new Set<string>();
+    
+    (diagnosticReports as DiagnosticReport[]).forEach((dr) => {
+      if (!dr || dr.resourceType !== "DiagnosticReport") return;
+      
+      const obs = Array.isArray(dr._observations) 
+        ? dr._observations.filter((o): o is Observation => !!o?.resourceType && o.resourceType === 'Observation')
+        : [];
+      
+      obs.forEach(o => { 
+        if (o?.id) seen.add(o.id);
+      });
+      
+      if (obs.length === 0) return;
+      
+      const category = Array.isArray(dr.category) 
+        ? dr.category.map(c => ccText(c)).filter(Boolean).join(', ')
+        : ccText(dr.category);
+      
+      rows.push({
+        id: dr.id || Math.random().toString(36),
+        title: ccText(dr.code) || "Unnamed Report",
+        meta: `${category || "Laboratory"} • ${dr.status || "—"} • ${fmtDate(dr.issued || dr.effectiveDateTime)}`,
+        obs
+      });
+    });
+    
+    return { reportRows: rows, seenIds: seen };
+  }, [diagnosticReports]);
 
-        async function fetchDR(category?: "laboratory" | "LAB") {
-          const base = `DiagnosticReport?patient=${pidQ}&_count=50&_sort=-date&_include=DiagnosticReport:result`
-          const url = category ? `${base}&category=${category}` : base
-          const bundle = await client.request(url, { flat: true }).catch(() => null)
-          if (!bundle || !Array.isArray(bundle)) return [] as Row[]
+  // 找出沒有掛在 DR 的「孤兒」Observation（常見：生化），做分組
+  const orphanRows: Row[] = useMemo(() => {
+    if (!Array.isArray(observations)) return [];
+    
+    // 1) 篩掉已在 DR 內者
+    const orphan = observations.filter((o): o is Observation => 
+      o?.resourceType === 'Observation' && (!o.id || !seenIds.has(o.id))
+    );
 
-          const reports: DiagnosticReport[] = []
-          const obsIndex = new Map<string, Observation>()
-          for (const r of bundle as any[]) {
-            if (r.resourceType === "DiagnosticReport") reports.push(r as DiagnosticReport)
-            if (r.resourceType === "Observation" && r.id) obsIndex.set(r.id, r as Observation)
-          }
+    // 2) 只保留有意義的 panel/數值
+    const panels = orphan.filter((o) =>
+      (Array.isArray(o.component) && o.component.length > 0) ||
+      (Array.isArray(o.hasMember) && o.hasMember.length > 0) ||
+      !!o.valueQuantity || !!o.valueString
+    )
 
-          async function expandHasMembers(o: Observation): Promise<Observation[]> {
-            if (!o?.hasMember?.length) return [o]
-            const list: Observation[] = []
-            for (const m of o.hasMember) {
-              const id = m.reference?.split("/")[1]
-              if (!id) continue
-              if (obsIndex.has(id)) list.push(obsIndex.get(id)!)
-              else {
-                try {
-                  const child = await client.request(`Observation/${id}`)
-                  if (child?.resourceType === "Observation") {
-                    list.push(child as Observation)
-                    if (child.id) obsIndex.set(child.id, child as Observation)
-                  }
-                } catch {}
-              }
-            }
-            return [o, ...list]
-          }
+    // 3) 依 encounter + 日期 + 主碼分組（把同次抽血的生化項目聚在一起）
+    const groupKey = (o: Observation) =>
+      (o.encounter?.reference || "") + "|" +
+      (o.effectiveDateTime ? new Date(o.effectiveDateTime).toISOString().slice(0,10) : "unknown") + "|" +
+      (ccText(o.code) || "Observation")
 
-          const rowsDR: Row[] = []
-          for (const dr of reports) {
-            const collected: Observation[] = []
-            for (const r of dr.result || []) {
-              const id = r.reference?.split("/")[1]
-              if (!id) continue
-              const cached = obsIndex.get(id)
-              if (cached) {
-                const expanded = await expandHasMembers(cached)
-                collected.push(...expanded)
-              } else {
-                try {
-                  const fetched = await client.request(`Observation/${id}`)
-                  if (fetched?.resourceType === "Observation") {
-                    const expanded = await expandHasMembers(fetched as Observation)
-                    collected.push(...expanded)
-                  }
-                } catch {}
-              }
-            }
-            rowsDR.push({
-              id: dr.id || Math.random().toString(36),
-              title: ccText(dr.code),
-              meta: `Laboratory • ${dr.status || "—"} • ${fmtDate(dr.issued || dr.effectiveDateTime)}`,
-              obs: collected,
-            })
-          }
-          return rowsDR
-        }
+    const groups = new Map<string, Observation[]>()
+    for (const o of panels) {
+      const k = groupKey(o)
+      const arr = groups.get(k) || []
+      arr.push(o)
+      groups.set(k, arr)
+    }
 
-        // 先試 DiagnosticReport
-        let allRows = [] as Row[]
-        for (const cat of [undefined, "laboratory", "LAB"] as const) {
-          const r = await fetchDR(cat as any)
-          if (r.length > 0) { allRows = r; break }
-        }
-
-        // 沒有 DR 再回退 Observation 分組
-        if (allRows.length === 0) {
-          let obsFlat = await client
-            .request(`Observation?patient=${pidQ}&category=laboratory&_count=100&_sort=-date`, { flat: true })
-            .catch(() => null)
-
-          if (!obsFlat || (Array.isArray(obsFlat) && obsFlat.length === 0)) {
-            obsFlat = await client
-              .request(`Observation?patient=${pidQ}&_count=200&_sort=-date`, { flat: true })
-              .catch(() => null)
-          }
-
-          const obsList: Observation[] = Array.isArray(obsFlat)
-            ? (obsFlat as any[]).filter(r => r.resourceType === "Observation")
-            : []
-
-          const panels = obsList.filter(o =>
-            (Array.isArray(o.component) && o.component.length > 0) ||
-            (Array.isArray(o.hasMember) && o.hasMember.length > 0) ||
-            !!o.valueQuantity || !!o.valueString
-          )
-
-          const groupKey = (o: Observation) =>
-            (o.encounter?.reference || "") + "|" +
-            (o.effectiveDateTime ? new Date(o.effectiveDateTime).toISOString().slice(0, 10) : "unknown") + "|" +
-            (ccText(o.code) || "obs")
-
-          const groups = new Map<string, Observation[]>()
-          for (const o of panels) {
-            const k = groupKey(o)
-            const arr = groups.get(k) || []
-            arr.push(o)
-            groups.set(k, arr)
-          }
-
-          allRows = Array.from(groups.entries()).map(([k, lst]) => {
-            const first = lst[0]
-            return {
-              id: k,
-              title: ccText(first.code),
-              meta: `Observation Group • ${fmtDate(first.effectiveDateTime)}`,
-              obs: lst,
-            }
-          })
-        }
-
-        if (alive) setRows(allRows)
-      } catch (e: any) {
-        console.error(e)
-        if (alive) setErr(e?.message || "Failed to load reports")
-      } finally {
-        if (alive) setLoading(false)
+    return Array.from(groups.entries()).map(([k, lst]) => {
+      const first = lst[0]
+      return {
+        id: `orphan:${k}`,
+        title: ccText(first.code),
+        meta: `Observation Group • ${fmtDate(first.effectiveDateTime)}`,
+        obs: lst,
       }
-    })()
-    return () => { alive = false }
-  }, [])
+    })
+  }, [observations, seenIds])
+
+  // 合併並按時間排序（新→舊）
+  const rows: Row[] = useMemo(() => {
+    const all = [...reportRows, ...orphanRows];
+    all.sort((a, b) => {
+      const dateA = a.obs[0]?.effectiveDateTime;
+      const dateB = b.obs[0]?.effectiveDateTime;
+      const timeA = dateA ? new Date(dateA).getTime() : 0;
+      const timeB = dateB ? new Date(dateB).getTime() : 0;
+      return timeB - timeA; // 降序排序（新的在前）
+    });
+    return all;
+  }, [reportRows, orphanRows]);
 
   function ObservationBlock({ o }: { o: Observation }) {
     const title = ccText(o.code)
@@ -301,40 +238,80 @@ export function ReportsCard() {
     )
   }
 
-  const body = useMemo(() => {
-    if (loading) return <div className="text-sm text-muted-foreground">Loading reports…</div>
-    if (err) return <div className="text-sm text-red-600">{err}</div>
-    if (rows.length === 0) return <div className="text-sm text-muted-foreground">No lab reports.</div>
-
-    const defaultOpen = rows.slice(0, 2).map(r => r.id)
-
+  if (isLoading) {
     return (
-      <Accordion type="multiple" defaultValue={defaultOpen} className="w-full">
-        {rows.map(({ id, title, meta, obs }) => (
-          <AccordionItem key={id} value={id} className="border rounded-md px-2">
-            <AccordionTrigger className="py-3">
-              <div className="flex flex-col items-start text-left">
-                <div className="font-medium">{title}</div>
-                <div className="text-xs text-muted-foreground">{meta}</div>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pb-4">
-              <div className="space-y-2">
-                {obs.length > 0
-                  ? obs.map(o => <ObservationBlock key={o.id || Math.random().toString(36)} o={o} />)
-                  : <div className="text-sm text-muted-foreground">No observations.</div>}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+      <Card>
+        <CardHeader>
+          <CardTitle>Reports</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          Loading reports...
+        </CardContent>
+      </Card>
     )
-  }, [rows, loading, err])
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Reports</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-red-600">
+          Error loading reports: {error?.message || 'Unknown error'}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Reports</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          No reports available
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const defaultOpen = rows.slice(0, 2).map(r => r.id)
 
   return (
     <Card>
-      <CardHeader><CardTitle>Reports</CardTitle></CardHeader>
-      <CardContent>{body}</CardContent>
+      <CardHeader>
+        <CardTitle>Reports</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Accordion type="multiple" defaultValue={defaultOpen} className="w-full">
+          {rows.map((row) => (
+            <AccordionItem 
+              key={row.id} 
+              value={row.id} 
+              className="border rounded-md px-2 mb-2"
+            >
+              <AccordionTrigger className="py-3">
+                <div className="flex flex-col items-start text-left">
+                  <div className="font-medium">{row.title}</div>
+                  <div className="text-xs text-muted-foreground">{row.meta}</div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="space-y-3">
+                  {row.obs.map((obs, i) => (
+                    <ObservationBlock 
+                      key={obs.id ? `obs-${obs.id}` : `obs-${i}`} 
+                      o={obs} 
+                    />
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </CardContent>
     </Card>
   )
 }

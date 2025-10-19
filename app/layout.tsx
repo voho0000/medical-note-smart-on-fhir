@@ -2,6 +2,8 @@
 import "./globals.css"
 import type { Metadata } from "next"
 import { ApiKeyProvider } from "@/lib/providers/ApiKeyProvider"
+import { PatientProvider } from "@/lib/providers/PatientProvider"
+import { ClinicalDataProvider } from "@/lib/providers/ClinicalDataProvider"
 
 export const metadata: Metadata = {
   title: "Medical Note · SMART on FHIR",
@@ -13,7 +15,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <ApiKeyProvider storage="session">
-          {children}
+          <PatientProvider>
+            <ClinicalDataProvider>
+              {children}
+            </ClinicalDataProvider>
+          </PatientProvider>
         </ApiKeyProvider>
       </body>
     </html>

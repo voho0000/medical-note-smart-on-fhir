@@ -1,99 +1,90 @@
 // features/clinical-summary/components/DiagnosesCard.tsx
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
 
-type Coding = { system?: string; code?: string; display?: string }
-type CodeableConcept = { text?: string; coding?: Coding[] }
+// FHIR R4 Type Definitions
+interface Coding {
+  system?: string
+  code?: string
+  display?: string
+}
 
-type Condition = {
-  resourceType: "Condition"
+interface CodeableConcept {
+  coding?: Coding[]
+  text?: string
+}
+
+interface Category {
+  coding?: Coding[]
+  text?: string
+}
+
+interface Condition {
   id?: string
   code?: CodeableConcept
   clinicalStatus?: CodeableConcept
   verificationStatus?: CodeableConcept
-  category?: CodeableConcept[]
+  category?: Category[]
   onsetDateTime?: string
   recordedDate?: string
   encounter?: { reference?: string }
 }
 
-type Row = {
+interface Row {
   id: string
   title: string
   when?: string
   verification?: string
   clinical?: string
-  categories?: string[]
+  categories: string[]
 }
 
-function ccText(cc?: CodeableConcept) {
-  return cc?.text || cc?.coding?.[0]?.display || cc?.coding?.[0]?.code || "—"
+function ccText(cc?: CodeableConcept): string {
+  if (!cc) return "—"
+  return cc.text || cc.coding?.[0]?.display || cc.coding?.[0]?.code || "—"
 }
-function fmtDate(d?: string) {
+
+function fmtDate(d?: string): string {
   if (!d) return ""
   try { return new Date(d).toLocaleDateString() } catch { return d }
 }
 
 export function DiagnosesCard() {
-  const [rows, setRows] = useState<Row[]>([])
-  const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      setLoading(true); setErr(null)
-      try {
-        const FHIR = (await import("fhirclient")).default
-        const client = await FHIR.oauth2.ready()
-        const pid = await client.getPatientId()
-        if (!pid) { if (alive) setErr("No patient id from session."); return }
-        const pidQ = encodeURIComponent(pid)
-
-        // 只拿「臨床狀態=active」優先；若空，再退回全部 Condition
-        let flat = await client
-          .request(`Condition?patient=${pidQ}&clinical-status=active&_count=100&_sort=-onset-date`, { flat: true })
-          .catch(() => null)
-
-        if (!flat || (Array.isArray(flat) && flat.length === 0)) {
-          flat = await client
-            .request(`Condition?patient=${pidQ}&_count=100&_sort=-onset-date`, { flat: true })
-            .catch(() => null)
-        }
-
-        const list: Condition[] = Array.isArray(flat)
-          ? (flat as any[]).filter(r => r.resourceType === "Condition")
-          : []
-
-        const activePrefer = list
-          .filter(c => {
-            const cs = (c.clinicalStatus?.coding?.[0]?.code || c.clinicalStatus?.text || "").toLowerCase()
-            return !cs || cs === "active" || cs === "recurrence" || cs === "relapse"
-          })
-
-        const useList = activePrefer.length > 0 ? activePrefer : list
-
-        const rowsTmp: Row[] = useList.map(c => ({
-          id: c.id || Math.random().toString(36),
-          title: ccText(c.code),
-          when: fmtDate(c.onsetDateTime || c.recordedDate),
-          clinical: ccText(c.clinicalStatus),
-          verification: ccText(c.verificationStatus),
-          categories: (c.category || []).map(ccText).filter(Boolean),
-        }))
-
-        if (alive) setRows(rowsTmp)
-      } catch (e: any) {
-        console.error(e)
-        if (alive) setErr(e?.message || "Failed to load diagnoses")
-      } finally {
-        if (alive) setLoading(false)
+  const { diagnoses = [], isLoading, error } = useClinicalData()
+  
+  const rows = useMemo<Row[]>(() => {
+    if (!diagnoses || !Array.isArray(diagnoses)) return []
+    
+    return (diagnoses as Condition[]).map(condition => {
+      // Extract categories safely
+      const categories: string[] = []
+      if (condition.category) {
+        condition.category.forEach((cat: Category) => {
+          if (cat.coding) {
+            cat.coding.forEach((coding: Coding) => {
+              if (coding.display) categories.push(coding.display)
+              else if (coding.code) categories.push(coding.code)
+            })
+          }
+        })
       }
-    })()
-    return () => { alive = false }
-  }, [])
+
+      return {
+        id: condition.id || Math.random().toString(36),
+        title: condition.code?.text || condition.code?.coding?.[0]?.display || 'Unknown',
+        when: fmtDate(condition.onsetDateTime || condition.recordedDate),
+        clinical: condition.clinicalStatus?.coding?.[0]?.display || condition.clinicalStatus?.coding?.[0]?.code || '',
+        verification: condition.verificationStatus?.coding?.[0]?.display || condition.verificationStatus?.coding?.[0]?.code || '',
+        categories: categories,
+      }
+    })
+  }, [diagnoses])
+
+  const loading = isLoading
+  const err = error ? String(error) : null
 
   const body = useMemo(() => {
     if (loading) return <div className="text-sm text-muted-foreground">Loading diagnoses…</div>

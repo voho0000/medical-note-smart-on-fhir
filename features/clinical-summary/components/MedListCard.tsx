@@ -1,12 +1,21 @@
 // features/clinical-summary/components/MedListCard.tsx
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { usePatient } from "@/lib/providers/PatientProvider"
+import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
+import { Badge } from "@/components/ui/badge"
 
-type Coding = { system?: string; code?: string; display?: string }
-type CodeableConcept = { text?: string; coding?: Coding[] }
+type Coding = { 
+  system?: string 
+  code?: string 
+  display?: string 
+}
+
+type CodeableConcept = { 
+  text?: string 
+  coding?: Coding[] 
+}
 
 type TimingRepeat = {
   frequency?: number
@@ -16,36 +25,39 @@ type TimingRepeat = {
 
 type DoseAndRate = {
   doseQuantity?: { value?: number; unit?: string }
-  doseRange?: { low?: { value?: number; unit?: string }, high?: { value?: number; unit?: string } }
+  doseRange?: { 
+    low?: { value?: number; unit?: string } 
+    high?: { value?: number; unit?: string } 
+  }
 }
 
-type MedicationRequest = {
-  resourceType: "MedicationRequest"
+type Medication = {
   id?: string
+  resourceType?: string  // Made optional to handle cases where it might be missing
   status?: string
   intent?: string
   medicationCodeableConcept?: CodeableConcept
+  medicationReference?: { display?: string }
   authoredOn?: string
-  dosageInstruction?: {
-    text?: string
-    route?: CodeableConcept
-    timing?: { repeat?: TimingRepeat }
-    doseAndRate?: DoseAndRate[]
-  }[]
-}
-
-type MedicationStatement = {
-  resourceType: "MedicationStatement"
-  id?: string
-  status?: string
   effectiveDateTime?: string
-  medicationCodeableConcept?: CodeableConcept
-  dosage?: {
+  dosageInstruction?: Array<{
     text?: string
     route?: CodeableConcept
     timing?: { repeat?: TimingRepeat }
     doseAndRate?: DoseAndRate[]
-  }[]
+  }>
+  dosage?: Array<{
+    text?: string
+    route?: CodeableConcept
+    timing?: { repeat?: TimingRepeat }
+    doseAndRate?: DoseAndRate[]
+  }>
+  // Add other possible FHIR medication properties that might be present
+  code?: CodeableConcept
+  medication?: CodeableConcept
+  resource?: {
+    code?: CodeableConcept
+  }
 }
 
 type Row = {
@@ -177,117 +189,93 @@ function buildDetail({
 // -----------------------------------------------------------------
 
 export function MedListCard() {
-  const { patient } = usePatient()
-  const [rows, setRows] = useState<Row[]>([])
-  const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  const { medications = [], isLoading, error } = useClinicalData()
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      if (!patient?.id) return
-      setLoading(true); setErr(null)
-      try {
-        const FHIR = (await import("fhirclient")).default
-        const client = await FHIR.oauth2.ready()
-        const pid = encodeURIComponent(patient.id)
+  const rows = useMemo<Row[]>(() => {
+    if (!Array.isArray(medications)) return []
 
-        // 1) 先抓 active MedicationRequest
-        const reqFlat = await client.request(
-          `MedicationRequest?patient=${pid}&status=active&_count=100&_sort=-authoredon`,
-          { flat: true }
-        ).catch(() => []) as any[]
-
-        let rowsTmp: Row[] = []
-        const reqs = (reqFlat || []).filter(r => r.resourceType === "MedicationRequest") as MedicationRequest[]
-
-        if (reqs.length > 0) {
-          rowsTmp = reqs
-            .filter(r => (r.status || "").toLowerCase() === "active")
-            .map(r => {
-              const d = r.dosageInstruction?.[0]
-              const detail = buildDetail({
-                doseAndRate: d?.doseAndRate,
-                doseText: d?.text,
-                route: d?.route,
-                repeat: d?.timing?.repeat
-              })
-              return {
-                id: r.id || Math.random().toString(36),
-                title: ccText(r.medicationCodeableConcept),
-                status: r.status || "active",
-                detail: detail || undefined,
-                when: fmtDate(r.authoredOn),
-              }
-            })
-        } else {
-          // 2) 沒有 MR 時用 MedicationStatement（同樣只拿 active）
-          const stmFlat = await client.request(
-            `MedicationStatement?patient=${pid}&status=active&_count=100&_sort=-_lastUpdated`,
-            { flat: true }
-          ).catch(() => []) as any[]
-
-          const stms = (stmFlat || []).filter(r => r.resourceType === "MedicationStatement") as MedicationStatement[]
-          rowsTmp = stms
-            .filter(s => (s.status || "").toLowerCase() === "active")
-            .map(s => {
-              const d = s.dosage?.[0]
-              const detail = buildDetail({
-                doseAndRate: d?.doseAndRate,
-                doseText: d?.text,
-                route: d?.route,
-                repeat: d?.timing?.repeat
-              })
-              return {
-                id: s.id || Math.random().toString(36),
-                title: ccText(s.medicationCodeableConcept),
-                status: s.status || "active",
-                detail: detail || undefined,
-                when: fmtDate(s.effectiveDateTime),
-              }
-            })
-        }
-
-        if (alive) setRows(rowsTmp)
-      } catch (e: any) {
-        console.error(e)
-        if (alive) setErr(e?.message || "Failed to load medications")
-      } finally {
-        if (alive) setLoading(false)
+    return medications.map((med: any) => {  // Using 'any' to be more permissive with the data structure
+      // Handle different FHIR medication resource structures
+      const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
+      
+      // Get medication name from various possible locations in the FHIR resource
+      let medicationName = 'Unknown Medication'
+      if (med.medicationCodeableConcept) {
+        medicationName = ccText(med.medicationCodeableConcept)
+      } else if (med.medicationReference?.display) {
+        medicationName = med.medicationReference.display
+      } else if (med.code?.text) {
+        medicationName = med.code.text
+      } else if (med.medication?.text) {
+        medicationName = med.medication.text
+      } else if (med.resource?.code?.text) {
+        medicationName = med.resource.code.text
+      } else if (med.code?.coding?.[0]?.display) {
+        medicationName = med.code.coding[0].display
       }
-    })()
-    return () => { alive = false }
-  }, [patient?.id])
+      
+      const detail = buildDetail({
+        doseAndRate: dosage?.doseAndRate,
+        doseText: dosage?.text,
+        route: dosage?.route,
+        repeat: dosage?.timing?.repeat
+      })
+
+      return {
+        id: med.id || Math.random().toString(36),
+        title: medicationName,
+        status: med.status?.toLowerCase() || "unknown",
+        detail: detail || undefined,
+        when: fmtDate(med.authoredOn || med.effectiveDateTime),
+      }
+    })
+  }, [medications])
 
   const body = useMemo(() => {
-    if (loading) return <div className="text-sm text-muted-foreground">Loading medications…</div>
-    if (err) return <div className="text-sm text-red-600">{err}</div>
-    if (rows.length === 0) return <div className="text-sm text-muted-foreground">No active medications.</div>
+    if (isLoading) return <div className="text-sm text-muted-foreground">Loading medications…</div>
+    if (error) return <div className="text-sm text-red-600">{error instanceof Error ? error.message : String(error)}</div>
+    if (rows.length === 0) return <div className="text-sm text-muted-foreground">No medications found.</div>
 
     return (
-      <ul className="space-y-2">
-        {rows.map(r => (
-          <li key={r.id} className="rounded-md border p-3">
-            <div className="flex items-baseline justify-between">
-              <div className="font-medium">{r.title}</div>
-              <div className="text-xs text-muted-foreground">{r.when}</div>
+      <div className="space-y-2">
+        {rows.map(row => (
+          <div key={row.id} className="rounded-md border p-3">
+            <div className="flex items-center justify-between">
+              <div className="font-medium">{row.title}</div>
+              <Badge 
+                variant={
+                  row.status === 'active' ? 'default' : 
+                  row.status === 'completed' || row.status === 'stopped' ? 'secondary' : 'outline'
+                }
+                className="ml-2 capitalize"
+              >
+                {row.status}
+              </Badge>
             </div>
-            {r.detail && <div className="text-sm text-muted-foreground mt-1">{r.detail}</div>}
-            <div className="mt-1 text-xs">
-              <span className="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-emerald-700 ring-1 ring-emerald-200">
-                {r.status}
-              </span>
-            </div>
-          </li>
+            {row.detail && (
+              <div className="mt-1 text-sm text-muted-foreground">
+                {row.detail}
+              </div>
+            )}
+            {row.when && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                {row.when}
+              </div>
+            )}
+          </div>
         ))}
-      </ul>
+      </div>
     )
-  }, [rows, loading, err])
+  }, [rows, isLoading, error])
 
   return (
     <Card>
-      <CardHeader><CardTitle>Medications (Active)</CardTitle></CardHeader>
-      <CardContent>{body}</CardContent>
+      <CardHeader>
+        <CardTitle>Medications</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {body}
+      </CardContent>
     </Card>
   )
 }
