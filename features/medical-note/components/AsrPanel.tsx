@@ -63,7 +63,7 @@ export function AsrPanel() {
             </div>
           )}
         />
-        <Textarea value={asrText} onChange={(e) => setAsrText(e.target.value)} className="min-h-[160px]" spellCheck={false} />
+        <Textarea value={asrText} onChange={(e) => setAsrText(e.target.value)} className="min-h-[100px]" spellCheck={false} />
       </CardContent>
     </Card>
   )

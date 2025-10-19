@@ -25,7 +25,7 @@ export default function MedicalNoteFeature() {
   const { patient } = usePatient()
   return (
     <NoteProvider>
-      <div className="space-y-6">
+      <div className="space-y-3">
         <ApiKeyField />
         <AsrPanel />
         <PromptEditor />

@@ -10,7 +10,7 @@ export function PromptEditor({ title = "Prompt" }: { title?: string }) {
     <Card>
       <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
       <CardContent>
-        <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="min-h-[120px]" spellCheck={false} />
+        <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="min-h-[60px]" spellCheck={false} />
       </CardContent>
     </Card>
   )

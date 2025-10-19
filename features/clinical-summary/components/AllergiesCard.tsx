@@ -1,3 +1,4 @@
+// features/clinical-summary/components/AllergiesCard.tsx
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -14,7 +15,7 @@ type AllergyIntolerance = {
   clinicalStatus?: CodeableConcept
   verificationStatus?: CodeableConcept
   criticality?: "low" | "high" | "unable-to-assess"
-  code?: CodeableConcept                // 過敏物質
+  code?: CodeableConcept
   reaction?: {
     manifestation?: CodeableConcept[]
     severity?: "mild" | "moderate" | "severe"
@@ -60,12 +61,13 @@ export function AllergiesCard() {
         const client = await FHIR.oauth2.ready()
         const pid = encodeURIComponent(patient.id)
 
-        // 只抓 active 過敏
+        // active 過敏
         const ai = await client.request(
           `AllergyIntolerance?patient=${pid}&clinical-status=active&_count=100&_sort=-recorded-date`,
           { flat: true }
         ).catch(() => []) as any[]
 
+        // 不良事件
         const ae = await client.request(
           `AdverseEvent?subject=Patient/${pid}&_count=50&_sort=-date`,
           { flat: true }
@@ -89,7 +91,9 @@ export function AllergiesCard() {
     if (err) return <div className="text-sm text-red-600">{err}</div>
 
     return (
-      <div className="space-y-4">
+      // 兩欄並排；小螢幕改為一欄
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Allergies（左） */}
         <section>
           <div className="mb-2 text-sm font-medium">Allergies (active)</div>
           {allergies.length === 0 ? (
@@ -136,6 +140,7 @@ export function AllergiesCard() {
           )}
         </section>
 
+        {/* Adverse Events（右） */}
         <section>
           <div className="mb-2 text-sm font-medium">Adverse Events</div>
           {events.length === 0 ? (

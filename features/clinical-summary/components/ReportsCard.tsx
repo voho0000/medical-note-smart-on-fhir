@@ -4,16 +4,11 @@
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { usePatient } from "@/lib/providers/PatientProvider"
 
 type Coding = { system?: string; code?: string; display?: string }
 type Quantity = { value?: number; unit?: string }
 type CodeableConcept = { text?: string; coding?: Coding[] }
-type ReferenceRange = {
-  low?: Quantity
-  high?: Quantity
-  text?: string
-}
+type ReferenceRange = { low?: Quantity; high?: Quantity; text?: string }
 
 type ObsComponent = {
   code?: CodeableConcept
@@ -70,9 +65,7 @@ function fmtDate(d?: string) {
 function refRangeText(rr?: ReferenceRange[]) {
   if (!rr || rr.length === 0) return ""
   const r = rr[0]
-  // 1) 直接用 text
   if (r.text) return `Ref: ${r.text}`
-  // 2) low–high 組字串
   const low = r.low?.value
   const high = r.high?.value
   const unit = r.low?.unit || r.high?.unit
@@ -85,12 +78,9 @@ function interpCode(concept?: CodeableConcept) {
   const raw = concept?.coding?.[0]?.code || concept?.coding?.[0]?.display || concept?.text || ""
   return (raw || "").toString().toUpperCase()
 }
-/** 將 interpretation 轉成 badge 樣式 & 顯示字 */
 function getInterpTag(concept?: CodeableConcept) {
   const code = interpCode(concept)
-  // 常見值：H/HH（高/顯著高）、L/LL（低/顯著低）、A（異常）、POS/NEG
   if (!code) return null
-
   let label = code
   let style = "bg-muted text-muted-foreground"
   if (["H", "HI", "HIGH", "ABOVE", ">", "HH", "CRIT-HI"].includes(code)) {
@@ -112,21 +102,18 @@ function getInterpTag(concept?: CodeableConcept) {
     label = "Normal"
     style = "bg-gray-100 text-gray-600 border border-gray-200"
   }
-
   return { label, style }
 }
 
 export function ReportsCard() {
-  const { patient } = usePatient()
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [debug, setDebug] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     ;(async () => {
-      setLoading(true); setErr(null); setDebug(null)
+      setLoading(true); setErr(null)
       try {
         const FHIR = (await import("fhirclient")).default
         const client = await FHIR.oauth2.ready()
@@ -197,23 +184,20 @@ export function ReportsCard() {
           return rowsDR
         }
 
-        let allRows: Row[] = []
-        const tried: string[] = []
-
+        // 先試 DiagnosticReport
+        let allRows = [] as Row[]
         for (const cat of [undefined, "laboratory", "LAB"] as const) {
-          tried.push(cat ? `DR(category=${cat})` : "DR(no category)")
           const r = await fetchDR(cat as any)
           if (r.length > 0) { allRows = r; break }
         }
 
+        // 沒有 DR 再回退 Observation 分組
         if (allRows.length === 0) {
-          tried.push("OBS(category=laboratory)")
           let obsFlat = await client
             .request(`Observation?patient=${pidQ}&category=laboratory&_count=100&_sort=-date`, { flat: true })
             .catch(() => null)
 
           if (!obsFlat || (Array.isArray(obsFlat) && obsFlat.length === 0)) {
-            tried.push("OBS(all)")
             obsFlat = await client
               .request(`Observation?patient=${pidQ}&_count=200&_sort=-date`, { flat: true })
               .catch(() => null)
@@ -253,10 +237,7 @@ export function ReportsCard() {
           })
         }
 
-        if (alive) {
-          setRows(allRows)
-          if (allRows.length === 0) setDebug(`Tried: ${tried.join(" → ")} (rows=0)`)
-        }
+        if (alive) setRows(allRows)
       } catch (e: any) {
         console.error(e)
         if (alive) setErr(e?.message || "Failed to load reports")
@@ -294,8 +275,6 @@ export function ReportsCard() {
     return (
       <div className="rounded-md border p-3">
         {selfVal}
-
-        {/* 面板組件值 */}
         {Array.isArray(o.component) && o.component.length > 0 && (
           <div className="mt-2 grid gap-1 pl-2">
             {o.component.map((c, i) => {
@@ -325,14 +304,7 @@ export function ReportsCard() {
   const body = useMemo(() => {
     if (loading) return <div className="text-sm text-muted-foreground">Loading reports…</div>
     if (err) return <div className="text-sm text-red-600">{err}</div>
-    if (rows.length === 0) {
-      return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">No lab reports.</div>
-          {debug && <pre className="rounded bg-muted p-2 text-xs text-muted-foreground overflow-auto">{debug}</pre>}
-        </div>
-      )
-    }
+    if (rows.length === 0) return <div className="text-sm text-muted-foreground">No lab reports.</div>
 
     const defaultOpen = rows.slice(0, 2).map(r => r.id)
 
@@ -357,7 +329,7 @@ export function ReportsCard() {
         ))}
       </Accordion>
     )
-  }, [rows, loading, err, debug])
+  }, [rows, loading, err])
 
   return (
     <Card>

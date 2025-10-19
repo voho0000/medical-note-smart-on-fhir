@@ -29,12 +29,12 @@ export function GptPanel({ patient, defaultModel = "gpt-4.1" }: { patient?: Pati
 
     const patientInfo = patient
       ? `Patient Info:
-Name: ${patient.name?.[0]?.given?.join(" ") || "N/A"} ${patient.name?.[0]?.family || "N/A"}
-Gender: ${patient.gender || "N/A"}
-Age: ${patient.birthDate ? calculateAge(patient.birthDate) : "N/A"}`
+      Name: ${patient.name?.[0]?.given?.join(" ") || "N/A"} ${patient.name?.[0]?.family || "N/A"}
+      Gender: ${patient.gender || "N/A"}
+      Age: ${patient.birthDate ? calculateAge(patient.birthDate) : "N/A"}`
       : "No patient information available."
 
-    const fullPrompt = `${patientInfo}\n\nASR Content:\n${asrText}\n\n${prompt}`
+    const fullPrompt = `${patientInfo}\n\n\n${asrText}\n\n${prompt}`
 
     try {
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -54,7 +54,7 @@ Age: ${patient.birthDate ? calculateAge(patient.birthDate) : "N/A"}`
       <CardHeader><CardTitle>GPT Response</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         {/* 若之後要加模型選單，可用 <Select> 改 setModel */}
-        <Textarea value={gptResponse} onChange={(e) => setGptResponse(e.target.value)} className="min-h-[200px]" spellCheck={false} />
+        <Textarea value={gptResponse} onChange={(e) => setGptResponse(e.target.value)} className="min-h-[100px]" spellCheck={false} />
         <Button onClick={handleGptRequest} disabled={isGenerating}>
           {isGenerating ? "Generating…" : "Generate GPT Response"}
         </Button>

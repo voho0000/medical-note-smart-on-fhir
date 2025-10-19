@@ -11,23 +11,29 @@ export function ApiKeyField() {
   const [value, setValue] = useState(apiKey)
 
   return (
-    <div className="max-w-xl space-y-2">
-      <label htmlFor="openai-key" className="text-sm text-muted-foreground">
+    // ↓ tighter vertical spacing
+    <div className="max-w-xl space-y-1">
+      {/* ↓ smaller label */}
+      <label htmlFor="openai-key" className="text-xs text-muted-foreground">
         OpenAI API key（僅保存在本機瀏覽器）
       </label>
-      <div className="flex gap-2">
+      {/* ↓ smaller gap */}
+      <div className="flex gap-1.5">
+        {/* ↓ thinner input */}
         <Input
           id="openai-key"
           type="password"
           placeholder="sk-..."
+          className="h-8 text-sm"
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
-        <Button onClick={() => setApiKey(value)} disabled={!value}>Save</Button>
-        <Button variant="outline" onClick={() => { setValue(""); clearApiKey() }}>Clear</Button>
+        {/* ↓ small buttons */}
+        <Button size="sm" onClick={() => setApiKey(value)} disabled={!value}>Save</Button>
+        <Button size="sm" variant="outline" onClick={() => { setValue(""); clearApiKey() }}>Clear</Button>
       </div>
       {!apiKey && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[11px] leading-tight text-muted-foreground">
           尚未設定金鑰，ASR 與 GPT 功能將無法呼叫 OpenAI。
         </p>
       )}
