@@ -23,7 +23,16 @@ type ClinicalData = {
 export function RightPanelFeature() {
   const [activeTab, setActiveTab] = useState("medicalNote")
   const clinicalData = useClinicalData()
-  const { selectedData, setSelectedData } = useDataSelection()
+  const { 
+    selectedData, 
+    setSelectedData, 
+    filters, 
+    setFilters 
+  } = useDataSelection()
+  
+  const handleFiltersChange = (newFilters: any) => {
+    setFilters(newFilters)
+  }
 
   return (
     <Tabs 
@@ -58,6 +67,8 @@ export function RightPanelFeature() {
               }}
               selectedData={selectedData}
               onSelectionChange={setSelectedData}
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
             />
           </div>
         </ScrollArea>

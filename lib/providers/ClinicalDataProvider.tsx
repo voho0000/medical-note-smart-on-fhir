@@ -224,10 +224,22 @@ async function fetchMedications(client: FHIRClient, patientId: string): Promise<
 }
 
 async function fetchAllergies(client: FHIRClient, patientId: string): Promise<FHIRAllergyIntolerance[]> {
-  // First try with recordedDate, then fallback to no sort if that fails
   try {
-    const response = await client.request(`AllergyIntolerance?patient=${patientId}&_sort=-recordedDate&_count=100`)
-    return response.entry?.map((entry: any) => ({
+    console.log('Fetching allergies for patient:', patientId)
+    // Try with a simpler query first
+    const url = `AllergyIntolerance?patient=${patientId}&_count=100`
+    console.log('Fetching from URL:', url)
+    
+    const response = await client.request(url)
+    console.log('Received response:', response)
+    
+    if (!response.entry) {
+      console.debug('No allergy data found in response')
+      return []
+    }
+    
+    // Process the response
+    const allergies = response.entry.map((entry: any) => ({
       id: entry.resource?.id,
       code: entry.resource?.code,
       clinicalStatus: entry.resource?.clinicalStatus,
@@ -235,20 +247,21 @@ async function fetchAllergies(client: FHIRClient, patientId: string): Promise<FH
       criticality: entry.resource?.criticality,
       reaction: entry.resource?.reaction,
       recordedDate: entry.resource?.recordedDate || entry.resource?.recorded,
-    })) || []
-  } catch (error) {
-    // If sorting fails, try without sort
-    console.warn('Failed to sort allergies by recordedDate, trying without sort', error)
-    const response = await client.request(`AllergyIntolerance?patient=${patientId}&_count=100`)
-    return response.entry?.map((entry: any) => ({
-      id: entry.resource?.id,
-      code: entry.resource?.code,
-      clinicalStatus: entry.resource?.clinicalStatus,
-      verificationStatus: entry.resource?.verificationStatus,
-      criticality: entry.resource?.criticality,
-      reaction: entry.resource?.reaction,
-      recordedDate: entry.resource?.recordedDate || entry.resource?.recorded,
-    })) || []
+    }))
+    
+    console.log(`Found ${allergies.length} allergies`)
+    return allergies
+  } catch (error: unknown) {
+    console.error('Error in fetchAllergies:', error)
+    if (error && typeof error === 'object' && 'response' in error) {
+      const err = error as { response?: { status?: number; statusText?: string; data?: unknown } }
+      console.error('Response error:', {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data
+      })
+    }
+    return []
   }
 }
 

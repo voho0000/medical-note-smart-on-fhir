@@ -7,7 +7,31 @@ export type DataType = 'conditions' | 'medications' | 'allergies' | 'diagnosticR
 
 export type DataSelection = Record<DataType, boolean>
 
+export type MedicationStatus = 'active' | 'all'
+export type ReportInclusion = 'latest' | 'all'
+export type TimeRange = '1w' | '1m' | '3m' | '6m' | '1y' | 'all'
+
+export interface DataFilters {
+  medicationStatus: MedicationStatus
+  reportInclusion: ReportInclusion
+  reportTimeRange: TimeRange
+  labReportVersion: 'latest' | 'all'
+  vitalSignsVersion: 'latest' | 'all'
+  vitalSignsTimeRange: '24h' | '3d' | '1w' | '1m' | '3m' | 'all'
+}
+
+const DEFAULT_FILTERS: DataFilters = {
+  medicationStatus: 'active',
+  reportInclusion: 'latest',
+  reportTimeRange: 'all',
+  labReportVersion: 'latest',
+  vitalSignsVersion: 'latest',
+  vitalSignsTimeRange: 'all'
+}
+
 const STORAGE_KEY = 'clinicalDataSelection'
+const FILTERS_STORAGE_KEY = 'clinicalDataFilters'
+
 const DEFAULT_SELECTION: DataSelection = {
   conditions: true,
   medications: true,
@@ -43,8 +67,43 @@ const getInitialSelection = (): DataSelection => {
   }
 }
 
+const getInitialFilters = (): DataFilters => {
+  if (typeof window === 'undefined') return DEFAULT_FILTERS
+  
+  try {
+    const saved = localStorage.getItem(FILTERS_STORAGE_KEY)
+    if (!saved) return DEFAULT_FILTERS
+    
+    const parsed = JSON.parse(saved)
+    return {
+      medicationStatus: ['active', 'all'].includes(parsed.medicationStatus) 
+        ? parsed.medicationStatus 
+        : DEFAULT_FILTERS.medicationStatus,
+      reportInclusion: ['latest', 'all'].includes(parsed.reportInclusion)
+        ? parsed.reportInclusion
+        : DEFAULT_FILTERS.reportInclusion,
+      reportTimeRange: ['1w', '1m', '3m', '6m', '1y', 'all'].includes(parsed.reportTimeRange)
+        ? parsed.reportTimeRange
+        : DEFAULT_FILTERS.reportTimeRange,
+      labReportVersion: ['latest', 'all'].includes(parsed.labReportVersion)
+        ? parsed.labReportVersion
+        : DEFAULT_FILTERS.labReportVersion,
+      vitalSignsVersion: ['latest', 'all'].includes(parsed.vitalSignsVersion)
+        ? parsed.vitalSignsVersion
+        : DEFAULT_FILTERS.vitalSignsVersion,
+      vitalSignsTimeRange: ['24h', '3d', '1w', '1m', '3m', 'all'].includes(parsed.vitalSignsTimeRange)
+        ? parsed.vitalSignsTimeRange
+        : DEFAULT_FILTERS.vitalSignsTimeRange
+    }
+  } catch (error) {
+    console.error('Failed to load saved filters:', error)
+    return DEFAULT_FILTERS
+  }
+}
+
 export function useDataSelection() {
   const [selectedData, setSelectedData] = useState<DataSelection>(getInitialSelection)
+  const [filters, setFilters] = useState<DataFilters>(getInitialFilters)
 
   // Save to localStorage whenever selection changes
   useEffect(() => {
@@ -54,6 +113,15 @@ export function useDataSelection() {
       console.error('Failed to save data selection:', error)
     }
   }, [selectedData])
+
+  // Save filters to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters))
+    } catch (error) {
+      console.error('Failed to save filters:', error)
+    }
+  }, [filters])
 
   const updateSelection = useCallback((dataType: DataType, isSelected: boolean) => {
     setSelectedData(prev => ({
@@ -78,6 +146,7 @@ export function useDataSelection() {
 
   const resetToDefaults = useCallback(() => {
     setSelectedData(DEFAULT_SELECTION)
+    setFilters(DEFAULT_FILTERS)
   }, [])
 
   return {
@@ -86,6 +155,8 @@ export function useDataSelection() {
     updateSelection,
     setSelection,
     resetToDefaults,
+    filters,
+    setFilters,
     isAnySelected: Object.values(selectedData).some(Boolean)
   }
 }

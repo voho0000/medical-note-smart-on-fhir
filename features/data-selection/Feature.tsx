@@ -18,26 +18,44 @@ type ClinicalData = {
 
 export function DataSelectionFeature() {
   const clinicalData = useClinicalData() as ClinicalData
-  const { selectedData, setSelectedData } = useDataSelection()
+  const { 
+    selectedData, 
+    setSelectedData, 
+    filters, 
+    setFilters 
+  } = useDataSelection()
 
   if (clinicalData.isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <div className="text-lg font-medium mb-2">Loading clinical data...</div>
-          <div className="text-sm text-muted-foreground">Please wait while we load your data</div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+          <p className="text-sm text-muted-foreground">Loading clinical data...</p>
         </div>
       </div>
     )
   }
 
-  // Safely get data with fallback to empty arrays
+  if (!clinicalData) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-muted-foreground">No clinical data available</p>
+        </div>
+      </div>
+    )
+  }
+
   const data = {
     conditions: clinicalData.diagnoses || [],
     medications: clinicalData.medications || [],
     allergies: clinicalData.allergies || [],
     diagnosticReports: clinicalData.diagnosticReports || [],
     observations: clinicalData.observations || clinicalData.vitalSigns || clinicalData.vitals || []
+  }
+
+  const handleFiltersChange = (newFilters: any) => {
+    setFilters(newFilters)
   }
 
   return (
@@ -55,6 +73,8 @@ export function DataSelectionFeature() {
             clinicalData={data}
             selectedData={selectedData}
             onSelectionChange={setSelectedData}
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
           />
         </div>
       </div>
