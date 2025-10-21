@@ -153,7 +153,7 @@ export function GptPanel({
             setDisplayResponse(e.target.value)
           }} 
           placeholder="GPT response will appear here..." 
-          className="min-h-[100px]"
+          className="min-h-[80px]"
         />
         <Button onClick={handleGptRequest} disabled={isLoading}>
           {isLoading ? "Generating…" : "Generate GPT Response"}
