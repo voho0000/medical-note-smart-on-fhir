@@ -9,7 +9,8 @@ import { VitalsCard } from "./components/VitalsCard"
 import { AllergiesCard } from "./components/AllergiesCard"
 import { MedListCard } from "./components/MedListCard"
 import { ReportsCard } from "./components/ReportsCard"
-import { DiagnosesCard } from "./components/DiagnosisCard" 
+import { DiagnosesCard } from "./components/DiagnosisCard"
+import { VisitHistoryCard } from "./components/VisitHistoryCard"
 
 export default function ClinicalSummaryFeature() {
   // 固定高度，讓每個分頁內容自行捲動，不影響整頁
@@ -21,6 +22,7 @@ export default function ClinicalSummaryFeature() {
           <TabsTrigger value="patient">Patient / Vitals / Diagnosis</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
           <TabsTrigger value="meds">Medications</TabsTrigger>
+          <TabsTrigger value="visits">Visit History</TabsTrigger>
         </TabsList>
 
         {/* 分頁內容：各自 ScrollArea */}
@@ -47,6 +49,14 @@ export default function ClinicalSummaryFeature() {
             <div className="space-y-4 py-2">
               <AllergiesCard />
               <MedListCard />
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="visits" className="flex-1">
+          <ScrollArea className="h-full pr-2">
+            <div className="space-y-4 py-2">
+              <VisitHistoryCard />
             </div>
           </ScrollArea>
         </TabsContent>

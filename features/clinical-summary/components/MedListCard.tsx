@@ -64,8 +64,14 @@ type Row = {
   id: string
   title: string
   status: string
+  dose?: string
+  route?: string
+  frequency?: string
   detail?: string
-  when?: string
+  startedOn?: string
+  stoppedOn?: string
+  durationDays?: number
+  isInactive: boolean
 }
 
 function ccText(cc?: CodeableConcept) {
@@ -73,7 +79,115 @@ function ccText(cc?: CodeableConcept) {
 }
 function fmtDate(d?: string) {
   if (!d) return ""
-  try { return new Date(d).toLocaleString() } catch { return d }
+  try {
+    return new Date(d).toLocaleDateString("zh-TW", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    })
+  } catch {
+    return d
+  }
+}
+
+function extractFrequencyFromText(text?: string) {
+  if (!text) return ""
+  const upper = text.toUpperCase()
+  const known = upper.match(/\b(QD|BID|TID|QID|QOD|QHS|HS|PRN)\b/)
+  if (known) return known[1]
+  const every = upper.match(/Q(\d+)H/)
+  if (every) return `q${every[1]}h`
+  const everyHours = text.match(/every\s+(\d+)\s*hour/i)
+  if (everyHours) return `q${everyHours[1]}h`
+  const perDay = text.match(/(\d+)\s*(?:times|x)\s*(?:per|\/)?\s*day/i)
+  if (perDay) return `${perDay[1]}×/day`
+  return ""
+}
+
+type DurationLike = {
+  value?: number
+  unit?: string
+  code?: string
+}
+
+type PeriodLike = {
+  start?: string
+  end?: string
+}
+
+const UNIT_TO_DAYS: Record<string, number> = {
+  d: 1,
+  day: 1,
+  days: 1,
+  "24h": 1,
+  wk: 7,
+  w: 7,
+  week: 7,
+  weeks: 7,
+  mo: 30,
+  month: 30,
+  months: 30,
+  a: 365,
+  y: 365,
+  year: 365,
+  years: 365,
+  h: 1 / 24,
+  hr: 1 / 24,
+  hour: 1 / 24,
+  hours: 1 / 24,
+  min: 1 / (24 * 60),
+  minute: 1 / (24 * 60),
+  minutes: 1 / (24 * 60),
+  s: 1 / (24 * 60 * 60),
+  sec: 1 / (24 * 60 * 60),
+  second: 1 / (24 * 60 * 60),
+  seconds: 1 / (24 * 60 * 60),
+}
+
+function convertDurationToDays(duration?: DurationLike) {
+  if (!duration?.value) return undefined
+  const rawUnit = (duration.unit || duration.code || "").toLowerCase()
+  if (!rawUnit) return undefined
+  const factor = UNIT_TO_DAYS[rawUnit]
+  if (!factor) return undefined
+  const days = duration.value * factor
+  if (!Number.isFinite(days) || days <= 0) return undefined
+  return Math.round(days)
+}
+
+function periodToDays(period?: PeriodLike) {
+  if (!period?.start || !period?.end) return undefined
+  const startDate = new Date(period.start)
+  const endDate = new Date(period.end)
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return undefined
+  const diff = endDate.getTime() - startDate.getTime()
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1
+  if (!Number.isFinite(days) || days <= 0) return undefined
+  return days
+}
+
+function computeDurationDays({
+  start,
+  stop,
+  expectedDuration,
+  boundsDuration,
+  boundsPeriod,
+  validityPeriod,
+}: {
+  start?: string
+  stop?: string
+  expectedDuration?: DurationLike
+  boundsDuration?: DurationLike
+  boundsPeriod?: PeriodLike
+  validityPeriod?: PeriodLike
+}) {
+  return (
+    convertDurationToDays(expectedDuration) ??
+    convertDurationToDays(boundsDuration) ??
+    periodToDays(boundsPeriod) ??
+    periodToDays(validityPeriod) ??
+    periodToDays(start && stop ? { start, end: stop } : undefined)
+  )
 }
 
 // --- helpers: 劑量與單位 -----------------------------------------
@@ -194,47 +308,76 @@ export function MedListCard() {
   const rows = useMemo<Row[]>(() => {
     if (!Array.isArray(medications)) return []
 
-    return medications
-      .filter((med: any) => {
-        // Skip medications with status 'stopped' or 'completed'
-        const status = med.status?.toLowerCase()
-        return status !== 'stopped' && status !== 'completed'
-      })
-      .map((med: any) => {
-        // Handle different FHIR medication resource structures
-        const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
-        
-        // Get medication name from various possible locations in the FHIR resource
-        let medicationName = 'Unknown Medication'
-        if (med.medicationCodeableConcept) {
-          medicationName = ccText(med.medicationCodeableConcept)
-        } else if (med.medicationReference?.display) {
-          medicationName = med.medicationReference.display
-        } else if (med.code?.text) {
-          medicationName = med.code.text
-        } else if (med.medication?.text) {
-          medicationName = med.medication.text
-        } else if (med.resource?.code?.text) {
-          medicationName = med.resource.code.text
-        } else if (med.code?.coding?.[0]?.display) {
-          medicationName = med.code.coding[0].display
-        }
-        
-        const detail = buildDetail({
-          doseAndRate: dosage?.doseAndRate,
-          doseText: dosage?.text,
-          route: dosage?.route,
-          repeat: dosage?.timing?.repeat
-        })
+    const inactiveStatuses = new Set(["stopped", "completed"])
 
-        return {
-          id: med.id || Math.random().toString(36),
-          title: medicationName,
-          status: med.status?.toLowerCase() || "unknown",
-          detail: detail || undefined,
-          when: fmtDate(med.authoredOn || med.effectiveDateTime),
-        }
+    const enriched = medications.map((med: any) => {
+      const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
+
+      let medicationName = 'Unknown Medication'
+      if (med.medicationCodeableConcept) {
+        medicationName = ccText(med.medicationCodeableConcept)
+      } else if (med.medicationReference?.display) {
+        medicationName = med.medicationReference.display
+      } else if (med.code?.text) {
+        medicationName = med.code.text
+      } else if (med.medication?.text) {
+        medicationName = med.medication.text
+      } else if (med.resource?.code?.text) {
+        medicationName = med.resource.code.text
+      } else if (med.code?.coding?.[0]?.display) {
+        medicationName = med.code.coding[0].display
+      }
+
+      const status = med.status?.toLowerCase() || "unknown"
+      const isInactive = inactiveStatuses.has(status)
+
+      const doseSummary = humanDoseAmount(dosage?.doseAndRate, dosage?.text)
+      const routeSummary = ccText(dosage?.route)
+      const frequencySummary = humanDoseFreq(dosage?.timing?.repeat) || extractFrequencyFromText(dosage?.text) || ""
+
+      const detail = buildDetail({
+        doseAndRate: dosage?.doseAndRate,
+        doseText: dosage?.text,
+        route: dosage?.route,
+        repeat: dosage?.timing?.repeat
       })
+
+      const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start
+      const stopDateRaw = isInactive
+        ? med.dispenseRequest?.validityPeriod?.end || med.effectiveDateTime || med.authoredOn
+        : undefined
+
+      return {
+        id: med.id || Math.random().toString(36),
+        title: medicationName,
+        status,
+        detail: detail || undefined,
+        dose: doseSummary || undefined,
+        route: routeSummary && routeSummary !== "—" ? routeSummary : undefined,
+        frequency: frequencySummary || undefined,
+        startedOn: fmtDate(startDateRaw),
+        stoppedOn: stopDateRaw ? fmtDate(stopDateRaw) : undefined,
+        durationDays: computeDurationDays({
+          start: startDateRaw,
+          stop: stopDateRaw,
+          expectedDuration: med.dispenseRequest?.expectedSupplyDuration,
+          boundsDuration: dosage?.timing?.repeat?.boundsDuration,
+          boundsPeriod: dosage?.timing?.repeat?.boundsPeriod,
+          validityPeriod: med.dispenseRequest?.validityPeriod,
+        }),
+        isInactive,
+        _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
+      }
+    })
+
+    return enriched
+      .sort((a, b) => {
+        if (a.isInactive !== b.isInactive) {
+          return a.isInactive ? 1 : -1
+        }
+        return (b._startSortValue ?? 0) - (a._startSortValue ?? 0)
+      })
+      .map(({ _startSortValue, ...row }) => row)
   }, [medications])
 
   const body = useMemo(() => {
@@ -258,14 +401,19 @@ export function MedListCard() {
                 {row.status}
               </Badge>
             </div>
-            {row.detail && (
-              <div className="mt-1 text-sm text-muted-foreground">
-                {row.detail}
+            {(row.dose || row.frequency || row.route || row.detail) && (
+              <div className="mt-1 grid gap-1 text-sm text-muted-foreground">
+                {row.dose && <div>Dose: {row.dose}</div>}
+                {row.frequency && <div>Frequency: {row.frequency}</div>}
+                {row.route && <div>Route: {row.route}</div>}
+                {row.detail && <div>Notes: {row.detail}</div>}
               </div>
             )}
-            {row.when && (
-              <div className="mt-1 text-xs text-muted-foreground">
-                {row.when}
+            {(row.startedOn || row.stoppedOn || row.durationDays) && (
+              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                {row.startedOn && <div>Start date: {row.startedOn}</div>}
+                {row.stoppedOn && <div>Stop date: {row.stoppedOn}</div>}
+                {row.durationDays && <div>Prescription length: {row.durationDays} days</div>}
               </div>
             )}
           </div>

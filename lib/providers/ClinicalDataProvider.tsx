@@ -163,13 +163,14 @@ type FHIRAllergyIntolerance = {
 }
 
 export interface ClinicalData {
-  diagnoses: FHIRCondition[]
-  medications: FHIRMedication[]
-  allergies: FHIRAllergyIntolerance[]
-  vitals: FHIRObservation[]
+  diagnoses: any[]
+  medications: any[]
+  allergies: any[]
+  vitals: any[]
+  encounters: any[]
   isLoading: boolean
   error: Error | null
-  vitalSigns: FHIRObservation[]
+  vitalSigns: any[]
   diagnosticReports: any[]
   observations: any[]
 }
@@ -184,7 +185,7 @@ export function useClinicalData() {
   return context
 }
 
-async function fetchConditions(client: FHIRClient, patientId: string): Promise<FHIRCondition[]> {
+async function fetchConditions(client: FHIRClient, patientId: string): Promise<any[]> {
   // First try with recorded-date, fallback to no sort if that fails
   try {
     const response = await client.request(`Condition?patient=${patientId}&_sort=-recorded-date&_count=100`)
@@ -211,19 +212,22 @@ async function fetchConditions(client: FHIRClient, patientId: string): Promise<F
 
 export const ClinicalDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
-async function fetchMedications(client: FHIRClient, patientId: string): Promise<FHIRMedication[]> {
+async function fetchMedications(client: FHIRClient, patientId: string): Promise<any[]> {
   const response = await client.request(`MedicationRequest?patient=${patientId}&_sort=-authoredon&_count=100`)
   return response.entry?.map((entry: any) => ({
     id: entry.resource?.id,
     medicationCodeableConcept: entry.resource?.medicationCodeableConcept,
+    medicationReference: entry.resource?.medicationReference,
     status: entry.resource?.status,
     intent: entry.resource?.intent,
     authoredOn: entry.resource?.authoredOn,
     dosageInstruction: entry.resource?.dosageInstruction,
+    encounter: entry.resource?.encounter || entry.resource?.context,
+    dispenseRequest: entry.resource?.dispenseRequest,
   })) || []
 }
 
-async function fetchAllergies(client: FHIRClient, patientId: string): Promise<FHIRAllergyIntolerance[]> {
+async function fetchAllergies(client: FHIRClient, patientId: string): Promise<any[]> {
   try {
     console.log('Fetching allergies for patient:', patientId)
     // Try with a simpler query first
@@ -265,7 +269,7 @@ async function fetchAllergies(client: FHIRClient, patientId: string): Promise<FH
   }
 }
 
-async function fetchVitals(client: FHIRClient, patientId: string): Promise<FHIRObservation[]> {
+async function fetchVitals(client: FHIRClient, patientId: string): Promise<any[]> {
   const response = await client.request(`Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=200`)
   return response.entry?.map((entry: any) => entry.resource) || []
 }
@@ -276,6 +280,7 @@ async function fetchVitals(client: FHIRClient, patientId: string): Promise<FHIRO
     medications: [],
     allergies: [],
     vitals: [],
+    encounters: [],
     vitalSigns: [],
     diagnosticReports: [],
     observations: []
@@ -294,7 +299,7 @@ async function fetchVitals(client: FHIRClient, patientId: string): Promise<FHIRO
     }
   }, [])
 
-  const fetchVitalSigns = useCallback(async (client: FHIRClient, patientId: string): Promise<FHIRObservation[]> => {
+  const fetchVitalSigns = useCallback(async (client: FHIRClient, patientId: string): Promise<any[]> => {
     try {
       const response = await client.request(
         `Observation?patient=${patientId}&category=vital-signs&_count=100&_sort=-date`,
@@ -303,6 +308,18 @@ async function fetchVitals(client: FHIRClient, patientId: string): Promise<FHIRO
     } catch (err) {
       console.error('Error fetching vital signs:', err)
       setError(err instanceof Error ? err : new Error('Failed to fetch vital signs'))
+      return []
+    }
+  }, [])
+
+  const fetchEncounters = useCallback(async (client: FHIRClient, patientId: string): Promise<any[]> => {
+    try {
+      const response = await client.request(
+        `Encounter?patient=${patientId}&_sort=-date&_count=100&_include=Encounter:patient&_include=Encounter:location`
+      )
+      return response.entry?.map((entry: any) => entry.resource) || []
+    } catch (error) {
+      console.error('Error fetching encounters:', error)
       return []
     }
   }, [])
@@ -367,7 +384,7 @@ async function fetchVitals(client: FHIRClient, patientId: string): Promise<FHIRO
   }
 }, []);
 
-async function fetchObservations(client: FHIRClient, patientId: string): Promise<FHIRObservation[]> {
+async function fetchObservations(client: FHIRClient, patientId: string): Promise<any[]> {
   try {
     // 先抓 laboratory（多數生化/血液學都在這）
     let response = await client.request(
@@ -401,13 +418,22 @@ async function fetchObservations(client: FHIRClient, patientId: string): Promise
         const client = await getFhirClient()
         
         // Fetch all data in parallel
-        const [diagnoses, medications, allergies, vitals, diagnosticReports, observations] = await Promise.all([
+        const [
+          diagnoses,
+          medications,
+          allergies,
+          vitals,
+          diagnosticReports,
+          observations,
+          encounters
+        ] = await Promise.all([
           fetchConditions(client, patient.id),
           fetchMedications(client, patient.id),
           fetchAllergies(client, patient.id),
           fetchVitals(client, patient.id),
           fetchDiagnosticReports(client, patient.id),
-          fetchObservations(client, patient.id)
+          fetchObservations(client, patient.id),
+          fetchEncounters(client, patient.id)
         ])
 
         setState(prev => ({
@@ -418,7 +444,8 @@ async function fetchObservations(client: FHIRClient, patientId: string): Promise
           vitals,
           vitalSigns: vitals,
           diagnosticReports,
-          observations
+          observations,
+          encounters
         }))
       } catch (err) {
         console.error('Error loading clinical data:', err)
