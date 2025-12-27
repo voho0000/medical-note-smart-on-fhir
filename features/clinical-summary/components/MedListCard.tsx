@@ -194,41 +194,47 @@ export function MedListCard() {
   const rows = useMemo<Row[]>(() => {
     if (!Array.isArray(medications)) return []
 
-    return medications.map((med: any) => {  // Using 'any' to be more permissive with the data structure
-      // Handle different FHIR medication resource structures
-      const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
-      
-      // Get medication name from various possible locations in the FHIR resource
-      let medicationName = 'Unknown Medication'
-      if (med.medicationCodeableConcept) {
-        medicationName = ccText(med.medicationCodeableConcept)
-      } else if (med.medicationReference?.display) {
-        medicationName = med.medicationReference.display
-      } else if (med.code?.text) {
-        medicationName = med.code.text
-      } else if (med.medication?.text) {
-        medicationName = med.medication.text
-      } else if (med.resource?.code?.text) {
-        medicationName = med.resource.code.text
-      } else if (med.code?.coding?.[0]?.display) {
-        medicationName = med.code.coding[0].display
-      }
-      
-      const detail = buildDetail({
-        doseAndRate: dosage?.doseAndRate,
-        doseText: dosage?.text,
-        route: dosage?.route,
-        repeat: dosage?.timing?.repeat
+    return medications
+      .filter((med: any) => {
+        // Skip medications with status 'stopped' or 'completed'
+        const status = med.status?.toLowerCase()
+        return status !== 'stopped' && status !== 'completed'
       })
+      .map((med: any) => {
+        // Handle different FHIR medication resource structures
+        const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
+        
+        // Get medication name from various possible locations in the FHIR resource
+        let medicationName = 'Unknown Medication'
+        if (med.medicationCodeableConcept) {
+          medicationName = ccText(med.medicationCodeableConcept)
+        } else if (med.medicationReference?.display) {
+          medicationName = med.medicationReference.display
+        } else if (med.code?.text) {
+          medicationName = med.code.text
+        } else if (med.medication?.text) {
+          medicationName = med.medication.text
+        } else if (med.resource?.code?.text) {
+          medicationName = med.resource.code.text
+        } else if (med.code?.coding?.[0]?.display) {
+          medicationName = med.code.coding[0].display
+        }
+        
+        const detail = buildDetail({
+          doseAndRate: dosage?.doseAndRate,
+          doseText: dosage?.text,
+          route: dosage?.route,
+          repeat: dosage?.timing?.repeat
+        })
 
-      return {
-        id: med.id || Math.random().toString(36),
-        title: medicationName,
-        status: med.status?.toLowerCase() || "unknown",
-        detail: detail || undefined,
-        when: fmtDate(med.authoredOn || med.effectiveDateTime),
-      }
-    })
+        return {
+          id: med.id || Math.random().toString(36),
+          title: medicationName,
+          status: med.status?.toLowerCase() || "unknown",
+          detail: detail || undefined,
+          when: fmtDate(med.authoredOn || med.effectiveDateTime),
+        }
+      })
   }, [medications])
 
   const body = useMemo(() => {
