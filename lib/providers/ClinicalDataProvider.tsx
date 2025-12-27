@@ -168,6 +168,7 @@ export interface ClinicalData {
   allergies: any[]
   vitals: any[]
   encounters: any[]
+  procedures: any[]
   isLoading: boolean
   error: Error | null
   vitalSigns: any[]
@@ -281,6 +282,7 @@ async function fetchVitals(client: FHIRClient, patientId: string): Promise<any[]
     allergies: [],
     vitals: [],
     encounters: [],
+    procedures: [],
     vitalSigns: [],
     diagnosticReports: [],
     observations: []
@@ -320,6 +322,18 @@ async function fetchVitals(client: FHIRClient, patientId: string): Promise<any[]
       return response.entry?.map((entry: any) => entry.resource) || []
     } catch (error) {
       console.error('Error fetching encounters:', error)
+      return []
+    }
+  }, [])
+
+  const fetchProcedures = useCallback(async (client: FHIRClient, patientId: string): Promise<any[]> => {
+    try {
+      const response = await client.request(
+        `Procedure?patient=${patientId}&_count=100&_sort=-date`
+      )
+      return response.entry?.map((entry: any) => entry.resource) || []
+    } catch (error) {
+      console.error('Error fetching procedures:', error)
       return []
     }
   }, [])
@@ -425,7 +439,8 @@ async function fetchObservations(client: FHIRClient, patientId: string): Promise
           vitals,
           diagnosticReports,
           observations,
-          encounters
+          encounters,
+          procedures
         ] = await Promise.all([
           fetchConditions(client, patient.id),
           fetchMedications(client, patient.id),
@@ -433,7 +448,8 @@ async function fetchObservations(client: FHIRClient, patientId: string): Promise
           fetchVitals(client, patient.id),
           fetchDiagnosticReports(client, patient.id),
           fetchObservations(client, patient.id),
-          fetchEncounters(client, patient.id)
+          fetchEncounters(client, patient.id),
+          fetchProcedures(client, patient.id)
         ])
 
         setState(prev => ({
@@ -445,7 +461,8 @@ async function fetchObservations(client: FHIRClient, patientId: string): Promise
           vitalSigns: vitals,
           diagnosticReports,
           observations,
-          encounters
+          encounters,
+          procedures
         }))
       } catch (err) {
         console.error('Error loading clinical data:', err)

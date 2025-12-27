@@ -1,6 +1,6 @@
-// features/clinical-summary/components/VisitHistoryCard.tsx
 "use client"
-
+import { cn } from "@/lib/utils"
+// features/clinical-summary/components/VisitHistoryCard.tsx
 import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -28,17 +28,231 @@ type EncounterMedication = {
   when?: string
 }
 
-type EncounterTest = {
+type Coding = { system?: string; code?: string; display?: string }
+type Quantity = { value?: number; unit?: string }
+type CodeableConcept = { text?: string; coding?: Coding[] }
+type ReferenceRange = { low?: Quantity; high?: Quantity; text?: string }
+
+type EncounterObservationComponent = {
   id: string
-  name: string
+  title: string
+  value: string
+  interpretationLabel?: string
+  interpretationStyle?: string
+  referenceText?: string
+}
+
+type EncounterObservation = {
+  id: string
+  title: string
+  value: string
+  interpretationLabel?: string
+  interpretationStyle?: string
+  referenceText?: string
+  effectiveDateTime?: string
   status?: string
-  dateLabel?: string
   source: "diagnosticReport" | "observation"
+  components: EncounterObservationComponent[]
+}
+
+type EncounterProcedure = {
+  id: string
+  title: string
+  status?: string
+  performed?: string
+  performer?: string
+  category?: string
+  outcome?: string
+  report: string[]
 }
 
 type EncounterDetails = {
   medications: EncounterMedication[]
-  tests: EncounterTest[]
+  tests: EncounterObservation[]
+  procedures: EncounterProcedure[]
+}
+
+const qty = (q?: Quantity) => {
+  if (!q || q.value == null) return "—"
+  return `${q.value}${q.unit ? ` ${q.unit}` : ""}`
+}
+
+const valueWithUnit = (value?: Quantity, fallback?: string) => {
+  if (value && value.value != null) return qty(value)
+  return fallback ?? "—"
+}
+
+const refRangeText = (ranges?: ReferenceRange[]) => {
+  if (!ranges?.length) return ""
+  const range = ranges[0]
+  if (range.text) return `Ref: ${range.text}`
+  const low = range.low?.value
+  const high = range.high?.value
+  const unit = range.low?.unit || range.high?.unit
+  if (low != null && high != null) return `Ref: ${low}–${high}${unit ? ` ${unit}` : ""}`
+  if (low != null) return `Ref: ≥${low}${unit ? ` ${unit}` : ""}`
+  if (high != null) return `Ref: ≤${high}${unit ? ` ${unit}` : ""}`
+  return ""
+}
+
+const getInterpTag = (concept?: CodeableConcept) => {
+  const raw = concept?.coding?.[0]?.code || concept?.coding?.[0]?.display || concept?.text || ""
+  const code = raw?.toString().toUpperCase()
+  if (!code) return null
+  if (["H", "HI", "HIGH", "ABOVE", ">", "HH", "CRIT-HI"].includes(code)) {
+    return { label: code === "HH" ? "Critical High" : "High", style: "bg-red-100 text-red-700 border border-red-200" }
+  }
+  if (["L", "LO", "LOW", "BELOW", "<", "LL", "CRIT-LO"].includes(code)) {
+    return { label: code === "LL" ? "Critical Low" : "Low", style: "bg-blue-100 text-blue-700 border border-blue-200" }
+  }
+  if (["A", "ABN", "ABNORMAL"].includes(code)) {
+    return { label: "Abnormal", style: "bg-amber-100 text-amber-700 border border-amber-200" }
+  }
+  if (["POS", "POSITIVE", "DETECTED", "REACTIVE"].includes(code)) {
+    return { label: "Positive", style: "bg-orange-100 text-orange-700 border border-orange-200" }
+  }
+  if (["NEG", "NEGATIVE", "NOT DETECTED", "NONREACTIVE"].includes(code)) {
+    return { label: "Negative", style: "bg-emerald-100 text-emerald-700 border border-emerald-200" }
+  }
+  if (["N", "NORMAL"].includes(code)) {
+    return { label: "Normal", style: "bg-gray-100 text-gray-600 border border-gray-200" }
+  }
+  return { label: code, style: "bg-muted text-muted-foreground" }
+}
+
+const toEncounterObservation = (observation: any, source: "diagnosticReport" | "observation"): EncounterObservation => {
+  const title = getCodeText(observation?.code) || "Observation"
+  const interpretation = getInterpTag(observation?.interpretation)
+  const referenceText = refRangeText(observation?.referenceRange)
+  const components = Array.isArray(observation?.component)
+    ? observation.component.map((component: any, index: number): EncounterObservationComponent => {
+        const componentInterpretation = getInterpTag(component?.interpretation)
+        return {
+          id: component?.id || `${observation?.id || "component"}-${index}`,
+          title: getCodeText(component?.code) || "Component",
+          value: component?.valueQuantity
+            ? valueWithUnit(component.valueQuantity)
+            : component?.valueString || "—",
+          interpretationLabel: componentInterpretation?.label,
+          interpretationStyle: componentInterpretation?.style,
+          referenceText: refRangeText(component?.referenceRange),
+        }
+      })
+    : []
+
+  return {
+    id: observation?.id || `${source}-${Math.random().toString(36).slice(2, 10)}`,
+    title,
+    value: observation?.valueQuantity
+      ? valueWithUnit(observation.valueQuantity)
+      : observation?.valueString || "—",
+    interpretationLabel: interpretation?.label,
+    interpretationStyle: interpretation?.style,
+    referenceText,
+    effectiveDateTime: observation?.effectiveDateTime,
+    status: observation?.status,
+    source,
+    components,
+  }
+}
+
+function EncounterObservationCard({ observation }: { observation: EncounterObservation }) {
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-sm">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold text-foreground">{observation.title}</div>
+            <div className="text-xs text-muted-foreground">{observation.effectiveDateTime ? formatDateTime(observation.effectiveDateTime) : observation.source === "diagnosticReport" ? "Diagnostic report" : "Observation"}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-base font-semibold text-foreground">{observation.value}</span>
+            {observation.interpretationLabel && observation.interpretationStyle && (
+              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", observation.interpretationStyle)}>
+                {observation.interpretationLabel}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {observation.referenceText && <div className="text-xs text-muted-foreground">{observation.referenceText}</div>}
+
+        {observation.components.length > 0 && (
+          <div className="mt-2 divide-y rounded-md border bg-muted/40">
+            {observation.components.map((component) => (
+              <div key={component.id} className="grid gap-1 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">{component.title}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">{component.value}</span>
+                    {component.interpretationLabel && component.interpretationStyle && (
+                      <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", component.interpretationStyle)}>
+                        {component.interpretationLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {component.referenceText && <div className="text-xs text-muted-foreground">{component.referenceText}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProcedureRow({ procedure }: { procedure: EncounterProcedure }) {
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-foreground">{procedure.title}</span>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {procedure.category && <span>{procedure.category}</span>}
+            {procedure.outcome && (
+              <span className="inline-flex items-center gap-1">
+                <span className="font-medium text-foreground/80">Outcome:</span> {procedure.outcome}
+              </span>
+            )}
+          </div>
+          {procedure.report.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Reports: {procedure.report.join(", ")}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1 text-right">
+          {procedure.performed && <span className="text-xs text-muted-foreground">{formatDateTime(procedure.performed)}</span>}
+          {procedure.performer && <span className="text-xs text-muted-foreground">By {procedure.performer}</span>}
+          {procedure.status && (
+            <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs capitalize border-purple-200 bg-purple-50 text-purple-700">
+              {procedure.status}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MedicationRow({ medication }: { medication: EncounterMedication }) {
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-foreground">{medication.name}</span>
+          {medication.detail && <span className="text-xs text-muted-foreground">{medication.detail}</span>}
+        </div>
+        <div className="flex flex-col items-end text-right gap-1">
+          {medication.when && <span className="text-xs text-muted-foreground">{medication.when}</span>}
+          {medication.status && (
+            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs capitalize", medication.status === "active" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-muted bg-muted/60 text-muted-foreground")}>{medication.status}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 const getReferenceId = (ref: any): string | null => {
@@ -88,6 +302,7 @@ export function VisitHistoryCard() {
     medications = [],
     diagnosticReports = [],
     observations = [],
+    procedures = [],
     isLoading,
     error,
   } = useClinicalData()
@@ -183,7 +398,7 @@ export function VisitHistoryCard() {
 
     const ensureEntry = (encounterId: string) => {
       if (!map.has(encounterId)) {
-        map.set(encounterId, { medications: [], tests: [] })
+        map.set(encounterId, { medications: [], tests: [], procedures: [] })
       }
       return map.get(encounterId)!
     }
@@ -211,15 +426,14 @@ export function VisitHistoryCard() {
         const encounterId = getReferenceId(report?.encounter)
         if (!encounterId) return
         const entry = ensureEntry(encounterId)
-        const testId = report?.id || `${encounterId}-report-${entry.tests.length}`
-        if (entry.tests.some((item) => item.id === testId)) return
+        const observations = Array.isArray(report?._observations)
+          ? report._observations.filter((obs: any) => obs?.resourceType === "Observation")
+          : []
 
-        entry.tests.push({
-          id: testId,
-          name: getCodeText(report?.code) || "檢查報告",
-          status: report?.status,
-          dateLabel: formatDateTime(report?.issued || report?.effectiveDateTime),
-          source: "diagnosticReport",
+        observations.forEach((obs: any) => {
+          const normalized = toEncounterObservation(obs, "diagnosticReport")
+          if (entry.tests.some((item) => item.id === normalized.id)) return
+          entry.tests.push(normalized)
         })
       })
     }
@@ -229,26 +443,37 @@ export function VisitHistoryCard() {
         const encounterId = getReferenceId(obs?.encounter)
         if (!encounterId) return
         const entry = ensureEntry(encounterId)
-        const obsId = obs?.id || `${encounterId}-obs-${entry.tests.length}`
-        if (entry.tests.some((item) => item.id === obsId)) return
+        const normalized = toEncounterObservation(obs, "observation")
+        if (entry.tests.some((item) => item.id === normalized.id)) return
+        entry.tests.push(normalized)
+      })
+    }
 
-        const value =
-          obs?.valueQuantity?.value != null
-            ? `${obs.valueQuantity.value}${obs.valueQuantity.unit ? ` ${obs.valueQuantity.unit}` : ""}`
-            : obs?.valueString
+    if (Array.isArray(procedures)) {
+      procedures.forEach((procedure: any) => {
+        const encounterId = getReferenceId(procedure?.encounter)
+        if (!encounterId) return
+        const entry = ensureEntry(encounterId)
+        const id = procedure?.id || `${encounterId}-procedure-${entry.procedures.length}`
+        if (entry.procedures.some((existing) => existing.id === id)) return
 
-        entry.tests.push({
-          id: obsId,
-          name: value ? `${getCodeText(obs?.code) || "檢驗"} (${value})` : getCodeText(obs?.code) || "檢驗",
-          status: obs?.status,
-          dateLabel: formatDateTime(obs?.effectiveDateTime),
-          source: "observation",
+        entry.procedures.push({
+          id,
+          title: getCodeText(procedure?.code) || "Procedure",
+          status: procedure?.status,
+          performer: procedure?.performer?.[0]?.actor?.display,
+          performed: procedure?.performedDateTime || procedure?.performedPeriod?.start,
+          category: getCodeText(procedure?.category),
+          outcome: getCodeText(procedure?.outcome),
+          report: Array.isArray(procedure?.report)
+            ? procedure.report.map((ref: any) => ref?.display || ref?.reference).filter(Boolean)
+            : [],
         })
       })
     }
 
     return map
-  }, [medications, diagnosticReports, observations])
+  }, [medications, diagnosticReports, observations, procedures])
 
   const getTypeBadge = (type: VisitType) => {
     const typeMap = {
@@ -363,46 +588,33 @@ export function VisitHistoryCard() {
                     {hasDetails ? (
                         <div className="space-y-4">
                           {details?.tests.length ? (
-                            <div>
-                              <div className="text-xs font-medium text-muted-foreground">Tests</div>
-                              <div className="mt-1 space-y-2">
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tests</div>
+                              <div className="grid gap-2">
                                 {details.tests.map((test) => (
-                                  <div key={test.id} className="rounded-md bg-background/60 p-2">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <span className="font-medium text-sm">{test.name}</span>
-                                      {test.dateLabel && (
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">{test.dateLabel}</span>
-                                      )}
-                                    </div>
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                      {test.status && <span className="uppercase tracking-wide">{test.status}</span>}
-                                      <span>{test.source === "diagnosticReport" ? "Report" : "Observation"}</span>
-                                    </div>
-                                  </div>
+                                  <EncounterObservationCard key={test.id} observation={test} />
                                 ))}
                               </div>
                             </div>
                           ) : null}
 
                           {details?.medications.length ? (
-                            <div>
-                              <div className="text-xs font-medium text-muted-foreground">Medications</div>
-                              <div className="mt-1 space-y-2">
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Medications</div>
+                              <div className="grid gap-2">
                                 {details.medications.map((med) => (
-                                  <div key={med.id} className="rounded-md bg-background/60 p-2">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <span className="font-medium text-sm">{med.name}</span>
-                                      {med.when && (
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">{med.when}</span>
-                                      )}
-                                    </div>
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                      {med.status && <span className="uppercase tracking-wide">{med.status}</span>}
-                                    </div>
-                                    {med.detail && (
-                                      <div className="mt-1 text-xs text-muted-foreground">{med.detail}</div>
-                                    )}
-                                  </div>
+                                  <MedicationRow key={med.id} medication={med} />
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {details?.procedures.length ? (
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Procedures</div>
+                              <div className="grid gap-2">
+                                {details.procedures.map((procedure) => (
+                                  <ProcedureRow key={procedure.id} procedure={procedure} />
                                 ))}
                               </div>
                             </div>
