@@ -14,13 +14,13 @@ export function ApiKeyField() {
     // ↓ tighter vertical spacing
     <div className="max-w-xl space-y-1">
       {/* ↓ smaller label */}
-      <label htmlFor={`api-key-${Date.now()}`} className="text-xs text-muted-foreground">
+      <label htmlFor="api-key" className="text-xs text-muted-foreground">
         OpenAI API key（僅保存在本機瀏覽器）
       </label>
       {/* ↓ smaller gap */}
       <div className="flex gap-1.5">
         <Input
-          id={`api-key-${Date.now()}`}
+          id="api-key"
           type="password"
           placeholder="sk-..."
           className="h-8 text-sm"

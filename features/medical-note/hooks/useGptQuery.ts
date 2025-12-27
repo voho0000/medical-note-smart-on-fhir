@@ -9,19 +9,21 @@ type GptMessage = {
   content: string
 }
 
-type UseGptQueryOptions = {
-  defaultModel?: string
-  initialMessages?: GptMessage[]
-  timeout?: number // in milliseconds
+interface UseGptQueryOptions {
+  defaultModel?: string;
+  initialMessages?: GptMessage[];
+  timeout?: number; // in milliseconds
+  onResponse?: (response: string) => void;
+  onError?: (error: Error) => void;
 }
 
-export function useGptQuery(options: UseGptQueryOptions = {}) {
-  const { 
-    defaultModel = 'gpt-4.1', 
-    initialMessages = [],
-    timeout = 60000 // 1 minute default timeout (60000ms)
-  } = options
-  
+export function useGptQuery({
+  defaultModel = 'gpt-4.1',
+  initialMessages = [],
+  timeout = 60000, // 1 minute default timeout (60000ms)
+  onResponse,
+  onError
+}: UseGptQueryOptions = {}) {
   const { apiKey } = useApiKey()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
@@ -95,28 +97,10 @@ export function useGptQuery(options: UseGptQueryOptions = {}) {
       }
       
       const message = data.choices[0]?.message
-      console.log('Extracted message:', message)
-      
-      const content = message?.content
-      console.log('Extracted content:', content)
-      
-      if (content === undefined || content === null) {
-        console.error('Unexpected response structure:', {
-          data,
-          message,
-          content,
-          hasMessage: !!message,
-          hasContent: content !== undefined
-        })
-        throw new Error('Received empty or invalid response from OpenAI')
-      }
-      
-      // Final progress update
-      setProgress(100)
-      
-      setResponse(content)
-      console.log('Processed GPT Response:', content) // Log the processed response
-      return content
+      const responseText = data.choices[0]?.message?.content || '';
+      setResponse(responseText);
+      onResponse?.(responseText);
+      return responseText;
     } catch (err) {
       let error: Error
       
@@ -131,9 +115,11 @@ export function useGptQuery(options: UseGptQueryOptions = {}) {
         error = new Error(typeof err === 'string' ? err : 'An unknown error occurred')
       }
       
-      console.error('GPT Query Error:', error)
-      setError(error)
-      throw error
+      console.error('Error querying GPT:', error);
+      const errorObj = error as Error;
+      setError(errorObj);
+      onError?.(errorObj);
+      return '';
     } finally {
       clearTimeout(timeoutId)
       setIsLoading(false)

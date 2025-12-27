@@ -1,7 +1,7 @@
 // features/medical-note/components/GptPanel.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -10,11 +10,20 @@ import { usePatient } from "@/lib/providers/PatientProvider"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
 import { useGptQuery } from "../hooks/useGptQuery"
 import { useClinicalContext } from "@/features/data-selection/hooks/useClinicalContext"
+import { useGptResponse } from "../context/GptResponseContext"
 
-type PatientLite = { 
-  name?: { given?: string[]; family?: string }[]; 
+interface PatientLite { 
+  name?: Array<{ 
+    given?: string[]; 
+    family?: string 
+  }>; 
   gender?: string; 
-  birthDate?: string 
+  birthDate?: string;
+}
+
+interface ClinicalContextSection {
+  title?: string;
+  items?: Array<string | Record<string, unknown>> | string;
 }
 
 function calculateAge(birthDate?: string): string {
@@ -44,120 +53,147 @@ export function GptPanel({
   const { asrText, prompt, model, setModel } = useNote()
   const { getFormattedClinicalContext } = useClinicalContext()
   
+  const { setGptResponse, setIsGenerating } = useGptResponse();
+  
   const { queryGpt, isLoading, error, response: gptResponse } = useGptQuery({
-    defaultModel: defaultModel
-  })
-  const { apiKey } = useApiKey()
-  const [displayResponse, setDisplayResponse] = useState("")
-  const [isEdited, setIsEdited] = useState(false)
-
-  const validateApiKey = () => {
-    if (!apiKey) {
-      alert('請先輸入 OpenAI API key')
-      return false
+    defaultModel: defaultModel,
+    onResponse: (response) => {
+      setGptResponse(response);
+      setDisplayResponse(response);
+      setIsGenerating(false);
+    },
+    onError: (error) => {
+      console.error('GPT Error:', error);
+      setDisplayResponse(`Error: ${error.message}`);
+      setIsGenerating(false);
     }
-    return true
-  }
+  });
+  
+  const { apiKey } = useApiKey();
+  const [displayResponse, setDisplayResponse] = useState("");
+  const [isEdited, setIsEdited] = useState(false);
 
-  const handleGptRequest = async () => {
-    if (!validateApiKey()) return
-    
-    try {
-      // 1. Get de-identified patient info
-      const patientInfo = currentPatient
-        ? `Patient ID: ${currentPatient.id || 'N/A'}
-        Gender: ${currentPatient.gender || "N/A"}
-        Age: ${currentPatient.birthDate ? calculateAge(currentPatient.birthDate) : "N/A"}`
-        : "No patient information available."
-      
-      // Log original patient info (for debugging, not sent to GPT)
-      if (currentPatient) {
-        console.log('Original Patient Info (not sent to GPT):', {
-          name: `${currentPatient.name?.[0]?.given?.join(" ") || ""} ${currentPatient.name?.[0]?.family || ""}`.trim() || 'N/A',
-          gender: currentPatient.gender,
-          birthDate: currentPatient.birthDate,
-          id: currentPatient.id
+  const validateApiKey = useCallback(() => {
+    if (!apiKey) {
+      alert('Please enter your OpenAI API key');
+      return false;
+    }
+    return true;
+  }, [apiKey]);
+
+  const formatClinicalContext = useCallback((context: unknown): string => {
+    if (Array.isArray(context)) {
+      return context
+        .map((section: ClinicalContextSection) => {
+          if (!section) return '';
+          const title = section.title || 'Untitled';
+          const items = Array.isArray(section.items) 
+            ? section.items.map(item => `- ${typeof item === 'object' ? JSON.stringify(item) : item}`).join('\n')
+            : String(section.items || '');
+          return `${title}:\n${items}`;
         })
-      }
+        .filter(Boolean)
+        .join('\n\n');
+    }
+    return String(context);
+  }, []);
 
-      console.log('Patient Info:', patientInfo)
+  const handleGenerate = useCallback(async () => {
+    if (!validateApiKey()) return;
+    if (!apiKey) {
+      alert('Please set your API key in the settings');
+      return;
+    }
 
-      // 2. Get selected clinical data context
-      const clinicalContext = getFormattedClinicalContext()
-      console.log('Raw Clinical Context:', clinicalContext)
+    try {
+      setIsGenerating(true);
+      setDisplayResponse('');
       
-      // Define types for clinical context
-      interface ClinicalContextSection {
-        title?: string;
-        items?: (string | { [key: string]: any })[] | string;
-      }
+      const context = getFormattedClinicalContext();
+      const patientInfo = patient || currentPatient;
       
-      // Format the clinical context for display
-      const formatClinicalContext = (context: ClinicalContextSection[] | string | null | undefined): string => {
-        if (!context) return 'No clinical data selected';
-        
-        if (Array.isArray(context)) {
-          return context
-            .map((section: ClinicalContextSection) => {
-              if (!section) return '';
-              const title = section.title || 'Untitled';
-              const items = Array.isArray(section.items) 
-                ? section.items.map((item: any) => `- ${typeof item === 'object' ? JSON.stringify(item) : item}`).join('\n')
-                : String(section.items || '');
-              return `${title}:\n${items}`;
-            })
-            .filter(Boolean)
-            .join('\n\n');
-        }
-        
-        return String(context);
-      };
+      const patientDetails = patientInfo ? [
+        `Patient: ${patientInfo.name?.[0]?.given?.[0] || 'Unknown'} ${patientInfo.name?.[0]?.family || ''}`,
+        `Gender: ${patientInfo.gender || 'Unknown'}`,
+        `Age: ${calculateAge(patientInfo.birthDate)}`
+      ].join('\n') : 'No patient information available.';
+
+      const formattedContext = formatClinicalContext(context);
       
-      const formattedContext = formatClinicalContext(clinicalContext);
-      console.log('Formatted Clinical Context:', formattedContext);
+      const fullPrompt = [
+        '## Patient Information',
+        patientDetails,
+        '\n## Clinical Context',
+        formattedContext,
+        asrText ? '\n## Additional Notes from ASR\n' + asrText : '',
+        '\n## Instruction\n' + (prompt || 'Generate a clinical note based on the above information.')
+      ].join('\n');
 
-      // 3. Combine all context into the prompt
-      const fullPrompt = `## Patient Information\n${patientInfo}\n\n## Clinical Context\n${formattedContext}\n\n## Note\n${asrText || 'No note provided.'}\n\n## Instruction\n${prompt || 'Generate Medical Summary'}`
-
-      console.log('Full Prompt:', fullPrompt)
-
-      // 4. Make the API call
-      // The response will be set by the useGptQuery hook
+      console.log('Sending prompt to GPT:', fullPrompt);
+      
+      // Call GPT with the full prompt as a user message
       await queryGpt([
         { 
-          role: 'system', 
+          role: 'system' as const, 
           content: 'You are a helpful medical assistant. Provide clear and concise responses based on the patient information and clinical context provided.' 
         },
         { 
-          role: 'user', 
+          role: 'user' as const, 
           content: fullPrompt 
         }
-      ], model || defaultModel)
-    } catch (err) {
-      console.error('Error in handleGptRequest:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate GPT response'
-      console.error('Error details:', { error: err })
-      setDisplayResponse(`Error: ${errorMessage}`)
+      ]);
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate response';
+      console.error('Error generating response:', error);
+      setDisplayResponse(`Error: ${errorMessage}`);
+      alert('Error generating response. Please check the console for details.');
+    } finally {
+      setIsGenerating(false);
     }
-  }
+  }, [
+    apiKey, 
+    asrText, 
+    currentPatient, 
+    formatClinicalContext, 
+    getFormattedClinicalContext, 
+    model, 
+    patient, 
+    prompt, 
+    queryGpt, 
+    setIsGenerating, 
+    setGptResponse, 
+    validateApiKey
+  ]);
+
+  const handleResponseChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDisplayResponse(e.target.value);
+    setIsEdited(true);
+  }, []);
 
   return (
     <Card>
       <CardHeader><CardTitle>GPT Response</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        {/* 若之後要加模型選單，可用 <Select> 改 setModel */}
         <Textarea 
-          value={isEdited ? displayResponse : (gptResponse || displayResponse || '')} 
-          onChange={(e) => {
-            if (!isEdited) setIsEdited(true);
-            setDisplayResponse(e.target.value)
-          }} 
-          placeholder="GPT response will appear here..." 
-          className="min-h-[80px]"
+          value={displayResponse}
+          onChange={handleResponseChange}
+          placeholder="GPT response will appear here..."
+          className="min-h-[300px] font-mono text-sm"
+          readOnly={isLoading}
         />
-        <Button onClick={handleGptRequest} disabled={isLoading}>
-          {isLoading ? "Generating…" : "Generate GPT Response"}
-        </Button>
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-muted-foreground">
+            {isLoading ? 'Generating...' : isEdited ? 'Edited' : ''}
+          </div>
+          <Button 
+            onClick={handleGenerate}
+            disabled={isLoading}
+            className="ml-auto"
+          >
+            {isLoading ? 'Generating...' : 'Generate'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

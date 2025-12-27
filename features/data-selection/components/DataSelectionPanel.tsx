@@ -1,6 +1,7 @@
 // features/data-selection/components/DataSelectionPanel.tsx
 "use client"
 
+import { useState, useEffect, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
@@ -54,43 +55,155 @@ export function DataSelectionPanel({
   onSelectionChange,
   onFiltersChange 
 }: DataSelectionPanelProps) {
-  const dataCategories: DataItem[] = [
-    {
-      id: 'conditions',
-      label: 'Medical Conditions',
-      description: 'Active and historical medical conditions',
-      count: clinicalData.conditions?.length || 0,
-      category: 'clinical'
-    },
-    {
-      id: 'medications',
-      label: 'Medications',
-      description: 'Current and past medications',
-      count: clinicalData.medications?.length || 0,
-      category: 'medication'
-    },
-    {
-      id: 'allergies',
-      label: 'Allergies & Intolerances',
-      description: 'Known allergies and adverse reactions',
-      count: clinicalData.allergies?.length || 0,
-      category: 'clinical'
-    },
-    {
-      id: 'diagnosticReports',
-      label: 'Diagnostic Reports',
-      description: 'Lab results and diagnostic imaging reports',
-      count: clinicalData.diagnosticReports?.length || 0,
-      category: 'diagnostics'
-    },
-    {
-      id: 'observations',
-      label: 'Vital Signs',
-      description: 'Vital signs and other clinical measurements',
-      count: clinicalData.observations?.length || 0,
-      category: 'clinical'
+  // Helper function to check if a date is within the specified time range
+  const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return false;
+    
+    const now = new Date();
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+    
+    switch (range) {
+      case '24h': return diffInDays <= 1;
+      case '3d': return diffInDays <= 3;
+      case '1w': return diffInDays <= 7;
+      case '1m': return diffInDays <= 30;
+      case '3m': return diffInDays <= 90;
+      case '6m': return diffInDays <= 180;
+      case '1y': return diffInDays <= 365;
+      case 'all':
+      default:
+        return true;
     }
-  ]
+  };
+
+  // Get the latest version of each item by ID
+  const getLatestVersions = (items: any[]) => {
+    const latestVersions = new Map();
+    
+    items.forEach(item => {
+      // For FHIR resources, the ID might include the version after a /_history/ part
+      // Example: "Observation/123/_history/1"
+      const [baseId] = item.id?.split('/_history/') || [];
+      if (!baseId) return;
+      
+      const existing = latestVersions.get(baseId);
+      const currentVersion = parseInt(item.meta?.versionId || '0', 10);
+      const existingVersion = parseInt(existing?.meta?.versionId || '0', 10);
+      
+      if (!existing || currentVersion > existingVersion) {
+        latestVersions.set(baseId, item);
+      }
+    });
+    
+    return Array.from(latestVersions.values());
+  };
+
+  // Calculate filtered counts based on time range and version
+  const getFilteredCount = (items: any[], dataType: 'diagnosticReports' | 'observations' = 'diagnosticReports') => {
+    if (!items || !items.length) return 0;
+    if (!filters) return items.length;
+    
+    // Debug log
+    console.log(`Getting filtered count for ${dataType}`, {
+      filters,
+      itemCount: items.length,
+      hasItems: items.length > 0
+    });
+    
+    // Handle version filtering first
+    let filteredItems = [...items];
+    if (dataType === 'diagnosticReports') {
+      console.log('Applying diagnostic reports filter:', {
+        labReportVersion: filters.labReportVersion,
+        originalCount: filteredItems.length
+      });
+      if (filters.labReportVersion === 'latest') {
+        filteredItems = getLatestVersions(items);
+        console.log('After latest version filter:', filteredItems.length);
+      }
+    } else if (dataType === 'observations') {
+      console.log('Applying observations filter:', {
+        vitalSignsVersion: filters.vitalSignsVersion,
+        originalCount: filteredItems.length
+      });
+      if (filters.vitalSignsVersion === 'latest') {
+        filteredItems = getLatestVersions(items);
+        console.log('After latest version filter:', filteredItems.length);
+      }
+    }
+    
+    // Then handle time range filtering
+    const timeRange = dataType === 'diagnosticReports' 
+      ? filters.reportTimeRange 
+      : filters.vitalSignsTimeRange;
+      
+    if (!timeRange || timeRange === 'all') return filteredItems.length;
+    
+    return filteredItems.filter(item => {
+      const date = item.effectiveDateTime;
+      return isWithinTimeRange(date, timeRange);
+    }).length;
+  };
+
+  // Force re-render when filters change
+  const [filterKey, setFilterKey] = useState(0);
+
+  // Memoize the data categories to prevent unnecessary re-renders
+  const dataCategories = useMemo(() => {
+    // This will force a re-render when filterKey changes
+    const _ = filterKey;
+    return [
+      {
+        id: 'conditions' as const,
+        label: 'Medical Conditions',
+        description: 'Active and historical medical conditions',
+        count: clinicalData.conditions?.length || 0, // Conditions typically don't have a time range
+        category: 'clinical'
+      },
+      {
+        id: 'medications' as const,
+        label: 'Medications',
+        description: 'Current and past medications',
+        count: clinicalData.medications?.length || 0, // Medications typically don't have a time range
+        category: 'medication'
+      },
+      {
+        id: 'allergies' as const,
+        label: 'Allergies & Intolerances',
+        description: 'Known allergies and adverse reactions',
+        count: clinicalData.allergies?.length || 0, // Allergies typically don't have a time range
+        category: 'clinical'
+      },
+      {
+        id: 'diagnosticReports' as const,
+        label: 'Diagnostic Reports',
+        description: 'Lab results and diagnostic imaging reports',
+        count: getFilteredCount(clinicalData.diagnosticReports || [], 'diagnosticReports'),
+        category: 'diagnostics'
+      },
+      {
+        id: 'observations' as const,
+        label: 'Vital Signs',
+        description: 'Vital signs and other clinical measurements',
+        count: getFilteredCount(clinicalData.observations || [], 'observations'),
+        category: 'clinical'
+      }
+    ];
+  }, [
+    clinicalData.conditions,
+    clinicalData.medications,
+    clinicalData.allergies,
+    clinicalData.diagnosticReports,
+    clinicalData.observations,
+    filters?.reportTimeRange,
+    filters?.vitalSignsTimeRange,
+    filters?.labReportVersion,
+    filters?.vitalSignsVersion,
+    filterKey
+  ]);
 
   const handleToggle = (id: DataType, checked: boolean) => {
     onSelectionChange({
@@ -108,10 +221,23 @@ export function DataSelectionPanel({
   }
 
   const handleFilterChange = (key: keyof DataFilters, value: any) => {
-    onFiltersChange({
+    console.log('Filter changed:', { key, value, currentFilters: filters });
+    
+    const newFilters = {
       ...filters,
       [key]: value
-    })
+    };
+    
+    console.log('New filters:', newFilters);
+    
+    // Force a re-render by creating a new object reference and updating the filter key
+    onFiltersChange({ ...newFilters });
+    
+    // Force a re-render to ensure the component updates
+    setFilterKey(prev => prev + 1);
+    
+    // Log the current time to verify the function is called
+    console.log('Filter change processed at:', new Date().toISOString());
   }
 
   const allSelected = dataCategories.every(item => selectedData[item.id])
