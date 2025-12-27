@@ -10,6 +10,7 @@ import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
 import { useDataSelection, DataSelection } from "@/features/data-selection/hooks/useDataSelection"
 import { GptResponseProvider } from "@/features/medical-note/context/GptResponseContext"
 import { AsrProvider } from "@/features/medical-note/context/AsrContext"
+import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
 
 // Import the ClinicalData type from the provider
 import type { ClinicalData as ClinicalDataFromProvider } from "@/lib/providers/ClinicalDataProvider"
@@ -42,12 +43,13 @@ export function RightPanelFeature() {
           className="h-full flex flex-col"
           defaultValue="medicalNote"
         >
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="medicalNote">Medical Note</TabsTrigger>
           <TabsTrigger value="dataSelection">Data Selection</TabsTrigger>
+          <TabsTrigger value="clinicalInsights">Clinical Insights</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="medicalNote" className="flex-1 mt-0 pt-4">
+        <TabsContent value="medicalNote" className="flex-1 mt-0 pt-4" forceMount>
           <ScrollArea className="h-full pr-2">
             <div className="space-y-4">
               <MedicalNoteFeature />
@@ -55,7 +57,7 @@ export function RightPanelFeature() {
           </ScrollArea>
         </TabsContent>
         
-        <TabsContent value="dataSelection" className="flex-1 mt-0 pt-4">
+        <TabsContent value="dataSelection" className="flex-1 mt-0 pt-4" forceMount>
           <ScrollArea className="h-full pr-2">
             <div className="rounded-lg border p-4">
               <DataSelectionPanel 
@@ -74,6 +76,10 @@ export function RightPanelFeature() {
               />
             </div>
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="clinicalInsights" className="flex-1 mt-0 pt-4" forceMount>
+          <ClinicalInsightsFeature />
         </TabsContent>
       </Tabs>
       </AsrProvider>

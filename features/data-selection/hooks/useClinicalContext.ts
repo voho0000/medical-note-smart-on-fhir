@@ -1,6 +1,7 @@
 // features/data-selection/hooks/useClinicalContext.ts
 "use client";
 
+import { useCallback } from "react";
 import { useDataSelection } from "@/features/data-selection/hooks/useDataSelection";
 import { useClinicalData } from "@/lib/providers/ClinicalDataProvider";
 
@@ -120,7 +121,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
   };
 
   // Helper: format sections to a single string
-  const formatClinicalContext = (sections: ClinicalContextSection[]): string => {
+  const formatClinicalContext = useCallback((sections: ClinicalContextSection[]): string => {
     if (!sections || sections.length === 0) return "No clinical data available.";
 
     return sections
@@ -132,10 +133,10 @@ export function useClinicalContext(): UseClinicalContextReturn {
       })
       .filter(Boolean)
       .join("\n\n");
-  };
+  }, []);
 
   // Core: build clinical context list
-  const getClinicalContext = (): ClinicalContextSection[] => {
+  const getClinicalContext = useCallback((): ClinicalContextSection[] => {
     const context: ClinicalContextSection[] = [];
     const observationIdsInReports = new Set<string>();
 
@@ -324,9 +325,12 @@ export function useClinicalContext(): UseClinicalContextReturn {
     }
 
     return context;
-  };
+  }, [clinicalData, filters, selectedData]);
 
-  const getFormattedClinicalContext = (): string => formatClinicalContext(getClinicalContext());
+  const getFormattedClinicalContext = useCallback(
+    (): string => formatClinicalContext(getClinicalContext()),
+    [formatClinicalContext, getClinicalContext],
+  );
 
   // Return the hook API
   return {

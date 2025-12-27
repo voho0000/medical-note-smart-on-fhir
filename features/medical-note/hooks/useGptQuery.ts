@@ -54,12 +54,12 @@ export function useGptQuery({
       // Initial progress update
       setProgress(10)
       
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await fetch("/api/llm", {
         method: "POST",
         signal: controller.signal,
         headers: { 
           "Content-Type": "application/json", 
-          "Authorization": `Bearer ${apiKey}` 
+          "x-openai-key": apiKey 
         },
         body: JSON.stringify({ 
           model: customModel || model,
