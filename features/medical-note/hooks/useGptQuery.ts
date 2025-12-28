@@ -79,7 +79,7 @@ function extractGeminiContent(payload: unknown): string {
       const texts = record.parts
         .map((part) => {
           if (!part || typeof part !== "object") return ""
-          const text = (part as Record<string, unknown>).text
+          const { text } = part as Record<string, unknown>
           return typeof text === "string" ? text : ""
         })
         .filter((text) => text.trim().length > 0)
@@ -160,26 +160,22 @@ export function useGptQuery({
     const shouldUseOpenAiProxy = modelProvider === "openai" && !apiKey && isBuiltInModel && hasChatProxy
     const shouldUseGeminiProxy = modelProvider === "gemini" && !geminiKey && hasGeminiProxy
 
-    if (modelProvider === "openai") {
-      if (!apiKey) {
-        if (modelDefinition?.requiresUserKey) {
-          const error = new Error("This GPT model requires a personal OpenAI API key")
-          setError(error)
-          throw error
-        }
-
-        if (!shouldUseOpenAiProxy) {
-          const error = new Error("Built-in GPT models require either the PrismaCare proxy or a personal OpenAI key")
-          setError(error)
-          throw error
-        }
-      }
-    } else if (modelProvider === "gemini") {
-      if (!geminiKey && !shouldUseGeminiProxy) {
-        const error = new Error("Gemini models require either the PrismaCare Gemini proxy or a personal Gemini key")
+    if (modelProvider === "openai" && !apiKey) {
+      if (modelDefinition?.requiresUserKey) {
+        const error = new Error("This GPT model requires a personal OpenAI API key")
         setError(error)
         throw error
       }
+
+      if (!shouldUseOpenAiProxy) {
+        const error = new Error("Built-in GPT models require either the PrismaCare proxy or a personal OpenAI key")
+        setError(error)
+        throw error
+      }
+    } else if (modelProvider === "gemini" && !geminiKey && !shouldUseGeminiProxy) {
+      const error = new Error("Gemini models require either the PrismaCare Gemini proxy or a personal Gemini key")
+      setError(error)
+      throw error
     }
 
     // Reset states
@@ -225,7 +221,7 @@ export function useGptQuery({
         } else if (apiKey) {
           requestHeaders["x-openai-key"] = apiKey
         }
-      } else {
+      } else if (modelProvider === "gemini") {
         // Gemini request payload
         if (shouldUseGeminiProxy) {
           targetUrl = "/api/gemini-proxy"
@@ -300,7 +296,7 @@ export function useGptQuery({
             throw new Error('Invalid response format from OpenAI API')
           }
         }
-      } else {
+      } else if (modelProvider === "gemini") {
         if (shouldUseGeminiProxy) {
           const proxyPayload = data?.message ?? data
           responseText = extractMessageContent(proxyPayload) || extractGeminiContent(proxyPayload)

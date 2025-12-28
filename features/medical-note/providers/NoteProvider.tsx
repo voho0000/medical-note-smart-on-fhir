@@ -12,17 +12,27 @@ type Ctx = {
   setGptResponse: Dispatch<SetStateAction<string>>
   model: string
   setModel: Dispatch<SetStateAction<string>>
+  chatMessages: ChatMessage[]
+  setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>
 }
 
 const NoteContext = createContext<Ctx | null>(null)
 
 const MODEL_STORAGE_KEY = "clinical-note:model"
 
+export type ChatMessage = {
+  id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  timestamp: number
+}
+
 export function NoteProvider({ children }: { children: React.ReactNode }) {
   const [asrText, setAsrText] = useState("")
   const [prompt, setPrompt] = useState("Generate Medical Summary")
   const [gptResponse, setGptResponse] = useState("")
   const [model, setModel] = useState<string>(DEFAULT_MODEL_ID)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -43,7 +53,8 @@ export function NoteProvider({ children }: { children: React.ReactNode }) {
     prompt, setPrompt,
     gptResponse, setGptResponse,
     model, setModel,
-  }), [asrText, prompt, gptResponse, model])
+    chatMessages, setChatMessages,
+  }), [asrText, prompt, gptResponse, model, chatMessages])
 
   return <NoteContext.Provider value={value}>{children}</NoteContext.Provider>
 }

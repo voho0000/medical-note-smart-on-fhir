@@ -4,7 +4,7 @@
 import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import MedicalNoteFeature from "@/features/medical-note/Feature"
+import MedicalChatFeature from "@/features/medical-chat/Feature"
 import { NoteProvider } from "@/features/medical-note/providers/NoteProvider"
 import { DataSelectionPanel } from "@/features/data-selection/components/DataSelectionPanel"
 import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
@@ -32,7 +32,7 @@ export function RightPanelFeature() {
 }
 
 function RightPanelContent() {
-  const [activeTab, setActiveTab] = useState("medicalNote")
+  const [activeTab, setActiveTab] = useState("medicalChat")
   const clinicalData = useClinicalData()
   const { 
     selectedData, 
@@ -54,19 +54,19 @@ function RightPanelContent() {
               value={activeTab} 
               onValueChange={setActiveTab}
               className="h-full flex flex-col"
-              defaultValue="medicalNote"
+              defaultValue="medicalChat"
             >
               <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="medicalNote">Medical Note</TabsTrigger>
+                <TabsTrigger value="medicalChat">Note Chat</TabsTrigger>
                 <TabsTrigger value="dataSelection">Data Selection</TabsTrigger>
                 <TabsTrigger value="clinicalInsights">Clinical Insights</TabsTrigger>
                 <TabsTrigger value="settings">Settings</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="medicalNote" className="flex-1 mt-0 pt-4" forceMount>
+              <TabsContent value="medicalChat" className="flex-1 mt-0 pt-4" forceMount>
                 <ScrollArea className="h-full pr-2">
                   <div className="space-y-4">
-                    <MedicalNoteFeature />
+                    <MedicalChatFeature />
                   </div>
                 </ScrollArea>
               </TabsContent>
