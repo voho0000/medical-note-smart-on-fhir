@@ -14,7 +14,7 @@ import { useAsr } from "@/features/medical-note/context/AsrContext"
 import { useDataSelection } from "@/features/data-selection/hooks/useDataSelection"
 import { usePatient } from "@/lib/providers/PatientProvider"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
-import { Loader2, Mic, Square } from "lucide-react"
+import { Loader2, Mic, Square, Plus, Trash2, FileText } from "lucide-react"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/lib/config/ai"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { usePromptTemplates } from "@/features/medical-chat/context/PromptTemplatesContext"
@@ -325,7 +325,7 @@ export function MedicalChat() {
             Ask follow-up questions or dictate updates using the microphone.
           </p>
         </div>
-        {recordingStatusLabel || asrError || error || lastTranscript ? (
+        {recordingStatusLabel || asrError || error ? (
           <div className="space-y-0.5 text-[11px]">
             {recordingStatusLabel ? (
               <p className="flex items-center gap-2 text-muted-foreground">
@@ -340,10 +340,7 @@ export function MedicalChat() {
                 {recordingStatusLabel}
               </p>
             ) : null}
-            {lastTranscript ? (
-              <p className="text-muted-foreground">Last transcript: {latestTranscriptPreview || "—"}</p>
-            ) : null}
-            {asrError ? <p className="text-destructive">ASR error: {asrError}</p> : null}
+            {asrError ? <p className="text-destructive">Voice input error: {asrError}</p> : null}
             {error ? <p className="text-destructive">Chat error: {error.message}</p> : null}
           </div>
         ) : null}
@@ -387,36 +384,45 @@ export function MedicalChat() {
       </CardContent>
       <CardFooter className="flex flex-col gap-2 border-t pt-4">
         <div className="flex w-full flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-1 pb-2">
-            <Button variant="outline" size="sm" onClick={handleInsertContext} className="h-8 px-2 text-xs">
-              Insert Context
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleInsertAsr} disabled={!asrText} className="h-8 px-2 text-xs">
-              Insert ASR
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearAsrHistory}
-              disabled={!asrText}
-              className="h-8 px-2 text-xs"
-            >
-              Clear ASR
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleResetConversation}
-              disabled={chatMessages.length === 0 || isResetting}
-              className="h-8 px-2 text-xs"
-            >
-              Clear Chat
-            </Button>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
+            <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
+              <Button variant="ghost" size="sm" onClick={handleInsertContext} className="h-7 gap-1 px-1.5 text-xs">
+                <Plus className="h-3 w-3" />
+                Context
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleInsertAsr} disabled={!asrText} className="h-7 gap-1 px-1.5 text-xs">
+                <Plus className="h-3 w-3" />
+                Voice
+              </Button>
+            </div>
+            <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearAsrHistory}
+                disabled={!asrText}
+                className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+                Voice
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetConversation}
+                disabled={chatMessages.length === 0 || isResetting}
+                className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+                Chat
+              </Button>
+            </div>
             {templates.length > 0 ? (
-              <>
+              <div className="flex items-center gap-0.5 rounded-md border bg-primary/5 p-0.5">
                 <Select value={selectedTemplate?.id} onValueChange={setSelectedTemplateId}>
-                  <SelectTrigger className="h-8 min-w-[160px] px-2 text-left text-xs">
-                    <SelectValue placeholder="Prompt templates" />
+                  <SelectTrigger className="h-7 max-w-[180px] gap-1 border-0 bg-transparent px-1.5 text-xs shadow-none hover:bg-primary/10">
+                    <FileText className="h-3 w-3 shrink-0" />
+                    <SelectValue placeholder="Templates" className="truncate" />
                   </SelectTrigger>
                   <SelectContent align="start" className="w-[200px] text-xs">
                     {templates.map((template) => (
@@ -429,14 +435,15 @@ export function MedicalChat() {
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
                   onClick={handleInsertTemplate}
                   disabled={!selectedTemplate?.content?.trim()}
-                  className="h-8 px-2 text-xs"
+                  className="h-7 gap-1 px-1.5 text-xs hover:bg-primary/10"
                 >
+                  <Plus className="h-3 w-3" />
                   Insert
                 </Button>
-              </>
+              </div>
             ) : null}
           </div>
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
@@ -494,10 +501,10 @@ export function MedicalChat() {
             <span>{input.length} characters</span>
             {lastTranscript ? (
               <span className="truncate sm:max-w-[320px]">
-                Latest ASR snippet: {latestTranscriptPreview || "—"}
+                Latest voice input: {latestTranscriptPreview || "—"}
               </span>
             ) : (
-              <span aria-hidden="true"> </span>
+              <span aria-hidden="true"> </span>
             )}
           </div>
         </div>
