@@ -65,15 +65,15 @@ function RightPanelContent() {
                 <TabsTrigger value="settings">Settings</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="medicalChat" className="flex-1 mt-0 pt-4" forceMount>
+              <TabsContent value="medicalChat" className="flex-1" forceMount>
                 <ScrollArea className="h-full pr-2">
-                  <div className="space-y-4">
+                  <div className="space-y-4 py-2">
                     <MedicalChatFeature />
                   </div>
                 </ScrollArea>
               </TabsContent>
               
-              <TabsContent value="dataSelection" className="flex-1 mt-0 pt-4" forceMount>
+              <TabsContent value="dataSelection" className="flex-1" forceMount>
                 <ScrollArea className="h-full pr-2">
                   <div className="rounded-lg border p-4">
                     <DataSelectionPanel 
@@ -95,13 +95,13 @@ function RightPanelContent() {
                 </ScrollArea>
               </TabsContent>
 
-              <TabsContent value="clinicalInsights" className="flex-1 mt-0 pt-4" forceMount>
+              <TabsContent value="clinicalInsights" className="flex-1" forceMount>
                 <ClinicalInsightsFeature />
               </TabsContent>
 
-              <TabsContent value="settings" className="flex-1 mt-0 pt-4" forceMount>
+              <TabsContent value="settings" className="flex-1" forceMount>
                 <ScrollArea className="h-full pr-2">
-                  <div className="space-y-4">
+                  <div className="space-y-4 py-2">
                     <SettingsFeature />
                   </div>
                 </ScrollArea>

@@ -318,7 +318,7 @@ export function MedicalChat() {
 
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader className="space-y-2 pb-3">
+      <CardHeader className="space-y-1 pb-2">
         <div className="flex flex-col gap-0.5">
           <CardTitle className="text-base">Medical Note Chat</CardTitle>
           <p className="text-xs text-muted-foreground">
@@ -345,8 +345,8 @@ export function MedicalChat() {
           </div>
         ) : null}
       </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="h-[400px] px-4 py-4">
+      <CardContent className="border-t p-0">
+        <ScrollArea className="h-[390px] px-4">
           <div className="flex flex-col gap-3">
             {chatMessages.length === 0 ? (
               <div className="text-sm text-muted-foreground">
@@ -382,9 +382,9 @@ export function MedicalChat() {
           </div>
         </ScrollArea>
       </CardContent>
-      <CardFooter className="flex flex-col gap-2 border-t pt-4">
+      <CardFooter className="flex flex-col gap-2 border-t pt-1">
         <div className="flex w-full flex-col gap-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
             <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
               <Button variant="ghost" size="sm" onClick={handleInsertContext} className="h-7 gap-1 px-1.5 text-xs">
                 <Plus className="h-3 w-3" />
