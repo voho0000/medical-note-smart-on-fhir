@@ -16,6 +16,8 @@ import { usePatient } from "@/lib/providers/PatientProvider"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
 import { Loader2, Mic, Square } from "lucide-react"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/lib/config/ai"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { usePromptTemplates } from "@/features/medical-chat/context/PromptTemplatesContext"
 
 const ReactMediaRecorder = dynamic(async () => (await import("react-media-recorder")).ReactMediaRecorder, {
   ssr: false,
@@ -37,12 +39,14 @@ export function MedicalChat() {
   const { patient: currentPatient } = usePatient()
   const { selectedData } = useDataSelection()
   const { apiKey } = useApiKey()
+  const { templates } = usePromptTemplates()
   const [input, setInput] = useState("")
   const [isResetting, setIsResetting] = useState(false)
   const [lastTranscript, setLastTranscript] = useState<{ text: string; timestamp: string } | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [asrError, setAsrError] = useState<string | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("")
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const timerRef = useRef<number | null>(null)
   const startRecordingRef = useRef<() => void>(() => {})
@@ -72,6 +76,27 @@ export function MedicalChat() {
   useEffect(() => {
     asrTextRef.current = asrText
   }, [asrText])
+
+  const selectedTemplate = useMemo(() => {
+    if (!templates.length) {
+      return undefined
+    }
+    const fallback = templates[0]
+    if (!selectedTemplateId) {
+      return fallback
+    }
+    return templates.find((template) => template.id === selectedTemplateId) ?? fallback
+  }, [selectedTemplateId, templates])
+
+  useEffect(() => {
+    if (!templates.length) {
+      setSelectedTemplateId("")
+      return
+    }
+    if (!templates.some((template) => template.id === selectedTemplateId)) {
+      setSelectedTemplateId(templates[0].id)
+    }
+  }, [selectedTemplateId, templates])
 
   const formattedRecordingDuration = useMemo(() => {
     const minutes = Math.floor(seconds / 60)
@@ -285,41 +310,23 @@ export function MedicalChat() {
     setLastTranscript(null)
   }, [setAsrText])
 
+  const handleInsertTemplate = useCallback(() => {
+    const templateContent = selectedTemplate?.content?.trim()
+    if (!templateContent) return
+    setInput((prev) => (prev ? `${prev.trimEnd()}\n\n${templateContent}` : templateContent))
+  }, [selectedTemplate])
+
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <CardTitle>Medical Note Chat</CardTitle>
-          <p className="text-sm text-muted-foreground">
+      <CardHeader className="space-y-2 pb-3">
+        <div className="flex flex-col gap-0.5">
+          <CardTitle className="text-base">Medical Note Chat</CardTitle>
+          <p className="text-xs text-muted-foreground">
             Ask follow-up questions or dictate updates using the microphone.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleInsertContext}>
-            Insert Clinical Context
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleInsertAsr} disabled={!asrText}>
-            Insert ASR History
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClearAsrHistory}
-            disabled={!asrText}
-          >
-            Clear ASR History
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleResetConversation}
-            disabled={chatMessages.length === 0 || isResetting}
-          >
-            Clear Conversation
-          </Button>
-        </div>
         {recordingStatusLabel || asrError || error || lastTranscript ? (
-          <div className="space-y-1 text-xs">
+          <div className="space-y-0.5 text-[11px]">
             {recordingStatusLabel ? (
               <p className="flex items-center gap-2 text-muted-foreground">
                 {isRecording ? (
@@ -341,8 +348,8 @@ export function MedicalChat() {
           </div>
         ) : null}
       </CardHeader>
-      <CardContent className="flex-1 space-y-3 overflow-hidden p-0">
-        <ScrollArea className="h-[360px] w-full p-4">
+      <CardContent className="flex flex-1 min-h-0 flex-col overflow-hidden p-0">
+        <ScrollArea className="flex-1 px-4 py-4">
           <div className="flex flex-col gap-3">
             {chatMessages.length === 0 ? (
               <div className="text-sm text-muted-foreground">
@@ -380,6 +387,58 @@ export function MedicalChat() {
       </CardContent>
       <CardFooter className="flex flex-col gap-2 border-t pt-4">
         <div className="flex w-full flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-1 pb-2">
+            <Button variant="outline" size="sm" onClick={handleInsertContext} className="h-8 px-2 text-xs">
+              Insert Context
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleInsertAsr} disabled={!asrText} className="h-8 px-2 text-xs">
+              Insert ASR
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearAsrHistory}
+              disabled={!asrText}
+              className="h-8 px-2 text-xs"
+            >
+              Clear ASR
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetConversation}
+              disabled={chatMessages.length === 0 || isResetting}
+              className="h-8 px-2 text-xs"
+            >
+              Clear Chat
+            </Button>
+            {templates.length > 0 ? (
+              <>
+                <Select value={selectedTemplate?.id} onValueChange={setSelectedTemplateId}>
+                  <SelectTrigger className="h-8 min-w-[160px] px-2 text-left text-xs">
+                    <SelectValue placeholder="Prompt templates" />
+                  </SelectTrigger>
+                  <SelectContent align="start" className="w-[200px] text-xs">
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleInsertTemplate}
+                  disabled={!selectedTemplate?.content?.trim()}
+                  className="h-8 px-2 text-xs"
+                >
+                  Insert
+                </Button>
+              </>
+            ) : null}
+          </div>
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
             <Textarea
               value={input}

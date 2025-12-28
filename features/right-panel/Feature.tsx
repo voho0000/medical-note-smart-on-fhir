@@ -14,6 +14,7 @@ import { AsrProvider } from "@/features/medical-note/context/AsrContext"
 import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
 import SettingsFeature from "@/features/settings/Feature"
 import { ClinicalInsightsConfigProvider } from "@/features/clinical-insights/context/ClinicalInsightsConfigContext"
+import { PromptTemplatesProvider } from "@/features/medical-chat/context/PromptTemplatesContext"
 
 // Import the ClinicalData type from the provider
 import type { ClinicalData as ClinicalDataFromProvider } from "@/lib/providers/ClinicalDataProvider"
@@ -49,7 +50,8 @@ function RightPanelContent() {
     <GptResponseProvider>
       <AsrProvider>
         <NoteProvider>
-          <ClinicalInsightsConfigProvider>
+          <PromptTemplatesProvider>
+            <ClinicalInsightsConfigProvider>
             <Tabs 
               value={activeTab} 
               onValueChange={setActiveTab}
@@ -105,7 +107,8 @@ function RightPanelContent() {
                 </ScrollArea>
               </TabsContent>
             </Tabs>
-          </ClinicalInsightsConfigProvider>
+            </ClinicalInsightsConfigProvider>
+          </PromptTemplatesProvider>
         </NoteProvider>
       </AsrProvider>
     </GptResponseProvider>
