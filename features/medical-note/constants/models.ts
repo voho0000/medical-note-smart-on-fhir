@@ -9,22 +9,20 @@ export interface ModelDefinition {
 }
 
 export const BUILT_IN_MODELS = [
-  { id: "gpt-5.1", label: "GPT-5.1", description: "Default clinical summarization", provider: "openai" },
   { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Cost-efficient base model", provider: "openai" },
+  { id: "gpt-5.1", label: "GPT-5.1", description: "Default clinical summarization", provider: "openai" },
 ] as const satisfies readonly ModelDefinition[]
 
 export const PREMIUM_MODELS = [
-  { id: "gpt-4o", label: "GPT-4o", description: "High quality multimodal", provider: "openai", requiresUserKey: true },
-  { id: "gpt-4.1", label: "GPT-4.1", description: "Advanced reasoning", provider: "openai", requiresUserKey: true },
+  { id: "gpt-5.2", label: "GPT-5.2", description: "Latest premium model", provider: "openai", requiresUserKey: true },
+  { id: "gpt-5-pro", label: "GPT-5 Pro", description: "Professional grade model", provider: "openai", requiresUserKey: true },
 ] as const satisfies readonly ModelDefinition[]
 
 export const GEMINI_MODELS = [
-  {
-    id: "gemini-3-flash-preview",
-    label: "Gemini 3 Flash Preview",
-    description: "Preview Gemini 3 Flash via proxy or personal key",
-    provider: "gemini",
-  },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Fast Gemini model", provider: "gemini" },
+  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", description: "Preview Gemini 3 Flash", provider: "gemini" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Advanced Gemini model", provider: "gemini", requiresUserKey: true },
+  { id: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview", description: "Premium Gemini 3 Pro", provider: "gemini", requiresUserKey: true },
 ] as const satisfies readonly ModelDefinition[]
 
 export type BuiltInModelId = (typeof BUILT_IN_MODELS)[number]["id"]

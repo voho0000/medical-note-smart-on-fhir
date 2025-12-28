@@ -41,6 +41,25 @@ export function ModelAndKeySettings() {
     return base
   }, [apiKey])
 
+  const gptModels = useMemo(() => {
+    const models = [...BUILT_IN_MODELS, ...PREMIUM_MODELS]
+    return models.filter((entry) => {
+      const definition = getModelDefinition(entry.id)
+      if (!definition) return false
+      if (definition.requiresUserKey && !apiKey) return false
+      return true
+    })
+  }, [apiKey])
+
+  const geminiModels = useMemo(() => {
+    return GEMINI_MODELS.filter((entry) => {
+      const definition = getModelDefinition(entry.id)
+      if (!definition) return false
+      if (definition.requiresUserKey && !geminiKey) return false
+      return true
+    })
+  }, [geminiKey])
+
   const handleSelectModel = (candidate: string) => {
     if (!isModelId(candidate)) return
     const definition = getModelDefinition(candidate)
@@ -111,35 +130,65 @@ export function ModelAndKeySettings() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
+      <div className="space-y-3">
         <Label className="text-xs uppercase text-muted-foreground">Generation Model</Label>
-        <div className="flex flex-wrap gap-2">
-          {availableModels.map((entry) => {
-            const isActive = model === entry.id
-            const definition = getModelDefinition(entry.id)
-            const status = definition ? getModelStatus(definition) : ""
-            return (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => handleSelectModel(entry.id)}
-                className={cn(
-                  "h-auto min-w-[140px] flex-1 rounded-md border px-3 py-2 text-left text-xs transition",
-                  isActive
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border bg-background hover:border-primary/40",
-                )}
-              >
-                <span className="block text-sm font-medium leading-tight">{entry.label}</span>
-                <span className="text-xs text-muted-foreground">{entry.description}</span>
-                {status ? (
-                  <span className="mt-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    {status}
-                  </span>
-                ) : null}
-              </button>
-            )
-          })}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {gptModels.map((entry) => {
+              const isActive = model === entry.id
+              const definition = getModelDefinition(entry.id)
+              const status = definition ? getModelStatus(definition) : ""
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => handleSelectModel(entry.id)}
+                  className={cn(
+                    "h-auto min-w-[140px] flex-1 rounded-md border px-3 py-2 text-left text-xs transition",
+                    isActive
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border bg-background hover:border-primary/40",
+                  )}
+                >
+                  <span className="block text-sm font-medium leading-tight">{entry.label}</span>
+                  <span className="text-xs text-muted-foreground">{entry.description}</span>
+                  {status ? (
+                    <span className="mt-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                      {status}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {geminiModels.map((entry) => {
+              const isActive = model === entry.id
+              const definition = getModelDefinition(entry.id)
+              const status = definition ? getModelStatus(definition) : ""
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => handleSelectModel(entry.id)}
+                  className={cn(
+                    "h-auto min-w-[140px] flex-1 rounded-md border px-3 py-2 text-left text-xs transition",
+                    isActive
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border bg-background hover:border-primary/40",
+                  )}
+                >
+                  <span className="block text-sm font-medium leading-tight">{entry.label}</span>
+                  <span className="text-xs text-muted-foreground">{entry.description}</span>
+                  {status ? (
+                    <span className="mt-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                      {status}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
         </div>
         {!apiKey && (
           <p className="text-xs text-muted-foreground">
