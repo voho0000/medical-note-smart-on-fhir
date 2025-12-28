@@ -15,35 +15,17 @@ import { useGptQuery } from "@/features/medical-note/hooks/useGptQuery"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
 import { DEFAULT_MODEL_ID } from "@/features/medical-note/constants/models"
 import { hasChatProxy } from "@/lib/config/ai"
-
-const PANEL_DEFINITIONS = [
-  {
-    id: "safety" as const,
-    title: "Safety Flag",
-    subtitle: "Highlight any urgent safety issues, contraindications, or potential adverse events.",
-    defaultPrompt:
-      "Review the clinical context and flag any immediate patient safety risks, including drug interactions, abnormal results, or urgent follow-up needs. Respond with concise bullet points ordered by severity.",
-  },
-  {
-    id: "changes" as const,
-    title: "What's Changed",
-    subtitle: "Summarize notable changes compared to prior data or visits.",
-    defaultPrompt:
-      "Compare the patient's recent clinical data to prior information and list the most important changes in status, therapy, or results. Emphasize deltas that require attention.",
-  },
-  {
-    id: "snapshot" as const,
-    title: "Clinical Snapshot",
-    subtitle: "Provide a concise overview of the current clinical picture.",
-    defaultPrompt:
-      "Create a succinct clinical snapshot covering active problems, current therapies, recent results, and outstanding tasks. Keep it brief and actionable.",
-  },
-]
-
-type PanelId = (typeof PANEL_DEFINITIONS)[number]["id"]
+import { useClinicalInsightsConfig } from "@/features/clinical-insights/context/ClinicalInsightsConfigContext"
 
 const SYSTEM_INSTRUCTION =
   "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate."
+
+type PanelStatus = {
+  isLoading: boolean
+  error: Error | null
+}
+
+type ResponseEntry = { text: string; isEdited: boolean }
 
 function InsightPanel({
   title,
@@ -59,7 +41,7 @@ function InsightPanel({
   isEdited,
 }: {
   title: string
-  subtitle: string
+  subtitle?: string
   prompt: string
   onPromptChange: (value: string) => void
   onRegenerate: () => void
@@ -75,7 +57,7 @@ function InsightPanel({
       <CardHeader className="flex items-start justify-between gap-3 pb-2 pt-3">
         <div className="space-y-0.5">
           <CardTitle className="text-sm font-semibold leading-tight">{title}</CardTitle>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
         </div>
         <Button
           onClick={onRegenerate}
@@ -136,31 +118,44 @@ function InsightPanel({
 }
 
 export default function ClinicalInsightsFeature() {
+  const { panels } = useClinicalInsightsConfig()
   const { apiKey } = useApiKey()
   const { getFormattedClinicalContext } = useClinicalContext()
+  const { queryGpt } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
 
-  const [prompts, setPrompts] = useState<Record<PanelId, string>>(() =>
-    PANEL_DEFINITIONS.reduce(
-      (acc, panel) => {
-        acc[panel.id] = panel.defaultPrompt
-        return acc
-      },
-      {} as Record<PanelId, string>,
-    ),
-  )
+  const [prompts, setPrompts] = useState<Record<string, string>>({})
+  const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
+  const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
   const [hasAutoRun, setHasAutoRun] = useState(false)
-
-  const [responses, setResponses] = useState<Record<PanelId, { text: string; isEdited: boolean }>>(() =>
-    PANEL_DEFINITIONS.reduce(
-      (acc, panel) => {
-        acc[panel.id] = { text: "", isEdited: false }
-        return acc
-      },
-      {} as Record<PanelId, { text: string; isEdited: boolean }>,
-    ),
-  )
-
   const [context, setContext] = useState("")
+
+  useEffect(() => {
+    setPrompts((prev) => {
+      return panels.reduce<Record<string, string>>((acc, panel) => {
+        acc[panel.id] = prev[panel.id] ?? panel.prompt
+        return acc
+      }, {})
+    })
+
+    setResponses((prev) => {
+      return panels.reduce<Record<string, ResponseEntry>>((acc, panel) => {
+        const existing = prev[panel.id]
+        const text = typeof existing?.text === "string" ? existing.text : panel.prompt ?? ""
+        const isEdited = existing?.isEdited ?? false
+        acc[panel.id] = { text, isEdited }
+        return acc
+      }, {})
+    })
+
+    setPanelStatus((prev) => {
+      return panels.reduce<Record<string, PanelStatus>>((acc, panel) => {
+        acc[panel.id] = prev[panel.id] ?? { isLoading: false, error: null }
+        return acc
+      }, {})
+    })
+
+    setHasAutoRun(false)
+  }, [panels])
 
   useEffect(() => {
     const latestContext = getFormattedClinicalContext()
@@ -169,122 +164,101 @@ export default function ClinicalInsightsFeature() {
         return previous
       }
       setHasAutoRun(false)
+      setResponses((prev) => {
+        return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
+          acc[panelId] = { text: prev[panelId].text, isEdited: false }
+          return acc
+        }, {})
+      })
       return latestContext
     })
   }, [getFormattedClinicalContext])
 
-  const {
-    queryGpt: runSafety,
-    response: safetyResponse,
-    isLoading: safetyLoading,
-    error: safetyError,
-  } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
-
-  const {
-    queryGpt: runChanges,
-    response: changesResponse,
-    isLoading: changesLoading,
-    error: changesError,
-  } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
-
-  const {
-    queryGpt: runSnapshot,
-    response: snapshotResponse,
-    isLoading: snapshotLoading,
-    error: snapshotError,
-  } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
+  useEffect(() => {
+    setResponses((prev) => {
+      return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
+        const prevValue = prev[panelId]
+        if (prevValue === undefined) return acc
+        acc[panelId] = { text: prevValue.text, isEdited: false }
+        return acc
+      }, {})
+    })
+  }, [panels])
 
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(apiKey) || canUseProxy
 
-  useEffect(() => {
-    setResponses((prev) => {
-      const current = prev.safety
-      if (current && current.text === safetyResponse && current.isEdited === false) {
-        return prev
-      }
-      return {
-        ...prev,
-        safety: { text: safetyResponse, isEdited: false },
-      }
-    })
-  }, [safetyResponse])
-
-  useEffect(() => {
-    setResponses((prev) => {
-      const current = prev.changes
-      if (current && current.text === changesResponse && current.isEdited === false) {
-        return prev
-      }
-      return {
-        ...prev,
-        changes: { text: changesResponse, isEdited: false },
-      }
-    })
-  }, [changesResponse])
-
-  useEffect(() => {
-    setResponses((prev) => {
-      const current = prev.snapshot
-      if (current && current.text === snapshotResponse && current.isEdited === false) {
-        return prev
-      }
-      return {
-        ...prev,
-        snapshot: { text: snapshotResponse, isEdited: false },
-      }
-    })
-  }, [snapshotResponse])
-
   const runPanel = useCallback(
-    async (panelId: PanelId) => {
+    async (panelId: string, { force } = { force: false }) => {
+      const panel = panels.find((item) => item.id === panelId)
+      if (!panel) return
       if (!context.trim() || (!apiKey && !canUseProxy)) return
+
+      const prompt = prompts[panelId] ?? panel.prompt
+      const responseEntry = responses[panelId]
+      if (!force && responseEntry?.isEdited) {
+        return
+      }
 
       const baseMessages = [
         { role: "system" as const, content: SYSTEM_INSTRUCTION },
         {
           role: "user" as const,
-          content: `${prompts[panelId]}\n\n---\nPatient Clinical Context:\n${context}`,
+          content: `${prompt}\n\n---\nPatient Clinical Context:\n${context}`,
         },
       ]
 
-      switch (panelId) {
-        case "safety":
-          await runSafety(baseMessages)
-          break
-        case "changes":
-          await runChanges(baseMessages)
-          break
-        case "snapshot":
-          await runSnapshot(baseMessages)
-          break
-        default:
-          break
+      setPanelStatus((prev) => ({
+        ...prev,
+        [panelId]: { isLoading: true, error: null },
+      }))
+
+      try {
+        const responseText = await queryGpt(baseMessages)
+        setResponses((prev) => ({
+          ...prev,
+          [panelId]: { text: responseText || "", isEdited: false },
+        }))
+        setPanelStatus((prev) => ({
+          ...prev,
+          [panelId]: { isLoading: false, error: null },
+        }))
+      } catch (error) {
+        console.error(`Failed to generate insight for ${panel.title}`, error)
+        setPanelStatus((prev) => ({
+          ...prev,
+          [panelId]: {
+            isLoading: false,
+            error: error instanceof Error ? error : new Error(String(error)),
+          },
+        }))
       }
     },
-    [apiKey, canUseProxy, context, prompts, runSafety, runChanges, runSnapshot],
+    [apiKey, canUseProxy, context, panels, prompts, queryGpt, responses],
   )
 
   useEffect(() => {
-    if ((!apiKey && !canUseProxy) || hasAutoRun || !context.trim()) return
+    if ((!apiKey && !canUseProxy) || hasAutoRun || !context.trim() || panels.length === 0) {
+      return
+    }
 
     setHasAutoRun(true)
 
     const autoRun = async () => {
-      await Promise.all(PANEL_DEFINITIONS.map((panel) => runPanel(panel.id)))
+      await Promise.all(panels.map((panel) => runPanel(panel.id)))
     }
 
     autoRun().catch((error) => {
       console.error("Failed to auto-run clinical insights", error)
       setHasAutoRun(false)
     })
-  }, [apiKey, canUseProxy, context, hasAutoRun, runPanel])
+  }, [apiKey, canUseProxy, context, hasAutoRun, panels, runPanel])
 
-  const handlePromptChange = useCallback((panelId: PanelId, value: string) => {
+  const handlePromptChange = useCallback((panelId: string, value: string) => {
     setPrompts((prev) => ({ ...prev, [panelId]: value }))
   }, [])
 
-  const handleResponseChange = useCallback((panelId: PanelId, value: string) => {
+  const handleResponseChange = useCallback((panelId: string, value: string) => {
     setResponses((prev) => ({
       ...prev,
       [panelId]: { text: value, isEdited: true },
@@ -292,41 +266,31 @@ export default function ClinicalInsightsFeature() {
   }, [])
 
   const panelEntries = useMemo(() => {
-    return PANEL_DEFINITIONS.map((panel) => {
-      const panelResponse = responses[panel.id] ?? { text: "", isEdited: false }
+    return panels.map((panel) => {
+      const responseEntry = responses[panel.id] ?? { text: "", isEdited: false }
+      const status = panelStatus[panel.id] ?? { isLoading: false, error: null }
 
-      const sharedProps = {
-        title: panel.title,
-        subtitle: panel.subtitle,
-        prompt: prompts[panel.id],
-        onPromptChange: (value: string) => handlePromptChange(panel.id, value),
-        onRegenerate: () => runPanel(panel.id),
-        isLoading:
-          panel.id === "safety"
-            ? safetyLoading
-            : panel.id === "changes"
-            ? changesLoading
-            : snapshotLoading,
-        response:
-          panel.id === "safety"
-            ? panelResponse.text
-            : panel.id === "changes"
-            ? panelResponse.text
-            : panelResponse.text,
-        error:
-          panel.id === "safety"
-            ? safetyError
-            : panel.id === "changes"
-            ? changesError
-            : snapshotError,
-        canGenerate,
-        onResponseChange: (value: string) => handleResponseChange(panel.id, value),
-        isEdited: panelResponse.isEdited,
+      return {
+        id: panel.id,
+        label: panel.title,
+        props: {
+          title: panel.title,
+          subtitle: panel.subtitle,
+          prompt: prompts[panel.id] ?? panel.prompt,
+          onPromptChange: (value: string) => handlePromptChange(panel.id, value),
+          onRegenerate: () => runPanel(panel.id, { force: true }),
+          isLoading: status.isLoading,
+          response: responseEntry.text,
+          error: status.error,
+          canGenerate,
+          onResponseChange: (value: string) => handleResponseChange(panel.id, value),
+          isEdited: responseEntry.isEdited,
+        },
       }
-
-      return { id: panel.id, label: panel.title, props: sharedProps }
     })
-  }, [apiKey, canGenerate, changesError, changesLoading, handlePromptChange, handleResponseChange, prompts, responses, runPanel, safetyError, safetyLoading, snapshotError, snapshotLoading])
+  }, [canGenerate, handlePromptChange, handleResponseChange, panelStatus, panels, prompts, responses, runPanel])
+
+  const defaultTabValue = panelEntries[0]?.id ?? ""
 
   return (
     <ScrollArea className="h-full pr-3">
@@ -341,24 +305,32 @@ export default function ClinicalInsightsFeature() {
             </CardContent>
           </Card>
         )}
-        <Tabs defaultValue={panelEntries[0]?.id} className="space-y-3">
-          <TabsList className="flex w-full flex-wrap gap-2 rounded-md bg-muted/40 p-1">
+        {panelEntries.length > 0 ? (
+          <Tabs defaultValue={defaultTabValue} className="space-y-3">
+            <TabsList className="flex w-full flex-wrap gap-2 rounded-md bg-muted/40 p-1">
+              {panelEntries.map((panel) => (
+                <TabsTrigger
+                  key={panel.id}
+                  value={panel.id}
+                  className="text-xs font-medium uppercase tracking-wide data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  {panel.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
             {panelEntries.map((panel) => (
-              <TabsTrigger
-                key={panel.id}
-                value={panel.id}
-                className="text-xs font-medium uppercase tracking-wide data-[state=active]:bg-background data-[state=active]:shadow-sm"
-              >
-                {panel.label}
-              </TabsTrigger>
+              <TabsContent key={panel.id} value={panel.id} className="mt-0">
+                <InsightPanel {...panel.props} />
+              </TabsContent>
             ))}
-          </TabsList>
-          {panelEntries.map((panel) => (
-            <TabsContent key={panel.id} value={panel.id} className="mt-0">
-              <InsightPanel {...panel.props} />
-            </TabsContent>
-          ))}
-        </Tabs>
+          </Tabs>
+        ) : (
+          <Card>
+            <CardContent className="py-6 text-sm text-muted-foreground">
+              No clinical insight tabs configured. Add one from the Settings panel to get started.
+            </CardContent>
+          </Card>
+        )}
       </div>
     </ScrollArea>
   )

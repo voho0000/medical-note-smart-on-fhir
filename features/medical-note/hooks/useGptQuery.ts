@@ -6,6 +6,44 @@ import { useApiKey } from "@/lib/providers/ApiKeyProvider"
 import { CHAT_PROXY_URL, PROXY_CLIENT_KEY, hasChatProxy } from "@/lib/config/ai"
 import { isBuiltInModelId } from "@/features/medical-note/constants/models"
 
+function extractMessageContent(payload: unknown): string {
+  if (!payload) return ""
+  if (typeof payload === "string") return payload
+  if (Array.isArray(payload)) {
+    return payload
+      .map((item) => extractMessageContent(item))
+      .filter((item) => typeof item === "string" && item.trim().length > 0)
+      .join("\n")
+  }
+  if (typeof payload === "object") {
+    const maybeContent = (payload as Record<string, unknown>).content
+    if (maybeContent) {
+      const extracted = extractMessageContent(maybeContent)
+      if (extracted) return extracted
+    }
+
+    const maybeText = (payload as Record<string, unknown>).text
+    if (maybeText && typeof maybeText === "string") {
+      return maybeText
+    }
+
+    const maybeMessage = (payload as Record<string, unknown>).message
+    if (maybeMessage) {
+      const extracted = extractMessageContent(maybeMessage)
+      if (extracted) return extracted
+    }
+
+    const maybeChoices = (payload as Record<string, unknown>).choices
+    if (Array.isArray(maybeChoices)) {
+      for (const choice of maybeChoices) {
+        const extracted = extractMessageContent(choice)
+        if (extracted) return extracted
+      }
+    }
+  }
+  return ""
+}
+
 type GptMessage = {
   role: 'user' | 'assistant' | 'system'
   content: string
@@ -126,21 +164,23 @@ export function useGptQuery({
 
       let responseText = ""
       if (shouldUseProxy) {
-        responseText = data?.message || data?.openAiResponse?.choices?.[0]?.message?.content || ""
+        const proxyPayload = data?.message ?? data?.openAiResponse ?? data
+        responseText = extractMessageContent(proxyPayload)
         if (!responseText) {
           console.error('Invalid proxy response:', data)
           throw new Error('Invalid response format from proxy service')
         }
       } else {
-        if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-          console.error('Invalid choices in response:', data)
+        const directPayload = data?.choices ?? data
+        responseText = extractMessageContent(directPayload)
+        if (!responseText) {
+          console.error('Invalid response format from OpenAI API:', data)
           throw new Error('Invalid response format from OpenAI API')
         }
-        responseText = data.choices[0]?.message?.content || ''
       }
-      setResponse(responseText);
-      onResponse?.(responseText);
-      return responseText;
+      setResponse(responseText)
+      onResponse?.(responseText)
+      return responseText
     } catch (err) {
       let error: Error
       
@@ -163,15 +203,9 @@ export function useGptQuery({
     } finally {
       clearTimeout(timeoutId)
       setIsLoading(false)
-      
-      // Reset progress after a short delay to show completion
-      const timer = setTimeout(() => setProgress(0), 500)
-      
-      // Don't return anything from finally block
-      // The cleanup will happen when the component unmounts
-      return undefined
+      setTimeout(() => setProgress(0), 500)
     }
-  }, [apiKey, model, initialMessages, timeout])
+  }, [apiKey, model, initialMessages, timeout, hasChatProxy])
 
   return {
     queryGpt,

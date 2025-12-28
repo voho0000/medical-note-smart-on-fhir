@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { ModelAndKeySettings } from "@/features/medical-note/components/ApiKeyField"
+import { ClinicalInsightsSettings } from "@/features/clinical-insights/components/ClinicalInsightsSettings"
 
 export function SettingsFeature() {
   return (
@@ -13,6 +14,14 @@ export function SettingsFeature() {
         </CardHeader>
         <CardContent className="space-y-4">
           <ModelAndKeySettings />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Clinical Insights Tabs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ClinicalInsightsSettings />
         </CardContent>
       </Card>
       <Separator />

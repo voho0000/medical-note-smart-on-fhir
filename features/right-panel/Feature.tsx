@@ -13,6 +13,7 @@ import { GptResponseProvider } from "@/features/medical-note/context/GptResponse
 import { AsrProvider } from "@/features/medical-note/context/AsrContext"
 import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
 import SettingsFeature from "@/features/settings/Feature"
+import { ClinicalInsightsConfigProvider } from "@/features/clinical-insights/context/ClinicalInsightsConfigContext"
 
 // Import the ClinicalData type from the provider
 import type { ClinicalData as ClinicalDataFromProvider } from "@/lib/providers/ClinicalDataProvider"
@@ -40,62 +41,64 @@ export function RightPanelFeature() {
     <GptResponseProvider>
       <AsrProvider>
         <NoteProvider>
-          <Tabs 
-          value={activeTab} 
-          onValueChange={setActiveTab}
-          className="h-full flex flex-col"
-          defaultValue="medicalNote"
-        >
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="medicalNote">Medical Note</TabsTrigger>
-          <TabsTrigger value="dataSelection">Data Selection</TabsTrigger>
-          <TabsTrigger value="clinicalInsights">Clinical Insights</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="medicalNote" className="flex-1 mt-0 pt-4" forceMount>
-          <ScrollArea className="h-full pr-2">
-            <div className="space-y-4">
-              <MedicalNoteFeature />
-            </div>
-          </ScrollArea>
-        </TabsContent>
-        
-        <TabsContent value="dataSelection" className="flex-1 mt-0 pt-4" forceMount>
-          <ScrollArea className="h-full pr-2">
-            <div className="rounded-lg border p-4">
-              <DataSelectionPanel 
-                clinicalData={{
-                  // Use diagnoses instead of conditions since that's what's available
-                  conditions: clinicalData.diagnoses || [],
-                  medications: clinicalData.medications || [],
-                  allergies: clinicalData.allergies || [],
-                  diagnosticReports: clinicalData.diagnosticReports || [],
-                  observations: clinicalData.observations || []
-                }}
-                selectedData={selectedData}
-                onSelectionChange={setSelectedData}
-                filters={filters}
-                onFiltersChange={setFilters}
-              />
-            </div>
-          </ScrollArea>
-        </TabsContent>
+          <ClinicalInsightsConfigProvider>
+            <Tabs 
+              value={activeTab} 
+              onValueChange={setActiveTab}
+              className="h-full flex flex-col"
+              defaultValue="medicalNote"
+            >
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="medicalNote">Medical Note</TabsTrigger>
+                <TabsTrigger value="dataSelection">Data Selection</TabsTrigger>
+                <TabsTrigger value="clinicalInsights">Clinical Insights</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="medicalNote" className="flex-1 mt-0 pt-4" forceMount>
+                <ScrollArea className="h-full pr-2">
+                  <div className="space-y-4">
+                    <MedicalNoteFeature />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+              
+              <TabsContent value="dataSelection" className="flex-1 mt-0 pt-4" forceMount>
+                <ScrollArea className="h-full pr-2">
+                  <div className="rounded-lg border p-4">
+                    <DataSelectionPanel 
+                      clinicalData={{
+                        // Use diagnoses instead of conditions since that's what's available
+                        conditions: clinicalData.diagnoses || [],
+                        medications: clinicalData.medications || [],
+                        allergies: clinicalData.allergies || [],
+                        diagnosticReports: clinicalData.diagnosticReports || [],
+                        observations: clinicalData.observations || []
+                      }}
+                      selectedData={selectedData}
+                      onSelectionChange={setSelectedData}
+                      filters={filters}
+                      onFiltersChange={setFilters}
+                    />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
 
-        <TabsContent value="clinicalInsights" className="flex-1 mt-0 pt-4" forceMount>
-          <ClinicalInsightsFeature />
-        </TabsContent>
+              <TabsContent value="clinicalInsights" className="flex-1 mt-0 pt-4" forceMount>
+                <ClinicalInsightsFeature />
+              </TabsContent>
 
-        <TabsContent value="settings" className="flex-1 mt-0 pt-4" forceMount>
-          <ScrollArea className="h-full pr-2">
-            <div className="space-y-4">
-              <SettingsFeature />
-            </div>
-          </ScrollArea>
-        </TabsContent>
-        </Tabs>
-      </NoteProvider>
-    </AsrProvider>
-  </GptResponseProvider>
+              <TabsContent value="settings" className="flex-1 mt-0 pt-4" forceMount>
+                <ScrollArea className="h-full pr-2">
+                  <div className="space-y-4">
+                    <SettingsFeature />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </ClinicalInsightsConfigProvider>
+        </NoteProvider>
+      </AsrProvider>
+    </GptResponseProvider>
   )
 }
