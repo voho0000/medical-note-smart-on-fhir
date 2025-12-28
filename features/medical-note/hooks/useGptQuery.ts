@@ -8,6 +8,7 @@ import {
   getModelDefinition,
   isBuiltInModelId,
   type ModelDefinition,
+  type ModelProvider,
 } from "@/features/medical-note/constants/models"
 
 function extractMessageContent(payload: unknown): string {
@@ -117,8 +118,18 @@ interface UseGptQueryOptions {
   defaultModel?: string;
   initialMessages?: GptMessage[];
   timeout?: number; // in milliseconds
-  onResponse?: (response: string) => void;
+  onResponse?: (response: string, metadata: QueryMetadata) => void;
   onError?: (error: Error) => void;
+}
+
+export type QueryMetadata = {
+  modelId: string
+  provider: ModelProvider
+}
+
+export type QueryResult = {
+  text: string
+  metadata: QueryMetadata
 }
 
 export function useGptQuery({
@@ -134,11 +145,16 @@ export function useGptQuery({
   const [response, setResponse] = useState("")
   const [model, setModel] = useState(defaultModel)
   const [progress, setProgress] = useState(0)
+  const [lastMetadata, setLastMetadata] = useState<QueryMetadata | null>(null)
 
-  const queryGpt = useCallback(async (messages: GptMessage[], customModel?: string) => {
+  const queryGpt = useCallback(async (messages: GptMessage[], customModel?: string): Promise<QueryResult> => {
     const effectiveModel = customModel || model
     const modelDefinition: ModelDefinition | undefined = getModelDefinition(effectiveModel)
     const modelProvider = modelDefinition?.provider ?? "openai"
+    const metadata: QueryMetadata = {
+      modelId: effectiveModel,
+      provider: modelProvider,
+    }
 
     const isBuiltInModel = isBuiltInModelId(effectiveModel)
     const shouldUseOpenAiProxy = modelProvider === "openai" && !apiKey && isBuiltInModel && hasChatProxy
@@ -171,6 +187,7 @@ export function useGptQuery({
     setError(null)
     setResponse("")
     setProgress(0)
+    setLastMetadata(null)
 
     // Create a controller for the fetch request to support timeouts
     const controller = new AbortController()
@@ -300,8 +317,9 @@ export function useGptQuery({
         }
       }
       setResponse(responseText)
-      onResponse?.(responseText)
-      return responseText
+      setLastMetadata(metadata)
+      onResponse?.(responseText, metadata)
+      return { text: responseText, metadata }
     } catch (err) {
       let error: Error
       
@@ -320,7 +338,7 @@ export function useGptQuery({
       const errorObj = error as Error;
       setError(errorObj);
       onError?.(errorObj);
-      return '';
+      return { text: '', metadata }
     } finally {
       clearTimeout(timeoutId)
       setIsLoading(false)
@@ -335,6 +353,7 @@ export function useGptQuery({
     error,
     model,
     setModel,
-    progress
+    progress,
+    lastMetadata,
   }
 }

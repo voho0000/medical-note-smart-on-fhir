@@ -1,7 +1,7 @@
 // features/data-selection/hooks/useDataSelection.ts
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 
 export type DataType = 'conditions' | 'medications' | 'allergies' | 'diagnosticReports' | 'observations'
 
@@ -39,6 +39,19 @@ const DEFAULT_SELECTION: DataSelection = {
   diagnosticReports: true,
   observations: true
 }
+
+type DataSelectionContextValue = {
+  selectedData: DataSelection
+  setSelectedData: React.Dispatch<React.SetStateAction<DataSelection>>
+  updateSelection: (dataType: DataType, isSelected: boolean) => void
+  setSelection: (newSelection: Partial<DataSelection>) => void
+  resetToDefaults: () => void
+  filters: DataFilters
+  setFilters: React.Dispatch<React.SetStateAction<DataFilters>>
+  isAnySelected: boolean
+}
+
+const DataSelectionContext = createContext<DataSelectionContextValue | null>(null)
 
 const isValidDataSelection = (data: unknown): data is Partial<DataSelection> => {
   return typeof data === 'object' && data !== null
@@ -101,7 +114,7 @@ const getInitialFilters = (): DataFilters => {
   }
 }
 
-export function useDataSelection() {
+export function DataSelectionProvider({ children }: { children: ReactNode }) {
   const [selectedData, setSelectedData] = useState<DataSelection>(getInitialSelection)
   const [filters, setFilters] = useState<DataFilters>(getInitialFilters)
 
@@ -149,7 +162,7 @@ export function useDataSelection() {
     setFilters(DEFAULT_FILTERS)
   }, [])
 
-  return {
+  const value = useMemo<DataSelectionContextValue>(() => ({
     selectedData,
     setSelectedData,
     updateSelection,
@@ -157,6 +170,18 @@ export function useDataSelection() {
     resetToDefaults,
     filters,
     setFilters,
-    isAnySelected: Object.values(selectedData).some(Boolean)
-  }
+    isAnySelected: Object.values(selectedData).some(Boolean),
+  }), [filters, resetToDefaults, selectedData, setSelection, updateSelection])
+
+  return createElement(DataSelectionContext.Provider, { value }, children)
 }
+
+export function useDataSelection() {
+  const ctx = useContext(DataSelectionContext)
+  if (!ctx) {
+    throw new Error("useDataSelection must be used within a DataSelectionProvider")
+  }
+  return ctx
+}
+
+export { DEFAULT_SELECTION, DEFAULT_FILTERS }

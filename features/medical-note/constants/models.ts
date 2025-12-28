@@ -32,7 +32,7 @@ export type PremiumModelId = (typeof PREMIUM_MODELS)[number]["id"]
 export type GeminiModelId = (typeof GEMINI_MODELS)[number]["id"]
 export type ModelId = BuiltInModelId | PremiumModelId | GeminiModelId
 
-export const DEFAULT_MODEL_ID: BuiltInModelId = BUILT_IN_MODELS[0]?.id ?? "gpt-5.1"
+export const DEFAULT_MODEL_ID: BuiltInModelId = "gpt-5-mini"
 
 export const BUILT_IN_MODEL_IDS = new Set<BuiltInModelId>(BUILT_IN_MODELS.map((model) => model.id))
 export const PREMIUM_MODEL_IDS = new Set<PremiumModelId>(PREMIUM_MODELS.map((model) => model.id))

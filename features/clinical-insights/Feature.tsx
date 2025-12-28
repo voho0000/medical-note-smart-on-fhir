@@ -11,11 +11,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { AlertCircle, ChevronDown, Loader2, RefreshCcw } from "lucide-react"
 
 import { useClinicalContext } from "@/features/data-selection/hooks/useClinicalContext"
-import { useGptQuery } from "@/features/medical-note/hooks/useGptQuery"
+import { useGptQuery, type QueryMetadata } from "@/features/medical-note/hooks/useGptQuery"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
-import { DEFAULT_MODEL_ID } from "@/features/medical-note/constants/models"
+import { DEFAULT_MODEL_ID, getModelDefinition } from "@/features/medical-note/constants/models"
 import { hasChatProxy } from "@/lib/config/ai"
 import { useClinicalInsightsConfig } from "@/features/clinical-insights/context/ClinicalInsightsConfigContext"
+import { useNote } from "@/features/medical-note/providers/NoteProvider"
 
 const SYSTEM_INSTRUCTION =
   "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate."
@@ -25,7 +26,7 @@ type PanelStatus = {
   error: Error | null
 }
 
-type ResponseEntry = { text: string; isEdited: boolean }
+type ResponseEntry = { text: string; isEdited: boolean; metadata: QueryMetadata | null }
 
 function InsightPanel({
   title,
@@ -39,6 +40,8 @@ function InsightPanel({
   canGenerate,
   onResponseChange,
   isEdited,
+  modelMetadata,
+  fallbackModelId,
 }: {
   title: string
   subtitle?: string
@@ -51,13 +54,27 @@ function InsightPanel({
   canGenerate: boolean
   onResponseChange: (value: string) => void
   isEdited: boolean
+  modelMetadata: QueryMetadata | null
+  fallbackModelId: string
 }) {
+  const modelInfo = useMemo(() => {
+    // Always show the currently selected model
+    const definition = getModelDefinition(fallbackModelId)
+    return {
+      label: definition?.label ?? fallbackModelId,
+      provider: (definition?.provider ?? "openai").toUpperCase(),
+    }
+  }, [fallbackModelId])
+
   return (
     <Card>
       <CardHeader className="flex items-start justify-between gap-3 pb-2 pt-3">
         <div className="space-y-0.5">
           <CardTitle className="text-sm font-semibold leading-tight">{title}</CardTitle>
           {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+          <p className="text-xs text-muted-foreground">
+            Model: {modelInfo.label} ({modelInfo.provider})
+          </p>
         </div>
         <Button
           onClick={onRegenerate}
@@ -121,7 +138,8 @@ export default function ClinicalInsightsFeature() {
   const { panels } = useClinicalInsightsConfig()
   const { apiKey } = useApiKey()
   const { getFormattedClinicalContext } = useClinicalContext()
-  const { queryGpt } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
+  const { model } = useNote()
+  const { queryGpt } = useGptQuery({ defaultModel: model })
 
   const [prompts, setPrompts] = useState<Record<string, string>>({})
   const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
@@ -142,7 +160,8 @@ export default function ClinicalInsightsFeature() {
         const existing = prev[panel.id]
         const text = typeof existing?.text === "string" ? existing.text : panel.prompt ?? ""
         const isEdited = existing?.isEdited ?? false
-        acc[panel.id] = { text, isEdited }
+        const metadata = existing?.metadata ?? null
+        acc[panel.id] = { text, isEdited, metadata }
         return acc
       }, {})
     })
@@ -166,7 +185,7 @@ export default function ClinicalInsightsFeature() {
       setHasAutoRun(false)
       setResponses((prev) => {
         return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
-          acc[panelId] = { text: prev[panelId].text, isEdited: false }
+          acc[panelId] = { text: prev[panelId].text, isEdited: false, metadata: null }
           return acc
         }, {})
       })
@@ -179,7 +198,7 @@ export default function ClinicalInsightsFeature() {
       return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
         const prevValue = prev[panelId]
         if (prevValue === undefined) return acc
-        acc[panelId] = { text: prevValue.text, isEdited: false }
+        acc[panelId] = { text: prevValue.text, isEdited: false, metadata: prevValue.metadata ?? null }
         return acc
       }, {})
     })
@@ -214,10 +233,10 @@ export default function ClinicalInsightsFeature() {
       }))
 
       try {
-        const responseText = await queryGpt(baseMessages)
+        const { text: responseText, metadata } = await queryGpt(baseMessages)
         setResponses((prev) => ({
           ...prev,
-          [panelId]: { text: responseText || "", isEdited: false },
+          [panelId]: { text: responseText || "", isEdited: false, metadata },
         }))
         setPanelStatus((prev) => ({
           ...prev,
@@ -261,7 +280,7 @@ export default function ClinicalInsightsFeature() {
   const handleResponseChange = useCallback((panelId: string, value: string) => {
     setResponses((prev) => ({
       ...prev,
-      [panelId]: { text: value, isEdited: true },
+      [panelId]: { text: value, isEdited: true, metadata: prev[panelId]?.metadata ?? null },
     }))
   }, [])
 
@@ -285,10 +304,12 @@ export default function ClinicalInsightsFeature() {
           canGenerate,
           onResponseChange: (value: string) => handleResponseChange(panel.id, value),
           isEdited: responseEntry.isEdited,
+          modelMetadata: responseEntry.metadata ?? null,
+          fallbackModelId: model,
         },
       }
     })
-  }, [canGenerate, handlePromptChange, handleResponseChange, panelStatus, panels, prompts, responses, runPanel])
+  }, [canGenerate, handlePromptChange, handleResponseChange, model, panelStatus, panels, prompts, responses, runPanel])
 
   const defaultTabValue = panelEntries[0]?.id ?? ""
 

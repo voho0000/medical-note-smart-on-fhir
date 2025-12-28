@@ -8,7 +8,7 @@ import MedicalNoteFeature from "@/features/medical-note/Feature"
 import { NoteProvider } from "@/features/medical-note/providers/NoteProvider"
 import { DataSelectionPanel } from "@/features/data-selection/components/DataSelectionPanel"
 import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
-import { useDataSelection, DataSelection } from "@/features/data-selection/hooks/useDataSelection"
+import { DataSelectionProvider, useDataSelection, type DataSelection } from "@/features/data-selection/hooks/useDataSelection"
 import { GptResponseProvider } from "@/features/medical-note/context/GptResponseContext"
 import { AsrProvider } from "@/features/medical-note/context/AsrContext"
 import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
@@ -24,6 +24,14 @@ interface ClinicalData extends Omit<ClinicalDataFromProvider, 'vitals'> {
 }
 
 export function RightPanelFeature() {
+  return (
+    <DataSelectionProvider>
+      <RightPanelContent />
+    </DataSelectionProvider>
+  )
+}
+
+function RightPanelContent() {
   const [activeTab, setActiveTab] = useState("medicalNote")
   const clinicalData = useClinicalData()
   const { 
