@@ -1,7 +1,7 @@
 // features/data-selection/hooks/useClinicalContext.ts
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useDataSelection } from "@/features/data-selection/hooks/useDataSelection";
 import { useClinicalData } from "@/lib/providers/ClinicalDataProvider";
 
@@ -33,6 +33,12 @@ export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[];
   formatClinicalContext: (sections: ClinicalContextSection[]) => string;
   getFormattedClinicalContext: () => string;
+  supplementaryNotes: string;
+  setSupplementaryNotes: (notes: string) => void;
+  getFullClinicalContext: () => string;
+  editedClinicalContext: string | null;
+  setEditedClinicalContext: (context: string | null) => void;
+  resetClinicalContextToDefault: () => void;
 };
 
 // ---- Minimal FHIR-ish shapes we actually use in this hook ----
@@ -67,7 +73,7 @@ export type ClinicalData = {
  * Hook
  */
 export function useClinicalContext(): UseClinicalContextReturn {
-  const { selectedData, filters } = useDataSelection() as {
+  const { selectedData, filters, supplementaryNotes, setSupplementaryNotes, editedClinicalContext, setEditedClinicalContext } = useDataSelection() as {
     selectedData: {
       conditions?: boolean;
       medications?: boolean;
@@ -76,6 +82,10 @@ export function useClinicalContext(): UseClinicalContextReturn {
       observations?: boolean; // includes vitals when true
     };
     filters?: DataFilters;
+    supplementaryNotes: string;
+    setSupplementaryNotes: React.Dispatch<React.SetStateAction<string>>;
+    editedClinicalContext: string | null;
+    setEditedClinicalContext: React.Dispatch<React.SetStateAction<string | null>>;
   };
 
   const clinicalData = (useClinicalData() as ClinicalData | null) ?? null;
@@ -332,10 +342,29 @@ export function useClinicalContext(): UseClinicalContextReturn {
     [formatClinicalContext, getClinicalContext],
   );
 
+  const getFullClinicalContext = useCallback((): string => {
+    // Use edited version if available, otherwise use generated version
+    const baseContext = editedClinicalContext ?? formatClinicalContext(getClinicalContext());
+    if (supplementaryNotes.trim()) {
+      return `${baseContext}\n\n## Supplementary Notes\n${supplementaryNotes}`;
+    }
+    return baseContext;
+  }, [editedClinicalContext, formatClinicalContext, getClinicalContext, supplementaryNotes]);
+
+  const resetClinicalContextToDefault = useCallback(() => {
+    setEditedClinicalContext(null);
+  }, [setEditedClinicalContext]);
+
   // Return the hook API
   return {
     getClinicalContext,
     formatClinicalContext,
     getFormattedClinicalContext,
+    supplementaryNotes,
+    setSupplementaryNotes,
+    getFullClinicalContext,
+    editedClinicalContext,
+    setEditedClinicalContext,
+    resetClinicalContextToDefault,
   };
 }

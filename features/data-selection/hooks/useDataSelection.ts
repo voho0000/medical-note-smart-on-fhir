@@ -49,6 +49,10 @@ type DataSelectionContextValue = {
   filters: DataFilters
   setFilters: React.Dispatch<React.SetStateAction<DataFilters>>
   isAnySelected: boolean
+  supplementaryNotes: string
+  setSupplementaryNotes: React.Dispatch<React.SetStateAction<string>>
+  editedClinicalContext: string | null
+  setEditedClinicalContext: React.Dispatch<React.SetStateAction<string | null>>
 }
 
 const DataSelectionContext = createContext<DataSelectionContextValue | null>(null)
@@ -117,6 +121,8 @@ const getInitialFilters = (): DataFilters => {
 export function DataSelectionProvider({ children }: { children: ReactNode }) {
   const [selectedData, setSelectedData] = useState<DataSelection>(getInitialSelection)
   const [filters, setFilters] = useState<DataFilters>(getInitialFilters)
+  const [supplementaryNotes, setSupplementaryNotes] = useState<string>("")
+  const [editedClinicalContext, setEditedClinicalContext] = useState<string | null>(null)
 
   // Save to localStorage whenever selection changes
   useEffect(() => {
@@ -171,7 +177,11 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
     filters,
     setFilters,
     isAnySelected: Object.values(selectedData).some(Boolean),
-  }), [filters, resetToDefaults, selectedData, setSelection, updateSelection])
+    supplementaryNotes,
+    setSupplementaryNotes,
+    editedClinicalContext,
+    setEditedClinicalContext,
+  }), [editedClinicalContext, filters, resetToDefaults, selectedData, setSelection, supplementaryNotes, updateSelection])
 
   return createElement(DataSelectionContext.Provider, { value }, children)
 }

@@ -21,8 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 
 import { DataType, DataSelection, DataFilters } from "../hooks/useDataSelection"
+import { useClinicalContext } from "../hooks/useClinicalContext"
 
 type ClinicalData = {
   conditions: any[]
@@ -55,6 +58,15 @@ export function DataSelectionPanel({
   onSelectionChange,
   onFiltersChange 
 }: DataSelectionPanelProps) {
+  const { 
+    getFormattedClinicalContext, 
+    supplementaryNotes, 
+    setSupplementaryNotes,
+    editedClinicalContext,
+    setEditedClinicalContext,
+    resetClinicalContextToDefault
+  } = useClinicalContext()
+
   // Helper function to check if a date is within the specified time range
   const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
     if (!dateString) return false;
@@ -355,7 +367,7 @@ export function DataSelectionPanel({
     </div>
   )
 
-  return (
+  const selectionContent = (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
@@ -429,5 +441,59 @@ export function DataSelectionPanel({
         ))}
       </div>
     </div>
+  )
+
+  const previewContent = (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <h3 className="text-base font-medium">Supplementary Notes</h3>
+        <p className="text-sm text-muted-foreground">
+          Add additional context or notes to send to the AI
+        </p>
+      </div>
+      <Textarea 
+        value={supplementaryNotes}
+        onChange={(e) => setSupplementaryNotes(e.target.value)}
+        className="min-h-[120px] font-mono text-sm"
+        placeholder="Add supplementary notes here..."
+      />
+      <div className="space-y-1 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-medium">Formatted Clinical Context</h2>
+          <p className="text-sm text-muted-foreground">
+            Edit the clinical context to remove unnecessary details
+          </p>
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={resetClinicalContextToDefault}
+          disabled={!editedClinicalContext}
+        >
+          Reset to Default
+        </Button>
+      </div>
+      <Textarea 
+        value={editedClinicalContext ?? getFormattedClinicalContext()}
+        onChange={(e) => setEditedClinicalContext(e.target.value)}
+        className="min-h-[250px] font-mono text-sm"
+        placeholder="No data selected"
+      />
+    </div>
+  )
+
+  return (
+    <Tabs defaultValue="selection" className="w-full">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="selection">Data Selection</TabsTrigger>
+        <TabsTrigger value="preview">Preview</TabsTrigger>
+      </TabsList>
+      <TabsContent value="selection" className="mt-6">
+        {selectionContent}
+      </TabsContent>
+      <TabsContent value="preview" className="mt-6">
+        {previewContent}
+      </TabsContent>
+    </Tabs>
   )
 }

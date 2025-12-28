@@ -137,7 +137,7 @@ function InsightPanel({
 export default function ClinicalInsightsFeature() {
   const { panels } = useClinicalInsightsConfig()
   const { apiKey } = useApiKey()
-  const { getFormattedClinicalContext } = useClinicalContext()
+  const { getFullClinicalContext } = useClinicalContext()
   const { model } = useNote()
   const { queryGpt } = useGptQuery({ defaultModel: model })
 
@@ -177,21 +177,26 @@ export default function ClinicalInsightsFeature() {
   }, [panels])
 
   useEffect(() => {
-    const latestContext = getFormattedClinicalContext()
+    const latestContext = getFullClinicalContext()
     setContext((previous) => {
       if (previous === latestContext) {
         return previous
       }
-      setHasAutoRun(false)
+      setHasAutoRun((prevHasAutoRun) => {
+        if (!prevHasAutoRun) {
+          return true
+        }
+        return prevHasAutoRun
+      })
       setResponses((prev) => {
         return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
-          acc[panelId] = { text: prev[panelId].text, isEdited: false, metadata: null }
+          acc[panelId] = { text: prev[panelId].text, isEdited: false, metadata: prev[panelId].metadata ?? null }
           return acc
         }, {})
       })
       return latestContext
     })
-  }, [getFormattedClinicalContext])
+  }, [getFullClinicalContext])
 
   useEffect(() => {
     setResponses((prev) => {

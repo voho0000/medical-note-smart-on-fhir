@@ -52,7 +52,7 @@ export function GptPanel({
 }) {
   const { patient: currentPatient } = usePatient()
   const { asrText, prompt, model } = useNote()
-  const { getFormattedClinicalContext } = useClinicalContext()
+  const { getFullClinicalContext } = useClinicalContext()
   const { isAnySelected } = useDataSelection()
   
   const { setGptResponse, setIsGenerating } = useGptResponse();
@@ -103,7 +103,7 @@ export function GptPanel({
       setDisplayResponse('');
       setResponseMetadata(null);
       
-      const clinicalContext = getFormattedClinicalContext();
+      const clinicalContext = getFullClinicalContext();
       
       // Only include patient info if any data is selected
       let fullPrompt = '';
@@ -156,7 +156,8 @@ export function GptPanel({
   }, [
     asrText, 
     currentPatient, 
-    getFormattedClinicalContext, 
+    getFullClinicalContext, 
+    isAnySelected,
     model, 
     patient, 
     prompt, 
