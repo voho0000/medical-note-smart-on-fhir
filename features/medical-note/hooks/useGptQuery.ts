@@ -3,6 +3,8 @@
 
 import { useState, useCallback } from "react"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
+import { CHAT_PROXY_URL, PROXY_CLIENT_KEY, hasChatProxy } from "@/lib/config/ai"
+import { isBuiltInModelId } from "@/features/medical-note/constants/models"
 
 type GptMessage = {
   role: 'user' | 'assistant' | 'system'
@@ -32,10 +34,22 @@ export function useGptQuery({
   const [progress, setProgress] = useState(0)
 
   const queryGpt = useCallback(async (messages: GptMessage[], customModel?: string) => {
+    const effectiveModel = customModel || model
+    const isBuiltInModel = isBuiltInModelId(effectiveModel)
+    const shouldUseProxy = !apiKey && isBuiltInModel && hasChatProxy
+
     if (!apiKey) {
-      const error = new Error("OpenAI API key is required")
-      setError(error)
-      throw error
+      if (isBuiltInModel) {
+        if (!hasChatProxy) {
+          const error = new Error("Built-in models require either the PrismaCare chat proxy or a user API key")
+          setError(error)
+          throw error
+        }
+      } else {
+        const error = new Error("OpenAI API key is required for premium models")
+        setError(error)
+        throw error
+      }
     }
 
     // Reset states
@@ -54,31 +68,51 @@ export function useGptQuery({
       // Initial progress update
       setProgress(10)
       
-      const response = await fetch("/api/llm", {
+      const requestBody = {
+        model: effectiveModel,
+        messages: [...initialMessages, ...messages],
+        temperature: 0.7,
+        stream: false,
+      }
+
+      const requestHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      let targetUrl = "/api/llm"
+
+      if (shouldUseProxy) {
+        if (!CHAT_PROXY_URL) {
+          throw new Error("Chat proxy URL is not configured")
+        }
+        targetUrl = CHAT_PROXY_URL
+        if (PROXY_CLIENT_KEY) {
+          requestHeaders["x-proxy-key"] = PROXY_CLIENT_KEY
+        }
+      } else if (apiKey) {
+        requestHeaders["x-openai-key"] = apiKey
+      }
+
+      const response = await fetch(targetUrl, {
         method: "POST",
         signal: controller.signal,
-        headers: { 
-          "Content-Type": "application/json", 
-          "x-openai-key": apiKey 
-        },
-        body: JSON.stringify({ 
-          model: customModel || model,
-          messages: [...initialMessages, ...messages],
-          temperature: 0.7,
-          stream: false
-        })
+        headers: requestHeaders,
+        body: JSON.stringify(requestBody),
       })
 
       // Update progress after receiving headers
       setProgress(30)
 
       if (!response.ok) {
-        let errorMessage = 'Failed to fetch from OpenAI'
+        let errorMessage = shouldUseProxy ? 'Failed to reach clinical insights proxy' : 'Failed to fetch from OpenAI'
         try {
           const errorData = await response.json()
-          errorMessage = errorData.error?.message || errorMessage
+          errorMessage =
+            errorData?.error?.message ||
+            errorData?.error ||
+            errorData?.message ||
+            errorMessage
         } catch (e) {
-          // If we can't parse the error, use the status text
           errorMessage = response.statusText || errorMessage
         }
         throw new Error(errorMessage)
@@ -89,15 +123,21 @@ export function useGptQuery({
 
       const data = await response.json()
       console.log('Raw API Response:', data) // Log the full response for debugging
-      
-      // More robust response handling
-      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-        console.error('Invalid choices in response:', data)
-        throw new Error('Invalid response format from OpenAI API')
+
+      let responseText = ""
+      if (shouldUseProxy) {
+        responseText = data?.message || data?.openAiResponse?.choices?.[0]?.message?.content || ""
+        if (!responseText) {
+          console.error('Invalid proxy response:', data)
+          throw new Error('Invalid response format from proxy service')
+        }
+      } else {
+        if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+          console.error('Invalid choices in response:', data)
+          throw new Error('Invalid response format from OpenAI API')
+        }
+        responseText = data.choices[0]?.message?.content || ''
       }
-      
-      const message = data.choices[0]?.message
-      const responseText = data.choices[0]?.message?.content || '';
       setResponse(responseText);
       onResponse?.(responseText);
       return responseText;

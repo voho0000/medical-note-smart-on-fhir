@@ -5,12 +5,14 @@ import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import MedicalNoteFeature from "@/features/medical-note/Feature"
+import { NoteProvider } from "@/features/medical-note/providers/NoteProvider"
 import { DataSelectionPanel } from "@/features/data-selection/components/DataSelectionPanel"
 import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
 import { useDataSelection, DataSelection } from "@/features/data-selection/hooks/useDataSelection"
 import { GptResponseProvider } from "@/features/medical-note/context/GptResponseContext"
 import { AsrProvider } from "@/features/medical-note/context/AsrContext"
 import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
+import SettingsFeature from "@/features/settings/Feature"
 
 // Import the ClinicalData type from the provider
 import type { ClinicalData as ClinicalDataFromProvider } from "@/lib/providers/ClinicalDataProvider"
@@ -37,16 +39,18 @@ export function RightPanelFeature() {
   return (
     <GptResponseProvider>
       <AsrProvider>
-        <Tabs 
+        <NoteProvider>
+          <Tabs 
           value={activeTab} 
           onValueChange={setActiveTab}
           className="h-full flex flex-col"
           defaultValue="medicalNote"
         >
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="medicalNote">Medical Note</TabsTrigger>
           <TabsTrigger value="dataSelection">Data Selection</TabsTrigger>
           <TabsTrigger value="clinicalInsights">Clinical Insights</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
         
         <TabsContent value="medicalNote" className="flex-1 mt-0 pt-4" forceMount>
@@ -81,8 +85,17 @@ export function RightPanelFeature() {
         <TabsContent value="clinicalInsights" className="flex-1 mt-0 pt-4" forceMount>
           <ClinicalInsightsFeature />
         </TabsContent>
-      </Tabs>
-      </AsrProvider>
-    </GptResponseProvider>
+
+        <TabsContent value="settings" className="flex-1 mt-0 pt-4" forceMount>
+          <ScrollArea className="h-full pr-2">
+            <div className="space-y-4">
+              <SettingsFeature />
+            </div>
+          </ScrollArea>
+        </TabsContent>
+        </Tabs>
+      </NoteProvider>
+    </AsrProvider>
+  </GptResponseProvider>
   )
 }

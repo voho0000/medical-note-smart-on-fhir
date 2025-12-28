@@ -1,6 +1,7 @@
 // features/medical-note/providers/NoteProvider.tsx
 "use client"
-import { createContext, useContext, useMemo, useState, type Dispatch, type SetStateAction } from "react"
+import { createContext, useContext, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react"
+import { DEFAULT_MODEL_ID, isModelId } from "@/features/medical-note/constants/models"
 
 type Ctx = {
   asrText: string
@@ -15,11 +16,27 @@ type Ctx = {
 
 const NoteContext = createContext<Ctx | null>(null)
 
+const MODEL_STORAGE_KEY = "clinical-note:model"
+
 export function NoteProvider({ children }: { children: React.ReactNode }) {
   const [asrText, setAsrText] = useState("")
   const [prompt, setPrompt] = useState("Generate Medical Summary")
   const [gptResponse, setGptResponse] = useState("")
-  const [model, setModel] = useState("gpt-4.1")
+  const [model, setModel] = useState<string>(DEFAULT_MODEL_ID)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const stored = window.localStorage.getItem(MODEL_STORAGE_KEY)
+    if (stored && isModelId(stored)) {
+      const next = stored
+      setModel(next)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(MODEL_STORAGE_KEY, model)
+  }, [model])
 
   const value: Ctx = useMemo(() => ({
     asrText, setAsrText,

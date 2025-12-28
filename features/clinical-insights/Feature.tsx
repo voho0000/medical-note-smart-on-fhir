@@ -13,6 +13,8 @@ import { AlertCircle, ChevronDown, Loader2, RefreshCcw } from "lucide-react"
 import { useClinicalContext } from "@/features/data-selection/hooks/useClinicalContext"
 import { useGptQuery } from "@/features/medical-note/hooks/useGptQuery"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
+import { DEFAULT_MODEL_ID } from "@/features/medical-note/constants/models"
+import { hasChatProxy } from "@/lib/config/ai"
 
 const PANEL_DEFINITIONS = [
   {
@@ -53,6 +55,8 @@ function InsightPanel({
   response,
   error,
   canGenerate,
+  onResponseChange,
+  isEdited,
 }: {
   title: string
   subtitle: string
@@ -63,6 +67,8 @@ function InsightPanel({
   response: string
   error: Error | null
   canGenerate: boolean
+  onResponseChange: (value: string) => void
+  isEdited: boolean
 }) {
   return (
     <Card>
@@ -104,16 +110,24 @@ function InsightPanel({
         <Separator className="opacity-50" />
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase text-muted-foreground">Response</label>
-          <div className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm">
-            {error ? (
-              <span className="text-destructive">{error.message}</span>
-            ) : response ? (
-              response
-            ) : isLoading ? (
-              "Awaiting LLM response..."
-            ) : (
-              <span className="text-muted-foreground">No response yet. Regenerate when ready.</span>
-            )}
+          {error ? (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error.message}
+            </div>
+          ) : (
+            <Textarea
+              value={response}
+              onChange={(event) => onResponseChange(event.target.value)}
+              placeholder="AI generated insight will appear here. You can edit the text before saving or copying."
+              className="min-h-[220px] resize-vertical text-sm"
+              disabled={isLoading}
+            />
+          )}
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>
+              {isLoading ? "Generating..." : isEdited ? "Edited" : response ? "Generated" : "Awaiting generation"}
+            </span>
+            <span>{response.length} chars</span>
           </div>
         </div>
       </CardContent>
@@ -136,6 +150,16 @@ export default function ClinicalInsightsFeature() {
   )
   const [hasAutoRun, setHasAutoRun] = useState(false)
 
+  const [responses, setResponses] = useState<Record<PanelId, { text: string; isEdited: boolean }>>(() =>
+    PANEL_DEFINITIONS.reduce(
+      (acc, panel) => {
+        acc[panel.id] = { text: "", isEdited: false }
+        return acc
+      },
+      {} as Record<PanelId, { text: string; isEdited: boolean }>,
+    ),
+  )
+
   const [context, setContext] = useState("")
 
   useEffect(() => {
@@ -154,25 +178,67 @@ export default function ClinicalInsightsFeature() {
     response: safetyResponse,
     isLoading: safetyLoading,
     error: safetyError,
-  } = useGptQuery({ defaultModel: "gpt-4o-mini" })
+  } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
 
   const {
     queryGpt: runChanges,
     response: changesResponse,
     isLoading: changesLoading,
     error: changesError,
-  } = useGptQuery({ defaultModel: "gpt-4o-mini" })
+  } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
 
   const {
     queryGpt: runSnapshot,
     response: snapshotResponse,
     isLoading: snapshotLoading,
     error: snapshotError,
-  } = useGptQuery({ defaultModel: "gpt-4o-mini" })
+  } = useGptQuery({ defaultModel: DEFAULT_MODEL_ID })
+
+  const canUseProxy = hasChatProxy
+  const canGenerate = Boolean(apiKey) || canUseProxy
+
+  useEffect(() => {
+    setResponses((prev) => {
+      const current = prev.safety
+      if (current && current.text === safetyResponse && current.isEdited === false) {
+        return prev
+      }
+      return {
+        ...prev,
+        safety: { text: safetyResponse, isEdited: false },
+      }
+    })
+  }, [safetyResponse])
+
+  useEffect(() => {
+    setResponses((prev) => {
+      const current = prev.changes
+      if (current && current.text === changesResponse && current.isEdited === false) {
+        return prev
+      }
+      return {
+        ...prev,
+        changes: { text: changesResponse, isEdited: false },
+      }
+    })
+  }, [changesResponse])
+
+  useEffect(() => {
+    setResponses((prev) => {
+      const current = prev.snapshot
+      if (current && current.text === snapshotResponse && current.isEdited === false) {
+        return prev
+      }
+      return {
+        ...prev,
+        snapshot: { text: snapshotResponse, isEdited: false },
+      }
+    })
+  }, [snapshotResponse])
 
   const runPanel = useCallback(
     async (panelId: PanelId) => {
-      if (!context.trim() || !apiKey) return
+      if (!context.trim() || (!apiKey && !canUseProxy)) return
 
       const baseMessages = [
         { role: "system" as const, content: SYSTEM_INSTRUCTION },
@@ -196,11 +262,11 @@ export default function ClinicalInsightsFeature() {
           break
       }
     },
-    [apiKey, context, prompts, runSafety, runChanges, runSnapshot],
+    [apiKey, canUseProxy, context, prompts, runSafety, runChanges, runSnapshot],
   )
 
   useEffect(() => {
-    if (!apiKey || hasAutoRun || !context.trim()) return
+    if ((!apiKey && !canUseProxy) || hasAutoRun || !context.trim()) return
 
     setHasAutoRun(true)
 
@@ -212,14 +278,23 @@ export default function ClinicalInsightsFeature() {
       console.error("Failed to auto-run clinical insights", error)
       setHasAutoRun(false)
     })
-  }, [apiKey, context, hasAutoRun, runPanel])
+  }, [apiKey, canUseProxy, context, hasAutoRun, runPanel])
 
   const handlePromptChange = useCallback((panelId: PanelId, value: string) => {
     setPrompts((prev) => ({ ...prev, [panelId]: value }))
   }, [])
 
+  const handleResponseChange = useCallback((panelId: PanelId, value: string) => {
+    setResponses((prev) => ({
+      ...prev,
+      [panelId]: { text: value, isEdited: true },
+    }))
+  }, [])
+
   const panelEntries = useMemo(() => {
     return PANEL_DEFINITIONS.map((panel) => {
+      const panelResponse = responses[panel.id] ?? { text: "", isEdited: false }
+
       const sharedProps = {
         title: panel.title,
         subtitle: panel.subtitle,
@@ -234,27 +309,29 @@ export default function ClinicalInsightsFeature() {
             : snapshotLoading,
         response:
           panel.id === "safety"
-            ? safetyResponse
+            ? panelResponse.text
             : panel.id === "changes"
-            ? changesResponse
-            : snapshotResponse,
+            ? panelResponse.text
+            : panelResponse.text,
         error:
           panel.id === "safety"
             ? safetyError
             : panel.id === "changes"
             ? changesError
             : snapshotError,
-        canGenerate: Boolean(apiKey),
+        canGenerate,
+        onResponseChange: (value: string) => handleResponseChange(panel.id, value),
+        isEdited: panelResponse.isEdited,
       }
 
       return { id: panel.id, label: panel.title, props: sharedProps }
     })
-  }, [apiKey, changesError, changesLoading, changesResponse, handlePromptChange, prompts, runPanel, safetyError, safetyLoading, safetyResponse, snapshotError, snapshotLoading, snapshotResponse])
+  }, [apiKey, canGenerate, changesError, changesLoading, handlePromptChange, handleResponseChange, prompts, responses, runPanel, safetyError, safetyLoading, snapshotError, snapshotLoading])
 
   return (
     <ScrollArea className="h-full pr-3">
       <div className="space-y-3">
-        {!apiKey && (
+        {!canGenerate && (
           <Card className="border-destructive/40 bg-destructive/5 text-destructive">
             <CardContent className="flex items-center gap-3 py-4 text-sm font-medium">
               <AlertCircle className="h-5 w-5" />

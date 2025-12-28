@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
+import { WHISPER_PROXY_URL, PROXY_CLIENT_KEY, hasWhisperProxy } from "@/lib/config/ai"
 import { useAsr } from "../context/AsrContext"
 
 export function AsrPanel() {
@@ -37,32 +38,50 @@ export function AsrPanel() {
   }, [stopTimer])
 
   const handleWhisperRequest = useCallback(async (audioBlob: Blob) => {
-    if (!apiKey) { 
-      alert("Please enter your OpenAI API key")
-      return 
+    const useProxy = !apiKey && hasWhisperProxy
+
+    if (!apiKey && !useProxy) {
+      alert("Add your OpenAI API key in Settings or configure the ASR proxy endpoint.")
+      return
     }
-    
+
     setIsAsrLoading(true)
     const formData = new FormData()
     formData.append("file", audioBlob, "audio.webm")
     formData.append("model", "whisper-1")
-    
+
     try {
-      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      const targetUrl = useProxy ? WHISPER_PROXY_URL : "https://api.openai.com/v1/audio/transcriptions"
+      const headers: Record<string, string> = {}
+
+      if (useProxy) {
+        if (!WHISPER_PROXY_URL) {
+          throw new Error("Whisper proxy URL is not configured")
+        }
+        if (PROXY_CLIENT_KEY) {
+          headers["x-proxy-key"] = PROXY_CLIENT_KEY
+        }
+      } else if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`
+      }
+
+      const response = await fetch(targetUrl, {
         method: "POST",
-        headers: { 
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers,
         body: formData,
       })
-      
+
       if (!response.ok) {
         throw new Error(`API request failed with status ${response.status}`)
       }
-      
+
       const result = await response.json()
-      const text = result?.text?.trim() || "No transcription returned."
-      
+      const text =
+        result?.transcript?.trim() ||
+        result?.text?.trim() ||
+        result?.openAiResponse?.text?.trim() ||
+        "No transcription returned."
+
       // Append new transcription with timestamp
       const timestamp = new Date().toLocaleTimeString()
       const separator = asrText ? "\n\n---\n\n" : ""
@@ -79,11 +98,11 @@ export function AsrPanel() {
     } finally { 
       setIsAsrLoading(false) 
     }
-  }, [apiKey, setAsrText, asrText, setIsAsrLoading])
+  }, [apiKey, asrText, setAsrText, setIsAsrLoading])
 
   const handleStartRecording = useCallback(() => {
-    if (!apiKey) {
-      alert("Please enter your OpenAI API key")
+    if (!apiKey && !hasWhisperProxy) {
+      alert("Add your OpenAI API key in Settings or configure the ASR proxy endpoint.")
       return
     }
     startRecordingRef.current()

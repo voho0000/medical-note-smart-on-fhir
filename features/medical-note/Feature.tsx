@@ -2,8 +2,6 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { NoteProvider } from "./providers/NoteProvider"
-import { ApiKeyField } from "./components/ApiKeyField"
 import { PromptEditor } from "./components/PromptEditor"
 import { GptPanel } from "./components/GptPanel"
 import { usePatient } from "@/lib/providers/PatientProvider"
@@ -24,13 +22,10 @@ const AsrPanel = dynamic(
 export default function MedicalNoteFeature() {
   const { patient } = usePatient()
   return (
-    <NoteProvider>
-      <div className="space-y-3">
-        <ApiKeyField />
-        <AsrPanel />
-        <PromptEditor />
-        <GptPanel patient={patient ?? undefined} />
-      </div>
-    </NoteProvider>
+    <div className="space-y-3">
+      <AsrPanel />
+      <PromptEditor />
+      <GptPanel patient={patient ?? undefined} />
+    </div>
   )
 }

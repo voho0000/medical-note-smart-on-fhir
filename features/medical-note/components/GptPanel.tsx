@@ -11,6 +11,7 @@ import { useApiKey } from "@/lib/providers/ApiKeyProvider"
 import { useGptQuery } from "../hooks/useGptQuery"
 import { useClinicalContext } from "@/features/data-selection/hooks/useClinicalContext"
 import { useGptResponse } from "../context/GptResponseContext"
+import { DEFAULT_MODEL_ID, isBuiltInModelId } from "@/features/medical-note/constants/models"
 
 interface PatientLite { 
   name?: Array<{ 
@@ -43,20 +44,18 @@ function calculateAge(birthDate?: string): string {
 }
 
 export function GptPanel({ 
-  patient, 
-  defaultModel = "gpt-4" 
+  patient
 }: { 
   patient?: PatientLite | null 
-  defaultModel?: string 
 }) {
   const { patient: currentPatient } = usePatient()
-  const { asrText, prompt, model, setModel } = useNote()
+  const { asrText, prompt, model } = useNote()
   const { getFormattedClinicalContext } = useClinicalContext()
   
   const { setGptResponse, setIsGenerating } = useGptResponse();
   
   const { queryGpt, isLoading, error, response: gptResponse } = useGptQuery({
-    defaultModel: defaultModel,
+    defaultModel: DEFAULT_MODEL_ID,
     onResponse: (response) => {
       setGptResponse(response);
       setDisplayResponse(response);
@@ -72,14 +71,6 @@ export function GptPanel({
   const { apiKey } = useApiKey();
   const [displayResponse, setDisplayResponse] = useState("");
   const [isEdited, setIsEdited] = useState(false);
-
-  const validateApiKey = useCallback(() => {
-    if (!apiKey) {
-      alert('Please enter your OpenAI API key');
-      return false;
-    }
-    return true;
-  }, [apiKey]);
 
   const formatClinicalContext = useCallback((context: unknown): string => {
     if (Array.isArray(context)) {
@@ -99,10 +90,9 @@ export function GptPanel({
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    if (!validateApiKey()) return;
-    if (!apiKey) {
-      alert('Please set your API key in the settings');
-      return;
+    if (!apiKey && !isBuiltInModelId(model)) {
+      alert("Enter your OpenAI API key in Settings to use premium models.")
+      return
     }
 
     try {
@@ -141,8 +131,8 @@ export function GptPanel({
           role: 'user' as const, 
           content: fullPrompt 
         }
-      ]);
-      
+      ], model);
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate response';
       console.error('Error generating response:', error);
@@ -152,7 +142,6 @@ export function GptPanel({
       setIsGenerating(false);
     }
   }, [
-    apiKey, 
     asrText, 
     currentPatient, 
     formatClinicalContext, 
@@ -162,8 +151,7 @@ export function GptPanel({
     prompt, 
     queryGpt, 
     setIsGenerating, 
-    setGptResponse, 
-    validateApiKey
+    setGptResponse
   ]);
 
   const handleResponseChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
