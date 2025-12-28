@@ -81,6 +81,7 @@ function RightPanelContent() {
                         medications: clinicalData.medications || [],
                         allergies: clinicalData.allergies || [],
                         diagnosticReports: clinicalData.diagnosticReports || [],
+                        procedures: clinicalData.procedures || [],
                         observations: clinicalData.observations || []
                       }}
                       selectedData={selectedData}

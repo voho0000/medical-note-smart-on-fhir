@@ -3,7 +3,7 @@
 
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 
-export type DataType = 'conditions' | 'medications' | 'allergies' | 'diagnosticReports' | 'observations'
+export type DataType = 'patientInfo' | 'conditions' | 'medications' | 'allergies' | 'diagnosticReports' | 'procedures' | 'observations'
 
 export type DataSelection = Record<DataType, boolean>
 
@@ -33,10 +33,12 @@ const STORAGE_KEY = 'clinicalDataSelection'
 const FILTERS_STORAGE_KEY = 'clinicalDataFilters'
 
 const DEFAULT_SELECTION: DataSelection = {
+  patientInfo: true,
   conditions: true,
   medications: true,
   allergies: true,
   diagnosticReports: true,
+  procedures: true,
   observations: true
 }
 

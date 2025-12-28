@@ -32,7 +32,23 @@ type ClinicalData = {
   medications: any[]
   allergies: any[]
   diagnosticReports: any[]
+  procedures: ProcedureResource[]
   observations: any[]
+}
+
+type ProcedureResource = {
+  code?: {
+    text?: string
+    coding?: Array<{
+      display?: string
+    }>
+  }
+  status?: string
+  performedDateTime?: string
+  performedPeriod?: {
+    start?: string
+    end?: string
+  }
 }
 
 interface DataItem {
@@ -169,6 +185,13 @@ export function DataSelectionPanel({
     const _ = filterKey;
     return [
       {
+        id: 'patientInfo' as const,
+        label: 'Patient Information',
+        description: 'Demographics such as age and gender',
+        count: 1,
+        category: 'patient'
+      },
+      {
         id: 'conditions' as const,
         label: 'Medical Conditions',
         description: 'Active and historical medical conditions',
@@ -195,6 +218,13 @@ export function DataSelectionPanel({
         description: 'Lab results and diagnostic imaging reports',
         count: getFilteredCount(clinicalData.diagnosticReports || [], 'diagnosticReports'),
         category: 'diagnostics'
+      },
+      {
+        id: 'procedures' as const,
+        label: 'Procedures',
+        description: 'Surgical and clinical procedures',
+        count: clinicalData.procedures?.length || 0,
+        category: 'procedures'
       },
       {
         id: 'observations' as const,

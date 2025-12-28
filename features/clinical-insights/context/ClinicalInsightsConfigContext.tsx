@@ -34,6 +34,7 @@ const DEFAULT_PANELS: InsightPanelConfig[] = [
 ]
 
 const STORAGE_KEY = "clinical-insights-panels"
+const AUTO_GENERATE_STORAGE_KEY = "clinical-insights-auto-generate"
 const MAX_PANELS = 6
 
 function generatePanelId() {
@@ -55,12 +56,15 @@ type ClinicalInsightsConfigContextValue = {
   resetPanels: () => void
   maxPanels: number
   reorderPanels: (orderedIds: string[]) => void
+  autoGenerate: boolean
+  setAutoGenerate: (value: boolean) => void
 }
 
 const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContextValue | null>(null)
 
 export function ClinicalInsightsConfigProvider({ children }: { children: ReactNode }) {
   const [panels, setPanels] = useState<InsightPanelConfig[]>(getDefaultClinicalInsightPanels)
+  const [autoGenerate, setAutoGenerate] = useState<boolean>(true)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -80,11 +84,32 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
+      const stored = window.localStorage.getItem(AUTO_GENERATE_STORAGE_KEY)
+      if (stored !== null) {
+        setAutoGenerate(stored === "true")
+      }
+    } catch (error) {
+      console.warn("Failed to load auto-generate setting from storage", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(panels))
     } catch (error) {
       console.warn("Failed to persist clinical insights panels", error)
     }
   }, [panels])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      window.localStorage.setItem(AUTO_GENERATE_STORAGE_KEY, String(autoGenerate))
+    } catch (error) {
+      console.warn("Failed to persist auto-generate setting", error)
+    }
+  }, [autoGenerate])
 
   const addPanel = () => {
     setPanels((prev) => {
@@ -130,8 +155,8 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   }, [])
 
   const value = useMemo(
-    () => ({ panels, addPanel, updatePanel, removePanel, resetPanels, reorderPanels, maxPanels: MAX_PANELS }),
-    [panels, reorderPanels],
+    () => ({ panels, addPanel, updatePanel, removePanel, resetPanels, reorderPanels, maxPanels: MAX_PANELS, autoGenerate, setAutoGenerate }),
+    [autoGenerate, panels, reorderPanels],
   )
 
   return <ClinicalInsightsConfigContext.Provider value={value}>{children}</ClinicalInsightsConfigContext.Provider>

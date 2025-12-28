@@ -135,7 +135,7 @@ function InsightPanel({
 }
 
 export default function ClinicalInsightsFeature() {
-  const { panels } = useClinicalInsightsConfig()
+  const { panels, autoGenerate } = useClinicalInsightsConfig()
   const { apiKey } = useApiKey()
   const { getFullClinicalContext } = useClinicalContext()
   const { model } = useNote()
@@ -158,7 +158,7 @@ export default function ClinicalInsightsFeature() {
     setResponses((prev) => {
       return panels.reduce<Record<string, ResponseEntry>>((acc, panel) => {
         const existing = prev[panel.id]
-        const text = typeof existing?.text === "string" ? existing.text : panel.prompt ?? ""
+        const text = typeof existing?.text === "string" ? existing.text : ""
         const isEdited = existing?.isEdited ?? false
         const metadata = existing?.metadata ?? null
         acc[panel.id] = { text, isEdited, metadata }
@@ -262,7 +262,7 @@ export default function ClinicalInsightsFeature() {
   )
 
   useEffect(() => {
-    if ((!apiKey && !canUseProxy) || hasAutoRun || !context.trim() || panels.length === 0) {
+    if ((!apiKey && !canUseProxy) || hasAutoRun || !context.trim() || panels.length === 0 || !autoGenerate) {
       return
     }
 
@@ -276,7 +276,7 @@ export default function ClinicalInsightsFeature() {
       console.error("Failed to auto-run clinical insights", error)
       setHasAutoRun(false)
     })
-  }, [apiKey, canUseProxy, context, hasAutoRun, panels, runPanel])
+  }, [apiKey, autoGenerate, canUseProxy, context, hasAutoRun, panels, runPanel])
 
   const handlePromptChange = useCallback((panelId: string, value: string) => {
     setPrompts((prev) => ({ ...prev, [panelId]: value }))

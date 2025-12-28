@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { useClinicalInsightsConfig } from "@/features/clinical-insights/context/ClinicalInsightsConfigContext"
 
 export function ClinicalInsightsSettings() {
-  const { panels, updatePanel, addPanel, removePanel, resetPanels, maxPanels, reorderPanels } =
+  const { panels, updatePanel, addPanel, removePanel, resetPanels, maxPanels, reorderPanels, autoGenerate, setAutoGenerate } =
     useClinicalInsightsConfig()
 
   const canAddPanel = panels.length < maxPanels
@@ -29,12 +31,30 @@ export function ClinicalInsightsSettings() {
   return (
     <Card>
       <CardHeader className="space-y-1">
-        <CardTitle className="text-base">Clinical Insights Tabs</CardTitle>
+        <CardTitle className="text-base">Clinical Insights Settings</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Customize the tabs that appear in Clinical Insights. Use the move buttons to reorder, update tab labels, and tune each prompt.
+          Configure auto-generation behavior and customize the tabs that appear in Clinical Insights.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="flex items-center space-x-2 rounded-lg border p-4">
+          <Checkbox
+            id="auto-generate"
+            checked={autoGenerate}
+            onCheckedChange={(checked) => setAutoGenerate(checked as boolean)}
+          />
+          <div className="grid gap-1.5 leading-none">
+            <Label
+              htmlFor="auto-generate"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Auto-generate insights on page load
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              When enabled, Clinical Insights will automatically generate responses when you enter the page. When disabled, you'll need to manually trigger generation for each tab.
+            </p>
+          </div>
+        </div>
         {panels.map((panel, index) => (
           <div key={panel.id} className="space-y-3 rounded-lg border p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">

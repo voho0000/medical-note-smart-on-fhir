@@ -1,9 +1,10 @@
 // features/data-selection/hooks/useClinicalContext.ts
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useDataSelection } from "@/features/data-selection/hooks/useDataSelection";
 import { useClinicalData } from "@/lib/providers/ClinicalDataProvider";
+import { usePatient } from "@/lib/providers/PatientProvider";
 
 /**
  * TYPES
@@ -41,6 +42,20 @@ export type UseClinicalContextReturn = {
   resetClinicalContextToDefault: () => void;
 };
 
+function calculateAge(birthDate?: string | null): string {
+  if (!birthDate) return "Unknown";
+  const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) return "Unknown";
+
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? `${age}` : "Unknown";
+}
+
 // ---- Minimal FHIR-ish shapes we actually use in this hook ----
 interface CodeText { text?: string }
 interface ValueQuantity { value?: number | string; unit?: string }
@@ -59,6 +74,19 @@ interface DiagnosticReport {
   effectiveDateTime?: string;
 }
 
+interface ProcedureResource {
+  code?: {
+    text?: string;
+    coding?: Array<{ display?: string }>;
+  };
+  status?: string;
+  performedDateTime?: string;
+  performedPeriod?: {
+    start?: string;
+    end?: string;
+  };
+}
+
 export type ClinicalData = {
   diagnoses?: Array<{ code?: CodeText }>;
   medications?: Array<{ medicationCodeableConcept?: CodeText }>;
@@ -67,19 +95,29 @@ export type ClinicalData = {
   observations?: Observation[];
   vitalSigns?: Observation[];
   vitals?: Observation[]; // some sources use this name
+  procedures?: ProcedureResource[];
 };
 
 /**
  * Hook
  */
 export function useClinicalContext(): UseClinicalContextReturn {
-  const { selectedData, filters, supplementaryNotes, setSupplementaryNotes, editedClinicalContext, setEditedClinicalContext } = useDataSelection() as {
+  const {
+    selectedData,
+    filters,
+    supplementaryNotes,
+    setSupplementaryNotes,
+    editedClinicalContext,
+    setEditedClinicalContext,
+  } = useDataSelection() as {
     selectedData: {
+      patientInfo?: boolean;
       conditions?: boolean;
       medications?: boolean;
       allergies?: boolean;
       diagnosticReports?: boolean;
       observations?: boolean; // includes vitals when true
+      procedures?: boolean;
     };
     filters?: DataFilters;
     supplementaryNotes: string;
@@ -89,6 +127,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
   };
 
   const clinicalData = (useClinicalData() as ClinicalData | null) ?? null;
+  const { patient: currentPatient } = usePatient();
 
   // Helper: check if a date is within the specified time range
   const isWithinTimeRange = (dateString: string | undefined, range: TimeRange): boolean => {
@@ -148,9 +187,26 @@ export function useClinicalContext(): UseClinicalContextReturn {
   // Core: build clinical context list
   const getClinicalContext = useCallback((): ClinicalContextSection[] => {
     const context: ClinicalContextSection[] = [];
-    const observationIdsInReports = new Set<string>();
+
+    const patientInfo = currentPatient ?? null;
+    if (selectedData.patientInfo && patientInfo) {
+      const items: string[] = [];
+      const gender = patientInfo.gender ? `${patientInfo.gender.charAt(0).toUpperCase()}${patientInfo.gender.slice(1)}` : null;
+      if (gender) {
+        items.push(`Gender: ${gender}`);
+      }
+      const age = calculateAge(patientInfo.birthDate);
+      if (age !== "Unknown") {
+        items.push(`Age: ${age}`);
+      }
+      if (items.length > 0) {
+        context.push({ title: "Patient Information", items });
+      }
+    }
 
     if (!clinicalData) return context;
+
+    const observationIdsInReports = new Set<string>();
 
     // Small utility to map + filter
     const mapAndFilter = <T,>(
@@ -250,6 +306,21 @@ export function useClinicalContext(): UseClinicalContextReturn {
             items,
           });
         }
+      }
+    }
+
+    // Procedures
+    if (selectedData.procedures && clinicalData.procedures?.length) {
+      const items = mapAndFilter(clinicalData.procedures, (procedure) => {
+        const name = procedure.code?.text || procedure.code?.coding?.[0]?.display || "Procedure";
+        const performed = procedure.performedDateTime || procedure.performedPeriod?.end || procedure.performedPeriod?.start;
+        const datePart = performed ? ` (${new Date(performed).toLocaleDateString()})` : "";
+        const status = procedure.status ? ` – ${procedure.status}` : "";
+        return `${name}${datePart}${status}`.trim();
+      });
+
+      if (items.length) {
+        context.push({ title: "Procedures", items });
       }
     }
 
