@@ -348,8 +348,8 @@ export function MedicalChat() {
           </div>
         ) : null}
       </CardHeader>
-      <CardContent className="flex flex-1 min-h-0 flex-col overflow-hidden p-0">
-        <ScrollArea className="flex-1 px-4 py-4">
+      <CardContent className="p-0">
+        <ScrollArea className="h-[400px] px-4 py-4">
           <div className="flex flex-col gap-3">
             {chatMessages.length === 0 ? (
               <div className="text-sm text-muted-foreground">
