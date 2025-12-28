@@ -3,8 +3,12 @@
 
 import { useState, useCallback } from "react"
 import { useApiKey } from "@/lib/providers/ApiKeyProvider"
-import { CHAT_PROXY_URL, PROXY_CLIENT_KEY, hasChatProxy } from "@/lib/config/ai"
-import { isBuiltInModelId } from "@/features/medical-note/constants/models"
+import { CHAT_PROXY_URL, PROXY_CLIENT_KEY, hasChatProxy, hasGeminiProxy } from "@/lib/config/ai"
+import {
+  getModelDefinition,
+  isBuiltInModelId,
+  type ModelDefinition,
+} from "@/features/medical-note/constants/models"
 
 function extractMessageContent(payload: unknown): string {
   if (!payload) return ""
@@ -44,6 +48,66 @@ function extractMessageContent(payload: unknown): string {
   return ""
 }
 
+function extractGeminiContent(payload: unknown): string {
+  if (!payload) return ""
+  if (typeof payload === "string") return payload
+  if (Array.isArray(payload)) {
+    for (const entry of payload) {
+      const extracted = extractGeminiContent(entry)
+      if (extracted) return extracted
+    }
+    return ""
+  }
+
+  if (typeof payload === "object") {
+    const record = payload as Record<string, unknown>
+
+    if (Array.isArray(record.candidates)) {
+      for (const candidate of record.candidates) {
+        const extracted = extractGeminiContent(candidate)
+        if (extracted) return extracted
+      }
+    }
+
+    if (record.content) {
+      const extracted = extractGeminiContent(record.content)
+      if (extracted) return extracted
+    }
+
+    if (Array.isArray(record.parts)) {
+      const texts = record.parts
+        .map((part) => {
+          if (!part || typeof part !== "object") return ""
+          const text = (part as Record<string, unknown>).text
+          return typeof text === "string" ? text : ""
+        })
+        .filter((text) => text.trim().length > 0)
+
+      if (texts.length > 0) {
+        return texts.join("\n")
+      }
+    }
+
+    if (typeof record.text === "string") {
+      return record.text
+    }
+  }
+
+  return ""
+}
+
+function transformMessagesForGemini(messages: GptMessage[]): Array<{ role: string; parts: Array<{ text: string }> }> {
+  return messages.map((message) => {
+    const baseRole = message.role === "assistant" ? "model" : "user"
+    const role = message.role === "system" ? "user" : baseRole
+    const text = message.role === "system" ? `System instruction:\n${message.content}` : message.content
+    return {
+      role,
+      parts: [{ text }],
+    }
+  })
+}
+
 type GptMessage = {
   role: 'user' | 'assistant' | 'system'
   content: string
@@ -64,7 +128,7 @@ export function useGptQuery({
   onResponse,
   onError
 }: UseGptQueryOptions = {}) {
-  const { apiKey } = useApiKey()
+  const { apiKey, geminiKey } = useApiKey()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [response, setResponse] = useState("")
@@ -73,18 +137,30 @@ export function useGptQuery({
 
   const queryGpt = useCallback(async (messages: GptMessage[], customModel?: string) => {
     const effectiveModel = customModel || model
-    const isBuiltInModel = isBuiltInModelId(effectiveModel)
-    const shouldUseProxy = !apiKey && isBuiltInModel && hasChatProxy
+    const modelDefinition: ModelDefinition | undefined = getModelDefinition(effectiveModel)
+    const modelProvider = modelDefinition?.provider ?? "openai"
 
-    if (!apiKey) {
-      if (isBuiltInModel) {
-        if (!hasChatProxy) {
-          const error = new Error("Built-in models require either the PrismaCare chat proxy or a user API key")
+    const isBuiltInModel = isBuiltInModelId(effectiveModel)
+    const shouldUseOpenAiProxy = modelProvider === "openai" && !apiKey && isBuiltInModel && hasChatProxy
+    const shouldUseGeminiProxy = modelProvider === "gemini" && !geminiKey && hasGeminiProxy
+
+    if (modelProvider === "openai") {
+      if (!apiKey) {
+        if (modelDefinition?.requiresUserKey) {
+          const error = new Error("This GPT model requires a personal OpenAI API key")
           setError(error)
           throw error
         }
-      } else {
-        const error = new Error("OpenAI API key is required for premium models")
+
+        if (!shouldUseOpenAiProxy) {
+          const error = new Error("Built-in GPT models require either the PrismaCare proxy or a personal OpenAI key")
+          setError(error)
+          throw error
+        }
+      }
+    } else if (modelProvider === "gemini") {
+      if (!geminiKey && !shouldUseGeminiProxy) {
+        const error = new Error("Gemini models require either the PrismaCare Gemini proxy or a personal Gemini key")
         setError(error)
         throw error
       }
@@ -106,29 +182,52 @@ export function useGptQuery({
       // Initial progress update
       setProgress(10)
       
-      const requestBody = {
-        model: effectiveModel,
-        messages: [...initialMessages, ...messages],
-        temperature: 0.7,
-        stream: false,
-      }
+      const combinedMessages = [...initialMessages, ...messages]
 
+      let targetUrl = "/api/llm"
       const requestHeaders: Record<string, string> = {
         "Content-Type": "application/json",
       }
+      let requestBody: Record<string, unknown> = {}
 
-      let targetUrl = "/api/llm"
+      if (modelProvider === "openai") {
+        requestBody = {
+          model: effectiveModel,
+          messages: combinedMessages,
+          stream: false,
+        }
 
-      if (shouldUseProxy) {
-        if (!CHAT_PROXY_URL) {
-          throw new Error("Chat proxy URL is not configured")
+        if (shouldUseOpenAiProxy) {
+          if (!CHAT_PROXY_URL) {
+            throw new Error("Chat proxy URL is not configured")
+          }
+          targetUrl = CHAT_PROXY_URL
+          if (PROXY_CLIENT_KEY) {
+            requestHeaders["x-proxy-key"] = PROXY_CLIENT_KEY
+          }
+        } else if (apiKey) {
+          requestHeaders["x-openai-key"] = apiKey
         }
-        targetUrl = CHAT_PROXY_URL
-        if (PROXY_CLIENT_KEY) {
-          requestHeaders["x-proxy-key"] = PROXY_CLIENT_KEY
+      } else {
+        // Gemini request payload
+        if (shouldUseGeminiProxy) {
+          targetUrl = "/api/gemini-proxy"
+          requestBody = {
+            messages: combinedMessages,
+            model: effectiveModel,
+          }
+        } else {
+          const trimmedKey = geminiKey?.trim()
+          if (!trimmedKey) {
+            throw new Error("Gemini API key is not set")
+          }
+
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:generateContent?key=${encodeURIComponent(trimmedKey)}`
+          targetUrl = endpoint
+          requestBody = {
+            contents: transformMessagesForGemini(combinedMessages),
+          }
         }
-      } else if (apiKey) {
-        requestHeaders["x-openai-key"] = apiKey
       }
 
       const response = await fetch(targetUrl, {
@@ -142,7 +241,12 @@ export function useGptQuery({
       setProgress(30)
 
       if (!response.ok) {
-        let errorMessage = shouldUseProxy ? 'Failed to reach clinical insights proxy' : 'Failed to fetch from OpenAI'
+        let errorMessage = "Failed to fetch from model service"
+        if (modelProvider === "openai") {
+          errorMessage = shouldUseOpenAiProxy ? "Failed to reach clinical insights proxy" : "Failed to fetch from OpenAI"
+        } else if (modelProvider === "gemini") {
+          errorMessage = shouldUseGeminiProxy ? "Failed to reach Gemini proxy" : "Failed to fetch from Gemini"
+        }
         try {
           const errorData = await response.json()
           errorMessage =
@@ -163,19 +267,36 @@ export function useGptQuery({
       console.log('Raw API Response:', data) // Log the full response for debugging
 
       let responseText = ""
-      if (shouldUseProxy) {
-        const proxyPayload = data?.message ?? data?.openAiResponse ?? data
-        responseText = extractMessageContent(proxyPayload)
-        if (!responseText) {
-          console.error('Invalid proxy response:', data)
-          throw new Error('Invalid response format from proxy service')
+      if (modelProvider === "openai") {
+        if (shouldUseOpenAiProxy) {
+          const proxyPayload = data?.message ?? data?.openAiResponse ?? data
+          responseText = extractMessageContent(proxyPayload)
+          if (!responseText) {
+            console.error('Invalid proxy response:', data)
+            throw new Error('Invalid response format from proxy service')
+          }
+        } else {
+          const directPayload = data?.choices ?? data
+          responseText = extractMessageContent(directPayload)
+          if (!responseText) {
+            console.error('Invalid response format from OpenAI API:', data)
+            throw new Error('Invalid response format from OpenAI API')
+          }
         }
       } else {
-        const directPayload = data?.choices ?? data
-        responseText = extractMessageContent(directPayload)
-        if (!responseText) {
-          console.error('Invalid response format from OpenAI API:', data)
-          throw new Error('Invalid response format from OpenAI API')
+        if (shouldUseGeminiProxy) {
+          const proxyPayload = data?.message ?? data
+          responseText = extractMessageContent(proxyPayload) || extractGeminiContent(proxyPayload)
+          if (!responseText) {
+            console.error('Invalid Gemini proxy response:', data)
+            throw new Error('Invalid response format from proxy service')
+          }
+        } else {
+          responseText = extractGeminiContent(data)
+          if (!responseText) {
+            console.error('Invalid response format from Gemini API:', data)
+            throw new Error('Invalid response format from Gemini API')
+          }
         }
       }
       setResponse(responseText)
@@ -205,7 +326,7 @@ export function useGptQuery({
       setIsLoading(false)
       setTimeout(() => setProgress(0), 500)
     }
-  }, [apiKey, model, initialMessages, timeout, hasChatProxy])
+  }, [apiKey, geminiKey, model, initialMessages, timeout, hasChatProxy, hasGeminiProxy])
 
   return {
     queryGpt,

@@ -11,7 +11,8 @@ import { useApiKey } from "@/lib/providers/ApiKeyProvider"
 import { useGptQuery } from "../hooks/useGptQuery"
 import { useClinicalContext } from "@/features/data-selection/hooks/useClinicalContext"
 import { useGptResponse } from "../context/GptResponseContext"
-import { DEFAULT_MODEL_ID, isBuiltInModelId } from "@/features/medical-note/constants/models"
+import { DEFAULT_MODEL_ID, getModelDefinition, isBuiltInModelId } from "@/features/medical-note/constants/models"
+import { hasChatProxy, hasGeminiProxy } from "@/lib/config/ai"
 
 interface PatientLite { 
   name?: Array<{ 
@@ -68,7 +69,7 @@ export function GptPanel({
     }
   });
   
-  const { apiKey } = useApiKey();
+  const { apiKey, geminiKey } = useApiKey();
   const [displayResponse, setDisplayResponse] = useState("");
   const [isEdited, setIsEdited] = useState(false);
 
@@ -90,9 +91,24 @@ export function GptPanel({
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    if (!apiKey && !isBuiltInModelId(model)) {
-      alert("Enter your OpenAI API key in Settings to use premium models.")
-      return
+    const definition = getModelDefinition(model)
+    const provider = definition?.provider ?? "openai"
+
+    if (provider === "openai") {
+      if (!apiKey && definition?.requiresUserKey) {
+        alert("Enter your OpenAI API key in Settings to use this GPT model.")
+        return
+      }
+
+      if (!apiKey && !hasChatProxy) {
+        alert("Configure the PrismaCare chat proxy or add an OpenAI key before using GPT models.")
+        return
+      }
+    } else if (provider === "gemini") {
+      if (!geminiKey && !hasGeminiProxy) {
+        alert("Configure the PrismaCare Gemini proxy or add a Gemini key before using this model.")
+        return
+      }
     }
 
     try {

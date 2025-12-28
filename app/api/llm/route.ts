@@ -8,10 +8,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing OpenAI API key" }, { status: 401 })
     }
 
-    const { model, messages, temperature = 0.7 } = await request.json()
+    const { model, messages, temperature } = await request.json()
 
     if (!model || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Invalid request payload" }, { status: 400 })
+    }
+
+    const proxyBody: Record<string, unknown> = {
+      model,
+      messages,
+      stream: false,
+    }
+
+    // For gpt-5-mini, use temperature = 1 to avoid Gemini routing issues
+    // Some proxy services route gpt-5-mini to Gemini which only supports temperature = 1
+    if (model === "gpt-5-mini") {
+      proxyBody.temperature = 1
+    } else if (typeof temperature === "number") {
+      proxyBody.temperature = temperature
     }
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -20,12 +34,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        stream: false,
-      }),
+      body: JSON.stringify(proxyBody),
     })
 
     if (!response.ok) {
