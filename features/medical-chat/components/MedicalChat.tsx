@@ -453,7 +453,7 @@ export function MedicalChat() {
               onKeyDown={handleKeyDown}
               placeholder="Type your question or instruction…"
               spellCheck={false}
-              className="min-h-[72px] max-h-[240px] w-full flex-1 resize-y"
+              className="h-[72px] w-full flex-1 resize-none overflow-y-auto"
             />
             <div className="flex items-stretch gap-2 self-end sm:flex-col">
               <Button
