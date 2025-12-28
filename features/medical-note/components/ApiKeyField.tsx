@@ -52,12 +52,12 @@ export function ModelAndKeySettings() {
     }
 
     if (definition.provider === "openai" && !definition.requiresUserKey && !apiKey && !hasChatProxy) {
-      alert("Configure the PrismaCare chat proxy or add your OpenAI key to use this model.")
+      alert("Configure the Firebase Functions proxy or add your OpenAI key to use this model.")
       return
     }
 
     if (definition.provider === "gemini" && !geminiKey && !hasGeminiProxy) {
-      alert("Add a Gemini API key or configure the PrismaCare Gemini proxy before using this model.")
+      alert("Add a Gemini API key or configure the Firebase Functions proxy before using this model.")
       return
     }
 
@@ -70,13 +70,13 @@ export function ModelAndKeySettings() {
         return apiKey ? "Using personal OpenAI key" : "Requires OpenAI API key"
       }
       if (apiKey) return "Will use personal OpenAI key"
-      if (hasChatProxy) return "Routed via PrismaCare proxy"
+      if (hasChatProxy) return "Routed via Firebase proxy"
       return "Requires proxy or OpenAI key"
     }
 
     if (definition.provider === "gemini") {
       if (geminiKey) return "Using personal Gemini key"
-      if (hasGeminiProxy) return "Routed via PrismaCare Gemini proxy"
+      if (hasGeminiProxy) return "Routed via Firebase proxy"
       return "Requires Gemini key or proxy"
     }
 
@@ -143,12 +143,12 @@ export function ModelAndKeySettings() {
         </div>
         {!apiKey && (
           <p className="text-xs text-muted-foreground">
-            Built-in GPT models use the PrismaCare proxy when no OpenAI key is saved.
+            Built-in GPT models use a Firebase Functions proxy when no OpenAI key is saved.
           </p>
         )}
         {!geminiKey && hasGeminiProxy && (
           <p className="text-xs text-muted-foreground">
-            Gemini requests will route through the PrismaCare Gemini proxy unless you add your own key.
+            Gemini requests will route through a Firebase Functions proxy unless you add your own key.
           </p>
         )}
       </div>
@@ -176,7 +176,7 @@ export function ModelAndKeySettings() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Leave blank to keep using PrismaCare&apos;s built-in GPT models. Keys never leave this browser unless you invoke OpenAI directly.
+          Leave blank to use built-in GPT models via Firebase Functions proxy. Keys never leave this browser unless you invoke OpenAI directly.
         </p>
       </div>
 
@@ -203,7 +203,7 @@ export function ModelAndKeySettings() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Without a Gemini key we will call the PrismaCare Gemini proxy when available. Your Gemini key is kept in local storage on this device only.
+          Without a Gemini key, requests will use the Firebase Functions proxy when available. Your Gemini key is kept in local storage on this device only.
         </p>
       </div>
     </div>

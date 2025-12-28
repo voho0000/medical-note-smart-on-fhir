@@ -88,11 +88,11 @@ export function GptPanel({
       }
 
       if (!apiKey && !hasChatProxy) {
-        alert("Configure the PrismaCare chat proxy or add an OpenAI key before using GPT models.")
+        alert("Configure the Firebase Functions proxy or add an OpenAI key before using GPT models.")
         return
       }
     } else if (provider === "gemini" && !geminiKey && !hasGeminiProxy) {
-      alert("Configure the PrismaCare Gemini proxy or add a Gemini key before using this model.")
+      alert("Configure the Firebase Functions proxy or add a Gemini key before using this model.")
       return
     }
 

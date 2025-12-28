@@ -33,7 +33,7 @@ export function SettingsFeature() {
       <Separator />
       <div className="space-y-2 text-xs text-muted-foreground">
         <p>
-          Built-in models run through the PrismaCare secure proxy. Your prompts and responses are processed on our servers using the configured OpenAI account.
+          Built-in models run through a Firebase Functions proxy. Your prompts and responses are processed using the configured OpenAI account.
         </p>
         <p>
           Add a personal API key to access premium OpenAI models directly. Keys are stored locally in this browser only.
