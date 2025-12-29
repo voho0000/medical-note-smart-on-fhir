@@ -62,16 +62,44 @@ export class ClinicalDataMapper {
       code: fhirResource.code,
       result: fhirResource.result,
       conclusion: fhirResource.conclusion,
-      effectiveDateTime: fhirResource.effectiveDateTime
+      effectiveDateTime: fhirResource.effectiveDateTime,
+      status: fhirResource.status,
+      issued: fhirResource.issued,
+      category: fhirResource.category,
+      conclusionCode: fhirResource.conclusionCode,
+      note: fhirResource.note,
+      presentedForm: fhirResource.presentedForm
     }
 
-    // Attach related observations
+    // Attach related observations with expansion of hasMember
     if (fhirResource.result && observations.length > 0) {
       const resultIds = fhirResource.result
         .map((ref: any) => ref.reference?.split('/').pop())
         .filter(Boolean)
       
-      report._observations = observations.filter(obs => resultIds.includes(obs.id))
+      // Create a map of observations by ID for easy lookup
+      const obsMap = new Map(observations.map(obs => [obs.id, obs]))
+      
+      // Get the actual observation objects
+      const reportObservations = resultIds
+        .map((id: string) => obsMap.get(id))
+        .filter(Boolean)
+      
+      // Expand any observations that have members
+      const expandedObservations = reportObservations.flatMap((obs: any) => {
+        if (!obs?.hasMember?.length) return [obs]
+        
+        const members = obs.hasMember
+          .map((m: any) => {
+            const memberId = m.reference?.split('/').pop()
+            return memberId ? obsMap.get(memberId) : null
+          })
+          .filter(Boolean)
+          
+        return [obs, ...members]
+      })
+      
+      report._observations = expandedObservations as ObservationEntity[]
     }
 
     return report

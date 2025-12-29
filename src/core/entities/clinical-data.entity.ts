@@ -71,7 +71,8 @@ export interface AllergyEntity {
 }
 
 export interface ObservationEntity {
-  id: string
+  id?: string
+  resourceType?: string
   code?: {
     text?: string
     coding?: Array<{
@@ -85,17 +86,59 @@ export interface ObservationEntity {
     unit?: string
   }
   valueString?: string
+  interpretation?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+    }>
+  }
+  referenceRange?: Array<{
+    low?: {
+      value?: number
+      unit?: string
+    }
+    high?: {
+      value?: number
+      unit?: string
+    }
+    text?: string
+  }>
   component?: Array<{
     code?: {
+      text?: string
       coding?: Array<{
         code?: string
         display?: string
+        system?: string
       }>
     }
     valueQuantity?: {
       value?: number
       unit?: string
     }
+    valueString?: string
+    interpretation?: {
+      text?: string
+      coding?: Array<{
+        code?: string
+        display?: string
+      }>
+    }
+    referenceRange?: Array<{
+      low?: {
+        value?: number
+        unit?: string
+      }
+      high?: {
+        value?: number
+        unit?: string
+      }
+      text?: string
+    }>
+  }>
+  hasMember?: Array<{
+    reference?: string
   }>
   effectiveDateTime?: string
   status?: string
@@ -103,15 +146,23 @@ export interface ObservationEntity {
     coding?: Array<{
       code?: string
       system?: string
+      display?: string
     }>
     text?: string
   }>
+  encounter?: {
+    reference?: string
+  }
 }
 
 export interface DiagnosticReportEntity {
   id: string
   code?: {
     text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+    }>
   }
   result?: Array<{
     reference?: string
@@ -119,6 +170,12 @@ export interface DiagnosticReportEntity {
   conclusion?: string
   effectiveDateTime?: string
   _observations?: ObservationEntity[]
+  status?: string
+  issued?: string
+  category?: any
+  conclusionCode?: any
+  note?: Array<{ text?: string }>
+  presentedForm?: Array<{ title?: string; contentType?: string }>
 }
 
 export interface ProcedureEntity {

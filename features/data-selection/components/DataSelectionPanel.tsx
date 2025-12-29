@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useDataFiltering } from "../hooks/useDataFiltering"
@@ -59,8 +60,15 @@ export function DataSelectionPanel({
     onSelectionChange(newSelection)
   }
 
-  const allSelected = dataCategories.every(item => selectedData[item.id])
-  const someSelected = dataCategories.some(item => selectedData[item.id]) && !allSelected
+  const allSelected = useMemo(() => 
+    dataCategories.every(item => selectedData[item.id]), 
+    [dataCategories, selectedData]
+  )
+  
+  const someSelected = useMemo(() => 
+    dataCategories.some(item => selectedData[item.id]) && !allSelected,
+    [dataCategories, selectedData, allSelected]
+  )
 
   return (
     <Tabs defaultValue="selection" className="w-full">

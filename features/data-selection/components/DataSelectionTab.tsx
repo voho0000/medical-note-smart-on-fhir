@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { DataCategoryItem } from "./DataCategoryItem"
 import { MedicationFilter, VitalSignsFilter, LabReportFilter } from "./DataFilters"
@@ -27,6 +28,16 @@ export function DataSelectionTab({
   allSelected,
   someSelected,
 }: DataSelectionTabProps) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return null
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -42,7 +53,7 @@ export function DataSelectionTab({
             size="sm"
             onClick={() => onToggleAll(!allSelected)}
           >
-            {allSelected ? 'Deselect All' : someSelected ? 'Select All' : 'Select All'}
+            {mounted && allSelected ? 'Deselect All' : 'Select All'}
           </Button>
         </div>
       </div>

@@ -161,10 +161,10 @@ export function ReportsCard() {
     const seen = new Set<string>();
     
     (diagnosticReports as DiagnosticReport[]).forEach((dr) => {
-      if (!dr || dr.resourceType !== "DiagnosticReport") return;
+      if (!dr) return;
       
       const obs = Array.isArray(dr._observations) 
-        ? dr._observations.filter((o): o is Observation => !!o?.resourceType && o.resourceType === 'Observation')
+        ? dr._observations.filter((o): o is Observation => !!o)
         : [];
 
       obs.forEach(o => { 
@@ -232,9 +232,9 @@ export function ReportsCard() {
     if (!Array.isArray(observations)) return [];
     
     // 1) 篩掉已在 DR 內者
-    const orphan = observations.filter((o): o is Observation => 
-      o?.resourceType === 'Observation' && (!o.id || !seenIds.has(o.id))
-    );
+    const orphan = observations.filter((o) => 
+      (!o.id || !seenIds.has(o.id))
+    ) as Observation[];
 
     // 2) 只保留有意義的 panel/數值
     const panels = orphan.filter((o) =>
@@ -344,7 +344,7 @@ export function ReportsCard() {
         title,
         meta: `Procedure • ${procedure?.status || "—"} • ${fmtDate(performed)}`,
         obs: [observation],
-        group: "procedures"
+        group: "procedures" as const
       }
     })
   }, [procedures])
@@ -360,6 +360,30 @@ export function ReportsCard() {
     });
     return all;
   }, [reportRows, orphanRows, procedureRows]);
+
+  const groupedRows = useMemo(() => {
+    const lab = rows.filter((row) => row.group === "lab")
+    const imaging = rows.filter((row) => row.group === "imaging")
+    const proceduresOnly = rows.filter((row) => row.group === "procedures")
+    const other = rows.filter((row) => row.group === "other")
+    return {
+      all: rows,
+      lab,
+      imaging,
+      procedures: proceduresOnly,
+      other,
+    }
+  }, [rows])
+
+  const tabConfigs = useMemo(() => {
+    const configs = [
+      { value: "all", label: `All (${groupedRows.all.length})`, rows: groupedRows.all },
+      { value: "lab", label: `Labs (${groupedRows.lab.length})`, rows: groupedRows.lab },
+      { value: "imaging", label: `Imaging (${groupedRows.imaging.length})`, rows: groupedRows.imaging },
+      { value: "procedures", label: `Procedures (${groupedRows.procedures.length})`, rows: groupedRows.procedures },
+    ]
+    return configs.filter((config) => config.value === "all" || config.rows.length > 0)
+  }, [groupedRows])
 
   type ObservationBlockProps = {
     observation: Observation
@@ -466,30 +490,6 @@ export function ReportsCard() {
     )
   }
 
-  const groupedRows = useMemo(() => {
-    const lab = rows.filter((row) => row.group === "lab")
-    const imaging = rows.filter((row) => row.group === "imaging")
-    const proceduresOnly = rows.filter((row) => row.group === "procedures")
-    const other = rows.filter((row) => row.group === "other")
-    return {
-      all: rows,
-      lab,
-      imaging,
-      procedures: proceduresOnly,
-      other,
-    }
-  }, [rows])
-
-  const tabConfigs = useMemo(() => {
-    const configs = [
-      { value: "all", label: `All (${groupedRows.all.length})`, rows: groupedRows.all },
-      { value: "lab", label: `Labs (${groupedRows.lab.length})`, rows: groupedRows.lab },
-      { value: "imaging", label: `Imaging (${groupedRows.imaging.length})`, rows: groupedRows.imaging },
-      { value: "procedures", label: `Procedures (${groupedRows.procedures.length})`, rows: groupedRows.procedures },
-    ]
-    return configs.filter((config) => config.value === "all" || config.rows.length > 0)
-  }, [groupedRows])
-
   return (
     <Card>
       <CardHeader>
@@ -512,46 +512,80 @@ export function ReportsCard() {
                 {filteredRows.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No reports available in this category.</div>
                 ) : (
-                  <Accordion type="multiple" defaultValue={defaultOpen} className="w-full space-y-2">
-                    {filteredRows.map((row) => (
-                      <AccordionItem
-                        key={row.id}
-                        value={row.id}
-                        className="border rounded-lg bg-muted/40 px-3"
-                      >
-                        <AccordionTrigger className="py-3">
-                          <div className="flex w-full flex-col gap-1 text-left">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="font-semibold text-foreground">{row.title}</span>
-                              <Badge variant="outline" className="text-xs font-normal">{row.meta}</Badge>
+                  <div className="w-full space-y-2">
+                    {filteredRows.map((row) => {
+                      // 如果只有一個 observation 且沒有 component，直接顯示
+                      const isSingleSimpleObs = row.obs.length === 1 && 
+                        (!row.obs[0].component || row.obs[0].component.length === 0)
+                      
+                      if (isSingleSimpleObs) {
+                        return (
+                          <div key={row.id} className="border rounded-lg bg-muted/40 p-3">
+                            <div className="flex w-full flex-col gap-1 mb-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-semibold text-foreground">{row.title}</span>
+                                <Badge variant="outline" className="text-xs font-normal">{row.meta}</Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                {row.obs[0]?.status && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <span className="font-medium text-foreground/80">Status:</span> {row.obs[0]?.status}
+                                  </span>
+                                )}
+                                {row.obs[0]?.category && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <span className="font-medium text-foreground/80">Category:</span> {conceptText(row.obs[0]?.category)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              {row.obs[0]?.status && (
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="font-medium text-foreground/80">Status:</span> {row.obs[0]?.status}
-                                </span>
-                              )}
-                              {row.obs[0]?.category && (
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="font-medium text-foreground/80">Category:</span> {conceptText(row.obs[0]?.category)}
-                                </span>
-                              )}
-                            </div>
+                            <ObservationBlock observation={row.obs[0]} />
                           </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="pb-4">
-                          <div className="grid gap-3">
-                            {row.obs.map((obs, i) => (
-                              <ObservationBlock
-                                key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
-                                observation={obs}
-                              />
-                            ))}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
+                        )
+                      }
+                      
+                      // 多個 observations 或有 component 的，使用 Accordion
+                      return (
+                        <Accordion key={row.id} type="multiple" defaultValue={defaultOpen.includes(row.id) ? [row.id] : []} className="w-full">
+                          <AccordionItem
+                            value={row.id}
+                            className="border rounded-lg bg-muted/40 px-3"
+                          >
+                            <AccordionTrigger className="py-3">
+                              <div className="flex w-full flex-col gap-1 text-left">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="font-semibold text-foreground">{row.title}</span>
+                                  <Badge variant="outline" className="text-xs font-normal">{row.meta}</Badge>
+                                </div>
+                                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                  {row.obs[0]?.status && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className="font-medium text-foreground/80">Status:</span> {row.obs[0]?.status}
+                                    </span>
+                                  )}
+                                  {row.obs[0]?.category && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className="font-medium text-foreground/80">Category:</span> {conceptText(row.obs[0]?.category)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="pb-4">
+                              <div className="grid gap-3">
+                                {row.obs.map((obs, i) => (
+                                  <ObservationBlock
+                                    key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
+                                    observation={obs}
+                                  />
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                      )
+                    })}
+                  </div>
                 )}
               </TabsContent>
             )
