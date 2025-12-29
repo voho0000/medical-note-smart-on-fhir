@@ -51,7 +51,8 @@ export function DataSelectionFeature() {
     medications: clinicalData.medications || [],
     allergies: clinicalData.allergies || [],
     diagnosticReports: clinicalData.diagnosticReports || [],
-    observations: clinicalData.observations || clinicalData.vitalSigns || clinicalData.vitals || []
+    observations: clinicalData.observations || clinicalData.vitalSigns || clinicalData.vitals || [],
+    procedures: []
   }
 
   const handleFiltersChange = (newFilters: any) => {
