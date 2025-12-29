@@ -1,6 +1,9 @@
 // Dose and Frequency Helper Functions
-import type { DoseAndRate, TimingRepeat, CodeableConcept } from '../types'
-import { getCodeableConceptText } from './fhir-helpers'
+import type { DosageInstruction, CodeableConcept } from '@/src/shared/types/fhir.types'
+import { getCodeableConceptText } from '@/src/shared/utils/fhir-helpers'
+
+type DoseAndRate = NonNullable<DosageInstruction['doseAndRate']>[number]
+type TimingRepeat = NonNullable<NonNullable<DosageInstruction['timing']>['repeat']>
 
 function round1(n: number): number {
   return Number.isFinite(n) ? Math.round(n * 10) / 10 : n

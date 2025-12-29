@@ -1,6 +1,6 @@
 // Custom Hook: Active Allergies Filter
 import { useMemo } from 'react'
-import type { AllergyIntolerance } from '../types'
+import type { AllergyIntolerance } from '@/src/shared/types/fhir.types'
 
 export function useActiveAllergies(allergies: any[]) {
   return useMemo(() => {

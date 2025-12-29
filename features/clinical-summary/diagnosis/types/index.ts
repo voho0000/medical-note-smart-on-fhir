@@ -1,31 +1,9 @@
-// Types for Diagnosis
-export interface Coding {
-  system?: string
-  code?: string
-  display?: string
-}
+import type { CodeableConcept, Condition, Coding } from '@/src/shared/types/fhir.types'
 
-export interface CodeableConcept {
-  coding?: Coding[]
-  text?: string
-}
+export type { CodeableConcept, Condition, Coding }
 
-export interface Category {
-  coding?: Coding[]
-  text?: string
-}
-
-export interface Condition {
-  id?: string
-  code?: CodeableConcept
-  clinicalStatus?: CodeableConcept
-  verificationStatus?: CodeableConcept
-  category?: Category[]
-  onsetDateTime?: string
-  recordedDate?: string
-  encounter?: { reference?: string }
-}
-
+// Type aliases for backward compatibility
+export type Category = CodeableConcept
 export interface DiagnosisRow {
   id: string
   title: string

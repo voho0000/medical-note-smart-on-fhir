@@ -1,61 +1,28 @@
-// Types for Medications
-export type Coding = { 
-  system?: string 
-  code?: string 
-  display?: string 
+// Medications Types - Re-export from shared
+import type {
+  CodeableConcept,
+  Quantity,
+  Period,
+  Duration,
+  MedicationRequest,
+  DosageInstruction,
+} from '@/src/shared/types/fhir.types'
+
+export type {
+  CodeableConcept,
+  Quantity,
+  Period,
+  Duration,
+  MedicationRequest,
+  DosageInstruction,
 }
 
-export type CodeableConcept = { 
-  text?: string 
-  coding?: Coding[] 
-}
+// Type aliases for backward compatibility
+export type DurationLike = Duration
+export type PeriodLike = Period
+export type Medication = MedicationRequest
 
-export type TimingRepeat = {
-  frequency?: number
-  period?: number
-  periodUnit?: string
-  boundsDuration?: DurationLike
-  boundsPeriod?: PeriodLike
-}
-
-export type DoseAndRate = {
-  doseQuantity?: { value?: number; unit?: string }
-  doseRange?: { 
-    low?: { value?: number; unit?: string } 
-    high?: { value?: number; unit?: string } 
-  }
-}
-
-export type DosageInstruction = {
-  text?: string
-  route?: CodeableConcept
-  timing?: { repeat?: TimingRepeat }
-  doseAndRate?: DoseAndRate[]
-}
-
-export type Medication = {
-  id?: string
-  resourceType?: string
-  status?: string
-  intent?: string
-  medicationCodeableConcept?: CodeableConcept
-  medicationReference?: { display?: string }
-  authoredOn?: string
-  effectiveDateTime?: string
-  dosageInstruction?: DosageInstruction[]
-  dosage?: DosageInstruction[]
-  code?: CodeableConcept
-  medication?: CodeableConcept
-  resource?: {
-    code?: CodeableConcept
-  }
-  dispenseRequest?: {
-    validityPeriod?: PeriodLike
-    expectedSupplyDuration?: DurationLike
-  }
-}
-
-export type MedicationRow = {
+export interface MedicationRow {
   id: string
   title: string
   status: string
@@ -67,15 +34,4 @@ export type MedicationRow = {
   stoppedOn?: string
   durationDays?: number
   isInactive: boolean
-}
-
-export type DurationLike = {
-  value?: number
-  unit?: string
-  code?: string
-}
-
-export type PeriodLike = {
-  start?: string
-  end?: string
 }

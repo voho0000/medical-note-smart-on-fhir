@@ -1,27 +1,9 @@
-// Types for Vitals
-export type Coding = { system?: string; code?: string; display?: string }
-export type CodeableConcept = { text?: string; coding?: Coding[] }
-export type ObsComponent = {
-  code?: CodeableConcept
-  valueQuantity?: { value?: number; unit?: string }
-  valueString?: string
-}
+import type { Observation, CodeableConcept, Quantity, Coding, ObservationComponent } from '@/src/shared/types/fhir.types'
 
-export interface Observation {
-  id?: string
-  code?: CodeableConcept
-  valueQuantity?: { value?: number; unit?: string }
-  valueString?: string
-  effectiveDateTime?: string
-  category?: Array<{
-    coding?: Array<{
-      code?: string
-      display?: string
-    }>
-  }>
-  component?: ObsComponent[]
-}
+export type { Observation, CodeableConcept, Quantity, Coding, ObservationComponent }
 
+// Type aliases for backward compatibility
+export type ObsComponent = ObservationComponent
 export interface VitalsView {
   height: string
   weight: string
@@ -33,7 +15,6 @@ export interface VitalsView {
   spo2: string
   time: string
 }
-
 export const LOINC = {
   HEIGHT: "8302-2",
   WEIGHT: "29463-7",

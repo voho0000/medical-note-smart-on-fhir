@@ -1,7 +1,7 @@
 // Allergy Item Component
 import { Badge } from "@/components/ui/badge"
-import type { AllergyIntolerance } from '../types'
-import { getCodeableConceptText, formatDate } from '../utils/fhir-helpers'
+import type { AllergyIntolerance } from '@/src/shared/types/fhir.types'
+import { getCodeableConceptText, formatDate } from '@/src/shared/utils/fhir-helpers'
 
 interface AllergyItemProps {
   allergy: AllergyIntolerance

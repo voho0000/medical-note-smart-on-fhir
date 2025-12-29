@@ -1,5 +1,7 @@
 // Observation Helper Functions
-import type { Observation, Coding } from '../types'
+import type { Observation } from '@/src/shared/types/fhir.types'
+
+type Coding = { code?: string }
 
 export function pickLatestByCode(list: Observation[], code: string): Observation | undefined {
   if (!list || !list.length) return undefined

@@ -1,23 +1,10 @@
-// FHIR Helper Functions for Medications
-import type { CodeableConcept } from '../types'
+// Re-export from shared FHIR helpers
+export {
+  getCodeableConceptText,
+  formatDate,
+} from '@/src/shared/utils/fhir-helpers'
 
-export function getCodeableConceptText(cc?: CodeableConcept): string {
-  return cc?.text || cc?.coding?.[0]?.display || cc?.coding?.[0]?.code || "—"
-}
-
-export function formatDate(d?: string): string {
-  if (!d) return ""
-  try {
-    return new Date(d).toLocaleDateString("zh-TW", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    })
-  } catch {
-    return d
-  }
-}
-
+// Medication-specific helper
 export function extractFrequencyFromText(text?: string): string {
   if (!text) return ""
   const upper = text.toUpperCase()

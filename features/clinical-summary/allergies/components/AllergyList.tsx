@@ -1,5 +1,5 @@
 // Allergy List Component
-import type { AllergyIntolerance } from '../types'
+import type { AllergyIntolerance } from '@/src/shared/types/fhir.types'
 import { AllergyItem } from './AllergyItem'
 
 interface AllergyListProps {

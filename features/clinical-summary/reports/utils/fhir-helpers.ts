@@ -1,35 +1,18 @@
-// FHIR Helper Functions
-import type { CodeableConcept, Quantity, ReferenceRange } from '../types'
+// FHIR Helper Functions - Re-export from shared utils
+export {
+  getCodeableConceptText,
+  getConceptText,
+  formatQuantity,
+  formatDateTime as formatDate,
+} from '@/src/shared/utils/fhir-helpers'
 
-export function getCodeableConceptText(cc?: CodeableConcept): string {
-  return cc?.text || cc?.coding?.[0]?.display || cc?.coding?.[0]?.code || "—"
-}
-
-export function getConceptText(input?: CodeableConcept | CodeableConcept[]): string {
-  if (!input) return "—"
-  if (Array.isArray(input)) {
-    return input.map(getCodeableConceptText).filter(Boolean).join(", ") || "—"
-  }
-  return getCodeableConceptText(input)
-}
-
-export function formatQuantity(q?: Quantity): string {
-  if (!q || q.value == null) return "—"
-  return `${q.value}${q.unit ? " " + q.unit : ""}`
-}
+import type { ReferenceRange, Quantity } from '@/src/shared/types/fhir.types'
 
 export function getValueWithUnit(v?: Quantity, fallback?: string): string {
-  if (v && v.value != null) return formatQuantity(v)
-  return fallback ?? "—"
-}
-
-export function formatDate(d?: string): string {
-  if (!d) return "—"
-  try {
-    return new Date(d).toLocaleString()
-  } catch {
-    return d
+  if (v && v.value != null) {
+    return `${v.value}${v.unit ? " " + v.unit : ""}`
   }
+  return fallback ?? "—"
 }
 
 export function getReferenceRangeText(rr?: ReferenceRange[]): string {
