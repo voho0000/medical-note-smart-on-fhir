@@ -64,7 +64,7 @@ const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContex
 
 export function ClinicalInsightsConfigProvider({ children }: { children: ReactNode }) {
   const [panels, setPanels] = useState<InsightPanelConfig[]>(getDefaultClinicalInsightPanels)
-  const [autoGenerate, setAutoGenerate] = useState<boolean>(true)
+  const [autoGenerate, setAutoGenerate] = useState<boolean>(false)
 
   useEffect(() => {
     if (typeof window === "undefined") return
