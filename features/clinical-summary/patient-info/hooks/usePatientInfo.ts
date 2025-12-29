@@ -7,6 +7,9 @@ export function usePatientInfo(patient: any) {
   return useMemo<PatientInfo | null>(() => {
     if (!patient) return null
     
+    console.log('Patient data in usePatientInfo:', patient)
+    console.log('Patient name array:', patient.name)
+    
     return {
       name: formatName(patient),
       gender: formatGender(patient.gender),
