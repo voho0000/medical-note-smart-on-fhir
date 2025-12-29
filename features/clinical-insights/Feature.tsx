@@ -1,141 +1,23 @@
+// Refactored Clinical Insights Feature
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { useEffect, useMemo, useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { AlertCircle, ChevronDown, Loader2, RefreshCcw } from "lucide-react"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
-import type { AiQueryResponse } from "@/src/core/entities/ai.entity"
-
-type QueryMetadata = AiQueryResponse['metadata']
-import { DEFAULT_MODEL_ID, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
-import { hasChatProxy } from "@/src/shared/config/env.config"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { useNote } from "@/src/application/providers/note.provider"
+import { hasChatProxy } from "@/src/shared/config/env.config"
 
-const SYSTEM_INSTRUCTION =
-  "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate."
-
-type PanelStatus = {
-  isLoading: boolean
-  error: Error | null
-}
-
-type ResponseEntry = { text: string; isEdited: boolean; metadata: QueryMetadata | null }
-
-function InsightPanel({
-  title,
-  subtitle,
-  prompt,
-  onPromptChange,
-  onRegenerate,
-  isLoading,
-  response,
-  error,
-  canGenerate,
-  onResponseChange,
-  isEdited,
-  modelMetadata,
-  fallbackModelId,
-}: {
-  title: string
-  subtitle?: string
-  prompt: string
-  onPromptChange: (value: string) => void
-  onRegenerate: () => void
-  isLoading: boolean
-  response: string
-  error: Error | null
-  canGenerate: boolean
-  onResponseChange: (value: string) => void
-  isEdited: boolean
-  modelMetadata: QueryMetadata | null
-  fallbackModelId: string
-}) {
-  const modelInfo = useMemo(() => {
-    // Always show the currently selected model
-    const definition = getModelDefinition(fallbackModelId)
-    return {
-      label: definition?.label ?? fallbackModelId,
-      provider: (definition?.provider ?? "openai").toUpperCase(),
-    }
-  }, [fallbackModelId])
-
-  return (
-    <Card>
-      <CardHeader className="flex items-start justify-between gap-3 pb-2 pt-3">
-        <div className="space-y-0.5">
-          <CardTitle className="text-sm font-semibold leading-tight">{title}</CardTitle>
-          {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
-          <p className="text-xs text-muted-foreground">
-            Model: {modelInfo.label} ({modelInfo.provider})
-          </p>
-        </div>
-        <Button
-          onClick={onRegenerate}
-          size="sm"
-          disabled={isLoading || !canGenerate}
-          variant="outline"
-          className="gap-1"
-        >
-          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
-          {isLoading ? "Running" : "Regenerate"}
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-2 pt-0">
-        <Collapsible defaultOpen={false} className="space-y-1">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="w-full justify-between px-2 text-xs font-medium">
-              <span>Edit prompt</span>
-              <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-2">
-            <Textarea
-              value={prompt}
-              onChange={(event) => onPromptChange(event.target.value)}
-              className="min-h-[88px] resize-vertical text-sm"
-            />
-            <p className="text-xs text-muted-foreground">
-              Prompts are saved per panel. Adjust wording, then run again when you need a refreshed insight.
-            </p>
-          </CollapsibleContent>
-        </Collapsible>
-        <Separator className="opacity-50" />
-        <div className="space-y-1">
-          <label className="text-xs font-medium uppercase text-muted-foreground">Response</label>
-          {error ? (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-              {error.message}
-            </div>
-          ) : (
-            <Textarea
-              value={response}
-              onChange={(event) => onResponseChange(event.target.value)}
-              placeholder="AI generated insight will appear here. You can edit the text before saving or copying."
-              className="min-h-[220px] resize-vertical text-sm"
-              disabled={isLoading}
-            />
-          )}
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>
-              {isLoading ? "Generating..." : isEdited ? "Edited" : response ? "Generated" : "Awaiting generation"}
-            </span>
-            <span>{response.length} chars</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+import { useInsightPanels } from './hooks/useInsightPanels'
+import { useInsightGeneration } from './hooks/useInsightGeneration'
+import { useAutoGenerate } from './hooks/useAutoGenerate'
+import { InsightPanel } from './components/InsightPanel'
+import { ApiKeyWarning } from './components/ApiKeyWarning'
 
 export default function ClinicalInsightsFeature() {
   const { panels, autoGenerate } = useClinicalInsightsConfig()
@@ -144,153 +26,58 @@ export default function ClinicalInsightsFeature() {
   const { model } = useNote()
   const { queryAi } = useAiQuery(openAiKey, geminiKey)
 
-  const [prompts, setPrompts] = useState<Record<string, string>>({})
-  const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
-  const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
-  const [hasAutoRun, setHasAutoRun] = useState(false)
   const [context, setContext] = useState("")
 
-  useEffect(() => {
-    setPrompts((prev) => {
-      return panels.reduce<Record<string, string>>((acc, panel) => {
-        acc[panel.id] = prev[panel.id] ?? panel.prompt
-        return acc
-      }, {})
-    })
-
-    setResponses((prev) => {
-      return panels.reduce<Record<string, ResponseEntry>>((acc, panel) => {
-        const existing = prev[panel.id]
-        const text = typeof existing?.text === "string" ? existing.text : ""
-        const isEdited = existing?.isEdited ?? false
-        const metadata = existing?.metadata ?? null
-        acc[panel.id] = { text, isEdited, metadata }
-        return acc
-      }, {})
-    })
-
-    setPanelStatus((prev) => {
-      return panels.reduce<Record<string, PanelStatus>>((acc, panel) => {
-        acc[panel.id] = prev[panel.id] ?? { isLoading: false, error: null }
-        return acc
-      }, {})
-    })
-
-    setHasAutoRun(false)
-  }, [panels])
-
-  useEffect(() => {
-    const latestContext = getFullClinicalContext()
-    setContext((previous) => {
-      if (previous === latestContext) {
-        return previous
-      }
-      setHasAutoRun((prevHasAutoRun) => {
-        if (!prevHasAutoRun) {
-          return true
-        }
-        return prevHasAutoRun
-      })
-      setResponses((prev) => {
-        return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
-          acc[panelId] = { text: prev[panelId].text, isEdited: false, metadata: prev[panelId].metadata ?? null }
-          return acc
-        }, {})
-      })
-      return latestContext
-    })
-  }, [getFullClinicalContext])
-
-  useEffect(() => {
-    setResponses((prev) => {
-      return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
-        const prevValue = prev[panelId]
-        if (prevValue === undefined) return acc
-        acc[panelId] = { text: prevValue.text, isEdited: false, metadata: prevValue.metadata ?? null }
-        return acc
-      }, {})
-    })
-  }, [panels])
+  const {
+    prompts,
+    responses,
+    panelStatus,
+    setResponses,
+    setPanelStatus,
+    handlePromptChange,
+    handleResponseChange,
+    resetEditedFlags,
+  } = useInsightPanels(panels)
 
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
 
-  const runPanel = useCallback(
-    async (panelId: string, { force } = { force: false }) => {
-      const panel = panels.find((item) => item.id === panelId)
-      if (!panel) return
-      if (!context.trim() || (!openAiKey && !geminiKey && !canUseProxy)) return
+  const { runPanel } = useInsightGeneration({
+    panels,
+    prompts,
+    responses,
+    context,
+    openAiKey,
+    geminiKey,
+    canUseProxy,
+    model,
+    queryAi,
+    setResponses,
+    setPanelStatus,
+  })
 
-      const prompt = prompts[panelId] ?? panel.prompt
-      const responseEntry = responses[panelId]
-      if (!force && responseEntry?.isEdited) {
-        return
-      }
-
-      const baseMessages = [
-        { role: "system" as const, content: SYSTEM_INSTRUCTION },
-        {
-          role: "user" as const,
-          content: `${prompt}\n\n---\nPatient Clinical Context:\n${context}`,
-        },
-      ]
-
-      setPanelStatus((prev) => ({
-        ...prev,
-        [panelId]: { isLoading: true, error: null },
-      }))
-
-      try {
-        const { text: responseText, metadata } = await queryAi(baseMessages, model)
-        setResponses((prev) => ({
-          ...prev,
-          [panelId]: { text: responseText || "", isEdited: false, metadata },
-        }))
-        setPanelStatus((prev) => ({
-          ...prev,
-          [panelId]: { isLoading: false, error: null },
-        }))
-      } catch (error) {
-        console.error(`Failed to generate insight for ${panel.title}`, error)
-        setPanelStatus((prev) => ({
-          ...prev,
-          [panelId]: {
-            isLoading: false,
-            error: error instanceof Error ? error : new Error(String(error)),
-          },
-        }))
-      }
-    },
-    [openAiKey, geminiKey, canUseProxy, context, panels, prompts, queryAi, responses, model],
-  )
-
+  // Update context and reset edited flags when context changes
   useEffect(() => {
-    if ((!openAiKey && !geminiKey && !canUseProxy) || hasAutoRun || !context.trim() || panels.length === 0 || !autoGenerate) {
-      return
-    }
-
-    setHasAutoRun(true)
-
-    const autoRun = async () => {
-      await Promise.all(panels.map((panel) => runPanel(panel.id)))
-    }
-
-    autoRun().catch((error) => {
-      console.error("Failed to auto-run clinical insights", error)
-      setHasAutoRun(false)
+    const latestContext = getFullClinicalContext()
+    setContext((previous) => {
+      if (previous === latestContext) return previous
+      resetEditedFlags()
+      return latestContext
     })
-  }, [openAiKey, geminiKey, autoGenerate, canUseProxy, context, hasAutoRun, panels, runPanel])
+  }, [getFullClinicalContext, resetEditedFlags])
 
-  const handlePromptChange = useCallback((panelId: string, value: string) => {
-    setPrompts((prev) => ({ ...prev, [panelId]: value }))
-  }, [])
+  // Reset edited flags when panels change
+  useEffect(() => {
+    resetEditedFlags()
+  }, [panels, resetEditedFlags])
 
-  const handleResponseChange = useCallback((panelId: string, value: string) => {
-    setResponses((prev) => ({
-      ...prev,
-      [panelId]: { text: value, isEdited: true, metadata: prev[panelId]?.metadata ?? null },
-    }))
-  }, [])
+  useAutoGenerate({
+    panels,
+    autoGenerate,
+    canGenerate,
+    context,
+    runPanel,
+  })
 
   const panelEntries = useMemo(() => {
     return panels.map((panel) => {
@@ -324,16 +111,7 @@ export default function ClinicalInsightsFeature() {
   return (
     <ScrollArea className="h-full pr-3">
       <div className="space-y-3">
-        {!canGenerate && (
-          <Card className="border-destructive/40 bg-destructive/5 text-destructive">
-            <CardContent className="flex items-center gap-3 py-4 text-sm font-medium">
-              <AlertCircle className="h-5 w-5" />
-              <div>
-                Add an OpenAI API key in settings to automatically generate insights. Prompts can still be edited, but responses require an API key.
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {!canGenerate && <ApiKeyWarning />}
         {panelEntries.length > 0 ? (
           <Tabs defaultValue={defaultTabValue} className="space-y-3">
             <TabsList className="flex w-full flex-wrap gap-2 rounded-md bg-muted/40 p-1">
