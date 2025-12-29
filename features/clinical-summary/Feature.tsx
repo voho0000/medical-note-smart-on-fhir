@@ -4,13 +4,13 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-import { PatientInfoCard } from "./components/PatientInfoCard"
-import { VitalsCard } from "./components/VitalsCard"
-import { AllergiesCard } from "./components/AllergiesCard"
-import { MedListCard } from "./components/MedListCard"
-import { ReportsCard } from "./components/ReportsCard"
-import { DiagnosesCard } from "./components/DiagnosisCard"
-import { VisitHistoryCard } from "./components/VisitHistoryCard"
+import { PatientInfoCard } from "./patient-info/PatientInfoCard"
+import { VitalsCard } from "./vitals/VitalsCard"
+import { AllergiesCard } from "./allergies/AllergiesCard"
+import { MedListCard } from "./medications/MedListCard"
+import { ReportsCard } from "./reports/ReportsCard"
+import { DiagnosesCard } from "./diagnosis/DiagnosisCard"
+import { VisitHistoryCard } from "./visit-history/VisitHistoryCard"
 
 export default function ClinicalSummaryFeature() {
   // 固定高度，讓每個分頁內容自行捲動，不影響整頁
