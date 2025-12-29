@@ -7,7 +7,7 @@ export function useDiagnosisRows(conditions: any[]) {
   return useMemo<DiagnosisRow[]>(() => {
     if (!conditions || !Array.isArray(conditions)) return []
     
-    return (conditions as Condition[]).map(condition => {
+    const rows = (conditions as Condition[]).map(condition => {
       const categories: string[] = []
       if (condition.category) {
         condition.category.forEach((cat: Category) => {
@@ -33,5 +33,26 @@ export function useDiagnosisRows(conditions: any[]) {
         categories: categories,
       }
     })
+
+    // Sort: active first, then resolved, then others
+    rows.sort((a, b) => {
+      const statusOrder: Record<string, number> = {
+        'active': 0,
+        'recurrence': 1,
+        'relapse': 2,
+        'remission': 3,
+        'inactive': 4,
+        'resolved': 5,
+      }
+      
+      const aStatus = a.clinical.toLowerCase()
+      const bStatus = b.clinical.toLowerCase()
+      const aOrder = statusOrder[aStatus] ?? 99
+      const bOrder = statusOrder[bStatus] ?? 99
+      
+      return aOrder - bOrder
+    })
+
+    return rows
   }, [conditions])
 }
