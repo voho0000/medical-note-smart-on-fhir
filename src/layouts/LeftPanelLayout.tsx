@@ -1,10 +1,10 @@
-// features/clinical-summary/Feature.tsx
+// Left Panel Layout (Clinical Summary)
 "use client"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledFeatures } from "@/src/shared/config/feature-registry"
-import { VisitHistoryCard } from "./visit-history/VisitHistoryCard"
+import { VisitHistoryCard } from "@/features/clinical-summary/visit-history/VisitHistoryCard"
 
 export default function ClinicalSummaryFeature() {
   const features = getEnabledFeatures()

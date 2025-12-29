@@ -4,8 +4,8 @@
 import { PatientProvider } from "@/src/application/providers/patient.provider"
 import { ClinicalDataProvider } from "@/src/application/providers/clinical-data.provider"
 import { ApiKeyProvider } from "@/src/application/providers/api-key.provider"
-import ClinicalSummaryFeature from "@/features/clinical-summary/Feature"
-import { RightPanelFeature } from "@/features/right-panel/Feature"
+import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
+import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 
 export default function Page() {
   return (
