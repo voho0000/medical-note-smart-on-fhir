@@ -2,9 +2,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Sun, Moon } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useTheme } from "@/src/application/providers/theme.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import { useNote } from "@/src/application/providers/note.provider"
 import { DEFAULT_MODEL_ID, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { hasChatProxy, hasGeminiProxy } from "@/src/shared/config/env.config"
@@ -14,6 +17,7 @@ import { ApiKeyInput } from './ApiKeyInput'
 
 export function ModelAndKeySettings() {
   const { t } = useLanguage()
+  const { theme, setTheme } = useTheme()
   const { apiKey, setApiKey, clearApiKey, geminiKey, setGeminiKey, clearGeminiKey } = useApiKey()
   const { model, setModel } = useNote()
   const [openAiValue, setOpenAiValue] = useState(apiKey)
@@ -62,6 +66,31 @@ export function ModelAndKeySettings() {
 
   return (
     <div className="space-y-6">
+      {/* Theme Toggle */}
+      <div className="space-y-3">
+        <Label className="text-xs uppercase text-muted-foreground">{t.settings.appearance}</Label>
+        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 p-1">
+          <Button
+            variant={theme === "light" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setTheme("light")}
+            className="flex-1 gap-2"
+          >
+            <Sun className="h-4 w-4" />
+            {t.settings.lightMode}
+          </Button>
+          <Button
+            variant={theme === "dark" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setTheme("dark")}
+            className="flex-1 gap-2"
+          >
+            <Moon className="h-4 w-4" />
+            {t.settings.darkMode}
+          </Button>
+        </div>
+      </div>
+
       {/* Model Selection */}
       <div className="space-y-3">
         <Label className="text-xs uppercase text-muted-foreground">{t.settings.generationModel}</Label>
