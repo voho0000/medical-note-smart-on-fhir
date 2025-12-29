@@ -1,5 +1,6 @@
 // Custom Hook: Model Selection Logic
 import { useMemo } from 'react'
+import { useLanguage } from '@/src/application/providers/language.provider'
 import {
   BUILT_IN_MODELS,
   GEMINI_MODELS,
@@ -17,6 +18,7 @@ export function useModelSelection(
   model: string,
   setModel: (model: string) => void
 ) {
+  const { t } = useLanguage()
   const gptModels = useMemo(() => {
     const models = [...BUILT_IN_MODELS, ...PREMIUM_MODELS]
     return models.filter((entry) => {
@@ -62,17 +64,17 @@ export function useModelSelection(
   const getModelStatus = (definition: ModelDefinition) => {
     if (definition.provider === "openai") {
       if (definition.requiresUserKey) {
-        return apiKey ? "Using personal OpenAI key" : "Requires OpenAI API key"
+        return apiKey ? t.settings.usingPersonalOpenAiKey : t.settings.requiresOpenAiKey
       }
-      if (apiKey) return "Will use personal OpenAI key"
-      if (hasChatProxy) return "Routed via Firebase proxy"
-      return "Requires proxy or OpenAI key"
+      if (apiKey) return t.settings.willUsePersonalOpenAiKey
+      if (hasChatProxy) return t.settings.routedViaProxy
+      return t.settings.requiresProxyOrOpenAiKey
     }
 
     if (definition.provider === "gemini") {
-      if (geminiKey) return "Using personal Gemini key"
-      if (hasGeminiProxy) return "Routed via Firebase proxy"
-      return "Requires Gemini key or proxy"
+      if (geminiKey) return t.settings.usingPersonalGeminiKey
+      if (hasGeminiProxy) return t.settings.routedViaProxy
+      return t.settings.requiresGeminiKeyOrProxy
     }
 
     return ""
