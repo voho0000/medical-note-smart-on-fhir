@@ -4,6 +4,7 @@
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { InsightTabEditor } from './InsightTabEditor'
@@ -24,6 +25,7 @@ export function ClinicalInsightsSettings() {
 
   const canAddPanel = panels.length < maxPanels
   const canRemovePanel = panels.length > 1
+  const defaultTab = panels[0]?.id || ""
 
   const handleMove = (panelId: string, direction: "up" | "down") => {
     const currentIndex = panels.findIndex((panel) => panel.id === panelId)
@@ -69,25 +71,50 @@ export function ClinicalInsightsSettings() {
         </div>
 
         {/* Insight Tabs */}
-        {panels.map((panel, index) => (
-          <InsightTabEditor
-            key={`${panel.id}-${panel.prompt.substring(0, 20)}`}
-            panel={panel}
-            index={index}
-            canRemove={canRemovePanel}
-            canMoveUp={index > 0}
-            canMoveDown={index < panels.length - 1}
-            onUpdate={updatePanel}
-            onRemove={removePanel}
-            onMove={handleMove}
-          />
-        ))}
+        {panels.length > 0 && (
+          <Tabs defaultValue={defaultTab} className="space-y-4 overflow-hidden">
+            <div className="flex items-center gap-2 w-full">
+              <TabsList className="flex flex-1 flex-nowrap gap-0.5 rounded-md bg-muted/40 p-0.5 min-w-0 w-full h-auto">
+                {panels.map((panel, index) => (
+                  <TabsTrigger
+                    key={panel.id}
+                    value={panel.id}
+                    className="flex-1 min-w-[35px] px-2 py-1.5 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  >
+                    {index + 1}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={addPanel}
+                disabled={!canAddPanel}
+                className="h-9 w-9 shrink-0 p-0"
+              >
+                +
+              </Button>
+            </div>
+            {panels.map((panel, index) => (
+              <TabsContent key={panel.id} value={panel.id} className="mt-0">
+                <InsightTabEditor
+                  panel={panel}
+                  index={index}
+                  canRemove={canRemovePanel}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < panels.length - 1}
+                  onUpdate={updatePanel}
+                  onRemove={removePanel}
+                  onMove={handleMove}
+                />
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={addPanel} disabled={!canAddPanel}>
-            {t.settings.addTab}
-          </Button>
           <Button type="button" variant="ghost" onClick={resetPanels}>
             {t.settings.resetToDefaults}
           </Button>

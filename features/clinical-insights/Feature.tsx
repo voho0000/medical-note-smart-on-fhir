@@ -116,14 +116,14 @@ export default function ClinicalInsightsFeature() {
         {!canGenerate && <ApiKeyWarning />}
         {panelEntries.length > 0 ? (
           <Tabs defaultValue={defaultTabValue} className="space-y-3">
-            <TabsList className="flex w-full flex-wrap gap-2 rounded-md bg-muted/40 p-1">
+            <TabsList className="flex w-full flex-nowrap gap-0.5 rounded-md bg-muted/40 p-0.5 min-w-0">
               {panelEntries.map((panel) => (
                 <TabsTrigger
                   key={panel.id}
                   value={panel.id}
-                  className="text-xs font-medium uppercase tracking-wide data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="flex-1 min-w-[50px] px-2 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-hidden"
                 >
-                  {panel.label}
+                  <span className="truncate block w-full">{panel.label}</span>
                 </TabsTrigger>
               ))}
             </TabsList>

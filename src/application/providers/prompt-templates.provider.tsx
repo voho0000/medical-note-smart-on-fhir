@@ -94,6 +94,7 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
     return getDefaultTemplates(initialLang)
   })
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
+  const [isCustomTemplates, setIsCustomTemplates] = useState(false)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -102,6 +103,9 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY)
       if (!stored) {
+        const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
+        setTemplates(getDefaultTemplates(currentLang))
+        setIsCustomTemplates(false)
         setHasLoadedFromStorage(true)
         return
       }
@@ -112,7 +116,6 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
         const candidate = entry as Record<string, unknown>
         const label = typeof candidate.label === "string" ? candidate.label : ""
         const content = typeof candidate.content === "string" ? candidate.content : ""
-        if (!content.trim()) return acc
 
         const template: PromptTemplate = {
           id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
@@ -129,43 +132,58 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
       }, [])
 
       if (sanitized.length > 0) {
+        console.log('[Prompt Templates] Loaded', sanitized.length, 'templates from storage')
         setTemplates(sanitized.slice(0, MAX_TEMPLATES))
+        setIsCustomTemplates(true)
+      } else {
+        setHasLoadedFromStorage(true)
       }
     } catch (error) {
       console.warn("Failed to load prompt templates from storage", error)
     }
     
     setHasLoadedFromStorage(true)
-  }, [hasLoadedFromStorage])
+  }, [hasLoadedFromStorage, locale])
   
   // Update templates when language changes (only if using default templates)
   useEffect(() => {
     if (!hasLoadedFromStorage) return
+    if (isCustomTemplates) return
     
-    setTemplates((prevTemplates) => {
-      // Check if current templates match default templates structure
+    const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
+    const defaults = getDefaultTemplates(currentLang)
+    setTemplates(defaults)
+  }, [isCustomTemplates, locale, hasLoadedFromStorage])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!hasLoadedFromStorage) return
+    
+    try {
       const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
       const defaultTemplates = getDefaultTemplates(currentLang)
       const defaultIds = new Set(defaultTemplates.map(t => t.id))
       
-      // If all templates are default templates, update them
-      const allAreDefault = prevTemplates.every(t => defaultIds.has(t.id))
-      if (allAreDefault && prevTemplates.length === defaultTemplates.length) {
-        return defaultTemplates
-      }
+      const allAreDefault = templates.every(t => defaultIds.has(t.id))
+      const allMatchDefault = allAreDefault && templates.length === defaultTemplates.length &&
+        templates.every(template => {
+          const defaultTemplate = defaultTemplates.find(t => t.id === template.id)
+          return defaultTemplate && 
+                 template.label === defaultTemplate.label &&
+                 template.content === defaultTemplate.content
+        })
       
-      return prevTemplates
-    })
-  }, [locale, hasLoadedFromStorage])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(templates))
+      if (allMatchDefault) {
+        console.log('[Prompt Templates] Removing default templates from storage')
+        window.localStorage.removeItem(STORAGE_KEY)
+      } else {
+        console.log('[Prompt Templates] Saving', templates.length, 'custom templates to storage')
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(templates))
+      }
     } catch (error) {
       console.warn("Failed to persist prompt templates", error)
     }
-  }, [templates])
+  }, [templates, hasLoadedFromStorage, locale])
 
   const addTemplate = () => {
     setTemplates((prev) => {
@@ -180,10 +198,12 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
         },
       ]
     })
+    setIsCustomTemplates(true)
   }
 
   const updateTemplate = (id: string, patch: Partial<Omit<PromptTemplate, "id">>) => {
     setTemplates((prev) => prev.map((template) => (template.id === id ? { ...template, ...patch, id } : template)))
+    setIsCustomTemplates(true)
   }
 
   const removeTemplate = (id: string) => {
@@ -191,11 +211,13 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
       if (prev.length <= 1) return prev
       return prev.filter((template) => template.id !== id)
     })
+    setIsCustomTemplates(true)
   }
 
   const resetTemplates = () => {
     const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
     setTemplates(getDefaultTemplates(currentLang))
+    setIsCustomTemplates(false)
   }
 
   const value = useMemo(

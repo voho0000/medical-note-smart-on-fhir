@@ -18,10 +18,6 @@ export default function SmartLaunchPage() {
       const baseUrl = `${window.location.origin}${prefix}`.replace(/\/+$/, "")
       const redirectUri = `${baseUrl}/smart/callback` // 無結尾斜線（和 Pages 設定一致）
 
-      console.log("[SMART] href=", window.location.href)
-      console.log("[SMART] pathname=", window.location.pathname)
-      console.log("[SMART] baseUrl=", baseUrl, "redirectUri=", redirectUri)
-
       await FHIR.oauth2.authorize({
         clientId: "my_web_app",
         scope: "launch openid fhirUser patient/*.read online_access",
