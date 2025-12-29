@@ -1,27 +1,24 @@
 // Refactored MedListCard Component
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { FeatureCard } from "@/src/shared/components"
+import { useMedications } from './hooks/useMedications'
 import { useMedicationRows } from './hooks/useMedicationRows'
 import { MedicationList } from './components/MedicationList'
 
 export function MedListCard() {
-  const { medications = [], isLoading, error } = useClinicalData()
+  const { medications, isLoading, error } = useMedications()
   const rows = useMedicationRows(medications)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Medications</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <MedicationList 
-          medications={rows} 
-          isLoading={isLoading} 
-          error={error} 
-        />
-      </CardContent>
-    </Card>
+    <FeatureCard 
+      title="Medications" 
+      isLoading={isLoading} 
+      error={error}
+      isEmpty={rows.length === 0}
+      emptyMessage="No medications found"
+    >
+      <MedicationList medications={rows} isLoading={false} error={null} />
+    </FeatureCard>
   )
 }

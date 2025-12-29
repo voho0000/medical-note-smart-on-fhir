@@ -1,28 +1,24 @@
 // Refactored DiagnosisCard Component
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { FeatureCard } from "@/src/shared/components"
+import { useDiagnosis } from './hooks/useDiagnosis'
 import { useDiagnosisRows } from './hooks/useDiagnosisRows'
 import { DiagnosisList } from './components/DiagnosisList'
 
 export function DiagnosesCard() {
-  const { conditions = [], isLoading, error } = useClinicalData()
+  const { conditions, isLoading, error } = useDiagnosis()
   const rows = useDiagnosisRows(conditions)
-  
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Diagnosis / Problem List</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <DiagnosisList 
-          diagnoses={rows} 
-          isLoading={isLoading} 
-          error={error} 
-        />
-      </CardContent>
-    </Card>
+    <FeatureCard 
+      title="Diagnosis / Problem List" 
+      isLoading={isLoading} 
+      error={error}
+      isEmpty={rows.length === 0}
+      emptyMessage="No active diagnoses"
+    >
+      <DiagnosisList diagnoses={rows} isLoading={false} error={null} />
+    </FeatureCard>
   )
 }

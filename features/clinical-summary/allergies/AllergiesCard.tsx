@@ -1,27 +1,24 @@
 // Refactored AllergiesCard Component
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { FeatureCard } from "@/src/shared/components"
+import { useAllergies } from './hooks/useAllergies'
 import { useActiveAllergies } from './hooks/useActiveAllergies'
 import { AllergyList } from './components/AllergyList'
 
 export function AllergiesCard() {
-  const { allergies = [], isLoading, error } = useClinicalData()
+  const { allergies, isLoading, error } = useAllergies()
   const activeAllergies = useActiveAllergies(allergies)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Allergies & Intolerances</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <AllergyList 
-          allergies={activeAllergies} 
-          isLoading={isLoading} 
-          error={error} 
-        />
-      </CardContent>
-    </Card>
+    <FeatureCard 
+      title="Allergies & Intolerances" 
+      isLoading={isLoading} 
+      error={error}
+      isEmpty={activeAllergies.length === 0}
+      emptyMessage="No active allergies found"
+    >
+      <AllergyList allergies={activeAllergies} isLoading={false} error={null} />
+    </FeatureCard>
   )
 }
