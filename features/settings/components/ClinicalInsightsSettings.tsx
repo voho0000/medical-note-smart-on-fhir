@@ -2,7 +2,6 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -40,14 +39,15 @@ export function ClinicalInsightsSettings() {
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-base">{t.settings.clinicalInsightsSettingsTitle}</CardTitle>
+    <div className="space-y-5">
+      <div className="space-y-1">
+        <h3 className="text-base font-semibold leading-tight">{t.settings.clinicalInsightsSettingsTitle}</h3>
         <p className="text-xs text-muted-foreground">
           {t.settings.clinicalInsightsSettingsDesc}
         </p>
-      </CardHeader>
-      <CardContent className="space-y-5">
+      </div>
+
+      <div className="space-y-5">
         {/* Auto-generate Toggle */}
         <div className="flex items-center space-x-2 rounded-lg border p-4">
           <Checkbox
@@ -95,8 +95,8 @@ export function ClinicalInsightsSettings() {
             {panels.length}/{maxPanels} {t.settings.tabsInUse}
           </span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 

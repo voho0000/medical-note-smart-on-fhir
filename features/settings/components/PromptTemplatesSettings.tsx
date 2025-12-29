@@ -16,7 +16,7 @@ export function PromptTemplatesSettings() {
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold leading-tight">{t.settings.promptTemplatesTitle}</h3>
+        <h3 className="text-base font-semibold leading-tight">{t.settings.promptTemplatesTitle}</h3>
         <p className="text-xs text-muted-foreground">
           {t.settings.promptTemplatesDesc}
         </p>

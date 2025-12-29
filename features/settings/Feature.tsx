@@ -13,26 +13,34 @@ export function SettingsFeature() {
   
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="pt-4">
-          <Tabs defaultValue="ai" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="ai">{t.settings.aiPreferences}</TabsTrigger>
-              <TabsTrigger value="templates">{t.settings.promptTemplates}</TabsTrigger>
-              <TabsTrigger value="insights">{t.settings.clinicalInsightsTabs}</TabsTrigger>
-            </TabsList>
-            <TabsContent value="ai" className="space-y-6">
+      <Tabs defaultValue="ai" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="ai">{t.settings.aiPreferences}</TabsTrigger>
+          <TabsTrigger value="templates">{t.settings.promptTemplates}</TabsTrigger>
+          <TabsTrigger value="insights">{t.settings.clinicalInsightsTabs}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="ai" className="space-y-6">
+          <Card>
+            <CardContent className="pt-6">
               <ModelAndKeySettings />
-            </TabsContent>
-            <TabsContent value="templates" className="space-y-4">
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="templates" className="space-y-4">
+          <Card>
+            <CardContent className="pt-6">
               <PromptTemplatesSettings />
-            </TabsContent>
-            <TabsContent value="insights" className="space-y-4">
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="insights" className="space-y-4">
+          <Card>
+            <CardContent className="pt-6">
               <ClinicalInsightsSettings />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
       <Separator />
       <div className="space-y-2 text-xs text-muted-foreground">
         <p>
