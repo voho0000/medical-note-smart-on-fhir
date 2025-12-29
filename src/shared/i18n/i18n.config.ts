@@ -9,7 +9,7 @@ export const locales: Record<Locale, typeof en> = {
   'zh-TW': zhTW,
 }
 
-export const defaultLocale: Locale = 'en'
+export const defaultLocale: Locale = 'zh-TW'
 
 export const localeNames: Record<Locale, string> = {
   'en': 'English',

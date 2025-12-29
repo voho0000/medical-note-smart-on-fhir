@@ -23,6 +23,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     const savedLocale = localStorage.getItem(LOCALE_STORAGE_KEY) as Locale | null
     if (savedLocale && (savedLocale === 'en' || savedLocale === 'zh-TW')) {
       setLocaleState(savedLocale)
+    } else {
+      // Set default locale to zh-TW if no saved preference
+      setLocaleState('zh-TW')
     }
   }, [])
 
