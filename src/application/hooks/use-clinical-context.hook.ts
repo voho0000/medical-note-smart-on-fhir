@@ -5,7 +5,6 @@ import { useCallback, useMemo } from "react";
 import { useDataSelection } from "@/src/application/providers/data-selection.provider";
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider";
 import { usePatient } from "@/src/application/providers/patient.provider";
-import { useClinicalContextGenerator } from "@/src/application/hooks/use-clinical-context.hook";
 import type { ClinicalContextSection, DataFilters, TimeRange } from "@/src/core/entities/clinical-context.entity";
 
 export type UseClinicalContextReturn = {
