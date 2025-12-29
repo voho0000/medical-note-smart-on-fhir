@@ -25,6 +25,7 @@ export type ChatMessage = {
   role: "user" | "assistant" | "system"
   content: string
   timestamp: number
+  modelId?: string
 }
 
 export function NoteProvider({ children }: { children: React.ReactNode }) {

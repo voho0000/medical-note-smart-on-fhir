@@ -3,11 +3,18 @@
 import { useEffect, useRef } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import type { ChatMessage } from "@/src/application/providers/note.provider"
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
   isLoading: boolean
+}
+
+function getModelDisplayName(modelId?: string): string {
+  if (!modelId) return "AI"
+  const modelDef = getModelDefinition(modelId)
+  return modelDef?.label || modelId
 }
 
 export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
@@ -44,7 +51,11 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                 <pre className="whitespace-pre-wrap font-sans text-sm">{message.content}</pre>
               </div>
               <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
-                {message.role === "assistant" ? "AI" : message.role === "user" ? "You" : "System"}
+                {message.role === "assistant" 
+                  ? getModelDisplayName(message.modelId)
+                  : message.role === "user" 
+                  ? "You" 
+                  : "System"}
               </span>
             </div>
           ))
