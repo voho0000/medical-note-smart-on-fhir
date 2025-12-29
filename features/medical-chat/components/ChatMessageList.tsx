@@ -18,6 +18,28 @@ function getModelDisplayName(modelId?: string): string {
   return modelDef?.label || modelId
 }
 
+function formatTimestamp(timestamp: number): string {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const isToday = date.toDateString() === now.toDateString()
+  
+  const timeStr = date.toLocaleTimeString('zh-TW', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  })
+  
+  if (isToday) {
+    return timeStr
+  }
+  
+  const dateStr = date.toLocaleDateString('zh-TW', { 
+    month: '2-digit', 
+    day: '2-digit' 
+  })
+  return `${dateStr} ${timeStr}`
+}
+
 export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -49,19 +71,25 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
             >
               <div
                 className={cn(
-                  "rounded-md px-3 py-2 text-sm shadow-sm",
-                  message.role === "assistant" ? "bg-muted" : "bg-primary text-primary-foreground",
+                  "rounded-lg px-3 py-2 text-sm shadow-sm max-w-[90%]",
+                  message.role === "assistant" 
+                    ? "bg-muted border border-border" 
+                    : "bg-primary/10 border border-primary/20 text-foreground",
                 )}
               >
                 <pre className="whitespace-pre-wrap font-sans text-sm">{message.content}</pre>
               </div>
-              <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
-                {message.role === "assistant" 
-                  ? getModelDisplayName(message.modelId)
-                  : message.role === "user" 
-                  ? t.chat.you
-                  : t.chat.system}
-              </span>
+              <div className="flex items-center gap-2 text-[0.65rem] text-muted-foreground">
+                <span className="uppercase tracking-wide">
+                  {message.role === "assistant" 
+                    ? getModelDisplayName(message.modelId)
+                    : message.role === "user" 
+                    ? t.chat.you
+                    : t.chat.system}
+                </span>
+                <span>•</span>
+                <span>{formatTimestamp(message.timestamp)}</span>
+              </div>
             </div>
           ))
         )}
