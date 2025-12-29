@@ -19,11 +19,14 @@ function getModelDisplayName(modelId?: string): string {
 
 export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const prevMessagesLengthRef = useRef(0)
 
   useEffect(() => {
-    if (messagesEndRef.current) {
+    // Only scroll to bottom when new messages are added, not on initial mount
+    if (messages.length > prevMessagesLengthRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
     }
+    prevMessagesLengthRef.current = messages.length
   }, [messages, isLoading])
 
   return (

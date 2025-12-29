@@ -61,14 +61,12 @@ function RightPanelContent() {
               </TabsList>
               
               <TabsContent value="medicalChat" className="flex-1" forceMount>
-                <ScrollArea className="h-full pr-2">
-                  <div className="space-y-4 py-2">
-                    <MedicalChatFeature />
-                  </div>
-                </ScrollArea>
+                <div className="space-y-4 py-2">
+                  <MedicalChatFeature />
+                </div>
               </TabsContent>
               
-              <TabsContent value="dataSelection" className="flex-1" forceMount>
+              <TabsContent value="dataSelection" className="flex-1">
                 <ScrollArea className="h-full pr-2">
                   <div className="rounded-lg border p-4">
                     <DataSelectionPanel 
@@ -89,11 +87,11 @@ function RightPanelContent() {
                 </ScrollArea>
               </TabsContent>
 
-              <TabsContent value="clinicalInsights" className="flex-1" forceMount>
+              <TabsContent value="clinicalInsights" className="flex-1">
                 <ClinicalInsightsFeature />
               </TabsContent>
 
-              <TabsContent value="settings" className="flex-1" forceMount>
+              <TabsContent value="settings" className="flex-1">
                 <ScrollArea className="h-full pr-2">
                   <div className="space-y-4 py-2">
                     <SettingsFeature />
