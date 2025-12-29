@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useLanguage } from "./language.provider"
 
 type PromptTemplate = {
   id: string
@@ -84,19 +85,26 @@ function getDefaultTemplates(language: 'en' | 'zh-TW' = 'en'): PromptTemplate[] 
 }
 
 export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
+  const { locale } = useLanguage()
   const [templates, setTemplates] = useState<PromptTemplate[]>(() => {
     if (typeof window === "undefined") return getDefaultTemplates()
     
     const browserLang = window.navigator.language
-    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
-    return getDefaultTemplates(language)
+    const initialLang = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
+    return getDefaultTemplates(initialLang)
   })
+  const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (hasLoadedFromStorage) return
+    
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY)
-      if (!stored) return
+      if (!stored) {
+        setHasLoadedFromStorage(true)
+        return
+      }
       const parsed = JSON.parse(stored)
       if (!Array.isArray(parsed)) return
       const sanitized = parsed.reduce<PromptTemplate[]>((acc, entry) => {
@@ -126,7 +134,29 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.warn("Failed to load prompt templates from storage", error)
     }
-  }, [])
+    
+    setHasLoadedFromStorage(true)
+  }, [hasLoadedFromStorage])
+  
+  // Update templates when language changes (only if using default templates)
+  useEffect(() => {
+    if (!hasLoadedFromStorage) return
+    
+    setTemplates((prevTemplates) => {
+      // Check if current templates match default templates structure
+      const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
+      const defaultTemplates = getDefaultTemplates(currentLang)
+      const defaultIds = new Set(defaultTemplates.map(t => t.id))
+      
+      // If all templates are default templates, update them
+      const allAreDefault = prevTemplates.every(t => defaultIds.has(t.id))
+      if (allAreDefault && prevTemplates.length === defaultTemplates.length) {
+        return defaultTemplates
+      }
+      
+      return prevTemplates
+    })
+  }, [locale, hasLoadedFromStorage])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -164,14 +194,8 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
   }
 
   const resetTemplates = () => {
-    if (typeof window === "undefined") {
-      setTemplates(getDefaultTemplates())
-      return
-    }
-    
-    const browserLang = window.navigator.language
-    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
-    setTemplates(getDefaultTemplates(language))
+    const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
+    setTemplates(getDefaultTemplates(currentLang))
   }
 
   const value = useMemo(

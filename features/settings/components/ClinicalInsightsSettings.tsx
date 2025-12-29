@@ -71,7 +71,7 @@ export function ClinicalInsightsSettings() {
         {/* Insight Tabs */}
         {panels.map((panel, index) => (
           <InsightTabEditor
-            key={panel.id}
+            key={`${panel.id}-${panel.prompt.substring(0, 20)}`}
             panel={panel}
             index={index}
             canRemove={canRemovePanel}

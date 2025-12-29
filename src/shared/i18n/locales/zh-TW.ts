@@ -110,6 +110,7 @@ export const zhTW = {
     processing: '處理中…',
     voiceInputError: '語音輸入錯誤：',
     chatError: '對話錯誤：',
+    systemPrompt: 'You are a helpful medical assistant helping clinicians compose medical notes.\nBe concise, evidence-based, and note uncertainties when appropriate.\nWhen clinical context is provided in the conversation, reference it directly.',
   },
 
   dataSelection: {

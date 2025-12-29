@@ -35,27 +35,19 @@ export function VoiceRecorder({
       <Button
         type="button"
         variant={isRecording ? "destructive" : "outline"}
-        size="sm"
+        size="icon"
         onClick={onToggleRecording}
         disabled={isLoading}
-        className="flex items-center gap-2"
+        className="h-10 w-10 shrink-0"
+        aria-label={isRecording ? t.chat.stopRecording : isLoading ? t.chat.processing : t.chat.recordVoice}
         aria-pressed={isRecording}
       >
         {isRecording ? (
-          <>
-            <Square className="h-4 w-4" />
-            {t.chat.stopRecording}
-          </>
+          <Square className="h-4 w-4" />
         ) : isLoading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t.chat.processing}
-          </>
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <>
-            <Mic className="h-4 w-4" />
-            {t.chat.recordVoice}
-          </>
+          <Mic className="h-4 w-4" />
         )}
       </Button>
       <ReactMediaRecorder

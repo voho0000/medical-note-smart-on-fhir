@@ -1,6 +1,7 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useLanguage } from "./language.provider"
 
 export type InsightPanelConfig = {
   id: string
@@ -88,41 +89,50 @@ type ClinicalInsightsConfigContextValue = {
 const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContextValue | null>(null)
 
 export function ClinicalInsightsConfigProvider({ children }: { children: ReactNode }) {
+  const { locale } = useLanguage()
   const [panels, setPanels] = useState<InsightPanelConfig[]>(() => {
     if (typeof window === "undefined") return getDefaultClinicalInsightPanels()
-    
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored) as InsightPanelConfig[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((panel) => ({ ...panel, id: panel.id || generatePanelId() }))
-        }
-      }
-    } catch (error) {
-      console.warn("Failed to load clinical insights panels from storage", error)
-    }
-    
+
     const browserLang = window.navigator.language
-    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
+    const language = browserLang.startsWith("zh") ? "zh-TW" : "en"
     return getDefaultClinicalInsightPanels(language)
   })
   const [autoGenerate, setAutoGenerate] = useState<boolean>(false)
+  const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
+  const [isCustomPanels, setIsCustomPanels] = useState(false)
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (hasLoadedFromStorage) return
+    
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored) as InsightPanelConfig[]
         if (Array.isArray(parsed) && parsed.length > 0) {
           setPanels(parsed.map((panel) => ({ ...panel, id: panel.id || generatePanelId() })))
+          setIsCustomPanels(true)
         }
+      } else {
+        const currentLang = locale === "zh-TW" ? "zh-TW" : "en"
+        setPanels(getDefaultClinicalInsightPanels(currentLang))
+        setIsCustomPanels(false)
       }
     } catch (error) {
       console.warn("Failed to load clinical insights panels from storage", error)
     }
-  }, [])
+
+    setHasLoadedFromStorage(true)
+  }, [hasLoadedFromStorage, locale])
+
+  useEffect(() => {
+    if (!hasLoadedFromStorage) return
+    if (isCustomPanels) return
+
+    const currentLang = locale === "zh-TW" ? "zh-TW" : "en"
+    const defaults = getDefaultClinicalInsightPanels(currentLang)
+    setPanels(defaults)
+  }, [isCustomPanels, locale, hasLoadedFromStorage])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -138,12 +148,39 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(panels))
-    } catch (error) {
-      console.warn("Failed to persist clinical insights panels", error)
-    }
-  }, [panels])
+    if (!hasLoadedFromStorage) return // Don't save until we've loaded
+    
+    // Debounce to allow language change effect to complete first
+    const timeoutId = setTimeout(() => {
+      try {
+        // Check if current panels are default panels
+        const currentLang = locale === "zh-TW" ? "zh-TW" : "en"
+        const defaultPanels = getDefaultClinicalInsightPanels(currentLang)
+        const defaultIds = new Set(defaultPanels.map(p => p.id))
+
+        const allAreDefault = panels.every(p => defaultIds.has(p.id))
+        const allMatchDefault = allAreDefault && panels.length === defaultPanels.length &&
+          panels.every(panel => {
+            const defaultPanel = defaultPanels.find(p => p.id === panel.id)
+            return defaultPanel && 
+                   panel.title === defaultPanel.title &&
+                   panel.subtitle === defaultPanel.subtitle &&
+                   panel.prompt === defaultPanel.prompt
+          })
+        
+        if (allMatchDefault) {
+          window.localStorage.removeItem(STORAGE_KEY)
+        } else {
+          // Save custom panels
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(panels))
+        }
+      } catch (error) {
+        console.warn("Failed to persist clinical insights panels", error)
+      }
+    }, 100) // 100ms delay to let language change complete
+    
+    return () => clearTimeout(timeoutId)
+  }, [panels, hasLoadedFromStorage, locale])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -158,7 +195,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     setPanels((prev) => {
       if (prev.length >= MAX_PANELS) return prev
       const suffix = prev.length + 1
-      return [
+      const updated = [
         ...prev,
         {
           id: generatePanelId(),
@@ -167,29 +204,29 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
           prompt: "Describe the key clinical insights for this focus area using the provided context.",
         },
       ]
+      return updated
     })
+    setIsCustomPanels(true)
   }
 
   const updatePanel = (id: string, patch: Partial<InsightPanelConfig>) => {
     setPanels((prev) => prev.map((panel) => (panel.id === id ? { ...panel, ...patch, id: panel.id } : panel)))
+    setIsCustomPanels(true)
   }
 
   const removePanel = (id: string) => {
     setPanels((prev) => {
       if (prev.length <= 1) return prev
-      return prev.filter((panel) => panel.id !== id)
+      const updated = prev.filter((panel) => panel.id !== id)
+      return updated
     })
+    setIsCustomPanels(true)
   }
 
   const resetPanels = () => {
-    if (typeof window === "undefined") {
-      setPanels(getDefaultClinicalInsightPanels())
-      return
-    }
-    
-    const browserLang = window.navigator.language
-    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
-    setPanels(getDefaultClinicalInsightPanels(language))
+    const currentLang = locale === "zh-TW" ? "zh-TW" : "en"
+    setPanels(getDefaultClinicalInsightPanels(currentLang))
+    setIsCustomPanels(false)
   }
 
   const reorderPanels = useCallback((orderedIds: string[]) => {
@@ -200,8 +237,10 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
         .map((id) => prev.find((panel) => panel.id === id))
         .filter((panel): panel is InsightPanelConfig => Boolean(panel))
       const remaining = prev.filter((panel) => !idSet.has(panel.id))
-      return [...ordered, ...remaining]
+      const updated = [...ordered, ...remaining]
+      return updated
     })
+    setIsCustomPanels(true)
   }, [])
 
   const value = useMemo(

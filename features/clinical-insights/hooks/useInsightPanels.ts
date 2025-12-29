@@ -1,5 +1,5 @@
 // Custom Hook: Insight Panels State Management
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ResponseEntry, PanelStatus } from '../types'
 
 interface Panel {
@@ -10,15 +10,18 @@ interface Panel {
 }
 
 export function useInsightPanels(panels: Panel[]) {
-  const [prompts, setPrompts] = useState<Record<string, string>>({})
+  const [promptOverrides, setPromptOverrides] = useState<Record<string, string>>({})
   const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
   const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
 
   // Initialize state when panels change
   useEffect(() => {
-    setPrompts((prev) => {
-      return panels.reduce<Record<string, string>>((acc, panel) => {
-        acc[panel.id] = prev[panel.id] ?? panel.prompt
+    setPromptOverrides((prev) => {
+      const validIds = new Set(panels.map((panel) => panel.id))
+      return Object.keys(prev).reduce<Record<string, string>>((acc, key) => {
+        if (validIds.has(key)) {
+          acc[key] = prev[key]
+        }
         return acc
       }, {})
     })
@@ -42,9 +45,27 @@ export function useInsightPanels(panels: Panel[]) {
     })
   }, [panels])
 
+  const resolvedPrompts = useMemo(() => {
+    return panels.reduce<Record<string, string>>((acc, panel) => {
+      acc[panel.id] = promptOverrides[panel.id] ?? panel.prompt
+      return acc
+    }, {})
+  }, [panels, promptOverrides])
+
   const handlePromptChange = useCallback((panelId: string, value: string) => {
-    setPrompts((prev) => ({ ...prev, [panelId]: value }))
-  }, [])
+    setPromptOverrides((prev) => {
+      const panel = panels.find((item) => item.id === panelId)
+      if (!panel) return prev
+
+      if (value === panel.prompt) {
+        if (!(panelId in prev)) return prev
+        const { [panelId]: _, ...rest } = prev
+        return rest
+      }
+
+      return { ...prev, [panelId]: value }
+    })
+  }, [panels])
 
   const handleResponseChange = useCallback((panelId: string, value: string) => {
     setResponses((prev) => ({
@@ -63,7 +84,7 @@ export function useInsightPanels(panels: Panel[]) {
   }, [])
 
   return {
-    prompts,
+    prompts: resolvedPrompts,
     responses,
     panelStatus,
     setResponses,

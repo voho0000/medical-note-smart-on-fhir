@@ -62,8 +62,8 @@ function RightPanelContent() {
                 <TabsTrigger value="settings">{t.tabs.settings}</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="medicalChat" className="flex-1" forceMount>
-                <div className="space-y-4 py-2">
+              <TabsContent value="medicalChat" className="flex-1 overflow-hidden" forceMount>
+                <div className="h-full py-2">
                   <MedicalChatFeature />
                 </div>
               </TabsContent>
