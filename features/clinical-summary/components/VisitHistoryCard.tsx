@@ -1,7 +1,7 @@
 "use client"
-import { cn } from "@/lib/utils"
+import { cn } from "@/src/shared/utils/cn.utils"
 // features/clinical-summary/components/VisitHistoryCard.tsx
-import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useMemo, useState } from "react"

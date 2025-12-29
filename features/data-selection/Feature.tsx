@@ -1,9 +1,9 @@
 // features/data-selection/Feature.tsx
 "use client"
 
-import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { DataSelectionPanel } from "./components/DataSelectionPanel"
-import { useDataSelection } from "./hooks/useDataSelection"
+import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 
 type ClinicalData = {
   diagnoses?: any[]

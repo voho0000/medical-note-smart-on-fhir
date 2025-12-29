@@ -10,13 +10,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { AlertCircle, ChevronDown, Loader2, RefreshCcw } from "lucide-react"
 
-import { useClinicalContext } from "@/features/data-selection/hooks/useClinicalContext"
-import { useGptQuery, type QueryMetadata } from "@/features/medical-note/hooks/useGptQuery"
-import { useApiKey } from "@/lib/providers/ApiKeyProvider"
-import { DEFAULT_MODEL_ID, getModelDefinition } from "@/features/medical-note/constants/models"
-import { hasChatProxy } from "@/lib/config/ai"
-import { useClinicalInsightsConfig } from "@/features/clinical-insights/context/ClinicalInsightsConfigContext"
-import { useNote } from "@/features/medical-note/providers/NoteProvider"
+import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
+import { useApiKey } from "@/src/application/providers/api-key.provider"
+import type { AiQueryResponse } from "@/src/core/entities/ai.entity"
+
+type QueryMetadata = AiQueryResponse['metadata']
+import { DEFAULT_MODEL_ID, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { hasChatProxy } from "@/src/shared/config/env.config"
+import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
+import { useNote } from "@/src/application/providers/note.provider"
 
 const SYSTEM_INSTRUCTION =
   "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate."
@@ -136,10 +139,10 @@ function InsightPanel({
 
 export default function ClinicalInsightsFeature() {
   const { panels, autoGenerate } = useClinicalInsightsConfig()
-  const { apiKey } = useApiKey()
+  const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { getFullClinicalContext } = useClinicalContext()
   const { model } = useNote()
-  const { queryGpt } = useGptQuery({ defaultModel: model })
+  const { queryAi } = useAiQuery(openAiKey, geminiKey)
 
   const [prompts, setPrompts] = useState<Record<string, string>>({})
   const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
@@ -210,13 +213,13 @@ export default function ClinicalInsightsFeature() {
   }, [panels])
 
   const canUseProxy = hasChatProxy
-  const canGenerate = Boolean(apiKey) || canUseProxy
+  const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
 
   const runPanel = useCallback(
     async (panelId: string, { force } = { force: false }) => {
       const panel = panels.find((item) => item.id === panelId)
       if (!panel) return
-      if (!context.trim() || (!apiKey && !canUseProxy)) return
+      if (!context.trim() || (!openAiKey && !geminiKey && !canUseProxy)) return
 
       const prompt = prompts[panelId] ?? panel.prompt
       const responseEntry = responses[panelId]
@@ -238,7 +241,7 @@ export default function ClinicalInsightsFeature() {
       }))
 
       try {
-        const { text: responseText, metadata } = await queryGpt(baseMessages)
+        const { text: responseText, metadata } = await queryAi(baseMessages, model)
         setResponses((prev) => ({
           ...prev,
           [panelId]: { text: responseText || "", isEdited: false, metadata },
@@ -258,11 +261,11 @@ export default function ClinicalInsightsFeature() {
         }))
       }
     },
-    [apiKey, canUseProxy, context, panels, prompts, queryGpt, responses],
+    [openAiKey, geminiKey, canUseProxy, context, panels, prompts, queryAi, responses, model],
   )
 
   useEffect(() => {
-    if ((!apiKey && !canUseProxy) || hasAutoRun || !context.trim() || panels.length === 0 || !autoGenerate) {
+    if ((!openAiKey && !geminiKey && !canUseProxy) || hasAutoRun || !context.trim() || panels.length === 0 || !autoGenerate) {
       return
     }
 
@@ -276,7 +279,7 @@ export default function ClinicalInsightsFeature() {
       console.error("Failed to auto-run clinical insights", error)
       setHasAutoRun(false)
     })
-  }, [apiKey, autoGenerate, canUseProxy, context, hasAutoRun, panels, runPanel])
+  }, [openAiKey, geminiKey, autoGenerate, canUseProxy, context, hasAutoRun, panels, runPanel])
 
   const handlePromptChange = useCallback((panelId: string, value: string) => {
     setPrompts((prev) => ({ ...prev, [panelId]: value }))

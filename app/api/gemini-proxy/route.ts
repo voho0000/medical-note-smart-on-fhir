@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { GEMINI_PROXY_URL, PROXY_CLIENT_KEY } from "@/lib/config/ai"
+import { GEMINI_PROXY_URL, PROXY_CLIENT_KEY } from "@/src/shared/config/env.config"
 
 export async function POST(request: NextRequest) {
   if (!GEMINI_PROXY_URL) {

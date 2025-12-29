@@ -2,30 +2,17 @@
 
 import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { usePatient } from "@/src/application/providers/patient.provider"
+import type { ObservationEntity } from "@/src/core/entities/clinical-data.entity"
 
-import type { FHIRObservation } from "@/lib/providers/ClinicalDataProvider"
-
+type Observation = ObservationEntity
 type Coding = { system?: string; code?: string; display?: string }
 type CodeableConcept = { text?: string; coding?: Coding[] }
-type Quantity = { value?: number; unit?: string }
-type ObsComponent = { 
-  code?: CodeableConcept; 
-  valueQuantity?: Quantity; 
-  valueString?: string;
-  valueCodeableConcept?: CodeableConcept;
-}
-
-type Observation = FHIRObservation & {
-  component?: Array<ObsComponent & {
-    code?: {
-      coding?: Array<{
-        code?: string
-        system?: string
-        display?: string
-      }>
-    }
-  }>
+type ObsComponent = {
+  code?: CodeableConcept
+  valueQuantity?: { value?: number; unit?: string }
+  valueString?: string
 }
 
 const LOINC = {
@@ -72,13 +59,13 @@ function pickLatestByCode(list: Observation[], code: string): Observation | unde
 }
 
 export function VitalsCard() {
-  const { vitals, isLoading, error } = useClinicalData()
+  const { vitalSigns, isLoading, error } = useClinicalData()
   
   // Filter only vital signs observations
   const vitalObservations = useMemo(() => {
-    if (!vitals || !Array.isArray(vitals)) return [] as Observation[]
+    if (!vitalSigns || vitalSigns.length === 0) return [] as Observation[]
     
-    return vitals.filter((obs): obs is Observation => {
+    return vitalSigns.filter((obs): obs is Observation => {
       if (!obs || typeof obs !== 'object') return false
       
       // Check if it's a vital sign observation
@@ -89,7 +76,7 @@ export function VitalsCard() {
       
       return !!isVitalSign
     })
-  }, [vitals])
+  }, [vitalSigns, isLoading, error])
 
   // 計算各 vital
   const view = useMemo(() => {

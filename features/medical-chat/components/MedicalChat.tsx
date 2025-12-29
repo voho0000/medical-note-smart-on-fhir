@@ -6,18 +6,18 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { cn } from "@/lib/utils"
-import { useNote, type ChatMessage } from "@/features/medical-note/providers/NoteProvider"
-import { useGptQuery } from "@/features/medical-note/hooks/useGptQuery"
-import { useClinicalContext } from "@/features/data-selection/hooks/useClinicalContext"
-import { useAsr } from "@/features/medical-note/context/AsrContext"
-import { useDataSelection } from "@/features/data-selection/hooks/useDataSelection"
-import { usePatient } from "@/lib/providers/PatientProvider"
-import { useApiKey } from "@/lib/providers/ApiKeyProvider"
+import { cn } from "@/src/shared/utils/cn.utils"
+import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
+import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
+import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+import { useAsr } from "@/src/application/providers/asr.provider"
+import { useDataSelection } from "@/src/application/providers/data-selection.provider"
+import { usePatient } from "@/src/application/providers/patient.provider"
+import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { Loader2, Mic, Square, Plus, Trash2, FileText } from "lucide-react"
-import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/lib/config/ai"
+import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shared/config/env.config"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { usePromptTemplates } from "@/features/medical-chat/context/PromptTemplatesContext"
+import { usePromptTemplates } from "@/src/application/providers/prompt-templates.provider"
 
 const ReactMediaRecorder = dynamic(async () => (await import("react-media-recorder")).ReactMediaRecorder, {
   ssr: false,
@@ -245,7 +245,8 @@ export function MedicalChat() {
     ].join("\n")
   }, [clinicalContext, currentPatient?.name, selectedData.patientInfo])
 
-  const { queryGpt, isLoading, error } = useGptQuery()
+  const { apiKey: openAiKey, geminiKey } = useApiKey()
+  const { queryAi, isLoading, error } = useAiQuery(openAiKey, geminiKey)
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -268,7 +269,7 @@ export function MedicalChat() {
         ...optimisticMessages.map((message) => ({ role: message.role, content: message.content })),
       ]
 
-      const { text } = await queryGpt(gptMessages, model)
+      const { text } = await queryAi(gptMessages, model)
       const assistantMessage = createMessage("assistant", text || "")
       setChatMessages((prev) => [...prev, assistantMessage])
     } catch (err) {
@@ -276,7 +277,7 @@ export function MedicalChat() {
       const errorMessage = createMessage("assistant", `⚠️ ${fallback}`)
       setChatMessages((prev) => [...prev, errorMessage])
     }
-  }, [chatMessages, input, model, queryGpt, setChatMessages, systemPrompt])
+  }, [chatMessages, input, model, queryAi, setChatMessages, systemPrompt])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {

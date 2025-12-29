@@ -4,7 +4,7 @@
 import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 
 type Coding = { 
   system?: string 

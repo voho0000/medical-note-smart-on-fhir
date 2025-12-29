@@ -2,7 +2,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { usePatient } from "@/lib/providers/PatientProvider"
+import { usePatient } from "@/src/application/providers/patient.provider"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 
 function calculateAge(birthDate?: string): string {

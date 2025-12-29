@@ -24,8 +24,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 
-import { DataType, DataSelection, DataFilters } from "../hooks/useDataSelection"
-import { useClinicalContext } from "../hooks/useClinicalContext"
+import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
+import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+
+type DataType = keyof DataSelection
 
 type ClinicalData = {
   conditions: any[]

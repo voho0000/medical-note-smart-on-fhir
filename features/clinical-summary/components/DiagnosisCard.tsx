@@ -3,7 +3,7 @@
 
 import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 
 // FHIR R4 Type Definitions
 interface Coding {
@@ -53,12 +53,12 @@ function fmtDate(d?: string): string {
 }
 
 export function DiagnosesCard() {
-  const { diagnoses = [], isLoading, error } = useClinicalData()
+  const { conditions = [], isLoading, error } = useClinicalData()
   
   const rows = useMemo<Row[]>(() => {
-    if (!diagnoses || !Array.isArray(diagnoses)) return []
+    if (!conditions || !Array.isArray(conditions)) return []
     
-    return (diagnoses as Condition[]).map(condition => {
+    return (conditions as Condition[]).map(condition => {
       // Extract categories safely
       const categories: string[] = []
       if (condition.category) {
@@ -81,7 +81,7 @@ export function DiagnosesCard() {
         categories: categories,
       }
     })
-  }, [diagnoses])
+  }, [conditions])
 
   const loading = isLoading
   const err = error ? String(error) : null

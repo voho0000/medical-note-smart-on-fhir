@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { cn } from "@/lib/utils"
-import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
+import { cn } from "@/src/shared/utils/cn.utils"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 
 type Coding = { system?: string; code?: string; display?: string }
 type Quantity = { value?: number; unit?: string }

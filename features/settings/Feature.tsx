@@ -3,9 +3,9 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ModelAndKeySettings } from "@/features/medical-note/components/ApiKeyField"
-import { ClinicalInsightsSettings } from "@/features/clinical-insights/components/ClinicalInsightsSettings"
-import { PromptTemplatesSettings } from "@/features/medical-chat/components/PromptTemplatesSettings"
+import { ModelAndKeySettings } from "./components/ApiKeyField"
+import { ClinicalInsightsSettings } from "./components/ClinicalInsightsSettings"
+import { PromptTemplatesSettings } from "./components/PromptTemplatesSettings"
 
 export function SettingsFeature() {
   return (

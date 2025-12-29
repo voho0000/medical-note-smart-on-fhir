@@ -5,24 +5,19 @@ import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import MedicalChatFeature from "@/features/medical-chat/Feature"
-import { NoteProvider } from "@/features/medical-note/providers/NoteProvider"
+import { NoteProvider } from "@/src/application/providers/note.provider"
 import { DataSelectionPanel } from "@/features/data-selection/components/DataSelectionPanel"
-import { useClinicalData } from "@/lib/providers/ClinicalDataProvider"
-import { DataSelectionProvider, useDataSelection, type DataSelection } from "@/features/data-selection/hooks/useDataSelection"
-import { GptResponseProvider } from "@/features/medical-note/context/GptResponseContext"
-import { AsrProvider } from "@/features/medical-note/context/AsrContext"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { DataSelectionProvider, useDataSelection } from "@/src/application/providers/data-selection.provider"
+import type { DataSelection } from "@/src/core/entities/clinical-context.entity"
+import { GptResponseProvider } from "@/src/application/providers/gpt-response.provider"
+import { AsrProvider } from "@/src/application/providers/asr.provider"
 import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
 import SettingsFeature from "@/features/settings/Feature"
-import { ClinicalInsightsConfigProvider } from "@/features/clinical-insights/context/ClinicalInsightsConfigContext"
-import { PromptTemplatesProvider } from "@/features/medical-chat/context/PromptTemplatesContext"
+import { ClinicalInsightsConfigProvider } from "@/src/application/providers/clinical-insights-config.provider"
+import { PromptTemplatesProvider } from "@/src/application/providers/prompt-templates.provider"
 
-// Import the ClinicalData type from the provider
-import type { ClinicalData as ClinicalDataFromProvider } from "@/lib/providers/ClinicalDataProvider"
-
-// Define the expected shape of the clinical data for this component
-interface ClinicalData extends Omit<ClinicalDataFromProvider, 'vitals'> {
-  // Add any additional properties specific to this component
-}
+// ClinicalData type is now from the new provider
 
 export function RightPanelFeature() {
   return (
@@ -78,8 +73,7 @@ function RightPanelContent() {
                   <div className="rounded-lg border p-4">
                     <DataSelectionPanel 
                       clinicalData={{
-                        // Use diagnoses instead of conditions since that's what's available
-                        conditions: clinicalData.diagnoses || [],
+                        conditions: clinicalData.conditions || [],
                         medications: clinicalData.medications || [],
                         allergies: clinicalData.allergies || [],
                         diagnosticReports: clinicalData.diagnosticReports || [],
