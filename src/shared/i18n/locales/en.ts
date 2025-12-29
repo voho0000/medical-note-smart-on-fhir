@@ -17,7 +17,9 @@ export const en = {
   },
   
   header: {
-    title: 'Medical Note Assistant',
+    title: "Medical Note · SMART on FHIR",
+    clinicalSummary: "Clinical Summary",
+    features: "Features",
     language: 'Language',
   },
 

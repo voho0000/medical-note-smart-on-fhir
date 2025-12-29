@@ -7,15 +7,15 @@ interface PatientInfoDisplayProps {
 
 export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2 text-sm">
       <span className="font-medium text-muted-foreground">Name:</span>
-      <span className="col-span-2">{patientInfo.name}</span>
+      <span className="sm:col-span-2">{patientInfo.name}</span>
       
       <span className="font-medium text-muted-foreground">Gender:</span>
-      <span className="col-span-2">{patientInfo.gender}</span>
+      <span className="sm:col-span-2">{patientInfo.gender}</span>
       
       <span className="font-medium text-muted-foreground">Age:</span>
-      <span className="col-span-2">{patientInfo.age}</span>
+      <span className="sm:col-span-2">{patientInfo.age}</span>
       
       {patientInfo.id && (
         <>

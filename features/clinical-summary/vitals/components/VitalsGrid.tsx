@@ -19,7 +19,7 @@ export function VitalsGrid({ vitals, isLoading, error }: VitalsGridProps) {
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
         <VitalItem label="Height" value={vitals.height} />
         <VitalItem label="Weight" value={vitals.weight} />
         <VitalItem label="BMI" value={vitals.bmi} />

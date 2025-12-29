@@ -75,8 +75,8 @@ export function DataSelectionPanel({
   return (
     <Tabs defaultValue="selection" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="selection">{t.dataSelection.title}</TabsTrigger>
-        <TabsTrigger value="preview">{t.common.preview}</TabsTrigger>
+        <TabsTrigger value="selection" className="text-xs sm:text-sm">{t.dataSelection.title}</TabsTrigger>
+        <TabsTrigger value="preview" className="text-xs sm:text-sm">{t.common.preview}</TabsTrigger>
       </TabsList>
       <TabsContent value="selection" className="mt-6">
         <DataSelectionTab

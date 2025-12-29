@@ -19,7 +19,9 @@ export const zhTW = {
   },
   
   header: {
-    title: '醫療筆記助理',
+    title: "醫療筆記 · SMART on FHIR",
+    clinicalSummary: "臨床摘要",
+    features: "功能",
     language: '語言',
   },
 

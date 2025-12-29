@@ -16,6 +16,7 @@ function PageContent() {
   const { t } = useLanguage()
   const [leftWidth, setLeftWidth] = useState(50) // percentage
   const [isDragging, setIsDragging] = useState(false)
+  const [mobileView, setMobileView] = useState<'left' | 'right'>('left') // for mobile tab switching
   const containerRef = useRef<HTMLDivElement>(null)
   
   const handleMouseDown = () => {
@@ -57,29 +58,56 @@ function PageContent() {
   
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
-      <header className="shrink-0 border-b bg-white/80 backdrop-blur-md px-6 py-4 shadow-sm">
+      <header className="shrink-0 border-b bg-white/80 backdrop-blur-md px-3 py-3 sm:px-6 sm:py-4 shadow-sm">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30">
-              <Stethoscope className="h-5 w-5 text-white" />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30">
+              <Stethoscope className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
-            <h1 className="text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
+            <h1 className="text-base sm:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>
           <LanguageSwitcher />
         </div>
       </header>
-      <main className="flex flex-1 gap-6 overflow-hidden p-6" ref={containerRef}>
+      
+      {/* Mobile Tab Switcher - Only visible on small screens */}
+      <div className="lg:hidden flex border-b bg-white/80 backdrop-blur-md">
+        <button
+          onClick={() => setMobileView('left')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            mobileView === 'left'
+              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          }`}
+        >
+          {t.header.clinicalSummary || '臨床摘要'}
+        </button>
+        <button
+          onClick={() => setMobileView('right')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            mobileView === 'right'
+              ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          }`}
+        >
+          {t.header.features || '功能'}
+        </button>
+      </div>
+      
+      <main className="flex flex-1 flex-col lg:flex-row gap-3 sm:gap-6 overflow-hidden p-3 sm:p-6" ref={containerRef}>
         {/* Left Panel - Clinical Summary */}
         <section 
-          className="min-h-0 overflow-y-auto"
-          style={{ width: `${leftWidth}%` }}
+          className={`w-full lg:w-auto min-h-0 overflow-y-auto flex-1 lg:flex-initial ${
+            mobileView === 'left' ? 'block' : 'hidden lg:block'
+          }`}
+          style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${leftWidth}%` : undefined }}
         >
           <ClinicalSummaryFeature />
         </section>
         
-        {/* Resizable Divider */}
+        {/* Resizable Divider - Hidden on mobile */}
         <div
-          className="group relative flex w-2 shrink-0 cursor-col-resize items-center justify-center rounded-full bg-border/60 transition-colors hover:bg-primary/20 active:bg-primary/30"
+          className="hidden lg:flex group relative w-2 shrink-0 cursor-col-resize items-center justify-center rounded-full bg-border/60 transition-colors hover:bg-primary/20 active:bg-primary/30"
           onMouseDown={handleMouseDown}
         >
           <div className="absolute inset-y-0 -left-2 -right-2" />
@@ -88,8 +116,10 @@ function PageContent() {
         
         {/* Right Panel - Tabs (Medical Note / Data Selection) */}
         <section 
-          className="min-h-0 overflow-y-auto"
-          style={{ width: `${100 - leftWidth - 0.5}%` }}
+          className={`w-full lg:w-auto min-h-0 overflow-y-auto flex-1 lg:flex-initial ${
+            mobileView === 'right' ? 'block' : 'hidden lg:block'
+          }`}
+          style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${100 - leftWidth - 0.5}%` : undefined }}
         >
           <RightPanelFeature />
         </section>

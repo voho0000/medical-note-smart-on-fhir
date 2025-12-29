@@ -14,10 +14,10 @@ export function SettingsFeature() {
   return (
     <div className="space-y-4">
       <Tabs defaultValue="ai" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="ai">{t.settings.aiPreferences}</TabsTrigger>
-          <TabsTrigger value="templates">{t.settings.promptTemplates}</TabsTrigger>
-          <TabsTrigger value="insights">{t.settings.clinicalInsightsTabs}</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-1">
+          <TabsTrigger value="ai" className="text-xs sm:text-sm">{t.settings.aiPreferences}</TabsTrigger>
+          <TabsTrigger value="templates" className="text-xs sm:text-sm">{t.settings.promptTemplates}</TabsTrigger>
+          <TabsTrigger value="insights" className="text-xs sm:text-sm">{t.settings.clinicalInsightsTabs}</TabsTrigger>
         </TabsList>
         <TabsContent value="ai" className="space-y-6">
           <Card>
