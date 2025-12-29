@@ -4,6 +4,7 @@
 import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
@@ -13,6 +14,7 @@ import { ReportsTabContent } from './components/ReportsTabContent'
 import type { Row } from './types'
 
 export function ReportsCard() {
+  const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
 
   const { reportRows, seenIds } = useReportsData(diagnosticReports)
@@ -47,10 +49,10 @@ export function ReportsCard() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Reports</CardTitle>
+          <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Loading reports...
+          {t.common.loading}
         </CardContent>
       </Card>
     )
@@ -60,10 +62,10 @@ export function ReportsCard() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Reports</CardTitle>
+          <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-red-600">
-          Error loading reports: {error?.message || 'Unknown error'}
+          {t.common.error}: {error?.message || t.errors.unknown}
         </CardContent>
       </Card>
     )
@@ -73,10 +75,10 @@ export function ReportsCard() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Reports</CardTitle>
+          <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          No reports available
+          {t.reports.noData}
         </CardContent>
       </Card>
     )
@@ -85,7 +87,7 @@ export function ReportsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Reports</CardTitle>
+        <CardTitle>{t.reports.title}</CardTitle>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="all" className="w-full">

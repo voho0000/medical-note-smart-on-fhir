@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import type { ChatMessage } from "@/src/application/providers/note.provider"
 
@@ -18,6 +19,7 @@ function getModelDisplayName(modelId?: string): string {
 }
 
 export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
+  const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const prevMessagesLengthRef = useRef(0)
 
@@ -34,7 +36,7 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
       <div className="flex flex-col gap-3">
         {messages.length === 0 ? (
           <div className="text-sm text-muted-foreground">
-            Ask follow-up questions or draft sections of the medical note. You can insert clinical context or dictate notes with the microphone.
+            {t.chat.emptyState}
           </div>
         ) : (
           messages.map((message) => (
@@ -57,14 +59,14 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                 {message.role === "assistant" 
                   ? getModelDisplayName(message.modelId)
                   : message.role === "user" 
-                  ? "You" 
-                  : "System"}
+                  ? t.chat.you
+                  : t.chat.system}
               </span>
             </div>
           ))
         )}
         {isLoading ? (
-          <div className="text-xs text-muted-foreground">Generating response…</div>
+          <div className="text-xs text-muted-foreground">{t.common.loading}</div>
         ) : null}
         <div ref={messagesEndRef} />
       </div>

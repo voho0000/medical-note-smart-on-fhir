@@ -2,6 +2,7 @@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface ApiKeyInputProps {
   id: string
@@ -24,6 +25,8 @@ export function ApiKeyInput({
   onClear,
   helpText,
 }: ApiKeyInputProps) {
+  const { t } = useLanguage()
+  
   return (
     <div className="space-y-2">
       <Label htmlFor={id} className="text-xs uppercase text-muted-foreground">
@@ -40,10 +43,10 @@ export function ApiKeyInput({
         />
         <div className="flex gap-2 sm:w-auto">
           <Button size="sm" onClick={onSave} disabled={!value?.trim()}>
-            Save key
+            {t.settings.saveKey}
           </Button>
           <Button size="sm" variant="outline" onClick={onClear}>
-            Clear
+            {t.settings.clear}
           </Button>
         </div>
       </div>

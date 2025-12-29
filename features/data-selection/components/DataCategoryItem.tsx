@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Info } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection } from "@/src/core/entities/clinical-context.entity"
 
@@ -18,6 +19,8 @@ interface DataCategoryItemProps {
 }
 
 export function DataCategoryItem({ item, isSelected, onToggle, renderFilters }: DataCategoryItemProps) {
+  const { t } = useLanguage()
+  
   return (
     <Card className="p-4 hover:bg-muted/50 transition-colors">
       <div className="flex items-start space-x-3">
@@ -54,7 +57,7 @@ export function DataCategoryItem({ item, isSelected, onToggle, renderFilters }: 
               variant={isSelected ? "default" : "secondary"}
               className="ml-2"
             >
-              {item.count} {item.count === 1 ? 'item' : 'items'}
+              {item.count} {item.count === 1 ? t.dataSelection.item : t.dataSelection.items}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">

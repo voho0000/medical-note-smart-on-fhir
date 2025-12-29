@@ -4,6 +4,7 @@
 import { useCallback } from "react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { useNote } from "@/src/application/providers/note.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { useChatMessages } from "../hooks/useChatMessages"
 import { useVoiceRecording } from "../hooks/useVoiceRecording"
 import { useTemplateSelector } from "../hooks/useTemplateSelector"
@@ -16,6 +17,7 @@ import { ChatToolbar } from "./ChatToolbar"
 import { VoiceRecorder } from "./VoiceRecorder"
 
 export function MedicalChat() {
+  const { t } = useLanguage()
   const { model } = useNote()
   const { systemPrompt, clinicalContext } = useSystemPrompt()
   const input = useChatInput()
@@ -99,7 +101,7 @@ export function MedicalChat() {
               value={input.input}
               onChange={(event) => input.setInput(event.target.value)}
               onKeyDown={(e) => input.handleKeyDown(e, handleSend)}
-              placeholder="Type your question or instruction…"
+              placeholder={t.chat.placeholder}
               spellCheck={false}
               className="h-[72px] w-full flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
@@ -124,20 +126,20 @@ export function MedicalChat() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Sending…
+                    {t.common.sending}
                   </>
                 ) : (
-                  "Send"
+                  t.common.send
                 )}
               </button>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span>{input.input.length} characters</span>
+            <span>{input.input.length} {t.chat.characters}</span>
             {voice.lastTranscript ? (
               <span className="truncate sm:max-w-[320px]">
-                Latest voice input: {recordingStatus.latestTranscriptPreview || "—"}
+                {t.chat.latestVoiceInput} {recordingStatus.latestTranscriptPreview || "—"}
               </span>
             ) : (
               <span aria-hidden="true"> </span>
@@ -145,7 +147,7 @@ export function MedicalChat() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Tap the microphone to dictate, then refine or send your message.
+          {t.chat.microphoneHint}
         </p>
       </CardFooter>
     </Card>

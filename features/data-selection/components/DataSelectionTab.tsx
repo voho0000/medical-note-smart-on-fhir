@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { DataCategoryItem } from "./DataCategoryItem"
 import { MedicationFilter, VitalSignsFilter, LabReportFilter } from "./DataFilters"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
@@ -28,6 +29,7 @@ export function DataSelectionTab({
   allSelected,
   someSelected,
 }: DataSelectionTabProps) {
+  const { t } = useLanguage()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -42,9 +44,9 @@ export function DataSelectionTab({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h2 className="text-lg font-medium">Data Categories</h2>
+          <h2 className="text-lg font-medium">{t.dataSelection.dataCategories}</h2>
           <p className="text-sm text-muted-foreground">
-            Select which data categories to include in your notes
+            {t.dataSelection.dataCategoriesDescription}
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -53,7 +55,7 @@ export function DataSelectionTab({
             size="sm"
             onClick={() => onToggleAll(!allSelected)}
           >
-            {mounted && allSelected ? 'Deselect All' : 'Select All'}
+            {mounted && allSelected ? t.dataSelection.deselectAll : t.dataSelection.selectAll}
           </Button>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { Loader2, Mic, Square } from "lucide-react"
 
 const ReactMediaRecorder = dynamic(async () => (await import("react-media-recorder")).ReactMediaRecorder, {
@@ -27,6 +28,8 @@ export function VoiceRecorder({
   startRecordingRef,
   stopRecordingRef,
 }: VoiceRecorderProps) {
+  const { t } = useLanguage()
+  
   return (
     <>
       <Button
@@ -41,17 +44,17 @@ export function VoiceRecorder({
         {isRecording ? (
           <>
             <Square className="h-4 w-4" />
-            Stop Recording
+            {t.chat.stopRecording}
           </>
         ) : isLoading ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Processing…
+            {t.chat.processing}
           </>
         ) : (
           <>
             <Mic className="h-4 w-4" />
-            Record Voice
+            {t.chat.recordVoice}
           </>
         )}
       </Button>

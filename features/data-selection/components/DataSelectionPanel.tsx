@@ -2,6 +2,7 @@
 
 import { useMemo } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useDataFiltering } from "../hooks/useDataFiltering"
 import { useDataCategories, type DataType } from "../hooks/useDataCategories"
@@ -33,6 +34,7 @@ export function DataSelectionPanel({
   onSelectionChange,
   onFiltersChange 
 }: DataSelectionPanelProps) {
+  const { t } = useLanguage()
   const { 
     getFormattedClinicalContext, 
     supplementaryNotes, 
@@ -73,8 +75,8 @@ export function DataSelectionPanel({
   return (
     <Tabs defaultValue="selection" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="selection">Data Selection</TabsTrigger>
-        <TabsTrigger value="preview">Preview</TabsTrigger>
+        <TabsTrigger value="selection">{t.dataSelection.title}</TabsTrigger>
+        <TabsTrigger value="preview">{t.common.preview}</TabsTrigger>
       </TabsList>
       <TabsContent value="selection" className="mt-6">
         <DataSelectionTab

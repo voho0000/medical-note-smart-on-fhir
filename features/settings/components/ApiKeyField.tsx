@@ -2,6 +2,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { Label } from "@/components/ui/label"
 import { useNote } from "@/src/application/providers/note.provider"
@@ -12,6 +13,7 @@ import { ModelSelector } from './ModelSelector'
 import { ApiKeyInput } from './ApiKeyInput'
 
 export function ModelAndKeySettings() {
+  const { t } = useLanguage()
   const { apiKey, setApiKey, clearApiKey, geminiKey, setGeminiKey, clearGeminiKey } = useApiKey()
   const { model, setModel } = useNote()
   const [openAiValue, setOpenAiValue] = useState(apiKey)
@@ -62,7 +64,7 @@ export function ModelAndKeySettings() {
     <div className="space-y-6">
       {/* Model Selection */}
       <div className="space-y-3">
-        <Label className="text-xs uppercase text-muted-foreground">Generation Model</Label>
+        <Label className="text-xs uppercase text-muted-foreground">{t.settings.generationModel}</Label>
         <div className="space-y-2">
           <ModelSelector
             models={gptModels}
@@ -79,12 +81,12 @@ export function ModelAndKeySettings() {
         </div>
         {!apiKey && (
           <p className="text-xs text-muted-foreground">
-            Built-in GPT models use a Firebase Functions proxy when no OpenAI key is saved.
+            {t.settings.builtInGptNote}
           </p>
         )}
         {!geminiKey && hasGeminiProxy && (
           <p className="text-xs text-muted-foreground">
-            Gemini requests will route through a Firebase Functions proxy unless you add your own key.
+            {t.settings.geminiProxyNote}
           </p>
         )}
       </div>
@@ -92,25 +94,25 @@ export function ModelAndKeySettings() {
       {/* OpenAI API Key */}
       <ApiKeyInput
         id="openai-key"
-        label="Personal OpenAI API key (stored locally)"
+        label={t.settings.personalOpenAiKey}
         placeholder="sk-..."
         value={openAiValue || ''}
         onChange={setOpenAiValue}
         onSave={handleSaveOpenAiKey}
         onClear={handleClearOpenAiKey}
-        helpText="Leave blank to use built-in GPT models via Firebase Functions proxy. Keys never leave this browser unless you invoke OpenAI directly."
+        helpText={t.settings.openAiKeyHelp}
       />
 
       {/* Gemini API Key */}
       <ApiKeyInput
         id="gemini-key"
-        label="Personal Gemini API key (stored locally)"
+        label={t.settings.personalGeminiKey}
         placeholder="AIza..."
         value={geminiValue || ''}
         onChange={setGeminiValue}
         onSave={handleSaveGeminiKey}
         onClear={handleClearGeminiKey}
-        helpText="Without a Gemini key, requests will use the Firebase Functions proxy when available. Your Gemini key is kept in local storage on this device only."
+        helpText={t.settings.geminiKeyHelp}
       />
     </div>
   )

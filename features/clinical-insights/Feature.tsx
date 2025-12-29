@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
@@ -20,6 +21,7 @@ import { InsightPanel } from './components/InsightPanel'
 import { ApiKeyWarning } from './components/ApiKeyWarning'
 
 export default function ClinicalInsightsFeature() {
+  const { t } = useLanguage()
   const { panels, autoGenerate } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { getFullClinicalContext } = useClinicalContext()
@@ -134,7 +136,7 @@ export default function ClinicalInsightsFeature() {
         ) : (
           <Card>
             <CardContent className="py-6 text-sm text-muted-foreground">
-              No clinical insight tabs configured. Add one from the Settings panel to get started.
+              {t.clinicalInsights.noTabsConfigured}
             </CardContent>
           </Card>
         )}

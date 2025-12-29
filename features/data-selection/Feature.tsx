@@ -1,6 +1,7 @@
 // features/data-selection/Feature.tsx
 "use client"
 
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { DataSelectionPanel } from "./components/DataSelectionPanel"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
@@ -17,6 +18,7 @@ type ClinicalData = {
 }
 
 export function DataSelectionFeature() {
+  const { t } = useLanguage()
   const clinicalData = useClinicalData() as ClinicalData
   const { 
     selectedData, 
@@ -30,7 +32,7 @@ export function DataSelectionFeature() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
-          <p className="text-sm text-muted-foreground">Loading clinical data...</p>
+          <p className="text-sm text-muted-foreground">{t.dataSelection.loadingData}</p>
         </div>
       </div>
     )
@@ -40,7 +42,7 @@ export function DataSelectionFeature() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-muted-foreground">No clinical data available</p>
+          <p className="text-muted-foreground">{t.dataSelection.noDataAvailable}</p>
         </div>
       </div>
     )
@@ -64,9 +66,9 @@ export function DataSelectionFeature() {
       <div className="max-w-3xl mx-auto">
         <div className="space-y-6">
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">Data Selection</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t.dataSelection.title}</h1>
             <p className="text-sm text-muted-foreground">
-              Select which clinical data to include in your medical notes
+              {t.dataSelection.description}
             </p>
           </div>
           

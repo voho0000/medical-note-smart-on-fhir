@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import type { DataSelection } from "@/src/core/entities/clinical-context.entity"
 
 type ClinicalData = {
@@ -25,60 +26,63 @@ export function useDataCategories(
   getFilteredCount: (items: any[], dataType: 'diagnosticReports' | 'observations') => number,
   filterKey: number
 ) {
+  const { t } = useLanguage()
+  
   return useMemo(() => {
     const _ = filterKey
     return [
       {
         id: 'patientInfo' as const,
-        label: 'Patient Information',
-        description: 'Demographics such as age and gender',
+        label: t.dataSelection.patientInfo,
+        description: t.dataSelection.patientInfoDesc,
         count: 1,
         category: 'patient'
       },
       {
         id: 'conditions' as const,
-        label: 'Medical Conditions',
-        description: 'Active and historical medical conditions',
+        label: t.dataSelection.conditions,
+        description: t.dataSelection.conditionsDesc,
         count: clinicalData.conditions?.length || 0,
         category: 'clinical'
       },
       {
         id: 'medications' as const,
-        label: 'Medications',
-        description: 'Current and past medications',
+        label: t.dataSelection.medications,
+        description: t.dataSelection.medicationsDesc,
         count: clinicalData.medications?.length || 0,
         category: 'medication'
       },
       {
         id: 'allergies' as const,
-        label: 'Allergies & Intolerances',
-        description: 'Known allergies and adverse reactions',
+        label: t.dataSelection.allergies,
+        description: t.dataSelection.allergiesDesc,
         count: clinicalData.allergies?.length || 0,
         category: 'clinical'
       },
       {
         id: 'diagnosticReports' as const,
-        label: 'Diagnostic Reports',
-        description: 'Lab results and diagnostic imaging reports',
+        label: t.dataSelection.diagnosticReports,
+        description: t.dataSelection.diagnosticReportsDesc,
         count: getFilteredCount(clinicalData.diagnosticReports || [], 'diagnosticReports'),
         category: 'diagnostics'
       },
       {
         id: 'procedures' as const,
-        label: 'Procedures',
-        description: 'Surgical and clinical procedures',
+        label: t.dataSelection.procedures,
+        description: t.dataSelection.proceduresDesc,
         count: clinicalData.procedures?.length || 0,
         category: 'procedures'
       },
       {
         id: 'observations' as const,
-        label: 'Vital Signs',
-        description: 'Vital signs and other clinical measurements',
+        label: t.dataSelection.observations,
+        description: t.dataSelection.observationsDesc,
         count: getFilteredCount(clinicalData.observations || [], 'observations'),
         category: 'clinical'
       }
     ]
   }, [
+    t,
     clinicalData.conditions,
     clinicalData.medications,
     clinicalData.allergies,

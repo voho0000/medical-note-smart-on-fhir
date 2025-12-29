@@ -1,6 +1,7 @@
 "use client"
 
 import { CardHeader, CardTitle } from "@/components/ui/card"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { Loader2 } from "lucide-react"
 
 interface ChatHeaderProps {
@@ -12,12 +13,14 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ recordingStatus, asrError, chatError, isRecording, isAsrLoading }: ChatHeaderProps) {
+  const { t } = useLanguage()
+  
   return (
     <CardHeader className="space-y-1 pb-2">
       <div className="flex flex-col gap-0.5">
-        <CardTitle className="text-base">Medical Note Chat</CardTitle>
+        <CardTitle className="text-base">{t.chat.title}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Ask follow-up questions or dictate updates using the microphone.
+          {t.chat.description}
         </p>
       </div>
       {recordingStatus || asrError || chatError ? (
@@ -35,8 +38,8 @@ export function ChatHeader({ recordingStatus, asrError, chatError, isRecording, 
               {recordingStatus}
             </p>
           ) : null}
-          {asrError ? <p className="text-destructive">Voice input error: {asrError}</p> : null}
-          {chatError ? <p className="text-destructive">Chat error: {chatError.message}</p> : null}
+          {asrError ? <p className="text-destructive">{t.chat.voiceInputError} {asrError}</p> : null}
+          {chatError ? <p className="text-destructive">{t.chat.chatError} {chatError.message}</p> : null}
         </div>
       ) : null}
     </CardHeader>

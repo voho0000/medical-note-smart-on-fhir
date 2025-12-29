@@ -2,11 +2,13 @@
 "use client"
 
 import { usePatient } from "@/src/application/providers/patient.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
 import { usePatientInfo } from './hooks/usePatientInfo'
 import { PatientInfoDisplay } from './components/PatientInfoDisplay'
 
 export function PatientInfoCard() {
+  const { t } = useLanguage()
   const { patient, loading, error } = usePatient()
   const patientInfo = usePatientInfo(patient)
 
@@ -14,11 +16,11 @@ export function PatientInfoCard() {
 
   return (
     <FeatureCard 
-      title="Patient Info" 
+      title={t.patient.info}
       isLoading={loading} 
       error={errorObj}
       isEmpty={!patientInfo}
-      emptyMessage="Failed to load patient information"
+      emptyMessage={t.errors.fetchPatient}
     >
       {patientInfo && <PatientInfoDisplay patientInfo={patientInfo} />}
     </FeatureCard>

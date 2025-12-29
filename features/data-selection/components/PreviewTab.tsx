@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface PreviewTabProps {
   supplementaryNotes: string
@@ -20,25 +21,27 @@ export function PreviewTab({
   formattedClinicalContext,
   onReset,
 }: PreviewTabProps) {
+  const { t } = useLanguage()
+  
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <h3 className="text-base font-medium">Supplementary Notes</h3>
+        <h3 className="text-base font-medium">{t.dataSelection.supplementaryNotes}</h3>
         <p className="text-sm text-muted-foreground">
-          Add additional context or notes to send to the AI
+          {t.dataSelection.supplementaryNotesDescription}
         </p>
       </div>
       <Textarea 
         value={supplementaryNotes}
         onChange={(e) => onSupplementaryNotesChange(e.target.value)}
         className="min-h-[120px] font-mono text-sm"
-        placeholder="Add supplementary notes here..."
+        placeholder={t.dataSelection.supplementaryNotesPlaceholder}
       />
       <div className="space-y-1 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-medium">Formatted Clinical Context</h2>
+          <h2 className="text-lg font-medium">{t.dataSelection.formattedClinicalContext}</h2>
           <p className="text-sm text-muted-foreground">
-            Edit the clinical context to remove unnecessary details
+            {t.dataSelection.formattedClinicalContextDescription}
           </p>
         </div>
         <Button 
@@ -47,14 +50,14 @@ export function PreviewTab({
           onClick={onReset}
           disabled={!editedClinicalContext}
         >
-          Reset to Default
+          {t.dataSelection.resetToDefault}
         </Button>
       </div>
       <Textarea 
         value={editedClinicalContext ?? formattedClinicalContext}
         onChange={(e) => onEditedClinicalContextChange(e.target.value)}
         className="min-h-[250px] font-mono text-sm"
-        placeholder="No data selected"
+        placeholder={t.dataSelection.noDataSelected}
       />
     </div>
   )

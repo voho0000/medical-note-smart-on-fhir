@@ -3,20 +3,23 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { ModelAndKeySettings } from "./components/ApiKeyField"
 import { ClinicalInsightsSettings } from "./components/ClinicalInsightsSettings"
 import { PromptTemplatesSettings } from "./components/PromptTemplatesSettings"
 
 export function SettingsFeature() {
+  const { t } = useLanguage()
+  
   return (
     <div className="space-y-4">
       <Card>
         <CardContent className="pt-4">
           <Tabs defaultValue="ai" className="space-y-4">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="ai">AI Preferences</TabsTrigger>
-              <TabsTrigger value="templates">Prompt Templates</TabsTrigger>
-              <TabsTrigger value="insights">Clinical Insights Tabs</TabsTrigger>
+              <TabsTrigger value="ai">{t.settings.aiPreferences}</TabsTrigger>
+              <TabsTrigger value="templates">{t.settings.promptTemplates}</TabsTrigger>
+              <TabsTrigger value="insights">{t.settings.clinicalInsightsTabs}</TabsTrigger>
             </TabsList>
             <TabsContent value="ai" className="space-y-6">
               <ModelAndKeySettings />
@@ -33,10 +36,10 @@ export function SettingsFeature() {
       <Separator />
       <div className="space-y-2 text-xs text-muted-foreground">
         <p>
-          Built-in models run through a Firebase Functions proxy. Your prompts and responses are processed using the configured OpenAI account.
+          {t.settings.builtInModelsNote}
         </p>
         <p>
-          Add a personal API key to access premium OpenAI models directly. Keys are stored locally in this browser only.
+          {t.settings.personalKeyNote}
         </p>
       </div>
     </div>

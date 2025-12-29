@@ -18,7 +18,7 @@ type PromptTemplatesContextValue = {
   maxTemplates: number
 }
 
-const DEFAULT_TEMPLATES: PromptTemplate[] = [
+const DEFAULT_TEMPLATES_EN: PromptTemplate[] = [
   {
     id: "summary",
     label: "Summarize Medical Information",
@@ -42,6 +42,30 @@ const DEFAULT_TEMPLATES: PromptTemplate[] = [
   },
 ]
 
+const DEFAULT_TEMPLATES_ZH: PromptTemplate[] = [
+  {
+    id: "summary",
+    label: "醫療資訊摘要",
+    description: "簡明、以問題為導向的病人摘要。",
+    content:
+      "提供病人目前狀況、主要診斷、治療和待追蹤事項的結構化摘要。突顯緊急問題和建議的下一步行動。",
+  },
+  {
+    id: "plan",
+    label: "照護計畫建議",
+    description: "概述照護計畫和監測項目。",
+    content:
+      "檢視病人資料並提出優先順序的照護計畫，包括藥物、監測建議、病人衛教和後續追蹤安排。",
+  },
+  {
+    id: "handoff",
+    label: "交班紀錄",
+    description: "交班溝通的關鍵更新。",
+    content:
+      "起草交班紀錄，涵蓋病人狀態、近期變化、活動中的問題、預期問題和下一位臨床人員的行動項目。",
+  },
+]
+
 const STORAGE_KEY = "medical-chat-prompt-templates"
 const MAX_TEMPLATES = 6
 
@@ -54,9 +78,18 @@ function generateTemplateId() {
 
 const PromptTemplatesContext = createContext<PromptTemplatesContextValue | null>(null)
 
+function getDefaultTemplates(language: 'en' | 'zh-TW' = 'en'): PromptTemplate[] {
+  const templates = language === 'zh-TW' ? DEFAULT_TEMPLATES_ZH : DEFAULT_TEMPLATES_EN
+  return templates.map((template) => ({ ...template }))
+}
+
 export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
   const [templates, setTemplates] = useState<PromptTemplate[]>(() => {
-    return DEFAULT_TEMPLATES.map((template) => ({ ...template }))
+    if (typeof window === "undefined") return getDefaultTemplates()
+    
+    const browserLang = window.navigator.language
+    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
+    return getDefaultTemplates(language)
   })
 
   useEffect(() => {
@@ -131,7 +164,14 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
   }
 
   const resetTemplates = () => {
-    setTemplates(DEFAULT_TEMPLATES.map((template) => ({ ...template })))
+    if (typeof window === "undefined") {
+      setTemplates(getDefaultTemplates())
+      return
+    }
+    
+    const browserLang = window.navigator.language
+    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
+    setTemplates(getDefaultTemplates(language))
   }
 
   const value = useMemo(

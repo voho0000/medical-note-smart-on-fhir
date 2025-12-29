@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useVisitHistory } from "./hooks/useVisitHistory"
@@ -8,6 +9,7 @@ import { useEncounterDetails } from "./hooks/useEncounterDetails"
 import { VisitItem } from "./VisitItem"
 
 export function VisitHistoryCard() {
+  const { t } = useLanguage()
   const {
     encounters = [],
     medications = [],
@@ -26,17 +28,17 @@ export function VisitHistoryCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Visit History</CardTitle>
+        <CardTitle>{t.tabs.visits}</CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading...</div>
+          <div className="text-sm text-muted-foreground">{t.common.loading}</div>
         ) : error ? (
           <div className="text-sm text-red-600">
-            {error instanceof Error ? error.message : 'Unable to load visit history'}
+            {error instanceof Error ? error.message : t.errors.fetchClinicalData}
           </div>
         ) : visitHistory.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No visit history available</div>
+          <div className="text-sm text-muted-foreground">{t.procedures.noData}</div>
         ) : (
           <div className="space-y-3">
             {visitHistory.map((visit) => (

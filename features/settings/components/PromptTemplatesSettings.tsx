@@ -2,10 +2,12 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { usePromptTemplates } from "@/src/application/providers/prompt-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
 
 export function PromptTemplatesSettings() {
+  const { t } = useLanguage()
   const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, maxTemplates } = usePromptTemplates()
 
   const canAddTemplate = templates.length < maxTemplates
@@ -14,9 +16,9 @@ export function PromptTemplatesSettings() {
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold leading-tight">Prompt Templates</h3>
+        <h3 className="text-sm font-semibold leading-tight">{t.settings.promptTemplatesTitle}</h3>
         <p className="text-xs text-muted-foreground">
-          Create reusable prompts to speed up note drafting. Templates are stored locally in this browser.
+          {t.settings.promptTemplatesDesc}
         </p>
       </div>
 
@@ -35,13 +37,13 @@ export function PromptTemplatesSettings() {
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" onClick={addTemplate} disabled={!canAddTemplate}>
-          Add template
+          {t.settings.addTemplate}
         </Button>
         <Button type="button" variant="ghost" onClick={resetTemplates}>
-          Reset defaults
+          {t.settings.resetDefaults}
         </Button>
         <span className="text-xs text-muted-foreground">
-          {templates.length}/{maxTemplates} templates available.
+          {templates.length}/{maxTemplates} {t.settings.templatesAvailable}
         </span>
       </div>
     </div>

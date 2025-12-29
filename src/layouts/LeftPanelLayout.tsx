@@ -5,8 +5,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledFeatures } from "@/src/shared/config/feature-registry"
 import { VisitHistoryCard } from "@/features/clinical-summary/visit-history/VisitHistoryCard"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 export default function ClinicalSummaryFeature() {
+  const { t } = useLanguage()
   const features = getEnabledFeatures()
   
   // Group features by tab
@@ -24,10 +26,10 @@ export default function ClinicalSummaryFeature() {
     <div className="flex h-[calc(100vh-6rem)] flex-col">
       <Tabs defaultValue="patient" className="flex h-full flex-col">
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="patient">Patient / Vitals / Diagnosis</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="meds">Medications</TabsTrigger>
-          <TabsTrigger value="visits">Visit History</TabsTrigger>
+          <TabsTrigger value="patient">{t.tabs.patient}</TabsTrigger>
+          <TabsTrigger value="reports">{t.tabs.reports}</TabsTrigger>
+          <TabsTrigger value="meds">{t.tabs.medications}</TabsTrigger>
+          <TabsTrigger value="visits">{t.tabs.visits}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="patient" className="flex-1">

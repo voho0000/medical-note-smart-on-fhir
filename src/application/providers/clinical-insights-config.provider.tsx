@@ -9,7 +9,7 @@ export type InsightPanelConfig = {
   prompt: string
 }
 
-const DEFAULT_PANELS: InsightPanelConfig[] = [
+const DEFAULT_PANELS_EN: InsightPanelConfig[] = [
   {
     id: "safety",
     title: "Safety Flag",
@@ -33,6 +33,30 @@ const DEFAULT_PANELS: InsightPanelConfig[] = [
   },
 ]
 
+const DEFAULT_PANELS_ZH: InsightPanelConfig[] = [
+  {
+    id: "safety",
+    title: "安全警示",
+    subtitle: "突顯緊急安全問題或禁忌症。",
+    prompt:
+      "檢視臨床資料並標記任何立即的病人安全風險，包括藥物交互作用、異常結果或緊急追蹤需求。以簡潔的條列式回應，依嚴重程度排序。",
+  },
+  {
+    id: "changes",
+    title: "變化摘要",
+    subtitle: "總結與先前資料或就診相比的顯著變化。",
+    prompt:
+      "比較病人最近的臨床資料與先前資訊，列出狀態、治療或結果中最重要的變化。強調需要注意的差異。",
+  },
+  {
+    id: "snapshot",
+    title: "臨床快照",
+    subtitle: "提供當前臨床狀況的簡明概述。",
+    prompt:
+      "建立簡潔的臨床快照，涵蓋活動中的問題、目前治療、近期結果和待辦事項。保持簡短且可執行。",
+  },
+]
+
 const STORAGE_KEY = "clinical-insights-panels"
 const AUTO_GENERATE_STORAGE_KEY = "clinical-insights-auto-generate"
 const MAX_PANELS = 6
@@ -44,8 +68,9 @@ function generatePanelId() {
   return `panel_${Math.random().toString(36).slice(2, 10)}`
 }
 
-export function getDefaultClinicalInsightPanels(): InsightPanelConfig[] {
-  return DEFAULT_PANELS.map((panel) => ({ ...panel }))
+export function getDefaultClinicalInsightPanels(language: 'en' | 'zh-TW' = 'en'): InsightPanelConfig[] {
+  const panels = language === 'zh-TW' ? DEFAULT_PANELS_ZH : DEFAULT_PANELS_EN
+  return panels.map((panel) => ({ ...panel }))
 }
 
 type ClinicalInsightsConfigContextValue = {
@@ -63,7 +88,25 @@ type ClinicalInsightsConfigContextValue = {
 const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContextValue | null>(null)
 
 export function ClinicalInsightsConfigProvider({ children }: { children: ReactNode }) {
-  const [panels, setPanels] = useState<InsightPanelConfig[]>(getDefaultClinicalInsightPanels)
+  const [panels, setPanels] = useState<InsightPanelConfig[]>(() => {
+    if (typeof window === "undefined") return getDefaultClinicalInsightPanels()
+    
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as InsightPanelConfig[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((panel) => ({ ...panel, id: panel.id || generatePanelId() }))
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load clinical insights panels from storage", error)
+    }
+    
+    const browserLang = window.navigator.language
+    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
+    return getDefaultClinicalInsightPanels(language)
+  })
   const [autoGenerate, setAutoGenerate] = useState<boolean>(false)
 
   useEffect(() => {
@@ -139,7 +182,14 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   }
 
   const resetPanels = () => {
-    setPanels(getDefaultClinicalInsightPanels())
+    if (typeof window === "undefined") {
+      setPanels(getDefaultClinicalInsightPanels())
+      return
+    }
+    
+    const browserLang = window.navigator.language
+    const language = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
+    setPanels(getDefaultClinicalInsightPanels(language))
   }
 
   const reorderPanels = useCallback((orderedIds: string[]) => {

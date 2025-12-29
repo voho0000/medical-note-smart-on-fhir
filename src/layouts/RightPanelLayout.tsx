@@ -16,6 +16,7 @@ import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
 import SettingsFeature from "@/features/settings/Feature"
 import { ClinicalInsightsConfigProvider } from "@/src/application/providers/clinical-insights-config.provider"
 import { PromptTemplatesProvider } from "@/src/application/providers/prompt-templates.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 // ClinicalData type is now from the new provider
 
@@ -28,6 +29,7 @@ export function RightPanelFeature() {
 }
 
 function RightPanelContent() {
+  const { t } = useLanguage()
   const [activeTab, setActiveTab] = useState("medicalChat")
   const clinicalData = useClinicalData()
   const { 
@@ -54,10 +56,10 @@ function RightPanelContent() {
               defaultValue="medicalChat"
             >
               <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="medicalChat">Note Chat</TabsTrigger>
-                <TabsTrigger value="dataSelection">Data Selection</TabsTrigger>
-                <TabsTrigger value="clinicalInsights">Clinical Insights</TabsTrigger>
-                <TabsTrigger value="settings">Settings</TabsTrigger>
+                <TabsTrigger value="medicalChat">{t.tabs.noteChat}</TabsTrigger>
+                <TabsTrigger value="dataSelection">{t.tabs.dataSelection}</TabsTrigger>
+                <TabsTrigger value="clinicalInsights">{t.tabs.clinicalInsights}</TabsTrigger>
+                <TabsTrigger value="settings">{t.tabs.settings}</TabsTrigger>
               </TabsList>
               
               <TabsContent value="medicalChat" className="flex-1" forceMount>
