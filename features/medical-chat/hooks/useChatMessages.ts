@@ -32,8 +32,8 @@ export function useChatMessages(systemPrompt: string, model: string) {
           ...optimisticMessages.map((message) => ({ role: message.role, content: message.content })),
         ]
 
-        const { text } = await queryAi(gptMessages, model)
-        const assistantMessage = createMessage("assistant", text || "")
+        const result = await queryAi(gptMessages, model)
+        const assistantMessage = createMessage("assistant", result.text || "")
         setChatMessages((prev) => [...prev, assistantMessage])
       } catch (err) {
         const fallback = err instanceof Error ? err.message : "Failed to generate response."

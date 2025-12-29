@@ -1,14 +1,15 @@
+// Refactored Medical Chat Component
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback } from "react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { usePatient } from "@/src/application/providers/patient.provider"
-import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { useNote } from "@/src/application/providers/note.provider"
 import { useChatMessages } from "../hooks/useChatMessages"
 import { useVoiceRecording } from "../hooks/useVoiceRecording"
 import { useTemplateSelector } from "../hooks/useTemplateSelector"
+import { useChatInput } from "../hooks/useChatInput"
+import { useSystemPrompt } from "../hooks/useSystemPrompt"
+import { useRecordingStatus } from "../hooks/useRecordingStatus"
 import { ChatHeader } from "./ChatHeader"
 import { ChatMessageList } from "./ChatMessageList"
 import { ChatToolbar } from "./ChatToolbar"
@@ -16,97 +17,33 @@ import { VoiceRecorder } from "./VoiceRecorder"
 
 export function MedicalChat() {
   const { model } = useNote()
-  const { getFullClinicalContext } = useClinicalContext()
-  const { patient: currentPatient } = usePatient()
-  const { selectedData } = useDataSelection()
-  const [input, setInput] = useState("")
-
-  // Clinical context for system prompt
-  const clinicalContext = useMemo(() => getFullClinicalContext(), [getFullClinicalContext])
-
-  const systemPrompt = useMemo(() => {
-    const nameEntry = currentPatient?.name?.[0]
-    const given = nameEntry?.given?.join(" ")?.trim()
-    const family = nameEntry?.family?.trim()
-    const patientName = [given, family].filter(Boolean).join(" ") || "the patient"
-    const patientDetails = selectedData.patientInfo
-      ? clinicalContext
-      : clinicalContext.replace(/Patient Information:[\s\S]*?(?=\n\n|$)/, "").trim()
-
-    return [
-      "You are a helpful medical assistant helping clinicians compose medical notes.",
-      "Be concise, evidence-based, and note uncertainties when appropriate.",
-      "If the conversation includes updated clinical context, reference it directly instead of prior context.",
-      "Patient Context:",
-      patientDetails || "No clinical context available.",
-      `Patient Name: ${patientName}`,
-    ].join("\n")
-  }, [clinicalContext, currentPatient?.name, selectedData.patientInfo])
-
-  // Custom hooks
+  const { systemPrompt, clinicalContext } = useSystemPrompt()
+  const input = useChatInput()
   const chat = useChatMessages(systemPrompt, model)
   const voice = useVoiceRecording()
   const template = useTemplateSelector()
-
-  // Recording status
-  const formattedRecordingDuration = useMemo(() => {
-    const minutes = Math.floor(voice.seconds / 60)
-    const secs = (voice.seconds % 60).toString().padStart(2, "0")
-    return `${minutes}:${secs}`
-  }, [voice.seconds])
-
-  const recordingStatusLabel = useMemo(() => {
-    if (voice.isRecording) {
-      return `Recording… ${formattedRecordingDuration}`
-    }
-    if (voice.isAsrLoading) {
-      return "Transcribing audio…"
-    }
-    return ""
-  }, [formattedRecordingDuration, voice.isAsrLoading, voice.isRecording])
-
-  const latestTranscriptPreview = useMemo(() => {
-    if (!voice.lastTranscript) {
-      return ""
-    }
-    const { text } = voice.lastTranscript
-    return text.length > 160 ? `${text.slice(0, 160)}…` : text
-  }, [voice.lastTranscript])
+  const recordingStatus = useRecordingStatus(voice)
 
   // Handlers
   const handleSend = useCallback(async () => {
-    const trimmed = input.trim()
+    const trimmed = input.input.trim()
     if (!trimmed) return
-
     await chat.handleSend(trimmed)
-    setInput("")
+    input.clear()
   }, [input, chat])
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault()
-        handleSend().catch((err) => console.error("Send message failed", err))
-      }
-    },
-    [handleSend]
-  )
-
   const handleInsertContext = useCallback(() => {
-    if (!clinicalContext) return
-    setInput((prev) => (prev ? `${prev}\n\n${clinicalContext}` : clinicalContext))
-  }, [clinicalContext])
+    input.insertText(clinicalContext)
+  }, [input, clinicalContext])
 
   const handleInsertAsr = useCallback(() => {
-    if (!voice.asrText?.trim()) return
-    setInput((prev) => (prev ? `${prev}\n\n${voice.asrText}` : voice.asrText))
-  }, [voice.asrText])
+    if (voice.asrText) input.insertText(voice.asrText)
+  }, [input, voice.asrText])
 
   const handleInsertTemplate = useCallback(() => {
     const templateContent = template.selectedTemplate?.content?.trim()
-    if (!templateContent) return
-    setInput((prev) => (prev ? `${prev.trimEnd()}\n\n${templateContent}` : templateContent))
-  }, [template.selectedTemplate])
+    if (templateContent) input.insertTextWithTrim(templateContent)
+  }, [input, template.selectedTemplate])
 
   const handleRecordingStart = useCallback(() => {
     voice.setIsRecording(true)
@@ -119,16 +56,18 @@ export function MedicalChat() {
       voice.stopTimer()
       const text = await voice.handleWhisperRequest(blob)
       if (text) {
-        setInput((prev: string) => (prev.trim().length > 0 ? `${prev.trimEnd()}\n\n${text}` : text))
+        input.setInput((prev: string) => 
+          prev.trim().length > 0 ? `${prev.trimEnd()}\n\n${text}` : text
+        )
       }
     },
-    [voice]
+    [voice, input]
   )
 
   return (
     <Card className="flex h-full flex-col">
       <ChatHeader
-        recordingStatus={recordingStatusLabel}
+        recordingStatus={recordingStatus.recordingStatusLabel}
         asrError={voice.asrError}
         chatError={chat.error}
         isRecording={voice.isRecording}
@@ -157,9 +96,9 @@ export function MedicalChat() {
 
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
             <textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
+              value={input.input}
+              onChange={(event) => input.setInput(event.target.value)}
+              onKeyDown={(e) => input.handleKeyDown(e, handleSend)}
               placeholder="Type your question or instruction…"
               spellCheck={false}
               className="h-[72px] w-full flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -176,7 +115,7 @@ export function MedicalChat() {
               />
               <button
                 onClick={() => handleSend().catch(console.error)}
-                disabled={chat.isLoading || !input.trim()}
+                disabled={chat.isLoading || !input.input.trim()}
                 className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
               >
                 {chat.isLoading ? (
@@ -195,10 +134,10 @@ export function MedicalChat() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span>{input.length} characters</span>
+            <span>{input.input.length} characters</span>
             {voice.lastTranscript ? (
               <span className="truncate sm:max-w-[320px]">
-                Latest voice input: {latestTranscriptPreview || "—"}
+                Latest voice input: {recordingStatus.latestTranscriptPreview || "—"}
               </span>
             ) : (
               <span aria-hidden="true"> </span>
