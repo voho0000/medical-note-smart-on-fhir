@@ -54,33 +54,26 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   }, [messages, isLoading])
 
   return (
-    <ScrollArea className="h-[390px] px-4">
-      <div className="flex flex-col gap-3">
+    <ScrollArea className="h-[390px] px-4 py-4">
+      <div className="flex flex-col gap-4">
         {messages.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            {t.chat.emptyState}
+          <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+            <div className="text-4xl mb-3 opacity-20">💬</div>
+            <div className="text-sm text-muted-foreground">
+              {t.chat.emptyState}
+            </div>
           </div>
         ) : (
           messages.map((message) => (
             <div
               key={message.id}
               className={cn(
-                "flex flex-col gap-1",
+                "flex flex-col gap-1.5",
                 message.role === "assistant" ? "items-start" : "items-end",
               )}
             >
-              <div
-                className={cn(
-                  "rounded-lg px-3 py-2 text-sm shadow-sm max-w-[90%]",
-                  message.role === "assistant" 
-                    ? "bg-muted border border-border" 
-                    : "bg-primary/10 border border-primary/20 text-foreground",
-                )}
-              >
-                <pre className="whitespace-pre-wrap font-sans text-sm">{message.content}</pre>
-              </div>
-              <div className="flex items-center gap-2 text-[0.65rem] text-muted-foreground">
-                <span className="uppercase tracking-wide">
+              <div className="flex items-center gap-2 text-[0.65rem] text-muted-foreground px-1">
+                <span className="font-medium uppercase tracking-wide">
                   {message.role === "assistant" 
                     ? getModelDisplayName(message.modelId)
                     : message.role === "user" 
@@ -89,6 +82,16 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                 </span>
                 <span>•</span>
                 <span>{formatTimestamp(message.timestamp)}</span>
+              </div>
+              <div
+                className={cn(
+                  "relative px-4 py-2.5 text-sm max-w-[85%] break-words",
+                  message.role === "assistant" 
+                    ? "rounded-2xl rounded-tl-sm bg-muted/80 text-foreground shadow-sm" 
+                    : "rounded-2xl rounded-tr-sm bg-blue-500 text-white shadow-md",
+                )}
+              >
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{message.content}</pre>
               </div>
             </div>
           ))

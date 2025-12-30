@@ -121,7 +121,7 @@ export function MedicalChat() {
         isCustomPrompt={isCustomPrompt}
       />
       
-      <CardContent className="flex-1 border-t p-0 overflow-y-auto min-h-0">
+      <CardContent className="flex-1 border-t p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background">
         <ChatMessageList messages={chat.messages} isLoading={chat.isLoading} />
       </CardContent>
 
@@ -151,8 +151,8 @@ export function MedicalChat() {
                 placeholder={t.chat.placeholder}
                 spellCheck={false}
                 rows={1}
-                className="w-full resize-none overflow-y-auto rounded-lg border border-input/60 bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-4 focus-visible:shadow-md hover:border-border disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
-                style={{ minHeight: '40px', maxHeight: '200px' }}
+                className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+                style={{ minHeight: '44px', maxHeight: '200px' }}
               />
             </div>
             <VoiceRecorder
