@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Stethoscope } from "lucide-react"
+import Image from "next/image"
 import { PatientProvider } from "@/src/application/providers/patient.provider"
 import { ClinicalDataProvider } from "@/src/application/providers/clinical-data.provider"
 import { ApiKeyProvider } from "@/src/application/providers/api-key.provider"
@@ -74,8 +74,8 @@ function PageContent() {
       <header className="shrink-0 border-b bg-white/80 backdrop-blur-md px-3 py-3 sm:px-6 sm:py-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30">
-              <Stethoscope className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
+              <Image src="/icon.svg" alt="App Icon" width={40} height={40} className="h-full w-full" />
             </div>
             <h1 className="text-base sm:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>

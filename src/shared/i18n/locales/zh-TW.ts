@@ -167,6 +167,8 @@ export const zhTW = {
     formattedClinicalContextDescription: '編輯臨床資料以移除不必要的細節',
     resetToDefault: '重設為預設',
     noDataSelected: '未選擇資料',
+    item: '項',
+    items: '項',
   },
 
   timeRanges: {

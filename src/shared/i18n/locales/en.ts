@@ -165,6 +165,8 @@ export const en = {
     formattedClinicalContextDescription: 'Edit the clinical context to remove unnecessary details',
     resetToDefault: 'Reset to Default',
     noDataSelected: 'No data selected',
+    item: 'item',
+    items: 'items',
   },
 
   timeRanges: {
