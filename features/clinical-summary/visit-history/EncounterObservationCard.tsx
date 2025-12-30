@@ -2,6 +2,7 @@
 
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatDateTime } from "./utils/formatters"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 type EncounterObservationComponent = {
   id: string
@@ -26,6 +27,8 @@ export type EncounterObservation = {
 }
 
 export function EncounterObservationCard({ observation }: { observation: EncounterObservation }) {
+  const { locale } = useLanguage()
+  
   return (
     <div className="rounded-lg border bg-background p-3 shadow-sm">
       <div className="flex flex-col gap-2">
@@ -34,7 +37,7 @@ export function EncounterObservationCard({ observation }: { observation: Encount
             <div className="text-sm font-semibold text-foreground">{observation.title}</div>
             <div className="text-xs text-muted-foreground">
               {observation.effectiveDateTime 
-                ? formatDateTime(observation.effectiveDateTime) 
+                ? formatDateTime(observation.effectiveDateTime, locale) 
                 : observation.source === "diagnosticReport" ? "Diagnostic report" : "Observation"}
             </div>
           </div>

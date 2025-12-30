@@ -55,20 +55,28 @@ function RightPanelContent() {
               className="h-full flex flex-col"
               defaultValue="medicalChat"
             >
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="medicalChat">{t.tabs.noteChat}</TabsTrigger>
-                <TabsTrigger value="dataSelection">{t.tabs.dataSelection}</TabsTrigger>
-                <TabsTrigger value="clinicalInsights">{t.tabs.clinicalInsights}</TabsTrigger>
-                <TabsTrigger value="settings">{t.tabs.settings}</TabsTrigger>
+              <TabsList className="w-full justify-start gap-1 h-12 bg-muted/50 p-1 border">
+                <TabsTrigger value="medicalChat" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+                  {t.tabs.noteChat}
+                </TabsTrigger>
+                <TabsTrigger value="dataSelection" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+                  {t.tabs.dataSelection}
+                </TabsTrigger>
+                <TabsTrigger value="clinicalInsights" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+                  {t.tabs.clinicalInsights}
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+                  {t.tabs.settings}
+                </TabsTrigger>
               </TabsList>
               
-              <TabsContent value="medicalChat" className="flex-1 overflow-hidden" forceMount>
-                <div className="h-full py-2">
+              <TabsContent value="medicalChat" className="flex-1 overflow-hidden mt-4" forceMount>
+                <div className="h-full">
                   <MedicalChatFeature />
                 </div>
               </TabsContent>
               
-              <TabsContent value="dataSelection" className="flex-1">
+              <TabsContent value="dataSelection" className="flex-1 mt-4">
                 <ScrollArea className="h-full pr-2">
                   <div className="rounded-lg border p-4">
                     <DataSelectionPanel 
@@ -78,7 +86,9 @@ function RightPanelContent() {
                         allergies: clinicalData.allergies || [],
                         diagnosticReports: clinicalData.diagnosticReports || [],
                         procedures: clinicalData.procedures || [],
-                        observations: clinicalData.observations || []
+                        observations: clinicalData.observations || [],
+                        vitalSigns: clinicalData.vitalSigns || [],
+                        encounters: clinicalData.encounters || []
                       }}
                       selectedData={selectedData}
                       onSelectionChange={setSelectedData}
@@ -89,11 +99,13 @@ function RightPanelContent() {
                 </ScrollArea>
               </TabsContent>
 
-              <TabsContent value="clinicalInsights" className="flex-1">
-                <ClinicalInsightsFeature />
+              <TabsContent value="clinicalInsights" className="flex-1 mt-4">
+                <div className="h-full py-2">
+                  <ClinicalInsightsFeature />
+                </div>
               </TabsContent>
 
-              <TabsContent value="settings" className="flex-1">
+              <TabsContent value="settings" className="flex-1 mt-4">
                 <ScrollArea className="h-full pr-2">
                   <div className="space-y-4 py-2">
                     <SettingsFeature />

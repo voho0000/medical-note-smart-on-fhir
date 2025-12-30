@@ -36,14 +36,15 @@ export function ReportsCard() {
   const groupedRows = useGroupedRows(rows)
 
   const tabConfigs = useMemo(() => {
+    const { tabs: reportTabs } = t.reports
     const configs = [
-      { value: "all", label: `All (${groupedRows.all.length})`, rows: groupedRows.all },
-      { value: "lab", label: `Labs (${groupedRows.lab.length})`, rows: groupedRows.lab },
-      { value: "imaging", label: `Imaging (${groupedRows.imaging.length})`, rows: groupedRows.imaging },
-      { value: "procedures", label: `Procedures (${groupedRows.procedures.length})`, rows: groupedRows.procedures },
+      { value: "all", label: `${reportTabs.all} (${groupedRows.all.length})`, rows: groupedRows.all },
+      { value: "lab", label: `${reportTabs.lab} (${groupedRows.lab.length})`, rows: groupedRows.lab },
+      { value: "imaging", label: `${reportTabs.imaging} (${groupedRows.imaging.length})`, rows: groupedRows.imaging },
+      { value: "procedures", label: `${reportTabs.procedures} (${groupedRows.procedures.length})`, rows: groupedRows.procedures },
     ]
     return configs.filter((config) => config.value === "all" || config.rows.length > 0)
-  }, [groupedRows])
+  }, [groupedRows, t])
 
   if (isLoading) {
     return (
@@ -86,14 +87,11 @@ export function ReportsCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t.reports.title}</CardTitle>
-      </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-4">
         <Tabs defaultValue="all" className="w-full">
-          <TabsList className="mb-4 flex w-full flex-wrap justify-start gap-2">
+          <TabsList className="mb-6 flex w-full flex-wrap justify-start gap-1 h-9 bg-muted/40 p-1 border border-border/50">
             {tabConfigs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="capitalize">
+              <TabsTrigger key={tab.value} value={tab.value} className="capitalize text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
                 {tab.label}
               </TabsTrigger>
             ))}

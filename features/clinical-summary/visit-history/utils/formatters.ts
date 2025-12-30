@@ -76,10 +76,10 @@ export const getMedicationName = (med: any) => {
   )
 }
 
-export const formatDateTime = (dateString?: string) => {
+export const formatDateTime = (dateString?: string, locale: string = "en-US") => {
   if (!dateString) return undefined
   try {
-    return new Date(dateString).toLocaleString("en-US", {
+    return new Date(dateString).toLocaleString(locale, {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",

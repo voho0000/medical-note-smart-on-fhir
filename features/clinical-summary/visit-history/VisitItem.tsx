@@ -5,6 +5,8 @@ import { EncounterObservationCard } from "./EncounterObservationCard"
 import { MedicationRow, ProcedureRow } from "./EncounterCards"
 import type { VisitRecord } from "./hooks/useVisitHistory"
 import type { EncounterDetails } from "./hooks/useEncounterDetails"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 
 type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'other'
 
@@ -15,32 +17,21 @@ interface VisitItemProps {
   onToggle: () => void
 }
 
-const getTypeBadge = (type: VisitType) => {
+const getTypeBadge = (type: VisitType, labels: any) => {
   const typeMap = {
-    outpatient: { label: "Outpatient", variant: "default" as const },
-    inpatient: { label: 'Inpatient', variant: 'secondary' as const },
-    emergency: { label: 'Emergency', variant: 'destructive' as const },
-    home: { label: 'Home Care', variant: 'outline' as const },
-    virtual: { label: 'Virtual Visit', variant: 'outline' as const },
-    other: { label: 'Visit', variant: 'outline' as const }
+    outpatient: { label: labels.outpatient, variant: "default" as const },
+    inpatient: { label: labels.inpatient, variant: 'secondary' as const },
+    emergency: { label: labels.emergency, variant: 'destructive' as const },
+    home: { label: labels.home, variant: 'outline' as const },
+    virtual: { label: labels.virtual, variant: 'outline' as const },
+    other: { label: labels.other, variant: 'outline' as const }
   }
   const { label, variant } = typeMap[type] || typeMap.other
   return <Badge variant={variant}>{label}</Badge>
 }
 
-const formatDate = (dateString: string) => {
-  try {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    })
-  } catch {
-    return dateString || 'Unknown date'
-  }
-}
-
 export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemProps) {
+  const { t, locale } = useLanguage()
   const hasDetails = !!(details && (details.medications.length > 0 || details.tests.length > 0 || details.procedures.length > 0))
 
   return (
@@ -52,19 +43,19 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
       >
         <div className="flex items-start justify-between">
           <div className="flex items-center space-x-2">
-            {getTypeBadge(visit.type)}
+            {getTypeBadge(visit.type, t.visitHistory.badges)}
             <div className="flex flex-col">
-              <span className="font-medium">{formatDate(visit.date)}</span>
+              <span className="font-medium">{formatDateUtil(visit.date, locale)}</span>
               {visit.department && (
                 <span className="text-xs text-muted-foreground">{visit.department}</span>
               )}
               {visit.physician && (
-                <span className="text-xs text-muted-foreground">Physician: {visit.physician}</span>
+                <span className="text-xs text-muted-foreground">{t.visitHistory.physician}: {visit.physician}</span>
               )}
             </div>
             {visit.status === "in-progress" && (
               <Badge variant="outline" className="border-green-500 text-green-700">
-                In progress
+                {t.visitHistory.inProgress}
               </Badge>
             )}
           </div>
@@ -79,13 +70,13 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
           <div className="mt-2 space-y-1 text-sm">
             {visit.reason && (
               <div>
-                <span className="font-medium text-muted-foreground">Reason: </span>
+                <span className="font-medium text-muted-foreground">{t.visitHistory.reason}: </span>
                 <span>{visit.reason}</span>
               </div>
             )}
             {visit.diagnosis && (
               <div>
-                <span className="font-medium text-muted-foreground">Diagnosis: </span>
+                <span className="font-medium text-muted-foreground">{t.visitHistory.diagnosis}: </span>
                 <span>{visit.diagnosis}</span>
               </div>
             )}
@@ -96,9 +87,9 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
           <span>
             {hasDetails
               ? isExpanded
-                ? "Hide tests & medications"
-                : "View tests & medications"
-              : "No tests or medications"}
+                ? t.visitHistory.hideDetails
+                : t.visitHistory.viewDetails
+              : t.visitHistory.noDetails}
           </span>
           <span>{hasDetails ? (isExpanded ? "▲" : "▼") : "-"}</span>
         </div>
@@ -110,7 +101,7 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
             <div className="space-y-4">
               {details?.tests.length ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tests</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.tests}</div>
                   <div className="grid gap-2">
                     {details.tests.map((test) => (
                       <EncounterObservationCard key={test.id} observation={test} />
@@ -121,7 +112,7 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
 
               {details?.medications.length ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Medications</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.medications}</div>
                   <div className="grid gap-2">
                     {details.medications.map((med) => (
                       <MedicationRow key={med.id} medication={med} />
@@ -132,7 +123,7 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
 
               {details?.procedures.length ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Procedures</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.procedures}</div>
                   <div className="grid gap-2">
                     {details.procedures.map((procedure) => (
                       <ProcedureRow key={procedure.id} procedure={procedure} />
@@ -142,7 +133,7 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
               ) : null}
             </div>
           ) : (
-            <div className="text-xs text-muted-foreground">No related tests or medications for this visit.</div>
+            <div className="text-xs text-muted-foreground">{t.visitHistory.noDetailsExpanded}</div>
           )}
         </div>
       )}

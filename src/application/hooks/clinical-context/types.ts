@@ -1,6 +1,10 @@
 // Clinical Context Types
 export interface CodeText { 
-  text?: string 
+  text?: string
+  coding?: Array<{ 
+    display?: string
+    code?: string
+  }>
 }
 
 export interface ValueQuantity { 
@@ -14,6 +18,13 @@ export interface Observation {
   valueQuantity?: ValueQuantity
   valueString?: string
   effectiveDateTime?: string
+  component?: Array<{
+    code?: {
+      text?: string
+      coding?: Array<{ display?: string }>
+    }
+    valueQuantity?: ValueQuantity
+  }>
 }
 
 export interface DiagnosticReport {

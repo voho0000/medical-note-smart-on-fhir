@@ -49,6 +49,7 @@ export function PreviewTab({
           size="sm"
           onClick={onReset}
           disabled={!editedClinicalContext}
+          className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
         >
           {t.dataSelection.resetToDefault}
         </Button>

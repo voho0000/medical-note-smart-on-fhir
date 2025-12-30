@@ -43,7 +43,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
 
   // Use individual context hooks
   const patientSection = usePatientContext(selectedData.patientInfo ?? false)
-  const conditionsSection = useConditionsContext(selectedData.conditions ?? false, clinicalData)
+  const conditionsSection = useConditionsContext(selectedData.conditions ?? false, clinicalData, filters)
   const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData)
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
   const { section: reportsSection, observationIdsInReports } = useReportsContext(
@@ -74,7 +74,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
 
     const filtered = standalone.filter((obs) => {
       const { isWithinTimeRange } = require("@/src/shared/utils/date.utils")
-      return isWithinTimeRange(obs.effectiveDateTime, filters?.vitalSignsTimeRange ?? "1m")
+      return isWithinTimeRange(obs.effectiveDateTime, filters?.vitalSignsTimeRange ?? "all")
     })
 
     if (filtered.length === 0) {

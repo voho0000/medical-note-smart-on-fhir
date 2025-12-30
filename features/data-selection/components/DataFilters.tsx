@@ -9,6 +9,31 @@ interface FilterProps {
   onFilterChange: (key: keyof DataFilters, value: any) => void
 }
 
+export function ConditionFilter({ filters, onFilterChange }: FilterProps) {
+  const { t } = useLanguage()
+  
+  return (
+    <div className="mt-2 pl-6 space-y-2">
+      <div className="flex items-center space-x-2 text-sm">
+        <span className="text-muted-foreground">{t.dataSelection.conditionStatus}</span>
+        <Select
+          value={filters.conditionStatus || 'active'}
+          onValueChange={(value) => onFilterChange('conditionStatus', value as 'active' | 'all')}
+          defaultValue="active"
+        >
+          <SelectTrigger className="h-8 w-36">
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{t.dataSelection.activeOnly}</SelectItem>
+            <SelectItem value="all">{t.dataSelection.allConditions}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
 export function MedicationFilter({ filters, onFilterChange }: FilterProps) {
   const { t } = useLanguage()
   

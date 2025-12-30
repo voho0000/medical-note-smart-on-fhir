@@ -12,6 +12,7 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
 }
 
 export const DEFAULT_DATA_FILTERS: DataFilters = {
+  conditionStatus: 'active',
   medicationStatus: 'active',
   reportInclusion: 'latest',
   reportTimeRange: 'all',

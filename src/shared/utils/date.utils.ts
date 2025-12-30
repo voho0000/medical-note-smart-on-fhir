@@ -1,23 +1,35 @@
 // Date Utilities
-export function formatDate(dateString: string | undefined): string {
-  if (!dateString) return 'Unknown'
+export function formatDate(dateString: string | undefined, locale: string = 'en-US'): string {
+  const unknown = locale.startsWith('zh') ? '未知日期' : 'Unknown'
+  const invalid = locale.startsWith('zh') ? '日期無效' : 'Invalid date'
+  if (!dateString) return unknown
   try {
     const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'Invalid date'
-    return date.toLocaleDateString()
+    if (Number.isNaN(date.getTime())) return invalid
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date)
   } catch {
-    return 'Invalid date'
+    return invalid
   }
 }
 
-export function formatDateTime(dateString: string | undefined): string {
-  if (!dateString) return 'Unknown'
+export function formatDateTime(dateString: string | undefined, locale: string = 'en-US'): string {
+  if (!dateString) return locale.startsWith('zh') ? '未知' : 'Unknown'
   try {
     const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'Invalid date'
-    return date.toLocaleString()
+    if (Number.isNaN(date.getTime())) return locale.startsWith('zh') ? '日期無效' : 'Invalid date'
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date)
   } catch {
-    return 'Invalid date'
+    return locale.startsWith('zh') ? '日期無效' : 'Invalid date'
   }
 }
 

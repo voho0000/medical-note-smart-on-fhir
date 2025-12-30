@@ -16,6 +16,10 @@ export function PromptTemplatesSettings() {
 
   const defaultTab = templates[0]?.id || ""
 
+  const handleMove = () => {
+    // Order adjustment not implemented yet
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-1">
@@ -28,12 +32,12 @@ export function PromptTemplatesSettings() {
       {templates.length > 0 ? (
         <Tabs defaultValue={defaultTab} className="space-y-4 overflow-hidden">
           <div className="flex items-center gap-2 w-full">
-            <TabsList className="flex flex-1 flex-nowrap gap-0.5 rounded-md bg-muted/40 p-0.5 min-w-0 w-full h-auto">
+            <TabsList className="flex flex-1 flex-nowrap gap-1 rounded-md bg-muted/50 p-1 min-w-0 w-full h-9 border">
               {templates.map((template, index) => (
                 <TabsTrigger
                   key={template.id}
                   value={template.id}
-                  className="flex-1 min-w-[35px] px-2 py-1.5 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="flex-1 min-w-[40px] px-2 py-1 text-xs font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                 >
                   {index + 1}
                 </TabsTrigger>
@@ -42,10 +46,10 @@ export function PromptTemplatesSettings() {
             <Button
               type="button"
               size="sm"
-              variant="ghost"
+              variant="outline"
               onClick={addTemplate}
               disabled={!canAddTemplate}
-              className="h-9 w-9 shrink-0 p-0"
+              className="h-9 w-9 shrink-0 p-0 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 text-lg font-semibold"
             >
               +
             </Button>
@@ -56,8 +60,11 @@ export function PromptTemplatesSettings() {
                 template={template}
                 index={index}
                 canRemove={canRemoveTemplate}
+                canMoveUp={index > 0}
+                canMoveDown={index < templates.length - 1}
                 onUpdate={updateTemplate}
                 onRemove={removeTemplate}
+                onMove={handleMove}
               />
             </TabsContent>
           ))}
@@ -65,7 +72,7 @@ export function PromptTemplatesSettings() {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" variant="ghost" onClick={resetTemplates}>
+        <Button type="button" variant="outline" onClick={resetTemplates} className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10">
           {t.settings.resetDefaults}
         </Button>
         <span className="text-xs text-muted-foreground">

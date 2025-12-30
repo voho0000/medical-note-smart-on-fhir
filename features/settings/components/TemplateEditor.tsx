@@ -16,28 +16,62 @@ interface TemplateEditorProps {
   template: Template
   index: number
   canRemove: boolean
+  canMoveUp: boolean
+  canMoveDown: boolean
   onUpdate: (id: string, updates: Partial<Template>) => void
   onRemove: (id: string) => void
+  onMove: (id: string, direction: "up" | "down") => void
 }
 
-export function TemplateEditor({ template, index, canRemove, onUpdate, onRemove }: TemplateEditorProps) {
+export function TemplateEditor({ 
+  template, 
+  index, 
+  canRemove, 
+  canMoveUp,
+  canMoveDown,
+  onUpdate, 
+  onRemove,
+  onMove
+}: TemplateEditorProps) {
   const { t } = useLanguage()
   
   return (
     <div className="space-y-3 rounded-lg border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {t.settings.template} {index + 1}
-        </span>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{template.content.length} {t.clinicalInsights.chars}</span>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold">{t.settings.template} {index + 1}</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{t.settings.orderControls}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onMove(template.id, "up")}
+              disabled={!canMoveUp}
+              aria-label={`Move template ${index + 1} up`}
+            >
+              {t.settings.moveUp}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onMove(template.id, "down")}
+              disabled={!canMoveDown}
+              aria-label={`Move template ${index + 1} down`}
+            >
+              {t.settings.moveDown}
+            </Button>
+          </div>
+        </div>
+        <div className="flex gap-2">
           {canRemove && (
             <Button
               type="button"
+              variant="outline"
               size="sm"
-              variant="ghost"
               onClick={() => onRemove(template.id)}
-              className="text-xs"
+              className="border-2 border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10"
             >
               {t.settings.remove}
             </Button>
@@ -79,7 +113,7 @@ export function TemplateEditor({ template, index, canRemove, onUpdate, onRemove 
             value={template.content}
             onChange={(event) => onUpdate(template.id, { content: event.target.value })}
             placeholder={t.settings.promptPlaceholder}
-            className="min-h-[120px] resize-vertical text-sm"
+            className="min-h-[60px] resize-vertical text-sm"
           />
         </div>
       </div>

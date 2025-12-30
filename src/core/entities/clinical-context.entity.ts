@@ -18,6 +18,7 @@ export interface DataSelection {
 }
 
 export interface DataFilters {
+  conditionStatus: 'active' | 'all'
   medicationStatus: 'active' | 'all'
   reportInclusion: 'latest' | 'all'
   reportTimeRange: TimeRange

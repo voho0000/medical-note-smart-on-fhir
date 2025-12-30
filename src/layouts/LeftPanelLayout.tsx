@@ -25,16 +25,16 @@ export default function ClinicalSummaryFeature() {
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
       <Tabs defaultValue="patient" className="flex h-full flex-col">
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="patient">{t.tabs.patient}</TabsTrigger>
-          <TabsTrigger value="reports">{t.tabs.reports}</TabsTrigger>
-          <TabsTrigger value="meds">{t.tabs.medications}</TabsTrigger>
-          <TabsTrigger value="visits">{t.tabs.visits}</TabsTrigger>
+        <TabsList className="w-full justify-start gap-1 h-12 bg-muted/50 p-1 border">
+          <TabsTrigger value="patient" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.tabs.patient}</TabsTrigger>
+          <TabsTrigger value="reports" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.tabs.reports}</TabsTrigger>
+          <TabsTrigger value="meds" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.tabs.medications}</TabsTrigger>
+          <TabsTrigger value="visits" className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.tabs.visits}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="patient" className="flex-1">
+        <TabsContent value="patient" className="flex-1 mt-4">
           <ScrollArea className="h-full pr-2">
-            <div className="space-y-4 py-2">
+            <div className="space-y-4">
               {patientTabFeatures.map(feature => {
                 const Component = feature.component
                 return <Component key={feature.id} />
@@ -43,9 +43,9 @@ export default function ClinicalSummaryFeature() {
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="reports" className="flex-1">
+        <TabsContent value="reports" className="flex-1 mt-4">
           <ScrollArea className="h-full pr-2">
-            <div className="space-y-4 py-2">
+            <div className="space-y-4">
               {reportsTabFeatures.map(feature => {
                 const Component = feature.component
                 return <Component key={feature.id} />
@@ -54,9 +54,9 @@ export default function ClinicalSummaryFeature() {
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="meds" className="flex-1">
+        <TabsContent value="meds" className="flex-1 mt-4">
           <ScrollArea className="h-full pr-2">
-            <div className="space-y-4 py-2">
+            <div className="space-y-4">
               {medsTabFeatures.map(feature => {
                 const Component = feature.component
                 return <Component key={feature.id} />
@@ -65,9 +65,9 @@ export default function ClinicalSummaryFeature() {
           </ScrollArea>
         </TabsContent>
 
-        <TabsContent value="visits" className="flex-1">
+        <TabsContent value="visits" className="flex-1 mt-4">
           <ScrollArea className="h-full pr-2">
-            <div className="space-y-4 py-2">
+            <div className="space-y-4">
               <VisitHistoryCard />
             </div>
           </ScrollArea>

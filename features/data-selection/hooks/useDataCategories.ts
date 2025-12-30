@@ -1,15 +1,8 @@
 import { useMemo } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { DataSelection } from "@/src/core/entities/clinical-context.entity"
-
-type ClinicalData = {
-  conditions: any[]
-  medications: any[]
-  allergies: any[]
-  diagnosticReports: any[]
-  procedures: any[]
-  observations: any[]
-}
+import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
+import { useReportsRowCount } from "@/src/application/hooks/use-reports-row-count.hook"
 
 export type DataType = keyof DataSelection
 
@@ -22,11 +15,48 @@ export interface DataItem {
 }
 
 export function useDataCategories(
-  clinicalData: ClinicalData,
+  clinicalData: ClinicalDataCollection,
   getFilteredCount: (items: any[], dataType: 'diagnosticReports' | 'observations') => number,
-  filterKey: number
+  filterKey: number,
+  filters?: { conditionStatus?: 'active' | 'all', labReportVersion?: 'all' | 'latest', reportTimeRange?: string, vitalSignsVersion?: 'all' | 'latest', vitalSignsTimeRange?: string }
 ) {
   const { t } = useLanguage()
+  const rowCounts = useReportsRowCount(
+    clinicalData.diagnosticReports || [],
+    clinicalData.observations || [],
+    clinicalData.procedures || [],
+    filters
+  )
+  
+  // Calculate vital signs count
+  const vitalSignsCount = useMemo(() => {
+    const vitalSigns = clinicalData.vitalSigns || []
+    if (vitalSigns.length === 0) return 0
+    
+    // Apply version filter
+    let filtered = vitalSigns
+    if (filters?.vitalSignsVersion === 'latest') {
+      const latestByCode = new Map()
+      filtered.forEach((obs: any) => {
+        const code = obs.code?.text || obs.code?.coding?.[0]?.display || "Unknown"
+        const existing = latestByCode.get(code)
+        if (!existing || (obs.effectiveDateTime || "") > (existing.effectiveDateTime || "")) {
+          latestByCode.set(code, obs)
+        }
+      })
+      filtered = Array.from(latestByCode.values())
+    }
+    
+    // Apply time range filter
+    if (filters?.vitalSignsTimeRange && filters.vitalSignsTimeRange !== 'all') {
+      const { isWithinTimeRange } = require("@/src/shared/utils/date.utils")
+      filtered = filtered.filter((obs: any) => 
+        isWithinTimeRange(obs.effectiveDateTime, filters.vitalSignsTimeRange)
+      )
+    }
+    
+    return filtered.length
+  }, [clinicalData.vitalSigns, filters])
   
   return useMemo(() => {
     const _ = filterKey
@@ -42,7 +72,20 @@ export function useDataCategories(
         id: 'conditions' as const,
         label: t.dataSelection.conditions,
         description: t.dataSelection.conditionsDesc,
-        count: clinicalData.conditions?.length || 0,
+        count: (() => {
+          const conditions = clinicalData.conditions || []
+          if (filters?.conditionStatus === 'active') {
+            return conditions.filter((condition: any) => {
+              const clinicalStatus = condition.clinicalStatus?.coding?.[0]?.code || 
+                                    condition.clinicalStatus?.text ||
+                                    condition.clinicalStatus
+              return clinicalStatus === 'active' || 
+                     clinicalStatus === 'recurrence' || 
+                     clinicalStatus === 'relapse'
+            }).length
+          }
+          return conditions.length
+        })(),
         category: 'clinical'
       },
       {
@@ -63,21 +106,21 @@ export function useDataCategories(
         id: 'diagnosticReports' as const,
         label: t.dataSelection.diagnosticReports,
         description: t.dataSelection.diagnosticReportsDesc,
-        count: getFilteredCount(clinicalData.diagnosticReports || [], 'diagnosticReports'),
+        count: rowCounts.lab + rowCounts.imaging,
         category: 'diagnostics'
       },
       {
         id: 'procedures' as const,
         label: t.dataSelection.procedures,
         description: t.dataSelection.proceduresDesc,
-        count: clinicalData.procedures?.length || 0,
+        count: rowCounts.procedures,
         category: 'procedures'
       },
       {
         id: 'observations' as const,
         label: t.dataSelection.observations,
         description: t.dataSelection.observationsDesc,
-        count: getFilteredCount(clinicalData.observations || [], 'observations'),
+        count: vitalSignsCount,
         category: 'clinical'
       }
     ]
@@ -90,6 +133,9 @@ export function useDataCategories(
     clinicalData.observations,
     clinicalData.procedures,
     filterKey,
-    getFilteredCount
+    getFilteredCount,
+    rowCounts,
+    filters,
+    vitalSignsCount
   ])
 }

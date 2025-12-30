@@ -14,10 +14,10 @@ export function SettingsFeature() {
   return (
     <div className="space-y-4">
       <Tabs defaultValue="ai" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-1">
-          <TabsTrigger value="ai" className="text-xs sm:text-sm">{t.settings.aiPreferences}</TabsTrigger>
-          <TabsTrigger value="templates" className="text-xs sm:text-sm">{t.settings.promptTemplates}</TabsTrigger>
-          <TabsTrigger value="insights" className="text-xs sm:text-sm">{t.settings.clinicalInsightsTabs}</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
+          <TabsTrigger value="ai" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.aiPreferences}</TabsTrigger>
+          <TabsTrigger value="templates" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.promptTemplates}</TabsTrigger>
+          <TabsTrigger value="insights" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.clinicalInsightsTabs}</TabsTrigger>
         </TabsList>
         <TabsContent value="ai" className="space-y-6">
           <Card>

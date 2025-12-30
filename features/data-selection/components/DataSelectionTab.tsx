@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { DataCategoryItem } from "./DataCategoryItem"
-import { MedicationFilter, VitalSignsFilter, LabReportFilter } from "./DataFilters"
+import { ConditionFilter, MedicationFilter, VitalSignsFilter, LabReportFilter } from "./DataFilters"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 
@@ -68,6 +68,9 @@ export function DataSelectionTab({
             isSelected={!!selectedData[item.id]}
             onToggle={onToggle}
             renderFilters={() => {
+              if (item.id === 'conditions' && selectedData.conditions) {
+                return <ConditionFilter filters={filters} onFilterChange={onFilterChange} />
+              }
               if (item.id === 'medications' && selectedData.medications) {
                 return <MedicationFilter filters={filters} onFilterChange={onFilterChange} />
               }

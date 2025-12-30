@@ -9,7 +9,7 @@ import { useEncounterDetails } from "./hooks/useEncounterDetails"
 import { VisitItem } from "./VisitItem"
 
 export function VisitHistoryCard() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const {
     encounters = [],
     medications = [],
@@ -23,7 +23,7 @@ export function VisitHistoryCard() {
   const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null)
   
   const visitHistory = useVisitHistory(encounters)
-  const encounterDetails = useEncounterDetails(medications, diagnosticReports, observations, procedures)
+  const encounterDetails = useEncounterDetails(medications, diagnosticReports, observations, procedures, locale)
 
   return (
     <Card>

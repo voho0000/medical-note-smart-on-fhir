@@ -49,7 +49,8 @@ export function useEncounterDetails(
   medications: any[],
   diagnosticReports: any[],
   observations: any[],
-  procedures: any[]
+  procedures: any[],
+  locale: string = "en-US"
 ) {
   return useMemo(() => {
     const map = new Map<string, EncounterDetails>()
@@ -74,7 +75,7 @@ export function useEncounterDetails(
           name: getMedicationName(med),
           status: med?.status,
           detail: med?.dosageInstruction?.[0]?.text,
-          when: formatDateTime(med?.authoredOn),
+          when: formatDateTime(med?.authoredOn, locale),
         })
       })
     }
@@ -131,5 +132,5 @@ export function useEncounterDetails(
     }
 
     return map
-  }, [medications, diagnosticReports, observations, procedures])
+  }, [medications, diagnosticReports, observations, procedures, locale])
 }

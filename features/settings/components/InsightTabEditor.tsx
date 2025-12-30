@@ -67,9 +67,10 @@ export function InsightTabEditor({
           {canRemove && (
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => onRemove(panel.id)}
+              className="border-2 border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10"
             >
               {t.settings.remove}
             </Button>
@@ -101,7 +102,7 @@ export function InsightTabEditor({
           <Textarea
             value={panel.prompt}
             onChange={(event) => onUpdate(panel.id, { prompt: event.target.value })}
-            className="min-h-[140px] resize-vertical text-sm"
+            className="min-h-[70px] resize-vertical text-sm"
             placeholder={t.settings.promptPlaceholderInsight}
           />
         </div>

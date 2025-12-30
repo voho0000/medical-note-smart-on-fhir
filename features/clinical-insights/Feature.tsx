@@ -112,16 +112,16 @@ export default function ClinicalInsightsFeature() {
 
   return (
     <ScrollArea className="h-full pr-3">
-      <div className="space-y-3">
+      <div className="space-y-4">
         {!canGenerate && <ApiKeyWarning />}
         {panelEntries.length > 0 ? (
-          <Tabs defaultValue={defaultTabValue} className="space-y-3">
-            <TabsList className="flex w-full flex-nowrap gap-0.5 rounded-md bg-muted/40 p-0.5 min-w-0">
+          <Tabs defaultValue={defaultTabValue} className="space-y-4">
+            <TabsList className="grid w-full gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length}, minmax(0, 1fr))` }}>
               {panelEntries.map((panel) => (
                 <TabsTrigger
                   key={panel.id}
                   value={panel.id}
-                  className="flex-1 min-w-[50px] px-2 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-hidden"
+                  className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                 >
                   <span className="truncate block w-full">{panel.label}</span>
                 </TabsTrigger>

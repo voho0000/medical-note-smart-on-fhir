@@ -52,28 +52,6 @@ export function ChatToolbar({
           {t.chat.insertAsr}
         </Button>
       </div>
-      <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearAsr}
-          disabled={!hasAsrText}
-          className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="h-3 w-3" />
-          {t.chat.clearAsr}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onResetChat}
-          disabled={!hasChatMessages}
-          className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="h-3 w-3" />
-          {t.chat.resetChat}
-        </Button>
-      </div>
       {templates.length > 0 ? (
         <div className="flex items-center gap-0.5 rounded-md border bg-primary/5 p-0.5">
           <Select value={selectedTemplateId} onValueChange={onTemplateChange}>
@@ -102,6 +80,28 @@ export function ChatToolbar({
           </Button>
         </div>
       ) : null}
+      <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearAsr}
+          disabled={!hasAsrText}
+          className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="h-3 w-3" />
+          {t.chat.clearAsr}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onResetChat}
+          disabled={!hasChatMessages}
+          className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="h-3 w-3" />
+          {t.chat.resetChat}
+        </Button>
+      </div>
     </div>
   )
 }
