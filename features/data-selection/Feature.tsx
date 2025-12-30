@@ -14,6 +14,8 @@ type ClinicalData = {
   vitalSigns?: any[]
   vitals?: any[]
   observations?: any[]
+  encounters?: any[]
+  procedures?: any[]
   isLoading: boolean
 }
 
@@ -54,7 +56,9 @@ export function DataSelectionFeature() {
     allergies: clinicalData.allergies || [],
     diagnosticReports: clinicalData.diagnosticReports || [],
     observations: clinicalData.observations || clinicalData.vitalSigns || clinicalData.vitals || [],
-    procedures: []
+    vitalSigns: clinicalData.vitalSigns || clinicalData.vitals || [],
+    procedures: clinicalData.procedures || [],
+    encounters: clinicalData.encounters || []
   }
 
   const handleFiltersChange = (newFilters: any) => {
