@@ -1,15 +1,15 @@
 // Environment Configuration
 export const ENV_CONFIG = {
   // AI Proxy URLs
-  chatProxyUrl: process.env.NEXT_PUBLIC_PRISMACARE_CHAT_URL || 'https://proxychatcompletion-dnl5zk7goa-uc.a.run.app',
-  whisperProxyUrl: process.env.NEXT_PUBLIC_PRISMACARE_WHISPER_URL || 'https://proxywhisper-dnl5zk7goa-uc.a.run.app',
-  geminiProxyUrl: process.env.NEXT_PUBLIC_PRISMACARE_GEMINI_URL || '',
-  proxyClientKey: process.env.NEXT_PUBLIC_PRISMACARE_PROXY_KEY || '',
+  chatProxyUrl: process.env.NEXT_PUBLIC_CHAT_URL || '',
+  whisperProxyUrl: process.env.NEXT_PUBLIC_WHISPER_URL || '',
+  geminiProxyUrl: process.env.NEXT_PUBLIC_GEMINI_URL || '',
+  proxyClientKey: process.env.NEXT_PUBLIC_PROXY_KEY || '',
   
   // Feature flags
-  hasChatProxy: Boolean(process.env.NEXT_PUBLIC_PRISMACARE_CHAT_URL || 'https://proxychatcompletion-dnl5zk7goa-uc.a.run.app'),
-  hasWhisperProxy: Boolean(process.env.NEXT_PUBLIC_PRISMACARE_WHISPER_URL || 'https://proxywhisper-dnl5zk7goa-uc.a.run.app'),
-  hasGeminiProxy: Boolean(process.env.NEXT_PUBLIC_PRISMACARE_GEMINI_URL),
+  hasChatProxy: Boolean(process.env.NEXT_PUBLIC_CHAT_URL),
+  hasWhisperProxy: Boolean(process.env.NEXT_PUBLIC_WHISPER_URL),
+  hasGeminiProxy: Boolean(process.env.NEXT_PUBLIC_GEMINI_URL),
   
   // SMART on FHIR
   smartClientId: 'my_web_app',

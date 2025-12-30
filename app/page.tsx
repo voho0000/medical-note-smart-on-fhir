@@ -17,7 +17,20 @@ function PageContent() {
   const [leftWidth, setLeftWidth] = useState(50) // percentage
   const [isDragging, setIsDragging] = useState(false)
   const [mobileView, setMobileView] = useState<'left' | 'right'>('left') // for mobile tab switching
+  const [isLargeScreen, setIsLargeScreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Detect screen size on client side to avoid hydration mismatch
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsLargeScreen(window.innerWidth >= 1024)
+    }
+    
+    checkScreenSize()
+    window.addEventListener('resize', checkScreenSize)
+    
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
   
   const handleMouseDown = () => {
     setIsDragging(true)
@@ -100,7 +113,7 @@ function PageContent() {
           className={`w-full lg:w-auto min-h-0 overflow-y-auto flex-1 lg:flex-initial ${
             mobileView === 'left' ? 'block' : 'hidden lg:block'
           }`}
-          style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${leftWidth}%` : undefined }}
+          style={isLargeScreen ? { width: `${leftWidth}%` } : undefined}
         >
           <ClinicalSummaryFeature />
         </section>
@@ -119,7 +132,7 @@ function PageContent() {
           className={`w-full lg:w-auto min-h-0 overflow-y-auto flex-1 lg:flex-initial ${
             mobileView === 'right' ? 'block' : 'hidden lg:block'
           }`}
-          style={{ width: typeof window !== 'undefined' && window.innerWidth >= 1024 ? `${100 - leftWidth - 0.5}%` : undefined }}
+          style={isLargeScreen ? { width: `${100 - leftWidth - 0.5}%` } : undefined}
         >
           <RightPanelFeature />
         </section>
