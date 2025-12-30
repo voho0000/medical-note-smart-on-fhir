@@ -28,6 +28,10 @@ jobs:
         env:
           GITHUB_PAGES: "true"
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"   # 👈 disable lightningcss in CI
+          NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
+          NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
+          NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
+          NEXT_PUBLIC_PROXY_KEY: ${{ secrets.NEXT_PUBLIC_PROXY_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
