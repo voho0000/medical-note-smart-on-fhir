@@ -15,8 +15,9 @@ A clinical documentation assistant built with **Next.js 16**, **SMART on FHIR**,
   - Visit history
 
 ### AI-Powered Documentation
-- **Medical Chat**: Interactive AI assistant for clinical queries and note generation
-- **Clinical Insights**: Automated generation of clinical summaries with customizable prompts
+- **Note Chat**: Interactive AI assistant for clinical queries and note generation
+- **Clinical Insights**: Automated generation of clinical summaries with customizable prompts and tabs
+- **Prompt Templates**: Reusable prompt templates for faster note drafting
 - **Voice Recording**: Audio recording with Whisper transcription for hands-free documentation
 - **Data Selection**: Filter and select specific clinical data for context-aware AI responses
 
@@ -49,9 +50,10 @@ A clinical documentation assistant built with **Next.js 16**, **SMART on FHIR**,
 
 - **Node.js**: 18.18+ or 20.x LTS
 - **Package Manager**: npm, pnpm, or yarn
-- **API Keys** (at least one):
-  - OpenAI API key (for GPT models)
-  - Google Gemini API key (for Gemini models)
+- **API Keys** (optional for premium models):
+  - OpenAI API key (for premium GPT models)
+  - Google Gemini API key (for premium Gemini models)
+  - Built-in models available via Firebase Functions proxy without personal keys
 - **FHIR Server**: Access to a SMART on FHIR sandbox or EHR system
 
 ---
@@ -125,16 +127,33 @@ npm test:coverage
 
 ## 🔑 API Key Configuration
 
-API keys are required for AI features. Configure them in the **Settings** tab:
+The application provides built-in AI models that work without personal API keys. For premium models, configure your keys in the **Settings** tab:
 
-1. Navigate to the Settings tab in the application
-2. Enter your OpenAI API key and/or Google Gemini API key
-3. Keys are stored securely in browser local storage
+1. Navigate to the Settings tab → **AI Preferences** sub-tab
+2. (Optional) Enter your OpenAI API key and/or Google Gemini API key
+3. Keys are stored securely in browser local storage only
 4. Select your preferred AI model for note generation
 
-### Supported Models
-- **OpenAI**: GPT-4, GPT-4 Turbo, GPT-3.5 Turbo
-- **Google**: Gemini Pro, Gemini 1.5 Pro
+### Available Models
+
+**Built-in Models** (via Firebase Functions proxy, no personal key required):
+- GPT-5 Mini (Cost-efficient base model)
+- GPT-5.1 (Recommended for clinical summarization)
+- Gemini 2.5 Flash (Fast Gemini model)
+- Gemini 3 Flash Preview (Preview version)
+
+**Premium Models** (requires personal API key):
+- GPT-5.2 (Latest premium model)
+- GPT-5 Pro (Professional grade model)
+- Gemini 2.5 Pro (Advanced Gemini model)
+- Gemini 3 Pro Preview (Premium preview version)
+
+### Settings Organization
+
+The Settings tab is organized into three sub-tabs:
+1. **AI Preferences**: Model selection, API keys, appearance (light/dark mode)
+2. **Prompt Templates**: Create and manage reusable prompt templates
+3. **Clinical Insights Tabs**: Customize auto-generation and insight tabs
 
 ---
 

@@ -87,35 +87,47 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 左側面板顯示病患的完整臨床資料，分為四個標籤：
 
-#### 1. 病患資訊
-- **基本資料**：姓名、性別、出生日期、聯絡方式
-- **生命徵象**：最新的血壓、心跳、體溫、血氧等
-- **診斷**：目前和過往的診斷記錄
+#### 1. 病患 / 生命徵象 / 診斷
+此標籤整合顯示三個主要卡片：
+
+- **病患資訊卡片**：姓名、性別、出生日期、年齡
+- **生命徵象卡片**：最新的血壓、心率、體溫、呼吸速率、血氧飽和度、身高、體重、BMI
+- **診斷卡片**：目前和過往的診斷記錄
 
 **使用方式：**
-- 點擊各個卡片可展開查看詳細資訊
-- 資料會自動從 FHIR 伺服器載入
+- 所有資料會自動從 FHIR 伺服器載入
+- 向下滾動查看各個卡片內容
 
-#### 2. 檢驗報告
+#### 2. 報告
 - 顯示所有診斷性檢查報告
-- 包含實驗室檢驗、影像檢查等
-- 可查看報告日期、類型和結果
+- 分為「全部」、「檢驗」、「影像」、「處置」四個子標籤
+- 可篩選時間範圍（過去 24 小時、3 天、1 週、1 個月、3 個月、6 個月、1 年、全部時間）
+- 可選擇僅顯示最新版本或所有版本
 
 **使用方式：**
-- 點擊報告可查看完整內容
-- 使用搜尋功能快速找到特定報告
+- 點擊子標籤切換不同類型的報告
+- 使用時間範圍篩選器快速找到特定時期的報告
+- 點擊報告可展開查看詳細內容
 
-#### 3. 用藥與過敏
-- **用藥記錄**：目前用藥、劑量、頻率
-- **過敏史**：藥物過敏、食物過敏等
+#### 3. 用藥
+- **用藥記錄**：顯示病患的所有用藥
+- **過敏史**：顯示已知的藥物過敏和不耐症
+- 可篩選「使用中」或「全部」用藥
 
 **使用方式：**
-- 檢視完整的用藥清單
+- 切換「使用中」/「全部」查看不同狀態的用藥
+- 檢視完整的用藥清單和過敏史
 - 確認過敏史以避免藥物交互作用
 
-#### 4. 就診記錄
+#### 4. 就診紀錄
 - 顯示病患的歷次就診記錄
-- 包含就診日期、診斷、處置等
+- 包含就診類型（門診、住院、急診、居家照護、遠距就醫）
+- 顯示就診日期、主治醫師、就診原因、診斷
+- 可展開查看該次就診的檢驗、用藥、處置詳情
+
+**使用方式：**
+- 點擊「查看檢驗與用藥」展開詳細資訊
+- 查看每次就診的完整記錄
 
 ---
 
@@ -123,7 +135,7 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 右側面板提供四個主要功能標籤：
 
-#### 1. 病歷對話（Medical Chat）
+#### 1. 筆記對話（Note Chat）
 
 與 AI 助理互動，協助撰寫病歷或回答臨床問題。
 
@@ -150,9 +162,11 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 - "請整理最近的檢驗結果"
 
 **進階功能：**
-- **選擇 AI 模型**：在設定中切換不同的 AI 模型
-- **調整溫度參數**：控制回應的創意程度（0-1）
-- **清除對話**：點擊清除按鈕重新開始
+- **插入臨床資料**：點擊「臨床資料」按鈕將選定的病患資料插入對話
+- **插入語音文字**：點擊「語音文字」按鈕將最近的語音轉錄插入對話
+- **插入範本**：從下拉選單選擇預設的提示範本快速開始
+- **編輯系統提示**：點擊標題列的編輯按鈕自訂 AI 助理的行為
+- **重設聊天**：點擊「Chat」按鈕清除對話記錄重新開始
 
 #### 2. 資料選擇（Data Selection）
 
@@ -215,30 +229,45 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 #### 4. 設定（Settings）
 
-管理系統設定和偏好。
+管理系統設定和偏好，分為三個子標籤：
 
-**設定項目：**
+**AI 偏好設定標籤：**
 
-1. **API 金鑰管理**：
-   - 新增/更新 OpenAI API 金鑰
-   - 新增/更新 Google Gemini API 金鑰
-   - 測試金鑰是否有效
+1. **外觀設定**：
+   - 切換亮色模式或深色模式
 
-2. **AI 模型選擇**：
-   - GPT-4（最強大，較慢）
-   - GPT-4 Turbo（平衡）
-   - GPT-3.5 Turbo（快速）
-   - Gemini Pro
-   - Gemini 1.5 Pro
+2. **生成模型選擇**：
+   - **內建模型**（透過 Firebase 代理，無需個人金鑰）：
+     - GPT-5 Mini（經濟實惠的基礎模型）
+     - GPT-5.1（臨床摘要推薦模型）
+     - Gemini 2.5 Flash（快速 Gemini 模型）
+     - Gemini 3 Flash Preview（預覽版）
+   - **進階模型**（需要個人 API 金鑰）：
+     - GPT-5.2（最新進階模型）
+     - GPT-5 Pro（專業級模型）
+     - Gemini 2.5 Pro（進階 Gemini 模型）
+     - Gemini 3 Pro Preview（高級預覽版）
 
-3. **臨床洞察設定**：
-   - 啟用/停用自動生成
-   - 自訂分析項目
-   - 編輯提示詞範本
+3. **API 金鑰管理**：
+   - 個人 OpenAI API 金鑰（本機儲存）
+   - 個人 Gemini API 金鑰（本機儲存）
+   - 儲存或清除金鑰
 
-4. **語音辨識設定**：
-   - 選擇語音辨識語言
-   - 調整辨識靈敏度
+**提示範本標籤：**
+
+- 建立可重複使用的提示範本
+- 每個範本包含：標籤、描述、提示內容
+- 最多可建立多個範本
+- 可新增、編輯、刪除範本
+- 重設為預設範本
+
+**臨床洞察標籤標籤：**
+
+- 啟用/停用「載入頁面時自動產生洞察」
+- 自訂臨床洞察中顯示的標籤
+- 每個標籤包含：標籤名稱、副標題、提示內容
+- 可新增、編輯、刪除、重新排序標籤
+- 重設為預設標籤配置
 
 ---
 
@@ -246,12 +275,14 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 ### 情境 1：撰寫門診病歷
 
-1. 在左側面板查看病患基本資料和生命徵象
-2. 切換到「資料選擇」，勾選相關的診斷和用藥
-3. 切換到「病歷對話」
-4. 使用語音輸入描述病患主訴和理學檢查
-5. 要求 AI 生成 SOAP 格式病歷
-6. 複製結果並貼到病歷系統
+1. 在左側面板「病患 / 生命徵象 / 診斷」標籤查看病患基本資料
+2. 切換到右側「資料選擇」，勾選相關的診斷和用藥
+3. 切換到「筆記對話」標籤
+4. 從範本下拉選單選擇適合的提示範本（如有設定）
+5. 使用語音輸入或文字輸入描述病患主訴和理學檢查
+6. 點擊「臨床資料」按鈕插入選定的病患資料
+7. 要求 AI 生成病歷內容
+8. 複製結果並貼到病歷系統
 
 ### 情境 2：快速了解新病患
 
@@ -263,10 +294,11 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 ### 情境 3：用藥評估
 
-1. 在左側面板查看「用藥與過敏」
-2. 在「資料選擇」中選擇所有用藥和過敏史
-3. 在「臨床洞察」查看用藥建議
-4. 在「病歷對話」詢問藥物交互作用
+1. 在左側面板切換到「用藥」標籤
+2. 查看所有使用中的用藥和過敏史
+3. 在右側「資料選擇」中勾選所有用藥和過敏史
+4. 切換到「臨床洞察」標籤查看 AI 生成的用藥分析
+5. 在「筆記對話」詢問特定的藥物交互作用問題
 
 ---
 
@@ -341,15 +373,20 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 1. 前往 https://platform.openai.com
 2. 註冊帳號並登入
 3. 在 API Keys 頁面建立新金鑰
-4. 複製金鑰並貼到設定中
+4. 複製金鑰並貼到設定的「AI 偏好設定」標籤中
+5. 點擊「儲存金鑰」
 
 **Google Gemini API 金鑰：**
-1. 前往 https://makersuite.google.com/app/apikey
+1. 前往 https://aistudio.google.com/app/apikey
 2. 使用 Google 帳號登入
 3. 建立新的 API 金鑰
-4. 複製金鑰並貼到設定中
+4. 複製金鑰並貼到設定的「AI 偏好設定」標籤中
+5. 點擊「儲存金鑰」
 
-**注意：** API 使用可能需要付費，請確認費率。
+**注意：** 
+- 如果不提供個人 API 金鑰，系統會使用內建模型（透過 Firebase Functions 代理）
+- 個人 API 金鑰僅儲存在您的瀏覽器本機，不會上傳到伺服器
+- API 使用可能需要付費，請確認費率
 
 ---
 
@@ -426,35 +463,47 @@ Click the language switcher button in the top-right corner to choose "中文" or
 
 The left panel displays comprehensive patient clinical data in four tabs:
 
-#### 1. Patient Information
-- **Demographics**: Name, gender, date of birth, contact information
-- **Vital Signs**: Latest blood pressure, heart rate, temperature, oxygen saturation, etc.
-- **Diagnoses**: Current and historical diagnosis records
+#### 1. Patient / Vitals / Diagnosis
+This tab integrates three main cards:
+
+- **Patient Information Card**: Name, gender, date of birth, age
+- **Vital Signs Card**: Latest blood pressure, heart rate, temperature, respiratory rate, oxygen saturation, height, weight, BMI
+- **Diagnoses Card**: Current and historical diagnosis records
 
 **How to Use:**
-- Click cards to expand and view detailed information
-- Data automatically loads from FHIR server
+- All data automatically loads from FHIR server
+- Scroll down to view each card's content
 
 #### 2. Reports
 - Displays all diagnostic test reports
-- Includes laboratory tests, imaging studies, etc.
-- View report date, type, and results
+- Organized into four sub-tabs: "All", "Labs", "Imaging", "Procedures"
+- Filter by time range (Last 24 hours, 3 days, 1 week, 1 month, 3 months, 6 months, 1 year, All time)
+- Option to show latest versions only or all versions
 
 **How to Use:**
-- Click reports to view full content
-- Use search function to quickly find specific reports
+- Click sub-tabs to switch between different report types
+- Use time range filter to quickly find reports from specific periods
+- Click reports to expand and view detailed content
 
-#### 3. Medications & Allergies
-- **Medication Records**: Current medications, dosages, frequencies
-- **Allergy History**: Drug allergies, food allergies, etc.
+#### 3. Medications
+- **Medication Records**: Displays all patient medications
+- **Allergy History**: Shows known drug allergies and intolerances
+- Filter by "Active" or "All" medications
 
 **How to Use:**
-- Review complete medication list
+- Toggle between "Active"/"All" to view medications by status
+- Review complete medication list and allergy history
 - Confirm allergy history to avoid drug interactions
 
 #### 4. Visit History
-- Displays patient's visit records
-- Includes visit dates, diagnoses, treatments, etc.
+- Displays patient's historical visit records
+- Includes visit types (Outpatient, Inpatient, Emergency, Home Care, Virtual Visit)
+- Shows visit date, physician, reason, diagnosis
+- Expandable to view tests, medications, and procedures for each visit
+
+**How to Use:**
+- Click "View tests & medications" to expand detailed information
+- Review complete records for each visit
 
 ---
 
@@ -462,7 +511,7 @@ The left panel displays comprehensive patient clinical data in four tabs:
 
 The right panel provides four main feature tabs:
 
-#### 1. Medical Chat
+#### 1. Note Chat
 
 Interact with AI assistant to help write medical notes or answer clinical questions.
 
@@ -489,9 +538,11 @@ Interact with AI assistant to help write medical notes or answer clinical questi
 - "Please summarize recent lab results"
 
 **Advanced Features:**
-- **Select AI Model**: Switch between different AI models in settings
-- **Adjust Temperature**: Control response creativity (0-1)
-- **Clear Chat**: Click clear button to start fresh
+- **Insert Clinical Context**: Click "Context" button to insert selected patient data into conversation
+- **Insert Voice Text**: Click "Voice" button to insert recent voice transcription into conversation
+- **Insert Template**: Select from dropdown menu to quickly start with predefined prompt templates
+- **Edit System Prompt**: Click edit button in header to customize AI assistant behavior
+- **Reset Chat**: Click "Chat" button to clear conversation history and start fresh
 
 #### 2. Data Selection
 
@@ -554,30 +605,45 @@ Automatically generate various clinical summaries and analyses.
 
 #### 4. Settings
 
-Manage system settings and preferences.
+Manage system settings and preferences, organized into three sub-tabs:
 
-**Setting Items:**
+**AI Preferences Tab:**
 
-1. **API Key Management**:
-   - Add/update OpenAI API key
-   - Add/update Google Gemini API key
-   - Test if keys are valid
+1. **Appearance Settings**:
+   - Toggle between Light Mode and Dark Mode
 
-2. **AI Model Selection**:
-   - GPT-4 (most powerful, slower)
-   - GPT-4 Turbo (balanced)
-   - GPT-3.5 Turbo (fast)
-   - Gemini Pro
-   - Gemini 1.5 Pro
+2. **Generation Model Selection**:
+   - **Built-in Models** (via Firebase proxy, no personal key required):
+     - GPT-5 Mini (Cost-efficient base model)
+     - GPT-5.1 (Recommended for clinical summarization)
+     - Gemini 2.5 Flash (Fast Gemini model)
+     - Gemini 3 Flash Preview (Preview version)
+   - **Premium Models** (requires personal API key):
+     - GPT-5.2 (Latest premium model)
+     - GPT-5 Pro (Professional grade model)
+     - Gemini 2.5 Pro (Advanced Gemini model)
+     - Gemini 3 Pro Preview (Premium preview version)
 
-3. **Clinical Insights Settings**:
-   - Enable/disable auto-generation
-   - Customize analysis items
-   - Edit prompt templates
+3. **API Key Management**:
+   - Personal OpenAI API key (stored locally)
+   - Personal Gemini API key (stored locally)
+   - Save or clear keys
 
-4. **Voice Recognition Settings**:
-   - Select voice recognition language
-   - Adjust recognition sensitivity
+**Prompt Templates Tab:**
+
+- Create reusable prompt templates
+- Each template includes: label, description, prompt content
+- Can create multiple templates
+- Add, edit, delete templates
+- Reset to default templates
+
+**Clinical Insights Tabs Tab:**
+
+- Enable/disable "Auto-generate insights on page load"
+- Customize tabs displayed in Clinical Insights
+- Each tab includes: tab label, subtitle, prompt content
+- Add, edit, delete, reorder tabs
+- Reset to default tab configuration
 
 ---
 
@@ -585,12 +651,14 @@ Manage system settings and preferences.
 
 ### Scenario 1: Writing Outpatient Notes
 
-1. Review patient demographics and vital signs in left panel
-2. Switch to "Data Selection", check relevant diagnoses and medications
-3. Switch to "Medical Chat"
-4. Use voice input to describe chief complaint and physical examination
-5. Ask AI to generate SOAP format note
-6. Copy result and paste into medical record system
+1. Review patient information in left panel's "Patient / Vitals / Diagnosis" tab
+2. Switch to right panel's "Data Selection", check relevant diagnoses and medications
+3. Switch to "Note Chat" tab
+4. Select appropriate prompt template from dropdown menu (if configured)
+5. Use voice input or text input to describe chief complaint and physical examination
+6. Click "Context" button to insert selected patient data
+7. Ask AI to generate medical note content
+8. Copy result and paste into medical record system
 
 ### Scenario 2: Quickly Understanding New Patient
 
@@ -602,10 +670,11 @@ Manage system settings and preferences.
 
 ### Scenario 3: Medication Assessment
 
-1. Review "Medications & Allergies" in left panel
-2. Select all medications and allergies in "Data Selection"
-3. Check medication recommendations in "Clinical Insights"
-4. Ask about drug interactions in "Medical Chat"
+1. Switch to "Medications" tab in left panel
+2. Review all active medications and allergy history
+3. Check all medications and allergies in right panel's "Data Selection"
+4. Switch to "Clinical Insights" tab to view AI-generated medication analysis
+5. Ask specific drug interaction questions in "Note Chat"
 
 ---
 
@@ -680,15 +749,20 @@ Currently, the system can only handle one patient at a time. To switch patients:
 1. Go to https://platform.openai.com
 2. Register and login
 3. Create new key in API Keys page
-4. Copy key and paste into settings
+4. Copy key and paste into "AI Preferences" tab in settings
+5. Click "Save key"
 
 **Google Gemini API Key:**
-1. Go to https://makersuite.google.com/app/apikey
+1. Go to https://aistudio.google.com/app/apikey
 2. Login with Google account
 3. Create new API key
-4. Copy key and paste into settings
+4. Copy key and paste into "AI Preferences" tab in settings
+5. Click "Save key"
 
-**Note:** API usage may require payment, please confirm rates.
+**Note:** 
+- If you don't provide a personal API key, the system will use built-in models (via Firebase Functions proxy)
+- Personal API keys are stored only in your browser locally and are not uploaded to servers
+- API usage may require payment, please confirm rates
 
 ---
 
