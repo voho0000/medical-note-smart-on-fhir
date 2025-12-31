@@ -11,6 +11,14 @@
 
 基於 **Next.js 16**、**SMART on FHIR** 和 **AI 整合**（OpenAI GPT / Google Gemini）建構的臨床文件助理。本應用程式協助醫療人員高效檢視病患資料、生成臨床摘要，並透過語音錄製和 AI 輔助建立醫療筆記。
 
+## 🌐 線上展示
+
+**Demo 網站：** https://voho0000.github.io/medical-note-smart-on-fhir
+
+**Launch URL（用於 SMART Launcher）：** https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
+
+> 💡 **提示：** 請透過 SMART on FHIR Launcher（如 [SMART Health IT Launcher](https://launch.smarthealthit.org/)）輸入上述 Launch URL 來啟動應用程式。詳細說明請參閱[使用者指南](./USER_GUIDE.md)。
+
 ## 🎯 主要功能
 
 ### 臨床資料整合
@@ -300,6 +308,14 @@ npm run deploy
 [🔝 Back to Top](#mediprisma--smart-on-fhir) | [🌐 Switch to 中文](#中文版)
 
 A clinical documentation assistant built with **Next.js 16**, **SMART on FHIR**, and **AI integration** (OpenAI GPT / Google Gemini). This application helps healthcare providers efficiently review patient data, generate clinical summaries, and create medical notes through voice recording and AI assistance.
+
+## 🌐 Live Demo
+
+**Demo Site:** https://voho0000.github.io/medical-note-smart-on-fhir
+
+**Launch URL (for SMART Launcher):** https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
+
+> 💡 **Note:** Please use a SMART on FHIR Launcher (such as [SMART Health IT Launcher](https://launch.smarthealthit.org/)) and enter the Launch URL above to start the application. For detailed instructions, please refer to the [User Guide](./USER_GUIDE.md).
 
 ## 🎯 Key Features
 

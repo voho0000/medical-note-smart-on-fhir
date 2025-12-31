@@ -39,6 +39,14 @@ MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 - 透過語音輸入建立病歷
 - 與 AI 助理互動，獲得臨床建議
 
+### 線上展示
+
+**Demo 網站：** https://voho0000.github.io/medical-note-smart-on-fhir
+
+**Launch URL（用於 SMART Launcher）：** https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
+
+> 💡 請透過 SMART on FHIR Launcher（如 [SMART Health IT Launcher](https://launch.smarthealthit.org/)）輸入上述 Launch URL 來啟動應用程式進行測試。
+
 ### 系統需求
 - 現代網頁瀏覽器（Chrome、Safari、Edge、Firefox）
 - 穩定的網路連線
@@ -416,6 +424,14 @@ MediPrisma · SMART on FHIR is an intelligent clinical documentation assistant t
 - Generate clinical summaries and medical notes using AI
 - Create medical records through voice input
 - Interact with AI assistant for clinical insights
+
+### Live Demo
+
+**Demo Site:** https://voho0000.github.io/medical-note-smart-on-fhir
+
+**Launch URL (for SMART Launcher):** https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
+
+> 💡 Please use a SMART on FHIR Launcher (such as [SMART Health IT Launcher](https://launch.smarthealthit.org/)) and enter the Launch URL above to start the application for testing.
 
 ### System Requirements
 - Modern web browser (Chrome, Safari, Edge, Firefox)
