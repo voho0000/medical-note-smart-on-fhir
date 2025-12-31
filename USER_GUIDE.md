@@ -1,4 +1,4 @@
-# 臨床使用者操作指南 / Clinical User Guide
+# MediPrisma · SMART on FHIR 使用者操作指南 / User Guide
 
 > **語言選擇 / Language Selection:**  
 > 📖 [**中文版**](#中文版) | 📖 [**English Version**](#english-version)
@@ -29,11 +29,11 @@
 
 # 中文版
 
-[🔝 返回頂部](#臨床使用者操作指南--clinical-user-guide) | [🌐 切換到 English](#english-version)
+[🔝 返回頂部](#mediprisma--smart-on-fhir-使用者操作指南--user-guide) | [🌐 切換到 English](#english-version)
 
 ## 系統簡介
 
-Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫療人員：
+MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫療人員：
 - 快速查看病患的完整臨床資料
 - 使用 AI 生成臨床摘要和病歷記錄
 - 透過語音輸入建立病歷
@@ -198,23 +198,25 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 #### 3. 臨床洞察（Clinical Insights）
 
-自動生成各種臨床摘要和分析。
+自動生成臨床分析和建議。
 
 **預設分析項目：**
 
-1. **SOAP 病歷**：
-   - Subjective（主觀）
-   - Objective（客觀）
-   - Assessment（評估）
-   - Plan（計畫）
+1. **安全警示（Safety Flag）**：
+   - 突顯緊急安全問題或禁忌症
+   - 標記立即的病人安全風險
+   - 包括藥物交互作用、異常結果或緊急追蹤需求
+   - 依嚴重程度排序
 
-2. **問題清單**：
-   - 目前活動中的問題
-   - 優先順序排序
+2. **變化摘要（What's Changed）**：
+   - 總結與先前資料或就診相比的顯著變化
+   - 列出狀態、治療或結果中最重要的變化
+   - 強調需要注意的差異
 
-3. **用藥建議**：
-   - 藥物交互作用檢查
-   - 劑量建議
+3. **臨床快照（Clinical Snapshot）**：
+   - 提供當前臨床狀況的簡明概述
+   - 涵蓋活動中的問題、目前治療、近期結果和待辦事項
+   - 保持簡短且可執行
 
 **使用方式：**
 
@@ -405,11 +407,11 @@ Medical Note SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 # English Version
 
-[🔝 Back to Top](#臨床使用者操作指南--clinical-user-guide) | [🌐 Switch to 中文](#中文版)
+[🔝 Back to Top](#mediprisma--smart-on-fhir-使用者操作指南--user-guide) | [🌐 Switch to 中文](#中文版)
 
 ## System Overview
 
-Medical Note SMART on FHIR is an intelligent clinical documentation assistant that helps healthcare providers:
+MediPrisma · SMART on FHIR is an intelligent clinical documentation assistant that helps healthcare providers:
 - Quickly review comprehensive patient clinical data
 - Generate clinical summaries and medical notes using AI
 - Create medical records through voice input
@@ -574,23 +576,25 @@ Precisely control which clinical data AI uses.
 
 #### 3. Clinical Insights
 
-Automatically generate various clinical summaries and analyses.
+Automatically generate clinical analysis and recommendations.
 
 **Default Analysis Items:**
 
-1. **SOAP Note**:
-   - Subjective
-   - Objective
-   - Assessment
-   - Plan
+1. **Safety Flag**:
+   - Highlight urgent safety issues or contraindications
+   - Flag immediate patient safety risks
+   - Include drug interactions, abnormal results, or urgent follow-up needs
+   - Ordered by severity
 
-2. **Problem List**:
-   - Currently active problems
-   - Priority sorted
+2. **What's Changed**:
+   - Summarize notable changes compared to prior data or visits
+   - List most important changes in status, therapy, or results
+   - Emphasize deltas that require attention
 
-3. **Medication Recommendations**:
-   - Drug interaction checks
-   - Dosage recommendations
+3. **Clinical Snapshot**:
+   - Provide a concise overview of the current clinical picture
+   - Cover active problems, current therapies, recent results, and outstanding tasks
+   - Keep it brief and actionable
 
 **How to Use:**
 
@@ -777,7 +781,7 @@ For technical issues or assistance, please contact:
 
 ---
 
-[⬆️ Back to English Version](#english-version) | [🔝 返回頂部](#臨床使用者操作指南--clinical-user-guide)
+[⬆️ Back to English Version](#english-version) | [🔝 返回頂部](#mediprisma--smart-on-fhir-使用者操作指南--user-guide)
 
 ---
 

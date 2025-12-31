@@ -1,4 +1,4 @@
-# Medical Note · SMART on FHIR
+# MediPrisma · SMART on FHIR
 
 A clinical documentation assistant built with **Next.js 16**, **SMART on FHIR**, and **AI integration** (OpenAI GPT / Google Gemini). This application helps healthcare providers efficiently review patient data, generate clinical summaries, and create medical notes through voice recording and AI assistance.
 
