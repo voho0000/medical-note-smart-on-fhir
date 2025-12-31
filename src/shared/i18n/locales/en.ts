@@ -17,7 +17,7 @@ export const en = {
   },
   
   header: {
-    title: "Medical Note · SMART on FHIR",
+    title: "MediPrisma · SMART on FHIR",
     clinicalSummary: "Clinical Summary",
     features: "Features",
     language: 'Language',
@@ -55,6 +55,14 @@ export const en = {
     respiratoryRate: 'Respiratory Rate',
     oxygenSaturation: 'Oxygen Saturation',
     noData: 'No vital signs data available.',
+    height: 'Height',
+    weight: 'Weight',
+    bmi: 'BMI',
+    bp: 'BP',
+    hr: 'HR',
+    rr: 'RR',
+    temp: 'Temp',
+    spo2: 'SpO₂',
   },
 
   conditions: {

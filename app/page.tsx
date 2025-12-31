@@ -2,7 +2,6 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import Image from "next/image"
 import { PatientProvider } from "@/src/application/providers/patient.provider"
 import { ClinicalDataProvider } from "@/src/application/providers/clinical-data.provider"
 import { ApiKeyProvider } from "@/src/application/providers/api-key.provider"
@@ -75,7 +74,7 @@ function PageContent() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
-              <Image src="/icon.svg" alt="App Icon" width={40} height={40} className="h-full w-full" />
+              <img src="/icon.svg" alt="App Icon" className="h-full w-full object-contain" />
             </div>
             <h1 className="text-base sm:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>

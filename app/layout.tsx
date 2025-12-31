@@ -3,7 +3,7 @@ import "./globals.css"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Medical Note · SMART on FHIR",
+  title: "MediPrisma · SMART on FHIR",
   description: "A modular SMART on FHIR app with clinical summary and medical note features.",
 }
 

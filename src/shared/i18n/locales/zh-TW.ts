@@ -19,7 +19,7 @@ export const zhTW = {
   },
   
   header: {
-    title: "醫療筆記 · SMART on FHIR",
+    title: "MediPrisma · SMART on FHIR",
     clinicalSummary: "臨床摘要",
     features: "功能",
     language: '語言',
@@ -57,6 +57,14 @@ export const zhTW = {
     respiratoryRate: '呼吸速率',
     oxygenSaturation: '血氧飽和度',
     noData: '無生命徵象資料。',
+    height: '身高',
+    weight: '體重',
+    bmi: 'BMI',
+    bp: '血壓',
+    hr: '心率',
+    rr: '呼吸',
+    temp: '體溫',
+    spo2: '血氧SpO₂',
   },
 
   conditions: {
