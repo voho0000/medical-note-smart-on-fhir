@@ -1,7 +1,7 @@
 name: Deploy to GitHub Pages
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch: {}
 
 permissions:
@@ -27,6 +27,7 @@ jobs:
         run: npm run build:gh
         env:
           GITHUB_PAGES: "true"
+          NEXT_PUBLIC_BASE_PATH: "/medical-note-smart-on-fhir"
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"   # 👈 disable lightningcss in CI
           NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
           NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
