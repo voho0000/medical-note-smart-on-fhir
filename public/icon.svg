@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="32" fill="#234C96"/>
+  <!-- Prism shape with white stroke -->
+  <g fill="none" stroke="white" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Top edge of prism -->
+    <path d="M 80 80 L 176 80"/>
+    <!-- Left side -->
+    <path d="M 80 80 L 48 176"/>
+    <!-- Right side -->
+    <path d="M 176 80 L 208 176"/>
+    <!-- Bottom edge -->
+    <path d="M 48 176 L 208 176"/>
+    <!-- Bottom point -->
+    <path d="M 48 176 L 128 224 L 208 176"/>
+    <!-- Internal refraction lines -->
+    <path d="M 80 80 L 128 176"/>
+    <path d="M 176 80 L 128 176"/>
+    <path d="M 128 176 L 128 224"/>
+  </g>
+</svg>
