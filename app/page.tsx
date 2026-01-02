@@ -74,7 +74,7 @@ function PageContent() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
-              <img src="/icon.svg" alt="App Icon" className="h-full w-full object-contain" />
+              <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg`} alt="App Icon" className="h-full w-full object-contain" />
             </div>
             <h1 className="text-base sm:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>
