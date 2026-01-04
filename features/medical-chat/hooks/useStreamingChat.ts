@@ -6,6 +6,7 @@ import { useNote, type ChatMessage } from "@/src/application/providers/note.prov
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { StreamOrchestrator } from "@/src/infrastructure/ai/streaming/stream-orchestrator"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
 
 export function useStreamingChat(systemPrompt: string, modelId: string) {
   const { chatMessages, setChatMessages } = useNote()
@@ -49,10 +50,24 @@ export function useStreamingChat(systemPrompt: string, modelId: string) {
         const provider = modelDef?.provider ?? "openai"
         const apiKey = provider === "openai" ? openAiKey : geminiKey
 
-        // Build messages for API
+        // Prepare messages
+        const userMessages = newMessages.map((m) => ({ role: m.role, content: m.content }))
+        
+        // Check token usage and truncate if needed
+        const stats = getTokenStats(userMessages, { modelId, systemPrompt })
+        console.log(`[Chat] Token usage: ${stats.totalTokens}/${stats.contextLimit} (${stats.utilizationPercent}%)`)
+        
+        // Truncate to fit context window
+        const truncatedMessages = truncateToContextWindow(userMessages, { 
+          modelId, 
+          systemPrompt,
+          maxResponseTokens: 4000 
+        })
+
+        // Build final messages for API
         const apiMessages = [
           { role: "system", content: systemPrompt },
-          ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+          ...truncatedMessages,
         ]
 
         // Stream response using orchestrator
