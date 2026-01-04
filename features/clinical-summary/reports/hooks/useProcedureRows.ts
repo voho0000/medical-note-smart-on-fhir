@@ -10,12 +10,25 @@ export function useProcedureRows(procedures: any[]) {
     return procedures.map((procedure: any) => {
       const title = getCodeableConceptText(procedure?.code) || "Procedure"
       const performed = procedure?.performedDateTime || procedure?.performedPeriod?.start
-      const performer = Array.isArray(procedure?.performer)
-        ? procedure.performer
-            .map((p: any) => p?.actor?.display || p?.actor?.reference)
-            .filter(Boolean)
-            .join(", ")
-        : undefined
+      // Extract performer with better fallback logic
+      let performer: string | undefined
+      if (Array.isArray(procedure?.performer) && procedure.performer.length > 0) {
+        performer = procedure.performer
+          .map((p: any) => {
+            // Try different FHIR formats
+            return p?.actor?.display || 
+                   p?.display || 
+                   p?.actor?.reference?.split('/').pop() ||
+                   p?.reference?.split('/').pop()
+          })
+          .filter(Boolean)
+          .join(", ")
+        
+        // Debug: log if we have performer array but no extracted names
+        if (!performer && procedure.performer.length > 0) {
+          console.log('[Procedure] performer data structure:', procedure.performer[0])
+        }
+      }
       const outcome = getConceptText(procedure?.outcome)
       const category = getConceptText(procedure?.category)
       const location = procedure?.location?.display
@@ -30,15 +43,15 @@ export function useProcedureRows(procedures: any[]) {
         : []
 
       const components: any[] = []
-      components.push({ code: { text: "Status" }, valueString: procedure?.status || "—" })
+      components.push({ code: { text: "狀態" }, valueString: procedure?.status || "—" })
       if (performed) {
-        components.push({ code: { text: "Performed On" }, valueString: formatDate(performed) })
+        components.push({ code: { text: "執行日期" }, valueString: formatDate(performed) })
       }
       if (performer) {
-        components.push({ code: { text: "Performer" }, valueString: performer })
+        components.push({ code: { text: "執行者" }, valueString: performer })
       }
       if (category && category !== "—") {
-        components.push({ code: { text: "Category" }, valueString: category })
+        components.push({ code: { text: "類別" }, valueString: category })
       }
       if (reason && reason !== "—") {
         components.push({ code: { text: "Reason" }, valueString: reason })
@@ -66,7 +79,7 @@ export function useProcedureRows(procedures: any[]) {
         resourceType: "Observation",
         id: procedure?.id ? `procedure-${procedure.id}` : `procedure-${Math.random().toString(36).slice(2, 10)}`,
         code: { text: "Procedure Summary" },
-        valueString: outcome !== "—" ? outcome : notes || "Expand to view procedure details",
+        valueString: outcome !== "—" ? outcome : notes || "—",
         effectiveDateTime: performed,
         status: procedure?.status,
         category: procedure?.category,

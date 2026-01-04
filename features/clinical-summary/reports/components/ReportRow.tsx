@@ -25,12 +25,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {row.obs[0]?.status && (
               <span className="inline-flex items-center gap-1">
-                <span className="font-medium text-foreground/80">Status:</span> {row.obs[0]?.status}
+                <span className="font-medium text-foreground/80">狀態:</span> {row.obs[0]?.status}
               </span>
             )}
             {row.obs[0]?.category && (
               <span className="inline-flex items-center gap-1">
-                <span className="font-medium text-foreground/80">Category:</span> {getConceptText(row.obs[0]?.category)}
+                <span className="font-medium text-foreground/80">類別:</span> {getConceptText(row.obs[0]?.category)}
               </span>
             )}
           </div>
@@ -52,12 +52,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               {row.obs[0]?.status && (
                 <span className="inline-flex items-center gap-1">
-                  <span className="font-medium text-foreground/80">Status:</span> {row.obs[0]?.status}
+                  <span className="font-medium text-foreground/80">狀態:</span> {row.obs[0]?.status}
                 </span>
               )}
               {row.obs[0]?.category && (
                 <span className="inline-flex items-center gap-1">
-                  <span className="font-medium text-foreground/80">Category:</span> {getConceptText(row.obs[0]?.category)}
+                  <span className="font-medium text-foreground/80">類別:</span> {getConceptText(row.obs[0]?.category)}
                 </span>
               )}
             </div>
