@@ -9,7 +9,7 @@ import { ChatMessageList } from "./ChatMessageList"
 import { VoiceRecorder } from "./VoiceRecorder"
 import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
-import { useChatMessages } from "../hooks/useChatMessages"
+import { useStreamingChat } from "../hooks/useStreamingChat"
 import { useVoiceRecording } from "../hooks/useVoiceRecording"
 import { useTemplateSelector } from "../hooks/useTemplateSelector"
 import { useChatInput } from "../hooks/useChatInput"
@@ -23,7 +23,7 @@ export function MedicalChat() {
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { getFullClinicalContext } = useClinicalContext()
   const input = useChatInput()
-  const chat = useChatMessages(systemPrompt, model)
+  const chat = useStreamingChat(systemPrompt, model)
   const voice = useVoiceRecording()
   const template = useTemplateSelector()
   const recordingStatus = useRecordingStatus(voice)
