@@ -13,6 +13,7 @@ export const en = {
     reset: 'Reset',
     send: 'Send',
     sending: 'Sending…',
+    stop: 'Stop',
     preview: 'Preview',
   },
   

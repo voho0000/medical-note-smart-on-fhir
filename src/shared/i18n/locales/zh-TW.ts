@@ -15,6 +15,7 @@ export const zhTW = {
     reset: '重設',
     send: '傳送',
     sending: '傳送中…',
+    stop: '停止',
     preview: '預覽',
   },
   

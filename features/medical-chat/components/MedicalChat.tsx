@@ -17,7 +17,7 @@ import { useChatInput } from "../hooks/useChatInput"
 import { useSystemPrompt } from "../hooks/useSystemPrompt"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { Sparkles, MessageSquare } from "lucide-react"
+import { Sparkles, MessageSquare, Square } from "lucide-react"
 
 export function MedicalChat() {
   const { t } = useLanguage()
@@ -206,23 +206,23 @@ export function MedicalChat() {
               startRecordingRef={voice.startRecordingRef}
               stopRecordingRef={voice.stopRecordingRef}
             />
-            <button
-              onClick={() => handleSend().catch(console.error)}
-              disabled={chat.isLoading || !input.input.trim()}
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
-            >
-              {chat.isLoading ? (
-                <>
-                  <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  {t.common.sending}
-                </>
-              ) : (
-                t.common.send
-              )}
-            </button>
+            {chat.isLoading ? (
+              <button
+                onClick={() => chat.stopGeneration()}
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 px-4 py-2"
+              >
+                <Square className="h-4 w-4 fill-current" />
+                {t.common.stop}
+              </button>
+            ) : (
+              <button
+                onClick={() => handleSend().catch(console.error)}
+                disabled={!input.input.trim()}
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+              >
+                {t.common.send}
+              </button>
+            )}
           </div>
           {(input.input.length > 0 || voice.lastTranscript) && (
             <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
