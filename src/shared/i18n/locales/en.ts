@@ -255,6 +255,7 @@ export const en = {
     template: 'Template',
     remove: 'Remove',
     label: 'Label',
+    prompt: 'Prompt',
     tab: 'Tab',
     tabLabel: 'Tab label',
     subtitleOptional: 'Subtitle (optional)',
