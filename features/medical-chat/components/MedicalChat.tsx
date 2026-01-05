@@ -23,22 +23,26 @@ export function MedicalChat() {
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { getFullClinicalContext } = useClinicalContext()
   const input = useChatInput()
-  const chat = useStreamingChat(systemPrompt, model)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  // Clear input and reset textarea height
+  const clearInputAndResetHeight = useCallback(() => {
+    input.clear()
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+  }, [input])
+  
+  const chat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight)
   const voice = useVoiceRecording()
   const template = useTemplateSelector()
   const recordingStatus = useRecordingStatus(voice)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Handlers
   const handleSend = useCallback(async () => {
     const trimmed = input.input.trim()
     if (!trimmed) return
     await chat.handleSend(trimmed)
-    input.clear()
-    // Reset textarea height after sending
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
   }, [input, chat])
   
   // Auto-resize textarea based on content

@@ -9,16 +9,18 @@ import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
 import { formatErrorMessage } from "../utils/formatErrorMessage"
 
-export function useStreamingChat(systemPrompt: string, modelId: string) {
+export function useStreamingChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
   const { chatMessages, setChatMessages } = useNote()
   const { apiKey: openAiKey, geminiKey } = useApiKey()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const orchestratorRef = useRef(new StreamOrchestrator())
+  const hasReceivedChunkRef = useRef(false)
 
   const handleSend = useCallback(
     async (input: string) => {
+      hasReceivedChunkRef.current = false
       const trimmed = input.trim()
       if (!trimmed) return
 
@@ -78,6 +80,11 @@ export function useStreamingChat(systemPrompt: string, modelId: string) {
           apiKey,
           signal: abortControllerRef.current.signal,
           onChunk: (content: string) => {
+            // Clear input on first chunk (streaming started successfully)
+            if (!hasReceivedChunkRef.current && onInputClear) {
+              hasReceivedChunkRef.current = true
+              onInputClear()
+            }
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId ? { ...m, content } : m)
             )
