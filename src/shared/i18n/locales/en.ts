@@ -255,6 +255,7 @@ export const en = {
     template: 'Template',
     remove: 'Remove',
     label: 'Label',
+    tab: 'Tab',
     tabLabel: 'Tab label',
     subtitleOptional: 'Subtitle (optional)',
     tabLabelPlaceholder: 'Safety Flag',

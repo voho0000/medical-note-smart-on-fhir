@@ -257,6 +257,7 @@ export const zhTW = {
     template: '範本',
     remove: '移除',
     label: '標籤',
+    tab: '標籤',
     tabLabel: '標籤名稱',
     subtitleOptional: '副標題（選填）',
     tabLabelPlaceholder: '安全警示',
