@@ -54,11 +54,19 @@ export function MedicalChat() {
     return provider === "openai" ? !!openAiKey : !!geminiKey
   }, [model, openAiKey, geminiKey])
 
+  // Hide warning when API key is set
+  useEffect(() => {
+    if (isAgentMode && hasApiKey()) {
+      setShowApiKeyWarning(false)
+    }
+  }, [isAgentMode, hasApiKey])
+
   // Handle agent mode toggle with API key check
   const handleAgentModeToggle = useCallback((enabled: boolean) => {
     if (enabled && !hasApiKey()) {
       setShowApiKeyWarning(true)
-      setTimeout(() => setShowApiKeyWarning(false), 5000)
+    } else {
+      setShowApiKeyWarning(false)
     }
     setIsAgentMode(enabled)
   }, [hasApiKey])
