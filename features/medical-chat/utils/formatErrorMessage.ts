@@ -4,9 +4,12 @@ export function formatErrorMessage(error: Error | string): string {
   const message = typeof error === 'string' ? error : error.message
   
   // Map common errors to user-friendly messages with actionable advice
+  // Order matters: more specific patterns should come first
   const errorMappings: Array<{ pattern: RegExp; message: string }> = [
+    // Check for API key errors first (most common user error)
+    // Match various forms: "401", "Unauthorized", "Authentication failed", etc.
     {
-      pattern: /authentication failed|api key|unauthorized|401/i,
+      pattern: /401|unauthorized|authentication failed.*check.*api key|incorrect api key|invalid api key|invalid_api_key|api_key_invalid/i,
       message: '🔑 **API Key 錯誤**\n\n您的 API key 可能無效或已過期。\n\n**解決方法：**\n1. 前往右側「設定」標籤\n2. 重新輸入正確的 API key\n3. 確認 key 沒有多餘的空格\n4. 如使用 OpenAI，key 應以 `sk-` 開頭\n5. 如使用 Gemini，key 應以 `AIza` 開頭'
     },
     {
@@ -17,9 +20,10 @@ export function formatErrorMessage(error: Error | string): string {
       pattern: /timeout|timed out/i,
       message: '⏰ **請求逾時**\n\n伺服器回應時間過長。\n\n**解決方法：**\n1. 檢查網路連線\n2. 稍後再試\n3. 嘗試較短的問題'
     },
+    // Network errors should come after more specific errors
     {
       pattern: /network error|failed to fetch|fetch failed/i,
-      message: '🌐 **網路連線問題**\n\n無法連接到 AI 服務。\n\n**解決方法：**\n1. 檢查網路連線\n2. 確認防火牆設定\n3. 重新整理頁面\n4. 檢查 Firebase proxy 是否正常運作'
+      message: '🌐 **網路連線問題**\n\n無法連接到 AI 服務。\n\n**解決方法：**\n1. 檢查網路連線\n2. 確認防火牆設定\n3. 重新整理頁面\n4. 如果您有設定 API key，請確認 key 是否正確'
     },
     {
       pattern: /service.*unavailable|500|502|503/i,
