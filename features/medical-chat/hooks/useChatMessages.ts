@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react"
 import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
 import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { formatErrorMessage } from "../utils/formatErrorMessage"
 
 function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
   return {
@@ -39,8 +40,9 @@ export function useChatMessages(systemPrompt: string, model: string) {
         }
         setChatMessages((prev) => [...prev, assistantMessage])
       } catch (err) {
-        const fallback = err instanceof Error ? err.message : "Failed to generate response."
-        const errorMessage = createMessage("assistant", `⚠️ ${fallback}`)
+        const errorObj = err instanceof Error ? err : new Error("Failed to generate response.")
+        const formattedError = formatErrorMessage(errorObj)
+        const errorMessage = createMessage("assistant", formattedError)
         setChatMessages((prev) => [...prev, errorMessage])
       }
     },

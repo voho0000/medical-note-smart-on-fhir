@@ -7,6 +7,7 @@ import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { StreamOrchestrator } from "@/src/infrastructure/ai/streaming/stream-orchestrator"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
+import { formatErrorMessage } from "../utils/formatErrorMessage"
 
 export function useStreamingChat(systemPrompt: string, modelId: string) {
   const { chatMessages, setChatMessages } = useNote()
@@ -85,10 +86,11 @@ export function useStreamingChat(systemPrompt: string, modelId: string) {
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return
         
-        const msg = err instanceof Error ? err.message : "Failed to generate response."
-        setError(err instanceof Error ? err : new Error(msg))
+        const errorObj = err instanceof Error ? err : new Error("Failed to generate response.")
+        setError(errorObj)
+        const formattedError = formatErrorMessage(errorObj)
         setChatMessages((prev) =>
-          prev.map((m) => m.id === assistantMessageId ? { ...m, content: `⚠️ ${msg}` } : m)
+          prev.map((m) => m.id === assistantMessageId ? { ...m, content: formattedError } : m)
         )
       } finally {
         setIsLoading(false)
