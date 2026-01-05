@@ -20,12 +20,18 @@ const NoteContext = createContext<Ctx | null>(null)
 
 const MODEL_STORAGE_KEY = "clinical-note:model"
 
+export type AgentState = {
+  state: string
+  timestamp: number
+}
+
 export type ChatMessage = {
   id: string
   role: "user" | "assistant" | "system"
   content: string
   timestamp: number
   modelId?: string
+  agentStates?: AgentState[]
 }
 
 export function NoteProvider({ children }: { children: React.ReactNode }) {

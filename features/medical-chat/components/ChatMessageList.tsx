@@ -8,6 +8,7 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import type { ChatMessage } from "@/src/application/providers/note.provider"
+import { AgentStateHistory } from "./AgentStateHistory"
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
@@ -85,15 +86,22 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                 <span>•</span>
                 <span>{formatTimestamp(message.timestamp)}</span>
               </div>
-              <div
-                className={cn(
-                  "relative px-4 py-2.5 text-sm max-w-[85%] break-words",
-                  message.role === "assistant" 
-                    ? "rounded-2xl rounded-tl-sm bg-muted/80 text-foreground shadow-sm" 
-                    : "rounded-2xl rounded-tr-sm bg-blue-500 text-white shadow-md",
+              <div className="flex flex-col gap-2 max-w-[85%]">
+                {message.role === "assistant" && message.agentStates && message.agentStates.length > 1 && (
+                  <AgentStateHistory 
+                    states={message.agentStates} 
+                    currentState={message.content}
+                  />
                 )}
-              >
-                {message.role === "assistant" ? (
+                <div
+                  className={cn(
+                    "relative px-4 py-2.5 text-sm break-words",
+                    message.role === "assistant" 
+                      ? "rounded-2xl rounded-tl-sm bg-muted/80 text-foreground shadow-sm" 
+                      : "rounded-2xl rounded-tr-sm bg-blue-500 text-white shadow-md",
+                  )}
+                >
+                  {message.role === "assistant" ? (
                   <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
@@ -120,9 +128,10 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                       {message.content}
                     </ReactMarkdown>
                   </div>
-                ) : (
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{message.content}</pre>
-                )}
+                  ) : (
+                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{message.content}</pre>
+                  )}
+                </div>
               </div>
             </div>
           ))

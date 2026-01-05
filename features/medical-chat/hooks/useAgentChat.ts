@@ -5,7 +5,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from "react"
 import { streamText } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
+import { useNote, type ChatMessage, type AgentState } from "@/src/application/providers/note.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { usePatient } from "@/src/application/providers/patient.provider"
 import { formatErrorMessage } from "../utils/formatErrorMessage"
@@ -64,12 +64,17 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
       const assistantMessageId = crypto.randomUUID()
       const thinkingMessage = `🤔 ${t.agent.thinking}`
+      const initialState: AgentState = {
+        state: thinkingMessage,
+        timestamp: Date.now(),
+      }
       setChatMessages([...newMessages, {
         id: assistantMessageId,
         role: "assistant",
         content: thinkingMessage,
         timestamp: Date.now(),
         modelId,
+        agentStates: [initialState],
       }])
 
       setIsLoading(true)
@@ -166,9 +171,14 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
                 return displayNames[name] || name
               }).join('、')
               
+              const newState = `🔍 正在${toolNames}...`
               setChatMessages((prev) =>
                 prev.map((m) => m.id === assistantMessageId 
-                  ? { ...m, content: `🔍 正在${toolNames}...` } 
+                  ? { 
+                      ...m, 
+                      content: newState,
+                      agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }]
+                    } 
                   : m)
               )
             }
@@ -198,9 +208,14 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
           } else if (chunk.type === 'tool-call') {
             const toolNameKey = chunk.toolName as keyof typeof t.agent.toolNames
             const displayName = t.agent.toolNames[toolNameKey] || chunk.toolName
+            const newState = `🔍 ${displayName}...`
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId 
-                ? { ...m, content: `🔍 ${displayName}...` } 
+                ? { 
+                    ...m, 
+                    content: newState,
+                    agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }]
+                  } 
                 : m)
             )
           } else if (chunk.type === 'tool-result') {
@@ -219,9 +234,14 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
           console.log('[Agent] No text after tool calls, sending follow-up request...')
           console.log('[Agent] Tool results to process:', JSON.stringify(toolResults, null, 2))
           
+          const organizingState = `📝 ${t.agent.organizingResults}`
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId 
-              ? { ...m, content: `📝 ${t.agent.organizingResults}` } 
+              ? { 
+                  ...m, 
+                  content: organizingState,
+                  agentStates: [...(m.agentStates || []), { state: organizingState, timestamp: Date.now() }]
+                } 
               : m)
           )
           
