@@ -38,8 +38,8 @@ export function ModelAndKeySettings() {
     setModel
   )
 
-  const handleSaveOpenAiKey = () => {
-    if (openAiValue) setApiKey(openAiValue.trim())
+  const handleSaveOpenAiKey = async () => {
+    if (openAiValue) await setApiKey(openAiValue.trim())
   }
 
   const handleClearOpenAiKey = () => {
@@ -51,8 +51,8 @@ export function ModelAndKeySettings() {
     }
   }
 
-  const handleSaveGeminiKey = () => {
-    if (geminiValue) setGeminiKey(geminiValue.trim())
+  const handleSaveGeminiKey = async () => {
+    if (geminiValue) await setGeminiKey(geminiValue.trim())
   }
 
   const handleClearGeminiKey = () => {

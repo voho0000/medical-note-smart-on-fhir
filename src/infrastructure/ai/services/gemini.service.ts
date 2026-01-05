@@ -56,7 +56,8 @@ export class GeminiService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: response.statusText }))
-        throw new Error(errorData.error?.message || errorData.error || 'Gemini API request failed')
+        const errorMessage = this.sanitizeErrorMessage(errorData.error?.message || errorData.error || 'Gemini API request failed')
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -86,6 +87,39 @@ export class GeminiService {
     }
     // Direct Gemini API response format
     return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  }
+
+  private sanitizeErrorMessage(message: string): string {
+    // Remove actual API keys from error messages
+    let sanitized = message
+    
+    // Remove Google API key pattern (AIza...)
+    sanitized = sanitized.replace(/AIza[a-zA-Z0-9_-]{20,}/g, '[API_KEY_REDACTED]')
+    
+    // Remove Bearer tokens
+    sanitized = sanitized.replace(/Bearer\s+[a-zA-Z0-9_-]+/gi, 'Bearer [TOKEN_REDACTED]')
+    
+    // Check for sensitive keywords that indicate API key exposure
+    const hasSensitiveInfo = /api[_-]?key[:\s]*["']?AIza/gi.test(message)
+    if (hasSensitiveInfo) {
+      return 'Authentication failed. Please check your API key.'
+    }
+
+    // Map common error codes to user-friendly messages
+    if (sanitized.includes('401') || sanitized.includes('Unauthorized')) {
+      return 'Authentication failed. Please check your API key.'
+    }
+    if (sanitized.includes('429') || sanitized.includes('rate limit')) {
+      return 'Rate limit exceeded. Please try again later.'
+    }
+    if (sanitized.includes('500') || sanitized.includes('Internal Server Error')) {
+      return 'Service temporarily unavailable. Please try again later.'
+    }
+    if (sanitized.includes('timeout')) {
+      return 'Request timed out. Please try again.'
+    }
+
+    return sanitized
   }
 
 }

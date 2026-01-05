@@ -227,7 +227,28 @@ medical-note-smart-on-fhir/
 - **Provider 模式**：基於 Context 的狀態管理
 - **Repository 模式**：資料存取抽象
 - **Adapter 模式**：外部 API 整合
+- **Registry 模式**：可插拔功能架構
 - **基於功能的組織**：模組化功能結構
+
+### 🔌 可插拔架構
+
+應用程式採用可插拔架構，讓開發者輕鬆新增、替換或移除功能：
+
+**左側 Panel（臨床摘要）**：
+- 配置檔：`src/shared/config/feature-registry.ts`
+- 支援動態 Tab 和功能管理
+- 詳細指南：[CONTRIBUTING_LEFT_PANEL.md](./docs/CONTRIBUTING_LEFT_PANEL.md)
+
+**右側 Panel（AI 功能）**：
+- 配置檔：`src/shared/config/right-panel-registry.ts`
+- 支援功能註冊和 Provider 管理
+- 詳細指南：[CONTRIBUTING_RIGHT_PANEL.md](./docs/CONTRIBUTING_RIGHT_PANEL.md)
+
+**適用場景**：
+- Fork 專案並客製化功能
+- 新增醫院專屬功能
+- 實驗性功能測試
+- 多團隊協作開發
 
 ---
 
@@ -277,13 +298,37 @@ npm run deploy
 
 ---
 
+## 🔒 安全性
+
+本專案實作了多層安全防護：
+
+- **API Key 加密**：使用 AES-GCM 256-bit 加密儲存
+- **Content Security Policy**：防止 XSS 和 injection 攻擊
+- **HTML Sanitization**：過濾危險的 HTML 內容
+- **錯誤訊息過濾**：避免洩漏敏感資訊
+
+詳細資訊請參閱：
+- [SECURITY.md](./docs/SECURITY.md) - 安全性指南和最佳實踐
+- [SECURITY_IMPLEMENTATION.md](./docs/SECURITY_IMPLEMENTATION.md) - 安全性實作細節
+
+---
+
 ## 🤝 貢獻
+
+### 開發者指南
+
+- **新增左側功能**：參閱 [CONTRIBUTING_LEFT_PANEL.md](./docs/CONTRIBUTING_LEFT_PANEL.md)
+- **新增右側功能**：參閱 [CONTRIBUTING_RIGHT_PANEL.md](./docs/CONTRIBUTING_RIGHT_PANEL.md)
+- **架構說明**：參閱 [ARCHITECTURE_UPDATE.md](./docs/ARCHITECTURE_UPDATE.md)
+
+### 貢獻準則
 
 1. 遵循現有的程式碼結構和模式
 2. 為新功能撰寫測試
 3. 提交前確保所有測試通過
 4. 遵循 TypeScript 最佳實踐
 5. 使用慣例式提交訊息
+6. 透過 Registry 新增功能，避免直接修改 Layout
 
 ---
 
@@ -525,7 +570,28 @@ This application follows **Clean Architecture** principles:
 - **Provider Pattern**: Context-based state management
 - **Repository Pattern**: Data access abstraction
 - **Adapter Pattern**: External API integration
+- **Registry Pattern**: Pluggable feature architecture
 - **Feature-based Organization**: Modular feature structure
+
+### 🔌 Pluggable Architecture
+
+The application uses a pluggable architecture that allows developers to easily add, replace, or remove features:
+
+**Left Panel (Clinical Summary)**:
+- Configuration: `src/shared/config/feature-registry.ts`
+- Supports dynamic tabs and feature management
+- Guide: [CONTRIBUTING_LEFT_PANEL.md](./docs/CONTRIBUTING_LEFT_PANEL.md)
+
+**Right Panel (AI Features)**:
+- Configuration: `src/shared/config/right-panel-registry.ts`
+- Supports feature registration and provider management
+- Guide: [CONTRIBUTING_RIGHT_PANEL.md](./docs/CONTRIBUTING_RIGHT_PANEL.md)
+
+**Use Cases**:
+- Fork and customize features
+- Add hospital-specific functionality
+- Test experimental features
+- Multi-team collaborative development
 
 ---
 
@@ -577,11 +643,20 @@ For clinical users, please refer to [USER_GUIDE.md](./USER_GUIDE.md) for detaile
 
 ## 🤝 Contributing
 
+### Developer Guides
+
+- **Adding Left Panel Features**: See [CONTRIBUTING_LEFT_PANEL.md](./docs/CONTRIBUTING_LEFT_PANEL.md)
+- **Adding Right Panel Features**: See [CONTRIBUTING_RIGHT_PANEL.md](./docs/CONTRIBUTING_RIGHT_PANEL.md)
+- **Architecture Overview**: See [ARCHITECTURE_UPDATE.md](./docs/ARCHITECTURE_UPDATE.md)
+
+### Contribution Guidelines
+
 1. Follow the existing code structure and patterns
 2. Write tests for new features
 3. Ensure all tests pass before submitting
 4. Follow TypeScript best practices
 5. Use conventional commit messages
+6. Add features via Registry, avoid directly modifying Layouts
 
 ---
 

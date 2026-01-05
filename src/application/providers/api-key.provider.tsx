@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react'
 import { StorageService } from '@/src/shared/utils/storage.utils'
 import { STORAGE_KEYS } from '@/src/shared/constants/data-selection.constants'
+import { encrypt, decrypt, clearSessionKey } from '@/src/shared/utils/crypto.utils'
 
 type StorageType = 'localStorage' | 'sessionStorage'
 
@@ -11,9 +12,9 @@ interface ApiKeyContextValue {
   apiKey: string | null
   geminiKey: string | null
   storageType: StorageType
-  setApiKey: (key: string | null) => void
-  setGeminiKey: (key: string | null) => void
-  setStorageType: (type: StorageType) => void
+  setApiKey: (key: string | null) => Promise<void>
+  setGeminiKey: (key: string | null) => Promise<void>
+  setStorageType: (type: StorageType) => Promise<void>
   clearKeys: () => void
   clearApiKey: () => void
   clearGeminiKey: () => void
@@ -28,35 +29,52 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
 
   // Load keys on mount
   useEffect(() => {
-    const storage = new StorageService(storageType)
-    const loadedApiKey = storage.get<string>(STORAGE_KEYS.API_KEY)
-    const loadedGeminiKey = storage.get<string>(STORAGE_KEYS.GEMINI_KEY)
+    const loadKeys = async () => {
+      const storage = new StorageService(storageType)
+      const loadedApiKey = storage.get<string>(STORAGE_KEYS.API_KEY)
+      const loadedGeminiKey = storage.get<string>(STORAGE_KEYS.GEMINI_KEY)
+      
+      // Decrypt keys if they exist
+      if (loadedApiKey) {
+        const decryptedKey = await decrypt(loadedApiKey)
+        setApiKeyState(decryptedKey)
+      }
+      if (loadedGeminiKey) {
+        const decryptedKey = await decrypt(loadedGeminiKey)
+        setGeminiKeyState(decryptedKey)
+      }
+    }
     
-    if (loadedApiKey) setApiKeyState(loadedApiKey)
-    if (loadedGeminiKey) setGeminiKeyState(loadedGeminiKey)
+    loadKeys()
   }, [storageType])
 
-  const setApiKey = (key: string | null) => {
+  const setApiKey = async (key: string | null) => {
     const storage = new StorageService(storageType)
     if (key) {
-      storage.set(STORAGE_KEYS.API_KEY, key)
+      // Encrypt before storing
+      const encryptedKey = await encrypt(key)
+      storage.set(STORAGE_KEYS.API_KEY, encryptedKey)
+      setApiKeyState(key)
     } else {
       storage.remove(STORAGE_KEYS.API_KEY)
+      setApiKeyState(null)
     }
-    setApiKeyState(key)
   }
 
-  const setGeminiKey = (key: string | null) => {
+  const setGeminiKey = async (key: string | null) => {
     const storage = new StorageService(storageType)
     if (key) {
-      storage.set(STORAGE_KEYS.GEMINI_KEY, key)
+      // Encrypt before storing
+      const encryptedKey = await encrypt(key)
+      storage.set(STORAGE_KEYS.GEMINI_KEY, encryptedKey)
+      setGeminiKeyState(key)
     } else {
       storage.remove(STORAGE_KEYS.GEMINI_KEY)
+      setGeminiKeyState(null)
     }
-    setGeminiKeyState(key)
   }
 
-  const setStorageType = (type: StorageType) => {
+  const setStorageType = async (type: StorageType) => {
     // Migrate keys to new storage
     const oldStorage = new StorageService(storageType)
     const newStorage = new StorageService(type)
@@ -64,8 +82,17 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
     const oldApiKey = oldStorage.get<string>(STORAGE_KEYS.API_KEY)
     const oldGeminiKey = oldStorage.get<string>(STORAGE_KEYS.GEMINI_KEY)
 
-    if (oldApiKey) newStorage.set(STORAGE_KEYS.API_KEY, oldApiKey)
-    if (oldGeminiKey) newStorage.set(STORAGE_KEYS.GEMINI_KEY, oldGeminiKey)
+    // Decrypt from old storage and re-encrypt for new storage
+    if (oldApiKey) {
+      const decrypted = await decrypt(oldApiKey)
+      const encrypted = await encrypt(decrypted)
+      newStorage.set(STORAGE_KEYS.API_KEY, encrypted)
+    }
+    if (oldGeminiKey) {
+      const decrypted = await decrypt(oldGeminiKey)
+      const encrypted = await encrypt(decrypted)
+      newStorage.set(STORAGE_KEYS.GEMINI_KEY, encrypted)
+    }
 
     oldStorage.remove(STORAGE_KEYS.API_KEY)
     oldStorage.remove(STORAGE_KEYS.GEMINI_KEY)
@@ -77,6 +104,7 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
     const storage = new StorageService(storageType)
     storage.remove(STORAGE_KEYS.API_KEY)
     storage.remove(STORAGE_KEYS.GEMINI_KEY)
+    clearSessionKey() // Clear encryption key
     setApiKeyState(null)
     setGeminiKeyState(null)
   }
