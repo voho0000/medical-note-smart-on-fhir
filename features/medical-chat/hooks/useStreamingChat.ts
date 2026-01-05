@@ -4,6 +4,7 @@
 import { useState, useCallback, useRef } from "react"
 import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { StreamOrchestrator } from "@/src/infrastructure/ai/streaming/stream-orchestrator"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
@@ -12,6 +13,7 @@ import { formatErrorMessage } from "../utils/formatErrorMessage"
 export function useStreamingChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
   const { chatMessages, setChatMessages } = useNote()
   const { apiKey: openAiKey, geminiKey } = useApiKey()
+  const { locale } = useLanguage()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -95,7 +97,7 @@ export function useStreamingChat(systemPrompt: string, modelId: string, onInputC
         
         const errorObj = err instanceof Error ? err : new Error("Failed to generate response.")
         setError(errorObj)
-        const formattedError = formatErrorMessage(errorObj)
+        const formattedError = formatErrorMessage(errorObj, locale)
         setChatMessages((prev) =>
           prev.map((m) => m.id === assistantMessageId ? { ...m, content: formattedError } : m)
         )
