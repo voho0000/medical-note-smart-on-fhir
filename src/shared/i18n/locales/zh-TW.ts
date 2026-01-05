@@ -261,6 +261,7 @@ export const zhTW = {
     tab: '標籤',
     tabLabel: '標籤名稱',
     subtitleOptional: '副標題（選填）',
+    descriptionOptional: '描述（選填）',
     orderControls: '順序控制：',
     moveUp: '↑ 上移',
     moveDown: '↓ 下移',

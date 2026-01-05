@@ -259,6 +259,7 @@ export const en = {
     tab: 'Tab',
     tabLabel: 'Tab label',
     subtitleOptional: 'Subtitle (optional)',
+    descriptionOptional: 'Description (optional)',
     orderControls: 'Order controls:',
     moveUp: '↑ Move up',
     moveDown: '↓ Move down',
