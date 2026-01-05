@@ -1,4 +1,6 @@
 // API Key Input Component
+import { useState } from "react"
+import { Eye, EyeOff } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -26,6 +28,7 @@ export function ApiKeyInput({
   helpText,
 }: ApiKeyInputProps) {
   const { t } = useLanguage()
+  const [showPassword, setShowPassword] = useState(false)
   
   return (
     <div className="space-y-2">
@@ -33,14 +36,28 @@ export function ApiKeyInput({
         {label}
       </Label>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Input
-          id={id}
-          type="password"
-          placeholder={placeholder}
-          className="sm:flex-1"
-          value={value || ''}
-          onChange={(event) => onChange(event.target.value)}
-        />
+        <div className="relative sm:flex-1">
+          <Input
+            id={id}
+            type={showPassword ? "text" : "password"}
+            placeholder={placeholder}
+            className="pr-10"
+            value={value || ''}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={showPassword ? "隱藏 API key" : "顯示 API key"}
+          >
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
         <div className="flex gap-2 sm:w-auto">
           <Button size="sm" onClick={onSave} disabled={!value?.trim()}>
             {t.settings.saveKey}
