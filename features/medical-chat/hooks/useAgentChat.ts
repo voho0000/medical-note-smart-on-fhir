@@ -86,7 +86,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const apiKey = isGemini ? geminiKey : openAiKey
 
         if (!apiKey) {
-          throw new Error("API key not available")
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
+          )
+          setIsLoading(false)
+          return
         }
 
         const provider = isGemini 

@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useNote } from "@/src/application/providers/note.provider"
+import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ChatMessageList } from "./ChatMessageList"
 import { VoiceRecorder } from "./VoiceRecorder"
@@ -17,16 +18,19 @@ import { useChatInput } from "../hooks/useChatInput"
 import { useSystemPrompt } from "../hooks/useSystemPrompt"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { Sparkles, MessageSquare, Square } from "lucide-react"
+import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { Sparkles, MessageSquare, Square, AlertCircle } from "lucide-react"
 
 export function MedicalChat() {
   const { t } = useLanguage()
   const { model } = useNote()
+  const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { getFullClinicalContext } = useClinicalContext()
   const input = useChatInput()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isAgentMode, setIsAgentMode] = useState(false)
+  const [showApiKeyWarning, setShowApiKeyWarning] = useState(false)
   
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
@@ -42,6 +46,22 @@ export function MedicalChat() {
   const voice = useVoiceRecording()
   const template = useTemplateSelector()
   const recordingStatus = useRecordingStatus(voice)
+
+  // Check if current model has API key
+  const hasApiKey = useCallback(() => {
+    const modelDef = getModelDefinition(model)
+    const provider = modelDef?.provider ?? "openai"
+    return provider === "openai" ? !!openAiKey : !!geminiKey
+  }, [model, openAiKey, geminiKey])
+
+  // Handle agent mode toggle with API key check
+  const handleAgentModeToggle = useCallback((enabled: boolean) => {
+    if (enabled && !hasApiKey()) {
+      setShowApiKeyWarning(true)
+      setTimeout(() => setShowApiKeyWarning(false), 5000)
+    }
+    setIsAgentMode(enabled)
+  }, [hasApiKey])
 
   // Handlers
   const handleSend = useCallback(async () => {
@@ -140,7 +160,7 @@ export function MedicalChat() {
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => setIsAgentMode(false)}
+                onClick={() => handleAgentModeToggle(false)}
                 className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
                   !isAgentMode
                     ? 'bg-primary text-primary-foreground'
@@ -152,7 +172,7 @@ export function MedicalChat() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsAgentMode(true)}
+                onClick={() => handleAgentModeToggle(true)}
                 className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
                   isAgentMode
                     ? 'bg-primary text-primary-foreground'
@@ -169,6 +189,15 @@ export function MedicalChat() {
               </span>
             )}
           </div>
+          {showApiKeyWarning && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+              <div className="flex-1 text-amber-800 dark:text-amber-200">
+                <div className="font-medium mb-1">{t.medicalChat.apiKeyWarningTitle}</div>
+                <div className="text-amber-700 dark:text-amber-300">{t.medicalChat.apiKeyWarningMessage}</div>
+              </div>
+            </div>
+          )}
           <ChatToolbar
             onInsertContext={handleInsertContext}
             onInsertAsr={handleInsertAsr}

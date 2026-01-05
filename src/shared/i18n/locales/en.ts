@@ -320,6 +320,7 @@ export const en = {
     thinking: 'Thinking...',
     organizingResults: 'Organizing query results...',
     noTextGenerated: 'AI executed the query but did not generate a response. Please try again or rephrase your question.',
+    apiKeyRequired: '⚠️ Deep Mode Requires API Key\n\nDeep Mode (AI Agent) requires direct communication with AI providers to use tool calling features, and currently cannot work through Firebase Proxy.\n\nPlease set your OpenAI or Gemini API Key in the "Settings" page, or switch to "Normal Mode".',
     toolNames: {
       queryConditions: 'Querying conditions',
       queryMedications: 'Querying medications',
@@ -373,6 +374,8 @@ export const en = {
     deepMode: 'Deep Mode',
     normalMode: 'Normal Mode',
     agentModeDescription: 'AI can automatically query FHIR data',
+    apiKeyWarningTitle: 'Deep Mode Requires API Key',
+    apiKeyWarningMessage: 'Please set your API Key in the Settings page first, or switch to Normal Mode.',
   },
 }
 

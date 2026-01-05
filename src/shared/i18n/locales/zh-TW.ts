@@ -322,6 +322,7 @@ export const zhTW = {
     thinking: '思考中...',
     organizingResults: '正在整理查詢結果...',
     noTextGenerated: 'AI 執行了查詢但沒有生成回應。請重新嘗試或換個方式提問。',
+    apiKeyRequired: '⚠️ 深入模式需要 API Key\n\n深入模式（AI Agent）需要直接與 AI 服務商通訊以使用工具查詢功能，目前無法透過 Firebase Proxy 運作。\n\n請在「設定」頁面中設定您的 OpenAI 或 Gemini API Key，或改用「一般模式」。',
     toolNames: {
       queryConditions: '查詢診斷資料',
       queryMedications: '查詢用藥資料',
@@ -375,5 +376,7 @@ export const zhTW = {
     deepMode: '深入模式',
     normalMode: '一般模式',
     agentModeDescription: 'AI 可自動查詢 FHIR 資料',
+    apiKeyWarningTitle: '深入模式需要 API Key',
+    apiKeyWarningMessage: '請先在「設定」頁面中設定您的 API Key，或改用一般模式。',
   },
 } satisfies Translation
