@@ -1,0 +1,297 @@
+// Agent Chat Hook - AI Agent with Client-Side FHIR Tool Calling
+"use client"
+
+import { useState, useCallback, useRef, useMemo, useEffect } from "react"
+import { streamText } from "ai"
+import { createOpenAI } from "@ai-sdk/openai"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
+import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { usePatient } from "@/src/application/providers/patient.provider"
+import { formatErrorMessage } from "../utils/formatErrorMessage"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+import { createFhirTools } from "@/src/infrastructure/ai/tools/fhir-tools"
+import { fhirClient, type FHIRClient } from "@/src/infrastructure/fhir/client/fhir-client.service"
+
+export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
+  const { chatMessages, setChatMessages } = useNote()
+  const { apiKey: openAiKey, geminiKey } = useApiKey()
+  const { patient } = usePatient()
+  const { locale, t } = useLanguage()
+  const { getFullClinicalContext } = useClinicalContext()
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const [actualFhirClient, setActualFhirClient] = useState<FHIRClient | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const hasReceivedChunkRef = useRef(false)
+
+  // Initialize the actual FHIR client
+  useEffect(() => {
+    fhirClient.getClient().then(client => {
+      setActualFhirClient(client)
+      console.log('[Agent] FHIR client initialized')
+    }).catch(err => {
+      console.error('[Agent] Failed to initialize FHIR client:', err)
+    })
+  }, [])
+
+  const tools = useMemo(() => {
+    if (!patient?.id || !actualFhirClient) return {}
+    console.log('[Agent] Creating FHIR tools with client:', !!actualFhirClient)
+    return createFhirTools(actualFhirClient, patient.id)
+  }, [patient?.id, actualFhirClient])
+
+  const handleSend = useCallback(
+    async (input: string) => {
+      hasReceivedChunkRef.current = false
+      const trimmed = input.trim()
+      if (!trimmed) return
+
+      if (!patient?.id) {
+        setError(new Error("Patient ID not available"))
+        return
+      }
+
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: trimmed,
+        timestamp: Date.now(),
+      }
+      const newMessages = [...chatMessages, userMessage]
+      setChatMessages(newMessages)
+
+      const assistantMessageId = crypto.randomUUID()
+      const thinkingMessage = `🤔 ${t.agent.thinking}`
+      setChatMessages([...newMessages, {
+        id: assistantMessageId,
+        role: "assistant",
+        content: thinkingMessage,
+        timestamp: Date.now(),
+        modelId,
+      }])
+
+      setIsLoading(true)
+      setError(null)
+      abortControllerRef.current = new AbortController()
+
+      try {
+        const isGemini = modelId.startsWith("gemini") || modelId.startsWith("models/gemini")
+        const apiKey = isGemini ? geminiKey : openAiKey
+
+        if (!apiKey) {
+          throw new Error("API key not available")
+        }
+
+        const provider = isGemini 
+          ? createGoogleGenerativeAI({ apiKey })
+          : createOpenAI({ apiKey })
+        const model = provider(modelId)
+
+        const clinicalContext = getFullClinicalContext()
+        const hasClinicalData = clinicalContext.trim().length > 0
+
+        const sp = t.agent.systemPrompt
+        const td = sp.toolDescriptions
+        
+        const enhancedSystemPrompt = `${systemPrompt}
+
+${sp.deepModeIntro}
+
+**${sp.currentPatient}**
+- ${sp.patientId.replace('{id}', patient.id)}
+- ${sp.hasPermission}
+
+${hasClinicalData ? `**${sp.organizedClinicalData}**
+${sp.organizedClinicalDataDesc}
+
+${clinicalContext}
+
+---` : ''}
+
+**${sp.availableTools}**
+${hasClinicalData ? sp.availableToolsPrefix : ''}${sp.availableToolsSuffix}
+
+1. queryConditions - ${td.queryConditions}
+2. queryMedications - ${td.queryMedications}
+3. queryAllergies - ${td.queryAllergies}
+4. queryDiagnosticReports - ${td.queryDiagnosticReports}
+5. queryObservations - ${td.queryObservations}
+6. queryProcedures - ${td.queryProcedures}
+7. queryEncounters - ${td.queryEncounters}
+
+${sp.importantNote}
+
+**${sp.usageGuidelines}**
+${hasClinicalData ? `- ${sp.prioritizeClinicalData}
+- ${sp.useToolsWhenNeeded}` : `- ${sp.useToolsDirectly}`}
+- ${sp.noAuthNeeded}
+- ${sp.mustExplainResults}
+- ${sp.provideAnalysis}
+- ${sp.indicateNoRecords}
+
+${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
+
+        const apiMessages = [
+          { role: "system" as const, content: enhancedSystemPrompt },
+          ...newMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ]
+
+        const result = await streamText({
+          model,
+          messages: apiMessages,
+          tools,
+          abortSignal: abortControllerRef.current.signal,
+          onStepFinish: ({ toolCalls, toolResults, text }) => {
+            console.log('[Agent] Step finished:', { 
+              toolCallsCount: toolCalls?.length || 0,
+              toolResultsCount: toolResults?.length || 0,
+              hasText: !!text 
+            })
+            
+            if (toolCalls && toolCalls.length > 0) {
+              console.log('[Agent] Tool calls:', toolCalls.map(tc => tc.toolName))
+              
+              const toolNames = toolCalls.map(tc => {
+                const name = tc.toolName
+                const displayNames: Record<string, string> = {
+                  'queryConditions': '查詢診斷資料',
+                  'queryMedications': '查詢用藥資料',
+                  'queryAllergies': '查詢過敏史',
+                  'queryObservations': '查詢檢驗數據',
+                  'queryProcedures': '查詢處置紀錄',
+                  'queryEncounters': '查詢就診紀錄',
+                }
+                return displayNames[name] || name
+              }).join('、')
+              
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === assistantMessageId 
+                  ? { ...m, content: `🔍 正在${toolNames}...` } 
+                  : m)
+              )
+            }
+            
+            if (toolResults && toolResults.length > 0) {
+              console.log('[Agent] Tool results received:', toolResults.length)
+            }
+          },
+        })
+
+        let accumulatedContent = ""
+        let toolResults: Array<{ toolName: string; result: unknown }> = []
+        console.log('[Agent] Starting full stream...')
+
+        for await (const chunk of result.fullStream) {
+          if (chunk.type === 'text-delta') {
+            accumulatedContent += chunk.text
+
+            if (!hasReceivedChunkRef.current && onInputClear) {
+              hasReceivedChunkRef.current = true
+              onInputClear()
+            }
+
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+            )
+          } else if (chunk.type === 'tool-call') {
+            const toolNameKey = chunk.toolName as keyof typeof t.agent.toolNames
+            const displayName = t.agent.toolNames[toolNameKey] || chunk.toolName
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId 
+                ? { ...m, content: `🔍 ${displayName}...` } 
+                : m)
+            )
+          } else if (chunk.type === 'tool-result') {
+            // AI SDK v6 tool-result chunk structure may vary, try multiple ways to get the result
+            const chunkAny = chunk as any
+            const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
+            console.log('[Agent] Tool result chunk:', JSON.stringify(chunkAny, null, 2))
+            toolResults.push({ toolName: chunk.toolName, result })
+          }
+        }
+        
+        console.log('[Agent] Full stream completed, total length:', accumulatedContent.length, 'tool results:', toolResults.length)
+        
+        // If there are tool results but no text generated, send a follow-up request
+        if (toolResults.length > 0 && accumulatedContent.length === 0) {
+          console.log('[Agent] No text after tool calls, sending follow-up request...')
+          console.log('[Agent] Tool results to process:', JSON.stringify(toolResults, null, 2))
+          
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId 
+              ? { ...m, content: `📝 ${t.agent.organizingResults}` } 
+              : m)
+          )
+          
+          // Build follow-up messages containing tool results
+          const toolResultsSummary = toolResults.map(tr => {
+            const r = tr.result as any
+            console.log('[Agent] Processing tool result:', tr.toolName, r)
+            const countInfo = r?.count === 0 
+              ? t.agent.noDataFound.replace('{summary}', r?.summary || '')
+              : t.agent.foundRecords.replace('{count}', String(r?.count || 0))
+            return `${tr.toolName} ${t.agent.queryResult}: ${r?.success ? countInfo : t.agent.queryFailed}\n${r?.count > 0 ? JSON.stringify(r?.data?.slice(0, 10) || [], null, 2) : t.agent.noData}`
+          }).join('\n\n')
+          
+          console.log('[Agent] Tool results summary:', toolResultsSummary)
+          
+          // Get the user's original question
+          const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
+          
+          const assistantMsg = `${t.agent.queriedFhirData}\n\n${toolResultsSummary}`
+          const userMsg = t.agent.answerQuestion.replace('{question}', originalQuestion)
+          const followUpMessages = [
+            ...apiMessages,
+            { role: "assistant" as const, content: assistantMsg },
+            { role: "user" as const, content: userMsg }
+          ]
+          
+          const followUpResult = await streamText({
+            model,
+            messages: followUpMessages,
+            abortSignal: abortControllerRef.current?.signal,
+          })
+          
+          let followUpContent = ""
+          for await (const chunk of followUpResult.fullStream) {
+            if (chunk.type === 'text-delta') {
+              followUpContent += chunk.text
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+              )
+            }
+          }
+          
+          console.log('[Agent] Follow-up completed, length:', followUpContent.length)
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return
+        
+        const errorObj = err instanceof Error ? err : new Error("Failed to generate response.")
+        setError(errorObj)
+        const formattedError = formatErrorMessage(errorObj, locale)
+        setChatMessages((prev) =>
+          prev.map((m) => m.id === assistantMessageId ? { ...m, content: formattedError } : m)
+        )
+      } finally {
+        setIsLoading(false)
+        abortControllerRef.current = null
+      }
+    },
+    [chatMessages, modelId, openAiKey, geminiKey, patient, setChatMessages, systemPrompt, onInputClear, locale, tools]
+  )
+
+  const handleReset = useCallback(() => {
+    abortControllerRef.current?.abort()
+    setChatMessages([])
+  }, [setChatMessages])
+
+  const stopGeneration = useCallback(() => {
+    abortControllerRef.current?.abort()
+    setIsLoading(false)
+  }, [])
+
+  return { messages: chatMessages, isLoading, error, handleSend, handleReset, stopGeneration }
+}
