@@ -115,17 +115,17 @@ describe('OpenAiService', () => {
 
     it('should handle timeout', async () => {
       // Arrange
-      mockFetch.mockImplementationOnce(() => 
-        new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout')), 100)
-        })
-      )
+      const abortError = new Error('The operation was aborted')
+      abortError.name = 'AbortError'
+      mockFetch.mockRejectedValueOnce(abortError)
 
       // Act & Assert
       await expect(service.query(mockRequest)).rejects.toThrow()
     })
 
     it('should set temperature to 1 for gpt-5-mini', async () => {
+      // Reset mock to clear any leftover mock implementations
+      mockFetch.mockReset()
       // Arrange
       const gpt5Request: AiQueryRequest = {
         modelId: 'gpt-5-mini',
@@ -143,8 +143,9 @@ describe('OpenAiService', () => {
       await service.query(gpt5Request)
 
       // Assert
-      const fetchCall = mockFetch.mock.calls[0]
-      const body = JSON.parse(fetchCall[1]?.body as string)
+      const fetchCalls = mockFetch.mock.calls
+      const lastCall = fetchCalls[fetchCalls.length - 1]
+      const body = JSON.parse(lastCall[1]?.body as string)
       expect(body.temperature).toBe(1)
     })
 
@@ -191,7 +192,15 @@ describe('OpenAiService', () => {
     })
 
     it('should handle empty response content', async () => {
+      // Reset mock to clear any leftover mock implementations
+      mockFetch.mockReset()
+      
       // Arrange
+      const emptyRequest: AiQueryRequest = {
+        modelId: 'gpt-5.1',
+        messages: [{ role: 'user', content: 'Test' }],
+      }
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -200,10 +209,10 @@ describe('OpenAiService', () => {
       } as Response)
 
       // Act
-      const result = await service.query(mockRequest)
+      const result = await service.query(emptyRequest)
 
       // Assert
-      // Empty content is handled by extractOpenAiContent
+      // extractOpenAiContent returns empty string for empty content
       expect(result.text).toBe('')
     })
   })
