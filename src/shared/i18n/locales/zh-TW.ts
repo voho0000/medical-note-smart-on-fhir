@@ -369,4 +369,10 @@ export const zhTW = {
       helpWithClinicalData: '現在請根據用戶的問題，優先使用已提供的臨床資料，必要時使用工具來提供幫助。記得在使用工具後，一定要生成文字回應來解釋結果。',
     },
   },
+
+  medicalChat: {
+    deepMode: '深入模式',
+    normalMode: '一般模式',
+    agentModeDescription: 'AI 可自動查詢 FHIR 資料',
+  },
 } satisfies Translation

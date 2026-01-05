@@ -137,33 +137,35 @@ export function MedicalChat() {
       <CardFooter className="flex flex-col gap-2 border-t pt-1 shrink-0">
         <div className="flex w-full flex-col gap-2">
           <div className="flex items-center justify-between gap-2 px-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <button
+                type="button"
                 onClick={() => setIsAgentMode(false)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
                   !isAgentMode
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
                 <MessageSquare className="h-3.5 w-3.5" />
-                一般模式
+                {t.medicalChat.normalMode}
               </button>
               <button
+                type="button"
                 onClick={() => setIsAgentMode(true)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
                   isAgentMode
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                深入模式
+                {t.medicalChat.deepMode}
               </button>
             </div>
             {isAgentMode && (
               <span className="text-[10px] text-muted-foreground/60">
-                AI 可自動查詢 FHIR 資料
+                {t.medicalChat.agentModeDescription}
               </span>
             )}
           </div>

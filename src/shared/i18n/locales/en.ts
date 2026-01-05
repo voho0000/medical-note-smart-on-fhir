@@ -367,6 +367,12 @@ export const en = {
       helpWithClinicalData: 'Now, based on the user\'s question, prioritize using the provided clinical data, and if necessary, use tools to help. Remember to always generate a text response to explain the results after using tools.',
     },
   },
+
+  medicalChat: {
+    deepMode: 'Deep Mode',
+    normalMode: 'Normal Mode',
+    agentModeDescription: 'AI can automatically query FHIR data',
+  },
 }
 
 export type Translation = typeof en
