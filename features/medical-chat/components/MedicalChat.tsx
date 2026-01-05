@@ -147,7 +147,7 @@ export function MedicalChat() {
                 ref={textareaRef}
                 value={input.input}
                 onChange={(event) => input.setInput(event.target.value)}
-                onKeyDown={(e) => input.handleKeyDown(e, handleSend)}
+                onKeyDown={(e) => input.handleKeyDown(e, handleSend, chat.isLoading)}
                 placeholder={t.chat.placeholder}
                 spellCheck={false}
                 rows={1}
