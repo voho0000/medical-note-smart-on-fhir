@@ -90,13 +90,7 @@ const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContex
 
 export function ClinicalInsightsConfigProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
-  const [panels, setPanels] = useState<InsightPanelConfig[]>(() => {
-    if (typeof window === "undefined") return getDefaultClinicalInsightPanels()
-
-    const browserLang = window.navigator.language
-    const language = browserLang.startsWith("zh") ? "zh-TW" : "en"
-    return getDefaultClinicalInsightPanels(language)
-  })
+  const [panels, setPanels] = useState<InsightPanelConfig[]>(() => getDefaultClinicalInsightPanels())
   const [autoGenerate, setAutoGenerate] = useState<boolean>(false)
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomPanels, setIsCustomPanels] = useState(false)

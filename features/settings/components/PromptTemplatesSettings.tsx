@@ -27,6 +27,9 @@ export function PromptTemplatesSettings() {
         <p className="text-xs text-muted-foreground">
           {t.settings.promptTemplatesDesc}
         </p>
+        <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2 mt-2">
+          {t.settings.promptTemplatesLanguageWarning}
+        </p>
       </div>
 
       {templates.length > 0 ? (

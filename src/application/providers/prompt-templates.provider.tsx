@@ -86,13 +86,7 @@ function getDefaultTemplates(language: 'en' | 'zh-TW' = 'en'): PromptTemplate[] 
 
 export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
-  const [templates, setTemplates] = useState<PromptTemplate[]>(() => {
-    if (typeof window === "undefined") return getDefaultTemplates()
-    
-    const browserLang = window.navigator.language
-    const initialLang = browserLang.startsWith('zh') ? 'zh-TW' : 'en'
-    return getDefaultTemplates(initialLang)
-  })
+  const [templates, setTemplates] = useState<PromptTemplate[]>(() => getDefaultTemplates())
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomTemplates, setIsCustomTemplates] = useState(false)
 
