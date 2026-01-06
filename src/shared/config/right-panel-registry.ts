@@ -63,6 +63,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     component: () => null,
     order: 2,
     enabled: true,
+    forceMount: true,
     contentClassName: 'flex-1 mt-4',
   },
   {

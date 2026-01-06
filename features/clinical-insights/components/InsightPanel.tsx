@@ -1,5 +1,5 @@
 // Insight Panel Component
-import { useMemo } from "react"
+import { useMemo, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,11 +20,14 @@ export function InsightPanel({
   response,
   error,
   canGenerate,
+  hasData,
   onResponseChange,
   isEdited,
   fallbackModelId,
 }: InsightPanelProps) {
   const { t } = useLanguage()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  
   const modelInfo = useMemo(() => {
     const definition = getModelDefinition(fallbackModelId)
     return {
@@ -32,6 +35,13 @@ export function InsightPanel({
       provider: (definition?.provider ?? "openai").toUpperCase(),
     }
   }, [fallbackModelId])
+
+  // Auto-scroll to bottom when response changes during loading (streaming)
+  useEffect(() => {
+    if (isLoading && textareaRef.current) {
+      textareaRef.current.scrollTop = textareaRef.current.scrollHeight
+    }
+  }, [response, isLoading])
 
   return (
     <Card>
@@ -46,9 +56,10 @@ export function InsightPanel({
         <Button
           onClick={onRegenerate}
           size="sm"
-          disabled={isLoading || !canGenerate}
+          disabled={isLoading || !canGenerate || !hasData}
           variant="outline"
           className="gap-1"
+          title={!hasData ? t.clinicalInsights.waitingForData : undefined}
         >
           {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
           {isLoading ? t.clinicalInsights.running : t.clinicalInsights.regenerate}
@@ -76,22 +87,33 @@ export function InsightPanel({
         <Separator className="opacity-50" />
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase text-muted-foreground">{t.clinicalInsights.response}</label>
-          {error ? (
+          {!hasData ? (
+            <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4 text-sm text-blue-800 dark:text-blue-200">
+              <div className="flex items-start gap-2">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-medium mb-1">{t.clinicalInsights.waitingForDataTitle}</div>
+                  <div className="text-blue-700 dark:text-blue-300 text-xs">{t.clinicalInsights.waitingForDataMessage}</div>
+                </div>
+              </div>
+            </div>
+          ) : error ? (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error.message}
             </div>
           ) : (
             <Textarea
+              ref={textareaRef}
               value={response}
               onChange={(event) => onResponseChange(event.target.value)}
               placeholder={t.clinicalInsights.responsePlaceholder}
-              className="min-h-[220px] resize-vertical text-sm"
+              className="min-h-[220px] max-h-[400px] resize-none text-sm overflow-y-auto"
               disabled={isLoading}
             />
           )}
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>
-              {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : t.clinicalInsights.awaitingGeneration}
+              {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : !hasData ? t.clinicalInsights.waitingForData : t.clinicalInsights.readyToGenerate}
             </span>
             <span>{response.length} {t.clinicalInsights.chars}</span>
           </div>

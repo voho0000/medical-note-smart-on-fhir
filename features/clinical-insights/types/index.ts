@@ -24,6 +24,7 @@ export interface InsightPanelProps {
   response: string
   error: Error | null
   canGenerate: boolean
+  hasData: boolean
   onResponseChange: (value: string) => void
   isEdited: boolean
   modelMetadata: QueryMetadata | null

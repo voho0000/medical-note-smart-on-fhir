@@ -1,7 +1,7 @@
 // Refactored Clinical Insights Feature
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -9,7 +9,9 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
+import { useAiStreaming } from "@/src/application/hooks/use-ai-streaming.hook"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { useNote } from "@/src/application/providers/note.provider"
 import { hasChatProxy } from "@/src/shared/config/env.config"
@@ -22,13 +24,27 @@ import { ApiKeyWarning } from './components/ApiKeyWarning'
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
-  const { panels, autoGenerate } = useClinicalInsightsConfig()
+  const { panels: configPanels, autoGenerate } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { getFullClinicalContext } = useClinicalContext()
+  const { isLoading: clinicalDataLoading } = useClinicalData()
   const { model } = useNote()
   const { queryAi } = useAiQuery(openAiKey, geminiKey)
 
   const [context, setContext] = useState("")
+  const currentPanelIdRef = useRef<string | null>(null)
+  
+  // Track panel IDs to detect actual changes
+  const panelIdsRef = useRef<string>('')
+  const panelsRef = useRef(configPanels)
+  
+  const currentPanelIds = configPanels.map(p => p.id).join(',')
+  if (currentPanelIds !== panelIdsRef.current) {
+    panelIdsRef.current = currentPanelIds
+    panelsRef.current = configPanels
+  }
+  
+  const panels = panelsRef.current
 
   const {
     prompts,
@@ -40,6 +56,20 @@ export default function ClinicalInsightsFeature() {
     handleResponseChange,
     resetEditedFlags,
   } = useInsightPanels(panels)
+  
+  // Use streaming hook with real-time updates
+  const { streamAi } = useAiStreaming(openAiKey, geminiKey, {
+    onChunk: (chunk) => {
+      // Update response in real-time during streaming
+      const panelId = currentPanelIdRef.current
+      if (!panelId) return
+      
+      setResponses((prev) => ({
+        ...prev,
+        [panelId]: { text: chunk, isEdited: false, metadata: prev[panelId]?.metadata },
+      }))
+    },
+  })
 
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
@@ -54,24 +84,17 @@ export default function ClinicalInsightsFeature() {
     canUseProxy,
     model,
     queryAi,
+    streamAi,
+    currentPanelIdRef,
     setResponses,
     setPanelStatus,
   })
 
-  // Update context and reset edited flags when context changes
+  // Update context when it changes (without resetting responses)
   useEffect(() => {
     const latestContext = getFullClinicalContext()
-    setContext((previous) => {
-      if (previous === latestContext) return previous
-      resetEditedFlags()
-      return latestContext
-    })
-  }, [getFullClinicalContext, resetEditedFlags])
-
-  // Reset edited flags when panels change
-  useEffect(() => {
-    resetEditedFlags()
-  }, [panels, resetEditedFlags])
+    setContext(latestContext)
+  }, [getFullClinicalContext])
 
   useAutoGenerate({
     panels,
@@ -80,6 +103,9 @@ export default function ClinicalInsightsFeature() {
     context,
     runPanel,
   })
+
+  // Only enable insights when data is fully loaded and context is available
+  const hasData = !clinicalDataLoading && context.trim().length > 0
 
   const panelEntries = useMemo(() => {
     return panels.map((panel) => {
@@ -99,6 +125,7 @@ export default function ClinicalInsightsFeature() {
           response: responseEntry.text,
           error: status.error,
           canGenerate,
+          hasData,
           onResponseChange: (value: string) => handleResponseChange(panel.id, value),
           isEdited: responseEntry.isEdited,
           modelMetadata: responseEntry.metadata ?? null,
@@ -106,7 +133,7 @@ export default function ClinicalInsightsFeature() {
         },
       }
     })
-  }, [canGenerate, handlePromptChange, handleResponseChange, model, panelStatus, panels, prompts, responses, runPanel])
+  }, [canGenerate, hasData, handlePromptChange, handleResponseChange, model, panelStatus, panels, prompts, responses, runPanel])
 
   const defaultTabValue = panelEntries[0]?.id ?? ""
 

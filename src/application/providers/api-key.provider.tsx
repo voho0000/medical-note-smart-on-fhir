@@ -36,12 +36,24 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
       
       // Decrypt keys if they exist
       if (loadedApiKey) {
-        const decryptedKey = await decrypt(loadedApiKey)
-        setApiKeyState(decryptedKey)
+        try {
+          const decryptedKey = await decrypt(loadedApiKey)
+          setApiKeyState(decryptedKey)
+        } catch (error) {
+          console.warn('Failed to decrypt API key, clearing stored key:', error)
+          storage.remove(STORAGE_KEYS.API_KEY)
+          setApiKeyState(null)
+        }
       }
       if (loadedGeminiKey) {
-        const decryptedKey = await decrypt(loadedGeminiKey)
-        setGeminiKeyState(decryptedKey)
+        try {
+          const decryptedKey = await decrypt(loadedGeminiKey)
+          setGeminiKeyState(decryptedKey)
+        } catch (error) {
+          console.warn('Failed to decrypt Gemini key, clearing stored key:', error)
+          storage.remove(STORAGE_KEYS.GEMINI_KEY)
+          setGeminiKeyState(null)
+        }
       }
     }
     
