@@ -72,18 +72,6 @@ export function TabManagementToolbar({ currentTabId, onTabChange, isEditMode, on
   if (!isEditMode) {
     return (
       <div className="flex items-center justify-end gap-2">
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent side="left" className="max-w-xs">
-              <p className="text-xs">
-                {t.clinicalInsights.languageWarning || "注意：修改過的標籤在切換語言時不會自動更新。重設為預設值以查看對應語言的標籤。"}
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
         <Button
           variant="outline"
           size="sm"
@@ -102,6 +90,18 @@ export function TabManagementToolbar({ currentTabId, onTabChange, isEditMode, on
           <Settings className="h-3.5 w-3.5" />
           {t.clinicalInsights.manageTabs || "Manage Tabs"}
         </Button>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-4 w-4 text-amber-600 dark:text-amber-500 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="left" className="max-w-xs bg-amber-50 dark:bg-amber-950/90 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100">
+              <p className="text-xs">
+                {t.settings.clinicalInsightsLanguageWarning}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     )
   }
