@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import { RightPanelProvider, useRightPanel } from '@/src/application/providers/right-panel.provider'
 
 // ============================================================================
 // FEATURE COMPONENTS - Import your feature components here
@@ -62,12 +63,29 @@ function RightPanelProviders({ children }: { children: ReactNode }) {
 // ============================================================================
 // MAIN EXPORT - Right Panel Feature
 // ============================================================================
-export function RightPanelFeature() {
+function RightPanelContent() {
+  const features = getEnabledRightPanelFeatures()
+  const defaultTab = features[0]?.id || 'medical-chat'
+  
   return (
     <RightPanelProviders>
-      <RightPanelContent />
+      <RightPanelProvider defaultTab={defaultTab}>
+        <RightPanelContentInner />
+      </RightPanelProvider>
     </RightPanelProviders>
   )
+}
+
+export function RightPanelFeature() {
+  return (
+    <div className="h-full flex flex-col">
+      <RightPanelContent />
+    </div>
+  )
+}
+
+export default function RightPanelLayout() {
+  return <RightPanelFeature />
 }
 
 // ============================================================================
@@ -105,11 +123,10 @@ function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
 // ============================================================================
 // RIGHT PANEL CONTENT - Dynamic tab rendering from registry
 // ============================================================================
-function RightPanelContent() {
+function RightPanelContentInner() {
   const { t } = useLanguage()
   const features = getEnabledRightPanelFeatures()
-  const defaultTab = features[0]?.id || 'medical-chat'
-  const [activeTab, setActiveTab] = useState(defaultTab)
+  const { activeTab, setActiveTab } = useRightPanel()
 
   // Helper to get tab label (supports i18n)
   const getTabLabel = (feature: RightPanelFeatureConfig): string => {
@@ -122,7 +139,6 @@ function RightPanelContent() {
       value={activeTab} 
       onValueChange={setActiveTab}
       className="h-full flex flex-col"
-      defaultValue={defaultTab}
     >
       <TabsList className="w-full justify-start gap-1 h-12 bg-muted/50 p-1 border">
         {features.map(feature => (

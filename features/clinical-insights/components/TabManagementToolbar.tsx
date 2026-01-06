@@ -8,6 +8,7 @@ import {
 import { Settings, X, Plus, RotateCcw, ChevronLeft, ChevronRight, Trash2, Info } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
+import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 
 interface TabManagementToolbarProps {
   currentTabId: string
@@ -19,6 +20,11 @@ interface TabManagementToolbarProps {
 export function TabManagementToolbar({ currentTabId, onTabChange, isEditMode, onEditModeChange }: TabManagementToolbarProps) {
   const { t } = useLanguage()
   const { panels, addPanel, removePanel, resetPanels, maxPanels, reorderPanels } = useClinicalInsightsConfig()
+  const { setActiveTab } = useRightPanel()
+
+  const handleManageModels = () => {
+    setActiveTab('settings', 'ai')
+  }
 
   const currentIndex = panels.findIndex((p) => p.id === currentTabId)
   const canAddPanel = panels.length < maxPanels
@@ -78,6 +84,15 @@ export function TabManagementToolbar({ currentTabId, onTabChange, isEditMode, on
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleManageModels}
+          className="gap-1.5"
+        >
+          <Settings className="h-3.5 w-3.5" />
+          {t.clinicalInsights.manageModels || "管理模型"}
+        </Button>
         <Button
           variant="outline"
           size="sm"

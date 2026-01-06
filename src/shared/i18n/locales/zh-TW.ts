@@ -120,6 +120,8 @@ export const zhTW = {
     clearAsr: '清除語音',
     resetChat: '重設聊天',
     insertTemplate: '插入範本',
+    manageTemplates: '管理範本',
+    manageModels: '管理模型',
     characters: '字元',
     latestVoiceInput: '最新語音輸入：',
     microphoneHint: '點擊麥克風進行語音輸入，然後修改或傳送您的訊息。',
@@ -313,6 +315,7 @@ export const zhTW = {
     autoGenerate: '自動產生',
     autoGenerateTooltip: '啟用時，進入臨床洞察頁面且病患資料已載入時，此判讀分頁會自動產生。停用則僅在需要時手動觸發產生。',
     languageWarning: '注意：修改過的標籤在切換語言時不會自動更新。重設為預設值以查看對應語言的標籤。',
+    manageModels: '管理模型',
   },
 
   recording: {

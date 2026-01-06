@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { Plus, Trash2, FileText } from "lucide-react"
+import { useRightPanel } from "@/src/application/providers/right-panel.provider"
+import { Plus, Trash2, FileText, Settings } from "lucide-react"
 
 interface Template {
   id: string
@@ -33,6 +34,15 @@ export function ChatToolbar({
   hasTemplateContent,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
+  const { setActiveTab } = useRightPanel()
+
+  const handleManageTemplates = () => {
+    setActiveTab('settings', 'templates')
+  }
+
+  const handleManageModels = () => {
+    setActiveTab('settings', 'ai')
+  }
   
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto">
@@ -80,6 +90,26 @@ export function ChatToolbar({
         >
           <Trash2 className="h-3 w-3" />
           {t.chat.resetChat}
+        </Button>
+      </div>
+      <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleManageModels}
+          className="h-7 gap-1 px-1.5 text-xs"
+        >
+          <Settings className="h-3 w-3" />
+          {t.chat.manageModels || "管理模型"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleManageTemplates}
+          className="h-7 gap-1 px-1.5 text-xs"
+        >
+          <Settings className="h-3 w-3" />
+          {t.chat.manageTemplates || "管理範本"}
         </Button>
       </div>
     </div>

@@ -118,6 +118,8 @@ export const en = {
     clearAsr: 'Voice',
     resetChat: 'Chat',
     insertTemplate: 'Template',
+    manageTemplates: 'Manage Templates',
+    manageModels: 'Manage Models',
     characters: 'characters',
     latestVoiceInput: 'Latest voice input:',
     microphoneHint: 'Tap the microphone to dictate, then refine or send your message.',
@@ -311,6 +313,7 @@ export const en = {
     autoGenerate: 'Auto-generate',
     autoGenerateTooltip: 'When enabled, this insight will automatically generate when you enter the Clinical Insights page with patient data loaded. Disable to manually trigger generation only when needed.',
     languageWarning: 'Note: Modified tabs will not automatically update when switching languages. Reset to defaults to see language-specific tabs.',
+    manageModels: 'Manage Models',
   },
 
   recording: {
