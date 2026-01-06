@@ -15,6 +15,7 @@ export interface ResponseEntry {
 }
 
 export interface InsightPanelProps {
+  panelId: string
   title: string
   subtitle?: string
   prompt: string
@@ -30,4 +31,6 @@ export interface InsightPanelProps {
   isEdited: boolean
   modelMetadata: QueryMetadata | null
   fallbackModelId: string
+  autoGenerate: boolean
+  isEditMode?: boolean
 }

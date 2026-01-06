@@ -301,6 +301,16 @@ export const en = {
     waitingForData: 'Waiting for clinical data',
     waitingForDataTitle: 'Waiting for Clinical Data',
     waitingForDataMessage: 'Please select patient data from the left panel. Insights can be generated once data is loaded.',
+    manageTabs: 'Manage Tabs',
+    editMode: 'Edit Mode',
+    moveLeft: 'Move Left',
+    moveRight: 'Move Right',
+    deleteTab: 'Delete',
+    addTab: 'Add Tab',
+    reset: 'Reset',
+    autoGenerate: 'Auto-generate',
+    autoGenerateTooltip: 'When enabled, this insight will automatically generate when you enter the Clinical Insights page with patient data loaded. Disable to manually trigger generation only when needed.',
+    languageWarning: 'Note: Modified tabs will not automatically update when switching languages. Reset to defaults to see language-specific tabs.',
   },
 
   recording: {

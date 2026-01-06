@@ -8,29 +8,30 @@ export type InsightPanelConfig = {
   title: string
   subtitle?: string
   prompt: string
+  autoGenerate?: boolean
 }
 
 const DEFAULT_PANELS_EN: InsightPanelConfig[] = [
   {
     id: "safety",
     title: "Safety Flag",
-    subtitle: "Highlight urgent safety issues or contraindications.",
     prompt:
       "Review the clinical context and flag any immediate patient safety risks, including drug interactions, abnormal results, or urgent follow-up needs. Respond with concise bullet points ordered by severity.",
+    autoGenerate: false,
   },
   {
     id: "changes",
     title: "What's Changed",
-    subtitle: "Summarize notable changes compared to prior data or visits.",
     prompt:
       "Compare the patient's recent clinical data to prior information and list the most important changes in status, therapy, or results. Emphasize deltas that require attention.",
+    autoGenerate: false,
   },
   {
     id: "snapshot",
     title: "Clinical Snapshot",
-    subtitle: "Provide a concise overview of the current clinical picture.",
     prompt:
       "Create a succinct clinical snapshot covering active problems, current therapies, recent results, and outstanding tasks. Keep it brief and actionable.",
+    autoGenerate: false,
   },
 ]
 
@@ -38,23 +39,23 @@ const DEFAULT_PANELS_ZH: InsightPanelConfig[] = [
   {
     id: "safety",
     title: "安全警示",
-    subtitle: "突顯緊急安全問題或禁忌症。",
     prompt:
       "檢視臨床資料並標記任何立即的病人安全風險，包括藥物交互作用、異常結果或緊急追蹤需求。以簡潔的條列式回應，依嚴重程度排序。",
+    autoGenerate: false,
   },
   {
     id: "changes",
     title: "變化摘要",
-    subtitle: "總結與先前資料或就診相比的顯著變化。",
     prompt:
       "比較病人最近的臨床資料與先前資訊，列出狀態、治療或結果中最重要的變化。強調需要注意的差異。",
+    autoGenerate: false,
   },
   {
     id: "snapshot",
     title: "臨床快照",
-    subtitle: "提供當前臨床狀況的簡明概述。",
     prompt:
       "建立簡潔的臨床快照，涵蓋活動中的問題、目前治療、近期結果和待辦事項。保持簡短且可執行。",
+    autoGenerate: false,
   },
 ]
 
@@ -82,8 +83,6 @@ type ClinicalInsightsConfigContextValue = {
   resetPanels: () => void
   maxPanels: number
   reorderPanels: (orderedIds: string[]) => void
-  autoGenerate: boolean
-  setAutoGenerate: (value: boolean) => void
 }
 
 const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContextValue | null>(null)
@@ -91,7 +90,6 @@ const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContex
 export function ClinicalInsightsConfigProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
   const [panels, setPanels] = useState<InsightPanelConfig[]>(() => getDefaultClinicalInsightPanels())
-  const [autoGenerate, setAutoGenerate] = useState<boolean>(false)
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomPanels, setIsCustomPanels] = useState(false)
 
@@ -104,7 +102,11 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
       if (stored) {
         const parsed = JSON.parse(stored) as InsightPanelConfig[]
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setPanels(parsed.map((panel) => ({ ...panel, id: panel.id || generatePanelId() })))
+          setPanels(parsed.map((panel) => ({ 
+            ...panel, 
+            id: panel.id || generatePanelId(),
+            autoGenerate: panel.autoGenerate ?? false 
+          })))
           setIsCustomPanels(true)
         }
       } else {
@@ -128,17 +130,6 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     setPanels(defaults)
   }, [isCustomPanels, locale, hasLoadedFromStorage])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const stored = window.localStorage.getItem(AUTO_GENERATE_STORAGE_KEY)
-      if (stored !== null) {
-        setAutoGenerate(stored === "true")
-      }
-    } catch (error) {
-      console.warn("Failed to load auto-generate setting from storage", error)
-    }
-  }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -176,14 +167,6 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     return () => clearTimeout(timeoutId)
   }, [panels, hasLoadedFromStorage, locale])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      window.localStorage.setItem(AUTO_GENERATE_STORAGE_KEY, String(autoGenerate))
-    } catch (error) {
-      console.warn("Failed to persist auto-generate setting", error)
-    }
-  }, [autoGenerate])
 
   const addPanel = () => {
     setPanels((prev) => {
@@ -194,8 +177,8 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
         {
           id: generatePanelId(),
           title: `Custom Panel ${suffix}`,
-          subtitle: "Summarize clinically relevant information for this focus area.",
           prompt: "Describe the key clinical insights for this focus area using the provided context.",
+          autoGenerate: false,
         },
       ]
       return updated
@@ -238,8 +221,8 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   }, [])
 
   const value = useMemo(
-    () => ({ panels, addPanel, updatePanel, removePanel, resetPanels, reorderPanels, maxPanels: MAX_PANELS, autoGenerate, setAutoGenerate }),
-    [autoGenerate, panels, reorderPanels],
+    () => ({ panels, addPanel, updatePanel, removePanel, resetPanels, reorderPanels, maxPanels: MAX_PANELS }),
+    [panels, reorderPanels],
   )
 
   return <ClinicalInsightsConfigContext.Provider value={value}>{children}</ClinicalInsightsConfigContext.Provider>

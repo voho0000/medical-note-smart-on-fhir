@@ -21,10 +21,11 @@ import { useInsightGeneration } from './hooks/useInsightGeneration'
 import { useAutoGenerate } from './hooks/useAutoGenerate'
 import { InsightPanel } from './components/InsightPanel'
 import { ApiKeyWarning } from './components/ApiKeyWarning'
+import { TabManagementToolbar } from './components/TabManagementToolbar'
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
-  const { panels: configPanels, autoGenerate } = useClinicalInsightsConfig()
+  const { panels: configPanels } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { getFullClinicalContext } = useClinicalContext()
   const { isLoading: clinicalDataLoading } = useClinicalData()
@@ -32,19 +33,12 @@ export default function ClinicalInsightsFeature() {
   const { queryAi } = useAiQuery(openAiKey, geminiKey)
 
   const [context, setContext] = useState("")
+  const [activeTabId, setActiveTabId] = useState<string>("")
+  const [isEditMode, setIsEditMode] = useState(false)
   const currentPanelIdRef = useRef<string | null>(null)
   
-  // Track panel IDs to detect actual changes
-  const panelIdsRef = useRef<string>('')
-  const panelsRef = useRef(configPanels)
-  
-  const currentPanelIds = configPanels.map(p => p.id).join(',')
-  if (currentPanelIds !== panelIdsRef.current) {
-    panelIdsRef.current = currentPanelIds
-    panelsRef.current = configPanels
-  }
-  
-  const panels = panelsRef.current
+  // Use configPanels directly instead of caching in ref
+  const panels = configPanels
 
   const {
     prompts,
@@ -99,11 +93,19 @@ export default function ClinicalInsightsFeature() {
 
   useAutoGenerate({
     panels,
-    autoGenerate,
     canGenerate,
     context,
     runPanel,
   })
+
+  // Initialize active tab when panels change
+  useEffect(() => {
+    if (!activeTabId && panels.length > 0) {
+      setActiveTabId(panels[0].id)
+    } else if (activeTabId && !panels.find(p => p.id === activeTabId)) {
+      setActiveTabId(panels[0]?.id || "")
+    }
+  }, [panels, activeTabId])
 
   // Only enable insights when data is fully loaded and context is available
   const hasData = !clinicalDataLoading && context.trim().length > 0
@@ -117,6 +119,7 @@ export default function ClinicalInsightsFeature() {
         id: panel.id,
         label: panel.title,
         props: {
+          panelId: panel.id,
           title: panel.title,
           subtitle: panel.subtitle,
           prompt: prompts[panel.id] ?? panel.prompt,
@@ -132,19 +135,26 @@ export default function ClinicalInsightsFeature() {
           isEdited: responseEntry.isEdited,
           modelMetadata: responseEntry.metadata ?? null,
           fallbackModelId: model,
+          autoGenerate: panel.autoGenerate ?? false,
+          isEditMode,
         },
       }
     })
   }, [canGenerate, hasData, handlePromptChange, handleResponseChange, model, panelStatus, panels, prompts, responses, runPanel])
-
-  const defaultTabValue = panelEntries[0]?.id ?? ""
 
   return (
     <ScrollArea className="h-full pr-3">
       <div className="space-y-4">
         {!canGenerate && <ApiKeyWarning />}
         {panelEntries.length > 0 ? (
-          <Tabs defaultValue={defaultTabValue} className="space-y-4">
+          <>
+            <TabManagementToolbar 
+              currentTabId={activeTabId} 
+              onTabChange={setActiveTabId}
+              isEditMode={isEditMode}
+              onEditModeChange={setIsEditMode}
+            />
+            <Tabs value={activeTabId} onValueChange={setActiveTabId} className="space-y-4">
             <TabsList className="grid w-full gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length}, minmax(0, 1fr))` }}>
               {panelEntries.map((panel) => (
                 <TabsTrigger
@@ -162,7 +172,7 @@ export default function ClinicalInsightsFeature() {
               </TabsContent>
             ))}
           </Tabs>
-        ) : (
+          </> ) : (
           <Card>
             <CardContent className="py-6 text-sm text-muted-foreground">
               {t.clinicalInsights.noTabsConfigured}

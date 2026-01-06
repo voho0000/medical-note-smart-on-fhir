@@ -303,6 +303,16 @@ export const zhTW = {
     waitingForData: '等待臨床資料載入',
     waitingForDataTitle: '等待臨床資料載入中',
     waitingForDataMessage: '請在左側面板選擇病患資料，資料載入後即可產生判讀',
+    manageTabs: '管理標籤',
+    editMode: '編輯模式',
+    moveLeft: '左移',
+    moveRight: '右移',
+    deleteTab: '刪除',
+    addTab: '新增標籤',
+    reset: '重設',
+    autoGenerate: '自動產生',
+    autoGenerateTooltip: '啟用時，進入臨床洞察頁面且病患資料已載入時，此判讀分頁會自動產生。停用則僅在需要時手動觸發產生。',
+    languageWarning: '注意：修改過的標籤在切換語言時不會自動更新。重設為預設值以查看對應語言的標籤。',
   },
 
   recording: {

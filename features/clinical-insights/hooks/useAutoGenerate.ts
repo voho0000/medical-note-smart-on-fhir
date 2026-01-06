@@ -3,11 +3,11 @@ import { useState, useEffect } from 'react'
 
 interface Panel {
   id: string
+  autoGenerate?: boolean
 }
 
 interface UseAutoGenerateProps {
   panels: Panel[]
-  autoGenerate: boolean
   canGenerate: boolean
   context: string
   runPanel: (panelId: string) => Promise<void>
@@ -15,7 +15,6 @@ interface UseAutoGenerateProps {
 
 export function useAutoGenerate({
   panels,
-  autoGenerate,
   canGenerate,
   context,
   runPanel,
@@ -27,23 +26,28 @@ export function useAutoGenerate({
     setHasAutoRun(false)
   }, [context])
 
-  // Auto-run when conditions are met
+  // Auto-run panels with autoGenerate enabled when conditions are met
   useEffect(() => {
-    if (!canGenerate || hasAutoRun || !context.trim() || panels.length === 0 || !autoGenerate) {
+    if (!canGenerate || hasAutoRun || !context.trim() || panels.length === 0) {
+      return
+    }
+
+    const panelsToAutoRun = panels.filter((panel) => panel.autoGenerate === true)
+    if (panelsToAutoRun.length === 0) {
       return
     }
 
     setHasAutoRun(true)
 
     const autoRun = async () => {
-      await Promise.all(panels.map((panel) => runPanel(panel.id)))
+      await Promise.all(panelsToAutoRun.map((panel) => runPanel(panel.id)))
     }
 
     autoRun().catch((error) => {
       console.error("Failed to auto-run clinical insights", error)
       setHasAutoRun(false)
     })
-  }, [canGenerate, context, hasAutoRun, panels, runPanel, autoGenerate])
+  }, [canGenerate, context, hasAutoRun, panels, runPanel])
 
   return { hasAutoRun, setHasAutoRun }
 }
