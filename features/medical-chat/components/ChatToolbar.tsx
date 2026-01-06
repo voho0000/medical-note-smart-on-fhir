@@ -13,11 +13,8 @@ interface Template {
 
 interface ChatToolbarProps {
   onInsertContext: () => void
-  onInsertAsr: () => void
-  onClearAsr: () => void
   onResetChat: () => void
   onInsertTemplate: () => void
-  hasAsrText: boolean
   hasChatMessages: boolean
   templates: Template[]
   selectedTemplateId?: string
@@ -27,11 +24,8 @@ interface ChatToolbarProps {
 
 export function ChatToolbar({
   onInsertContext,
-  onInsertAsr,
-  onClearAsr,
   onResetChat,
   onInsertTemplate,
-  hasAsrText,
   hasChatMessages,
   templates,
   selectedTemplateId,
@@ -46,10 +40,6 @@ export function ChatToolbar({
         <Button variant="ghost" size="sm" onClick={onInsertContext} className="h-7 gap-1 px-1.5 text-xs">
           <Plus className="h-3 w-3" />
           {t.chat.insertContext}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onInsertAsr} disabled={!hasAsrText} className="h-7 gap-1 px-1.5 text-xs">
-          <Plus className="h-3 w-3" />
-          {t.chat.insertAsr}
         </Button>
       </div>
       {templates.length > 0 ? (
@@ -81,16 +71,6 @@ export function ChatToolbar({
         </div>
       ) : null}
       <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearAsr}
-          disabled={!hasAsrText}
-          className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="h-3 w-3" />
-          {t.chat.clearAsr}
-        </Button>
         <Button
           variant="ghost"
           size="sm"

@@ -3,23 +3,34 @@ import { useAsr } from "@/src/application/providers/asr.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shared/config/env.config"
 
-export function useVoiceRecording() {
-  const { asrText, setAsrText, isAsrLoading, setIsAsrLoading } = useAsr()
+/**
+ * Voice Recording Hook - 語音錄製與轉錄
+ * 
+ * 設計原則：
+ * 1. 封裝內部狀態 - 外部無法直接修改 isRecording, seconds 等狀態
+ * 2. 單一職責 - 所有錄音相關邏輯都在此 hook 內完成
+ * 3. 最小 API - 只暴露必要的公開方法和狀態
+ * 
+ * 使用方式：
+ * - toggleRecording(): 切換錄音狀態
+ * - onRecordingStart: 傳給 ReactMediaRecorder 的 onStart
+ * - onRecordingStop: 傳給 ReactMediaRecorder 的 onStop（會自動轉錄）
+ */
+export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
+  const { isAsrLoading, setIsAsrLoading } = useAsr()
   const { apiKey } = useApiKey()
+  
+  // Internal state - 內部狀態
   const [isRecording, setIsRecording] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [asrError, setAsrError] = useState<string | null>(null)
-  const [lastTranscript, setLastTranscript] = useState<{ text: string; timestamp: string } | null>(null)
   
+  // Internal refs - 內部引用
   const timerRef = useRef<number | null>(null)
   const startRecordingRef = useRef<() => void>(() => {})
   const stopRecordingRef = useRef<() => void>(() => {})
-  const asrTextRef = useRef(asrText)
 
-  useEffect(() => {
-    asrTextRef.current = asrText
-  }, [asrText])
-
+  // Timer management - 計時器管理（內部使用）
   const startTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -36,17 +47,19 @@ export function useVoiceRecording() {
     }
   }, [])
 
+  // Cleanup timer on unmount
   useEffect(() => () => stopTimer(), [stopTimer])
 
-  const handleWhisperRequest = useCallback(
-    async (audioBlob: Blob) => {
-      if (audioBlob.size === 0) return
+  // Whisper API request - 語音轉文字 API 請求
+  const transcribeAudio = useCallback(
+    async (audioBlob: Blob): Promise<string | null> => {
+      if (audioBlob.size === 0) return null
 
       const useProxy = !apiKey && hasWhisperProxy
 
       if (!apiKey && !useProxy) {
         alert("Add your OpenAI API key in Settings or configure the ASR proxy endpoint.")
-        return
+        return null
       }
 
       setIsAsrLoading(true)
@@ -92,15 +105,6 @@ export function useVoiceRecording() {
           throw new Error("No transcription returned")
         }
 
-        const timestamp = new Date().toLocaleTimeString()
-        setLastTranscript({ text, timestamp })
-
-        const previous = asrTextRef.current?.trim?.() ? asrTextRef.current : asrTextRef.current ?? ""
-        const separator = previous ? "\n\n---\n\n" : ""
-        const updatedAsr = `${previous}${separator}[${timestamp}] ${text}`.trim()
-        asrTextRef.current = updatedAsr
-        setAsrText(updatedAsr)
-
         return text
       } catch (err) {
         console.error("ASR transcription error:", err)
@@ -111,9 +115,10 @@ export function useVoiceRecording() {
         setIsAsrLoading(false)
       }
     },
-    [apiKey, setIsAsrLoading, setAsrText]
+    [apiKey, setIsAsrLoading]
   )
 
+  // Start recording - 開始錄音（內部使用）
   const handleStartRecording = useCallback(() => {
     if (isAsrLoading) return
 
@@ -127,10 +132,12 @@ export function useVoiceRecording() {
     startRecordingRef.current()
   }, [apiKey, isAsrLoading])
 
+  // Stop recording - 停止錄音（內部使用）
   const handleStopRecording = useCallback(() => {
     stopRecordingRef.current()
   }, [])
 
+  // Toggle recording - 切換錄音狀態（公開 API）
   const toggleRecording = useCallback(() => {
     if (isRecording) {
       handleStopRecording()
@@ -139,26 +146,41 @@ export function useVoiceRecording() {
     }
   }, [handleStartRecording, handleStopRecording, isRecording])
 
-  const handleClearHistory = useCallback(() => {
-    asrTextRef.current = ""
-    setAsrText("")
-    setLastTranscript(null)
-  }, [setAsrText])
+  // ReactMediaRecorder onStart callback - 錄音開始時的回調
+  const onRecordingStart = useCallback(() => {
+    setIsRecording(true)
+    startTimer()
+  }, [startTimer])
 
+  // ReactMediaRecorder onStop callback - 錄音停止時的回調（自動轉錄）
+  const onRecordingStop = useCallback(
+    async (_url: string, blob: Blob) => {
+      setIsRecording(false)
+      stopTimer()
+      
+      const text = await transcribeAudio(blob)
+      if (text && onTranscriptReady) {
+        onTranscriptReady(text)
+      }
+    },
+    [stopTimer, transcribeAudio, onTranscriptReady]
+  )
+
+  // Public API - 公開介面
   return {
+    // Read-only state - 只讀狀態
     isRecording,
-    setIsRecording,
     isAsrLoading,
     asrError,
-    asrText,
-    lastTranscript,
     seconds,
-    startTimer,
-    stopTimer,
-    handleWhisperRequest,
+    
+    // Public method - 公開方法
     toggleRecording,
-    handleClearHistory,
+    
+    // ReactMediaRecorder integration - ReactMediaRecorder 整合
     startRecordingRef,
     stopRecordingRef,
+    onRecordingStart,
+    onRecordingStop,
   }
 }

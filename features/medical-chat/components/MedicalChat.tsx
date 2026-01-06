@@ -43,8 +43,23 @@ export function MedicalChat() {
   const normalChat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight)
   const agentChat = useAgentChat(systemPrompt, model, clearInputAndResetHeight)
   const chat = isAgentMode ? agentChat : normalChat
-  const voice = useVoiceRecording()
   const template = useTemplateSelector()
+  
+  // Voice recording with callback to insert transcript into input
+  const handleTranscriptReady = useCallback((text: string) => {
+    input.setInput((prev: string) => 
+      prev.trim().length > 0 ? `${prev.trimEnd()}\n\n${text}` : text
+    )
+    if (textareaRef.current) {
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.scrollTop = textareaRef.current.scrollHeight
+        }
+      }, 0)
+    }
+  }, [input])
+  
+  const voice = useVoiceRecording(handleTranscriptReady)
   const recordingStatus = useRecordingStatus(voice)
 
   // Check if current model has API key
@@ -109,13 +124,6 @@ export function MedicalChat() {
     scrollTextareaToBottom()
   }, [input, getFullClinicalContext, scrollTextareaToBottom])
 
-  const handleInsertAsr = useCallback(() => {
-    if (voice.asrText) {
-      input.insertText(voice.asrText)
-      scrollTextareaToBottom()
-    }
-  }, [input, voice.asrText, scrollTextareaToBottom])
-
   const handleInsertTemplate = useCallback(() => {
     const templateContent = template.selectedTemplate?.content?.trim()
     if (templateContent) {
@@ -123,26 +131,6 @@ export function MedicalChat() {
       scrollTextareaToBottom()
     }
   }, [input, template.selectedTemplate, scrollTextareaToBottom])
-
-  const handleRecordingStart = useCallback(() => {
-    voice.setIsRecording(true)
-    voice.startTimer()
-  }, [voice])
-
-  const handleRecordingStop = useCallback(
-    async (blob: Blob) => {
-      voice.setIsRecording(false)
-      voice.stopTimer()
-      const text = await voice.handleWhisperRequest(blob)
-      if (text) {
-        input.setInput((prev: string) => 
-          prev.trim().length > 0 ? `${prev.trimEnd()}\n\n${text}` : text
-        )
-        scrollTextareaToBottom()
-      }
-    },
-    [voice, input, scrollTextareaToBottom]
-  )
 
   return (
     <Card className="flex h-full flex-col overflow-hidden">
@@ -208,11 +196,8 @@ export function MedicalChat() {
           )}
           <ChatToolbar
             onInsertContext={handleInsertContext}
-            onInsertAsr={handleInsertAsr}
-            onClearAsr={voice.handleClearHistory}
             onResetChat={chat.handleReset}
             onInsertTemplate={handleInsertTemplate}
-            hasAsrText={!!voice.asrText}
             hasChatMessages={chat.messages.length > 0}
             templates={template.templates}
             selectedTemplateId={template.selectedTemplate?.id}
@@ -238,8 +223,8 @@ export function MedicalChat() {
               isRecording={voice.isRecording}
               isLoading={voice.isAsrLoading}
               onToggleRecording={voice.toggleRecording}
-              onRecordingStart={handleRecordingStart}
-              onRecordingStop={handleRecordingStop}
+              onRecordingStart={voice.onRecordingStart}
+              onRecordingStop={voice.onRecordingStop}
               startRecordingRef={voice.startRecordingRef}
               stopRecordingRef={voice.stopRecordingRef}
             />
@@ -261,16 +246,9 @@ export function MedicalChat() {
               </button>
             )}
           </div>
-          {(input.input.length > 0 || voice.lastTranscript) && (
+          {input.input.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
-              {input.input.length > 0 && (
-                <span>{input.input.length} {t.chat.characters}</span>
-              )}
-              {voice.lastTranscript && (
-                <span className="truncate sm:max-w-[320px] ml-auto">
-                  {t.chat.latestVoiceInput} {recordingStatus.latestTranscriptPreview || "—"}
-                </span>
-              )}
+              <span>{input.input.length} {t.chat.characters}</span>
             </div>
           )}
         </div>

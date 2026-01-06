@@ -14,7 +14,7 @@ interface VoiceRecorderProps {
   isLoading: boolean
   onToggleRecording: () => void
   onRecordingStart: () => void
-  onRecordingStop: (blob: Blob) => Promise<void>
+  onRecordingStop: (url: string, blob: Blob) => Promise<void>
   startRecordingRef: React.MutableRefObject<() => void>
   stopRecordingRef: React.MutableRefObject<() => void>
 }
@@ -53,9 +53,7 @@ export function VoiceRecorder({
       <ReactMediaRecorder
         audio
         onStart={onRecordingStart}
-        onStop={async (_url, blob) => {
-          await onRecordingStop(blob)
-        }}
+        onStop={onRecordingStop}
         render={({ startRecording, stopRecording }) => {
           startRecordingRef.current = startRecording
           stopRecordingRef.current = stopRecording
