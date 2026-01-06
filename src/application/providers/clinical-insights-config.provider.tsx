@@ -83,6 +83,8 @@ type ClinicalInsightsConfigContextValue = {
   resetPanels: () => void
   maxPanels: number
   reorderPanels: (orderedIds: string[]) => void
+  autoGenerate: boolean
+  setAutoGenerate: (value: boolean) => void
 }
 
 const ClinicalInsightsConfigContext = createContext<ClinicalInsightsConfigContextValue | null>(null)
@@ -92,6 +94,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   const [panels, setPanels] = useState<InsightPanelConfig[]>(() => getDefaultClinicalInsightPanels())
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomPanels, setIsCustomPanels] = useState(false)
+  const [autoGenerate, setAutoGenerateState] = useState(false)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -113,6 +116,11 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
         const currentLang = locale === "zh-TW" ? "zh-TW" : "en"
         setPanels(getDefaultClinicalInsightPanels(currentLang))
         setIsCustomPanels(false)
+      }
+      
+      const storedAutoGenerate = window.localStorage.getItem(AUTO_GENERATE_STORAGE_KEY)
+      if (storedAutoGenerate !== null) {
+        setAutoGenerateState(storedAutoGenerate === "true")
       }
     } catch (error) {
       console.warn("Failed to load clinical insights panels from storage", error)
@@ -220,9 +228,20 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     setIsCustomPanels(true)
   }, [])
 
+  const setAutoGenerate = useCallback((value: boolean) => {
+    setAutoGenerateState(value)
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(AUTO_GENERATE_STORAGE_KEY, String(value))
+      } catch (error) {
+        console.warn("Failed to persist auto-generate setting", error)
+      }
+    }
+  }, [])
+
   const value = useMemo(
-    () => ({ panels, addPanel, updatePanel, removePanel, resetPanels, reorderPanels, maxPanels: MAX_PANELS }),
-    [panels, reorderPanels],
+    () => ({ panels, addPanel, updatePanel, removePanel, resetPanels, reorderPanels, maxPanels: MAX_PANELS, autoGenerate, setAutoGenerate }),
+    [panels, reorderPanels, autoGenerate, setAutoGenerate],
   )
 
   return <ClinicalInsightsConfigContext.Provider value={value}>{children}</ClinicalInsightsConfigContext.Provider>
