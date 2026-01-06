@@ -58,7 +58,7 @@ export default function ClinicalInsightsFeature() {
   } = useInsightPanels(panels)
   
   // Use streaming hook with real-time updates
-  const { streamAi } = useAiStreaming(openAiKey, geminiKey, {
+  const { streamAi, stopStreaming } = useAiStreaming(openAiKey, geminiKey, {
     onChunk: (chunk) => {
       // Update response in real-time during streaming
       const panelId = currentPanelIdRef.current
@@ -74,7 +74,7 @@ export default function ClinicalInsightsFeature() {
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
 
-  const { runPanel } = useInsightGeneration({
+  const { runPanel, stopPanel } = useInsightGeneration({
     panels,
     prompts,
     responses,
@@ -85,6 +85,7 @@ export default function ClinicalInsightsFeature() {
     model,
     queryAi,
     streamAi,
+    stopStreaming,
     currentPanelIdRef,
     setResponses,
     setPanelStatus,
@@ -121,6 +122,7 @@ export default function ClinicalInsightsFeature() {
           prompt: prompts[panel.id] ?? panel.prompt,
           onPromptChange: (value: string) => handlePromptChange(panel.id, value),
           onRegenerate: () => runPanel(panel.id, { force: true }),
+          onStopGeneration: () => stopPanel(panel.id),
           isLoading: status.isLoading,
           response: responseEntry.text,
           error: status.error,

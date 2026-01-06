@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ChevronDown, Loader2, RefreshCcw } from "lucide-react"
+import { ChevronDown, Loader2, RefreshCcw, Square, Sparkles } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import type { InsightPanelProps } from '../types'
@@ -16,6 +16,7 @@ export function InsightPanel({
   prompt,
   onPromptChange,
   onRegenerate,
+  onStopGeneration,
   isLoading,
   response,
   error,
@@ -53,17 +54,29 @@ export function InsightPanel({
             {t.clinicalInsights.model} {modelInfo.label} ({modelInfo.provider})
           </p>
         </div>
-        <Button
-          onClick={onRegenerate}
-          size="sm"
-          disabled={isLoading || !canGenerate || !hasData}
-          variant="outline"
-          className="gap-1"
-          title={!hasData ? t.clinicalInsights.waitingForData : undefined}
-        >
-          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
-          {isLoading ? t.clinicalInsights.running : t.clinicalInsights.regenerate}
-        </Button>
+        {isLoading ? (
+          <Button
+            onClick={onStopGeneration}
+            size="sm"
+            variant="secondary"
+            className="gap-1"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+            {t.common.stop}
+          </Button>
+        ) : (
+          <Button
+            onClick={onRegenerate}
+            size="sm"
+            disabled={!canGenerate || !hasData}
+            variant="outline"
+            className="gap-1"
+            title={!hasData ? t.clinicalInsights.waitingForData : undefined}
+          >
+            {response ? <RefreshCcw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {response ? t.clinicalInsights.regenerate : t.clinicalInsights.generate}
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
         <Collapsible defaultOpen={false} className="space-y-1">
@@ -102,14 +115,24 @@ export function InsightPanel({
               {error.message}
             </div>
           ) : (
-            <Textarea
-              ref={textareaRef}
-              value={response}
-              onChange={(event) => onResponseChange(event.target.value)}
-              placeholder={t.clinicalInsights.responsePlaceholder}
-              className="min-h-[220px] max-h-[400px] resize-none text-sm overflow-y-auto"
-              disabled={isLoading}
-            />
+            <div className="relative">
+              <Textarea
+                ref={textareaRef}
+                value={response}
+                onChange={(event) => onResponseChange(event.target.value)}
+                placeholder={t.clinicalInsights.responsePlaceholder}
+                className="min-h-[220px] max-h-[400px] resize-none text-sm overflow-y-auto"
+                disabled={isLoading}
+              />
+              {isLoading && !response && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-[2px] rounded-md pointer-events-none">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span className="text-xs font-medium">{t.clinicalInsights.generating}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>

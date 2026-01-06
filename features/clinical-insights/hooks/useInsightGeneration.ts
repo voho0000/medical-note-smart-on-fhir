@@ -22,6 +22,7 @@ interface UseInsightGenerationProps {
   model: string
   queryAi: (messages: any[], model: string) => Promise<{ text: string; metadata: any }>
   streamAi?: (messages: any[], model: string) => Promise<string>
+  stopStreaming?: () => void
   currentPanelIdRef?: React.MutableRefObject<string | null>
   setResponses: React.Dispatch<React.SetStateAction<Record<string, ResponseEntry>>>
   setPanelStatus: React.Dispatch<React.SetStateAction<Record<string, PanelStatus>>>
@@ -38,6 +39,7 @@ export function useInsightGeneration({
   model,
   queryAi,
   streamAi,
+  stopStreaming,
   currentPanelIdRef,
   setResponses,
   setPanelStatus,
@@ -66,6 +68,12 @@ export function useInsightGeneration({
       if (currentPanelIdRef) {
         currentPanelIdRef.current = panelId
       }
+
+      // Clear response immediately for instant visual feedback
+      setResponses((prev) => ({
+        ...prev,
+        [panelId]: { text: "", isEdited: false, metadata: prev[panelId]?.metadata },
+      }))
 
       setPanelStatus((prev) => ({
         ...prev,
@@ -117,5 +125,24 @@ export function useInsightGeneration({
     [openAiKey, geminiKey, canUseProxy, context, panels, prompts, queryAi, streamAi, currentPanelIdRef, responses, model, setResponses, setPanelStatus],
   )
 
-  return { runPanel }
+  const stopPanel = useCallback(
+    (panelId: string) => {
+      // Stop streaming if available
+      stopStreaming?.()
+      
+      // Update panel status to not loading
+      setPanelStatus((prev) => ({
+        ...prev,
+        [panelId]: { isLoading: false, error: null },
+      }))
+      
+      // Clear current panel ID
+      if (currentPanelIdRef) {
+        currentPanelIdRef.current = null
+      }
+    },
+    [stopStreaming, setPanelStatus, currentPanelIdRef]
+  )
+
+  return { runPanel, stopPanel }
 }

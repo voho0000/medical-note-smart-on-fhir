@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { Loader2, Mic, Square } from "lucide-react"
+import { Loader2, Mic, StopCircle } from "lucide-react"
 
 const ReactMediaRecorder = dynamic(async () => (await import("react-media-recorder")).ReactMediaRecorder, {
   ssr: false,
@@ -43,7 +43,7 @@ export function VoiceRecorder({
         aria-pressed={isRecording}
       >
         {isRecording ? (
-          <Square className="h-4 w-4" />
+          <StopCircle className="h-4 w-4" />
         ) : isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (

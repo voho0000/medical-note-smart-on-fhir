@@ -20,6 +20,7 @@ export interface InsightPanelProps {
   prompt: string
   onPromptChange: (value: string) => void
   onRegenerate: () => void
+  onStopGeneration: () => void
   isLoading: boolean
   response: string
   error: Error | null
