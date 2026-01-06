@@ -19,25 +19,32 @@ export function useAutoGenerate({
   context,
   runPanel,
 }: UseAutoGenerateProps) {
-  const [hasAutoRun, setHasAutoRun] = useState(false)
+  const [autoRunPanels, setAutoRunPanels] = useState<Set<string>>(new Set())
 
-  // Reset hasAutoRun when context changes
+  // Reset autoRunPanels when context changes
   useEffect(() => {
-    setHasAutoRun(false)
+    setAutoRunPanels(new Set())
   }, [context])
 
   // Auto-run panels with autoGenerate enabled when conditions are met
   useEffect(() => {
-    if (!canGenerate || hasAutoRun || !context.trim() || panels.length === 0) {
+    if (!canGenerate || !context.trim() || panels.length === 0) {
       return
     }
 
-    const panelsToAutoRun = panels.filter((panel) => panel.autoGenerate === true)
+    const panelsToAutoRun = panels.filter(
+      (panel) => panel.autoGenerate === true && !autoRunPanels.has(panel.id)
+    )
     if (panelsToAutoRun.length === 0) {
       return
     }
 
-    setHasAutoRun(true)
+    // Mark these panels as auto-run
+    setAutoRunPanels((prev) => {
+      const next = new Set(prev)
+      panelsToAutoRun.forEach((panel) => next.add(panel.id))
+      return next
+    })
 
     const autoRun = async () => {
       await Promise.all(panelsToAutoRun.map((panel) => runPanel(panel.id)))
@@ -45,9 +52,14 @@ export function useAutoGenerate({
 
     autoRun().catch((error) => {
       console.error("Failed to auto-run clinical insights", error)
-      setHasAutoRun(false)
+      // Remove failed panels from the set so they can be retried
+      setAutoRunPanels((prev) => {
+        const next = new Set(prev)
+        panelsToAutoRun.forEach((panel) => next.delete(panel.id))
+        return next
+      })
     })
-  }, [canGenerate, context, hasAutoRun, panels, runPanel])
+  }, [canGenerate, context, autoRunPanels, panels, runPanel])
 
-  return { hasAutoRun, setHasAutoRun }
+  return { autoRunPanels, setAutoRunPanels }
 }

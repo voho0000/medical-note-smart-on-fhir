@@ -14,7 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ChevronDown, Loader2, RefreshCcw, Square, Sparkles, Info, Pencil } from "lucide-react"
+import { ChevronDown, Loader2, Square, Sparkles, Info, Pencil } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
@@ -172,8 +172,8 @@ export function InsightPanel({
             className="gap-1"
             title={!hasData ? t.clinicalInsights.waitingForData : undefined}
           >
-            {response ? <RefreshCcw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {response ? t.clinicalInsights.regenerate : t.clinicalInsights.generate}
+            <Sparkles className="h-3.5 w-3.5" />
+            {t.clinicalInsights.generate}
           </Button>
         )}
       </CardHeader>
@@ -235,7 +235,7 @@ export function InsightPanel({
           )}
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>
-              {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : !hasData ? t.clinicalInsights.waitingForData : t.clinicalInsights.readyToGenerate}
+              {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : hasData ? t.clinicalInsights.readyToGenerate : t.clinicalInsights.waitingForData}
             </span>
             <span>{response.length} {t.clinicalInsights.chars}</span>
           </div>

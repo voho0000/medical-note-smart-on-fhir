@@ -158,7 +158,8 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
             return defaultPanel && 
                    panel.title === defaultPanel.title &&
                    panel.subtitle === defaultPanel.subtitle &&
-                   panel.prompt === defaultPanel.prompt
+                   panel.prompt === defaultPanel.prompt &&
+                   (panel.autoGenerate ?? false) === (defaultPanel.autoGenerate ?? false)
           })
         
         if (allMatchDefault) {
@@ -180,7 +181,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     setPanels((prev) => {
       if (prev.length >= MAX_PANELS) return prev
       const suffix = prev.length + 1
-      const updated = [
+      return [
         ...prev,
         {
           id: generatePanelId(),
@@ -189,7 +190,6 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
           autoGenerate: false,
         },
       ]
-      return updated
     })
     setIsCustomPanels(true)
   }
@@ -202,8 +202,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   const removePanel = (id: string) => {
     setPanels((prev) => {
       if (prev.length <= 1) return prev
-      const updated = prev.filter((panel) => panel.id !== id)
-      return updated
+      return prev.filter((panel) => panel.id !== id)
     })
     setIsCustomPanels(true)
   }
@@ -222,8 +221,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
         .map((id) => prev.find((panel) => panel.id === id))
         .filter((panel): panel is InsightPanelConfig => Boolean(panel))
       const remaining = prev.filter((panel) => !idSet.has(panel.id))
-      const updated = [...ordered, ...remaining]
-      return updated
+      return [...ordered, ...remaining]
     })
     setIsCustomPanels(true)
   }, [])
