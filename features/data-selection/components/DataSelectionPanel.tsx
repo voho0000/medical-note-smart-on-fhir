@@ -65,12 +65,12 @@ export function DataSelectionPanel({
   )
 
   return (
-    <Tabs defaultValue="selection" className="w-full">
+    <Tabs defaultValue="selection" className="w-full space-y-4">
       <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50">
         <TabsTrigger value="selection" className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.dataSelection.title}</TabsTrigger>
         <TabsTrigger value="preview" className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.common.preview}</TabsTrigger>
       </TabsList>
-      <TabsContent value="selection" className="mt-6">
+      <TabsContent value="selection">
         <DataSelectionTab
           dataCategories={dataCategories}
           selectedData={selectedData}
@@ -82,7 +82,7 @@ export function DataSelectionPanel({
           someSelected={someSelected}
         />
       </TabsContent>
-      <TabsContent value="preview" className="mt-6">
+      <TabsContent value="preview">
         <PreviewTab
           supplementaryNotes={supplementaryNotes}
           onSupplementaryNotesChange={setSupplementaryNotes}

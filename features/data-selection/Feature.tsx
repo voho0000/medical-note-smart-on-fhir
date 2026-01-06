@@ -66,25 +66,14 @@ export function DataSelectionFeature() {
   }
 
   return (
-    <div className="h-full overflow-auto p-4">
-      <div className="max-w-3xl mx-auto">
-        <div className="space-y-6">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">{t.dataSelection.title}</h1>
-            <p className="text-sm text-muted-foreground">
-              {t.dataSelection.description}
-            </p>
-          </div>
-          
-          <DataSelectionPanel 
-            clinicalData={data}
-            selectedData={selectedData}
-            onSelectionChange={setSelectedData}
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-          />
-        </div>
-      </div>
+    <div className="space-y-4">
+      <DataSelectionPanel 
+        clinicalData={data}
+        selectedData={selectedData}
+        onSelectionChange={setSelectedData}
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+      />
     </div>
   )
 }
