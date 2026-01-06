@@ -168,10 +168,8 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
         })
       
       if (allMatchDefault) {
-        console.log('[Prompt Templates] Removing default templates from storage')
         window.localStorage.removeItem(STORAGE_KEY)
       } else {
-        console.log('[Prompt Templates] Saving', templates.length, 'custom templates to storage')
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(templates))
       }
     } catch (error) {

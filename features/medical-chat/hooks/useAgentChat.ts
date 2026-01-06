@@ -30,7 +30,6 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   useEffect(() => {
     fhirClient.getClient().then(client => {
       setActualFhirClient(client)
-      console.log('[Agent] FHIR client initialized')
     }).catch(err => {
       console.error('[Agent] Failed to initialize FHIR client:', err)
     })
@@ -38,7 +37,6 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
   const tools = useMemo(() => {
     if (!patient?.id || !actualFhirClient) return {}
-    console.log('[Agent] Creating FHIR tools with client:', !!actualFhirClient)
     return createFhirTools(actualFhirClient, patient.id)
   }, [patient?.id, actualFhirClient])
 

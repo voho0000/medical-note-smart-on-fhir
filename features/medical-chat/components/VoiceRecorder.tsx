@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { Loader2, Mic, StopCircle } from "lucide-react"
 
-const ReactMediaRecorder = dynamic(async () => (await import("react-media-recorder")).ReactMediaRecorder, {
-  ssr: false,
-})
+const ReactMediaRecorder = dynamic(
+  () => import("react-media-recorder").then((mod) => ({ default: mod.ReactMediaRecorder })),
+  { ssr: false }
+)
 
 interface VoiceRecorderProps {
   isRecording: boolean
