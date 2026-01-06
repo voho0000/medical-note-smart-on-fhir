@@ -40,7 +40,6 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
           const decryptedKey = await decrypt(loadedApiKey)
           setApiKeyState(decryptedKey)
         } catch (error) {
-          console.warn('Failed to decrypt API key, clearing stored key:', error)
           storage.remove(STORAGE_KEYS.API_KEY)
           setApiKeyState(null)
         }
@@ -50,7 +49,6 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
           const decryptedKey = await decrypt(loadedGeminiKey)
           setGeminiKeyState(decryptedKey)
         } catch (error) {
-          console.warn('Failed to decrypt Gemini key, clearing stored key:', error)
           storage.remove(STORAGE_KEYS.GEMINI_KEY)
           setGeminiKeyState(null)
         }

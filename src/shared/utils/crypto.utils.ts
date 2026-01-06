@@ -114,6 +114,12 @@ export async function decrypt(encryptedText: string): Promise<string> {
     // Decode from base64
     const combined = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0))
     
+    // Validate minimum length (salt + IV + some data)
+    const minLength = 16 + IV_LENGTH + 1
+    if (combined.length < minLength) {
+      throw new Error('Encrypted data too short')
+    }
+    
     // Extract salt, IV, and encrypted data
     const salt = combined.slice(0, 16)
     const iv = combined.slice(16, 16 + IV_LENGTH)
@@ -134,9 +140,9 @@ export async function decrypt(encryptedText: string): Promise<string> {
     const decoder = new TextDecoder()
     return decoder.decode(decryptedData)
   } catch (error) {
-    console.error('Decryption failed:', error)
-    // If decryption fails, might be plaintext (backward compatibility)
-    return encryptedText
+    // Decryption failed - this is expected when session key changes
+    // Throw error so caller can handle (e.g., clear corrupted keys)
+    throw error
   }
 }
 
