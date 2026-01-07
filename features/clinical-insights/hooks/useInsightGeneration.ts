@@ -81,8 +81,8 @@ export function useInsightGeneration({
       }))
 
       try {
-        // Use streaming if available and API key is present
-        const useStreaming = streamAi && (openAiKey || geminiKey)
+        // Use streaming if available (works with both API keys and proxy)
+        const useStreaming = streamAi && (openAiKey || geminiKey || canUseProxy)
         
         if (useStreaming) {
           const responseText = await streamAi(baseMessages, model)

@@ -7,6 +7,14 @@ export class GeminiStreamAdapter {
   async stream(config: StreamConfig): Promise<void> {
     const useProxy = this.shouldUseProxy(config.apiKey, config.model)
     
+    console.log("[Gemini Adapter] Stream method called", {
+      model: config.model,
+      hasApiKey: !!config.apiKey,
+      useProxy,
+      hasGeminiProxy: ENV_CONFIG.hasGeminiProxy,
+      geminiProxyUrl: ENV_CONFIG.geminiProxyUrl,
+    })
+    
     if (useProxy) {
       await this.streamViaProxy(config)
     } else {
@@ -41,6 +49,12 @@ export class GeminiStreamAdapter {
       headers["x-proxy-key"] = ENV_CONFIG.proxyClientKey
     }
 
+    console.log("[Gemini Proxy] Starting streaming request", {
+      url: ENV_CONFIG.geminiProxyUrl,
+      model: config.model,
+      messageCount: config.messages.length,
+    })
+
     // Firebase proxy expects simple messages format, not Gemini native format
     const res = await fetch(ENV_CONFIG.geminiProxyUrl, {
       method: "POST",
@@ -48,8 +62,15 @@ export class GeminiStreamAdapter {
       body: JSON.stringify({
         model: config.model,
         messages: config.messages,
+        stream: true,  // Enable streaming
       }),
       signal: config.signal,
+    })
+
+    console.log("[Gemini Proxy] Response received", {
+      status: res.status,
+      contentType: res.headers.get("content-type"),
+      hasBody: !!res.body,
     })
 
     if (!res.ok) {
@@ -62,9 +83,8 @@ export class GeminiStreamAdapter {
       }
     }
 
-    const data = await res.json()
-    const text = data.message || data.text || data.candidates?.[0]?.content?.parts?.[0]?.text || ""
-    config.onChunk(text)
+    // Process Vercel AI SDK data stream format
+    await this.processDataStreamResponse(res, config.onChunk)
   }
 
   private async streamDirect(config: StreamConfig): Promise<void> {
@@ -119,6 +139,98 @@ export class GeminiStreamAdapter {
           }
         }
       }
+    }
+  }
+
+  private async processDataStreamResponse(
+    response: Response,
+    onChunk: (content: string) => void
+  ): Promise<void> {
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error("No response body")
+
+    console.log("[Gemini Stream] Starting to read stream...")
+
+    const decoder = new TextDecoder()
+    let buffer = ""
+    let content = ""
+    let chunkCount = 0
+    let textChunkCount = 0
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          console.log("[Gemini Stream] Stream completed", {
+            totalChunks: chunkCount,
+            textChunks: textChunkCount,
+            finalLength: content.length,
+          })
+          break
+        }
+
+        chunkCount++
+        const decoded = decoder.decode(value, { stream: true })
+        buffer += decoded
+
+        if (chunkCount === 1) {
+          console.log("[Gemini Stream] First chunk received", {
+            length: decoded.length,
+            preview: decoded.substring(0, 100),
+          })
+        }
+
+        const lines = buffer.split("\n")
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+
+          // Vercel AI SDK data stream format: "0:\"text\"\n" or "d:{...}\n"
+          if (line.startsWith("0:")) {
+            try {
+              const text = JSON.parse(line.slice(2))
+              content += text
+              textChunkCount++
+              onChunk(content)
+              
+              if (textChunkCount === 1) {
+                console.log("[Gemini Stream] First text chunk parsed", {
+                  text: text.substring(0, 50),
+                })
+              }
+            } catch (e) {
+              console.warn("[Gemini Stream] Failed to parse text chunk", {
+                line: line.substring(0, 100),
+                error: e instanceof Error ? e.message : String(e),
+              })
+            }
+          } else if (line.startsWith("d:")) {
+            try {
+              const data = JSON.parse(line.slice(2))
+              console.log("[Gemini Stream] Finish reason:", data.finishReason)
+            } catch (e) {
+              console.warn("[Gemini Stream] Failed to parse finish data", {
+                line: line.substring(0, 100),
+                error: e instanceof Error ? e.message : String(e),
+              })
+            }
+          } else {
+            console.log("[Gemini Stream] Unknown line format", {
+              prefix: line.substring(0, 20),
+            })
+          }
+        }
+      }
+    } catch (error) {
+      // Most errors during streaming are abort errors from user clicking stop
+      // Just log and return gracefully instead of throwing
+      console.log("[Gemini Stream] Stream interrupted", {
+        chunkCount,
+        textChunkCount,
+      })
+      // Don't throw - return gracefully
+      return
     }
   }
 }
