@@ -16,6 +16,52 @@ function collectCategoryTokens(input?: CodeableConcept | CodeableConcept[]): Set
 }
 
 export function inferGroupFromCategory(category?: CodeableConcept | CodeableConcept[]): ReportGroup {
+  const concepts = Array.isArray(category) ? category : category ? [category] : []
+  
+  // First, check for FHIR standard codes
+  for (const concept of concepts) {
+    if (concept?.coding) {
+      for (const coding of concept.coding) {
+        const system = coding.system?.toLowerCase() || ''
+        const code = coding.code?.toUpperCase() || ''
+        
+        // Check v2-0074 Diagnostic Service Section ID
+        if (system.includes('v2-0074')) {
+          if (code === 'LAB' || code === 'HM' || code === 'CH' || code === 'MB') {
+            return 'lab'
+          }
+          if (code === 'RAD' || code === 'IMG' || code === 'CT' || code === 'MR' || code === 'US') {
+            return 'imaging'
+          }
+        }
+        
+        // Check SNOMED CT codes
+        if (system.includes('snomed')) {
+          // Common SNOMED codes for imaging
+          if (['363679005', '77477000', '363680008'].includes(code)) {
+            return 'imaging'
+          }
+          // Common SNOMED codes for laboratory
+          if (['15220000', '108252007'].includes(code)) {
+            return 'lab'
+          }
+        }
+        
+        // Check LOINC system
+        if (system.includes('loinc')) {
+          const display = coding.display?.toLowerCase() || ''
+          if (display.includes('radiology') || display.includes('imaging')) {
+            return 'imaging'
+          }
+          if (display.includes('laboratory') || display.includes('lab')) {
+            return 'lab'
+          }
+        }
+      }
+    }
+  }
+  
+  // Fallback to keyword matching (case-insensitive)
   const tokens = collectCategoryTokens(category)
   const tokenArray = Array.from(tokens)
   

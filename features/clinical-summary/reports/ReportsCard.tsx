@@ -43,7 +43,13 @@ export function ReportsCard() {
       { value: "imaging", label: `${reportTabs.imaging} (${groupedRows.imaging.length})`, rows: groupedRows.imaging },
       { value: "procedures", label: `${reportTabs.procedures} (${groupedRows.procedures.length})`, rows: groupedRows.procedures },
     ]
-    return configs.filter((config) => config.value === "all" || config.rows.length > 0)
+    // Always show All, Lab, Imaging tabs; only hide Procedures if empty
+    return configs.filter((config) => 
+      config.value === "all" || 
+      config.value === "lab" || 
+      config.value === "imaging" || 
+      config.rows.length > 0
+    )
   }, [groupedRows, t])
 
   if (isLoading) {
