@@ -25,6 +25,8 @@ export interface DataFilters {
   labReportVersion: 'latest' | 'all'
   vitalSignsVersion: 'latest' | 'all'
   vitalSignsTimeRange: TimeRange
+  procedureVersion: 'latest' | 'all'
+  procedureTimeRange: TimeRange
 }
 
 export interface ClinicalContextOptions {

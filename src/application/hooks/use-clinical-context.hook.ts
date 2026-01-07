@@ -44,14 +44,14 @@ export function useClinicalContext(): UseClinicalContextReturn {
   // Use individual context hooks
   const patientSection = usePatientContext(selectedData.patientInfo ?? false)
   const conditionsSection = useConditionsContext(selectedData.conditions ?? false, clinicalData, filters)
-  const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData)
+  const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters)
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
   const { section: reportsSection, observationIdsInReports } = useReportsContext(
     selectedData.diagnosticReports ?? false,
     clinicalData,
     filters
   )
-  const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData)
+  const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters)
   const vitalSignsSections = useVitalSignsContext(
     selectedData.observations ?? false,
     clinicalData,

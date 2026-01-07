@@ -50,7 +50,11 @@ export interface ProcedureResource {
 
 export type ClinicalData = {
   conditions?: Array<{ code?: CodeText }>
-  medications?: Array<{ medicationCodeableConcept?: CodeText }>
+  medications?: Array<{ 
+    medicationCodeableConcept?: CodeText
+    status?: string
+    authoredOn?: string
+  }>
   allergies?: Array<{ code?: CodeText }>
   diagnosticReports?: DiagnosticReport[]
   observations?: Observation[]

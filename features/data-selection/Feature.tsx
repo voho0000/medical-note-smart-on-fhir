@@ -7,7 +7,7 @@ import { DataSelectionPanel } from "./components/DataSelectionPanel"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 
 type ClinicalData = {
-  diagnoses?: any[]
+  conditions?: any[]
   medications?: any[]
   allergies?: any[]
   diagnosticReports?: any[]
@@ -51,7 +51,7 @@ export function DataSelectionFeature() {
   }
 
   const data = {
-    conditions: clinicalData.diagnoses || [],
+    conditions: clinicalData.conditions || [],
     medications: clinicalData.medications || [],
     allergies: clinicalData.allergies || [],
     diagnosticReports: clinicalData.diagnosticReports || [],

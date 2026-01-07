@@ -81,6 +81,7 @@ describe('GenerateClinicalContextUseCase', () => {
     },
     filters: {
       medicationStatus: 'all',
+      conditionStatus: 'all',
       reportInclusion: 'all',
       reportTimeRange: 'all',
       labReportVersion: 'all',
@@ -113,8 +114,9 @@ describe('GenerateClinicalContextUseCase', () => {
 
       const medsSection = result.find(s => s.title === "Patient's Medications")
       expect(medsSection).toBeDefined()
-      expect(medsSection?.items).toContain('Metformin 500mg')
-      expect(medsSection?.items).toContain('Lisinopril 10mg')
+      expect(medsSection?.items).toContain('Active Medications:')
+      expect(medsSection?.items.some(item => item.includes('Metformin 500mg'))).toBe(true)
+      expect(medsSection?.items.some(item => item.includes('Lisinopril 10mg'))).toBe(true)
     })
 
     it('should filter medications by status', () => {
@@ -134,8 +136,9 @@ describe('GenerateClinicalContextUseCase', () => {
       const result = useCase.execute(mockPatient, dataWithInactive, options)
       const medsSection = result.find(s => s.title === "Patient's Medications")
       
-      expect(medsSection?.items).not.toContain('Old Med')
-      expect(medsSection?.items).toHaveLength(2)
+      expect(medsSection?.items.some(item => item.includes('Old Med'))).toBe(false)
+      expect(medsSection?.items).toContain('Active Medications:')
+      expect(medsSection?.items.length).toBeGreaterThanOrEqual(3) // Header + 2 active meds
     })
 
     it('should generate allergies section', () => {

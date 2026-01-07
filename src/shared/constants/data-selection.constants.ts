@@ -18,7 +18,9 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   reportTimeRange: 'all',
   labReportVersion: 'latest',
   vitalSignsVersion: 'latest',
-  vitalSignsTimeRange: 'all'
+  vitalSignsTimeRange: 'all',
+  procedureVersion: 'latest',
+  procedureTimeRange: 'all'
 }
 
 export const STORAGE_KEYS = {

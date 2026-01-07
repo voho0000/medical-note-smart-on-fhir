@@ -18,7 +18,7 @@ export function useDataCategories(
   clinicalData: ClinicalDataCollection,
   getFilteredCount: (items: any[], dataType: 'diagnosticReports' | 'observations') => number,
   filterKey: number,
-  filters?: { conditionStatus?: 'active' | 'all', labReportVersion?: 'all' | 'latest', reportTimeRange?: string, vitalSignsVersion?: 'all' | 'latest', vitalSignsTimeRange?: string }
+  filters?: { conditionStatus?: 'active' | 'all', medicationStatus?: 'active' | 'all', labReportVersion?: 'all' | 'latest', reportTimeRange?: string, vitalSignsVersion?: 'all' | 'latest', vitalSignsTimeRange?: string }
 ) {
   const { t } = useLanguage()
   const rowCounts = useReportsRowCount(
@@ -79,9 +79,18 @@ export function useDataCategories(
               const clinicalStatus = condition.clinicalStatus?.coding?.[0]?.code || 
                                     condition.clinicalStatus?.text ||
                                     condition.clinicalStatus
-              return clinicalStatus === 'active' || 
-                     clinicalStatus === 'recurrence' || 
-                     clinicalStatus === 'relapse'
+              
+              // If no status field, treat as active
+              if (!clinicalStatus) return true
+              
+              // Check if status is active (handle both string and object formats)
+              const statusStr = typeof clinicalStatus === 'string' 
+                ? clinicalStatus.toLowerCase() 
+                : String(clinicalStatus).toLowerCase()
+              
+              return statusStr === 'active' || 
+                     statusStr === 'recurrence' || 
+                     statusStr === 'relapse'
             }).length
           }
           return conditions.length
@@ -92,7 +101,15 @@ export function useDataCategories(
         id: 'medications' as const,
         label: t.dataSelection.medications,
         description: t.dataSelection.medicationsDesc,
-        count: clinicalData.medications?.length || 0,
+        count: (() => {
+          const medications = clinicalData.medications || []
+          if (filters?.medicationStatus === 'active') {
+            return medications.filter((med: any) => 
+              med.status === 'active' || med.status === 'completed'
+            ).length
+          }
+          return medications.length
+        })(),
         category: 'medication'
       },
       {

@@ -48,6 +48,8 @@ export interface ReportsRowCounts {
 export interface ReportFilters {
   labReportVersion?: 'all' | 'latest'
   reportTimeRange?: string
+  procedureVersion?: 'all' | 'latest'
+  procedureTimeRange?: string
 }
 
 const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
@@ -170,8 +172,35 @@ export function calculateReportsRowCounts(
   }
   const orphanRowCount = groups.size
 
-  // Count procedure rows
-  const procedureRowCount = (procedures || []).length
+  // Count procedure rows with filters
+  let filteredProcedures = procedures || []
+  
+  // Apply time range filter to procedures
+  const procedureTimeRange = filters?.procedureTimeRange
+  if (procedureTimeRange && procedureTimeRange !== 'all') {
+    filteredProcedures = filteredProcedures.filter((p: any) => {
+      const performed = p.performedDateTime || p.performedPeriod?.end || p.performedPeriod?.start
+      return isWithinTimeRange(performed, procedureTimeRange)
+    })
+  }
+  
+  // Apply version filter to procedures (latest only)
+  if (filters?.procedureVersion === 'latest') {
+    const byName = new Map<string, any>()
+    filteredProcedures.forEach((procedure: any) => {
+      const name = getCodeableConceptText(procedure.code) || 'Procedure'
+      const existing = byName.get(name)
+      const performed = procedure.performedDateTime || procedure.performedPeriod?.end || procedure.performedPeriod?.start
+      const existingPerformed = existing?.performedDateTime || existing?.performedPeriod?.end || existing?.performedPeriod?.start
+      
+      if (!existing || (performed && existingPerformed && performed > existingPerformed)) {
+        byName.set(name, procedure)
+      }
+    })
+    filteredProcedures = Array.from(byName.values())
+  }
+  
+  const procedureRowCount = filteredProcedures.length
 
   const totalRows = reportRowCount + orphanRowCount + procedureRowCount
 

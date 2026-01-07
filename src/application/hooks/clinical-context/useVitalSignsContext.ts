@@ -53,49 +53,58 @@ export function useVitalSignsContext(
 
     const sections: ClinicalContextSection[] = []
     byType.forEach((observations, type) => {
-      const latest = [...observations].sort((a, b) => 
+      // Sort by date (newest first)
+      const sorted = [...observations].sort((a, b) => 
         (b.effectiveDateTime || "").localeCompare(a.effectiveDateTime || "")
-      )[0]
+      )
+      
+      // Get observations based on version filter
+      const observationsToShow = filters?.vitalSignsVersion === 'all' 
+        ? sorted 
+        : [sorted[0]] // latest only
       
       const items: string[] = []
       
-      // Format date
-      const date = latest.effectiveDateTime 
-        ? new Date(latest.effectiveDateTime).toLocaleString('zh-TW', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-        : ''
-      
-      // Handle component-based observations (e.g., Blood Pressure)
-      if (Array.isArray(latest.component) && latest.component.length > 0) {
-        const componentValues = latest.component
-          .map((comp: any) => {
-            const compValue = comp.valueQuantity?.value
-            const compUnit = comp.valueQuantity?.unit || ''
-            const compCode = comp.code?.text || comp.code?.coding?.[0]?.display || ''
-            if (compValue !== undefined && compValue !== null) {
-              return `${compCode}: ${compValue} ${compUnit}`.trim()
-            }
-            return null
-          })
-          .filter(Boolean)
+      // Process each observation
+      observationsToShow.forEach(obs => {
+        // Format date
+        const date = obs.effectiveDateTime 
+          ? new Date(obs.effectiveDateTime).toLocaleString('zh-TW', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : ''
         
-        if (componentValues.length > 0) {
-          items.push(`${componentValues.join(', ')}${date ? ` (${date})` : ''}`)
+        // Handle component-based observations (e.g., Blood Pressure)
+        if (Array.isArray(obs.component) && obs.component.length > 0) {
+          const componentValues = obs.component
+            .map((comp: any) => {
+              const compValue = comp.valueQuantity?.value
+              const compUnit = comp.valueQuantity?.unit || ''
+              const compCode = comp.code?.text || comp.code?.coding?.[0]?.display || ''
+              if (compValue !== undefined && compValue !== null) {
+                return `${compCode}: ${compValue} ${compUnit}`.trim()
+              }
+              return null
+            })
+            .filter(Boolean)
+          
+          if (componentValues.length > 0) {
+            items.push(`${componentValues.join(', ')}${date ? ` (${date})` : ''}`)
+          }
+        } 
+        // Handle simple value observations
+        else {
+          const value = obs.valueQuantity?.value ?? obs.valueString
+          const unit = obs.valueQuantity?.unit ?? ""
+          if (value !== undefined && value !== null) {
+            items.push(`${String(value)} ${unit}${date ? ` (${date})` : ''}`.trim())
+          }
         }
-      } 
-      // Handle simple value observations
-      else {
-        const value = latest.valueQuantity?.value ?? latest.valueString
-        const unit = latest.valueQuantity?.unit ?? ""
-        if (value !== undefined && value !== null) {
-          items.push(`${String(value)} ${unit}${date ? ` (${date})` : ''}`.trim())
-        }
-      }
+      })
       
       if (items.length > 0) {
         sections.push({ title: type, items })

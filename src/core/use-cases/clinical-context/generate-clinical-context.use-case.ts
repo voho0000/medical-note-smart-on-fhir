@@ -47,12 +47,52 @@ export class GenerateClinicalContextUseCase {
 
     // Medications
     if (selection.medications && clinicalData.medications.length > 0) {
-      const items = clinicalData.medications
+      const filtered = clinicalData.medications
         .filter(m => filters.medicationStatus === 'all' || m.status === 'active')
-        .map(m => m.medicationCodeableConcept?.text || 'Unknown medication')
-        .filter(Boolean)
-      if (items.length > 0) {
-        context.push({ title: "Patient's Medications", items })
+      
+      if (filtered.length > 0) {
+        // Debug: log medication statuses
+        console.log('[Clinical Context] Medication statuses:', 
+          filtered.map(m => ({ name: m.medicationCodeableConcept?.text, status: m.status }))
+        )
+        
+        // Separate active and stopped medications
+        // Active statuses: active, completed
+        // Stopped statuses: stopped, cancelled, entered-in-error, on-hold
+        const activeMeds = filtered.filter(m => 
+          m.status === 'active' || m.status === 'completed'
+        )
+        const stoppedMeds = filtered.filter(m => 
+          m.status !== 'active' && m.status !== 'completed'
+        )
+        
+        const items: string[] = []
+        
+        // Add active medications
+        if (activeMeds.length > 0) {
+          items.push('Active Medications:')
+          activeMeds.forEach(m => {
+            const name = m.medicationCodeableConcept?.text || 'Unknown medication'
+            const date = m.authoredOn ? ` (started: ${new Date(m.authoredOn).toLocaleDateString()})` : ''
+            items.push(`  • ${name}${date}`)
+          })
+        }
+        
+        // Add stopped medications
+        if (stoppedMeds.length > 0) {
+          if (items.length > 0) items.push('') // Add blank line separator
+          items.push('Stopped Medications:')
+          stoppedMeds.forEach(m => {
+            const name = m.medicationCodeableConcept?.text || 'Unknown medication'
+            const date = m.authoredOn ? ` (${new Date(m.authoredOn).toLocaleDateString()})` : ''
+            const status = m.status ? ` [${m.status}]` : ''
+            items.push(`  • ${name}${date}${status}`)
+          })
+        }
+        
+        if (items.length > 0) {
+          context.push({ title: "Patient's Medications", items })
+        }
       }
     }
 
