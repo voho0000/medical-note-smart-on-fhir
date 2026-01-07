@@ -1,29 +1,33 @@
 // features/data-selection/Feature.tsx
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useCallback } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { DataSelectionPanel } from "./components/DataSelectionPanel"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { ClinicalDataMapper } from "@/src/core/services/clinical-data-mapper.service"
+import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
 
-type ClinicalData = {
-  conditions?: any[]
-  medications?: any[]
-  allergies?: any[]
-  diagnosticReports?: any[]
-  vitalSigns?: any[]
-  vitals?: any[]
-  observations?: any[]
-  encounters?: any[]
-  procedures?: any[]
+/**
+ * Raw clinical data type from provider (includes loading state)
+ */
+interface RawClinicalData {
+  conditions?: unknown[]
+  medications?: unknown[]
+  allergies?: unknown[]
+  diagnosticReports?: unknown[]
+  vitalSigns?: unknown[]
+  vitals?: unknown[]
+  observations?: unknown[]
+  encounters?: unknown[]
+  procedures?: unknown[]
   isLoading: boolean
 }
 
 export function DataSelectionFeature() {
   const { t } = useLanguage()
-  const clinicalData = useClinicalData() as ClinicalData
+  const rawClinicalData = useClinicalData() as RawClinicalData
   const { 
     selectedData, 
     setSelectedData, 
@@ -33,13 +37,17 @@ export function DataSelectionFeature() {
 
   // Use ClinicalDataMapper service to transform data (Dependency Inversion Principle)
   const mappedData = useMemo(() => {
-    if (!clinicalData || clinicalData.isLoading) {
+    if (!rawClinicalData || rawClinicalData.isLoading) {
       return ClinicalDataMapper.getEmptyCollection()
     }
-    return ClinicalDataMapper.toClinicalDataCollection(clinicalData)
-  }, [clinicalData])
+    return ClinicalDataMapper.toClinicalDataCollection(rawClinicalData)
+  }, [rawClinicalData])
 
-  if (clinicalData.isLoading) {
+  const handleFiltersChange = useCallback((newFilters: DataFilters) => {
+    setFilters(newFilters)
+  }, [setFilters])
+
+  if (rawClinicalData.isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -50,7 +58,7 @@ export function DataSelectionFeature() {
     )
   }
 
-  if (!clinicalData || !ClinicalDataMapper.isValid(clinicalData)) {
+  if (!rawClinicalData || !ClinicalDataMapper.isValid(rawClinicalData)) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -58,10 +66,6 @@ export function DataSelectionFeature() {
         </div>
       </div>
     )
-  }
-
-  const handleFiltersChange = (newFilters: any) => {
-    setFilters(newFilters)
   }
 
   return (

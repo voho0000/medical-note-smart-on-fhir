@@ -1,11 +1,16 @@
 // Core Domain Entity: Clinical Context
 
+import type { FilterValue } from '@/src/core/interfaces/data-category.interface'
+
 export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | 'all'
 
 export interface ClinicalContextSection {
   title: string
   items: string[]
 }
+
+// Re-export FilterValue for convenience
+export type { FilterValue }
 
 export interface DataSelection {
   patientInfo: boolean

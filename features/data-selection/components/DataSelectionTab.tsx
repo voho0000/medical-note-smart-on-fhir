@@ -21,7 +21,7 @@ interface SelectionProps {
 
 interface FilteringProps {
   filters: DataFilters
-  onFilterChange: (key: keyof DataFilters, value: any) => void
+  onFilterChange: (key: keyof DataFilters, value: FilterValue) => void
 }
 
 interface BulkSelectionProps {

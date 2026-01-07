@@ -3,6 +3,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
+import { TranslationService } from "@/src/core/services/translation.service"
 
 export type DataType = keyof DataSelection
 
@@ -21,40 +22,50 @@ export function useDataCategories(
 ) {
   const { t } = useLanguage()
   
+  // Create a stable hash of filters for dependency tracking
+  const filtersHash = useMemo(() => 
+    JSON.stringify(filters || {}), 
+    [filters]
+  )
+  
   return useMemo(() => {
-    // Use filterKey to force recalculation when filters change
-    const _ = filterKey
-    
     // Get all registered categories from the registry
     const categories = dataCategoryRegistry.getAll()
     
+    // Ensure filters is a valid object
+    const safeFilters: Partial<DataFilters> = filters || {}
+    
     // Map registry categories to DataItem format
     return categories.map(category => {
-      // Get translated label and description
+      // Get translated label and description using Translation Service
       const labelParts = category.labelKey.split('.')
       const descParts = category.descriptionKey.split('.')
       
-      // Navigate to the translation
       let label = category.label
       let description = category.description
       
-      try {
-        // Try to get translated label (e.g., t.dataSelection.labReports)
-        if (labelParts[0] === 'dataSelection' && labelParts[1]) {
-          label = (t.dataSelection as any)[labelParts[1]] || category.label
-        }
-        if (descParts[0] === 'dataSelection' && descParts[1]) {
-          description = (t.dataSelection as any)[descParts[1]] || category.description
-        }
-      } catch {
-        // Use default if translation fails
+      // Safely get translations without type assertions
+      if (labelParts[0] === 'dataSelection' && labelParts[1]) {
+        label = TranslationService.get(
+          t.dataSelection as Record<string, unknown>,
+          labelParts[1],
+          category.label
+        )
+      }
+      if (descParts[0] === 'dataSelection' && descParts[1]) {
+        description = TranslationService.get(
+          t.dataSelection as Record<string, unknown>,
+          descParts[1],
+          category.description
+        )
       }
       
       // Calculate count using the registry
+      // Note: Registry accepts Partial<DataFilters> internally
       const count = dataCategoryRegistry.getCategoryCount(
         category.id,
         clinicalData,
-        filters || {} as any
+        safeFilters as DataFilters
       )
       
       return {
@@ -66,9 +77,9 @@ export function useDataCategories(
       }
     })
   }, [
-    t,
+    t.dataSelection,
     clinicalData,
     filterKey,
-    filters
+    filtersHash
   ])
 }

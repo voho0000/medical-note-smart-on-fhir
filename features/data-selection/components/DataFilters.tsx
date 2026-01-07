@@ -1,13 +1,14 @@
 "use client"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import type { CategoryFilterProps } from "@/src/core/interfaces/data-category.interface"
+import type { CategoryFilterProps, FilterValue } from "@/src/core/interfaces/data-category.interface"
 
 // Legacy interface for backward compatibility
 interface FilterProps {
-  filters: Record<string, any>
-  onFilterChange: (key: string, value: any) => void
+  filters: Record<string, FilterValue>
+  onFilterChange: (key: string, value: FilterValue) => void
 }
 
 export function ConditionFilter({ filters, onFilterChange }: CategoryFilterProps) {
