@@ -57,8 +57,8 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   }, [messages, isLoading])
 
   return (
-    <ScrollArea className="h-[390px] px-4 py-4">
-      <div className="flex flex-col gap-4">
+    <ScrollArea className="h-full px-4 py-4">
+      <div className="flex flex-col gap-4 min-h-full justify-end">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-12 text-center">
             <div className="text-4xl mb-3 opacity-20">💬</div>

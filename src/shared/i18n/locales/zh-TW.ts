@@ -17,6 +17,8 @@ export const zhTW = {
     sending: '傳送中…',
     stop: '停止',
     preview: '預覽',
+    maximize: '放大',
+    minimize: '縮小',
   },
   
   header: {
@@ -132,6 +134,7 @@ export const zhTW = {
     recordVoice: '語音輸入',
     stopRecording: '停止錄音',
     processing: '處理中…',
+    expandedMode: '對話已放大。按 ESC 或點擊縮小按鈕返回。',
     voiceInputError: '語音輸入錯誤：',
     chatError: '對話錯誤：',
     systemPrompt: 'You are a helpful medical assistant helping clinicians compose medical notes.\nBe concise, evidence-based, and note uncertainties when appropriate.\nWhen clinical context is provided in the conversation, reference it directly.',

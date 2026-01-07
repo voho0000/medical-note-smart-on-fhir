@@ -5,7 +5,7 @@ import { CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { Loader2, Eye, EyeOff, Edit, Save, RotateCcw } from "lucide-react"
+import { Loader2, Eye, EyeOff, Edit, Save, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
 
 interface ChatHeaderProps {
   recordingStatus?: string
@@ -17,6 +17,8 @@ interface ChatHeaderProps {
   onUpdateSystemPrompt?: (prompt: string) => void
   onResetSystemPrompt?: () => void
   isCustomPrompt?: boolean
+  isExpanded?: boolean
+  onToggleExpand?: () => void
 }
 
 export function ChatHeader({ 
@@ -28,7 +30,9 @@ export function ChatHeader({
   systemPrompt,
   onUpdateSystemPrompt,
   onResetSystemPrompt,
-  isCustomPrompt
+  isCustomPrompt,
+  isExpanded,
+  onToggleExpand
 }: ChatHeaderProps) {
   const { t } = useLanguage()
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
@@ -68,8 +72,8 @@ export function ChatHeader({
             {t.chat.description}
           </p>
         </div>
-        {systemPrompt && (
-          <div className="flex gap-1">
+        <div className="flex gap-1 items-center">
+          {systemPrompt && (
             <Button
               variant="ghost"
               size="sm"
@@ -79,8 +83,19 @@ export function ChatHeader({
               {showSystemPrompt ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
               System Prompt
             </Button>
-          </div>
-        )}
+          )}
+          {onToggleExpand && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleExpand}
+              className="h-7 w-7 p-0"
+              title={isExpanded ? t.common.minimize : t.common.maximize}
+            >
+              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          )}
+        </div>
       </div>
       {showSystemPrompt && systemPrompt && (
         <div className="mt-2 space-y-2">

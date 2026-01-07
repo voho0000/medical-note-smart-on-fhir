@@ -15,6 +15,8 @@ export const en = {
     sending: 'Sending…',
     stop: 'Stop',
     preview: 'Preview',
+    maximize: 'Maximize',
+    minimize: 'Minimize',
   },
   
   header: {
@@ -133,6 +135,7 @@ export const en = {
     voiceInputError: 'Voice input error:',
     chatError: 'Chat error:',
     systemPrompt: 'You are a helpful medical assistant helping clinicians compose medical notes.\nBe concise, evidence-based, and note uncertainties when appropriate.\nWhen clinical context is provided in the conversation, reference it directly.',
+    expandedMode: 'Chat is expanded. Press ESC or click minimize to return.',
   },
 
   dataSelection: {

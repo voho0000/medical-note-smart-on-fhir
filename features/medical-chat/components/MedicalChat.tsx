@@ -19,7 +19,7 @@ import { useSystemPrompt } from "../hooks/useSystemPrompt"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
-import { Sparkles, MessageSquare, Square, AlertCircle } from "lucide-react"
+import { Sparkles, MessageSquare, Square, AlertCircle, Maximize2 } from "lucide-react"
 
 export function MedicalChat() {
   const { t } = useLanguage()
@@ -31,6 +31,7 @@ export function MedicalChat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isAgentMode, setIsAgentMode] = useState(false)
   const [showApiKeyWarning, setShowApiKeyWarning] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
@@ -132,8 +133,27 @@ export function MedicalChat() {
     }
   }, [input, template.selectedTemplate, scrollTextareaToBottom])
 
-  return (
-    <Card className="flex h-full flex-col overflow-hidden">
+  // Handle escape key to close expanded mode
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isExpanded) {
+        setIsExpanded(false)
+      }
+    }
+    
+    if (isExpanded) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = ''
+    }
+  }, [isExpanded])
+
+  const chatContent = (
+    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none' : ''}`}>
       <ChatHeader
         recordingStatus={recordingStatus.recordingStatusLabel}
         asrError={voice.asrError}
@@ -144,6 +164,8 @@ export function MedicalChat() {
         onUpdateSystemPrompt={updateSystemPrompt}
         onResetSystemPrompt={resetSystemPrompt}
         isCustomPrompt={isCustomPrompt}
+        isExpanded={isExpanded}
+        onToggleExpand={() => setIsExpanded(!isExpanded)}
       />
       
       <CardContent className="flex-1 border-t p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background">
@@ -255,4 +277,34 @@ export function MedicalChat() {
       </CardFooter>
     </Card>
   )
+
+  // Render expanded overlay or normal view
+  if (isExpanded) {
+    return (
+      <>
+        {/* Placeholder to maintain layout */}
+        <Card className="flex h-full flex-col overflow-hidden opacity-50">
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <Maximize2 className="h-8 w-8 mr-2" />
+            {t.chat.expandedMode}
+          </div>
+        </Card>
+        
+        {/* Fullscreen overlay - click outside to close */}
+        <div 
+          className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
+          onClick={() => setIsExpanded(false)}
+        >
+          <div 
+            className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col min-h-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {chatContent}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  return chatContent
 }
