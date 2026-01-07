@@ -1,6 +1,7 @@
 // Lab Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
-import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { inferGroupFromCategory, inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { LabReportFilter } from '@/features/data-selection/components/DataFilters'
 
 interface DiagnosticReport {
   id?: string
@@ -10,13 +11,24 @@ interface DiagnosticReport {
   issued?: string
   conclusion?: string
   result?: Array<{ reference?: string }>
+  resourceType?: string
 }
 
 interface Observation {
   id?: string
   code?: { text?: string }
+  category?: any
+  effectiveDateTime?: string
   valueQuantity?: { value?: number; unit?: string }
   valueString?: string
+  resourceType?: string
+}
+
+// Union type for lab data (can be DiagnosticReport or standalone Observation)
+type LabData = DiagnosticReport | Observation
+
+function isObservation(item: LabData): item is Observation {
+  return (item as any).resourceType === 'Observation' || !!(item as Observation).valueQuantity || !!(item as Observation).valueString
 }
 
 const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
@@ -38,25 +50,27 @@ const isWithinTimeRange = (dateString: string | undefined, range: string): boole
   }
 }
 
-const getLatestByName = (reports: DiagnosticReport[]): DiagnosticReport[] => {
-  const byName = new Map<string, DiagnosticReport>()
+const getLatestByName = (items: LabData[]): LabData[] => {
+  const byName = new Map<string, LabData>()
   
   // Sort by date descending first
-  const sorted = [...reports].sort((a, b) => 
-    (b.effectiveDateTime || b.issued || '').localeCompare(a.effectiveDateTime || a.issued || '')
-  )
+  const sorted = [...items].sort((a, b) => {
+    const dateA = (a as DiagnosticReport).effectiveDateTime || (a as DiagnosticReport).issued || (a as Observation).effectiveDateTime || ''
+    const dateB = (b as DiagnosticReport).effectiveDateTime || (b as DiagnosticReport).issued || (b as Observation).effectiveDateTime || ''
+    return dateB.localeCompare(dateA)
+  })
   
-  sorted.forEach(report => {
-    const name = report.code?.text || 'Unknown'
+  sorted.forEach(item => {
+    const name = item.code?.text || 'Unknown'
     if (!byName.has(name)) {
-      byName.set(name, report)
+      byName.set(name, item)
     }
   })
   
   return Array.from(byName.values())
 }
 
-export const labReportsCategory: DataCategory<DiagnosticReport> = {
+export const labReportsCategory: DataCategory<LabData> = {
   id: 'labReports',
   label: 'Lab Reports',
   labelKey: 'dataSelection.labReports',
@@ -92,35 +106,74 @@ export const labReportsCategory: DataCategory<DiagnosticReport> = {
     }
   ],
   
+  FilterComponent: LabReportFilter,
+  
   extractData: (clinicalData) => {
+    const results: LabData[] = []
+    
+    // Include DiagnosticReports that are lab reports
     const reports = clinicalData?.diagnosticReports || []
-    return reports.filter((report: DiagnosticReport) => 
+    const labReports = reports.filter((report: DiagnosticReport) => 
       inferGroupFromCategory(report.category) === 'lab'
     )
+    results.push(...labReports)
+    
+    // Include standalone lab observations (not in any DiagnosticReport)
+    const observations = clinicalData?.observations || []
+    const allReportObsIds = new Set<string>()
+    
+    // Collect all observation IDs that are already in reports
+    reports.forEach((report: DiagnosticReport) => {
+      report.result?.forEach((result: any) => {
+        const id = result.reference?.split('/').pop()
+        if (id) allReportObsIds.add(id)
+      })
+    })
+    
+    // Filter standalone lab observations
+    const standaloneLabObs = observations.filter((obs: Observation) => {
+      // Skip if already in a report
+      if (obs.id && allReportObsIds.has(obs.id)) return false
+      // Check if it's a lab observation
+      return inferGroupFromObservation(obs) === 'lab'
+    })
+    
+    results.push(...standaloneLabObs)
+    
+    return results
   },
   
   getCount: (data, filters, allClinicalData) => {
-    // Filter out reports without content (matching useReportsData logic)
-    let filtered = data.filter(report => {
-      // Check if report has observations
+    // Filter out items without content
+    let filtered = data.filter(item => {
+      // For standalone observations, they always have content (valueQuantity or valueString)
+      if (isObservation(item)) {
+        return !!(item.valueQuantity || item.valueString)
+      }
+      
+      // For DiagnosticReports, check if they have observations, conclusion, or notes
+      const report = item as DiagnosticReport
       const hasObservations = report.result && report.result.length > 0
-      // Check if report has conclusion or notes
       const hasConclusion = !!report.conclusion
       const hasNotes = Array.isArray((report as any).note) && (report as any).note.length > 0
       
       return hasObservations || hasConclusion || hasNotes
     })
     
-    // Apply time range filter
-    const timeRange = filters.labReportTimeRange as string
+    // Apply time range filter - with safe access and default value
+    const timeRange = (filters?.labReportTimeRange as string) || 'all'
     if (timeRange && timeRange !== 'all') {
-      filtered = filtered.filter(report => 
-        isWithinTimeRange(report.effectiveDateTime || report.issued, timeRange)
-      )
+      filtered = filtered.filter(item => {
+        const date = isObservation(item) 
+          ? item.effectiveDateTime 
+          : ((item as DiagnosticReport).effectiveDateTime || (item as DiagnosticReport).issued)
+        return isWithinTimeRange(date, timeRange)
+      })
     }
     
-    // Apply version filter
-    if (filters.labReportVersion === 'latest') {
+    // Apply version filter - with safe access and default value
+    const version = (filters?.labReportVersion as string) || 'latest'
+    if (version === 'latest') {
       filtered = getLatestByName(filtered)
     }
     
@@ -132,20 +185,24 @@ export const labReportsCategory: DataCategory<DiagnosticReport> = {
     
     let filtered = data
     
-    // Apply time range filter
-    const timeRange = filters.labReportTimeRange as string
+    // Apply time range filter - with safe access and default value
+    const timeRange = (filters?.labReportTimeRange as string) || 'all'
     if (timeRange && timeRange !== 'all') {
-      filtered = filtered.filter(report => 
-        isWithinTimeRange(report.effectiveDateTime || report.issued, timeRange)
-      )
+      filtered = filtered.filter(item => {
+        const date = isObservation(item) 
+          ? item.effectiveDateTime 
+          : ((item as DiagnosticReport).effectiveDateTime || (item as DiagnosticReport).issued)
+        return isWithinTimeRange(date, timeRange)
+      })
     }
     
     if (filtered.length === 0) {
       return { title: 'Lab Reports', items: ['No lab reports found within the selected time range.'] }
     }
     
-    // Apply version filter
-    if (filters.labReportVersion === 'latest') {
+    // Apply version filter - with safe access and default value
+    const version = (filters?.labReportVersion as string) || 'latest'
+    if (version === 'latest') {
       filtered = getLatestByName(filtered)
     }
     
@@ -153,9 +210,26 @@ export const labReportsCategory: DataCategory<DiagnosticReport> = {
     const observations = allClinicalData?.observations || []
     
     const items: string[] = []
-    filtered.forEach(report => {
+    filtered.forEach(item => {
+      // Handle standalone observations
+      if (isObservation(item)) {
+        const obs = item as Observation
+        const value = obs.valueQuantity?.value ?? obs.valueString
+        const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ''
+        const datePart = obs.effectiveDateTime 
+          ? ` (${new Date(obs.effectiveDateTime).toLocaleDateString()})` 
+          : ''
+        
+        if (value !== undefined && value !== null) {
+          items.push(`${obs.code?.text || 'Lab Test'}: ${value}${unit}${datePart}`)
+        }
+        return
+      }
+      
+      // Handle DiagnosticReports
+      const report = item as DiagnosticReport
       const reportObs: Observation[] = []
-      report.result?.forEach(result => {
+      report.result?.forEach((result: any) => {
         const id = result.reference?.split('/').pop()
         if (id) {
           const obs = observations.find((o: Observation) => o.id === id)
@@ -183,7 +257,8 @@ export const labReportsCategory: DataCategory<DiagnosticReport> = {
     
     if (items.length === 0) return null
     
-    const title = filters.labReportVersion === 'latest' 
+    const reportVersion = (filters?.labReportVersion as string) || 'latest'
+    const title = reportVersion === 'latest' 
       ? 'Lab Reports (Latest Only)' 
       : 'Lab Reports'
     

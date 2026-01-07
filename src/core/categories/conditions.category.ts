@@ -1,5 +1,6 @@
 // Conditions Category
 import type { DataCategory, ClinicalContextSection, FilterValue } from '../interfaces/data-category.interface'
+import { ConditionFilter } from '@/features/data-selection/components/DataFilters'
 
 interface Condition {
   code?: { text?: string }
@@ -45,6 +46,8 @@ export const conditionsCategory: DataCategory<Condition> = {
       defaultValue: 'active'
     }
   ],
+  
+  FilterComponent: ConditionFilter,
   
   extractData: (clinicalData) => clinicalData?.conditions || [],
   

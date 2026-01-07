@@ -1,6 +1,7 @@
 // Imaging Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { ImagingReportFilter } from '@/features/data-selection/components/DataFilters'
 
 interface DiagnosticReport {
   id?: string
@@ -90,6 +91,8 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
       defaultValue: 'all'
     }
   ],
+  
+  FilterComponent: ImagingReportFilter,
   
   extractData: (clinicalData) => {
     const reports = clinicalData?.diagnosticReports || []

@@ -1,5 +1,6 @@
 // Vital Signs Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import { VitalSignsFilter } from '@/features/data-selection/components/DataFilters'
 
 interface Observation {
   id?: string
@@ -85,6 +86,8 @@ export const vitalSignsCategory: DataCategory<Observation> = {
       defaultValue: 'all'
     }
   ],
+  
+  FilterComponent: VitalSignsFilter,
   
   extractData: (clinicalData) => clinicalData?.vitalSigns || [],
   

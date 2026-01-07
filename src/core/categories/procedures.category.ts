@@ -1,5 +1,6 @@
 // Procedures Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import { ProcedureFilter } from '@/features/data-selection/components/DataFilters'
 
 interface Procedure {
   code?: { 
@@ -88,6 +89,8 @@ export const proceduresCategory: DataCategory<Procedure> = {
       defaultValue: 'all'
     }
   ],
+  
+  FilterComponent: ProcedureFilter,
   
   extractData: (clinicalData) => clinicalData?.procedures || [],
   

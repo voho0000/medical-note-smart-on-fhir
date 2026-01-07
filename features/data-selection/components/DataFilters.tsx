@@ -2,14 +2,15 @@
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
+import type { CategoryFilterProps } from "@/src/core/interfaces/data-category.interface"
 
+// Legacy interface for backward compatibility
 interface FilterProps {
-  filters: DataFilters
-  onFilterChange: (key: keyof DataFilters, value: any) => void
+  filters: Record<string, any>
+  onFilterChange: (key: string, value: any) => void
 }
 
-export function ConditionFilter({ filters, onFilterChange }: FilterProps) {
+export function ConditionFilter({ filters, onFilterChange }: CategoryFilterProps) {
   const { t } = useLanguage()
   
   return (
@@ -17,8 +18,8 @@ export function ConditionFilter({ filters, onFilterChange }: FilterProps) {
       <div className="flex items-center space-x-2 text-sm">
         <span className="text-muted-foreground">{t.dataSelection.conditionStatus}</span>
         <Select
-          value={filters.conditionStatus || 'active'}
-          onValueChange={(value) => onFilterChange('conditionStatus', value as 'active' | 'all')}
+          value={(filters.conditionStatus as string) || 'active'}
+          onValueChange={(value) => onFilterChange('conditionStatus', value)}
           defaultValue="active"
         >
           <SelectTrigger className="h-8 w-36">
@@ -34,7 +35,7 @@ export function ConditionFilter({ filters, onFilterChange }: FilterProps) {
   )
 }
 
-export function MedicationFilter({ filters, onFilterChange }: FilterProps) {
+export function MedicationFilter({ filters, onFilterChange }: CategoryFilterProps) {
   const { t } = useLanguage()
   
   return (
@@ -42,8 +43,8 @@ export function MedicationFilter({ filters, onFilterChange }: FilterProps) {
       <div className="flex items-center space-x-2 text-sm">
         <span className="text-muted-foreground">{t.dataSelection.medicationStatus}</span>
         <Select
-          value={filters.medicationStatus}
-          onValueChange={(value) => onFilterChange('medicationStatus', value as 'active' | 'all')}
+          value={(filters.medicationStatus as string) || 'active'}
+          onValueChange={(value) => onFilterChange('medicationStatus', value)}
         >
           <SelectTrigger className="h-8 w-36">
             <SelectValue placeholder="Select status" />
@@ -58,7 +59,7 @@ export function MedicationFilter({ filters, onFilterChange }: FilterProps) {
   )
 }
 
-export function VitalSignsFilter({ filters, onFilterChange }: FilterProps) {
+export function VitalSignsFilter({ filters, onFilterChange }: CategoryFilterProps) {
   const { t } = useLanguage()
   
   return (
@@ -67,8 +68,8 @@ export function VitalSignsFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.dataSelection.reportVersion}</span>
           <Select
-            value={filters.vitalSignsVersion || 'latest'}
-            onValueChange={(value) => onFilterChange('vitalSignsVersion', value as 'latest' | 'all')}
+            value={(filters.vitalSignsVersion as string) || 'latest'}
+            onValueChange={(value) => onFilterChange('vitalSignsVersion', value)}
             defaultValue="latest"
           >
             <SelectTrigger className="h-8 w-40">
@@ -84,8 +85,8 @@ export function VitalSignsFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.timeRanges.timeRange}</span>
           <Select
-            value={filters.vitalSignsTimeRange || '1m'}
-            onValueChange={(value) => onFilterChange('vitalSignsTimeRange', value as '24h' | '3d' | '1w' | '1m' | '3m' | 'all')}
+            value={(filters.vitalSignsTimeRange as string) || '1m'}
+            onValueChange={(value) => onFilterChange('vitalSignsTimeRange', value)}
             defaultValue="1m"
           >
             <SelectTrigger className="h-8 w-36">
@@ -106,7 +107,7 @@ export function VitalSignsFilter({ filters, onFilterChange }: FilterProps) {
   )
 }
 
-export function LabReportFilter({ filters, onFilterChange }: FilterProps) {
+export function LabReportFilter({ filters, onFilterChange }: CategoryFilterProps) {
   const { t } = useLanguage()
   
   return (
@@ -115,8 +116,8 @@ export function LabReportFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.dataSelection.reportVersion}</span>
           <Select
-            value={filters.labReportVersion}
-            onValueChange={(value) => onFilterChange('labReportVersion', value as 'latest' | 'all')}
+            value={(filters.labReportVersion as string) || 'latest'}
+            onValueChange={(value) => onFilterChange('labReportVersion', value)}
             defaultValue="latest"
           >
             <SelectTrigger className="h-8 w-40">
@@ -136,8 +137,8 @@ export function LabReportFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.timeRanges.timeRange}</span>
           <Select
-            value={filters.labReportTimeRange || 'all'}
-            onValueChange={(value) => onFilterChange('labReportTimeRange', value as '1w' | '1m' | '3m' | '6m' | '1y' | 'all')}
+            value={(filters.labReportTimeRange as string) || 'all'}
+            onValueChange={(value) => onFilterChange('labReportTimeRange', value)}
             defaultValue="all"
           >
             <SelectTrigger className="h-8 w-36">
@@ -158,7 +159,7 @@ export function LabReportFilter({ filters, onFilterChange }: FilterProps) {
   )
 }
 
-export function ImagingReportFilter({ filters, onFilterChange }: FilterProps) {
+export function ImagingReportFilter({ filters, onFilterChange }: CategoryFilterProps) {
   const { t } = useLanguage()
   
   return (
@@ -167,8 +168,8 @@ export function ImagingReportFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.dataSelection.reportVersion}</span>
           <Select
-            value={filters.imagingReportVersion || 'latest'}
-            onValueChange={(value) => onFilterChange('imagingReportVersion', value as 'latest' | 'all')}
+            value={(filters.imagingReportVersion as string) || 'latest'}
+            onValueChange={(value) => onFilterChange('imagingReportVersion', value)}
             defaultValue="latest"
           >
             <SelectTrigger className="h-8 w-40">
@@ -188,8 +189,8 @@ export function ImagingReportFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.timeRanges.timeRange}</span>
           <Select
-            value={filters.imagingReportTimeRange || 'all'}
-            onValueChange={(value) => onFilterChange('imagingReportTimeRange', value as '1w' | '1m' | '3m' | '6m' | '1y' | 'all')}
+            value={(filters.imagingReportTimeRange as string) || 'all'}
+            onValueChange={(value) => onFilterChange('imagingReportTimeRange', value)}
             defaultValue="all"
           >
             <SelectTrigger className="h-8 w-36">
@@ -210,7 +211,7 @@ export function ImagingReportFilter({ filters, onFilterChange }: FilterProps) {
   )
 }
 
-export function ProcedureFilter({ filters, onFilterChange }: FilterProps) {
+export function ProcedureFilter({ filters, onFilterChange }: CategoryFilterProps) {
   const { t } = useLanguage()
   
   return (
@@ -219,8 +220,8 @@ export function ProcedureFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.dataSelection.reportVersion}</span>
           <Select
-            value={filters.procedureVersion || 'latest'}
-            onValueChange={(value) => onFilterChange('procedureVersion', value as 'latest' | 'all')}
+            value={(filters.procedureVersion as string) || 'latest'}
+            onValueChange={(value) => onFilterChange('procedureVersion', value)}
             defaultValue="latest"
           >
             <SelectTrigger className="h-8 w-40">
@@ -240,8 +241,8 @@ export function ProcedureFilter({ filters, onFilterChange }: FilterProps) {
         <div className="flex items-center space-x-2 text-sm">
           <span className="text-muted-foreground">{t.timeRanges.timeRange}</span>
           <Select
-            value={filters.procedureTimeRange || 'all'}
-            onValueChange={(value) => onFilterChange('procedureTimeRange', value as '1w' | '1m' | '3m' | '6m' | '1y' | 'all')}
+            value={(filters.procedureTimeRange as string) || 'all'}
+            onValueChange={(value) => onFilterChange('procedureTimeRange', value)}
             defaultValue="all"
           >
             <SelectTrigger className="h-8 w-36">

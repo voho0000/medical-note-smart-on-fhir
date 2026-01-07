@@ -14,6 +14,7 @@ import { useReportsContext } from "./clinical-context/useReportsContext"
 import { useProceduresContext } from "./clinical-context/useProceduresContext"
 import { useVitalSignsContext } from "./clinical-context/useVitalSignsContext"
 import type { ClinicalData } from "./clinical-context/types"
+import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 
 export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
@@ -46,13 +47,25 @@ export function useClinicalContext(): UseClinicalContextReturn {
   const conditionsSection = useConditionsContext(selectedData.conditions ?? false, clinicalData, filters)
   const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters)
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
-  // Include reports if any report type is selected (lab, imaging, or legacy diagnosticReports)
-  const includeReports = selectedData.labReports || selectedData.imagingReports || selectedData.diagnosticReports
-  const { section: reportsSection, observationIdsInReports } = useReportsContext(
-    includeReports ?? false,
+  
+  // Use registry system for lab and imaging reports (includes standalone observations)
+  const labReportsSection = useMemo(() => {
+    if (!selectedData.labReports || !clinicalData) return null
+    return dataCategoryRegistry.getCategoryContext('labReports', clinicalData, filters)
+  }, [selectedData.labReports, clinicalData, filters])
+  
+  const imagingReportsSection = useMemo(() => {
+    if (!selectedData.imagingReports || !clinicalData) return null
+    return dataCategoryRegistry.getCategoryContext('imagingReports', clinicalData, filters)
+  }, [selectedData.imagingReports, clinicalData, filters])
+  
+  // Legacy diagnosticReports support (fallback to old hook if needed)
+  const { section: legacyReportsSection, observationIdsInReports } = useReportsContext(
+    selectedData.diagnosticReports ?? false,
     clinicalData,
     filters
   )
+  
   const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters)
   const vitalSignsSections = useVitalSignsContext(
     selectedData.observations ?? false,
@@ -60,16 +73,28 @@ export function useClinicalContext(): UseClinicalContextReturn {
     filters
   )
 
-  // Additional observations (standalone, excluding vitals and those in reports)
+  // Additional observations (standalone, excluding vitals, lab observations, and those in reports)
   const additionalObservationsSection = useMemo((): ClinicalContextSection | null => {
     if (!selectedData.observations || !clinicalData?.observations?.length) return null
 
+    const { inferGroupFromObservation } = require("@/features/clinical-summary/reports/utils/grouping-helpers")
+    
     const vitalIds = new Set<string | undefined>([
       ...(clinicalData.vitalSigns ?? []).map((v) => v.id),
     ])
 
     const standalone = clinicalData.observations.filter(
-      (obs) => !vitalIds.has(obs.id) && !observationIdsInReports.has(String(obs.id))
+      (obs) => {
+        // Exclude vitals
+        if (vitalIds.has(obs.id)) return false
+        // Exclude observations in reports
+        if (observationIdsInReports.has(String(obs.id))) return false
+        // Exclude lab observations (now handled by lab-reports.category)
+        if (inferGroupFromObservation(obs) === 'lab') return false
+        // Exclude imaging observations (handled by imaging-reports.category)
+        if (inferGroupFromObservation(obs) === 'imaging') return false
+        return true
+      }
     )
 
     if (standalone.length === 0) return null
@@ -79,9 +104,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
       return isWithinTimeRange(obs.effectiveDateTime, filters?.vitalSignsTimeRange ?? "all")
     })
 
-    if (filtered.length === 0) {
-      return { title: "Additional Observations", items: ["No observations found within the selected time range."] }
-    }
+    if (filtered.length === 0) return null
 
     const latestByCode = new Map()
     filtered.forEach((obs) => {
@@ -115,7 +138,28 @@ export function useClinicalContext(): UseClinicalContextReturn {
     if (conditionsSection) sections.push(conditionsSection)
     if (medicationsSection) sections.push(medicationsSection)
     if (allergiesSection) sections.push(allergiesSection)
-    if (reportsSection) sections.push(reportsSection)
+    
+    // Add lab reports section (includes standalone lab observations)
+    if (labReportsSection) {
+      if (Array.isArray(labReportsSection)) {
+        sections.push(...labReportsSection)
+      } else {
+        sections.push(labReportsSection)
+      }
+    }
+    
+    // Add imaging reports section (includes standalone imaging observations)
+    if (imagingReportsSection) {
+      if (Array.isArray(imagingReportsSection)) {
+        sections.push(...imagingReportsSection)
+      } else {
+        sections.push(imagingReportsSection)
+      }
+    }
+    
+    // Add legacy reports section if needed
+    if (legacyReportsSection) sections.push(legacyReportsSection)
+    
     if (proceduresSection) sections.push(proceduresSection)
     sections.push(...vitalSignsSections)
     if (additionalObservationsSection) sections.push(additionalObservationsSection)
@@ -126,7 +170,9 @@ export function useClinicalContext(): UseClinicalContextReturn {
     conditionsSection,
     medicationsSection,
     allergiesSection,
-    reportsSection,
+    labReportsSection,
+    imagingReportsSection,
+    legacyReportsSection,
     proceduresSection,
     vitalSignsSections,
     additionalObservationsSection,

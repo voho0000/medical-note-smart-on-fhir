@@ -1,5 +1,6 @@
 // Medications Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import { MedicationFilter } from '@/features/data-selection/components/DataFilters'
 
 interface Medication {
   medicationCodeableConcept?: { text?: string }
@@ -32,6 +33,8 @@ export const medicationsCategory: DataCategory<Medication> = {
       defaultValue: 'active'
     }
   ],
+  
+  FilterComponent: MedicationFilter,
   
   extractData: (clinicalData) => clinicalData?.medications || [],
   

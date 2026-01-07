@@ -4,31 +4,50 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { DataCategoryItem } from "./DataCategoryItem"
-import { ConditionFilter, MedicationFilter, VitalSignsFilter, LabReportFilter, ImagingReportFilter, ProcedureFilter } from "./DataFilters"
+import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
+import type { FilterValue } from "@/src/core/interfaces/data-category.interface"
 
-interface DataSelectionTabProps {
+// Separated interfaces following Interface Segregation Principle
+interface CategoryListProps {
   dataCategories: DataItem[]
+}
+
+interface SelectionProps {
   selectedData: DataSelection
-  filters: DataFilters
   onToggle: (id: DataType, checked: boolean) => void
-  onToggleAll: (checked: boolean) => void
+}
+
+interface FilteringProps {
+  filters: DataFilters
   onFilterChange: (key: keyof DataFilters, value: any) => void
+}
+
+interface BulkSelectionProps {
+  onToggleAll: (checked: boolean) => void
   allSelected: boolean
   someSelected: boolean
 }
 
-export function DataSelectionTab({
-  dataCategories,
-  selectedData,
-  filters,
-  onToggle,
-  onToggleAll,
-  onFilterChange,
-  allSelected,
-  someSelected,
-}: DataSelectionTabProps) {
+// Combined interface for the component
+interface DataSelectionTabProps 
+  extends CategoryListProps, 
+          SelectionProps, 
+          FilteringProps, 
+          BulkSelectionProps {}
+
+export function DataSelectionTab(props: DataSelectionTabProps) {
+  const {
+    dataCategories,
+    selectedData,
+    filters,
+    onToggle,
+    onToggleAll,
+    onFilterChange,
+    allSelected,
+    someSelected,
+  } = props
   const { t } = useLanguage()
   const [mounted, setMounted] = useState(false)
 
@@ -68,25 +87,26 @@ export function DataSelectionTab({
             isSelected={!!selectedData[item.id]}
             onToggle={onToggle}
             renderFilters={() => {
-              if (item.id === 'conditions' && selectedData.conditions) {
-                return <ConditionFilter filters={filters} onFilterChange={onFilterChange} />
+              if (!selectedData[item.id]) return null
+              
+              // Get the category from registry
+              const category = dataCategoryRegistry.get(item.id)
+              if (!category?.FilterComponent) return null
+              
+              const FilterComponent = category.FilterComponent
+              
+              // Type adapter: convert DataFilters to Record<string, FilterValue>
+              const adaptedFilters = filters as unknown as Record<string, FilterValue>
+              const adaptedOnFilterChange = (key: string, value: FilterValue) => {
+                onFilterChange(key as keyof DataFilters, value)
               }
-              if (item.id === 'medications' && selectedData.medications) {
-                return <MedicationFilter filters={filters} onFilterChange={onFilterChange} />
-              }
-              if (item.id === 'observations' && selectedData.observations) {
-                return <VitalSignsFilter filters={filters} onFilterChange={onFilterChange} />
-              }
-              if (item.id === 'labReports' && selectedData.labReports) {
-                return <LabReportFilter filters={filters} onFilterChange={onFilterChange} />
-              }
-              if (item.id === 'imagingReports' && selectedData.imagingReports) {
-                return <ImagingReportFilter filters={filters} onFilterChange={onFilterChange} />
-              }
-              if (item.id === 'procedures' && selectedData.procedures) {
-                return <ProcedureFilter filters={filters} onFilterChange={onFilterChange} />
-              }
-              return null
+              
+              return (
+                <FilterComponent 
+                  filters={adaptedFilters} 
+                  onFilterChange={adaptedOnFilterChange} 
+                />
+              )
             }}
           />
         ))}

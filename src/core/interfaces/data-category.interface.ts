@@ -2,7 +2,7 @@
 // This defines the contract for all data categories in the application
 // Adding a new category only requires implementing this interface
 
-import type { ReactNode } from 'react'
+import type { ReactNode, ComponentType } from 'react'
 
 export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | 'all'
 
@@ -21,6 +21,12 @@ export interface CategoryFilter {
   label: string
   options?: { value: string; label: string }[]
   defaultValue: FilterValue
+}
+
+// Props interface for filter components
+export interface CategoryFilterProps {
+  filters: Record<string, FilterValue>
+  onFilterChange: (key: string, value: FilterValue) => void
 }
 
 // The main interface that all data categories must implement
@@ -42,6 +48,10 @@ export interface DataCategory<TData = any> {
   
   // Filter configuration for this category
   filters?: CategoryFilter[]
+  
+  // Optional React component for rendering filters
+  // If provided, this component will be used instead of auto-generating filters
+  FilterComponent?: ComponentType<CategoryFilterProps>
   
   // Extract relevant data from clinical data
   extractData: (clinicalData: any) => TData[]
