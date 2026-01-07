@@ -46,8 +46,10 @@ export function useClinicalContext(): UseClinicalContextReturn {
   const conditionsSection = useConditionsContext(selectedData.conditions ?? false, clinicalData, filters)
   const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters)
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
+  // Include reports if any report type is selected (lab, imaging, or legacy diagnosticReports)
+  const includeReports = selectedData.labReports || selectedData.imagingReports || selectedData.diagnosticReports
   const { section: reportsSection, observationIdsInReports } = useReportsContext(
-    selectedData.diagnosticReports ?? false,
+    includeReports ?? false,
     clinicalData,
     filters
   )

@@ -36,8 +36,8 @@ export function DataSelectionPanel({
     resetClinicalContextToDefault
   } = useClinicalContext()
 
-  const { filterKey, getFilteredCount, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
-  const dataCategories = useDataCategories(clinicalData, getFilteredCount, filterKey, filters)
+  const { filterKey, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
+  const dataCategories = useDataCategories(clinicalData, filterKey, filters)
 
   const handleToggle = (id: DataType, checked: boolean) => {
     onSelectionChange({

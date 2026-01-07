@@ -1,8 +1,8 @@
 import { useMemo } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import type { DataSelection } from "@/src/core/entities/clinical-context.entity"
+import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
-import { useReportsRowCount } from "@/src/application/hooks/use-reports-row-count.hook"
+import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 
 export type DataType = keyof DataSelection
 
@@ -16,143 +16,59 @@ export interface DataItem {
 
 export function useDataCategories(
   clinicalData: ClinicalDataCollection,
-  getFilteredCount: (items: any[], dataType: 'diagnosticReports' | 'observations') => number,
   filterKey: number,
-  filters?: { conditionStatus?: 'active' | 'all', medicationStatus?: 'active' | 'all', labReportVersion?: 'all' | 'latest', reportTimeRange?: string, vitalSignsVersion?: 'all' | 'latest', vitalSignsTimeRange?: string }
+  filters?: Partial<DataFilters>
 ) {
   const { t } = useLanguage()
-  const rowCounts = useReportsRowCount(
-    clinicalData.diagnosticReports || [],
-    clinicalData.observations || [],
-    clinicalData.procedures || [],
-    filters
-  )
-  
-  // Calculate vital signs count
-  const vitalSignsCount = useMemo(() => {
-    const vitalSigns = clinicalData.vitalSigns || []
-    if (vitalSigns.length === 0) return 0
-    
-    // Apply version filter
-    let filtered = vitalSigns
-    if (filters?.vitalSignsVersion === 'latest') {
-      const latestByCode = new Map()
-      filtered.forEach((obs: any) => {
-        const code = obs.code?.text || obs.code?.coding?.[0]?.display || "Unknown"
-        const existing = latestByCode.get(code)
-        if (!existing || (obs.effectiveDateTime || "") > (existing.effectiveDateTime || "")) {
-          latestByCode.set(code, obs)
-        }
-      })
-      filtered = Array.from(latestByCode.values())
-    }
-    
-    // Apply time range filter
-    if (filters?.vitalSignsTimeRange && filters.vitalSignsTimeRange !== 'all') {
-      const { isWithinTimeRange } = require("@/src/shared/utils/date.utils")
-      filtered = filtered.filter((obs: any) => 
-        isWithinTimeRange(obs.effectiveDateTime, filters.vitalSignsTimeRange)
-      )
-    }
-    
-    return filtered.length
-  }, [clinicalData.vitalSigns, filters])
   
   return useMemo(() => {
+    // Use filterKey to force recalculation when filters change
     const _ = filterKey
-    return [
-      {
-        id: 'patientInfo' as const,
-        label: t.dataSelection.patientInfo,
-        description: t.dataSelection.patientInfoDesc,
-        count: 1,
-        category: 'patient'
-      },
-      {
-        id: 'conditions' as const,
-        label: t.dataSelection.conditions,
-        description: t.dataSelection.conditionsDesc,
-        count: (() => {
-          const conditions = clinicalData.conditions || []
-          if (filters?.conditionStatus === 'active') {
-            return conditions.filter((condition: any) => {
-              const clinicalStatus = condition.clinicalStatus?.coding?.[0]?.code || 
-                                    condition.clinicalStatus?.text ||
-                                    condition.clinicalStatus
-              
-              // If no status field, treat as active
-              if (!clinicalStatus) return true
-              
-              // Check if status is active (handle both string and object formats)
-              const statusStr = typeof clinicalStatus === 'string' 
-                ? clinicalStatus.toLowerCase() 
-                : String(clinicalStatus).toLowerCase()
-              
-              return statusStr === 'active' || 
-                     statusStr === 'recurrence' || 
-                     statusStr === 'relapse'
-            }).length
-          }
-          return conditions.length
-        })(),
-        category: 'clinical'
-      },
-      {
-        id: 'medications' as const,
-        label: t.dataSelection.medications,
-        description: t.dataSelection.medicationsDesc,
-        count: (() => {
-          const medications = clinicalData.medications || []
-          if (filters?.medicationStatus === 'active') {
-            return medications.filter((med: any) => 
-              med.status === 'active' || med.status === 'completed'
-            ).length
-          }
-          return medications.length
-        })(),
-        category: 'medication'
-      },
-      {
-        id: 'allergies' as const,
-        label: t.dataSelection.allergies,
-        description: t.dataSelection.allergiesDesc,
-        count: clinicalData.allergies?.length || 0,
-        category: 'clinical'
-      },
-      {
-        id: 'diagnosticReports' as const,
-        label: t.dataSelection.diagnosticReports,
-        description: t.dataSelection.diagnosticReportsDesc,
-        count: rowCounts.lab + rowCounts.imaging,
-        category: 'diagnostics'
-      },
-      {
-        id: 'procedures' as const,
-        label: t.dataSelection.procedures,
-        description: t.dataSelection.proceduresDesc,
-        count: rowCounts.procedures,
-        category: 'procedures'
-      },
-      {
-        id: 'observations' as const,
-        label: t.dataSelection.observations,
-        description: t.dataSelection.observationsDesc,
-        count: vitalSignsCount,
-        category: 'clinical'
+    
+    // Get all registered categories from the registry
+    const categories = dataCategoryRegistry.getAll()
+    
+    // Map registry categories to DataItem format
+    return categories.map(category => {
+      // Get translated label and description
+      const labelParts = category.labelKey.split('.')
+      const descParts = category.descriptionKey.split('.')
+      
+      // Navigate to the translation
+      let label = category.label
+      let description = category.description
+      
+      try {
+        // Try to get translated label (e.g., t.dataSelection.labReports)
+        if (labelParts[0] === 'dataSelection' && labelParts[1]) {
+          label = (t.dataSelection as any)[labelParts[1]] || category.label
+        }
+        if (descParts[0] === 'dataSelection' && descParts[1]) {
+          description = (t.dataSelection as any)[descParts[1]] || category.description
+        }
+      } catch {
+        // Use default if translation fails
       }
-    ]
+      
+      // Calculate count using the registry
+      const count = dataCategoryRegistry.getCategoryCount(
+        category.id,
+        clinicalData,
+        filters || {} as any
+      )
+      
+      return {
+        id: category.id as DataType,
+        label,
+        description,
+        count,
+        category: category.group
+      }
+    })
   }, [
     t,
-    clinicalData.conditions,
-    clinicalData.medications,
-    clinicalData.allergies,
-    clinicalData.diagnosticReports,
-    clinicalData.observations,
-    clinicalData.procedures,
+    clinicalData,
     filterKey,
-    getFilteredCount,
-    rowCounts,
-    filters,
-    vitalSignsCount
+    filters
   ])
 }

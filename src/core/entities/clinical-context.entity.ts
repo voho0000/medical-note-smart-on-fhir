@@ -12,7 +12,9 @@ export interface DataSelection {
   conditions: boolean
   medications: boolean
   allergies: boolean
-  diagnosticReports: boolean
+  diagnosticReports: boolean  // Legacy - kept for backward compatibility
+  labReports: boolean
+  imagingReports: boolean
   procedures: boolean
   observations: boolean
 }
@@ -23,6 +25,9 @@ export interface DataFilters {
   reportInclusion: 'latest' | 'all'
   reportTimeRange: TimeRange
   labReportVersion: 'latest' | 'all'
+  labReportTimeRange: TimeRange
+  imagingReportVersion: 'latest' | 'all'
+  imagingReportTimeRange: TimeRange
   vitalSignsVersion: 'latest' | 'all'
   vitalSignsTimeRange: TimeRange
   procedureVersion: 'latest' | 'all'

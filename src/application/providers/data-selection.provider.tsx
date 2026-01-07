@@ -5,6 +5,10 @@ import { createContext, useContext, useEffect, useState, useMemo, useCallback, t
 import { StorageService } from '@/src/shared/utils/storage.utils'
 import { DEFAULT_DATA_SELECTION, DEFAULT_DATA_FILTERS, STORAGE_KEYS } from '@/src/shared/constants/data-selection.constants'
 import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-context.entity'
+import { ensureCategoriesInitialized } from '@/src/core/categories/init'
+
+// Initialize categories on module load
+ensureCategoriesInitialized()
 
 type DataType = keyof DataSelection
 
