@@ -1,10 +1,12 @@
 // features/data-selection/Feature.tsx
 "use client"
 
+import { useMemo } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { DataSelectionPanel } from "./components/DataSelectionPanel"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
+import { ClinicalDataMapper } from "@/src/core/services/clinical-data-mapper.service"
 
 type ClinicalData = {
   conditions?: any[]
@@ -29,6 +31,14 @@ export function DataSelectionFeature() {
     setFilters 
   } = useDataSelection()
 
+  // Use ClinicalDataMapper service to transform data (Dependency Inversion Principle)
+  const mappedData = useMemo(() => {
+    if (!clinicalData || clinicalData.isLoading) {
+      return ClinicalDataMapper.getEmptyCollection()
+    }
+    return ClinicalDataMapper.toClinicalDataCollection(clinicalData)
+  }, [clinicalData])
+
   if (clinicalData.isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -40,7 +50,7 @@ export function DataSelectionFeature() {
     )
   }
 
-  if (!clinicalData) {
+  if (!clinicalData || !ClinicalDataMapper.isValid(clinicalData)) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -50,17 +60,6 @@ export function DataSelectionFeature() {
     )
   }
 
-  const data = {
-    conditions: clinicalData.conditions || [],
-    medications: clinicalData.medications || [],
-    allergies: clinicalData.allergies || [],
-    diagnosticReports: clinicalData.diagnosticReports || [],
-    observations: clinicalData.observations || clinicalData.vitalSigns || clinicalData.vitals || [],
-    vitalSigns: clinicalData.vitalSigns || clinicalData.vitals || [],
-    procedures: clinicalData.procedures || [],
-    encounters: clinicalData.encounters || []
-  }
-
   const handleFiltersChange = (newFilters: any) => {
     setFilters(newFilters)
   }
@@ -68,7 +67,7 @@ export function DataSelectionFeature() {
   return (
     <div className="space-y-4">
       <DataSelectionPanel 
-        clinicalData={data}
+        clinicalData={mappedData}
         selectedData={selectedData}
         onSelectionChange={setSelectedData}
         filters={filters}

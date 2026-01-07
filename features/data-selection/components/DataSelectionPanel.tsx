@@ -1,11 +1,11 @@
 "use client"
 
-import { useMemo } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useDataFiltering } from "../hooks/useDataFiltering"
-import { useDataCategories, type DataType } from "../hooks/useDataCategories"
+import { useDataCategories } from "../hooks/useDataCategories"
+import { useSelectionLogic } from "../hooks/useSelectionLogic"
 import { DataSelectionTab } from "./DataSelectionTab"
 import { PreviewTab } from "./PreviewTab"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
@@ -39,30 +39,12 @@ export function DataSelectionPanel({
   const { filterKey, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
   const dataCategories = useDataCategories(clinicalData, filterKey, filters)
 
-  const handleToggle = (id: DataType, checked: boolean) => {
-    onSelectionChange({
-      ...selectedData,
-      [id]: checked
-    } as DataSelection)
-  }
-
-  const handleToggleAll = (checked: boolean) => {
-    const newSelection = { ...selectedData } as DataSelection
-    dataCategories.forEach(item => {
-      newSelection[item.id] = checked
-    })
-    onSelectionChange(newSelection)
-  }
-
-  const allSelected = useMemo(() => 
-    dataCategories.every(item => selectedData[item.id]), 
-    [dataCategories, selectedData]
-  )
-  
-  const someSelected = useMemo(() => 
-    dataCategories.some(item => selectedData[item.id]) && !allSelected,
-    [dataCategories, selectedData, allSelected]
-  )
+  // Use selection logic hook (Single Responsibility Principle)
+  const { handleToggle, handleToggleAll, allSelected, someSelected } = useSelectionLogic({
+    selectedData,
+    dataCategories,
+    onSelectionChange
+  })
 
   return (
     <Tabs defaultValue="selection" className="w-full space-y-4">

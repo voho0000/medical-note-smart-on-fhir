@@ -9,16 +9,28 @@ import { Info } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
-import type { DataSelection } from "@/src/core/entities/clinical-context.entity"
+import type { CategoryFilterProps } from "@/src/core/interfaces/data-category.interface"
 
+/**
+ * Props for DataCategoryItem component
+ * Following Interface Segregation Principle - only includes necessary props
+ */
 interface DataCategoryItemProps {
   item: DataItem
   isSelected: boolean
   onToggle: (id: DataType, checked: boolean) => void
-  renderFilters?: () => React.ReactNode
+  // More explicit than render prop - accepts a React component
+  FilterComponent?: React.ComponentType<CategoryFilterProps>
+  filterProps?: CategoryFilterProps
 }
 
-export function DataCategoryItem({ item, isSelected, onToggle, renderFilters }: DataCategoryItemProps) {
+export function DataCategoryItem({ 
+  item, 
+  isSelected, 
+  onToggle, 
+  FilterComponent, 
+  filterProps 
+}: DataCategoryItemProps) {
   const { t } = useLanguage()
   
   return (
@@ -64,7 +76,9 @@ export function DataCategoryItem({ item, isSelected, onToggle, renderFilters }: 
             {item.description}
           </p>
           
-          {isSelected && renderFilters && renderFilters()}
+          {isSelected && FilterComponent && filterProps && (
+            <FilterComponent {...filterProps} />
+          )}
         </div>
       </div>
     </Card>

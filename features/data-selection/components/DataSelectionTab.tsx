@@ -80,36 +80,31 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
       </div>
 
       <div className="space-y-3">
-        {dataCategories.map((item) => (
-          <DataCategoryItem
-            key={item.id}
-            item={item}
-            isSelected={!!selectedData[item.id]}
-            onToggle={onToggle}
-            renderFilters={() => {
-              if (!selectedData[item.id]) return null
-              
-              // Get the category from registry
-              const category = dataCategoryRegistry.get(item.id)
-              if (!category?.FilterComponent) return null
-              
-              const FilterComponent = category.FilterComponent
-              
-              // Type adapter: convert DataFilters to Record<string, FilterValue>
-              const adaptedFilters = filters as unknown as Record<string, FilterValue>
-              const adaptedOnFilterChange = (key: string, value: FilterValue) => {
-                onFilterChange(key as keyof DataFilters, value)
-              }
-              
-              return (
-                <FilterComponent 
-                  filters={adaptedFilters} 
-                  onFilterChange={adaptedOnFilterChange} 
-                />
-              )
-            }}
-          />
-        ))}
+        {dataCategories.map((item) => {
+          // Get the category from registry
+          const category = dataCategoryRegistry.get(item.id)
+          const FilterComponent = category?.FilterComponent
+          
+          // Type adapter: convert DataFilters to Record<string, FilterValue>
+          const adaptedFilters = filters as unknown as Record<string, FilterValue>
+          const adaptedOnFilterChange = (key: string, value: FilterValue) => {
+            onFilterChange(key as keyof DataFilters, value)
+          }
+          
+          return (
+            <DataCategoryItem
+              key={item.id}
+              item={item}
+              isSelected={!!selectedData[item.id]}
+              onToggle={onToggle}
+              FilterComponent={FilterComponent}
+              filterProps={{
+                filters: adaptedFilters,
+                onFilterChange: adaptedOnFilterChange
+              }}
+            />
+          )
+        })}
       </div>
     </div>
   )
