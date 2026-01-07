@@ -19,7 +19,7 @@ import { useSystemPrompt } from "../hooks/useSystemPrompt"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
-import { Sparkles, MessageSquare, Square, AlertCircle, Maximize2 } from "lucide-react"
+import { Sparkles, MessageSquare, Square, AlertCircle, Maximize2, Minimize2 } from "lucide-react"
 
 export function MedicalChat() {
   const { t } = useLanguage()
@@ -153,22 +153,24 @@ export function MedicalChat() {
   }, [isExpanded])
 
   const chatContent = (
-    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none' : ''}`}>
-      <ChatHeader
-        recordingStatus={recordingStatus.recordingStatusLabel}
-        asrError={voice.asrError}
-        chatError={chat.error}
-        isRecording={voice.isRecording}
-        isAsrLoading={voice.isAsrLoading}
-        systemPrompt={systemPrompt}
-        onUpdateSystemPrompt={updateSystemPrompt}
-        onResetSystemPrompt={resetSystemPrompt}
-        isCustomPrompt={isCustomPrompt}
-        isExpanded={isExpanded}
-        onToggleExpand={() => setIsExpanded(!isExpanded)}
-      />
+    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : ''}`}>
+      {!isExpanded && (
+        <ChatHeader
+          recordingStatus={recordingStatus.recordingStatusLabel}
+          asrError={voice.asrError}
+          chatError={chat.error}
+          isRecording={voice.isRecording}
+          isAsrLoading={voice.isAsrLoading}
+          systemPrompt={systemPrompt}
+          onUpdateSystemPrompt={updateSystemPrompt}
+          onResetSystemPrompt={resetSystemPrompt}
+          isCustomPrompt={isCustomPrompt}
+          isExpanded={isExpanded}
+          onToggleExpand={() => setIsExpanded(!isExpanded)}
+        />
+      )}
       
-      <CardContent className="flex-1 border-t p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background">
+      <CardContent className={`flex-1 p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background ${isExpanded ? '' : 'border-t'}`}>
         <ChatMessageList messages={chat.messages} isLoading={chat.isLoading} />
       </CardContent>
 
@@ -295,6 +297,15 @@ export function MedicalChat() {
           className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
           onClick={() => setIsExpanded(false)}
         >
+          {/* Floating minimize button */}
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="absolute top-4 right-4 z-10 p-2 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shadow-md"
+            title={t.common.minimize}
+          >
+            <Minimize2 className="h-5 w-5" />
+          </button>
+          
           <div 
             className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col min-h-0"
             onClick={(e) => e.stopPropagation()}

@@ -64,15 +64,17 @@ export function ChatHeader({
   }
   
   return (
-    <CardHeader className="space-y-1 pb-2">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col gap-0.5 flex-1">
-          <CardTitle className="text-base">{t.chat.title}</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {t.chat.description}
-          </p>
-        </div>
-        <div className="flex gap-1 items-center">
+    <CardHeader className={`${isExpanded ? 'p-2' : 'space-y-1 pb-2'}`}>
+      <div className={`flex items-start justify-between gap-2 ${isExpanded ? 'min-h-0' : ''}`}>
+        {!isExpanded && (
+          <div className="flex flex-col gap-0.5 flex-1">
+            <CardTitle className="text-base">{t.chat.title}</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {t.chat.description}
+            </p>
+          </div>
+        )}
+        <div className={`flex gap-1 items-center ${isExpanded ? 'ml-auto' : ''}`}>
           {systemPrompt && (
             <Button
               variant="ghost"
