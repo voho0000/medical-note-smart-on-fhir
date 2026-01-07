@@ -38,7 +38,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self' data:",
-              "connect-src 'self' https://api.openai.com https://generativelanguage.googleapis.com https://fhir.epic.com https://fhir.cerner.com https://*.firebase.google.com https://*.run.app https://launch.smarthealthit.org https://*.smarthealthit.org",
+              "connect-src 'self' https://api.openai.com https://generativelanguage.googleapis.com https://api.perplexity.ai https://fhir.epic.com https://fhir.cerner.com https://*.firebase.google.com https://*.run.app https://launch.smarthealthit.org https://*.smarthealthit.org",
               "worker-src 'self' blob:",
               "frame-ancestors 'self'",
               "base-uri 'self'",

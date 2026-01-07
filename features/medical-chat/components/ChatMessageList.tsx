@@ -113,6 +113,14 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                         ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-1" {...props} />,
                         li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
                         p: ({node, ...props}) => <p className="leading-relaxed" {...props} />,
+                        a: ({node, ...props}) => (
+                          <a 
+                            className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            {...props} 
+                          />
+                        ),
                         code: ({node, inline, ...props}: any) => 
                           inline ? (
                             <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props} />

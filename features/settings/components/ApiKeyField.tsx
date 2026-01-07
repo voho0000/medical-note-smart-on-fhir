@@ -18,10 +18,11 @@ import { ApiKeyInput } from './ApiKeyInput'
 export function ModelAndKeySettings() {
   const { t } = useLanguage()
   const { theme, setTheme } = useTheme()
-  const { apiKey, setApiKey, clearApiKey, geminiKey, setGeminiKey, clearGeminiKey } = useApiKey()
+  const { apiKey, setApiKey, clearApiKey, geminiKey, setGeminiKey, clearGeminiKey, perplexityKey, setPerplexityKey, clearPerplexityKey } = useApiKey()
   const { model, setModel } = useNote()
   const [openAiValue, setOpenAiValue] = useState(apiKey)
   const [geminiValue, setGeminiValue] = useState(geminiKey)
+  const [perplexityValue, setPerplexityValue] = useState(perplexityKey)
 
   useEffect(() => {
     setOpenAiValue(apiKey)
@@ -30,6 +31,10 @@ export function ModelAndKeySettings() {
   useEffect(() => {
     setGeminiValue(geminiKey)
   }, [geminiKey])
+
+  useEffect(() => {
+    setPerplexityValue(perplexityKey)
+  }, [perplexityKey])
 
   const { gptModels, geminiModels, handleSelectModel, getModelStatus } = useModelSelection(
     apiKey,
@@ -62,6 +67,15 @@ export function ModelAndKeySettings() {
     if (definition?.provider === "gemini" && !hasGeminiProxy) {
       setModel(DEFAULT_MODEL_ID)
     }
+  }
+
+  const handleSavePerplexityKey = async () => {
+    if (perplexityValue) await setPerplexityKey(perplexityValue.trim())
+  }
+
+  const handleClearPerplexityKey = () => {
+    setPerplexityValue("")
+    clearPerplexityKey()
   }
 
   return (
@@ -142,6 +156,18 @@ export function ModelAndKeySettings() {
         onSave={handleSaveGeminiKey}
         onClear={handleClearGeminiKey}
         helpText={t.settings.geminiKeyHelp}
+      />
+
+      {/* Perplexity API Key */}
+      <ApiKeyInput
+        id="perplexity-key"
+        label={t.settings.personalPerplexityKey}
+        placeholder="pplx-..."
+        value={perplexityValue || ''}
+        onChange={setPerplexityValue}
+        onSave={handleSavePerplexityKey}
+        onClear={handleClearPerplexityKey}
+        helpText={t.settings.perplexityKeyHelp}
       />
     </div>
   )

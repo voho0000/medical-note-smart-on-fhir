@@ -27,6 +27,7 @@ export const STORAGE_KEYS = {
   MODEL_SELECTION: 'clinical-note:model',
   API_KEY: 'clinical-note:openai-key',
   GEMINI_KEY: 'clinical-note:gemini-key',
+  PERPLEXITY_KEY: 'clinical-note:perplexity-key',
   PROMPT_TEMPLATES: 'medical-chat-prompt-templates',
   CLINICAL_INSIGHTS_PANELS: 'clinical-insights-panels',
   CLINICAL_INSIGHTS_AUTO_GENERATE: 'clinical-insights-auto-generate'

@@ -12,11 +12,12 @@ import { formatErrorMessage } from "../utils/formatErrorMessage"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { createFhirTools } from "@/src/infrastructure/ai/tools/fhir-tools"
+import { createLiteratureTools } from "@/src/infrastructure/ai/tools/literature-tools"
 import { fhirClient, type FHIRClient } from "@/src/infrastructure/fhir/client/fhir-client.service"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
   const { chatMessages, setChatMessages } = useNote()
-  const { apiKey: openAiKey, geminiKey } = useApiKey()
+  const { apiKey: openAiKey, geminiKey, perplexityKey } = useApiKey()
   const { patient } = usePatient()
   const { locale, t } = useLanguage()
   const { getFullClinicalContext } = useClinicalContext()
@@ -37,8 +38,13 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
   const tools = useMemo(() => {
     if (!patient?.id || !actualFhirClient) return {}
-    return createFhirTools(actualFhirClient, patient.id)
-  }, [patient?.id, actualFhirClient])
+    const fhirTools = createFhirTools(actualFhirClient, patient.id)
+    const literatureTools = createLiteratureTools(perplexityKey)
+    return {
+      ...fhirTools,
+      ...literatureTools,
+    }
+  }, [patient?.id, actualFhirClient, perplexityKey])
 
   const handleSend = useCallback(
     async (input: string) => {
@@ -126,7 +132,8 @@ ${hasClinicalData ? sp.availableToolsPrefix : ''}${sp.availableToolsSuffix}
 4. queryDiagnosticReports - ${td.queryDiagnosticReports}
 5. queryObservations - ${td.queryObservations}
 6. queryProcedures - ${td.queryProcedures}
-7. queryEncounters - ${td.queryEncounters}
+7. queryEncounters - ${td.queryEncounters}${perplexityKey ? `
+8. searchMedicalLiterature - ${td.searchMedicalLiterature}` : ''}
 
 ${sp.importantNote}
 
@@ -169,6 +176,7 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
                   'queryObservations': '查詢檢驗數據',
                   'queryProcedures': '查詢處置紀錄',
                   'queryEncounters': '查詢就診紀錄',
+                  'searchMedicalLiterature': '搜尋醫學文獻',
                 }
                 return displayNames[name] || name
               }).join('、')
@@ -248,9 +256,27 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
           )
           
           // Build follow-up messages containing tool results
+          // Also collect citations for post-processing
+          let literatureCitations: string[] = []
+          
           const toolResultsSummary = toolResults.map(tr => {
             const r = tr.result as any
             console.log('[Agent] Processing tool result:', tr.toolName, r)
+            
+            // Handle literature search results differently from FHIR results
+            if (tr.toolName === 'searchMedicalLiterature') {
+              if (r?.success && r?.content) {
+                // Store citations for post-processing AI response
+                if (r?.citations && Array.isArray(r.citations)) {
+                  literatureCitations = r.citations
+                }
+                return `${tr.toolName} ${t.agent.queryResult}:\n${r.content}`
+              } else {
+                return `${tr.toolName} ${t.agent.queryFailed}: ${r?.content || t.agent.noData}`
+              }
+            }
+            
+            // Handle FHIR tool results (with count field)
             const countInfo = r?.count === 0 
               ? t.agent.noDataFound.replace('{summary}', r?.summary || '')
               : t.agent.foundRecords.replace('{count}', String(r?.count || 0))
@@ -284,6 +310,30 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
                 prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
               )
             }
+          }
+          
+          // Post-process: Convert citation numbers [1][2] to clickable links if we have citations
+          if (literatureCitations.length > 0) {
+            let processedContent = followUpContent
+            
+            // Replace citation numbers like [1] with clickable markdown links
+            literatureCitations.forEach((citation, index) => {
+              const citationNum = index + 1
+              const regex = new RegExp(`\\[${citationNum}\\]`, 'g')
+              processedContent = processedContent.replace(regex, `[[${citationNum}]](${citation})`)
+            })
+            
+            // Add sources list at the bottom if not already present
+            if (!processedContent.includes('**Sources:**') && !processedContent.includes('**參考來源**')) {
+              processedContent += '\n\n**Sources:**\n' + literatureCitations.map((c, i) => `${i + 1}. [${c}](${c})`).join('\n')
+            }
+            
+            // Update the message with processed content
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
+            )
+            
+            console.log('[Agent] Post-processed citations, converted', literatureCitations.length, 'citations to links')
           }
           
           console.log('[Agent] Follow-up completed, length:', followUpContent.length)
