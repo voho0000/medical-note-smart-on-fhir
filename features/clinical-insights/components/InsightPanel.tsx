@@ -14,7 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ChevronDown, Loader2, Square, Sparkles, Info, Pencil } from "lucide-react"
+import { ChevronDown, Loader2, Square, Sparkles, Info, Pencil, Maximize2, Minimize2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
@@ -46,6 +46,7 @@ export function InsightPanel({
   const titleInputRef = useRef<HTMLInputElement>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState(title)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
     setTitleValue(title)
@@ -96,7 +97,27 @@ export function InsightPanel({
     }
   }, [response, isLoading])
 
+  // Handle escape key to close expanded mode
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isExpanded) {
+        setIsExpanded(false)
+      }
+    }
+    
+    if (isExpanded) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = ''
+    }
+  }, [isExpanded])
+
   return (
+    <>
     <Card>
       <CardHeader className="flex items-start justify-between gap-3 pb-2 pt-3">
         <div className="space-y-1 flex-1">
@@ -231,6 +252,16 @@ export function InsightPanel({
                   </div>
                 </div>
               )}
+              {/* Expand button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(true)}
+                className="absolute top-2 right-2 h-7 w-7 p-0 opacity-60 hover:opacity-100"
+                title={t.common.maximize}
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
             </div>
           )}
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -242,5 +273,47 @@ export function InsightPanel({
         </div>
       </CardContent>
     </Card>
+    
+    {/* Expanded overlay */}
+    {isExpanded && (
+      <div 
+        className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
+        onClick={() => setIsExpanded(false)}
+      >
+        {/* Floating minimize button */}
+        <button
+          onClick={() => setIsExpanded(false)}
+          className="absolute top-4 right-4 z-10 p-2 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shadow-md"
+          title={t.common.minimize}
+        >
+          <Minimize2 className="h-5 w-5" />
+        </button>
+        
+        {/* Title */}
+        <div className="pt-4 px-6 text-center">
+          <h2 className="text-lg font-semibold">{title}</h2>
+        </div>
+        
+        <div 
+          className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col min-h-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Textarea
+            value={response}
+            onChange={(event) => onResponseChange(event.target.value)}
+            placeholder={t.clinicalInsights.responsePlaceholder}
+            className="flex-1 resize-none text-sm overflow-y-auto"
+            disabled={isLoading}
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-2">
+            <span>
+              {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : t.clinicalInsights.readyToGenerate}
+            </span>
+            <span>{response.length} {t.clinicalInsights.chars}</span>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
