@@ -44,14 +44,19 @@ export function NoteProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return
     const stored = window.localStorage.getItem(MODEL_STORAGE_KEY)
+    console.log('[NoteProvider] Loading model from localStorage:', stored)
     if (stored && isModelId(stored)) {
       const next = stored
+      console.log('[NoteProvider] Restoring model:', next)
       setModel(next)
+    } else {
+      console.log('[NoteProvider] Using default model:', DEFAULT_MODEL_ID)
     }
   }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    console.log('[NoteProvider] Saving model to localStorage:', model)
     window.localStorage.setItem(MODEL_STORAGE_KEY, model)
   }, [model])
 

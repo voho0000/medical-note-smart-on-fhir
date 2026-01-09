@@ -25,7 +25,7 @@ import { TabManagementToolbar } from './components/TabManagementToolbar'
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
-  const { panels: configPanels } = useClinicalInsightsConfig()
+  const { panels: configPanels, updatePanel } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { getFullClinicalContext } = useClinicalContext()
   const { isLoading: clinicalDataLoading } = useClinicalData()
@@ -49,7 +49,9 @@ export default function ClinicalInsightsFeature() {
     handlePromptChange,
     handleResponseChange,
     resetEditedFlags,
-  } = useInsightPanels(panels)
+  } = useInsightPanels(panels, (panelId, prompt) => {
+    updatePanel(panelId, { prompt })
+  })
   
   // Use streaming hook with real-time updates
   const { streamAi, stopStreaming } = useAiStreaming(openAiKey, geminiKey, {

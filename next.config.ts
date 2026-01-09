@@ -24,27 +24,12 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
   },
-  // Security headers
+  // Security headers (CSP disabled for local development)
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: https:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://api.openai.com https://generativelanguage.googleapis.com https://api.perplexity.ai https://fhir.epic.com https://fhir.cerner.com https://*.firebase.google.com https://*.run.app https://launch.smarthealthit.org https://*.smarthealthit.org",
-              "worker-src 'self' blob:",
-              "frame-ancestors 'self'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; ')
-          },
           {
             key: 'X-Frame-Options',
             value: 'SAMEORIGIN'

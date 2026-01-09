@@ -9,23 +9,17 @@ interface Panel {
   prompt: string
 }
 
-export function useInsightPanels(panels: Panel[]) {
-  const [promptOverrides, setPromptOverrides] = useState<Record<string, string>>({})
+interface UseInsightPanelsProps {
+  panels: Panel[]
+  onPromptUpdate?: (panelId: string, prompt: string) => void
+}
+
+export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: string, prompt: string) => void) {
   const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
   const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
 
   // Initialize state when panels change
   useEffect(() => {
-    setPromptOverrides((prev) => {
-      const validIds = new Set(panels.map((panel) => panel.id))
-      return Object.keys(prev).reduce<Record<string, string>>((acc, key) => {
-        if (validIds.has(key)) {
-          acc[key] = prev[key]
-        }
-        return acc
-      }, {})
-    })
-
     setResponses((prev) => {
       return panels.reduce<Record<string, ResponseEntry>>((acc, panel) => {
         const existing = prev[panel.id]
@@ -47,25 +41,16 @@ export function useInsightPanels(panels: Panel[]) {
 
   const resolvedPrompts = useMemo(() => {
     return panels.reduce<Record<string, string>>((acc, panel) => {
-      acc[panel.id] = promptOverrides[panel.id] ?? panel.prompt
+      acc[panel.id] = panel.prompt
       return acc
     }, {})
-  }, [panels, promptOverrides])
+  }, [panels])
 
   const handlePromptChange = useCallback((panelId: string, value: string) => {
-    setPromptOverrides((prev) => {
-      const panel = panels.find((item) => item.id === panelId)
-      if (!panel) return prev
-
-      if (value === panel.prompt) {
-        if (!(panelId in prev)) return prev
-        const { [panelId]: _, ...rest } = prev
-        return rest
-      }
-
-      return { ...prev, [panelId]: value }
-    })
-  }, [panels])
+    if (onPromptUpdate) {
+      onPromptUpdate(panelId, value)
+    }
+  }, [onPromptUpdate])
 
   const handleResponseChange = useCallback((panelId: string, value: string) => {
     setResponses((prev) => ({
