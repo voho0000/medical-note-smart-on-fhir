@@ -50,6 +50,7 @@ export function InsightPanel({
   const [titleValue, setTitleValue] = useState(title)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isEditingResponse, setIsEditingResponse] = useState(false)
+  const [isPromptExpanded, setIsPromptExpanded] = useState(false)
 
   useEffect(() => {
     setTitleValue(title)
@@ -118,6 +119,25 @@ export function InsightPanel({
       document.body.style.overflow = ''
     }
   }, [isExpanded])
+
+  // Handle escape key to close prompt expanded mode
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isPromptExpanded) {
+        setIsPromptExpanded(false)
+      }
+    }
+    
+    if (isPromptExpanded) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = ''
+    }
+  }, [isPromptExpanded])
 
   return (
     <>
@@ -210,11 +230,22 @@ export function InsightPanel({
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-2">
-            <Textarea
-              value={prompt}
-              onChange={(event) => onPromptChange(event.target.value)}
-              className="min-h-[88px] resize-vertical text-sm"
-            />
+            <div className="relative">
+              <Textarea
+                value={prompt}
+                onChange={(event) => onPromptChange(event.target.value)}
+                className="min-h-[88px] resize-vertical text-sm"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPromptExpanded(true)}
+                className="absolute top-2 right-2 h-7 w-7 p-0 opacity-60 hover:opacity-100"
+                title={t.common.maximize}
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
               {t.clinicalInsights.promptHelp}
             </p>
@@ -323,7 +354,7 @@ export function InsightPanel({
       </CardContent>
     </Card>
     
-    {/* Expanded overlay */}
+    {/* Expanded overlay for response */}
     {isExpanded && (
       <div 
         className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
@@ -405,6 +436,44 @@ export function InsightPanel({
               {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : t.clinicalInsights.readyToGenerate}
             </span>
             <span>{response.length} {t.clinicalInsights.chars}</span>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Expanded overlay for prompt */}
+    {isPromptExpanded && (
+      <div 
+        className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
+        onClick={() => setIsPromptExpanded(false)}
+      >
+        {/* Floating minimize button */}
+        <button
+          onClick={() => setIsPromptExpanded(false)}
+          className="absolute top-4 right-4 z-10 p-2 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shadow-md"
+          title={t.common.minimize}
+        >
+          <Minimize2 className="h-5 w-5" />
+        </button>
+        
+        {/* Title */}
+        <div className="pt-4 px-6 text-center">
+          <h2 className="text-lg font-semibold">{title} - {t.clinicalInsights.editPrompt}</h2>
+        </div>
+        
+        <div 
+          className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col min-h-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Textarea
+            value={prompt}
+            onChange={(event) => onPromptChange(event.target.value)}
+            placeholder={t.clinicalInsights.promptHelp}
+            className="flex-1 resize-none text-sm overflow-y-auto"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-2">
+            <span>{t.clinicalInsights.promptHelp}</span>
+            <span>{prompt.length} {t.clinicalInsights.chars}</span>
           </div>
         </div>
       </div>
