@@ -8,16 +8,17 @@ import { useCallback } from "react"
 import { useChatMessages as useChatMessagesProvider, type ChatMessage } from "@/src/application/providers/chat-messages.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
-import { sendMessageUseCase } from "@/src/core/use-cases/chat/send-message.use-case"
+import { useSendMessage } from "@/src/application/hooks/chat/use-send-message.hook"
 
 export function useChatMessagesHandler(systemPrompt: string, model: string) {
   const { chatMessages, setChatMessages } = useChatMessagesProvider()
   const ai = useUnifiedAi()
+  const sendMessage = useSendMessage()
 
   const handleSend = useCallback(
     async (input: string) => {
       // Use Use Case to validate input
-      const validation = sendMessageUseCase.validate({
+      const validation = sendMessage.validate({
         userMessage: input,
         conversationHistory: chatMessages,
         systemPrompt,
@@ -30,7 +31,7 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
       }
 
       // Use Use Case to prepare message send
-      const { messages, assistantMessageId } = sendMessageUseCase.prepareMessageSend({
+      const { messages, assistantMessageId } = sendMessage.prepareMessageSend({
         userMessage: input,
         conversationHistory: chatMessages,
         systemPrompt,
@@ -38,7 +39,7 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
       })
 
       // State management: Add user message optimistically
-      const userMessage = sendMessageUseCase.createMessage("user", input.trim())
+      const userMessage = sendMessage.createMessage("user", input.trim())
       setChatMessages((prev) => [...prev, userMessage])
 
       try {
@@ -46,7 +47,7 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
         const result = await ai.query(messages, { modelId: model })
         
         // State management: Add assistant response
-        const assistantMessage = sendMessageUseCase.createMessage(
+        const assistantMessage = sendMessage.createMessage(
           "assistant",
           result || "",
           model
@@ -56,14 +57,14 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
         const errorMessage = getUserErrorMessage(err)
         
         // State management: Add error message
-        const errorMsg = sendMessageUseCase.createMessage(
+        const errorMsg = sendMessage.createMessage(
           "assistant",
           `❌ ${errorMessage}`
         )
         setChatMessages((prev) => [...prev, errorMsg])
       }
     },
-    [chatMessages, model, ai, setChatMessages, systemPrompt]
+    [chatMessages, model, ai, setChatMessages, systemPrompt, sendMessage]
   )
 
   const handleReset = useCallback(() => {

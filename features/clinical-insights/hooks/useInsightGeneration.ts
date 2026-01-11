@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { getUserErrorMessage } from '@/src/core/errors'
-import { generateInsightUseCase } from '@/src/core/use-cases/clinical-insights/generate-insight.use-case'
+import { useGenerateInsight } from '@/src/application/hooks/clinical-insights/use-generate-insight.hook'
 import type { ResponseEntry, PanelStatus } from '../types'
 
 interface Panel {
@@ -34,6 +34,7 @@ export function useInsightGeneration({
   model,
 }: UseInsightGenerationProps): UseInsightGenerationReturn {
   const ai = useUnifiedAi()
+  const generateInsight = useGenerateInsight()
   const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
   const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
   const [currentPanelId, setCurrentPanelId] = useState<string | null>(null)
@@ -58,13 +59,13 @@ export function useInsightGeneration({
         modelId: model,
       }
 
-      const validation = generateInsightUseCase.validate(input)
+      const validation = generateInsight.validate(input)
       if (!validation.valid) {
         console.warn(`Validation failed: ${validation.error}`)
         return
       }
 
-      const messages = generateInsightUseCase.buildMessages(input)
+      const messages = generateInsight.buildMessages(input)
 
       // State management: Set loading state
       setCurrentPanelId(panelId)
@@ -94,7 +95,7 @@ export function useInsightGeneration({
           },
           onComplete: (fullText) => {
             // Use Use Case to build metadata
-            const metadata = generateInsightUseCase.buildMetadata(model)
+            const metadata = generateInsight.buildMetadata(model)
             
             // State management: Final update
             setResponses((prev) => ({
@@ -129,7 +130,7 @@ export function useInsightGeneration({
         setCurrentPanelId(null)
       }
     },
-    [context, panels, prompts, responses, model, ai],
+    [context, panels, prompts, responses, model, ai, generateInsight],
   )
 
   const stopPanel = useCallback(

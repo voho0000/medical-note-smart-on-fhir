@@ -11,7 +11,7 @@ const literatureSearchSchema = z.object({
 export function createLiteratureTools(perplexityKey: string | null) {
   // Only return tools if Perplexity key is available
   if (!perplexityKey) {
-    return {}
+    return null
   }
 
   return {

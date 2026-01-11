@@ -1,7 +1,7 @@
 // Agent Chat Hook - AI Agent with Client-Side FHIR Tool Calling
 "use client"
 
-import { useState, useCallback, useRef, useMemo, useEffect } from "react"
+import { useState, useCallback, useRef, useMemo } from "react"
 import { streamText } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -11,9 +11,8 @@ import { usePatient } from "@/src/application/providers/patient.provider"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { createFhirTools } from "@/src/infrastructure/ai/tools/fhir-tools"
-import { createLiteratureTools } from "@/src/infrastructure/ai/tools/literature-tools"
-import { fhirClient, type FHIRClient } from "@/src/infrastructure/fhir/client/fhir-client.service"
+import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
+import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-tools.hook"
 import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
@@ -24,28 +23,20 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const { getFullClinicalContext } = useClinicalContext()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const [actualFhirClient, setActualFhirClient] = useState<FHIRClient | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const hasReceivedChunkRef = useRef(false)
 
-  // Initialize the actual FHIR client
-  useEffect(() => {
-    fhirClient.getClient().then(client => {
-      setActualFhirClient(client)
-    }).catch(err => {
-      console.error('[Agent] Failed to initialize FHIR client:', err)
-    })
-  }, [])
+  // Use Application Layer hooks for tools (Clean Architecture)
+  const fhirTools = useFhirTools(patient?.id)
+  const literatureTools = useLiteratureTools(perplexityKey)
 
   const tools = useMemo(() => {
-    if (!patient?.id || !actualFhirClient) return {}
-    const fhirTools = createFhirTools(actualFhirClient, patient.id)
-    const literatureTools = createLiteratureTools(perplexityKey)
+    if (!fhirTools && !literatureTools) return undefined
     return {
-      ...fhirTools,
-      ...literatureTools,
+      ...(fhirTools || {}),
+      ...(literatureTools || {}),
     }
-  }, [patient?.id, actualFhirClient, perplexityKey])
+  }, [fhirTools, literatureTools])
 
   const handleSend = useCallback(
     async (input: string) => {
@@ -161,10 +152,10 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
             })
             
             if (toolCalls && toolCalls.length > 0) {
-              console.log('[Agent] Tool calls:', toolCalls.map(tc => tc.toolName))
+              console.log('[Agent] Tool calls:', toolCalls.map(tc => tc?.toolName))
               
               const toolNames = toolCalls.map(tc => {
-                const name = tc.toolName
+                const name = tc?.toolName || ''
                 const displayNames: Record<string, string> = {
                   'queryConditions': '查詢診斷資料',
                   'queryMedications': '查詢用藥資料',
