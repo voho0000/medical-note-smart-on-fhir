@@ -14,6 +14,7 @@ import { useClinicalContext } from "@/src/application/hooks/use-clinical-context
 import { createFhirTools } from "@/src/infrastructure/ai/tools/fhir-tools"
 import { createLiteratureTools } from "@/src/infrastructure/ai/tools/literature-tools"
 import { fhirClient, type FHIRClient } from "@/src/infrastructure/fhir/client/fhir-client.service"
+import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
   const { chatMessages, setChatMessages } = useChatMessages()
@@ -57,21 +58,16 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         return
       }
 
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: trimmed,
-        timestamp: Date.now(),
-      }
+      // Create user message
+      const userMessage = createUserMessage(trimmed)
       const newMessages = [...chatMessages, userMessage]
       setChatMessages(newMessages)
 
+      // Create assistant message with thinking state
       const assistantMessageId = crypto.randomUUID()
       const thinkingMessage = `🤔 ${t.agent.thinking}`
-      const initialState: AgentState = {
-        state: thinkingMessage,
-        timestamp: Date.now(),
-      }
+      const initialState = createAgentState(thinkingMessage)
+      
       setChatMessages([...newMessages, {
         id: assistantMessageId,
         role: "assistant",

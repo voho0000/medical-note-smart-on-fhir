@@ -7,6 +7,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
+import { addMessagePair } from "@/src/shared/utils/chat-message.utils"
 
 export function useStreamingChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
   const { chatMessages, setChatMessages } = useChatMessages()
@@ -21,31 +22,22 @@ export function useStreamingChat(systemPrompt: string, modelId: string, onInputC
       const trimmed = input.trim()
       if (!trimmed) return
 
-      // Create user message
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: trimmed,
-        timestamp: Date.now(),
-      }
-      const newMessages = [...chatMessages, userMessage]
-      setChatMessages(newMessages)
-
-      // Create placeholder for assistant message
-      const assistantMessageId = crypto.randomUUID()
-      setChatMessages([...newMessages, {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        timestamp: Date.now(),
+      // Create user message and assistant placeholder
+      const { messages: newMessages, assistantMessageId } = addMessagePair(
+        chatMessages,
+        trimmed,
         modelId,
-      }])
+        "" // Empty initial content
+      )
+      setChatMessages(newMessages)
 
       setError(null)
 
       try {
-        // Prepare messages
-        const userMessages = newMessages.map((m) => ({ role: m.role, content: m.content }))
+        // Prepare messages (exclude the empty assistant placeholder)
+        const userMessages = newMessages
+          .filter(m => m.id !== assistantMessageId)
+          .map((m) => ({ role: m.role, content: m.content }))
         
         // Check token usage and truncate if needed
         const stats = getTokenStats(userMessages, { modelId, systemPrompt })
