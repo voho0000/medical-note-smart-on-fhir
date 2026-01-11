@@ -21,7 +21,6 @@ import SettingsFeature from "@/features/settings/Feature"
 // PROVIDERS - Import providers needed by features
 // ============================================================================
 import { DataSelectionProvider } from "@/src/application/providers/data-selection.provider"
-import { GptResponseProvider } from "@/src/application/providers/gpt-response.provider"
 import { AsrProvider } from "@/src/application/providers/asr.provider"
 import { ClinicalInsightsConfigProvider } from "@/src/application/providers/clinical-insights-config.provider"
 import { PromptTemplatesProvider } from "@/src/application/providers/prompt-templates.provider"
@@ -44,15 +43,13 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
 function RightPanelProviders({ children }: { children: ReactNode }) {
   return (
     <DataSelectionProvider>
-      <GptResponseProvider>
-        <AsrProvider>
-          <PromptTemplatesProvider>
-            <ClinicalInsightsConfigProvider>
-              {children}
-            </ClinicalInsightsConfigProvider>
-          </PromptTemplatesProvider>
-        </AsrProvider>
-      </GptResponseProvider>
+      <AsrProvider>
+        <PromptTemplatesProvider>
+          <ClinicalInsightsConfigProvider>
+            {children}
+          </ClinicalInsightsConfigProvider>
+        </PromptTemplatesProvider>
+      </AsrProvider>
     </DataSelectionProvider>
   )
 }
