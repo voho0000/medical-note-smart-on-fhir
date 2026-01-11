@@ -3,7 +3,7 @@
 
 import { useCallback, useMemo } from "react"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
-import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import { formatClinicalContext } from "./clinical-context/formatters"
 import { usePatientContext } from "./clinical-context/usePatientContext"

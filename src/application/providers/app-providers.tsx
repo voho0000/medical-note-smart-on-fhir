@@ -1,8 +1,6 @@
 import { ReactNode } from 'react'
 import { ThemeProvider } from './theme.provider'
 import { LanguageProvider } from './language.provider'
-import { PatientProvider } from './patient.provider'
-import { ClinicalDataProvider } from './clinical-data.provider'
 import { QueryProvider } from './query-provider'
 
 interface AppProvidersProps {
@@ -10,25 +8,30 @@ interface AppProvidersProps {
 }
 
 /**
- * Unified provider component - React Query migration complete!
+ * Unified App Providers - Clean Architecture
  * 
- * Before: 8 providers
- * After: 3 providers (62.5% reduction!)
+ * Provider reduction: 8 → 3 (62.5% reduction!)
  * 
  * Final architecture:
- * - QueryProvider: Server state management (FHIR data via React Query)
- * - ThemeProvider: UI infrastructure (low-frequency, ecosystem support)
- * - LanguageProvider: UI infrastructure (low-frequency, i18n integration)
+ * 1. QueryProvider: Server state (FHIR data via React Query)
+ *    - Patient data: usePatientQuery()
+ *    - Clinical data: useClinicalDataQuery()
  * 
- * Migrated to React Query:
- * - Patient data (usePatientQuery)
- * - Clinical data (useClinicalDataQuery)
+ * 2. ThemeProvider: UI infrastructure (low-frequency updates)
+ * 
+ * 3. LanguageProvider: UI infrastructure (i18n, low-frequency updates)
+ * 
+ * State management strategy:
+ * - High-frequency client state → Zustand (API keys, model, chat)
+ * - Server state (FHIR) → React Query (patient, clinical data)
+ * - UI infrastructure → Context (theme, language)
  * 
  * Benefits:
- * - Automatic caching and background refetching
+ * - Automatic caching (5 min stale time)
+ * - Background refetching
+ * - Dependent queries
  * - No unnecessary re-renders
- * - Built-in loading/error states
- * - Dependent queries handled automatically
+ * - Clean separation of concerns
  */
 export function AppProviders({ children }: AppProvidersProps) {
   return (

@@ -1,6 +1,6 @@
 // Patient Context Hook
 import { useMemo } from "react"
-import { usePatient } from "@/src/application/providers/patient.provider"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { calculateAge } from "@/src/shared/utils/date.utils"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 

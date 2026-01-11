@@ -1,16 +1,26 @@
-// Application Providers - Barrel Export
-export { ApiKeyProvider, useApiKey } from './api-key.provider'
+/**
+ * Application Providers - Barrel Export
+ * 
+ * Migrated to Zustand:
+ * - ApiKeyProvider → useAiConfigStore
+ * - ModelSelectionProvider → useAiConfigStore
+ * - ChatMessagesProvider → useChatStore
+ * 
+ * Migrated to React Query:
+ * - PatientProvider → usePatientQuery
+ * - ClinicalDataProvider → useClinicalDataQuery
+ */
+
+// Active Context Providers
 export { AsrProvider, useAsr } from './asr.provider'
-export { ClinicalDataProvider, useClinicalData } from './clinical-data.provider'
 export { ClinicalInsightsConfigProvider, useClinicalInsightsConfig } from './clinical-insights-config.provider'
 export { DataSelectionProvider, useDataSelection } from './data-selection.provider'
 export { GptResponseProvider, useGptResponse } from './gpt-response.provider'
 export { LanguageProvider, useLanguage } from './language.provider'
-export { PatientProvider, usePatient } from './patient.provider'
 export { PromptTemplatesProvider, usePromptTemplates } from './prompt-templates.provider'
 export { RightPanelProvider, useRightPanel } from './right-panel.provider'
 export { ThemeProvider, useTheme } from './theme.provider'
 
-// Focused providers (replaced old NoteProvider)
-export { ModelSelectionProvider, useModelSelection } from './model-selection.provider'
-export { ChatMessagesProvider, useChatMessages, type ChatMessage, type AgentState } from './chat-messages.provider'
+// React Query Hooks (re-exported for convenience)
+export { usePatient, usePatientQuery } from '@/src/application/hooks/patient/use-patient-query.hook'
+export { useClinicalData, useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'

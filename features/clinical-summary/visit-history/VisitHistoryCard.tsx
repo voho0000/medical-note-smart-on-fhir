@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useVisitHistory } from "./hooks/useVisitHistory"
 import { useEncounterDetails } from "./hooks/useEncounterDetails"

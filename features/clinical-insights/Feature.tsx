@@ -9,7 +9,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAllApiKeys, useModel } from "@/src/stores/ai-config.store"
-import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { hasChatProxy } from "@/src/shared/config/env.config"
 

@@ -1,7 +1,7 @@
 // Refactored PatientInfoCard Component
 "use client"
 
-import { usePatient } from "@/src/application/providers/patient.provider"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
 import { usePatientInfo } from './hooks/usePatientInfo'

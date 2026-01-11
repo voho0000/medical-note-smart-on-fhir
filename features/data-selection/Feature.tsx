@@ -3,7 +3,7 @@
 
 import { useMemo, useCallback } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { DataSelectionPanel } from "./components/DataSelectionPanel"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { useClinicalDataMapper } from "@/src/application/hooks/data/use-clinical-data-mapper.hook"
