@@ -1,6 +1,11 @@
-// Custom Hook: Insight Panels State Management
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import type { ResponseEntry, PanelStatus } from '../types'
+/**
+ * Custom Hook: Insight Panels Prompts Management
+ * 
+ * Single Responsibility: Manage prompts only
+ * State ownership: Does NOT own responses or panelStatus
+ * Those are owned by useInsightGeneration
+ */
+import { useCallback, useMemo } from 'react'
 
 interface Panel {
   id: string
@@ -9,36 +14,8 @@ interface Panel {
   prompt: string
 }
 
-interface UseInsightPanelsProps {
-  panels: Panel[]
-  onPromptUpdate?: (panelId: string, prompt: string) => void
-}
-
 export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: string, prompt: string) => void) {
-  const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
-  const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
-
-  // Initialize state when panels change
-  useEffect(() => {
-    setResponses((prev) => {
-      return panels.reduce<Record<string, ResponseEntry>>((acc, panel) => {
-        const existing = prev[panel.id]
-        const text = typeof existing?.text === "string" ? existing.text : ""
-        const isEdited = existing?.isEdited ?? false
-        const metadata = existing?.metadata ?? null
-        acc[panel.id] = { text, isEdited, metadata }
-        return acc
-      }, {})
-    })
-
-    setPanelStatus((prev) => {
-      return panels.reduce<Record<string, PanelStatus>>((acc, panel) => {
-        acc[panel.id] = prev[panel.id] ?? { isLoading: false, error: null }
-        return acc
-      }, {})
-    })
-  }, [panels])
-
+  // Resolve prompts from panels configuration
   const resolvedPrompts = useMemo(() => {
     return panels.reduce<Record<string, string>>((acc, panel) => {
       acc[panel.id] = panel.prompt
@@ -46,49 +23,15 @@ export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: str
     }, {})
   }, [panels])
 
+  // Handle prompt changes (delegates to parent)
   const handlePromptChange = useCallback((panelId: string, value: string) => {
     if (onPromptUpdate) {
       onPromptUpdate(panelId, value)
     }
   }, [onPromptUpdate])
 
-  const handleResponseChange = useCallback((panelId: string, value: string) => {
-    // Allow empty string to clear the response
-    setResponses((prev) => ({
-      ...prev,
-      [panelId]: { 
-        text: value, 
-        isEdited: true, 
-        metadata: value === "" ? null : (prev[panelId]?.metadata ?? null)
-      },
-    }))
-  }, [])
-
-  const resetEditedFlags = useCallback(() => {
-    setResponses((prev) => {
-      return Object.keys(prev).reduce<Record<string, ResponseEntry>>((acc, panelId) => {
-        acc[panelId] = { text: prev[panelId].text, isEdited: false, metadata: prev[panelId].metadata ?? null }
-        return acc
-      }, {})
-    })
-  }, [])
-
-  const clearResponse = useCallback((panelId: string) => {
-    setResponses((prev) => ({
-      ...prev,
-      [panelId]: { text: "", isEdited: false, metadata: null },
-    }))
-  }, [])
-
   return {
     prompts: resolvedPrompts,
-    responses,
-    panelStatus,
-    setResponses,
-    setPanelStatus,
     handlePromptChange,
-    handleResponseChange,
-    clearResponse,
-    resetEditedFlags,
   }
 }

@@ -35,18 +35,15 @@ export default function ClinicalInsightsFeature() {
   
   const panels = configPanels
 
-  const {
-    prompts,
-    handlePromptChange,
-    handleResponseChange,
-    clearResponse,
-  } = useInsightPanels(panels, (panelId, prompt) => {
+  // Prompts management (no state ownership)
+  const { prompts, handlePromptChange } = useInsightPanels(panels, (panelId, prompt) => {
     updatePanel(panelId, { prompt })
   })
 
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
 
+  // Single Source of Truth: All state owned by useInsightGeneration
   const { runPanel, stopPanel, responses, panelStatus, setResponses } = useInsightGeneration({
     panels,
     prompts,
@@ -54,15 +51,8 @@ export default function ClinicalInsightsFeature() {
     model,
   })
 
-  // Create response management functions that work with useInsightGeneration's responses
-  const clearResponseForPanel = useCallback((panelId: string) => {
-    setResponses((prev) => ({
-      ...prev,
-      [panelId]: { text: "", isEdited: false, metadata: null },
-    }))
-  }, [setResponses])
-
-  const handleResponseChangeForPanel = useCallback((panelId: string, value: string) => {
+  // Response management functions (operate on SSOT)
+  const handleResponseChange = useCallback((panelId: string, value: string) => {
     setResponses((prev) => ({
       ...prev,
       [panelId]: { 
@@ -70,6 +60,13 @@ export default function ClinicalInsightsFeature() {
         isEdited: true, 
         metadata: value === "" ? null : (prev[panelId]?.metadata ?? null)
       },
+    }))
+  }, [setResponses])
+
+  const clearResponse = useCallback((panelId: string) => {
+    setResponses((prev) => ({
+      ...prev,
+      [panelId]: { text: "", isEdited: false, metadata: null },
     }))
   }, [setResponses])
 
@@ -119,8 +116,8 @@ export default function ClinicalInsightsFeature() {
           error: status.error,
           canGenerate,
           hasData,
-          onResponseChange: (value: string) => handleResponseChangeForPanel(panel.id, value),
-          onClearResponse: () => clearResponseForPanel(panel.id),
+          onResponseChange: (value: string) => handleResponseChange(panel.id, value),
+          onClearResponse: () => clearResponse(panel.id),
           isEdited: responseEntry.isEdited,
           modelMetadata: responseEntry.metadata ?? null,
           fallbackModelId: model,
@@ -129,7 +126,7 @@ export default function ClinicalInsightsFeature() {
         },
       }
     })
-  }, [canGenerate, hasData, handlePromptChange, handleResponseChangeForPanel, clearResponseForPanel, model, panelStatus, panels, prompts, responses, runPanel, stopPanel, isEditMode])
+  }, [canGenerate, hasData, handlePromptChange, handleResponseChange, clearResponse, model, panelStatus, panels, prompts, responses, runPanel, stopPanel, isEditMode])
 
   return (
     <ScrollArea className="h-full pr-3">
