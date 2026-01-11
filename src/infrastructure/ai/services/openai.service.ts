@@ -2,8 +2,12 @@
 import type { AiQueryRequest, AiQueryResponse, AiMessage } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { isBuiltInModelId, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import { AiError, AiErrorCode } from '@/src/core/errors'
+import type { IAiProvider, AiProviderConfig, StreamingOptions } from '@/src/core/interfaces/services/ai-provider.interface'
 
 export class OpenAiService {
+  readonly name = 'openai'
+
   constructor(private apiKey: string | null = null) {}
 
   setApiKey(apiKey: string | null): void {
@@ -20,9 +24,17 @@ export class OpenAiService {
 
     if (!shouldUseProxy && !this.apiKey) {
       if (modelDef?.requiresUserKey) {
-        throw new Error('This model requires a personal OpenAI API key')
+        throw new AiError(
+          'This model requires a personal OpenAI API key',
+          AiErrorCode.API_KEY_MISSING,
+          { modelId: request.modelId }
+        )
       }
-      throw new Error('OpenAI API key or proxy is required')
+      throw new AiError(
+        'OpenAI API key or proxy is required',
+        AiErrorCode.API_KEY_MISSING,
+        { modelId: request.modelId }
+      )
     }
 
     const targetUrl = shouldUseProxy ? ENV_CONFIG.chatProxyUrl : '/api/llm'
@@ -63,9 +75,23 @@ export class OpenAiService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: response.statusText }))
-        // Sanitize error messages to avoid leaking sensitive information
-        const errorMessage = this.sanitizeErrorMessage(errorData.error?.message || errorData.error || 'OpenAI API request failed')
-        throw new Error(errorMessage)
+        const errorMessage = errorData.error?.message || errorData.error || 'OpenAI API request failed'
+        
+        // Determine error code based on status
+        let errorCode = AiErrorCode.UNKNOWN_ERROR
+        if (response.status === 401) {
+          errorCode = AiErrorCode.API_KEY_INVALID
+        } else if (response.status === 429) {
+          errorCode = AiErrorCode.RATE_LIMIT_EXCEEDED
+        } else if (response.status >= 500) {
+          errorCode = AiErrorCode.NETWORK_ERROR
+        }
+        
+        throw new AiError(
+          this.sanitizeErrorMessage(errorMessage),
+          errorCode,
+          { modelId: request.modelId, status: response.status }
+        )
       }
 
       const data = await response.json()
