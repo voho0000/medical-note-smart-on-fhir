@@ -33,11 +33,12 @@
 
 ## 系統簡介
 
-MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫療人員：
+醫析 MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，採用**整潔架構**和**可插拔設計**，協助醫療人員：
 - 快速查看病患的完整臨床資料
-- 使用 AI 生成臨床摘要和病歷記錄
+- 使用 **AI Agent（深入模式）** 自動查詢 FHIR 資料和醫學文獻
 - 透過語音輸入建立病歷
-- 與 AI 助理互動，獲得臨床建議
+- 與 AI 助理互動，獲得臨床建議和實證醫學資訊
+- 生成個人化的臨床摘要和洞察
 
 ### 線上展示
 
@@ -71,12 +72,14 @@ MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 首次使用需要設定 AI 功能的 API 金鑰：
 
 1. 點擊右側面板的「**設定**」標籤
-2. 在「API 金鑰設定」區域輸入您的金鑰：
-   - **OpenAI API 金鑰**：用於 GPT 模型
-   - **Google Gemini API 金鑰**：用於 Gemini 模型
-   - 至少需要設定一個金鑰
-3. 選擇您偏好的 AI 模型
-4. 點擊「儲存設定」
+2. 切換到「**AI 偏好設定**」子標籤
+3. 在「API 金鑰設定」區域輸入您的金鑰（選用）：
+   - **OpenAI API 金鑰**：用於進階 GPT 模型
+   - **Google Gemini API 金鑰**：用於進階 Gemini 模型
+   - **Perplexity API 金鑰**：用於 AI Agent 文獻搜尋功能
+   - 如不提供金鑰，系統會使用內建模型（透過 Firebase Functions 代理）
+4. 選擇您偏好的 AI 模型
+5. 點擊「儲存設定」
 
 **安全提示：**
 - API 金鑰僅儲存在您的瀏覽器本地
@@ -145,9 +148,27 @@ MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 #### 1. 筆記對話（Note Chat）
 
-與 AI 助理互動，協助撰寫病歷或回答臨床問題。
+與 AI 助理互動，協助撰寫病歷或回答臨床問題。支援兩種模式：
+
+**🆕 深入模式（AI Agent）**：
+- AI 自動調用工具查詢資料
+- **FHIR Tools**：自動查詢病患的診斷、用藥、過敏、檢驗、處置、就診記錄
+- **Literature Search**：使用 Perplexity API 搜尋醫學文獻、臨床指引（需要 Perplexity API 金鑰）
+  - 搜尋來源：PubMed、NIH、WHO、UpToDate
+  - 自動提供引用連結和來源追溯
+  - 支援基礎模式（sonar）和進階模式（sonar-pro）
+- 適合需要深入分析或文獻查證的情境
+
+**一般模式**：
+- 使用預先選定的臨床資料
+- 快速生成回應
+- 適合日常病歷撰寫
 
 **使用方式：**
+
+1. **切換模式**：
+   - 點擊「深入模式」按鈕啟用 AI Agent
+   - 再次點擊切換回一般模式
 
 1. **語音輸入**：
    - 點擊麥克風按鈕開始錄音
@@ -163,11 +184,18 @@ MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
    - AI 會根據病患資料和您的輸入生成回應
    - 可複製回應內容到病歷系統
 
-**實用範例：**
+**一般模式範例：**
 - "請根據病患資料撰寫入院病歷"
 - "這位病患的主要問題是什麼？"
 - "建議的治療計畫為何？"
 - "請整理最近的檢驗結果"
+
+**深入模式範例（AI Agent）**：
+- "這個病人有什麼慢性病？請查詢診斷記錄"
+- "最近的檢驗結果是什麼？有哪些異常？"
+- "病人有哪些用藥？是否有藥物交互作用？"
+- "高血壓的最新治療指引是什麼？"（會自動搜尋文獻）
+- "糖尿病患者使用 SGLT2 抑制劑的證據有哪些？"（會搜尋 PubMed 等來源）
 
 **進階功能：**
 - **插入臨床資料**：點擊「臨床資料」按鈕將選定的病患資料插入對話
@@ -393,8 +421,16 @@ MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 4. 複製金鑰並貼到設定的「AI 偏好設定」標籤中
 5. 點擊「儲存金鑰」
 
+**Perplexity API 金鑰：**
+1. 前往 https://www.perplexity.ai/settings/api
+2. 使用帳號登入
+3. 建立新的 API 金鑰
+4. 複製金鑰並貼到設定的「AI 偏好設定」標籤中
+5. 點擊「儲存金鑰」
+
 **注意：** 
 - 如果不提供個人 API 金鑰，系統會使用內建模型（透過 Firebase Functions 代理）
+- Perplexity API 金鑰僅用於 AI Agent 的文獻搜尋功能
 - 個人 API 金鑰僅儲存在您的瀏覽器本機，不會上傳到伺服器
 - API 使用可能需要付費，請確認費率
 
@@ -419,11 +455,12 @@ MediPrisma · SMART on FHIR 是一個智能臨床文件助理系統，協助醫�
 
 ## System Overview
 
-MediPrisma · SMART on FHIR is an intelligent clinical documentation assistant that helps healthcare providers:
+MediPrisma · SMART on FHIR is an intelligent clinical documentation assistant built with **Clean Architecture** and **Pluggable Design** that helps healthcare providers:
 - Quickly review comprehensive patient clinical data
-- Generate clinical summaries and medical notes using AI
+- Use **AI Agent (Deep Mode)** to automatically query FHIR data and medical literature
 - Create medical records through voice input
-- Interact with AI assistant for clinical insights
+- Interact with AI assistant for clinical insights and evidence-based medicine
+- Generate personalized clinical summaries and insights
 
 ### Live Demo
 
@@ -457,12 +494,14 @@ MediPrisma · SMART on FHIR is an intelligent clinical documentation assistant t
 First-time setup requires AI feature API keys:
 
 1. Click the "**Settings**" tab in the right panel
-2. Enter your keys in the "API Key Settings" section:
-   - **OpenAI API Key**: For GPT models
-   - **Google Gemini API Key**: For Gemini models
-   - At least one key is required
-3. Select your preferred AI model
-4. Click "Save Settings"
+2. Switch to the "**AI Preferences**" sub-tab
+3. Enter your keys in the "API Key Settings" section (optional):
+   - **OpenAI API Key**: For premium GPT models
+   - **Google Gemini API Key**: For premium Gemini models
+   - **Perplexity API Key**: For AI Agent literature search feature
+   - If no keys provided, system will use built-in models (via Firebase Functions proxy)
+4. Select your preferred AI model
+5. Click "Save Settings"
 
 **Security Tips:**
 - API keys are stored only in your browser locally
@@ -531,9 +570,27 @@ The right panel provides four main feature tabs:
 
 #### 1. Note Chat
 
-Interact with AI assistant to help write medical notes or answer clinical questions.
+Interact with AI assistant to help write medical notes or answer clinical questions. Supports two modes:
+
+**🆕 Deep Mode (AI Agent)**:
+- AI automatically invokes tools to query data
+- **FHIR Tools**: Automatically queries patient's diagnoses, medications, allergies, observations, procedures, encounters
+- **Literature Search**: Uses Perplexity API to search medical literature and clinical guidelines (requires Perplexity API key)
+  - Search sources: PubMed, NIH, WHO, UpToDate
+  - Automatically provides citation links and source tracking
+  - Supports basic mode (sonar) and advanced mode (sonar-pro)
+- Suitable for scenarios requiring in-depth analysis or literature verification
+
+**Normal Mode**:
+- Uses pre-selected clinical data
+- Quick response generation
+- Suitable for daily medical note writing
 
 **How to Use:**
+
+1. **Switch Modes**:
+   - Click "Deep Mode" button to enable AI Agent
+   - Click again to switch back to normal mode
 
 1. **Voice Input**:
    - Click microphone button to start recording
@@ -549,11 +606,18 @@ Interact with AI assistant to help write medical notes or answer clinical questi
    - AI generates responses based on patient data and your input
    - Copy response content to medical record system
 
-**Practical Examples:**
+**Normal Mode Examples:**
 - "Please write an admission note based on patient data"
 - "What are the main problems for this patient?"
 - "What is the recommended treatment plan?"
 - "Please summarize recent lab results"
+
+**Deep Mode Examples (AI Agent)**:
+- "What chronic conditions does this patient have? Please query diagnosis records"
+- "What are the recent lab results? Any abnormalities?"
+- "What medications is the patient on? Any drug interactions?"
+- "What are the latest treatment guidelines for hypertension?" (will automatically search literature)
+- "What is the evidence for SGLT2 inhibitors in diabetic patients?" (will search PubMed and other sources)
 
 **Advanced Features:**
 - **Insert Clinical Context**: Click "Context" button to insert selected patient data into conversation
@@ -779,8 +843,16 @@ Currently, the system can only handle one patient at a time. To switch patients:
 4. Copy key and paste into "AI Preferences" tab in settings
 5. Click "Save key"
 
+**Perplexity API Key:**
+1. Go to https://www.perplexity.ai/settings/api
+2. Login with your account
+3. Create new API key
+4. Copy key and paste into "AI Preferences" tab in settings
+5. Click "Save key"
+
 **Note:** 
 - If you don't provide a personal API key, the system will use built-in models (via Firebase Functions proxy)
+- Perplexity API key is only used for AI Agent's literature search feature
 - Personal API keys are stored only in your browser locally and are not uploaded to servers
 - API usage may require payment, please confirm rates
 
