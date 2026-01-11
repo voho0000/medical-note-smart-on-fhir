@@ -53,9 +53,14 @@ export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: str
   }, [onPromptUpdate])
 
   const handleResponseChange = useCallback((panelId: string, value: string) => {
+    // Allow empty string to clear the response
     setResponses((prev) => ({
       ...prev,
-      [panelId]: { text: value, isEdited: true, metadata: prev[panelId]?.metadata ?? null },
+      [panelId]: { 
+        text: value, 
+        isEdited: true, 
+        metadata: value === "" ? null : (prev[panelId]?.metadata ?? null)
+      },
     }))
   }, [])
 
@@ -68,6 +73,13 @@ export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: str
     })
   }, [])
 
+  const clearResponse = useCallback((panelId: string) => {
+    setResponses((prev) => ({
+      ...prev,
+      [panelId]: { text: "", isEdited: false, metadata: null },
+    }))
+  }, [])
+
   return {
     prompts: resolvedPrompts,
     responses,
@@ -76,6 +88,7 @@ export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: str
     setPanelStatus,
     handlePromptChange,
     handleResponseChange,
+    clearResponse,
     resetEditedFlags,
   }
 }

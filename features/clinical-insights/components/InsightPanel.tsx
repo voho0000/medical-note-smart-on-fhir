@@ -16,7 +16,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ChevronDown, Loader2, Square, Sparkles, Info, Pencil, Maximize2, Minimize2 } from "lucide-react"
+import { ChevronDown, Loader2, Square, Sparkles, Info, Pencil, Maximize2, Minimize2, Trash2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
@@ -36,6 +36,7 @@ export function InsightPanel({
   canGenerate,
   hasData,
   onResponseChange,
+  onClearResponse,
   isEdited,
   modelMetadata,
   fallbackModelId,
@@ -197,29 +198,50 @@ export function InsightPanel({
             </TooltipProvider>
           </div>
         </div>
-        {isLoading ? (
-          <Button
-            onClick={onStopGeneration}
-            size="sm"
-            variant="secondary"
-            className="gap-1"
-          >
-            <Square className="h-3.5 w-3.5 fill-current" />
-            {t.common.stop}
-          </Button>
-        ) : (
-          <Button
-            onClick={onRegenerate}
-            size="sm"
-            disabled={!canGenerate || !hasData}
-            variant="outline"
-            className="gap-1"
-            title={!hasData ? t.clinicalInsights.waitingForData : undefined}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {t.clinicalInsights.generate}
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {response && !isLoading && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={onClearResponse}
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t.common.delete || "清除回應"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          {isLoading ? (
+            <Button
+              onClick={onStopGeneration}
+              size="sm"
+              variant="secondary"
+              className="gap-1"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" />
+              {t.common.stop}
+            </Button>
+          ) : (
+            <Button
+              onClick={onRegenerate}
+              size="sm"
+              disabled={!canGenerate || !hasData}
+              variant="outline"
+              className="gap-1"
+              title={!hasData ? t.clinicalInsights.waitingForData : undefined}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {t.clinicalInsights.generate}
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
         <Collapsible defaultOpen={false} className="space-y-1">

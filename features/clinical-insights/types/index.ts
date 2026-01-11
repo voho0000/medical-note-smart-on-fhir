@@ -28,9 +28,10 @@ export interface InsightPanelProps {
   canGenerate: boolean
   hasData: boolean
   onResponseChange: (value: string) => void
+  onClearResponse: () => void
   isEdited: boolean
   modelMetadata: QueryMetadata | null
   fallbackModelId: string
-  autoGenerate: boolean
+  autoGenerate?: boolean
   isEditMode?: boolean
 }

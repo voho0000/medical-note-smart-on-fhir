@@ -1,7 +1,7 @@
 // Refactored Clinical Insights Feature
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -39,6 +39,7 @@ export default function ClinicalInsightsFeature() {
     prompts,
     handlePromptChange,
     handleResponseChange,
+    clearResponse,
   } = useInsightPanels(panels, (panelId, prompt) => {
     updatePanel(panelId, { prompt })
   })
@@ -46,12 +47,31 @@ export default function ClinicalInsightsFeature() {
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
 
-  const { runPanel, stopPanel, responses, panelStatus } = useInsightGeneration({
+  const { runPanel, stopPanel, responses, panelStatus, setResponses } = useInsightGeneration({
     panels,
     prompts,
     context,
     model,
   })
+
+  // Create response management functions that work with useInsightGeneration's responses
+  const clearResponseForPanel = useCallback((panelId: string) => {
+    setResponses((prev) => ({
+      ...prev,
+      [panelId]: { text: "", isEdited: false, metadata: null },
+    }))
+  }, [setResponses])
+
+  const handleResponseChangeForPanel = useCallback((panelId: string, value: string) => {
+    setResponses((prev) => ({
+      ...prev,
+      [panelId]: { 
+        text: value, 
+        isEdited: true, 
+        metadata: value === "" ? null : (prev[panelId]?.metadata ?? null)
+      },
+    }))
+  }, [setResponses])
 
   // Update context when it changes (without resetting responses)
   useEffect(() => {
@@ -99,7 +119,8 @@ export default function ClinicalInsightsFeature() {
           error: status.error,
           canGenerate,
           hasData,
-          onResponseChange: (value: string) => handleResponseChange(panel.id, value),
+          onResponseChange: (value: string) => handleResponseChangeForPanel(panel.id, value),
+          onClearResponse: () => clearResponseForPanel(panel.id),
           isEdited: responseEntry.isEdited,
           modelMetadata: responseEntry.metadata ?? null,
           fallbackModelId: model,
@@ -108,7 +129,7 @@ export default function ClinicalInsightsFeature() {
         },
       }
     })
-  }, [canGenerate, hasData, handlePromptChange, handleResponseChange, model, panelStatus, panels, prompts, responses, runPanel])
+  }, [canGenerate, hasData, handlePromptChange, handleResponseChangeForPanel, clearResponseForPanel, model, panelStatus, panels, prompts, responses, runPanel, stopPanel, isEditMode])
 
   return (
     <ScrollArea className="h-full pr-3">
