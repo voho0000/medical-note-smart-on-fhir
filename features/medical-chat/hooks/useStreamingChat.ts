@@ -3,21 +3,16 @@
 
 import { useState, useCallback, useRef } from "react"
 import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
-import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { StreamOrchestrator } from "@/src/infrastructure/ai/streaming/stream-orchestrator"
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
+import { getUserErrorMessage } from "@/src/core/errors"
 import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
-import { formatErrorMessage } from "../utils/formatErrorMessage"
 
 export function useStreamingChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
   const { chatMessages, setChatMessages } = useNote()
-  const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { locale } = useLanguage()
-  const [isLoading, setIsLoading] = useState(false)
+  const ai = useUnifiedAi()
   const [error, setError] = useState<Error | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const orchestratorRef = useRef(new StreamOrchestrator())
   const hasReceivedChunkRef = useRef(false)
 
   const handleSend = useCallback(
@@ -46,15 +41,9 @@ export function useStreamingChat(systemPrompt: string, modelId: string, onInputC
         modelId,
       }])
 
-      setIsLoading(true)
       setError(null)
-      abortControllerRef.current = new AbortController()
 
       try {
-        const modelDef = getModelDefinition(modelId)
-        const provider = modelDef?.provider ?? "openai"
-        const apiKey = provider === "openai" ? openAiKey : geminiKey
-
         // Prepare messages
         const userMessages = newMessages.map((m) => ({ role: m.role, content: m.content }))
         
@@ -69,18 +58,18 @@ export function useStreamingChat(systemPrompt: string, modelId: string, onInputC
           maxResponseTokens: 4000 
         })
 
-        // Build final messages for API
+        // Build final messages for API with proper typing
         const apiMessages = [
-          { role: "system", content: systemPrompt },
-          ...truncatedMessages,
+          { role: "system" as const, content: systemPrompt },
+          ...truncatedMessages.map(m => ({
+            role: m.role as "user" | "assistant" | "system",
+            content: m.content
+          })),
         ]
 
-        // Stream response using orchestrator
-        await orchestratorRef.current.stream({
-          messages: apiMessages,
-          model: modelId,
-          apiKey,
-          signal: abortControllerRef.current.signal,
+        // Stream response using unified AI
+        await ai.stream(apiMessages, {
+          modelId,
           onChunk: (content: string) => {
             // Clear input on first chunk (streaming started successfully)
             if (!hasReceivedChunkRef.current && onInputClear) {
@@ -95,29 +84,26 @@ export function useStreamingChat(systemPrompt: string, modelId: string, onInputC
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return
         
-        const errorObj = err instanceof Error ? err : new Error("Failed to generate response.")
+        const errorMessage = getUserErrorMessage(err)
+        const errorObj = new Error(errorMessage)
         setError(errorObj)
-        const formattedError = formatErrorMessage(errorObj, locale)
+        
         setChatMessages((prev) =>
-          prev.map((m) => m.id === assistantMessageId ? { ...m, content: formattedError } : m)
+          prev.map((m) => m.id === assistantMessageId ? { ...m, content: `❌ ${errorMessage}` } : m)
         )
-      } finally {
-        setIsLoading(false)
-        abortControllerRef.current = null
       }
     },
-    [chatMessages, modelId, openAiKey, geminiKey, setChatMessages, systemPrompt]
+    [chatMessages, modelId, setChatMessages, systemPrompt, ai, onInputClear]
   )
 
   const handleReset = useCallback(() => {
-    abortControllerRef.current?.abort()
+    ai.stop()
     setChatMessages([])
-  }, [setChatMessages])
+  }, [setChatMessages, ai])
 
   const stopGeneration = useCallback(() => {
-    abortControllerRef.current?.abort()
-    setIsLoading(false)
-  }, [])
+    ai.stop()
+  }, [ai])
 
-  return { messages: chatMessages, isLoading, error, handleSend, handleReset, stopGeneration }
+  return { messages: chatMessages, isLoading: ai.isLoading, error, handleSend, handleReset, stopGeneration }
 }
