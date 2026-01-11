@@ -3,8 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useModelSelection } from "@/src/application/providers/model-selection.provider"
-import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { useModel, useAiConfigStore } from "@/src/stores/ai-config.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ChatMessageList } from "./ChatMessageList"
 import { VoiceRecorder } from "./VoiceRecorder"
@@ -23,10 +22,12 @@ import { useClinicalContext } from "@/src/application/hooks/use-clinical-context
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { Sparkles, MessageSquare, Square, AlertCircle, Maximize2, Minimize2 } from "lucide-react"
 
-export function MedicalChat() {
+export default function MedicalChat() {
   const { t } = useLanguage()
-  const { model } = useModelSelection()
-  const { apiKey: openAiKey, geminiKey } = useApiKey()
+  const model = useModel()
+  const setModel = useAiConfigStore((state) => state.setModel)
+  const openAiKey = useAiConfigStore((state) => state.apiKey)
+  const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { getFullClinicalContext } = useClinicalContext()
   const input = useChatInput()
@@ -51,6 +52,9 @@ export function MedicalChat() {
   const normalChat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight)
   const agentChat = useAgentChat(systemPrompt, model, clearInputAndResetHeight)
   const chat = isAgentMode ? agentChat : normalChat
+  
+  // Ensure chat.messages is always an array
+  const chatMessages = Array.isArray(chat.messages) ? chat.messages : []
   const template = useTemplateSelector()
   
   // Voice recording with callback to insert transcript into input
@@ -178,7 +182,7 @@ export function MedicalChat() {
       )}
       
       <CardContent className={`flex-1 p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background ${isExpanded ? '' : 'border-t'}`}>
-        <ChatMessageList messages={chat.messages} isLoading={chat.isLoading} />
+        <ChatMessageList messages={chatMessages} isLoading={chat.isLoading} />
       </CardContent>
 
       <CardFooter className="flex flex-col gap-2 border-t pt-1 shrink-0">
@@ -229,7 +233,7 @@ export function MedicalChat() {
             onInsertContext={handleInsertContext}
             onResetChat={chat.handleReset}
             onInsertTemplate={handleInsertTemplate}
-            hasChatMessages={chat.messages.length > 0}
+            hasChatMessages={chatMessages.length > 0}
             templates={template.templates}
             selectedTemplateId={template.selectedTemplate?.id}
             onTemplateChange={template.setSelectedTemplateId}
@@ -270,7 +274,7 @@ export function MedicalChat() {
             ) : (
               <button
                 onClick={() => handleSend().catch(console.error)}
-                disabled={!input.input.trim()}
+                disabled={!input.input.trim() || chat.isLoading}
                 className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
               >
                 {t.common.send}

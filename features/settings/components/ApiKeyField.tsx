@@ -5,10 +5,9 @@ import { useEffect, useState } from "react"
 import { Sun, Moon } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useTheme } from "@/src/application/providers/theme.provider"
-import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { useAiConfigStore } from "@/src/stores/ai-config.store"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { useModelSelection } from "@/src/application/providers/model-selection.provider"
 import { DEFAULT_MODEL_ID, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { hasChatProxy, hasGeminiProxy } from "@/src/shared/config/env.config"
 import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSelection'
@@ -18,8 +17,15 @@ import { ApiKeyInput } from './ApiKeyInput'
 export function ModelAndKeySettings() {
   const { t } = useLanguage()
   const { theme, setTheme } = useTheme()
-  const { apiKey, setApiKey, clearApiKey, geminiKey, setGeminiKey, clearGeminiKey, perplexityKey, setPerplexityKey, clearPerplexityKey } = useApiKey()
-  const { model, setModel } = useModelSelection()
+  const apiKey = useAiConfigStore((state) => state.apiKey)
+  const geminiKey = useAiConfigStore((state) => state.geminiKey)
+  const perplexityKey = useAiConfigStore((state) => state.perplexityKey)
+  const model = useAiConfigStore((state) => state.model)
+  const setApiKey = useAiConfigStore((state) => state.setApiKey)
+  const setGeminiKey = useAiConfigStore((state) => state.setGeminiKey)
+  const setPerplexityKey = useAiConfigStore((state) => state.setPerplexityKey)
+  const setModel = useAiConfigStore((state) => state.setModel)
+  const clearAllKeys = useAiConfigStore((state) => state.clearAllKeys)
   const [openAiValue, setOpenAiValue] = useState(apiKey)
   const [geminiValue, setGeminiValue] = useState(geminiKey)
   const [perplexityValue, setPerplexityValue] = useState(perplexityKey)
@@ -44,12 +50,12 @@ export function ModelAndKeySettings() {
   )
 
   const handleSaveOpenAiKey = async () => {
-    if (openAiValue) await setApiKey(openAiValue.trim())
+    if (openAiValue) setApiKey(openAiValue.trim())
   }
 
   const handleClearOpenAiKey = () => {
     setOpenAiValue("")
-    clearApiKey()
+    setApiKey(null)
     const definition = getModelDefinition(model)
     if (definition?.provider === "openai" && (definition.requiresUserKey || !hasChatProxy)) {
       setModel(DEFAULT_MODEL_ID)
@@ -57,12 +63,12 @@ export function ModelAndKeySettings() {
   }
 
   const handleSaveGeminiKey = async () => {
-    if (geminiValue) await setGeminiKey(geminiValue.trim())
+    setGeminiKey(geminiValue)
   }
 
   const handleClearGeminiKey = () => {
     setGeminiValue("")
-    clearGeminiKey()
+    setGeminiKey(null)
     const definition = getModelDefinition(model)
     if (definition?.provider === "gemini" && !hasGeminiProxy) {
       setModel(DEFAULT_MODEL_ID)
@@ -70,12 +76,12 @@ export function ModelAndKeySettings() {
   }
 
   const handleSavePerplexityKey = async () => {
-    if (perplexityValue) await setPerplexityKey(perplexityValue.trim())
+    if (perplexityValue) setPerplexityKey(perplexityValue.trim())
   }
 
   const handleClearPerplexityKey = () => {
     setPerplexityValue("")
-    clearPerplexityKey()
+    setPerplexityKey(null)
   }
 
   return (

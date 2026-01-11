@@ -5,8 +5,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react'
-import { useApiKey } from '@/src/application/providers/api-key.provider'
-import { useModelSelection } from '@/src/application/providers/model-selection.provider'
+import { useAllApiKeys, useModel } from '@/src/stores/ai-config.store'
 import { AiService } from '@/src/infrastructure/ai/services/ai.service'
 import { QueryAiUseCase } from '@/src/core/use-cases/ai/query-ai.use-case'
 import { StreamOrchestrator } from '@/src/infrastructure/ai/streaming/stream-orchestrator'
@@ -35,8 +34,8 @@ interface StreamOptions extends QueryOptions {
  * Consolidates AI query and streaming functionality
  */
 export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
-  const { apiKey: openAiKey, geminiKey } = useApiKey()
-  const { model: defaultModel } = useModelSelection()
+  const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
+  const defaultModel = useModel()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)

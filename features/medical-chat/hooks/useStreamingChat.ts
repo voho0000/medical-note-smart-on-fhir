@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { useChatMessages, type ChatMessage } from "@/src/application/providers/chat-messages.provider"
+import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/stores/chat.store"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
@@ -10,7 +10,8 @@ import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/conte
 import { addMessagePair } from "@/src/shared/utils/chat-message.utils"
 
 export function useStreamingChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
-  const { chatMessages, setChatMessages } = useChatMessages()
+  const chatMessages = useChatMessages()
+  const setChatMessages = useSetChatMessages()
   const { locale } = useLanguage()
   const ai = useUnifiedAi()
   const [error, setError] = useState<Error | null>(null)

@@ -17,9 +17,8 @@ export interface ChatMessage {
 }
 
 export interface AgentState {
-  id: string
+  state: string
   timestamp: number
-  message: string
 }
 
 interface ChatState {
@@ -49,8 +48,13 @@ export const useChatStore = create<ChatState>((set) => ({
   },
 }))
 
-// Selectors
-export const useChatMessages = () => useChatStore((state) => state.messages)
-export const useSetChatMessages = () => useChatStore((state) => state.setMessages)
-export const useAddChatMessage = () => useChatStore((state) => state.addMessage)
-export const useClearChatMessages = () => useChatStore((state) => state.clearMessages)
+// Selectors with stable references for SSR
+const selectMessages = (state: ChatState) => state.messages
+const selectSetMessages = (state: ChatState) => state.setMessages
+const selectAddMessage = (state: ChatState) => state.addMessage
+const selectClearMessages = (state: ChatState) => state.clearMessages
+
+export const useChatMessages = () => useChatStore(selectMessages)
+export const useSetChatMessages = () => useChatStore(selectSetMessages)
+export const useAddChatMessage = () => useChatStore(selectAddMessage)
+export const useClearChatMessages = () => useChatStore(selectClearMessages)

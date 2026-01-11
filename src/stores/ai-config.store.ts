@@ -12,7 +12,9 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useShallow } from 'zustand/react/shallow'
 import { encrypt, decrypt } from '@/src/shared/utils/crypto.utils'
+import { DEFAULT_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 
 type StorageType = 'localStorage' | 'sessionStorage'
 
@@ -42,8 +44,6 @@ const STORAGE_KEYS = {
   STORAGE_TYPE: 'api_key_storage_type',
   MODEL: 'selected_model',
 }
-
-const DEFAULT_MODEL_ID = 'gpt-4o-mini'
 
 // Helper to get storage
 const getStorage = (type: StorageType) => {
@@ -179,13 +179,22 @@ export const useAiConfigStore = create<AiConfigState>()(
   )
 )
 
-// Selectors for optimized re-renders
-export const useApiKey = () => useAiConfigStore((state) => state.apiKey)
-export const useGeminiKey = () => useAiConfigStore((state) => state.geminiKey)
-export const usePerplexityKey = () => useAiConfigStore((state) => state.perplexityKey)
-export const useModel = () => useAiConfigStore((state) => state.model)
-export const useAllApiKeys = () => useAiConfigStore((state) => ({
-  apiKey: state.apiKey,
-  geminiKey: state.geminiKey,
-  perplexityKey: state.perplexityKey,
-}))
+// Selectors with stable references for SSR
+const selectApiKey = (state: AiConfigState) => state.apiKey
+const selectGeminiKey = (state: AiConfigState) => state.geminiKey
+const selectPerplexityKey = (state: AiConfigState) => state.perplexityKey
+const selectModel = (state: AiConfigState) => state.model
+
+export const useApiKey = () => useAiConfigStore(selectApiKey)
+export const useGeminiKey = () => useAiConfigStore(selectGeminiKey)
+export const usePerplexityKey = () => useAiConfigStore(selectPerplexityKey)
+export const useModel = () => useAiConfigStore(selectModel)
+
+// Use useShallow to prevent infinite loops from object reference changes
+export const useAllApiKeys = () => useAiConfigStore(
+  useShallow((state) => ({
+    apiKey: state.apiKey,
+    geminiKey: state.geminiKey,
+    perplexityKey: state.perplexityKey,
+  }))
+)

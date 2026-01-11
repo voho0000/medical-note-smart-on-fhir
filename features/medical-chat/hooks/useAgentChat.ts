@@ -5,8 +5,8 @@ import { useState, useCallback, useRef, useMemo } from "react"
 import { streamText } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { useChatMessages, type ChatMessage, type AgentState } from "@/src/application/providers/chat-messages.provider"
-import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { useChatMessages, useSetChatMessages, type ChatMessage, type AgentState } from "@/src/stores/chat.store"
+import { useAllApiKeys } from "@/src/stores/ai-config.store"
 import { usePatient } from "@/src/application/providers/patient.provider"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -16,8 +16,9 @@ import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-to
 import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
-  const { chatMessages, setChatMessages } = useChatMessages()
-  const { apiKey: openAiKey, geminiKey, perplexityKey } = useApiKey()
+  const chatMessages = useChatMessages()
+  const setChatMessages = useSetChatMessages()
+  const { apiKey: openAiKey, geminiKey, perplexityKey } = useAllApiKeys()
   const { patient } = usePatient()
   const { locale, t } = useLanguage()
   const { getFullClinicalContext } = useClinicalContext()

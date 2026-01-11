@@ -8,10 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { useAllApiKeys, useModel } from "@/src/stores/ai-config.store"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
-import { useModelSelection } from "@/src/application/providers/model-selection.provider"
 import { hasChatProxy } from "@/src/shared/config/env.config"
 
 import { useInsightPanels } from './hooks/useInsightPanels'
@@ -24,10 +23,10 @@ import { TabManagementToolbar } from './components/TabManagementToolbar'
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
   const { panels: configPanels, updatePanel } = useClinicalInsightsConfig()
-  const { apiKey: openAiKey, geminiKey } = useApiKey()
+  const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext()
   const { isLoading: clinicalDataLoading } = useClinicalData()
-  const { model } = useModelSelection()
+  const model = useModel()
 
   const [context, setContext] = useState("")
   const [activeTabId, setActiveTabId] = useState<string>("")
