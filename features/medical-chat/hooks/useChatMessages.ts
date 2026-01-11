@@ -2,15 +2,7 @@ import { useCallback } from "react"
 import { useChatMessages as useChatMessagesProvider, type ChatMessage } from "@/src/application/providers/chat-messages.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
-
-function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
-  return {
-    id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${role}-${Date.now()}`,
-    role,
-    content,
-    timestamp: Date.now(),
-  }
-}
+import { sendMessageUseCase } from "@/src/core/use-cases/chat/send-message.use-case"
 
 export function useChatMessages(systemPrompt: string, model: string) {
   const { chatMessages, setChatMessages } = useChatMessagesProvider()
@@ -18,31 +10,50 @@ export function useChatMessages(systemPrompt: string, model: string) {
 
   const handleSend = useCallback(
     async (input: string) => {
-      const trimmed = input.trim()
-      if (!trimmed) return
+      // Use Use Case to validate input
+      const validation = sendMessageUseCase.validate({
+        userMessage: input,
+        conversationHistory: chatMessages,
+        systemPrompt,
+        modelId: model,
+      })
 
-      const userMessage = createMessage("user", trimmed)
-      const optimisticMessages = [...chatMessages, userMessage]
-      setChatMessages(optimisticMessages)
+      if (!validation.valid) {
+        console.warn(`Validation failed: ${validation.error}`)
+        return
+      }
+
+      // Use Use Case to prepare message send
+      const { messages, assistantMessageId } = sendMessageUseCase.prepareMessageSend({
+        userMessage: input,
+        conversationHistory: chatMessages,
+        systemPrompt,
+        modelId: model,
+      })
+
+      // State management: Add user message optimistically
+      const userMessage = sendMessageUseCase.createMessage("user", input.trim())
+      setChatMessages((prev) => [...prev, userMessage])
 
       try {
-        const gptMessages = [
-          { role: "system" as const, content: systemPrompt },
-          ...optimisticMessages.map((message) => ({ 
-            role: message.role as "user" | "assistant" | "system", 
-            content: message.content 
-          })),
-        ]
-
-        const result = await ai.query(gptMessages, { modelId: model })
-        const assistantMessage = {
-          ...createMessage("assistant", result || ""),
-          modelId: model,
-        }
+        // Call AI with prepared messages
+        const result = await ai.query(messages, { modelId: model })
+        
+        // State management: Add assistant response
+        const assistantMessage = sendMessageUseCase.createMessage(
+          "assistant",
+          result || "",
+          model
+        )
         setChatMessages((prev) => [...prev, assistantMessage])
       } catch (err) {
         const errorMessage = getUserErrorMessage(err)
-        const errorMsg = createMessage("assistant", `❌ ${errorMessage}`)
+        
+        // State management: Add error message
+        const errorMsg = sendMessageUseCase.createMessage(
+          "assistant",
+          `❌ ${errorMessage}`
+        )
         setChatMessages((prev) => [...prev, errorMsg])
       }
     },

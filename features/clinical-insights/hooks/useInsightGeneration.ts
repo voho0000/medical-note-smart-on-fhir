@@ -1,12 +1,10 @@
-// Custom Hook: Insight Generation Logic
+// Custom Hook: Insight Generation State Management
+// Business logic delegated to Use Case
 import { useCallback, useState } from 'react'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { getUserErrorMessage } from '@/src/core/errors'
-import type { AiProvider } from '@/src/core/entities/ai.entity'
+import { generateInsightUseCase } from '@/src/core/use-cases/clinical-insights/generate-insight.use-case'
 import type { ResponseEntry, PanelStatus } from '../types'
-
-const SYSTEM_INSTRUCTION =
-  "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate."
 
 interface Panel {
   id: string
@@ -44,31 +42,36 @@ export function useInsightGeneration({
       const force = options?.force ?? false
       const panel = panels.find((item) => item.id === panelId)
       if (!panel) return
-      if (!context.trim()) return
 
       const prompt = prompts[panelId] ?? panel.prompt
       const responseEntry = responses[panelId]
+      
+      // Skip if already edited (unless forced)
       if (!force && responseEntry?.isEdited) {
         return
       }
 
-      const messages = [
-        { role: "system" as const, content: SYSTEM_INSTRUCTION },
-        {
-          role: "user" as const,
-          content: `${prompt}\n\n---\nPatient Clinical Context:\n${context}`,
-        },
-      ]
+      // Use Use Case to validate and build messages
+      const input = {
+        prompt,
+        clinicalContext: context,
+        modelId: model,
+      }
 
-      // Set current panel ID
+      const validation = generateInsightUseCase.validate(input)
+      if (!validation.valid) {
+        console.warn(`Validation failed: ${validation.error}`)
+        return
+      }
+
+      const messages = generateInsightUseCase.buildMessages(input)
+
+      // State management: Set loading state
       setCurrentPanelId(panelId)
-
-      // Clear response immediately for instant visual feedback
       setResponses((prev) => ({
         ...prev,
         [panelId]: { text: "", isEdited: false, metadata: prev[panelId]?.metadata },
       }))
-
       setPanelStatus((prev) => ({
         ...prev,
         [panelId]: { isLoading: true, error: null },
@@ -79,7 +82,7 @@ export function useInsightGeneration({
         await ai.stream(messages, {
           modelId: model,
           onChunk: (chunk) => {
-            // Real-time update during streaming
+            // State management: Update response during streaming
             setResponses((prev) => ({
               ...prev,
               [panelId]: { 
@@ -90,28 +93,31 @@ export function useInsightGeneration({
             }))
           },
           onComplete: (fullText) => {
-            // Final update with metadata
-            const provider: AiProvider = model.startsWith('gemini') ? 'gemini' : 'openai'
+            // Use Use Case to build metadata
+            const metadata = generateInsightUseCase.buildMetadata(model)
+            
+            // State management: Final update
             setResponses((prev) => ({
               ...prev,
               [panelId]: { 
                 text: fullText, 
                 isEdited: false, 
-                metadata: { modelId: model, provider } 
+                metadata 
               },
             }))
           }
         })
         
+        // State management: Clear loading state
         setPanelStatus((prev) => ({
           ...prev,
           [panelId]: { isLoading: false, error: null },
         }))
       } catch (error) {
-        // Use unified error handling
         const errorMessage = getUserErrorMessage(error)
         console.error(`Failed to generate insight for ${panel.title}:`, errorMessage, error)
         
+        // State management: Set error state
         setPanelStatus((prev) => ({
           ...prev,
           [panelId]: {
