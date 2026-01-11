@@ -11,9 +11,6 @@ export { PromptTemplatesProvider, usePromptTemplates } from './prompt-templates.
 export { RightPanelProvider, useRightPanel } from './right-panel.provider'
 export { ThemeProvider, useTheme } from './theme.provider'
 
-// New focused providers (replacing NoteProvider)
+// Focused providers (replaced old NoteProvider)
 export { ModelSelectionProvider, useModelSelection } from './model-selection.provider'
 export { ChatMessagesProvider, useChatMessages, type ChatMessage, type AgentState } from './chat-messages.provider'
-
-// Legacy - will be removed
-export { NoteProvider, useNote } from './note.provider'

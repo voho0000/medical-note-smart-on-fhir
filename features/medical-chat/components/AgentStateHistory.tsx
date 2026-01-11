@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
-import type { AgentState } from "@/src/application/providers/note.provider"
+import type { AgentState } from "@/src/application/providers/chat-messages.provider"
 
 interface AgentStateHistoryProps {
   states: AgentState[]

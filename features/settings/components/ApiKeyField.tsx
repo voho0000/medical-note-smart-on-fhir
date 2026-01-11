@@ -8,10 +8,10 @@ import { useTheme } from "@/src/application/providers/theme.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { useNote } from "@/src/application/providers/note.provider"
+import { useModelSelection } from "@/src/application/providers/model-selection.provider"
 import { DEFAULT_MODEL_ID, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { hasChatProxy, hasGeminiProxy } from "@/src/shared/config/env.config"
-import { useModelSelection } from '../hooks/useModelSelection'
+import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSelection'
 import { ModelSelector } from './ModelSelector'
 import { ApiKeyInput } from './ApiKeyInput'
 
@@ -19,7 +19,7 @@ export function ModelAndKeySettings() {
   const { t } = useLanguage()
   const { theme, setTheme } = useTheme()
   const { apiKey, setApiKey, clearApiKey, geminiKey, setGeminiKey, clearGeminiKey, perplexityKey, setPerplexityKey, clearPerplexityKey } = useApiKey()
-  const { model, setModel } = useNote()
+  const { model, setModel } = useModelSelection()
   const [openAiValue, setOpenAiValue] = useState(apiKey)
   const [geminiValue, setGeminiValue] = useState(geminiKey)
   const [perplexityValue, setPerplexityValue] = useState(perplexityKey)
@@ -36,7 +36,7 @@ export function ModelAndKeySettings() {
     setPerplexityValue(perplexityKey)
   }, [perplexityKey])
 
-  const { gptModels, geminiModels, handleSelectModel, getModelStatus } = useModelSelection(
+  const { gptModels, geminiModels, handleSelectModel, getModelStatus } = useModelSelectionLogic(
     apiKey,
     geminiKey,
     model,

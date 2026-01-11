@@ -20,7 +20,6 @@ import SettingsFeature from "@/features/settings/Feature"
 // ============================================================================
 // PROVIDERS - Import providers needed by features
 // ============================================================================
-import { NoteProvider } from "@/src/application/providers/note.provider"
 import { DataSelectionProvider } from "@/src/application/providers/data-selection.provider"
 import { GptResponseProvider } from "@/src/application/providers/gpt-response.provider"
 import { AsrProvider } from "@/src/application/providers/asr.provider"
@@ -47,13 +46,11 @@ function RightPanelProviders({ children }: { children: ReactNode }) {
     <DataSelectionProvider>
       <GptResponseProvider>
         <AsrProvider>
-          <NoteProvider>
-            <PromptTemplatesProvider>
-              <ClinicalInsightsConfigProvider>
-                {children}
-              </ClinicalInsightsConfigProvider>
-            </PromptTemplatesProvider>
-          </NoteProvider>
+          <PromptTemplatesProvider>
+            <ClinicalInsightsConfigProvider>
+              {children}
+            </ClinicalInsightsConfigProvider>
+          </PromptTemplatesProvider>
         </AsrProvider>
       </GptResponseProvider>
     </DataSelectionProvider>
