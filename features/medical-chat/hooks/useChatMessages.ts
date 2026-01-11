@@ -1,9 +1,7 @@
-import { useCallback, useMemo } from "react"
+import { useCallback } from "react"
 import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
-import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
-import { useApiKey } from "@/src/application/providers/api-key.provider"
-import { useLanguage } from "@/src/application/providers/language.provider"
-import { formatErrorMessage } from "../utils/formatErrorMessage"
+import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
+import { getUserErrorMessage } from "@/src/core/errors"
 
 function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
   return {
@@ -16,9 +14,7 @@ function createMessage(role: ChatMessage["role"], content: string): ChatMessage 
 
 export function useChatMessages(systemPrompt: string, model: string) {
   const { chatMessages, setChatMessages } = useNote()
-  const { apiKey: openAiKey, geminiKey } = useApiKey()
-  const { locale } = useLanguage()
-  const { queryAi, isLoading, error } = useAiQuery(openAiKey, geminiKey)
+  const ai = useUnifiedAi()
 
   const handleSend = useCallback(
     async (input: string) => {
@@ -32,23 +28,25 @@ export function useChatMessages(systemPrompt: string, model: string) {
       try {
         const gptMessages = [
           { role: "system" as const, content: systemPrompt },
-          ...optimisticMessages.map((message) => ({ role: message.role, content: message.content })),
+          ...optimisticMessages.map((message) => ({ 
+            role: message.role as "user" | "assistant" | "system", 
+            content: message.content 
+          })),
         ]
 
-        const result = await queryAi(gptMessages, model)
+        const result = await ai.query(gptMessages, { modelId: model })
         const assistantMessage = {
-          ...createMessage("assistant", result.text || ""),
+          ...createMessage("assistant", result || ""),
           modelId: model,
         }
         setChatMessages((prev) => [...prev, assistantMessage])
       } catch (err) {
-        const errorObj = err instanceof Error ? err : new Error("Failed to generate response.")
-        const formattedError = formatErrorMessage(errorObj, locale)
-        const errorMessage = createMessage("assistant", formattedError)
-        setChatMessages((prev) => [...prev, errorMessage])
+        const errorMessage = getUserErrorMessage(err)
+        const errorMsg = createMessage("assistant", `❌ ${errorMessage}`)
+        setChatMessages((prev) => [...prev, errorMsg])
       }
     },
-    [chatMessages, model, queryAi, setChatMessages, systemPrompt]
+    [chatMessages, model, ai, setChatMessages, systemPrompt]
   )
 
   const handleReset = useCallback(() => {
@@ -57,8 +55,8 @@ export function useChatMessages(systemPrompt: string, model: string) {
 
   return {
     messages: chatMessages,
-    isLoading,
-    error,
+    isLoading: ai.isLoading,
+    error: ai.error,
     handleSend,
     handleReset,
   }
