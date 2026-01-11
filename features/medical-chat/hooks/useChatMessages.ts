@@ -5,13 +5,14 @@
  * Note: Renamed from useChatMessages to avoid confusion with the provider hook.
  */
 import { useCallback } from "react"
-import { useChatMessages as useChatMessagesProvider, type ChatMessage } from "@/src/application/providers/chat-messages.provider"
+import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/stores/chat.store"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useSendMessage } from "@/src/application/hooks/chat/use-send-message.hook"
 
 export function useChatMessagesHandler(systemPrompt: string, model: string) {
-  const { chatMessages, setChatMessages } = useChatMessagesProvider()
+  const chatMessages = useChatMessages()
+  const setChatMessages = useSetChatMessages()
   const ai = useUnifiedAi()
   const sendMessage = useSendMessage()
 

@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
-import type { ChatMessage } from "@/src/application/providers/chat-messages.provider"
+import type { ChatMessage } from "@/src/stores/chat.store"
 import { AgentStateHistory } from "./AgentStateHistory"
 
 interface ChatMessageListProps {

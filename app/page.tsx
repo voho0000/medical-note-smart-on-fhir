@@ -1,13 +1,8 @@
 // app/page.tsx
 "use client"
 
-import { PatientProvider } from "@/src/application/providers/patient.provider"
-import { ClinicalDataProvider } from "@/src/application/providers/clinical-data.provider"
-import { ApiKeyProvider } from "@/src/application/providers/api-key.provider"
-import { LanguageProvider, useLanguage } from "@/src/application/providers/language.provider"
-import { ThemeProvider } from "@/src/application/providers/theme.provider"
-import { ModelSelectionProvider } from "@/src/application/providers/model-selection.provider"
-import { ChatMessagesProvider } from "@/src/application/providers/chat-messages.provider"
+import { AppProviders } from "@/src/application/providers/app-providers"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
@@ -101,20 +96,8 @@ function PageContent() {
 
 export default function Page() {
   return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <ApiKeyProvider>
-          <ModelSelectionProvider>
-            <ChatMessagesProvider>
-              <PatientProvider>
-                <ClinicalDataProvider>
-                  <PageContent />
-                </ClinicalDataProvider>
-              </PatientProvider>
-            </ChatMessagesProvider>
-          </ModelSelectionProvider>
-        </ApiKeyProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+    <AppProviders>
+      <PageContent />
+    </AppProviders>
   )
 }

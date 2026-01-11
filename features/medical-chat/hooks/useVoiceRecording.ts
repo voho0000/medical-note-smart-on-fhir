@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useAsr } from "@/src/application/providers/asr.provider"
-import { useApiKey } from "@/src/application/providers/api-key.provider"
+import { useAiConfigStore } from "@/src/stores/ai-config.store"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shared/config/env.config"
 
 /**
@@ -18,7 +18,7 @@ import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shar
  */
 export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
   const { isAsrLoading, setIsAsrLoading } = useAsr()
-  const { apiKey } = useApiKey()
+  const apiKey = useAiConfigStore((state) => state.apiKey)
   
   // Internal state - 內部狀態
   const [isRecording, setIsRecording] = useState(false)
