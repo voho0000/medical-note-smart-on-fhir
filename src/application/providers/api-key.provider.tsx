@@ -72,44 +72,28 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
     loadKeys()
   }, [storageType])
 
-  const setApiKey = async (key: string | null) => {
-    const storage = new StorageService(storageType)
-    if (key) {
-      // Encrypt before storing
-      const encryptedKey = await encrypt(key)
-      storage.set(STORAGE_KEYS.API_KEY, encryptedKey)
-      setApiKeyState(key)
-    } else {
-      storage.remove(STORAGE_KEYS.API_KEY)
-      setApiKeyState(null)
+  // Helper function to set API key (DRY principle)
+  const createKeySetterHelper = (
+    storageKey: string,
+    setState: (key: string | null) => void
+  ) => {
+    return async (key: string | null) => {
+      const storage = new StorageService(storageType)
+      if (key) {
+        // Encrypt before storing
+        const encryptedKey = await encrypt(key)
+        storage.set(storageKey, encryptedKey)
+        setState(key)
+      } else {
+        storage.remove(storageKey)
+        setState(null)
+      }
     }
   }
 
-  const setGeminiKey = async (key: string | null) => {
-    const storage = new StorageService(storageType)
-    if (key) {
-      // Encrypt before storing
-      const encryptedKey = await encrypt(key)
-      storage.set(STORAGE_KEYS.GEMINI_KEY, encryptedKey)
-      setGeminiKeyState(key)
-    } else {
-      storage.remove(STORAGE_KEYS.GEMINI_KEY)
-      setGeminiKeyState(null)
-    }
-  }
-
-  const setPerplexityKey = async (key: string | null) => {
-    const storage = new StorageService(storageType)
-    if (key) {
-      // Encrypt before storing
-      const encryptedKey = await encrypt(key)
-      storage.set(STORAGE_KEYS.PERPLEXITY_KEY, encryptedKey)
-      setPerplexityKeyState(key)
-    } else {
-      storage.remove(STORAGE_KEYS.PERPLEXITY_KEY)
-      setPerplexityKeyState(null)
-    }
-  }
+  const setApiKey = createKeySetterHelper(STORAGE_KEYS.API_KEY, setApiKeyState)
+  const setGeminiKey = createKeySetterHelper(STORAGE_KEYS.GEMINI_KEY, setGeminiKeyState)
+  const setPerplexityKey = createKeySetterHelper(STORAGE_KEYS.PERPLEXITY_KEY, setPerplexityKeyState)
 
   const setStorageType = async (type: StorageType) => {
     // Migrate keys to new storage
@@ -155,23 +139,21 @@ export function ApiKeyProvider({ children }: { children: ReactNode }) {
     setPerplexityKeyState(null)
   }
 
-  const clearApiKey = () => {
-    const storage = new StorageService(storageType)
-    storage.remove(STORAGE_KEYS.API_KEY)
-    setApiKeyState(null)
+  // Helper function to clear API key (DRY principle)
+  const createKeyClearerHelper = (
+    storageKey: string,
+    setState: (key: string | null) => void
+  ) => {
+    return () => {
+      const storage = new StorageService(storageType)
+      storage.remove(storageKey)
+      setState(null)
+    }
   }
 
-  const clearGeminiKey = () => {
-    const storage = new StorageService(storageType)
-    storage.remove(STORAGE_KEYS.GEMINI_KEY)
-    setGeminiKeyState(null)
-  }
-
-  const clearPerplexityKey = () => {
-    const storage = new StorageService(storageType)
-    storage.remove(STORAGE_KEYS.PERPLEXITY_KEY)
-    setPerplexityKeyState(null)
-  }
+  const clearApiKey = createKeyClearerHelper(STORAGE_KEYS.API_KEY, setApiKeyState)
+  const clearGeminiKey = createKeyClearerHelper(STORAGE_KEYS.GEMINI_KEY, setGeminiKeyState)
+  const clearPerplexityKey = createKeyClearerHelper(STORAGE_KEYS.PERPLEXITY_KEY, setPerplexityKeyState)
 
   const value = useMemo(
     () => ({

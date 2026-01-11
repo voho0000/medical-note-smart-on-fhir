@@ -4,7 +4,7 @@
  * Following Single Responsibility Principle
  */
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { useApiKey } from '@/src/application/providers/api-key.provider'
 import { useModelSelection } from '@/src/application/providers/model-selection.provider'
 import { AiService } from '@/src/infrastructure/ai/services/ai.service'
@@ -41,6 +41,24 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
+  // Cache AI service instance to avoid recreating on every call
+  const aiService = useMemo(
+    () => new AiService(openAiKey, geminiKey),
+    [openAiKey, geminiKey]
+  )
+
+  // Cache use case instance
+  const queryUseCase = useMemo(
+    () => new QueryAiUseCase(aiService),
+    [aiService]
+  )
+
+  // Cache stream orchestrator instance
+  const streamOrchestrator = useMemo(
+    () => new StreamOrchestrator(),
+    []
+  )
+
   /**
    * Query AI (non-streaming)
    */
@@ -48,9 +66,6 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
     async (messages: AiMessage[], queryOptions?: QueryOptions): Promise<string> => {
       setIsLoading(true)
       setError(null)
-
-      const aiService = new AiService(openAiKey, geminiKey)
-      const queryUseCase = new QueryAiUseCase(aiService)
 
       try {
         const result = await queryUseCase.execute({
@@ -71,7 +86,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         setIsLoading(false)
       }
     },
-    [openAiKey, geminiKey, defaultModel, options]
+    [queryUseCase, defaultModel, options]
   )
 
   /**
@@ -83,14 +98,13 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       setError(null)
       abortControllerRef.current = new AbortController()
 
-      const orchestrator = new StreamOrchestrator()
       const modelId = streamOptions?.modelId || options.defaultModel || defaultModel
       const apiKey = modelId.startsWith('gemini') ? geminiKey : openAiKey
 
       let fullText = ''
 
       try {
-        await orchestrator.stream({
+        await streamOrchestrator.stream({
           messages,
           model: modelId,
           apiKey,
@@ -118,7 +132,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         abortControllerRef.current = null
       }
     },
-    [openAiKey, geminiKey, defaultModel, options]
+    [streamOrchestrator, openAiKey, geminiKey, defaultModel, options]
   )
 
   /**
