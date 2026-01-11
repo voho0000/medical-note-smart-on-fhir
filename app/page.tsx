@@ -1,7 +1,6 @@
 // app/page.tsx
 "use client"
 
-import { useState, useRef, useEffect } from "react"
 import { PatientProvider } from "@/src/application/providers/patient.provider"
 import { ClinicalDataProvider } from "@/src/application/providers/clinical-data.provider"
 import { ApiKeyProvider } from "@/src/application/providers/api-key.provider"
@@ -12,63 +11,21 @@ import { ChatMessagesProvider } from "@/src/application/providers/chat-messages.
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
+import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
+import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 
 function PageContent() {
   const { t } = useLanguage()
-  const [leftWidth, setLeftWidth] = useState(50) // percentage
-  const [isDragging, setIsDragging] = useState(false)
-  const [mobileView, setMobileView] = useState<'left' | 'right'>('left') // for mobile tab switching
-  const [isLargeScreen, setIsLargeScreen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
   
-  // Detect screen size on client side to avoid hydration mismatch
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsLargeScreen(window.innerWidth >= 1024)
-    }
-    
-    checkScreenSize()
-    window.addEventListener('resize', checkScreenSize)
-    
-    return () => window.removeEventListener('resize', checkScreenSize)
-  }, [])
+  // Resizable layout logic (extracted to custom hook)
+  const { leftWidth, isDragging, containerRef, handleMouseDown } = useResizableLayout({
+    initialWidth: 50,
+    minWidth: 30,
+    maxWidth: 70
+  })
   
-  const handleMouseDown = () => {
-    setIsDragging(true)
-  }
-  
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current) return
-      
-      const container = containerRef.current
-      const rect = container.getBoundingClientRect()
-      const newLeftWidth = ((e.clientX - rect.left) / rect.width) * 100
-      
-      // Limit between 30% and 70%
-      if (newLeftWidth >= 30 && newLeftWidth <= 70) {
-        setLeftWidth(newLeftWidth)
-      }
-    }
-    
-    const handleMouseUp = () => {
-      setIsDragging(false)
-    }
-    
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    }
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isDragging])
+  // Responsive view logic (extracted to custom hook)
+  const { mobileView, setMobileView, isLargeScreen } = useResponsiveView<'left' | 'right'>('left', 1024)
   
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
