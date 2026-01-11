@@ -3,11 +3,12 @@ import type { IPatientRepository } from '@/src/core/interfaces/repositories/pati
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { fhirClient } from '../client/fhir-client.service'
 import { PatientMapper } from '../mappers/patient.mapper'
+import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
 export class FhirPatientRepository implements IPatientRepository {
   async getCurrentPatient(): Promise<PatientEntity | null> {
     try {
-      const response = await fhirClient.request('Patient')
+      const response = await fhirClient.request(FHIR_RESOURCES.PATIENT)
       return PatientMapper.fromBundle(response)
     } catch (error) {
       console.error('Failed to fetch current patient:', error)

@@ -12,6 +12,7 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient } from '../client/fhir-client.service'
 import { ClinicalDataMapper } from '../mappers/clinical-data.mapper'
+import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
   async fetchAllClinicalData(patientId: string): Promise<ClinicalDataCollection> {
@@ -128,11 +129,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
       const entries = response.entry || []
       const reports = entries
-        .filter((e: any) => e.resource?.resourceType === 'DiagnosticReport')
+        .filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.DIAGNOSTIC_REPORT)
         .map((e: any) => e.resource)
 
       const observations = entries
-        .filter((e: any) => e.resource?.resourceType === 'Observation')
+        .filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.OBSERVATION)
         .map((e: any) => ClinicalDataMapper.toObservation(e.resource))
 
       return reports.map((report: any) => 

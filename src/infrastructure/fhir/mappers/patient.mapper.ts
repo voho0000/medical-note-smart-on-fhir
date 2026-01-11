@@ -1,10 +1,11 @@
 // FHIR Patient Mapper
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import { calculateAge } from '@/src/core/entities/patient.entity'
+import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
 export class PatientMapper {
   static toDomain(fhirResource: any): PatientEntity | null {
-    if (!fhirResource || fhirResource.resourceType !== 'Patient') {
+    if (!fhirResource || fhirResource.resourceType !== FHIR_RESOURCES.PATIENT) {
       return null
     }
 
@@ -12,7 +13,7 @@ export class PatientMapper {
 
     return {
       id: fhirResource.id || '',
-      resourceType: 'Patient',
+      resourceType: FHIR_RESOURCES.PATIENT,
       name: fhirResource.name,
       gender: fhirResource.gender,
       birthDate: fhirResource.birthDate,
@@ -23,13 +24,13 @@ export class PatientMapper {
   static fromBundle(bundle: any): PatientEntity | null {
     if (!bundle) return null
 
-    if (bundle.resourceType === 'Patient') {
+    if (bundle.resourceType === FHIR_RESOURCES.PATIENT) {
       return this.toDomain(bundle)
     }
 
     if (bundle.resourceType === 'Bundle' && bundle.entry) {
       const patientEntry = bundle.entry.find(
-        (e: any) => e.resource?.resourceType === 'Patient'
+        (e: any) => e.resource?.resourceType === FHIR_RESOURCES.PATIENT
       )
       return patientEntry ? this.toDomain(patientEntry.resource) : null
     }
