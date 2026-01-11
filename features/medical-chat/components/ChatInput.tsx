@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2 } from "lucide-react"
@@ -73,14 +73,24 @@ export function ChatInput({ onSend, isLoading, onInsertText }: ChatInputProps) {
   )
 }
 
+/**
+ * Input Controller Hook
+ * 
+ * Provides a way to control text insertion into the chat input from external components.
+ * Uses useRef instead of useState for better performance (no re-renders when function changes).
+ */
 export function useInputController() {
-  const [insertFn, setInsertFn] = useState<((text: string) => void) | null>(null)
+  const insertFnRef = useRef<((text: string) => void) | null>(null)
+
+  const setInsertFn = useCallback((fn: ((text: string) => void) | null) => {
+    insertFnRef.current = fn
+  }, [])
 
   const insertText = useCallback((text: string) => {
-    if (insertFn) {
-      insertFn(text)
+    if (insertFnRef.current) {
+      insertFnRef.current(text)
     }
-  }, [insertFn])
+  }, [])
 
   return {
     setInsertFn,

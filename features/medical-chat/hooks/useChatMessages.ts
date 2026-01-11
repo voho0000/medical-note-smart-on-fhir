@@ -1,10 +1,16 @@
+/**
+ * Chat Messages Handler Hook
+ * 
+ * Handles chat message sending logic and state management.
+ * Note: Renamed from useChatMessages to avoid confusion with the provider hook.
+ */
 import { useCallback } from "react"
 import { useChatMessages as useChatMessagesProvider, type ChatMessage } from "@/src/application/providers/chat-messages.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { sendMessageUseCase } from "@/src/core/use-cases/chat/send-message.use-case"
 
-export function useChatMessages(systemPrompt: string, model: string) {
+export function useChatMessagesHandler(systemPrompt: string, model: string) {
   const { chatMessages, setChatMessages } = useChatMessagesProvider()
   const ai = useUnifiedAi()
 
