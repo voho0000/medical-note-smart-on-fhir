@@ -1,15 +1,13 @@
 // Refactored Clinical Insights Feature
 "use client"
 
-import { useEffect, useMemo, useState, useRef } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { useAiQuery } from "@/src/application/hooks/use-ai-query.hook"
-import { useAiStreaming } from "@/src/application/hooks/use-ai-streaming.hook"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
@@ -30,61 +28,29 @@ export default function ClinicalInsightsFeature() {
   const { getFullClinicalContext } = useClinicalContext()
   const { isLoading: clinicalDataLoading } = useClinicalData()
   const { model } = useNote()
-  const { queryAi } = useAiQuery(openAiKey, geminiKey)
 
   const [context, setContext] = useState("")
   const [activeTabId, setActiveTabId] = useState<string>("")
   const [isEditMode, setIsEditMode] = useState(false)
-  const currentPanelIdRef = useRef<string | null>(null)
   
-  // Use configPanels directly instead of caching in ref
   const panels = configPanels
 
   const {
     prompts,
-    responses,
-    panelStatus,
-    setResponses,
-    setPanelStatus,
     handlePromptChange,
     handleResponseChange,
-    resetEditedFlags,
   } = useInsightPanels(panels, (panelId, prompt) => {
     updatePanel(panelId, { prompt })
-  })
-  
-  // Use streaming hook with real-time updates
-  const { streamAi, stopStreaming } = useAiStreaming(openAiKey, geminiKey, {
-    onChunk: (chunk) => {
-      // Update response in real-time during streaming
-      const panelId = currentPanelIdRef.current
-      if (!panelId) return
-      
-      setResponses((prev) => ({
-        ...prev,
-        [panelId]: { text: chunk, isEdited: false, metadata: prev[panelId]?.metadata },
-      }))
-    },
   })
 
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
 
-  const { runPanel, stopPanel } = useInsightGeneration({
+  const { runPanel, stopPanel, responses, panelStatus } = useInsightGeneration({
     panels,
     prompts,
-    responses,
     context,
-    openAiKey,
-    geminiKey,
-    canUseProxy,
     model,
-    queryAi,
-    streamAi,
-    stopStreaming,
-    currentPanelIdRef,
-    setResponses,
-    setPanelStatus,
   })
 
   // Update context when it changes (without resetting responses)

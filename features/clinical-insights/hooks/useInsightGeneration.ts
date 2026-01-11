@@ -1,6 +1,8 @@
 // Custom Hook: Insight Generation Logic
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { getUserErrorMessage } from '@/src/core/errors'
+import type { AiProvider } from '@/src/core/entities/ai.entity'
 import type { ResponseEntry, PanelStatus } from '../types'
 
 const SYSTEM_INSTRUCTION =
@@ -15,41 +17,34 @@ interface Panel {
 interface UseInsightGenerationProps {
   panels: Panel[]
   prompts: Record<string, string>
-  responses: Record<string, ResponseEntry>
   context: string
-  openAiKey: string | null
-  geminiKey: string | null
-  canUseProxy: boolean
   model: string
-  queryAi: (messages: any[], model: string) => Promise<{ text: string; metadata: any }>
-  streamAi?: (messages: any[], model: string) => Promise<string>
-  stopStreaming?: () => void
-  currentPanelIdRef?: React.MutableRefObject<string | null>
+}
+
+interface UseInsightGenerationReturn {
+  runPanel: (panelId: string, options?: { force?: boolean }) => Promise<void>
+  stopPanel: (panelId: string) => void
+  responses: Record<string, ResponseEntry>
+  panelStatus: Record<string, PanelStatus>
   setResponses: React.Dispatch<React.SetStateAction<Record<string, ResponseEntry>>>
-  setPanelStatus: React.Dispatch<React.SetStateAction<Record<string, PanelStatus>>>
 }
 
 export function useInsightGeneration({
   panels,
   prompts,
-  responses,
   context,
-  openAiKey,
-  geminiKey,
-  canUseProxy,
   model,
-  queryAi,
-  streamAi,
-  stopStreaming,
-  currentPanelIdRef,
-  setResponses,
-  setPanelStatus,
-}: UseInsightGenerationProps) {
+}: UseInsightGenerationProps): UseInsightGenerationReturn {
+  const ai = useUnifiedAi()
+  const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
+  const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
+  const [currentPanelId, setCurrentPanelId] = useState<string | null>(null)
   const runPanel = useCallback(
-    async (panelId: string, { force } = { force: false }) => {
+    async (panelId: string, options?: { force?: boolean }) => {
+      const force = options?.force ?? false
       const panel = panels.find((item) => item.id === panelId)
       if (!panel) return
-      if (!context.trim() || (!openAiKey && !geminiKey && !canUseProxy)) return
+      if (!context.trim()) return
 
       const prompt = prompts[panelId] ?? panel.prompt
       const responseEntry = responses[panelId]
@@ -57,7 +52,7 @@ export function useInsightGeneration({
         return
       }
 
-      const baseMessages = [
+      const messages = [
         { role: "system" as const, content: SYSTEM_INSTRUCTION },
         {
           role: "user" as const,
@@ -65,10 +60,8 @@ export function useInsightGeneration({
         },
       ]
 
-      // Set current panel ID for streaming callback
-      if (currentPanelIdRef) {
-        currentPanelIdRef.current = panelId
-      }
+      // Set current panel ID
+      setCurrentPanelId(panelId)
 
       // Clear response immediately for instant visual feedback
       setResponses((prev) => ({
@@ -82,34 +75,40 @@ export function useInsightGeneration({
       }))
 
       try {
-        // Use streaming if available (works with both API keys and proxy)
-        const useStreaming = streamAi && (openAiKey || geminiKey || canUseProxy)
-        
-        if (useStreaming) {
-          const responseText = await streamAi(baseMessages, model)
-          setResponses((prev) => ({
-            ...prev,
-            [panelId]: { text: responseText || "", isEdited: false, metadata: { modelId: model, provider: model.startsWith('gemini') ? 'gemini' : 'openai' } },
-          }))
-        } else {
-          const { text: responseText, metadata } = await queryAi(baseMessages, model)
-          setResponses((prev) => ({
-            ...prev,
-            [panelId]: { text: responseText || "", isEdited: false, metadata },
-          }))
-        }
+        // Use unified AI streaming
+        await ai.stream(messages, {
+          modelId: model,
+          onChunk: (chunk) => {
+            // Real-time update during streaming
+            setResponses((prev) => ({
+              ...prev,
+              [panelId]: { 
+                text: chunk, 
+                isEdited: false, 
+                metadata: prev[panelId]?.metadata 
+              },
+            }))
+          },
+          onComplete: (fullText) => {
+            // Final update with metadata
+            const provider: AiProvider = model.startsWith('gemini') ? 'gemini' : 'openai'
+            setResponses((prev) => ({
+              ...prev,
+              [panelId]: { 
+                text: fullText, 
+                isEdited: false, 
+                metadata: { modelId: model, provider } 
+              },
+            }))
+          }
+        })
         
         setPanelStatus((prev) => ({
           ...prev,
           [panelId]: { isLoading: false, error: null },
         }))
       } catch (error) {
-        // Clear current panel ID
-        if (currentPanelIdRef) {
-          currentPanelIdRef.current = null
-        }
-        
-        // Use unified error handling to get user-friendly message
+        // Use unified error handling
         const errorMessage = getUserErrorMessage(error)
         console.error(`Failed to generate insight for ${panel.title}:`, errorMessage, error)
         
@@ -121,19 +120,16 @@ export function useInsightGeneration({
           },
         }))
       } finally {
-        // Clear current panel ID when done
-        if (currentPanelIdRef) {
-          currentPanelIdRef.current = null
-        }
+        setCurrentPanelId(null)
       }
     },
-    [openAiKey, geminiKey, canUseProxy, context, panels, prompts, queryAi, streamAi, currentPanelIdRef, responses, model, setResponses, setPanelStatus],
+    [context, panels, prompts, responses, model, ai],
   )
 
   const stopPanel = useCallback(
     (panelId: string) => {
-      // Stop streaming if available
-      stopStreaming?.()
+      // Stop streaming using unified AI
+      ai.stop()
       
       // Update panel status to not loading
       setPanelStatus((prev) => ({
@@ -142,12 +138,10 @@ export function useInsightGeneration({
       }))
       
       // Clear current panel ID
-      if (currentPanelIdRef) {
-        currentPanelIdRef.current = null
-      }
+      setCurrentPanelId(null)
     },
-    [stopStreaming, setPanelStatus, currentPanelIdRef]
+    [ai]
   )
 
-  return { runPanel, stopPanel }
+  return { runPanel, stopPanel, responses, panelStatus, setResponses }
 }
