@@ -1,77 +1,19 @@
-// Application Provider: Clinical Data
-"use client"
+/**
+ * Clinical Data Provider (Bridge to React Query)
+ * 
+ * This file now acts as a compatibility layer, re-exporting the React Query hooks.
+ * This allows all existing components to work without modification.
+ * 
+ * Migration path:
+ * 1. Keep this file as a bridge (current approach)
+ * 2. All components continue to import from here
+ * 3. No component changes needed!
+ */
 
-import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react'
-import { FetchClinicalDataUseCase } from '@/src/core/use-cases/clinical-data/fetch-clinical-data.use-case'
-import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
-import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
-import { usePatient } from './patient.provider'
+// Re-export everything from the React Query hook
+export { useClinicalData, useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 
-interface ClinicalDataContextValue extends ClinicalDataCollection {
-  isLoading: boolean
-  error: Error | null
-  refetch: () => Promise<void>
-}
-
-const ClinicalDataContext = createContext<ClinicalDataContextValue | null>(null)
-
-export function ClinicalDataProvider({ children }: { children: ReactNode }) {
-  const { patient, loading: patientLoading } = usePatient()
-  const [data, setData] = useState<ClinicalDataCollection>({
-    conditions: [],
-    medications: [],
-    allergies: [],
-    observations: [],
-    vitalSigns: [],
-    diagnosticReports: [],
-    procedures: [],
-    encounters: []
-  })
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  const fetchData = async () => {
-    if (!patient?.id) return
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const repository = new FhirClinicalDataRepository()
-      const useCase = new FetchClinicalDataUseCase(repository)
-      const result = await useCase.execute(patient.id)
-      setData(result)
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to load clinical data')
-      setError(error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!patientLoading && patient?.id) {
-      fetchData()
-    }
-  }, [patient?.id, patientLoading])
-
-  const value = useMemo(
-    () => ({
-      ...data,
-      isLoading: patientLoading || isLoading,
-      error,
-      refetch: fetchData
-    }),
-    [data, patientLoading, isLoading, error]
-  )
-
-  return <ClinicalDataContext.Provider value={value}>{children}</ClinicalDataContext.Provider>
-}
-
-export function useClinicalData() {
-  const context = useContext(ClinicalDataContext)
-  if (!context) {
-    throw new Error('useClinicalData must be used within ClinicalDataProvider')
-  }
-  return context
+// Dummy ClinicalDataProvider for backward compatibility (does nothing now)
+export function ClinicalDataProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
 }
