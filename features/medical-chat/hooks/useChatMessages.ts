@@ -5,7 +5,7 @@
  * Note: Renamed from useChatMessages to avoid confusion with the provider hook.
  */
 import { useCallback } from "react"
-import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/stores/chat.store"
+import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/application/stores/chat.store"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useSendMessage } from "@/src/application/hooks/chat/use-send-message.hook"

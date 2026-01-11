@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useModel, useAiConfigStore } from "@/src/stores/ai-config.store"
+import { useModel, useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ChatMessageList } from "./ChatMessageList"
 import { VoiceRecorder } from "./VoiceRecorder"

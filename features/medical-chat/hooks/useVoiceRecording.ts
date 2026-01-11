@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useAsr } from "@/src/application/providers/asr.provider"
-import { useAiConfigStore } from "@/src/stores/ai-config.store"
+import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shared/config/env.config"
 
 /**

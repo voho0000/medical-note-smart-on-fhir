@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react'
-import { useAllApiKeys, useModel } from '@/src/stores/ai-config.store'
+import { useAllApiKeys, useModel } from '@/src/application/stores/ai-config.store'
 import { AiService } from '@/src/infrastructure/ai/services/ai.service'
 import { QueryAiUseCase } from '@/src/core/use-cases/ai/query-ai.use-case'
 import { StreamOrchestrator } from '@/src/infrastructure/ai/streaming/stream-orchestrator'

@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/stores/chat.store"
+import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/application/stores/chat.store"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
