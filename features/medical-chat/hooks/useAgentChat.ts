@@ -8,7 +8,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { useNote, type ChatMessage, type AgentState } from "@/src/application/providers/note.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { usePatient } from "@/src/application/providers/patient.provider"
-import { formatErrorMessage } from "../utils/formatErrorMessage"
+import { getUserErrorMessage } from "@/src/core/errors"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { createFhirTools } from "@/src/infrastructure/ai/tools/fhir-tools"
@@ -341,11 +341,11 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return
         
-        const errorObj = err instanceof Error ? err : new Error("Failed to generate response.")
+        const errorMessage = getUserErrorMessage(err)
+        const errorObj = new Error(errorMessage)
         setError(errorObj)
-        const formattedError = formatErrorMessage(errorObj, locale)
         setChatMessages((prev) =>
-          prev.map((m) => m.id === assistantMessageId ? { ...m, content: formattedError } : m)
+          prev.map((m) => m.id === assistantMessageId ? { ...m, content: `❌ ${errorMessage}` } : m)
         )
       } finally {
         setIsLoading(false)
