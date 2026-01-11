@@ -1,5 +1,6 @@
 // Custom Hook: Insight Generation Logic
 import { useCallback } from 'react'
+import { getUserErrorMessage } from '@/src/core/errors'
 import type { ResponseEntry, PanelStatus } from '../types'
 
 const SYSTEM_INSTRUCTION =
@@ -107,12 +108,16 @@ export function useInsightGeneration({
         if (currentPanelIdRef) {
           currentPanelIdRef.current = null
         }
-        console.error(`Failed to generate insight for ${panel.title}`, error)
+        
+        // Use unified error handling to get user-friendly message
+        const errorMessage = getUserErrorMessage(error)
+        console.error(`Failed to generate insight for ${panel.title}:`, errorMessage, error)
+        
         setPanelStatus((prev) => ({
           ...prev,
           [panelId]: {
             isLoading: false,
-            error: error instanceof Error ? error : new Error(String(error)),
+            error: new Error(errorMessage),
           },
         }))
       } finally {

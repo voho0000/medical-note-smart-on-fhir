@@ -1,5 +1,6 @@
 // Custom Hook: Auto-generate Insights
 import { useState, useEffect } from 'react'
+import { getUserErrorMessage } from '@/src/core/errors'
 
 interface Panel {
   id: string
@@ -51,7 +52,8 @@ export function useAutoGenerate({
     }
 
     autoRun().catch((error) => {
-      console.error("Failed to auto-run clinical insights", error)
+      const errorMessage = getUserErrorMessage(error)
+      console.error("Failed to auto-run clinical insights:", errorMessage, error)
       // Remove failed panels from the set so they can be retried
       setAutoRunPanels((prev) => {
         const next = new Set(prev)
