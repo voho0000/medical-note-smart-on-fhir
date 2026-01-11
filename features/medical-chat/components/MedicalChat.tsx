@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useNote } from "@/src/application/providers/note.provider"
+import { useModelSelection } from "@/src/application/providers/model-selection.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ChatMessageList } from "./ChatMessageList"
@@ -23,7 +23,7 @@ import { Sparkles, MessageSquare, Square, AlertCircle, Maximize2, Minimize2 } fr
 
 export function MedicalChat() {
   const { t } = useLanguage()
-  const { model } = useNote()
+  const { model } = useModelSelection()
   const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { getFullClinicalContext } = useClinicalContext()

@@ -1,5 +1,5 @@
 import { useCallback } from "react"
-import { useNote, type ChatMessage } from "@/src/application/providers/note.provider"
+import { useChatMessages as useChatMessagesProvider, type ChatMessage } from "@/src/application/providers/chat-messages.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 
@@ -13,7 +13,7 @@ function createMessage(role: ChatMessage["role"], content: string): ChatMessage 
 }
 
 export function useChatMessages(systemPrompt: string, model: string) {
-  const { chatMessages, setChatMessages } = useNote()
+  const { chatMessages, setChatMessages } = useChatMessagesProvider()
   const ai = useUnifiedAi()
 
   const handleSend = useCallback(

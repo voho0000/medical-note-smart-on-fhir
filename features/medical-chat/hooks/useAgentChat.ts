@@ -5,7 +5,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from "react"
 import { streamText } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { useNote, type ChatMessage, type AgentState } from "@/src/application/providers/note.provider"
+import { useChatMessages, type ChatMessage, type AgentState } from "@/src/application/providers/chat-messages.provider"
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { usePatient } from "@/src/application/providers/patient.provider"
 import { getUserErrorMessage } from "@/src/core/errors"
@@ -16,7 +16,7 @@ import { createLiteratureTools } from "@/src/infrastructure/ai/tools/literature-
 import { fhirClient, type FHIRClient } from "@/src/infrastructure/fhir/client/fhir-client.service"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
-  const { chatMessages, setChatMessages } = useNote()
+  const { chatMessages, setChatMessages } = useChatMessages()
   const { apiKey: openAiKey, geminiKey, perplexityKey } = useApiKey()
   const { patient } = usePatient()
   const { locale, t } = useLanguage()

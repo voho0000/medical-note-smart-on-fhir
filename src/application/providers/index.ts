@@ -1,5 +1,19 @@
 // Application Providers - Barrel Export
-export { PatientProvider, usePatient } from './patient.provider'
-export { ClinicalDataProvider, useClinicalData } from './clinical-data.provider'
 export { ApiKeyProvider, useApiKey } from './api-key.provider'
+export { AsrProvider, useAsr } from './asr.provider'
+export { ClinicalDataProvider, useClinicalData } from './clinical-data.provider'
+export { ClinicalInsightsConfigProvider, useClinicalInsightsConfig } from './clinical-insights-config.provider'
 export { DataSelectionProvider, useDataSelection } from './data-selection.provider'
+export { GptResponseProvider, useGptResponse } from './gpt-response.provider'
+export { LanguageProvider, useLanguage } from './language.provider'
+export { PatientProvider, usePatient } from './patient.provider'
+export { PromptTemplatesProvider, usePromptTemplates } from './prompt-templates.provider'
+export { RightPanelProvider, useRightPanel } from './right-panel.provider'
+export { ThemeProvider, useTheme } from './theme.provider'
+
+// New focused providers (replacing NoteProvider)
+export { ModelSelectionProvider, useModelSelection } from './model-selection.provider'
+export { ChatMessagesProvider, useChatMessages, type ChatMessage, type AgentState } from './chat-messages.provider'
+
+// Legacy - will be removed
+export { NoteProvider, useNote } from './note.provider'

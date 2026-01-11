@@ -11,7 +11,7 @@ import { useClinicalContext } from "@/src/application/hooks/use-clinical-context
 import { useApiKey } from "@/src/application/providers/api-key.provider"
 import { useClinicalData } from "@/src/application/providers/clinical-data.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
-import { useNote } from "@/src/application/providers/note.provider"
+import { useModelSelection } from "@/src/application/providers/model-selection.provider"
 import { hasChatProxy } from "@/src/shared/config/env.config"
 
 import { useInsightPanels } from './hooks/useInsightPanels'
@@ -27,7 +27,7 @@ export default function ClinicalInsightsFeature() {
   const { apiKey: openAiKey, geminiKey } = useApiKey()
   const { getFullClinicalContext } = useClinicalContext()
   const { isLoading: clinicalDataLoading } = useClinicalData()
-  const { model } = useNote()
+  const { model } = useModelSelection()
 
   const [context, setContext] = useState("")
   const [activeTabId, setActiveTabId] = useState<string>("")

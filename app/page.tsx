@@ -7,6 +7,8 @@ import { ClinicalDataProvider } from "@/src/application/providers/clinical-data.
 import { ApiKeyProvider } from "@/src/application/providers/api-key.provider"
 import { LanguageProvider, useLanguage } from "@/src/application/providers/language.provider"
 import { ThemeProvider } from "@/src/application/providers/theme.provider"
+import { ModelSelectionProvider } from "@/src/application/providers/model-selection.provider"
+import { ChatMessagesProvider } from "@/src/application/providers/chat-messages.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
@@ -145,11 +147,15 @@ export default function Page() {
     <ThemeProvider>
       <LanguageProvider>
         <ApiKeyProvider>
-          <PatientProvider>
-            <ClinicalDataProvider>
-              <PageContent />
-            </ClinicalDataProvider>
-          </PatientProvider>
+          <ModelSelectionProvider>
+            <ChatMessagesProvider>
+              <PatientProvider>
+                <ClinicalDataProvider>
+                  <PageContent />
+                </ClinicalDataProvider>
+              </PatientProvider>
+            </ChatMessagesProvider>
+          </ModelSelectionProvider>
         </ApiKeyProvider>
       </LanguageProvider>
     </ThemeProvider>
