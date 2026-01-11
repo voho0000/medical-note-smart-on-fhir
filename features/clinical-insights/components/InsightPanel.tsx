@@ -1,5 +1,6 @@
 // Insight Panel Component
 import { useMemo, useRef, useEffect, useState } from "react"
+import { useExpandable } from "@/src/shared/hooks/ui/use-expandable.hook"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -49,9 +50,13 @@ export function InsightPanel({
   const titleInputRef = useRef<HTMLInputElement>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleValue, setTitleValue] = useState(title)
-  const [isExpanded, setIsExpanded] = useState(false)
   const [isEditingResponse, setIsEditingResponse] = useState(false)
-  const [isPromptExpanded, setIsPromptExpanded] = useState(false)
+  
+  // Expandable states using shared hook
+  const responseExpandable = useExpandable()
+  const promptExpandable = useExpandable()
+  const { isExpanded } = responseExpandable
+  const { isExpanded: isPromptExpanded } = promptExpandable
 
   useEffect(() => {
     setTitleValue(title)
@@ -106,7 +111,7 @@ export function InsightPanel({
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isExpanded) {
-        setIsExpanded(false)
+        responseExpandable.collapse()
       }
     }
     
@@ -119,13 +124,13 @@ export function InsightPanel({
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = ''
     }
-  }, [isExpanded])
+  }, [isExpanded, responseExpandable])
 
   // Handle escape key to close prompt expanded mode
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isPromptExpanded) {
-        setIsPromptExpanded(false)
+        promptExpandable.collapse()
       }
     }
     
@@ -138,7 +143,7 @@ export function InsightPanel({
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = ''
     }
-  }, [isPromptExpanded])
+  }, [isPromptExpanded, promptExpandable])
 
   return (
     <>
@@ -261,7 +266,7 @@ export function InsightPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsPromptExpanded(true)}
+                onClick={promptExpandable.expand}
                 className="absolute top-2 right-2 h-7 w-7 p-0 opacity-60 hover:opacity-100"
                 title={t.common.maximize}
               >
@@ -358,7 +363,7 @@ export function InsightPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsExpanded(true)}
+                onClick={responseExpandable.expand}
                 className="absolute top-2 right-2 h-7 w-7 p-0 opacity-60 hover:opacity-100"
                 title={t.common.maximize}
               >
@@ -380,11 +385,11 @@ export function InsightPanel({
     {isExpanded && (
       <div 
         className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
-        onClick={() => setIsExpanded(false)}
+        onClick={responseExpandable.collapse}
       >
         {/* Floating minimize button */}
         <button
-          onClick={() => setIsExpanded(false)}
+          onClick={responseExpandable.collapse}
           className="absolute top-4 right-4 z-10 p-2 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shadow-md"
           title={t.common.minimize}
         >
@@ -467,11 +472,11 @@ export function InsightPanel({
     {isPromptExpanded && (
       <div 
         className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
-        onClick={() => setIsPromptExpanded(false)}
+        onClick={promptExpandable.collapse}
       >
         {/* Floating minimize button */}
         <button
-          onClick={() => setIsPromptExpanded(false)}
+          onClick={promptExpandable.collapse}
           className="absolute top-4 right-4 z-10 p-2 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shadow-md"
           title={t.common.minimize}
         >

@@ -5,7 +5,16 @@
  */
 
 import type { AiMessage, AiQueryResponse } from '@/src/core/entities/ai.entity'
-import type { StreamingOptions } from './ai-provider.interface'
+
+/**
+ * Streaming Options
+ */
+export interface StreamingOptions {
+  temperature?: number
+  maxTokens?: number
+  onChunk?: (chunk: string) => void
+  signal?: AbortSignal
+}
 
 /**
  * AI Service Configuration

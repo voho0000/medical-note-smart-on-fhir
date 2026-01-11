@@ -1,48 +1,37 @@
 /**
  * AI Provider Interface
- * Defines the contract for AI service providers (OpenAI, Gemini, etc.)
- * Following Dependency Inversion Principle
+ * Low-level interface for AI provider implementations (OpenAI, Gemini, etc.)
  */
 
-import type { AiMessage, AiQueryResponse } from '@/src/core/entities/ai.entity'
-
-/**
- * AI Provider Configuration
- */
-export interface AiProviderConfig {
-  apiKey: string | null
-  baseUrl?: string
-  timeout?: number
-  maxRetries?: number
-}
+import type { AiMessage } from '@/src/core/entities/ai.entity'
 
 /**
  * Streaming Options
  */
 export interface StreamingOptions {
-  signal?: AbortSignal
+  temperature?: number
+  maxTokens?: number
   onChunk?: (chunk: string) => void
-  onComplete?: (fullText: string) => void
-  onError?: (error: Error) => void
+  signal?: AbortSignal
+}
+
+/**
+ * AI Provider Configuration
+ */
+export interface AiProviderConfig {
+  apiKey: string
+  timeout?: number
 }
 
 /**
  * AI Provider Interface
- * All AI providers must implement this interface
+ * Each AI provider (OpenAI, Gemini) implements this interface
  */
 export interface IAiProvider {
-  /**
-   * Provider name (e.g., 'openai', 'gemini')
-   */
   readonly name: string
-
+  
   /**
-   * Check if provider is configured and ready
-   */
-  isReady(): boolean
-
-  /**
-   * Query AI with messages (non-streaming)
+   * Query AI (non-streaming)
    */
   query(
     messages: AiMessage[],
@@ -51,34 +40,19 @@ export interface IAiProvider {
       temperature?: number
       maxTokens?: number
     }
-  ): Promise<AiQueryResponse>
-
+  ): Promise<string>
+  
   /**
    * Stream AI response
    */
   stream(
     messages: AiMessage[],
     modelId: string,
-    options: StreamingOptions
+    options?: StreamingOptions
   ): Promise<string>
-
+  
   /**
-   * Validate model ID for this provider
+   * Check if provider supports a model
    */
   supportsModel(modelId: string): boolean
-}
-
-/**
- * AI Provider Factory Interface
- */
-export interface IAiProviderFactory {
-  /**
-   * Create provider instance
-   */
-  createProvider(config: AiProviderConfig): IAiProvider
-
-  /**
-   * Get supported model IDs
-   */
-  getSupportedModels(): string[]
 }

@@ -17,7 +17,8 @@ import { useTemplateSelector } from "../hooks/useTemplateSelector"
 import { useChatInput } from "../hooks/useChatInput"
 import { useSystemPrompt } from "../hooks/useSystemPrompt"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
-import { useMedicalChatUI } from "../hooks/useMedicalChatUI"
+import { useAgentMode } from "../hooks/useAgentMode"
+import { useExpandable } from "@/src/shared/hooks/ui/use-expandable.hook"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { Sparkles, MessageSquare, Square, AlertCircle, Maximize2, Minimize2 } from "lucide-react"
@@ -31,9 +32,13 @@ export function MedicalChat() {
   const input = useChatInput()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
-  // UI States - consolidated in custom hook
-  const ui = useMedicalChatUI()
-  const { isAgentMode, showApiKeyWarning, isExpanded } = ui
+  // Agent mode state (logically related: agent mode + API key warning)
+  const agentMode = useAgentMode()
+  const { isAgentMode, showApiKeyWarning } = agentMode
+  
+  // Expand/collapse state (independent UI state)
+  const expandable = useExpandable()
+  const { isExpanded } = expandable
   
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
@@ -75,19 +80,19 @@ export function MedicalChat() {
   // Hide warning when API key is set
   useEffect(() => {
     if (isAgentMode && hasApiKey()) {
-      ui.hideWarning()
+      agentMode.hideWarning()
     }
-  }, [isAgentMode, hasApiKey, ui])
+  }, [isAgentMode, hasApiKey, agentMode])
 
   // Handle agent mode toggle with API key check
   const handleAgentModeToggle = useCallback((enabled: boolean) => {
     if (enabled && !hasApiKey()) {
-      ui.showWarning()
+      agentMode.showWarning()
     } else {
-      ui.hideWarning()
+      agentMode.hideWarning()
     }
-    ui.setIsAgentMode(enabled)
-  }, [hasApiKey, ui])
+    agentMode.setIsAgentMode(enabled)
+  }, [hasApiKey, agentMode])
 
   // Handlers
   const handleSend = useCallback(async () => {
@@ -139,7 +144,7 @@ export function MedicalChat() {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isExpanded) {
-        ui.setIsExpanded(false)
+        expandable.collapse()
       }
     }
     
@@ -168,7 +173,7 @@ export function MedicalChat() {
           onResetSystemPrompt={resetSystemPrompt}
           isCustomPrompt={isCustomPrompt}
           isExpanded={isExpanded}
-          onToggleExpand={ui.toggleExpanded}
+          onToggleExpand={expandable.toggle}
         />
       )}
       
@@ -297,11 +302,11 @@ export function MedicalChat() {
         {/* Fullscreen overlay - click outside to close */}
         <div 
           className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
-          onClick={() => ui.setIsExpanded(false)}
+          onClick={expandable.collapse}
         >
           {/* Floating minimize button */}
           <button
-            onClick={() => ui.setIsExpanded(false)}
+            onClick={expandable.collapse}
             className="absolute top-4 right-4 z-10 p-2 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shadow-md"
             title={t.common.minimize}
           >
