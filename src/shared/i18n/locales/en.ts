@@ -86,6 +86,24 @@ export const en = {
   allergies: {
     title: "Patient's Allergies",
     noData: 'No allergies recorded.',
+    type: {
+      allergy: 'Allergy',
+      intolerance: 'Intolerance',
+    },
+    category: {
+      food: 'Food',
+      medication: 'Medication',
+      environment: 'Environment',
+      biologic: 'Biologic',
+    },
+    criticality: {
+      label: 'Criticality',
+      high: 'High',
+      low: 'Low',
+      unableToAssess: 'Unable to Assess',
+    },
+    status: 'Status',
+    verification: 'Verification',
   },
 
   reports: {

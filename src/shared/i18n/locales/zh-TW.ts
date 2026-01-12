@@ -88,6 +88,24 @@ export const zhTW = {
   allergies: {
     title: '病患過敏史',
     noData: '無過敏紀錄。',
+    type: {
+      allergy: '過敏',
+      intolerance: '不耐受',
+    },
+    category: {
+      food: '食物',
+      medication: '藥物',
+      environment: '環境',
+      biologic: '生物',
+    },
+    criticality: {
+      label: '嚴重度',
+      high: '高',
+      low: '低',
+      unableToAssess: '無法評估',
+    },
+    status: '狀態',
+    verification: '驗證',
   },
 
   reports: {
