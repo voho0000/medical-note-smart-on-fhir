@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { EncounterObservationCard } from "./EncounterObservationCard"
 import { MedicationRow, ProcedureRow } from "./EncounterCards"
-import { NoteItem } from "./NoteItem"
+// import { NoteItem } from "./NoteItem" // TODO: 暫時隱藏，等有真實資料時再啟用測試
 import type { VisitRecord } from "../hooks/useVisitHistory"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -36,8 +36,8 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
   const hasDetails = !!(details && (
     details.medications.length > 0 || 
     details.tests.length > 0 || 
-    details.procedures.length > 0 ||
-    details.clinicalNotes.length > 0
+    details.procedures.length > 0
+    // || details.clinicalNotes.length > 0 // TODO: 暫時隱藏病歷記錄判斷
   ))
 
   return (
@@ -138,6 +138,7 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
                 </div>
               ) : null}
 
+              {/* TODO: 病歷記錄功能暫時隱藏，等 FHIR 服務器提供真實資料後再啟用測試
               {details?.clinicalNotes.length ? (
                 <div className="space-y-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.clinicalNotes.title}</div>
@@ -148,6 +149,7 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
                   </div>
                 </div>
               ) : null}
+              */}
             </div>
           ) : (
             <div className="text-xs text-muted-foreground">{t.visitHistory.noDetailsExpanded}</div>
