@@ -1,14 +1,18 @@
 // Observation Block Component
+import { useState } from 'react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, formatDate, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag } from '../utils/interpretation-helpers'
+import { ObservationTrendDialog } from './ObservationTrendDialog'
+import { TrendingUp } from 'lucide-react'
 
 interface ObservationBlockProps {
   observation: Observation
 }
 
 export function ObservationBlock({ observation }: ObservationBlockProps) {
+  const [dialogOpen, setDialogOpen] = useState(false)
   const title = getCodeableConceptText(observation.code)
   const interp = getInterpretationTag(observation.interpretation)
   const ref = getReferenceRangeText(observation.referenceRange)
@@ -17,22 +21,31 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
     : observation.valueString || "—"
 
   return (
-    <div className="rounded-lg border p-3 shadow-sm">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-sm font-semibold text-foreground">{title}</div>
-            <div className="text-xs text-muted-foreground">{formatDate(observation.effectiveDateTime)}</div>
+    <>
+      <div className="rounded-lg border p-3 shadow-sm">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex-1">
+              <button
+                onClick={() => setDialogOpen(true)}
+                className="group flex items-center gap-2 text-left hover:text-primary transition-colors"
+              >
+                <div className="text-sm font-semibold text-foreground group-hover:text-primary">
+                  {title}
+                </div>
+                <TrendingUp className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+              <div className="text-xs text-muted-foreground">{formatDate(observation.effectiveDateTime)}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={cn("text-base font-semibold", interp && "text-foreground")}>{primaryValue}</span>
+              {interp && (
+                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", interp.style)}>
+                  {interp.label}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={cn("text-base font-semibold", interp && "text-foreground")}>{primaryValue}</span>
-            {interp && (
-              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", interp.style)}>
-                {interp.label}
-              </span>
-            )}
-          </div>
-        </div>
 
         {ref && <div className="text-xs text-muted-foreground">{ref}</div>}
 
@@ -67,5 +80,12 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
         )}
       </div>
     </div>
+
+      <ObservationTrendDialog
+        observation={observation}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
+    </>
   )
 }
