@@ -112,6 +112,8 @@ export const en = {
     allVersions: 'All Versions',
     timeRange: 'Time Range',
     noData: 'No reports found within the selected time range.',
+    status: 'Status',
+    category: 'Category',
     tabs: {
       all: 'All',
       lab: 'Labs',
@@ -128,6 +130,18 @@ export const en = {
   procedures: {
     title: 'Procedures',
     noData: 'No procedures recorded.',
+    status: 'Status',
+    performedDate: 'Performed Date',
+    performer: 'Performer',
+    category: 'Category',
+    reason: 'Reason',
+    outcome: 'Outcome',
+    location: 'Location',
+    bodySite: 'Body Site',
+    followUp: 'Follow Up',
+    reports: 'Reports',
+    notes: 'Notes',
+    summary: 'Procedure Summary',
   },
 
   clinicalNotes: {

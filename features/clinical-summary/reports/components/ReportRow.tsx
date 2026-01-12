@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import type { Row } from '../types'
 import { getConceptText } from '../utils/fhir-helpers'
 import { ObservationBlock } from './ObservationBlock'
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface ReportRowProps {
   row: Row
@@ -11,6 +12,7 @@ interface ReportRowProps {
 }
 
 export function ReportRow({ row, defaultOpen }: ReportRowProps) {
+  const { t } = useLanguage()
   const isSingleSimpleObs = row.obs.length === 1 && 
     (!row.obs[0].component || row.obs[0].component.length === 0)
 
@@ -25,12 +27,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {row.obs[0]?.status && (
               <span className="inline-flex items-center gap-1">
-                <span className="font-medium text-foreground/80">狀態:</span> {row.obs[0]?.status}
+                <span className="font-medium text-foreground/80">{t.reports.status}:</span> {row.obs[0]?.status}
               </span>
             )}
             {row.obs[0]?.category && (
               <span className="inline-flex items-center gap-1">
-                <span className="font-medium text-foreground/80">類別:</span> {getConceptText(row.obs[0]?.category)}
+                <span className="font-medium text-foreground/80">{t.reports.category}:</span> {getConceptText(row.obs[0]?.category)}
               </span>
             )}
           </div>
@@ -52,12 +54,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               {row.obs[0]?.status && (
                 <span className="inline-flex items-center gap-1">
-                  <span className="font-medium text-foreground/80">狀態:</span> {row.obs[0]?.status}
+                  <span className="font-medium text-foreground/80">{t.reports.status}:</span> {row.obs[0]?.status}
                 </span>
               )}
               {row.obs[0]?.category && (
                 <span className="inline-flex items-center gap-1">
-                  <span className="font-medium text-foreground/80">類別:</span> {getConceptText(row.obs[0]?.category)}
+                  <span className="font-medium text-foreground/80">{t.reports.category}:</span> {getConceptText(row.obs[0]?.category)}
                 </span>
               )}
             </div>

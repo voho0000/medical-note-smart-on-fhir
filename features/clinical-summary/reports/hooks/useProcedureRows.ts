@@ -2,8 +2,11 @@
 import { useMemo } from 'react'
 import type { Observation, Row } from '../types'
 import { getCodeableConceptText, getConceptText, formatDate } from '../utils/fhir-helpers'
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 export function useProcedureRows(procedures: any[]) {
+  const { t } = useLanguage()
+  
   return useMemo(() => {
     if (!Array.isArray(procedures)) return []
 
@@ -43,42 +46,42 @@ export function useProcedureRows(procedures: any[]) {
         : []
 
       const components: any[] = []
-      components.push({ code: { text: "狀態" }, valueString: procedure?.status || "—" })
+      components.push({ code: { text: t.procedures.status }, valueString: procedure?.status || "—" })
       if (performed) {
-        components.push({ code: { text: "執行日期" }, valueString: formatDate(performed) })
+        components.push({ code: { text: t.procedures.performedDate }, valueString: formatDate(performed) })
       }
       if (performer) {
-        components.push({ code: { text: "執行者" }, valueString: performer })
+        components.push({ code: { text: t.procedures.performer }, valueString: performer })
       }
       if (category && category !== "—") {
-        components.push({ code: { text: "類別" }, valueString: category })
+        components.push({ code: { text: t.procedures.category }, valueString: category })
       }
       if (reason && reason !== "—") {
-        components.push({ code: { text: "Reason" }, valueString: reason })
+        components.push({ code: { text: t.procedures.reason }, valueString: reason })
       }
       if (outcome && outcome !== "—") {
-        components.push({ code: { text: "Outcome" }, valueString: outcome })
+        components.push({ code: { text: t.procedures.outcome }, valueString: outcome })
       }
       if (location) {
-        components.push({ code: { text: "Location" }, valueString: location })
+        components.push({ code: { text: t.procedures.location }, valueString: location })
       }
       if (bodySite && bodySite !== "—") {
-        components.push({ code: { text: "Body Site" }, valueString: bodySite })
+        components.push({ code: { text: t.procedures.bodySite }, valueString: bodySite })
       }
       if (followUp && followUp !== "—") {
-        components.push({ code: { text: "Follow Up" }, valueString: followUp })
+        components.push({ code: { text: t.procedures.followUp }, valueString: followUp })
       }
       if (reports.length > 0) {
-        components.push({ code: { text: "Reports" }, valueString: reports.join(", ") })
+        components.push({ code: { text: t.procedures.reports }, valueString: reports.join(", ") })
       }
       if (notes) {
-        components.push({ code: { text: "Notes" }, valueString: notes })
+        components.push({ code: { text: t.procedures.notes }, valueString: notes })
       }
 
       const observation: Observation = {
         resourceType: "Observation",
         id: procedure?.id ? `procedure-${procedure.id}` : `procedure-${Math.random().toString(36).slice(2, 10)}`,
-        code: { text: "Procedure Summary" },
+        code: { text: t.procedures.summary },
         valueString: outcome !== "—" ? outcome : notes || "—",
         effectiveDateTime: performed,
         status: procedure?.status,
@@ -94,5 +97,5 @@ export function useProcedureRows(procedures: any[]) {
         group: "procedures" as const
       }
     })
-  }, [procedures])
+  }, [procedures, t])
 }

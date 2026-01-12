@@ -114,6 +114,8 @@ export const zhTW = {
     allVersions: '所有版本',
     timeRange: '時間範圍',
     noData: '在選定的時間範圍內未找到報告。',
+    status: '狀態',
+    category: '類別',
     tabs: {
       all: '全部',
       lab: '檢驗',
@@ -128,8 +130,20 @@ export const zhTW = {
   },
 
   procedures: {
-    title: '處置',
+    title: '處置紀錄',
     noData: '無處置紀錄。',
+    status: '狀態',
+    performedDate: '執行日期',
+    performer: '執行者',
+    category: '類別',
+    reason: '原因',
+    outcome: '結果',
+    location: '地點',
+    bodySite: '身體部位',
+    followUp: '後續追蹤',
+    reports: '報告',
+    notes: '註記',
+    summary: '處置摘要',
   },
 
   clinicalNotes: {
