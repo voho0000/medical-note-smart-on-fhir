@@ -400,7 +400,7 @@ export const zhTW = {
       queryProcedures: '查詢處置紀錄',
       queryEncounters: '查詢就診紀錄',
       queryDiagnosticReports: '查詢檢驗報告',
-      searchMedicalLiterature: '搜尋醫學文獻',
+      searchMedicalLiterature: '使用 Perplexity AI 搜尋醫學文獻',
     },
     queryResult: '查詢結果',
     queryFailed: '查詢失敗',

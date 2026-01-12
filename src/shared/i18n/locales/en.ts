@@ -398,7 +398,7 @@ export const en = {
       queryProcedures: 'Querying procedures',
       queryEncounters: 'Querying encounters',
       queryDiagnosticReports: 'Querying diagnostic reports',
-      searchMedicalLiterature: 'Searching medical literature',
+      searchMedicalLiterature: 'Searching medical literature with Perplexity AI',
     },
     queryResult: 'Query result',
     queryFailed: 'Query failed',
