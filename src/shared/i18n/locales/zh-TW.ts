@@ -33,6 +33,7 @@ export const zhTW = {
     reports: '報告',
     medications: '用藥',
     visits: '就診紀錄',
+    clinicalNotes: '病歷紀錄',
     noteChat: '筆記對話',
     dataSelection: '資料選擇',
     clinicalInsights: '臨床洞察',
@@ -111,6 +112,17 @@ export const zhTW = {
   procedures: {
     title: '處置',
     noData: '無處置紀錄。',
+  },
+
+  clinicalNotes: {
+    title: '病歷紀錄',
+    noData: '無病歷紀錄。',
+    document: '文件',
+    composition: '結構化紀錄',
+    category: '類別',
+    author: '作者',
+    date: '日期',
+    sections: '章節',
   },
 
   chat: {

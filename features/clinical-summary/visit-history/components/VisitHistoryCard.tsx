@@ -4,8 +4,9 @@ import { useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useVisitHistory } from "./hooks/useVisitHistory"
-import { useEncounterDetails } from "./hooks/useEncounterDetails"
+import { useVisitHistory } from "../hooks/useVisitHistory"
+import { useEncounterDetails } from "../hooks/useEncounterDetails"
+import { useClinicalNotes } from "../hooks/useClinicalNotes"
 import { VisitItem } from "./VisitItem"
 
 export function VisitHistoryCard() {
@@ -16,6 +17,8 @@ export function VisitHistoryCard() {
     diagnosticReports = [],
     observations = [],
     procedures = [],
+    documentReferences = [],
+    compositions = [],
     isLoading,
     error,
   } = useClinicalData()
@@ -23,7 +26,8 @@ export function VisitHistoryCard() {
   const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null)
   
   const visitHistory = useVisitHistory(encounters)
-  const encounterDetails = useEncounterDetails(medications, diagnosticReports, observations, procedures, locale)
+  const clinicalNotes = useClinicalNotes(documentReferences, compositions)
+  const encounterDetails = useEncounterDetails(medications, diagnosticReports, observations, procedures, clinicalNotes, locale)
 
   return (
     <Card>

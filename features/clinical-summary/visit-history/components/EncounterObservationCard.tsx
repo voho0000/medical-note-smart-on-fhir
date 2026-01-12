@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/src/shared/utils/cn.utils"
-import { formatDateTime } from "./utils/formatters"
+import { formatDateTime } from "../utils/formatters"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 type EncounterObservationComponent = {

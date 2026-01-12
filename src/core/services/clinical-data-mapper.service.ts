@@ -26,7 +26,9 @@ export class ClinicalDataMapper {
       observations: data.observations || data.vitalSigns || data.vitals || [],
       vitalSigns: data.vitalSigns || data.vitals || [],
       procedures: data.procedures || [],
-      encounters: data.encounters || []
+      encounters: data.encounters || [],
+      documentReferences: data.documentReferences || [],
+      compositions: data.compositions || []
     }
   }
 
@@ -43,7 +45,9 @@ export class ClinicalDataMapper {
       observations: [],
       vitalSigns: [],
       procedures: [],
-      encounters: []
+      encounters: [],
+      documentReferences: [],
+      compositions: []
     }
   }
 
@@ -66,7 +70,9 @@ export class ClinicalDataMapper {
       collection.observations.length > 0 ||
       collection.vitalSigns.length > 0 ||
       collection.procedures.length > 0 ||
-      collection.encounters.length > 0
+      collection.encounters.length > 0 ||
+      collection.documentReferences.length > 0 ||
+      collection.compositions.length > 0
     )
   }
 }

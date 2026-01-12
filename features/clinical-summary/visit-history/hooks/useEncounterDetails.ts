@@ -1,12 +1,14 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationName, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
-import type { EncounterObservation } from "../EncounterObservationCard"
-import type { EncounterMedication, EncounterProcedure } from "../EncounterCards"
+import type { EncounterObservation } from "../components/EncounterObservationCard"
+import type { EncounterMedication, EncounterProcedure } from "../components/EncounterCards"
+import type { ClinicalNote } from "./useClinicalNotes"
 
 export type EncounterDetails = {
   medications: EncounterMedication[]
   tests: EncounterObservation[]
   procedures: EncounterProcedure[]
+  clinicalNotes: ClinicalNote[]
 }
 
 const toEncounterObservation = (observation: any, source: "diagnosticReport" | "observation"): EncounterObservation => {
@@ -50,6 +52,7 @@ export function useEncounterDetails(
   diagnosticReports: any[],
   observations: any[],
   procedures: any[],
+  clinicalNotes: ClinicalNote[],
   locale: string = "en-US"
 ) {
   return useMemo(() => {
@@ -57,7 +60,7 @@ export function useEncounterDetails(
 
     const ensureEntry = (encounterId: string) => {
       if (!map.has(encounterId)) {
-        map.set(encounterId, { medications: [], tests: [], procedures: [] })
+        map.set(encounterId, { medications: [], tests: [], procedures: [], clinicalNotes: [] })
       }
       return map.get(encounterId)!
     }
@@ -131,6 +134,17 @@ export function useEncounterDetails(
       })
     }
 
+    // Associate clinical notes with encounters
+    if (Array.isArray(clinicalNotes)) {
+      clinicalNotes.forEach((note: ClinicalNote) => {
+        const encounterId = getReferenceId({ reference: note.encounterRef })
+        if (!encounterId) return
+        const entry = ensureEntry(encounterId)
+        if (entry.clinicalNotes.some((existing) => existing.id === note.id)) return
+        entry.clinicalNotes.push(note)
+      })
+    }
+
     return map
-  }, [medications, diagnosticReports, observations, procedures, locale])
+  }, [medications, diagnosticReports, observations, procedures, clinicalNotes, locale])
 }

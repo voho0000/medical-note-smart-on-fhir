@@ -8,6 +8,8 @@ import type {
   DiagnosticReportEntity,
   ProcedureEntity,
   EncounterEntity,
+  DocumentReferenceEntity,
+  CompositionEntity,
   ClinicalDataCollection
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient } from '../client/fhir-client.service'
@@ -24,7 +26,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       vitalSigns,
       diagnosticReports,
       procedures,
-      encounters
+      encounters,
+      documentReferences,
+      compositions
     ] = await Promise.all([
       this.fetchConditions(patientId),
       this.fetchMedications(patientId),
@@ -33,7 +37,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       this.fetchVitalSigns(patientId),
       this.fetchDiagnosticReports(patientId),
       this.fetchProcedures(patientId),
-      this.fetchEncounters(patientId)
+      this.fetchEncounters(patientId),
+      this.fetchDocumentReferences(patientId),
+      this.fetchCompositions(patientId)
     ])
 
     return {
@@ -44,7 +50,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       vitalSigns,
       diagnosticReports,
       procedures,
-      encounters
+      encounters,
+      documentReferences,
+      compositions
     }
   }
 
@@ -165,6 +173,30 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       return response.entry?.map((e: any) => ClinicalDataMapper.toEncounter(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch encounters:', error)
+      return []
+    }
+  }
+
+  async fetchDocumentReferences(patientId: string): Promise<DocumentReferenceEntity[]> {
+    try {
+      const response = await fhirClient.request(
+        `DocumentReference?patient=${patientId}&_sort=-date&_count=100`
+      )
+      return response.entry?.map((e: any) => ClinicalDataMapper.toDocumentReference(e.resource)) || []
+    } catch (error) {
+      console.error('Failed to fetch document references:', error)
+      return []
+    }
+  }
+
+  async fetchCompositions(patientId: string): Promise<CompositionEntity[]> {
+    try {
+      const response = await fhirClient.request(
+        `Composition?patient=${patientId}&_sort=-date&_count=100`
+      )
+      return response.entry?.map((e: any) => ClinicalDataMapper.toComposition(e.resource)) || []
+    } catch (error) {
+      console.error('Failed to fetch compositions:', error)
       return []
     }
   }

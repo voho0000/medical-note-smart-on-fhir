@@ -31,6 +31,7 @@ export const en = {
     reports: 'Reports',
     medications: 'Medications',
     visits: 'Visit History',
+    clinicalNotes: 'Clinical Notes',
     noteChat: 'Note Chat',
     dataSelection: 'Data Selection',
     clinicalInsights: 'Clinical Insights',
@@ -109,6 +110,17 @@ export const en = {
   procedures: {
     title: 'Procedures',
     noData: 'No procedures recorded.',
+  },
+
+  clinicalNotes: {
+    title: 'Clinical Notes',
+    noData: 'No clinical notes available.',
+    document: 'Document',
+    composition: 'Composition',
+    category: 'Category',
+    author: 'Author',
+    date: 'Date',
+    sections: 'Sections',
   },
 
   chat: {

@@ -6,7 +6,9 @@ import type {
   ObservationEntity,
   DiagnosticReportEntity,
   ProcedureEntity,
-  EncounterEntity
+  EncounterEntity,
+  DocumentReferenceEntity,
+  CompositionEntity
 } from '@/src/core/entities/clinical-data.entity'
 
 export class ClinicalDataMapper {
@@ -123,6 +125,36 @@ export class ClinicalDataMapper {
       type: fhirResource.type,
       period: fhirResource.period,
       reasonCode: fhirResource.reasonCode
+    }
+  }
+
+  static toDocumentReference(fhirResource: any): DocumentReferenceEntity {
+    return {
+      id: fhirResource.id || '',
+      status: fhirResource.status,
+      type: fhirResource.type,
+      category: fhirResource.category,
+      subject: fhirResource.subject,
+      date: fhirResource.date,
+      author: fhirResource.author,
+      description: fhirResource.description,
+      content: fhirResource.content,
+      context: fhirResource.context
+    }
+  }
+
+  static toComposition(fhirResource: any): CompositionEntity {
+    return {
+      id: fhirResource.id || '',
+      status: fhirResource.status,
+      type: fhirResource.type,
+      category: fhirResource.category,
+      subject: fhirResource.subject,
+      encounter: fhirResource.encounter,
+      date: fhirResource.date,
+      author: fhirResource.author,
+      title: fhirResource.title,
+      section: fhirResource.section
     }
   }
 }

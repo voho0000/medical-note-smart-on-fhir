@@ -213,6 +213,103 @@ export interface EncounterEntity {
   }>
 }
 
+export interface DocumentReferenceEntity {
+  id: string
+  status?: string
+  type?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }
+  category?: Array<{
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }>
+  subject?: {
+    reference?: string
+  }
+  date?: string
+  author?: Array<{
+    display?: string
+    reference?: string
+  }>
+  description?: string
+  content?: Array<{
+    attachment?: {
+      contentType?: string
+      data?: string
+      url?: string
+      title?: string
+      size?: number
+    }
+  }>
+  context?: {
+    encounter?: Array<{
+      reference?: string
+    }>
+    period?: {
+      start?: string
+      end?: string
+    }
+  }
+}
+
+export interface CompositionEntity {
+  id: string
+  status?: string
+  type?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }
+  category?: Array<{
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+    }>
+  }>
+  subject?: {
+    reference?: string
+  }
+  encounter?: {
+    reference?: string
+  }
+  date?: string
+  author?: Array<{
+    display?: string
+    reference?: string
+  }>
+  title?: string
+  section?: Array<{
+    title?: string
+    code?: {
+      text?: string
+      coding?: Array<{
+        code?: string
+        display?: string
+      }>
+    }
+    text?: {
+      status?: string
+      div?: string
+    }
+    entry?: Array<{
+      reference?: string
+    }>
+  }>
+}
+
 export interface ClinicalDataCollection {
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
@@ -222,4 +319,6 @@ export interface ClinicalDataCollection {
   diagnosticReports: DiagnosticReportEntity[]
   procedures: ProcedureEntity[]
   encounters: EncounterEntity[]
+  documentReferences: DocumentReferenceEntity[]
+  compositions: CompositionEntity[]
 }

@@ -49,6 +49,8 @@ export function useClinicalData() {
     diagnosticReports: data?.diagnosticReports ?? [],
     procedures: data?.procedures ?? [],
     encounters: data?.encounters ?? [],
+    documentReferences: data?.documentReferences ?? [],
+    compositions: data?.compositions ?? [],
     isLoading,
     error: error as Error | null,
     refetch: async () => {

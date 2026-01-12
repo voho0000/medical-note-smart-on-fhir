@@ -3,8 +3,9 @@
 import { Badge } from "@/components/ui/badge"
 import { EncounterObservationCard } from "./EncounterObservationCard"
 import { MedicationRow, ProcedureRow } from "./EncounterCards"
-import type { VisitRecord } from "./hooks/useVisitHistory"
-import type { EncounterDetails } from "./hooks/useEncounterDetails"
+import { NoteItem } from "./NoteItem"
+import type { VisitRecord } from "../hooks/useVisitHistory"
+import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 
@@ -32,7 +33,12 @@ const getTypeBadge = (type: VisitType, labels: any) => {
 
 export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
-  const hasDetails = !!(details && (details.medications.length > 0 || details.tests.length > 0 || details.procedures.length > 0))
+  const hasDetails = !!(details && (
+    details.medications.length > 0 || 
+    details.tests.length > 0 || 
+    details.procedures.length > 0 ||
+    details.clinicalNotes.length > 0
+  ))
 
   return (
     <div className="rounded-lg border transition-colors">
@@ -127,6 +133,17 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
                   <div className="grid gap-2">
                     {details.procedures.map((procedure) => (
                       <ProcedureRow key={procedure.id} procedure={procedure} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {details?.clinicalNotes.length ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.clinicalNotes.title}</div>
+                  <div className="grid gap-2">
+                    {details.clinicalNotes.map((note) => (
+                      <NoteItem key={note.id} note={note} />
                     ))}
                   </div>
                 </div>

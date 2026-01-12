@@ -7,7 +7,7 @@ import { MedListCard } from '@/features/clinical-summary/medications/MedListCard
 import { AllergiesCard } from '@/features/clinical-summary/allergies/AllergiesCard'
 import { DiagnosesCard } from '@/features/clinical-summary/diagnosis/DiagnosisCard'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
-import { VisitHistoryCard } from '@/features/clinical-summary/visit-history/VisitHistoryCard'
+import { VisitHistoryCard } from '@/features/clinical-summary/visit-history'
 
 // ============================================================================
 // TAB CONFIGURATION - Define available tabs in the left panel
