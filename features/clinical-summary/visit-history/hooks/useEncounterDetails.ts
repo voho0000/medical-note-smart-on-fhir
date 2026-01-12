@@ -89,7 +89,7 @@ export function useEncounterDetails(
         if (!encounterId) return
         const entry = ensureEntry(encounterId)
         const observations = Array.isArray(report?._observations)
-          ? report._observations.filter((obs: any) => obs?.resourceType === "Observation")
+          ? report._observations
           : []
 
         observations.forEach((obs: any) => {

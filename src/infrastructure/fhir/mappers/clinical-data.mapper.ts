@@ -70,7 +70,8 @@ export class ClinicalDataMapper {
       category: fhirResource.category,
       conclusionCode: fhirResource.conclusionCode,
       note: fhirResource.note,
-      presentedForm: fhirResource.presentedForm
+      presentedForm: fhirResource.presentedForm,
+      encounter: fhirResource.encounter
     }
 
     // Attach related observations with expansion of hasMember
@@ -113,7 +114,8 @@ export class ClinicalDataMapper {
       code: fhirResource.code,
       status: fhirResource.status,
       performedDateTime: fhirResource.performedDateTime,
-      performedPeriod: fhirResource.performedPeriod
+      performedPeriod: fhirResource.performedPeriod,
+      encounter: fhirResource.encounter
     }
   }
 

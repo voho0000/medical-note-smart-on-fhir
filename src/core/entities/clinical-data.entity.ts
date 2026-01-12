@@ -176,6 +176,9 @@ export interface DiagnosticReportEntity {
   conclusionCode?: any
   note?: Array<{ text?: string }>
   presentedForm?: Array<{ title?: string; contentType?: string }>
+  encounter?: {
+    reference?: string
+  }
 }
 
 export interface ProcedureEntity {
@@ -191,6 +194,9 @@ export interface ProcedureEntity {
   performedPeriod?: {
     start?: string
     end?: string
+  }
+  encounter?: {
+    reference?: string
   }
 }
 
