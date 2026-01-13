@@ -150,6 +150,7 @@ export function ModelAndKeySettings() {
         onSave={handleSaveOpenAiKey}
         onClear={handleClearOpenAiKey}
         helpText={t.settings.openAiKeyHelp}
+        clearWarning={t.settings.clearOpenAiKeyWarning}
       />
 
       {/* Gemini API Key */}
@@ -162,6 +163,7 @@ export function ModelAndKeySettings() {
         onSave={handleSaveGeminiKey}
         onClear={handleClearGeminiKey}
         helpText={t.settings.geminiKeyHelp}
+        clearWarning={t.settings.clearGeminiKeyWarning}
       />
 
       {/* Perplexity API Key */}
@@ -174,6 +176,7 @@ export function ModelAndKeySettings() {
         onSave={handleSavePerplexityKey}
         onClear={handleClearPerplexityKey}
         helpText={t.settings.perplexityKeyHelp}
+        clearWarning={t.settings.clearPerplexityKeyWarning}
       />
     </div>
   )

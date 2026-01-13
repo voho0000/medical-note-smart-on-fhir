@@ -5,6 +5,12 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface ApiKeyInputProps {
   id: string
@@ -15,6 +21,7 @@ interface ApiKeyInputProps {
   onSave: () => void
   onClear: () => void
   helpText: string
+  clearWarning?: string
 }
 
 export function ApiKeyInput({
@@ -26,10 +33,11 @@ export function ApiKeyInput({
   onSave,
   onClear,
   helpText,
+  clearWarning,
 }: ApiKeyInputProps) {
   const { t } = useLanguage()
   const [showPassword, setShowPassword] = useState(false)
-  
+
   return (
     <div className="space-y-2">
       <Label htmlFor={id} className="text-xs uppercase text-muted-foreground">
@@ -44,6 +52,7 @@ export function ApiKeyInput({
             className="pr-10"
             value={value || ''}
             onChange={(event) => onChange(event.target.value)}
+            autoComplete="off"
           />
           <button
             type="button"
@@ -62,9 +71,20 @@ export function ApiKeyInput({
           <Button size="sm" onClick={onSave} disabled={!value?.trim()}>
             {t.settings.saveKey}
           </Button>
-          <Button size="sm" variant="outline" onClick={onClear}>
-            {t.settings.clear}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button size="sm" variant="outline" onClick={onClear}>
+                  {t.settings.clear}
+                </Button>
+              </TooltipTrigger>
+              {clearWarning && (
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">{clearWarning}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">{helpText}</p>
