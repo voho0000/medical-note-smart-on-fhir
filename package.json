@@ -36,6 +36,7 @@
     "clsx": "^2.1.1",
     "dompurify": "^3.3.1",
     "fhirclient": "^2.6.3",
+    "firebase": "^12.7.0",
     "jest": "^30.2.0",
     "lodash": "^4.17.21",
     "lucide-react": "^0.545.0",
