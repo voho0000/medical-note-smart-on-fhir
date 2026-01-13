@@ -145,15 +145,8 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
           messages: apiMessages,
           tools,
           abortSignal: abortControllerRef.current.signal,
-          onStepFinish: ({ toolCalls, toolResults, text }) => {
-            console.log('[Agent] Step finished:', { 
-              toolCallsCount: toolCalls?.length || 0,
-              toolResultsCount: toolResults?.length || 0,
-              hasText: !!text 
-            })
-            
+          onStepFinish: ({ toolCalls, toolResults }) => {
             if (toolCalls && toolCalls.length > 0) {
-              console.log('[Agent] Tool calls:', toolCalls.map(tc => tc?.toolName))
               
               const toolNames = toolCalls.map(tc => {
                 const name = tc?.toolName || ''
@@ -181,15 +174,11 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
               )
             }
             
-            if (toolResults && toolResults.length > 0) {
-              console.log('[Agent] Tool results received:', toolResults.length)
-            }
           },
         })
 
         let accumulatedContent = ""
         let toolResults: Array<{ toolName: string; result: unknown }> = []
-        console.log('[Agent] Starting full stream...')
 
         for await (const chunk of result.fullStream) {
           if (chunk.type === 'text-delta') {
@@ -220,17 +209,12 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
             // AI SDK v6 tool-result chunk structure may vary, try multiple ways to get the result
             const chunkAny = chunk as any
             const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
-            console.log('[Agent] Tool result chunk:', JSON.stringify(chunkAny, null, 2))
             toolResults.push({ toolName: chunk.toolName, result })
           }
         }
         
-        console.log('[Agent] Full stream completed, total length:', accumulatedContent.length, 'tool results:', toolResults.length)
-        
         // If there are tool results but no text generated, send a follow-up request
         if (toolResults.length > 0 && accumulatedContent.length === 0) {
-          console.log('[Agent] No text after tool calls, sending follow-up request...')
-          console.log('[Agent] Tool results to process:', JSON.stringify(toolResults, null, 2))
           
           const organizingState = `📝 ${t.agent.organizingResults}`
           setChatMessages((prev) =>
@@ -249,7 +233,6 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
           
           const toolResultsSummary = toolResults.map(tr => {
             const r = tr.result as any
-            console.log('[Agent] Processing tool result:', tr.toolName, r)
             
             // Handle literature search results differently from FHIR results
             if (tr.toolName === 'searchMedicalLiterature') {
@@ -270,8 +253,6 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
               : t.agent.foundRecords.replace('{count}', String(r?.count || 0))
             return `${tr.toolName} ${t.agent.queryResult}: ${r?.success ? countInfo : t.agent.queryFailed}\n${r?.count > 0 ? JSON.stringify(r?.data?.slice(0, 10) || [], null, 2) : t.agent.noData}`
           }).join('\n\n')
-          
-          console.log('[Agent] Tool results summary:', toolResultsSummary)
           
           // Get the user's original question
           const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
@@ -321,10 +302,7 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
               prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
             )
             
-            console.log('[Agent] Post-processed citations, converted', literatureCitations.length, 'citations to links')
           }
-          
-          console.log('[Agent] Follow-up completed, length:', followUpContent.length)
         }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return

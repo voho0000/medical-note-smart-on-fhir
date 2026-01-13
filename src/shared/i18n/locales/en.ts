@@ -453,7 +453,9 @@ export const en = {
     apiKeyWarningMessage: 'Please set your API Key in the Settings page first, or switch to Normal Mode.',
   },
 
-  auth: {
+  auth: (() => {
+    const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
+    return {
     signInTitle: 'Sign In',
     signUpTitle: 'Sign Up',
     signIn: 'Sign In',
@@ -475,7 +477,7 @@ export const en = {
     resetEmailSentMessage: 'Check your email for a link to reset your password. If it doesn\'t appear within a few minutes, check your spam folder.',
     freeQuotaDescription: 'Get free daily API quota without your own API key',
     benefits: 'What you get:',
-    benefit1: '20 free API calls per day',
+    benefit1: `${QUOTA_CONFIG.DAILY_LIMIT} free API calls per day`,
     benefit2: 'No need for your own API key',
     benefit3: 'Access to all basic models',
     fillAllFields: 'Please fill in all fields',
@@ -488,7 +490,8 @@ export const en = {
     noApiKey: 'Don\'t have an API key?',
     signInToUseQuota: 'Sign in to use free quota',
     notSignedIn: 'Not signed in',
-  },
+  }
+  })(),
 }
 
 export type Translation = typeof en

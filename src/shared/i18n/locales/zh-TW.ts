@@ -455,7 +455,9 @@ export const zhTW = {
     apiKeyWarningMessage: '請先在「設定」頁面中設定您的 API Key，或改用一般模式。',
   },
 
-  auth: {
+  auth: (() => {
+    const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
+    return {
     signInTitle: '登入',
     signUpTitle: '註冊',
     signIn: '登入',
@@ -477,7 +479,7 @@ export const zhTW = {
     resetEmailSentMessage: '請檢查您的信箱，查看重設密碼的連結。如果幾分鐘內沒有收到，請檢查垃圾郵件資料夾。',
     freeQuotaDescription: '無需自己的 API 金鑰，即可獲得每日免費配額',
     benefits: '您將獲得：',
-    benefit1: '每日 20 次免費 API 呼叫',
+    benefit1: `每日 ${QUOTA_CONFIG.DAILY_LIMIT} 次免費 API 呼叫`,
     benefit2: '無需自己的 API 金鑰',
     benefit3: '存取所有基本模型',
     fillAllFields: '請填寫所有欄位',
@@ -490,5 +492,6 @@ export const zhTW = {
     noApiKey: '沒有 API 金鑰？',
     signInToUseQuota: '登入以使用免費配額',
     notSignedIn: '未登入',
-  },
+  }
+  })(),
 } satisfies Translation

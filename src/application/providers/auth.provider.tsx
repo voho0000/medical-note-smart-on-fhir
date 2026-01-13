@@ -12,8 +12,9 @@ import {
   GoogleAuthProvider,
   type User as FirebaseUser
 } from 'firebase/auth'
-import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '@/src/shared/config/firebase.config'
+import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 
 export interface User {
   uid: string
@@ -51,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [dailyUsage, setDailyUsage] = useState(0)
-  const dailyLimit = 20
+  const dailyLimit = QUOTA_CONFIG.DAILY_LIMIT
 
   // Load user's daily usage from Firestore
   const loadDailyUsage = async (uid: string) => {
@@ -71,13 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setDailyUsage(0)
       }
-    } catch (error: any) {
-      // Handle offline errors gracefully
-      if (error.code === 'unavailable' || error.message?.includes('offline')) {
-        console.warn('Firestore offline, using default usage')
-      } else {
-        console.error('Error loading daily usage:', error)
-      }
+    } catch {
       setDailyUsage(0)
     }
   }
@@ -103,19 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               await setDoc(userRef, {
                 email: firebaseUser.email,
                 displayName: firebaseUser.displayName,
+                photoURL: firebaseUser.photoURL,
                 createdAt: new Date().toISOString(),
               })
             }
             
-            // Load daily usage
+            // Load initial usage
             await loadDailyUsage(firebaseUser.uid)
-          } catch (error: any) {
-            // Handle offline errors gracefully
-            if (error.code === 'unavailable' || error.message?.includes('offline')) {
-              console.warn('Firestore offline, skipping user document creation')
-            } else {
-              console.error('Error creating user document:', error)
-            }
+          } catch {
+            // Silently handle errors (offline, permissions, etc.)
           }
         }
       } else {
@@ -127,6 +118,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => unsubscribe()
   }, [])
+
+  // Real-time usage listener
+  useEffect(() => {
+    if (!user || !db) return
+
+    const today = getTodayString()
+    const usageRef = doc(db, 'users', user.uid, 'usage', today)
+    
+    const unsubscribe = onSnapshot(
+      usageRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setDailyUsage(snapshot.data().count || 0)
+        } else {
+          setDailyUsage(0)
+        }
+      },
+      () => {}
+    )
+
+    return () => unsubscribe()
+  }, [user])
 
   // Sign in with Google
   const signInWithGoogle = async () => {

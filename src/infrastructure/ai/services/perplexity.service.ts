@@ -2,7 +2,7 @@
 export class PerplexityService {
   async searchLiterature(
     query: string, 
-    apiKey: string,
+    apiKey: string | null,
     searchDepth: 'basic' | 'advanced' = 'basic'
   ): Promise<{
     success: boolean
@@ -10,12 +10,9 @@ export class PerplexityService {
     citations?: string[]
     error?: string
   }> {
+    // If no API key provided, use Firebase Proxy
     if (!apiKey) {
-      return {
-        success: false,
-        content: '',
-        error: 'Perplexity API key is required'
-      }
+      return this.searchViaProxy(query, searchDepth)
     }
 
     try {
@@ -54,8 +51,6 @@ export class PerplexityService {
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Perplexity API error:', errorText)
         return {
           success: false,
           content: '',
@@ -73,11 +68,72 @@ export class PerplexityService {
         citations,
       }
     } catch (error) {
-      console.error('Perplexity search error:', error)
       return {
         success: false,
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
+  }
+
+  /**
+   * Search via Firebase Cloud Function proxy
+   * Uses environment variable NEXT_PUBLIC_PERPLEXITY_PROXY_URL
+   */
+  private async searchViaProxy(
+    query: string,
+    searchDepth: 'basic' | 'advanced'
+  ): Promise<{
+    success: boolean
+    content: string
+    citations?: string[]
+    error?: string
+  }> {
+    const proxyUrl = process.env.NEXT_PUBLIC_PERPLEXITY_PROXY_URL
+    
+    if (!proxyUrl) {
+      return {
+        success: false,
+        content: '',
+        error: 'Perplexity proxy URL not configured. Please set NEXT_PUBLIC_PERPLEXITY_PROXY_URL in .env.local'
+      }
+    }
+
+    try {
+      const response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          searchDepth
+        })
+      })
+
+      if (!response.ok) {
+        return {
+          success: false,
+          content: '',
+          error: `Proxy error: ${response.status} ${response.statusText}`
+        }
+      }
+
+      const data = await response.json()
+      
+      // Try different possible response structures
+      const result = data.result || data.data || data
+      
+      return {
+        success: true,
+        content: result.content || '',
+        citations: result.citations || [],
+      }
+    } catch (error) {
+      return {
+        success: false,
+        content: '',
+        error: error instanceof Error ? error.message : 'Proxy call failed'
       }
     }
   }

@@ -10,13 +10,18 @@
 
 import { useMemo } from 'react'
 import { createLiteratureTools } from '@/src/infrastructure/ai/tools/literature-tools'
+import { useAuth } from '@/src/application/providers/auth.provider'
 
 export function useLiteratureTools(perplexityApiKey: string | null) {
+  const { user } = useAuth()
+  const isAuthenticated = !!user
+  const userId = user?.uid
+  
   // Cache literature tools to avoid recreating on every render
+  // Now creates tools even without API key if user is authenticated (to use proxy)
   const tools = useMemo(() => {
-    if (!perplexityApiKey) return null
-    return createLiteratureTools(perplexityApiKey)
-  }, [perplexityApiKey])
+    return createLiteratureTools(perplexityApiKey, isAuthenticated, userId)
+  }, [perplexityApiKey, isAuthenticated, userId])
 
   return tools
 }
