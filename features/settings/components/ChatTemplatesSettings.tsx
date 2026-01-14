@@ -1,6 +1,7 @@
 // Chat Templates Settings
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -21,7 +22,25 @@ export function ChatTemplatesSettings() {
   const canAddTemplate = templates.length < maxTemplates
   const canRemoveTemplate = templates.length > 1
 
-  const defaultTab = templates[0]?.id || ""
+  const [activeTab, setActiveTab] = useState(templates[0]?.id || "")
+
+  const handleAddTemplate = () => {
+    const newTemplateId = addTemplate()
+    if (newTemplateId) {
+      setActiveTab(newTemplateId)
+    }
+  }
+
+  const handleRemoveTemplate = (id: string) => {
+    removeTemplate(id)
+    // Switch to first template after deletion
+    if (templates.length > 1) {
+      const remainingTemplates = templates.filter(t => t.id !== id)
+      if (remainingTemplates.length > 0) {
+        setActiveTab(remainingTemplates[0].id)
+      }
+    }
+  }
 
   const handleMove = (id: string, direction: "up" | "down") => {
     const currentIndex = templates.findIndex(t => t.id === id)
@@ -55,7 +74,7 @@ export function ChatTemplatesSettings() {
       </p>
 
       {templates.length > 0 ? (
-        <Tabs defaultValue={defaultTab} className="space-y-4 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 overflow-hidden">
           <div className="flex items-center gap-2 w-full">
             <TabsList className="flex flex-1 flex-nowrap gap-1 rounded-md bg-muted/50 p-1 min-w-0 w-full h-9 border">
               {templates.map((template, index) => (
@@ -72,7 +91,7 @@ export function ChatTemplatesSettings() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={addTemplate}
+              onClick={handleAddTemplate}
               disabled={!canAddTemplate}
               className="h-9 w-9 shrink-0 p-0 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 text-lg font-semibold"
             >
@@ -88,7 +107,7 @@ export function ChatTemplatesSettings() {
                 canMoveUp={index > 0}
                 canMoveDown={index < templates.length - 1}
                 onUpdate={updateTemplate}
-                onRemove={removeTemplate}
+                onRemove={handleRemoveTemplate}
                 onMove={handleMove}
               />
             </TabsContent>

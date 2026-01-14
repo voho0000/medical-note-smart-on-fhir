@@ -22,7 +22,7 @@ type ChatTemplate = {
 
 type ChatTemplatesContextValue = {
   templates: ChatTemplate[]
-  addTemplate: () => void
+  addTemplate: () => string | null
   updateTemplate: (id: string, patch: Partial<Omit<ChatTemplate, "id">>) => void
   removeTemplate: (id: string) => void
   moveTemplate: (fromIndex: number, toIndex: number) => void
@@ -265,6 +265,8 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   }, [templates, hasLoadedFromStorage, locale, user?.uid])
 
   const addTemplate = () => {
+    if (templates.length >= MAX_TEMPLATES) return null
+    
     const newTemplate: ChatTemplate = {
       id: generateTemplateId(),
       label: "New Prompt Template",
@@ -272,11 +274,9 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       order: templates.length,
     }
     
-    setTemplates((prev) => {
-      if (prev.length >= MAX_TEMPLATES) return prev
-      return [...prev, newTemplate]
-    })
+    setTemplates((prev) => [...prev, newTemplate])
     setIsCustomTemplates(true)
+    return newTemplate.id
   }
 
   const updateTemplate = (id: string, patch: Partial<Omit<ChatTemplate, "id">>) => {

@@ -1,6 +1,7 @@
 // Refactored Clinical Insights Settings
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -32,7 +33,26 @@ export function ClinicalInsightsSettings() {
 
   const canAddPanel = panels.length < maxPanels
   const canRemovePanel = panels.length > 1
-  const defaultTab = panels[0]?.id || ""
+  
+  const [activeTab, setActiveTab] = useState(panels[0]?.id || "")
+
+  const handleAddPanel = () => {
+    const newPanelId = addPanel()
+    if (newPanelId) {
+      setActiveTab(newPanelId)
+    }
+  }
+
+  const handleRemovePanel = (id: string) => {
+    removePanel(id)
+    // Switch to first panel after deletion
+    if (panels.length > 1) {
+      const remainingPanels = panels.filter(p => p.id !== id)
+      if (remainingPanels.length > 0) {
+        setActiveTab(remainingPanels[0].id)
+      }
+    }
+  }
 
   const handleMove = (panelId: string, direction: "up" | "down") => {
     const currentIndex = panels.findIndex((panel) => panel.id === panelId)
@@ -72,7 +92,7 @@ export function ClinicalInsightsSettings() {
 
         {/* Insight Tabs */}
         {panels.length > 0 && (
-          <Tabs defaultValue={defaultTab} className="space-y-4 overflow-hidden">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 overflow-hidden">
             <div className="flex items-center gap-2 w-full">
               <TabsList className="flex flex-1 flex-nowrap gap-1 rounded-md bg-muted/50 p-1 min-w-0 w-full h-9 border">
                 {panels.map((panel, index) => (
@@ -89,7 +109,7 @@ export function ClinicalInsightsSettings() {
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={addPanel}
+                onClick={handleAddPanel}
                 disabled={!canAddPanel}
                 className="h-9 w-9 shrink-0 p-0 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 text-lg font-semibold"
               >
@@ -105,7 +125,7 @@ export function ClinicalInsightsSettings() {
                   canMoveUp={index > 0}
                   canMoveDown={index < panels.length - 1}
                   onUpdate={updatePanel}
-                  onRemove={removePanel}
+                  onRemove={handleRemovePanel}
                   onMove={handleMove}
                 />
               </TabsContent>

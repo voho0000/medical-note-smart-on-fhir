@@ -90,7 +90,7 @@ export function getDefaultClinicalInsightPanels(language: 'en' | 'zh-TW' = 'en')
 
 type ClinicalInsightsConfigContextValue = {
   panels: InsightPanelConfig[]
-  addPanel: () => void
+  addPanel: () => string | null
   updatePanel: (id: string, patch: Partial<InsightPanelConfig>) => void
   removePanel: (id: string) => void
   resetPanels: () => Promise<void>
@@ -259,21 +259,20 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
 
 
   const addPanel = () => {
-    setPanels((prev) => {
-      if (prev.length >= MAX_PANELS) return prev
-      const suffix = prev.length + 1
-      return [
-        ...prev,
-        {
-          id: generatePanelId(),
-          title: `Custom Panel ${suffix}`,
-          prompt: "Describe the key clinical insights for this focus area using the provided context.",
-          autoGenerate: false,
-          order: prev.length,
-        },
-      ]
-    })
+    if (panels.length >= MAX_PANELS) return null
+    
+    const suffix = panels.length + 1
+    const newPanel: InsightPanelConfig = {
+      id: generatePanelId(),
+      title: `Custom Panel ${suffix}`,
+      prompt: "Describe the key clinical insights for this focus area using the provided context.",
+      autoGenerate: false,
+      order: panels.length,
+    }
+    
+    setPanels((prev) => [...prev, newPanel])
     setIsCustomPanels(true)
+    return newPanel.id
   }
 
   const updatePanel = (id: string, patch: Partial<InsightPanelConfig>) => {
