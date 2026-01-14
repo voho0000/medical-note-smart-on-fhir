@@ -5,6 +5,7 @@ import { AppProviders } from "@/src/application/providers/app-providers"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import { HeaderAuthButton } from "@/features/auth"
+import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
@@ -39,6 +40,11 @@ function PageContent() {
           </div>
         </div>
       </header>
+      
+      {/* Email Verification Banner */}
+      <div className="px-3 sm:px-6">
+        <EmailVerificationBanner />
+      </div>
       
       {/* Mobile Tab Switcher - Only visible on small screens */}
       <div className="lg:hidden flex border-b bg-white/80 backdrop-blur-md">

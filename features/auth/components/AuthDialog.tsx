@@ -25,6 +25,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<{ title: string; message: string } | null>(null)
   const [resetEmailSent, setResetEmailSent] = useState(false)
+  const [signUpSuccess, setSignUpSuccess] = useState(false)
 
   // Reset state when dialog closes
   const handleOpenChange = (newOpen: boolean) => {
@@ -36,6 +37,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
       setPassword('')
       setError(null)
       setResetEmailSent(false)
+      setSignUpSuccess(false)
     }
   }
 
@@ -65,12 +67,16 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     try {
       if (mode === 'signin') {
         await signInWithEmail(email, password)
+        onOpenChange(false)
+        setEmail('')
+        setPassword('')
       } else {
         await signUpWithEmail(email, password)
+        // Show success message instead of closing immediately
+        setSignUpSuccess(true)
+        setEmail('')
+        setPassword('')
       }
-      onOpenChange(false)
-      setEmail('')
-      setPassword('')
     } catch (err) {
       const errorMsg = getAuthErrorMessage(err, locale)
       setError(errorMsg)
@@ -102,18 +108,21 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     setMode(mode === 'signin' ? 'signup' : 'signin')
     setError(null)
     setResetEmailSent(false)
+    setSignUpSuccess(false)
   }
 
   const switchToReset = () => {
     setMode('reset')
     setError(null)
     setResetEmailSent(false)
+    setSignUpSuccess(false)
   }
 
   const switchToSignIn = () => {
     setMode('signin')
     setError(null)
     setResetEmailSent(false)
+    setSignUpSuccess(false)
   }
 
   return (
@@ -129,6 +138,28 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Sign Up Success Message */}
+          {mode === 'signup' && signUpSuccess && (
+            <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+              <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-500" />
+              <AlertTitle className="text-green-800 dark:text-green-200">
+                {locale === 'zh-TW' ? '註冊成功！' : 'Sign Up Successful!'}
+              </AlertTitle>
+              <AlertDescription className="text-green-700 dark:text-green-300">
+                {locale === 'zh-TW' 
+                  ? '驗證信已發送到您的信箱，請檢查收件匣（或垃圾郵件）並點擊連結完成驗證。您現在可以開始使用系統。' 
+                  : 'A verification email has been sent to your inbox. Please check your email (including spam folder) and click the link to verify. You can start using the system now.'}
+              </AlertDescription>
+              <Button 
+                onClick={() => onOpenChange(false)} 
+                className="mt-3 w-full"
+                variant="default"
+              >
+                {locale === 'zh-TW' ? '開始使用' : 'Start Using'}
+              </Button>
+            </Alert>
+          )}
+
           {/* Reset Password Success Message */}
           {mode === 'reset' && resetEmailSent && (
             <Alert>
@@ -138,8 +169,8 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
             </Alert>
           )}
 
-          {/* Benefits - Hide in reset mode */}
-          {mode !== 'reset' && (
+          {/* Benefits - Hide in reset mode and signup success */}
+          {mode !== 'reset' && !signUpSuccess && (
             <div className="rounded-lg bg-muted p-3 text-sm">
               <p className="font-medium mb-1">✨ {t.auth.benefits}</p>
               <ul className="space-y-1 text-muted-foreground">
@@ -150,8 +181,8 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
             </div>
           )}
 
-          {/* Google Sign In - Hide in reset mode */}
-          {mode !== 'reset' && (
+          {/* Google Sign In - Hide in reset mode and signup success */}
+          {mode !== 'reset' && !signUpSuccess && (
             <>
               <Button
                 variant="outline"
@@ -197,7 +228,8 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
             </>
           )}
 
-          {/* Email/Password Form or Reset Password Form */}
+          {/* Email/Password Form or Reset Password Form - Hide on signup success */}
+          {!signUpSuccess && (
           <form onSubmit={mode === 'reset' ? handleResetPassword : handleEmailAuth} className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="email">{t.auth.email}</Label>
@@ -249,6 +281,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
               {mode === 'reset' ? t.auth.sendResetLink : mode === 'signin' ? t.auth.signIn : t.auth.signUp}
             </Button>
           </form>
+          )}
 
           {/* Toggle Mode or Back to Sign In */}
           <div className="text-center text-sm space-y-2">

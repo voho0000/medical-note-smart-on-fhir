@@ -8,6 +8,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
   onAuthStateChanged,
   GoogleAuthProvider,
   type User as FirebaseUser
@@ -21,6 +22,7 @@ export interface User {
   email: string | null
   displayName: string | null
   photoURL: string | null
+  emailVerified: boolean
 }
 
 export interface AuthContextType {
@@ -43,6 +45,7 @@ const convertFirebaseUser = (firebaseUser: FirebaseUser): User => ({
   email: firebaseUser.email,
   displayName: firebaseUser.displayName,
   photoURL: firebaseUser.photoURL,
+  emailVerified: firebaseUser.emailVerified,
 })
 
 // Helper: Get today's date string (YYYY-MM-DD)
@@ -174,7 +177,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setLoading(true)
     try {
-      await createUserWithEmailAndPassword(auth, email, password)
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      // Send email verification
+      await sendEmailVerification(userCredential.user)
       // User state will be updated by onAuthStateChanged listener
     } finally {
       setLoading(false)
