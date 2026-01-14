@@ -25,32 +25,29 @@ export function AuthStatus() {
   if (!user) {
     return (
       <>
-        <div className="rounded-lg border p-4 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="rounded-full bg-primary/10 p-2">
-              <LogIn className="h-5 w-5 text-primary" />
+        <div className="rounded-lg border p-3">
+          <div className="flex items-start gap-2">
+            <div className="rounded-full bg-primary/10 p-1.5 shrink-0">
+              <LogIn className="h-4 w-4 text-primary" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h3 className="font-medium text-sm mb-1">
                 💡 {t.auth.useProxyModels}
               </h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                {t.auth.freeQuotaDescription}
-              </p>
-              <ul className="text-xs text-muted-foreground space-y-1 mb-3">
+              <ul className="text-xs text-muted-foreground space-y-0.5">
                 <li>• {t.auth.benefit1}</li>
                 <li>• {t.auth.benefit2}</li>
                 <li>• {t.auth.benefit3}</li>
               </ul>
-              <Button
-                size="sm"
-                onClick={() => setShowAuthDialog(true)}
-                className="w-full sm:w-auto"
-              >
-                <LogIn className="mr-2 h-4 w-4" />
-                {t.auth.signInToUseQuota}
-              </Button>
             </div>
+            <Button
+              size="sm"
+              onClick={() => setShowAuthDialog(true)}
+              className="h-8 text-xs shrink-0"
+            >
+              <LogIn className="mr-1.5 h-3.5 w-3.5" />
+              {t.auth.signInToUseQuota}
+            </Button>
           </div>
         </div>
 
