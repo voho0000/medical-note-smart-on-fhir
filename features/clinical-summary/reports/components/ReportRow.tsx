@@ -67,7 +67,8 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
         </AccordionTrigger>
         <AccordionContent className="pb-4">
           <div className="grid gap-3">
-            {row.obs.map((obs, i) => (
+            {/* For procedures, skip the first synthetic observation (procedure details) since it's already in the header */}
+            {(row.group === "procedures" ? row.obs.slice(1) : row.obs).map((obs, i) => (
               <ObservationBlock
                 key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
                 observation={obs}
