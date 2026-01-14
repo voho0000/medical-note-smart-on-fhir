@@ -46,7 +46,7 @@ export function ChatToolbar({
   }
   
   return (
-    <div className="flex items-center gap-1 overflow-x-auto">
+    <div className="flex items-center gap-1">
       <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
         <Button variant="ghost" size="sm" onClick={onInsertContext} className="h-7 gap-1 px-1.5 text-xs">
           <Plus className="h-3 w-3" />
