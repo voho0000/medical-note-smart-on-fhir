@@ -28,6 +28,7 @@ import { useApiKeyValidation } from "../hooks/useApiKeyValidation"
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts"
 import { useFhirContext } from "@/src/application/hooks/chat/use-fhir-context.hook"
 import { useAutoSaveChat } from "@/src/application/hooks/chat/use-auto-save-chat.hook"
+import { ChatHistoryDrawer } from "@/features/chat-history"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -157,17 +158,18 @@ export default function MedicalChat() {
   const chatContent = (
     <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : ''} !gap-0 !py-0`}>
       {!isExpanded && (
-        <div className="flex items-center gap-1 px-2 py-1">
+        <div className="relative flex items-center justify-between px-2 py-1">
+          <ChatHistoryDrawer />
           <button
             onClick={() => setShowHeader(!showHeader)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors absolute left-1/2 -translate-x-1/2"
             title={showHeader ? t.chat.hideHeader : t.chat.showHeader}
           >
             {showHeader ? `▲ ${t.chat.hideHeader}` : `▼ ${t.chat.showHeader}`}
           </button>
           <button
             onClick={expandable.toggle}
-            className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-auto"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1"
             title={t.common.maximize}
           >
             <Maximize2 className="h-4 w-4" />
