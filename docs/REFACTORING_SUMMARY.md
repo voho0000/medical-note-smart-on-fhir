@@ -146,43 +146,94 @@ src/core/categories/
 - ✅ Clean Architecture (基本分層)
 - ✅ Vertical Slice (透過 category 系統)
 
+## ✅ 多醫院資料整合支援（已完成）
+
+### 1. Domain Entities (獨立於資料來源) ✅
+**完成內容：**
+- ✅ 創建 6 個獨立的 Domain Entities：
+  - `ObservationEntity` - 觀察/檢驗資料
+  - `DiagnosticReportEntity` - 診斷報告
+  - `ProcedureEntity` - 醫療程序
+  - `MedicationEntity` - 藥物處方
+  - `ConditionEntity` - 診斷/病況
+  - `AllergyEntity` - 過敏資訊
+
+**優勢：**
+- 與 FHIR 格式解耦，可支援任何資料格式
+- 包含 `sourceSystem` 和 `sourceId` 欄位追蹤資料來源
+- 統一的業務模型，應用層不需要知道資料來源
+
+### 2. Data Mapper 架構 ✅
+**完成內容：**
+- ✅ 創建 `IDataMapper` 接口定義轉換契約
+- ✅ 實作 `FhirDataMapper` 處理 FHIR R4 資料
+- ✅ 創建 `DataMapperRegistry` 管理多個 mapper
+- ✅ 提供 `ExampleHospitalDataMapper` 作為範例模板
+
+**架構優勢：**
+```
+醫院 A (FHIR) ──→ FHIR Mapper ──┐
+                                 │
+醫院 B (自定義) ──→ 自定義 Mapper ──┼──→ Domain Entities ──→ 應用程式
+                                 │
+醫院 C (HL7) ──→ HL7 Mapper ────┘
+```
+
+### 3. 完整文檔 ✅
+**完成內容：**
+- ✅ `MULTI_HOSPITAL_INTEGRATION_GUIDE.md` - 詳細整合指南
+- ✅ 包含實際範例和最佳實踐
+- ✅ 單元測試範例
+- ✅ 錯誤處理和資料驗證指南
+
+### 接入新醫院只需 3 步驟：
+1. 創建新的 Mapper 類別實作 `IDataMapper`
+2. 實作各資料類型的轉換邏輯
+3. 註冊到 `dataMapperRegistry`
+
 ## 📝 未來可選改進（非必要）
 
-### 1. 更明確的 Domain Entities
-**當前狀態：** 直接使用 FHIR types 作為 domain types
-**可能改進：** 創建獨立的 domain entities，與 FHIR types 分離
-**優先級：** 低（當前方式已足夠）
-
-### 2. FHIR Mapper Service
-**當前狀態：** 轉換邏輯分散在各 category 中
-**可能改進：** 集中的 mapper 服務
-**優先級：** 低（當前結構清晰）
-
-### 3. 測試檔案更新
+### 1. 測試檔案更新
 **當前狀態：** 部分測試需要更新以匹配新類型
 **可能改進：** 更新測試檔案
 **優先級：** 中（功能正常但測試需要更新）
 
+### 2. 效能優化
+**當前狀態：** 基本功能完整
+**可能改進：** 大量資料轉換時的效能優化
+**優先級：** 低（視實際使用情況而定）
+
 ## 🎉 總結
 
 ### 重構成果
-- ✅ **2 次 commit** 完成所有重構
+- ✅ **4 次 commit** 完成所有重構
 - ✅ **減少 ~150 行** 重複代碼
 - ✅ **統一 8 處** FHIR 類型定義
 - ✅ **提取 4 個** 共用工具函數
+- ✅ **創建 6 個** Domain Entities
+- ✅ **實作完整的** Data Mapper 架構
 - ✅ **更新 11 個** 檔案
+- ✅ **新增 13 個** 檔案（entities, mappers, 文檔）
 
 ### 代碼品質提升
 - ✅ 符合 Clean Code 原則
 - ✅ 符合 SOLID 原則
 - ✅ 符合 SSOT 原則
 - ✅ 符合 DRY 原則
+- ✅ 符合 Clean Architecture（完整分層）
 - ✅ 更好的可維護性
 - ✅ 更好的可測試性
 - ✅ 更好的類型安全
+- ✅ **支援多醫院資料整合**
 
 ### 架構評估
-**當前架構已經非常良好**，符合所有主要的軟體工程原則。未來的改進是可選的優化，而非必要的重構。
+**當前架構已經完整且強大**，不僅符合所有主要的軟體工程原則，更具備：
+- ✅ 多資料來源支援能力
+- ✅ 完整的 Domain-Driven Design
+- ✅ 清晰的依賴反轉
+- ✅ 高度可擴展性
+
+**準備好接入任何醫院的資料格式！**
 
 ## 📚 相關文檔
 - [REFACTORING_PLAN.md](./REFACTORING_PLAN.md) - 詳細的重構計劃和建議
