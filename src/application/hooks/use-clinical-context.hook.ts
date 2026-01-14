@@ -6,6 +6,7 @@ import { useDataSelection } from "@/src/application/providers/data-selection.pro
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import { formatClinicalContext } from "./clinical-context/formatters"
+import { formatNumberSmart } from "@/features/clinical-summary/reports/utils/number-format.utils"
 import { usePatientContext } from "./clinical-context/usePatientContext"
 import { useConditionsContext } from "./clinical-context/useConditionsContext"
 import { useMedicationsContext } from "./clinical-context/useMedicationsContext"
@@ -59,12 +60,14 @@ export function useClinicalContext(): UseClinicalContextReturn {
     return dataCategoryRegistry.getCategoryContext('imagingReports', clinicalData, filters)
   }, [selectedData.imagingReports, clinicalData, filters])
   
-  // Legacy diagnosticReports support (fallback to old hook if needed)
-  const { section: legacyReportsSection, observationIdsInReports } = useReportsContext(
-    selectedData.diagnosticReports ?? false,
-    clinicalData,
-    filters
-  )
+  // Legacy diagnosticReports support removed - now using labReports category instead
+  // const { section: legacyReportsSection, observationIdsInReports } = useReportsContext(
+  //   selectedData.diagnosticReports ?? false,
+  //   clinicalData,
+  //   filters
+  // )
+  const legacyReportsSection = null
+  const observationIdsInReports = new Set<string>()
   
   const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters)
   const vitalSignsSections = useVitalSignsContext(
@@ -119,8 +122,9 @@ export function useClinicalContext(): UseClinicalContextReturn {
       .map((obs) => {
         const value = obs.valueQuantity?.value ?? obs.valueString
         const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ""
+        const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
         return value !== undefined && value !== null 
-          ? `${obs.code?.text || "Observation"}: ${value}${unit}` 
+          ? `${obs.code?.text || "Observation"}: ${formattedValue}${unit}` 
           : null
       })
       .filter(Boolean) as string[]

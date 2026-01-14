@@ -2,6 +2,7 @@
 import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
+import { formatNumberSmart } from "@/features/clinical-summary/reports/utils/number-format.utils"
 import type { ClinicalData, DiagnosticReport, Observation } from "./types"
 
 export function useReportsContext(
@@ -67,8 +68,9 @@ export function useReportsContext(
         .map((obs) => {
           const value = obs.valueQuantity?.value ?? obs.valueString
           const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ""
+          const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
           return value !== undefined && value !== null 
-            ? `${obs.code?.text || "Test"}: ${value}${unit}` 
+            ? `${obs.code?.text || "Test"}: ${formattedValue}${unit}` 
             : null
         })
         .filter(Boolean) as string[]

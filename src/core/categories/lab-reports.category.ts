@@ -1,6 +1,7 @@
 // Lab Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import { inferGroupFromCategory, inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
 import { LabReportFilter } from '@/features/data-selection/components/DataFilters'
 
 interface DiagnosticReport {
@@ -221,7 +222,8 @@ export const labReportsCategory: DataCategory<LabData> = {
           : ''
         
         if (value !== undefined && value !== null) {
-          items.push(`${obs.code?.text || 'Lab Test'}: ${value}${unit}${datePart}`)
+          const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
+          items.push(`${obs.code?.text || 'Lab Test'}: ${formattedValue}${unit}${datePart}`)
         }
         return
       }
@@ -247,7 +249,8 @@ export const labReportsCategory: DataCategory<LabData> = {
           const value = obs.valueQuantity?.value ?? obs.valueString
           const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ''
           if (value !== undefined && value !== null) {
-            items.push(`  • ${obs.code?.text || 'Test'}: ${value}${unit}`)
+            const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
+            items.push(`  • ${obs.code?.text || 'Test'}: ${formattedValue}${unit}`)
           }
         })
       } else if (report.conclusion) {

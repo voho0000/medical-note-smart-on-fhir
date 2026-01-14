@@ -1,5 +1,6 @@
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { ObservationHistoryItem } from '../hooks/useObservationHistory'
+import { formatNumberSmart } from '../utils/number-format.utils'
 
 interface ObservationHistoryTableProps {
   data: ObservationHistoryItem[]
@@ -73,11 +74,13 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
                   })}
                 </td>
                 <td className={cn(
-                  "px-4 py-3 font-medium",
+                  "px-4 py-3 font-medium cursor-help",
                   getInterpretationStyle(item.interpretation)
-                )}>
+                )}
+                title={typeof item.value === 'number' ? `原始值: ${item.value} ${item.unit || ''}` : undefined}
+                >
                   {typeof item.value === 'number' 
-                    ? `${item.value} ${item.unit || ''}` 
+                    ? `${formatNumberSmart(item.value)} ${item.unit || ''}` 
                     : item.value}
                 </td>
                 <td className="px-4 py-3">

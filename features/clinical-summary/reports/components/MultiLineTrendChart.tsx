@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import type { ComponentHistoryItem } from '../hooks/useObservationHistory'
+import { formatNumberSmart } from '../utils/number-format.utils'
 
 interface MultiLineTrendChartProps {
   componentData: ComponentHistoryItem[]
@@ -88,15 +89,7 @@ export function MultiLineTrendChart({ componentData, unit }: MultiLineTrendChart
           domain={yDomain}
           tick={{ fontSize: 12 }}
           className="text-muted-foreground"
-          tickFormatter={(value: number) => {
-            if (value === 0) return '0'
-            if (value % 1 === 0) return value.toString()
-            const absValue = Math.abs(value)
-            if (absValue >= 100) return value.toFixed(0)
-            if (absValue >= 1) return value.toFixed(1)
-            if (absValue >= 0.1) return value.toFixed(2)
-            return value.toFixed(3)
-          }}
+          tickFormatter={(value: number) => formatNumberSmart(value)}
           label={{ value: unit || '', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
         />
         <Tooltip
@@ -107,7 +100,10 @@ export function MultiLineTrendChart({ componentData, unit }: MultiLineTrendChart
             fontSize: '12px',
           }}
           labelStyle={{ color: 'hsl(var(--foreground))' }}
-          formatter={(value: number | undefined, name?: string) => [`${value ?? ''} ${unit || ''}`, name || '']}
+          formatter={(value: number | undefined, name?: string) => {
+            if (value === undefined) return ['', name || '']
+            return [`${formatNumberSmart(value)} ${unit || ''}`, name || '']
+          }}
         />
         <Legend />
         

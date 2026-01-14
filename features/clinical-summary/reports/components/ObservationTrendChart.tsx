@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts'
 import type { ObservationHistoryItem } from '../hooks/useObservationHistory'
+import { formatNumberSmart } from '../utils/number-format.utils'
 
 interface ObservationTrendChartProps {
   data: ObservationHistoryItem[]
@@ -97,15 +98,7 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
           domain={yDomain}
           tick={{ fontSize: 12 }}
           className="text-muted-foreground"
-          tickFormatter={(value: number) => {
-            if (value === 0) return '0'
-            if (value % 1 === 0) return value.toString()
-            const absValue = Math.abs(value)
-            if (absValue >= 100) return value.toFixed(0)
-            if (absValue >= 1) return value.toFixed(1)
-            if (absValue >= 0.1) return value.toFixed(2)
-            return value.toFixed(3)
-          }}
+          tickFormatter={(value: number) => formatNumberSmart(value)}
           label={{ value: unit || '', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
         />
         <Tooltip
@@ -116,7 +109,10 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
             fontSize: '12px',
           }}
           labelStyle={{ color: 'hsl(var(--foreground))' }}
-          formatter={(value: number | undefined) => [`${value ?? ''} ${unit || ''}`, '數值']}
+          formatter={(value: number | undefined) => {
+            if (value === undefined) return ['', '數值']
+            return [`${formatNumberSmart(value)} ${unit || ''}`, '數值']
+          }}
         />
         
         {referenceRange && (

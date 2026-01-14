@@ -7,8 +7,17 @@ export {
 } from '@/src/shared/utils/fhir-helpers'
 
 import type { ReferenceRange, Quantity } from '@/src/shared/types/fhir.types'
+import { formatNumberSmart } from './number-format.utils'
 
 export function getValueWithUnit(v?: Quantity, fallback?: string): string {
+  if (v && v.value != null) {
+    const formattedValue = formatNumberSmart(v.value)
+    return `${formattedValue}${v.unit ? " " + v.unit : ""}`
+  }
+  return fallback ?? "—"
+}
+
+export function getOriginalValueWithUnit(v?: Quantity, fallback?: string): string {
   if (v && v.value != null) {
     return `${v.value}${v.unit ? " " + v.unit : ""}`
   }

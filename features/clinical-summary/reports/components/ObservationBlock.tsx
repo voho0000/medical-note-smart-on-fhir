@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Observation } from '../types'
-import { getCodeableConceptText, getValueWithUnit, formatDate, getReferenceRangeText } from '../utils/fhir-helpers'
+import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, formatDate, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
@@ -18,6 +18,9 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
   const ref = getReferenceRangeText(observation.referenceRange)
   const primaryValue = observation.valueQuantity
     ? getValueWithUnit(observation.valueQuantity)
+    : observation.valueString || "—"
+  const originalPrimaryValue = observation.valueQuantity
+    ? getOriginalValueWithUnit(observation.valueQuantity)
     : observation.valueString || "—"
 
   return (
@@ -38,7 +41,12 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
               <div className="text-xs text-muted-foreground">{formatDate(observation.effectiveDateTime)}</div>
             </div>
             <div className="flex items-center gap-2">
-              <span className={cn("text-base font-semibold", interp && "text-foreground")}>{primaryValue}</span>
+              <span 
+                className={cn("text-base font-semibold cursor-help", interp && "text-foreground")}
+                title={originalPrimaryValue !== primaryValue ? `原始值: ${originalPrimaryValue}` : undefined}
+              >
+                {primaryValue}
+              </span>
               {interp && (
                 <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", interp.style)}>
                   {interp.label}
@@ -56,6 +64,9 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
               const value = component.valueQuantity
                 ? getValueWithUnit(component.valueQuantity)
                 : component.valueString || "—"
+              const originalValue = component.valueQuantity
+                ? getOriginalValueWithUnit(component.valueQuantity)
+                : component.valueString || "—"
               const componentInterp = getInterpretationTag(component.interpretation)
               const range = getReferenceRangeText(component.referenceRange)
 
@@ -64,7 +75,12 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-foreground">{name}</span>
                     <div className="flex items-center gap-2">
-                      <span className={cn("font-semibold", componentInterp && "text-foreground")}>{value}</span>
+                      <span 
+                        className={cn("font-semibold cursor-help", componentInterp && "text-foreground")}
+                        title={originalValue !== value ? `原始值: ${originalValue}` : undefined}
+                      >
+                        {value}
+                      </span>
                       {componentInterp && (
                         <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", componentInterp.style)}>
                           {componentInterp.label}

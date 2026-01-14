@@ -2,6 +2,7 @@
 import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
+import { formatNumberSmart } from "@/features/clinical-summary/reports/utils/number-format.utils"
 import type { ClinicalData, Observation } from "./types"
 
 export function useVitalSignsContext(
@@ -86,7 +87,8 @@ export function useVitalSignsContext(
               const compUnit = comp.valueQuantity?.unit || ''
               const compCode = comp.code?.text || comp.code?.coding?.[0]?.display || ''
               if (compValue !== undefined && compValue !== null) {
-                return `${compCode}: ${compValue} ${compUnit}`.trim()
+                const formattedValue = typeof compValue === 'number' ? formatNumberSmart(compValue) : compValue
+                return `${compCode}: ${formattedValue} ${compUnit}`.trim()
               }
               return null
             })
@@ -101,7 +103,8 @@ export function useVitalSignsContext(
           const value = obs.valueQuantity?.value ?? obs.valueString
           const unit = obs.valueQuantity?.unit ?? ""
           if (value !== undefined && value !== null) {
-            items.push(`${String(value)} ${unit}${date ? ` (${date})` : ''}`.trim())
+            const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
+            items.push(`${String(formattedValue)} ${unit}${date ? ` (${date})` : ''}`.trim())
           }
         }
       })
