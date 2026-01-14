@@ -1,4 +1,4 @@
-// Refactored Prompt Templates Settings
+// Chat Templates Settings
 "use client"
 
 import { Button } from "@/components/ui/button"
@@ -7,17 +7,23 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
 
-export function PromptTemplatesSettings() {
+export function ChatTemplatesSettings() {
   const { t } = useLanguage()
-  const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, saveTemplates, maxTemplates, isSaving } = useChatTemplates()
+  const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, saveTemplates, maxTemplates, isSaving, moveTemplate } = useChatTemplates()
 
   const canAddTemplate = templates.length < maxTemplates
   const canRemoveTemplate = templates.length > 1
 
   const defaultTab = templates[0]?.id || ""
 
-  const handleMove = () => {
-    // Order adjustment not implemented yet
+  const handleMove = (id: string, direction: "up" | "down") => {
+    const currentIndex = templates.findIndex(t => t.id === id)
+    if (currentIndex === -1) return
+    
+    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+    if (newIndex < 0 || newIndex >= templates.length) return
+    
+    moveTemplate(currentIndex, newIndex)
   }
 
   return (

@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { ModelAndKeySettings } from "./components/ApiKeyField"
-import { PromptTemplatesSettings } from "./components/PromptTemplatesSettings"
+import { ChatTemplatesSettings } from "./components/ChatTemplatesSettings"
 
 export function SettingsFeature() {
   const { t } = useLanguage()
@@ -37,7 +37,7 @@ export function SettingsFeature() {
         <TabsContent value="templates" className="space-y-4">
           <Card>
             <CardContent className="pt-6">
-              <PromptTemplatesSettings />
+              <ChatTemplatesSettings />
             </CardContent>
           </Card>
         </TabsContent>

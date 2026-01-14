@@ -17,6 +17,7 @@ export interface ChatTemplate {
   id: string
   label: string
   content: string
+  order: number
   createdAt?: Date
   updatedAt?: Date
 }
@@ -25,6 +26,7 @@ interface FirestoreChatTemplate {
   id: string
   label: string
   content: string
+  order: number
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -37,7 +39,7 @@ export async function getUserChatTemplates(userId: string): Promise<ChatTemplate
 
   try {
     const templatesRef = collection(db, 'users', userId, 'chatTemplates')
-    const q = query(templatesRef, orderBy('createdAt', 'asc'))
+    const q = query(templatesRef, orderBy('order', 'asc'))
     const snapshot = await getDocs(q)
     
     return snapshot.docs.map(doc => {
@@ -46,6 +48,7 @@ export async function getUserChatTemplates(userId: string): Promise<ChatTemplate
         id: doc.id,
         label: data.label,
         content: data.content,
+        order: data.order || 0,
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }
@@ -73,6 +76,7 @@ export async function saveChatTemplate(
       id: template.id,
       label: template.label,
       content: template.content,
+      order: template.order,
       createdAt: template.createdAt ? Timestamp.fromDate(template.createdAt) : now,
       updatedAt: now,
     })
@@ -113,7 +117,7 @@ export function subscribeToChatTemplates(
   if (!db) return () => {}
 
   const templatesRef = collection(db, 'users', userId, 'chatTemplates')
-  const q = query(templatesRef, orderBy('createdAt', 'asc'))
+  const q = query(templatesRef, orderBy('order', 'asc'))
   
   return onSnapshot(q, (snapshot) => {
     const templates = snapshot.docs.map(doc => {
@@ -122,6 +126,7 @@ export function subscribeToChatTemplates(
         id: doc.id,
         label: data.label,
         content: data.content,
+        order: data.order || 0,
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }

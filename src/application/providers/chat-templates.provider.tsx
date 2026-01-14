@@ -17,6 +17,7 @@ type ChatTemplate = {
   id: string
   label: string
   content: string
+  order: number
 }
 
 type ChatTemplatesContextValue = {
@@ -24,6 +25,7 @@ type ChatTemplatesContextValue = {
   addTemplate: () => void
   updateTemplate: (id: string, patch: Partial<Omit<ChatTemplate, "id">>) => void
   removeTemplate: (id: string) => void
+  moveTemplate: (fromIndex: number, toIndex: number) => void
   resetTemplates: () => void
   saveTemplates: () => Promise<void>
   maxTemplates: number
@@ -36,18 +38,21 @@ const DEFAULT_TEMPLATES_EN: ChatTemplate[] = [
     label: "Summarize Medical Information",
     content:
       "Provide a structured summary of the patient's current presentation, key diagnoses, treatments, and pending follow-ups. Highlight urgent issues and recommended next steps.",
+    order: 0,
   },
   {
     id: "plan",
     label: "Care Plan Recommendations",
     content:
       "Review the patient's data and propose a prioritized plan of care, including medications, monitoring recommendations, patient counseling, and follow-up scheduling.",
+    order: 1,
   },
   {
     id: "handoff",
     label: "Shift Handoff Note",
     content:
       "Draft a handoff note covering patient status, recent changes, active issues, anticipated problems, and action items for the next clinician.",
+    order: 2,
   },
 ]
 
@@ -57,18 +62,21 @@ const DEFAULT_TEMPLATES_ZH: ChatTemplate[] = [
     label: "醫療資訊摘要",
     content:
       "提供病人目前狀況、主要診斷、治療和待追蹤事項的結構化摘要。突顯緊急問題和建議的下一步行動。",
+    order: 0,
   },
   {
     id: "plan",
     label: "照護計畫建議",
     content:
       "檢視病人資料並提出優先順序的照護計畫，包括藥物、監測建議、病人衛教和後續追蹤安排。",
+    order: 1,
   },
   {
     id: "handoff",
     label: "交班紀錄",
     content:
       "起草交班紀錄，涵蓋病人狀態、近期變化、活動中的問題、預期問題和下一位臨床人員的行動項目。",
+    order: 2,
   },
 ]
 
@@ -128,6 +136,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
                   id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
                   label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
                   content: typeof candidate.content === "string" ? candidate.content : "",
+                  order: typeof candidate.order === "number" ? candidate.order : acc.length,
                 }
                 acc.push(template)
                 return acc
@@ -173,6 +182,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
               id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
               label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
               content: typeof candidate.content === "string" ? candidate.content : "",
+              order: typeof candidate.order === "number" ? candidate.order : acc.length,
             }
             acc.push(template)
             return acc
@@ -259,6 +269,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       id: generateTemplateId(),
       label: "New Prompt Template",
       content: "",
+      order: templates.length,
     }
     
     setTemplates((prev) => {
@@ -279,6 +290,16 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     setTemplates((prev) => {
       if (prev.length <= 1) return prev
       return prev.filter((template) => template.id !== id)
+    })
+    setIsCustomTemplates(true)
+  }
+
+  const moveTemplate = (fromIndex: number, toIndex: number) => {
+    setTemplates((prev) => {
+      const newTemplates = [...prev]
+      const [movedTemplate] = newTemplates.splice(fromIndex, 1)
+      newTemplates.splice(toIndex, 0, movedTemplate)
+      return newTemplates
     })
     setIsCustomTemplates(true)
   }
@@ -310,7 +331,12 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     setIsSaving(true)
     setIsSyncing(true)
     try {
-      await replaceAllChatTemplates(user.uid, templates)
+      // Update order before saving
+      const templatesWithOrder = templates.map((template, index) => ({
+        ...template,
+        order: index
+      }))
+      await replaceAllChatTemplates(user.uid, templatesWithOrder)
     } catch (error) {
       console.error('[Chat Templates] Save failed:', error)
     } finally {
@@ -325,6 +351,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       addTemplate, 
       updateTemplate, 
       removeTemplate, 
+      moveTemplate,
       resetTemplates, 
       saveTemplates,
       maxTemplates: MAX_TEMPLATES,
