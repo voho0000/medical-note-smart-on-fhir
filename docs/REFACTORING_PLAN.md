@@ -25,25 +25,56 @@
 - `src/application/hooks/clinical-context/types.ts`
 - `src/core/categories/lab-reports.category.ts`
 
-## 📋 待完成
+### 2. 統一其他 Category 檔案的類型使用 ✅
+**已更新的檔案：**
+- ✅ `src/core/categories/imaging-reports.category.ts` - 使用共享 DiagnosticReport & Observation
+- ✅ `src/core/categories/procedures.category.ts` - 使用共享 Procedure
+- ✅ `src/core/categories/vital-signs.category.ts` - 使用共享 Observation
+- ✅ `src/core/categories/conditions.category.ts` - 使用共享 Condition
+- ✅ `src/core/categories/medications.category.ts` - 使用共享 MedicationRequest
+- ✅ `src/core/categories/allergies.category.ts` - 使用共享 AllergyIntolerance
 
-### 2. 統一其他 Category 檔案的類型使用
-**需要檢查和更新的檔案：**
-- `src/core/categories/imaging-reports.category.ts`
-- `src/core/categories/procedures.category.ts`
-- `src/core/categories/vital-signs.category.ts`
-- `src/core/categories/conditions.category.ts`
-- `src/core/categories/medications.category.ts`
-- `src/core/categories/allergies.category.ts`
+**結果：** 所有 category 檔案現在都使用 `@/src/shared/types/fhir.types.ts` 的類型
 
-**行動：** 確保所有 category 檔案都使用 `@/src/shared/types/fhir.types.ts` 的類型
+### 3. 提取共用工具函數 (DRY 原則) ✅
+**問題：** 多個 category 檔案中有重複的邏輯
+- 時間範圍過濾邏輯重複 4 次
+- "取得最新項目" 邏輯重複 3 次
+- CodeableConcept 文字提取邏輯分散各處
 
-### 3. 改進架構分層 (Clean Architecture)
+**解決方案：**
+- ✅ 創建 `src/core/utils/date-filter.utils.ts`
+  - `isWithinTimeRange()`: 統一時間範圍過濾
+  - `getMostRecentDate()`: 取得最近日期
+- ✅ 創建 `src/core/utils/data-grouping.utils.ts`
+  - `getLatestByName()`: 通用的取得最新項目函數
+  - `getCodeableConceptText()`: 提取 CodeableConcept 文字
 
-**當前問題：**
-- Clinical context hooks 直接操作 FHIR 數據
-- 缺少明確的 domain entities
-- 業務邏輯和數據訪問混在一起
+**影響檔案：**
+- ✅ 更新 `lab-reports.category.ts` 使用共用工具
+- ✅ 更新 `imaging-reports.category.ts` 使用共用工具
+- ✅ 更新 `procedures.category.ts` 使用共用工具
+- ✅ 更新 `vital-signs.category.ts` 使用共用工具
+
+**成果：**
+- 減少約 150 行重複代碼
+- 統一行為邏輯
+- 更容易維護和測試
+
+## 📋 待完成（未來改進）
+
+### 4. 改進架構分層 (Clean Architecture)
+
+**當前狀態：** 已有良好的基礎架構
+- ✅ Domain Layer: entities 和 interfaces 已定義
+- ✅ Application Layer: hooks 職責明確
+- ✅ Shared utilities: 共用工具已提取
+- ⏳ Infrastructure Layer: repository 層已存在但可進一步改進
+
+**當前問題（非緊急）：**
+- Clinical context hooks 直接操作 FHIR 數據（可接受，因為是 React hooks）
+- 可以考慮更明確的 domain entities（當前使用 FHIR types 作為 domain types）
+- 業務邏輯和數據訪問已通過 registry pattern 分離
 
 **建議改進：**
 
