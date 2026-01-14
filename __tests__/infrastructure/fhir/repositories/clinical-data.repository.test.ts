@@ -1,20 +1,20 @@
 // Unit Tests: Clinical Data Repository
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { fhirClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
-import { ClinicalDataMapper } from '@/src/infrastructure/fhir/mappers/clinical-data.mapper'
+import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
 
 // Mock the dependencies
 jest.mock('@/src/infrastructure/fhir/client/fhir-client.service')
-jest.mock('@/src/infrastructure/fhir/mappers/clinical-data.mapper')
+jest.mock('@/src/infrastructure/fhir/mappers/fhir.mapper')
 
 describe('FhirClinicalDataRepository', () => {
   let repository: FhirClinicalDataRepository
   let mockFhirClient: jest.Mocked<typeof fhirClient>
-  let mockMapper: jest.Mocked<typeof ClinicalDataMapper>
+  let mockMapper: jest.Mocked<typeof FhirMapper>
 
   beforeEach(() => {
     mockFhirClient = fhirClient as jest.Mocked<typeof fhirClient>
-    mockMapper = ClinicalDataMapper as jest.Mocked<typeof ClinicalDataMapper>
+    mockMapper = FhirMapper as jest.Mocked<typeof FhirMapper>
     repository = new FhirClinicalDataRepository()
     jest.clearAllMocks()
   })

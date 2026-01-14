@@ -1,7 +1,7 @@
-// Unit Tests: Clinical Data Mapper
-import { ClinicalDataMapper } from '@/src/infrastructure/fhir/mappers/clinical-data.mapper'
+// Unit Tests: FHIR Mapper
+import { FhirMapper } from '@/src/infrastructure/fhir/mappers/fhir.mapper'
 
-describe('ClinicalDataMapper', () => {
+describe('FhirMapper', () => {
   describe('toCondition', () => {
     it('should map FHIR Condition to domain entity', () => {
       const fhirCondition = {
@@ -19,7 +19,7 @@ describe('ClinicalDataMapper', () => {
         recordedDate: '2024-01-15'
       }
 
-      const result = ClinicalDataMapper.toCondition(fhirCondition)
+      const result = FhirMapper.toCondition(fhirCondition)
 
       expect(result.id).toBe('condition-123')
       expect(result.code).toEqual(fhirCondition.code)
@@ -33,7 +33,7 @@ describe('ClinicalDataMapper', () => {
         code: { text: 'Hypertension' }
       }
 
-      const result = ClinicalDataMapper.toCondition(fhirCondition)
+      const result = FhirMapper.toCondition(fhirCondition)
 
       expect(result.id).toBe('')
     })
@@ -45,7 +45,7 @@ describe('ClinicalDataMapper', () => {
         dateRecorded: '2023-06-20'
       }
 
-      const result = ClinicalDataMapper.toCondition(fhirCondition)
+      const result = FhirMapper.toCondition(fhirCondition)
 
       expect(result.recordedDate).toBe('2023-06-20')
     })
@@ -56,7 +56,7 @@ describe('ClinicalDataMapper', () => {
         code: { text: 'Condition' }
       }
 
-      const result = ClinicalDataMapper.toCondition(fhirCondition)
+      const result = FhirMapper.toCondition(fhirCondition)
 
       expect(result.clinicalStatus).toBeUndefined()
       expect(result.verificationStatus).toBeUndefined()
@@ -82,7 +82,7 @@ describe('ClinicalDataMapper', () => {
         ]
       }
 
-      const result = ClinicalDataMapper.toMedication(fhirMedication)
+      const result = FhirMapper.toMedication(fhirMedication)
 
       expect(result.id).toBe('med-123')
       expect(result.medicationCodeableConcept).toEqual(fhirMedication.medicationCodeableConcept)
@@ -97,7 +97,7 @@ describe('ClinicalDataMapper', () => {
         id: 'med-minimal'
       }
 
-      const result = ClinicalDataMapper.toMedication(fhirMedication)
+      const result = FhirMapper.toMedication(fhirMedication)
 
       expect(result.id).toBe('med-minimal')
       expect(result.medicationCodeableConcept).toBeUndefined()
@@ -129,7 +129,7 @@ describe('ClinicalDataMapper', () => {
         recordedDate: '2023-05-15'
       }
 
-      const result = ClinicalDataMapper.toAllergy(fhirAllergy)
+      const result = FhirMapper.toAllergy(fhirAllergy)
 
       expect(result.id).toBe('allergy-123')
       expect(result.code).toEqual(fhirAllergy.code)
@@ -147,7 +147,7 @@ describe('ClinicalDataMapper', () => {
         recorded: '2022-03-10'
       }
 
-      const result = ClinicalDataMapper.toAllergy(fhirAllergy)
+      const result = FhirMapper.toAllergy(fhirAllergy)
 
       expect(result.recordedDate).toBe('2022-03-10')
     })
@@ -176,7 +176,7 @@ describe('ClinicalDataMapper', () => {
         ]
       }
 
-      const result = ClinicalDataMapper.toObservation(fhirObservation)
+      const result = FhirMapper.toObservation(fhirObservation)
 
       expect(result.id).toBe('obs-123')
       expect(result.code).toEqual(fhirObservation.code)
@@ -195,7 +195,7 @@ describe('ClinicalDataMapper', () => {
         status: 'final'
       }
 
-      const result = ClinicalDataMapper.toObservation(fhirObservation)
+      const result = FhirMapper.toObservation(fhirObservation)
 
       expect(result.valueString).toBe('A+')
       expect(result.valueQuantity).toBeUndefined()
@@ -219,7 +219,7 @@ describe('ClinicalDataMapper', () => {
         status: 'final'
       }
 
-      const result = ClinicalDataMapper.toObservation(fhirObservation)
+      const result = FhirMapper.toObservation(fhirObservation)
 
       expect(result.component).toBeDefined()
       expect(result.component).toHaveLength(2)
@@ -245,7 +245,7 @@ describe('ClinicalDataMapper', () => {
         category: [{ coding: [{ code: 'LAB' }] }]
       }
 
-      const result = ClinicalDataMapper.toDiagnosticReport(fhirReport, [])
+      const result = FhirMapper.toDiagnosticReport(fhirReport, [])
 
       expect(result.id).toBe('report-123')
       expect(result.code).toEqual(fhirReport.code)
@@ -281,7 +281,7 @@ describe('ClinicalDataMapper', () => {
         effectiveDateTime: '2024-01-15'
       }
 
-      const result = ClinicalDataMapper.toDiagnosticReport(fhirReport, observations)
+      const result = FhirMapper.toDiagnosticReport(fhirReport, observations)
 
       expect(result._observations).toHaveLength(2)
       expect(result._observations?.[0].id).toBe('obs-1')
@@ -321,7 +321,7 @@ describe('ClinicalDataMapper', () => {
         effectiveDateTime: '2024-01-15'
       }
 
-      const result = ClinicalDataMapper.toDiagnosticReport(fhirReport, observations)
+      const result = FhirMapper.toDiagnosticReport(fhirReport, observations)
 
       expect(result._observations).toHaveLength(3)
       expect(result._observations?.[0].id).toBe('obs-panel')
@@ -337,7 +337,7 @@ describe('ClinicalDataMapper', () => {
         effectiveDateTime: '2024-01-15'
       }
 
-      const result = ClinicalDataMapper.toDiagnosticReport(fhirReport, [])
+      const result = FhirMapper.toDiagnosticReport(fhirReport, [])
 
       expect(result._observations).toBeUndefined()
     })
@@ -355,7 +355,7 @@ describe('ClinicalDataMapper', () => {
         performedDateTime: '2024-01-10T09:00:00Z'
       }
 
-      const result = ClinicalDataMapper.toProcedure(fhirProcedure)
+      const result = FhirMapper.toProcedure(fhirProcedure)
 
       expect(result.id).toBe('proc-123')
       expect(result.code).toEqual(fhirProcedure.code)
@@ -375,7 +375,7 @@ describe('ClinicalDataMapper', () => {
         }
       }
 
-      const result = ClinicalDataMapper.toProcedure(fhirProcedure)
+      const result = FhirMapper.toProcedure(fhirProcedure)
 
       expect(result.performedPeriod).toEqual(fhirProcedure.performedPeriod)
       expect(result.performedDateTime).toBeUndefined()
@@ -408,7 +408,7 @@ describe('ClinicalDataMapper', () => {
         ]
       }
 
-      const result = ClinicalDataMapper.toEncounter(fhirEncounter)
+      const result = FhirMapper.toEncounter(fhirEncounter)
 
       expect(result.id).toBe('enc-123')
       expect(result.status).toBe('finished')
@@ -424,7 +424,7 @@ describe('ClinicalDataMapper', () => {
         status: 'planned'
       }
 
-      const result = ClinicalDataMapper.toEncounter(fhirEncounter)
+      const result = FhirMapper.toEncounter(fhirEncounter)
 
       expect(result.id).toBe('enc-minimal')
       expect(result.status).toBe('planned')
