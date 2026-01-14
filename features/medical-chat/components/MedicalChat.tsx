@@ -1,8 +1,8 @@
 // Refactored Medical Chat Component
 "use client"
 
-import { useCallback, useEffect, useRef } from "react"
-import { AlertCircle } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { AlertCircle, Maximize2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useModel, useAiConfigStore } from "@/src/application/stores/ai-config.store"
@@ -46,6 +46,9 @@ export default function MedicalChat() {
   // Expand/collapse state (independent UI state)
   const expandable = useExpandable()
   const { isExpanded } = expandable
+  
+  // Header visibility state (default collapsed for more chat space)
+  const [showHeader, setShowHeader] = useState(false)
   
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
@@ -138,8 +141,26 @@ export default function MedicalChat() {
   useKeyboardShortcuts(isExpanded, expandable.collapse)
 
   const chatContent = (
-    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : ''}`}>
+    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : ''} !gap-0 !py-0`}>
       {!isExpanded && (
+        <div className="flex items-center gap-1 px-2 py-1">
+          <button
+            onClick={() => setShowHeader(!showHeader)}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title={showHeader ? t.chat.hideHeader : t.chat.showHeader}
+          >
+            {showHeader ? `▲ ${t.chat.hideHeader}` : `▼ ${t.chat.showHeader}`}
+          </button>
+          <button
+            onClick={expandable.toggle}
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-auto"
+            title={t.common.maximize}
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {!isExpanded && showHeader && (
         <ChatHeader
           recordingStatus={recordingStatus.recordingStatusLabel}
           asrError={voice.asrError}
@@ -151,11 +172,10 @@ export default function MedicalChat() {
           onResetSystemPrompt={resetSystemPrompt}
           isCustomPrompt={isCustomPrompt}
           isExpanded={isExpanded}
-          onToggleExpand={expandable.toggle}
         />
       )}
       
-      <CardContent className={`flex-1 p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background ${isExpanded ? '' : 'border-t'}`}>
+      <CardContent className={`flex-1 p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background ${isExpanded || !showHeader ? '' : 'border-t'}`}>
         <ChatMessageList messages={chatMessages} isLoading={chat.isLoading} />
       </CardContent>
 

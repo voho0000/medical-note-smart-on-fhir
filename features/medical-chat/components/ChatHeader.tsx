@@ -19,6 +19,7 @@ interface ChatHeaderProps {
   isCustomPrompt?: boolean
   isExpanded?: boolean
   onToggleExpand?: () => void
+  onToggleHeader?: () => void
 }
 
 export function ChatHeader({ 
@@ -32,7 +33,8 @@ export function ChatHeader({
   onResetSystemPrompt,
   isCustomPrompt,
   isExpanded,
-  onToggleExpand
+  onToggleExpand,
+  onToggleHeader
 }: ChatHeaderProps) {
   const { t } = useLanguage()
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
@@ -64,40 +66,25 @@ export function ChatHeader({
   }
   
   return (
-    <CardHeader className={`${isExpanded ? 'p-2' : 'space-y-1 pb-2'}`}>
-      <div className={`flex items-start justify-between gap-2 ${isExpanded ? 'min-h-0' : ''}`}>
-        {!isExpanded && (
-          <div className="flex flex-col gap-0.5 flex-1">
-            <CardTitle className="text-base">{t.chat.title}</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              {t.chat.description}
-            </p>
-          </div>
-        )}
-        <div className={`flex gap-1 items-center ${isExpanded ? 'ml-auto' : ''}`}>
-          {systemPrompt && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-              className="h-7 px-2 text-xs"
-            >
-              {showSystemPrompt ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
-              System Prompt
-            </Button>
-          )}
-          {onToggleExpand && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleExpand}
-              className="h-7 w-7 p-0"
-              title={isExpanded ? t.common.minimize : t.common.maximize}
-            >
-              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
-          )}
+    <CardHeader className={`${isExpanded ? 'p-2 block' : 'space-y-1 pb-2 block'}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5 flex-1">
+          <CardTitle className="text-base">{t.chat.title}</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {t.chat.description}
+          </p>
         </div>
+        {systemPrompt && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+            className="h-7 px-2 text-xs"
+          >
+            {showSystemPrompt ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
+            System Prompt
+          </Button>
+        )}
       </div>
       {showSystemPrompt && systemPrompt && (
         <div className="mt-2 space-y-2">

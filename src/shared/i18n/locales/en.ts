@@ -179,6 +179,8 @@ export const en = {
     processing: 'Processing…',
     voiceInputError: 'Voice input error:',
     chatError: 'Chat error:',
+    showHeader: 'Header',
+    hideHeader: 'Hide',
     systemPrompt: 'You are a helpful medical assistant helping clinicians compose medical notes.\nBe concise, evidence-based, and note uncertainties when appropriate.\nWhen clinical context is provided in the conversation, reference it directly.',
     expandedMode: 'Chat is expanded. Press ESC or click minimize to return.',
   },
