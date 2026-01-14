@@ -138,9 +138,9 @@ export default function ClinicalInsightsFeature() {
                 <TabsTrigger
                   key={panel.id}
                   value={panel.id}
-                  className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0"
                 >
-                  <span className="truncate block w-full">{panel.label}</span>
+                  <span className="truncate" title={panel.label}>{panel.label}</span>
                 </TabsTrigger>
               ))}
             </TabsList>

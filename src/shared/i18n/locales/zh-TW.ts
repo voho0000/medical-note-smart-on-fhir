@@ -30,7 +30,7 @@ export const zhTW = {
   },
 
   tabs: {
-    patient: '病患 / 生命徵象 / 診斷',
+    patient: '生命徵象 / 診斷',
     reports: '報告',
     medications: '用藥',
     visits: '就診紀錄',

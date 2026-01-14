@@ -25,9 +25,15 @@ export function SettingsFeature() {
     <div className="space-y-4">
       <Tabs value={settingsTab} onValueChange={(value) => setActiveTab('settings', value)} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
-          <TabsTrigger value="ai" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.aiPreferences}</TabsTrigger>
-          <TabsTrigger value="templates" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.chatTemplates}</TabsTrigger>
-          <TabsTrigger value="insights" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.clinicalInsightsTabs}</TabsTrigger>
+          <TabsTrigger value="ai" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0">
+            <span className="truncate" title={t.settings.aiPreferences}>{t.settings.aiPreferences}</span>
+          </TabsTrigger>
+          <TabsTrigger value="templates" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0">
+            <span className="truncate" title={t.settings.chatTemplates}>{t.settings.chatTemplates}</span>
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0">
+            <span className="truncate" title={t.settings.clinicalInsightsTabs}>{t.settings.clinicalInsightsTabs}</span>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="ai" className="space-y-6">
           <Card>

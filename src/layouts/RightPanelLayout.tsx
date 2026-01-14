@@ -134,14 +134,14 @@ function RightPanelContentInner() {
       onValueChange={setActiveTab}
       className="h-full flex flex-col"
     >
-      <TabsList className="w-full justify-start gap-1 h-12 bg-muted/50 p-1 border">
+      <TabsList className="w-full grid grid-cols-4 gap-1 h-12 bg-muted/50 p-1 border">
         {features.map(feature => (
           <TabsTrigger 
             key={feature.id}
             value={feature.id} 
-            className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+            className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0"
           >
-            {getTabLabel(feature)}
+            <span className="truncate" title={getTabLabel(feature)}>{getTabLabel(feature)}</span>
           </TabsTrigger>
         ))}
       </TabsList>

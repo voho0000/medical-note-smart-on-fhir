@@ -42,14 +42,14 @@ export default function ClinicalSummaryFeature() {
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
       <Tabs defaultValue={defaultTab} className="flex h-full flex-col">
-        <TabsList className="w-full justify-start gap-1 h-12 bg-muted/50 p-1 border">
+        <TabsList className="w-full grid grid-cols-4 gap-1 h-12 bg-muted/50 p-1 border">
           {tabs.map(tab => (
             <TabsTrigger 
               key={tab.id}
               value={tab.id} 
-              className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              className="text-base font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0"
             >
-              {getTabLabel(tab)}
+              <span className="truncate" title={getTabLabel(tab)}>{getTabLabel(tab)}</span>
             </TabsTrigger>
           ))}
         </TabsList>

@@ -28,7 +28,7 @@ export const en = {
   },
 
   tabs: {
-    patient: 'Patient / Vitals / Diagnosis',
+    patient: 'Vitals / Conditions',
     reports: 'Reports',
     medications: 'Medications',
     visits: 'Visit History',
