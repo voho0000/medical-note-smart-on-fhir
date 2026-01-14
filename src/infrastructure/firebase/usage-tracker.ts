@@ -1,5 +1,5 @@
 // Usage Tracker for Firebase
-import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore'
+import { doc, setDoc, getDoc, increment } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
 import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 
@@ -26,7 +26,7 @@ export async function trackUsage(uid: string): Promise<boolean> {
     
     return true
   } catch {
-    return false
+    return true // Don't block the user if tracking fails
   }
 }
 

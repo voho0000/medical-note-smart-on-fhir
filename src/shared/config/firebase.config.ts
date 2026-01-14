@@ -28,8 +28,8 @@ if (typeof window !== 'undefined') {
   }
   
   auth = getAuth(app)
-  db = getFirestore(app)
-  
+  // Use named database 'mediprisma' instead of default
+  db = getFirestore(app, 'mediprisma')
 }
 
 export { app, auth, db }
