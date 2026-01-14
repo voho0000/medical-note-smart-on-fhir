@@ -1,9 +1,12 @@
 // Refactored ReportsCard Component
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
+import { Menu } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { useReportsData } from './hooks/useReportsData'
@@ -16,6 +19,7 @@ import type { Row } from './types'
 export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
+  const [activeTab, setActiveTab] = useState("all")
 
   const { reportRows, seenIds } = useReportsData(diagnosticReports)
   const procedureRows = useProcedureRows(procedures, observations)
@@ -126,14 +130,45 @@ export function ReportsCard() {
   return (
     <Card>
       <CardContent className="px-4 pb-4">
-        <Tabs defaultValue="all" className="w-full">
-          <TabsList className="mb-6 flex w-full flex-wrap justify-start gap-1 h-9 bg-muted/40 p-1 border border-border/50">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          {/* Desktop tabs - hidden on small screens */}
+          <TabsList className="mb-6 hidden md:grid w-full h-9 bg-muted/40 p-1 border border-border/50" style={{ gridTemplateColumns: `repeat(${tabConfigs.length}, 1fr)` }}>
             {tabConfigs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="capitalize text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">
+              <TabsTrigger 
+                key={tab.value} 
+                value={tab.value} 
+                className="capitalize text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm truncate"
+              >
                 {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>
+
+          {/* Mobile dropdown - shown on small screens */}
+          <div className="mb-6 md:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  <span className="truncate">
+                    {tabConfigs.find(t => t.value === activeTab)?.label || tabConfigs[0]?.label}
+                  </span>
+                  <Menu className="ml-2 h-4 w-4 shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
+                {tabConfigs.map((tab) => (
+                  <DropdownMenuItem
+                    key={tab.value}
+                    onClick={() => setActiveTab(tab.value)}
+                    className={activeTab === tab.value ? "bg-primary text-primary-foreground" : ""}
+                  >
+                    {tab.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
           {tabConfigs.map((tab) => (
             <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} />
           ))}
