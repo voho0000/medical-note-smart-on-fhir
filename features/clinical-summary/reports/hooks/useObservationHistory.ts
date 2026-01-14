@@ -18,6 +18,155 @@ export interface ObservationHistoryItem {
   reportId?: string
 }
 
+export interface ComponentHistoryItem {
+  componentName: string
+  data: ObservationHistoryItem[]
+  color: string
+}
+
+export interface CompositeHistoryItem {
+  id: string
+  date: string
+  compositeValue: string
+  unit?: string
+  status?: string
+  components: Array<{
+    name: string
+    value: number | string
+    unit?: string
+  }>
+}
+
+const COMPONENT_COLORS = [
+  '#60a5fa', // blue
+  '#f472b6', // pink
+  '#34d399', // green
+  '#fbbf24', // yellow
+  '#a78bfa', // purple
+  '#fb923c', // orange
+]
+
+export function useCompositeHistory(observationCode?: string, componentNames?: string[]) {
+  const { observations = [] } = useClinicalData()
+
+  return useMemo(() => {
+    if (!observationCode || !componentNames || componentNames.length === 0) return []
+
+    const compositeItems: CompositeHistoryItem[] = []
+
+    // Find all observations with matching code that have components
+    observations.forEach((obs) => {
+      const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
+      const obsCodeCode = obs.code?.coding?.[0]?.code
+
+      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+        const date = obs.effectiveDateTime || ''
+        const components: CompositeHistoryItem['components'] = []
+        
+        // Extract component values in order
+        componentNames.forEach((name) => {
+          const comp = obs.component?.find((c: any) => {
+            const compName = c.code?.text || c.code?.coding?.[0]?.display
+            return compName === name
+          })
+          
+          if (comp) {
+            components.push({
+              name,
+              value: comp.valueQuantity?.value ?? comp.valueString ?? '—',
+              unit: comp.valueQuantity?.unit
+            })
+          }
+        })
+
+        if (components.length > 0) {
+          // Format composite value (e.g., "120/80" for BP)
+          const values = components.map(c => 
+            typeof c.value === 'number' ? Math.round(c.value) : c.value
+          )
+          const compositeValue = values.join('/')
+          const unit = components[0]?.unit
+
+          compositeItems.push({
+            id: obs.id || `composite-${date}`,
+            date,
+            compositeValue,
+            unit,
+            status: obs.status,
+            components
+          })
+        }
+      }
+    })
+
+    // Sort by date (newest first)
+    compositeItems.sort((a, b) => {
+      const dateA = new Date(a.date).getTime()
+      const dateB = new Date(b.date).getTime()
+      return dateB - dateA
+    })
+
+    return compositeItems
+  }, [observationCode, componentNames, observations])
+}
+
+export function useComponentHistory(observationCode?: string, componentNames?: string[]) {
+  const { observations = [] } = useClinicalData()
+
+  return useMemo(() => {
+    if (!observationCode || !componentNames || componentNames.length === 0) return []
+
+    const componentHistories: ComponentHistoryItem[] = componentNames.map((name, index) => ({
+      componentName: name,
+      data: [],
+      color: COMPONENT_COLORS[index % COMPONENT_COLORS.length]
+    }))
+
+    // Find all observations with matching code that have components
+    observations.forEach((obs) => {
+      const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
+      const obsCodeCode = obs.code?.coding?.[0]?.code
+
+      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+        const date = obs.effectiveDateTime || ''
+        
+        // Extract component values
+        obs.component?.forEach((comp: any) => {
+          const compName = comp.code?.text || comp.code?.coding?.[0]?.display
+          const compIndex = componentNames.findIndex(n => n === compName)
+          
+          if (compIndex !== -1 && comp.valueQuantity?.value !== undefined) {
+            componentHistories[compIndex].data.push({
+              id: `${obs.id}-${compName}-${date}`,
+              date,
+              value: comp.valueQuantity.value,
+              unit: comp.valueQuantity.unit,
+              status: obs.status,
+              interpretation: comp.interpretation?.text || comp.interpretation?.coding?.[0]?.display,
+              referenceRange: comp.referenceRange?.[0] ? {
+                low: comp.referenceRange[0].low?.value,
+                high: comp.referenceRange[0].high?.value,
+                text: comp.referenceRange[0].text,
+              } : undefined,
+            })
+          }
+        })
+      }
+    })
+
+    // Sort each component's data by date (newest first)
+    componentHistories.forEach(ch => {
+      ch.data.sort((a, b) => {
+        const dateA = new Date(a.date).getTime()
+        const dateB = new Date(b.date).getTime()
+        return dateB - dateA
+      })
+    })
+
+    return componentHistories.filter(ch => ch.data.length > 0)
+  }, [observationCode, componentNames, observations])
+}
+
 export function useObservationHistory(observationCode?: string) {
   const { observations = [], diagnosticReports = [], procedures = [] } = useClinicalData()
 

@@ -1,8 +1,11 @@
+import { useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useObservationHistory } from '../hooks/useObservationHistory'
+import { useObservationHistory, useComponentHistory, useCompositeHistory } from '../hooks/useObservationHistory'
 import { ObservationTrendChart } from './ObservationTrendChart'
+import { MultiLineTrendChart } from './MultiLineTrendChart'
 import { ObservationHistoryTable } from './ObservationHistoryTable'
+import { CompositeHistoryTable } from './CompositeHistoryTable'
 import type { Observation } from '../types'
 
 interface ObservationTrendDialogProps {
@@ -13,9 +16,31 @@ interface ObservationTrendDialogProps {
 
 export function ObservationTrendDialog({ observation, open, onOpenChange }: ObservationTrendDialogProps) {
   const observationCode = observation?.code?.text || observation?.code?.coding?.[0]?.display
+  
+  // Check if observation has components (like Blood Pressure with SBP/DBP)
+  const hasComponents = observation?.component && observation.component.length > 0
+  const componentNames = useMemo(() => {
+    if (!hasComponents) return []
+    const names = observation.component
+      ?.map((comp: any) => comp.code?.text || comp.code?.coding?.[0]?.display)
+      .filter(Boolean) as string[]
+    
+    // Sort so Systolic comes before Diastolic for Blood Pressure
+    return names.sort((a, b) => {
+      const aLower = a.toLowerCase()
+      const bLower = b.toLowerCase()
+      if (aLower.includes('systolic') && bLower.includes('diastolic')) return -1
+      if (aLower.includes('diastolic') && bLower.includes('systolic')) return 1
+      return 0
+    })
+  }, [observation, hasComponents])
+  
   const history = useObservationHistory(observationCode)
+  const componentHistory = useComponentHistory(observationCode, componentNames)
+  const compositeHistory = useCompositeHistory(observationCode, componentNames)
 
-  const unit = observation?.valueQuantity?.unit
+  const unit = observation?.valueQuantity?.unit || 
+    (hasComponents ? observation?.component?.[0]?.valueQuantity?.unit : undefined)
   const referenceRange = observation?.referenceRange?.[0]
 
   return (
@@ -40,7 +65,12 @@ export function ObservationTrendDialog({ observation, open, onOpenChange }: Obse
               </div>
             )}
             <div>
-              共 {history.length} 筆記錄
+              共 {hasComponents && componentHistory.length > 0 
+                ? componentHistory[0]?.data.length || 0 
+                : history.length} 筆記錄
+              {hasComponents && componentNames.length > 0 && (
+                <span className="ml-2">({componentNames.join(', ')})</span>
+              )}
             </div>
           </div>
         </DialogHeader>
@@ -52,17 +82,25 @@ export function ObservationTrendDialog({ observation, open, onOpenChange }: Obse
           </TabsList>
 
           <TabsContent value="table" className="mt-4">
-            <ObservationHistoryTable data={history} />
+            {hasComponents && compositeHistory.length > 0 ? (
+              <CompositeHistoryTable data={compositeHistory} componentNames={componentNames} />
+            ) : (
+              <ObservationHistoryTable data={history} />
+            )}
           </TabsContent>
 
           <TabsContent value="chart" className="mt-4">
             <div className="rounded-lg border p-4 bg-muted/20">
-              <ObservationTrendChart data={history} unit={unit} />
+              {hasComponents && componentHistory.length > 0 ? (
+                <MultiLineTrendChart componentData={componentHistory} unit={unit} />
+              ) : (
+                <ObservationTrendChart data={history} unit={unit} />
+              )}
             </div>
           </TabsContent>
         </Tabs>
 
-        {history.length === 0 && (
+        {history.length === 0 && componentHistory.length === 0 && (
           <div className="text-center py-8 text-muted-foreground">
             此檢驗項目暫無歷史記錄
           </div>
