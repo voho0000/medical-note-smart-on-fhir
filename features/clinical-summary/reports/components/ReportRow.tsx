@@ -17,61 +17,9 @@ interface ReportRowProps {
 export function ReportRow({ row, defaultOpen }: ReportRowProps) {
   const { t } = useLanguage()
   const [trendDialogOpen, setTrendDialogOpen] = useState(false)
-  const isSingleSimpleObs = row.obs.length === 1 && 
-    (!row.obs[0].component || row.obs[0].component.length === 0)
   
   // Use the first observation for the trend dialog
   const firstObs = row.obs[0]
-
-  if (isSingleSimpleObs) {
-    return (
-      <>
-        <div className="border rounded-lg bg-muted/40 p-3">
-          <div className="flex w-full flex-col gap-1 mb-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">{row.title}</span>
-                <div
-                  onClick={() => setTrendDialogOpen(true)}
-                  className="text-muted-foreground hover:text-primary transition-colors cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="查看趨勢"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setTrendDialogOpen(true)
-                    }
-                  }}
-                >
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-              </div>
-              <Badge variant="outline" className="text-xs font-normal">{row.meta}</Badge>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {row.obs[0]?.status && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="font-medium text-foreground/80">{t.reports.status}:</span> {row.obs[0]?.status}
-                </span>
-              )}
-              {row.obs[0]?.category && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="font-medium text-foreground/80">{t.reports.category}:</span> {getConceptText(row.obs[0]?.category)}
-                </span>
-              )}
-            </div>
-          </div>
-          <ObservationBlock observation={row.obs[0]} />
-        </div>
-        <ObservationTrendDialog
-          observation={firstObs}
-          open={trendDialogOpen}
-          onOpenChange={setTrendDialogOpen}
-        />
-      </>
-    )
-  }
 
   return (
     <>

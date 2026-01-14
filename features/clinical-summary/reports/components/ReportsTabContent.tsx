@@ -9,7 +9,7 @@ interface ReportsTabContentProps {
 }
 
 export function ReportsTabContent({ value, rows }: ReportsTabContentProps) {
-  const defaultOpen = rows.slice(0, 2).map((r) => r.id)
+  const defaultOpen: string[] = []
 
   return (
     <TabsContent value={value} className="mt-0">
