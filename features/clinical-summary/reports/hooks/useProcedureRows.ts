@@ -81,7 +81,7 @@ export function useProcedureRows(procedures: any[]) {
       const observation: Observation = {
         resourceType: "Observation",
         id: procedure?.id ? `procedure-${procedure.id}` : `procedure-${Math.random().toString(36).slice(2, 10)}`,
-        code: { text: t.procedures.summary },
+        code: { text: title },
         valueString: outcome !== "—" ? outcome : notes || "—",
         effectiveDateTime: performed,
         status: procedure?.status,

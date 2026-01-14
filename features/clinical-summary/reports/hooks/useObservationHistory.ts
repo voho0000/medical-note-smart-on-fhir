@@ -19,7 +19,7 @@ export interface ObservationHistoryItem {
 }
 
 export function useObservationHistory(observationCode?: string) {
-  const { observations = [], diagnosticReports = [] } = useClinicalData()
+  const { observations = [], diagnosticReports = [], procedures = [] } = useClinicalData()
 
   const history = useMemo(() => {
     if (!observationCode) return []
@@ -87,6 +87,33 @@ export function useObservationHistory(observationCode?: string) {
       }
     })
 
+    // Find all procedures with matching code
+    procedures.forEach((procedure: any) => {
+      const procedureCodeText = procedure.code?.text || procedure.code?.coding?.[0]?.display
+      const procedureCodeCode = procedure.code?.coding?.[0]?.code
+
+      // Match by text or code
+      if (procedureCodeText === observationCode || procedureCodeCode === observationCode) {
+        const outcome = procedure.outcome?.text || procedure.outcome?.coding?.[0]?.display
+        const notes = Array.isArray(procedure.note)
+          ? procedure.note.map((n: any) => n?.text).filter(Boolean).join("; ")
+          : undefined
+        const value = outcome || notes || procedure.status || '—'
+        const date = procedure.performedDateTime || procedure.performedPeriod?.start || ''
+
+        items.push({
+          id: procedure.id || `procedure-${date}`,
+          date,
+          value,
+          status: procedure.status,
+          interpretation: undefined,
+          referenceRange: undefined,
+          reportName: 'Procedure',
+          reportId: undefined,
+        })
+      }
+    })
+
     // Sort by date (newest first)
     items.sort((a, b) => {
       const dateA = new Date(a.date).getTime()
@@ -95,7 +122,7 @@ export function useObservationHistory(observationCode?: string) {
     })
 
     return items
-  }, [observationCode, observations, diagnosticReports])
+  }, [observationCode, observations, diagnosticReports, procedures])
 
   return history
 }
