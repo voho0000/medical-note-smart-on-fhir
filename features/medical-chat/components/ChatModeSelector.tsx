@@ -23,7 +23,7 @@ export function ChatModeSelector({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-0.5 h-[42px] cursor-pointer w-[120px]">
+          <div className="flex items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-0.5 h-[42px] cursor-pointer w-[130px] shrink-0">
             {isAgentMode ? (
               <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
             ) : (
