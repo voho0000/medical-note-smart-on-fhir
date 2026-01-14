@@ -3,6 +3,13 @@
 
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { Info } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
@@ -28,15 +35,24 @@ export function ChatTemplatesSettings() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1">
+      <div className="flex items-center gap-2">
         <h3 className="text-base font-semibold leading-tight">{t.settings.chatTemplatesTitle}</h3>
-        <p className="text-xs text-muted-foreground">
-          {t.settings.chatTemplatesDesc}
-        </p>
-        <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2 mt-2">
-          {t.settings.chatTemplatesLanguageWarning}
-        </p>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-4 w-4 text-amber-600 dark:text-amber-500 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs bg-amber-50 dark:bg-amber-950/90 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100">
+              <p className="text-xs">
+                {t.settings.chatTemplatesLanguageWarning}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
+      <p className="text-xs text-muted-foreground">
+        {t.settings.chatTemplatesDesc}
+      </p>
 
       {templates.length > 0 ? (
         <Tabs defaultValue={defaultTab} className="space-y-4 overflow-hidden">
