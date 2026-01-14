@@ -1,28 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { History, MessageSquare, Trash2, Clock, X } from 'lucide-react'
+import { History, MessageSquare, Trash2, Clock, X, LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
-import { useChatHistory } from '@/src/application/hooks/chat/use-chat-history.hook'
-import { useChatSession } from '@/src/application/hooks/chat/use-chat-session.hook'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
+import { useChatHistory } from "@/src/application/hooks/chat/use-chat-history.hook"
+import { useChatSession } from "@/src/application/hooks/chat/use-chat-session.hook"
 import { useFhirContext } from '@/src/application/hooks/chat/use-fhir-context.hook'
-import { useLanguage } from '@/src/application/providers/language.provider'
-import type { ChatSessionMetadata } from '@/src/core/entities/chat-session.entity'
+import { AuthDialog } from '@/features/auth/components/AuthDialog'
+import type { ChatSessionMetadata } from "@/src/core/entities/chat-session.entity"
 
 export function ChatHistoryDrawer() {
   const [open, setOpen] = useState(false)
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
   const { t } = useLanguage()
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
+  const { user } = useAuth()
   const { sessions, isLoading, deleteSession } = useChatHistory(patientId || undefined, fhirServerUrl || undefined)
   const { loadSession, startNewSession } = useChatSession()
 
@@ -109,33 +106,50 @@ export function ChatHistoryDrawer() {
           </Button>
         </div>
 
-        <ScrollArea className="h-[calc(100vh-180px)]">
-          <div className="px-6 py-4 space-y-2">
+        {!user ? (
+          <div className="flex flex-col items-center justify-center h-[calc(100vh-180px)] px-6 text-center">
+            <LogIn className="h-16 w-16 text-muted-foreground/50 mb-6" />
+            <h3 className="text-lg font-semibold mb-2">
+              {t.chatHistory.loginRequired || "需要登入"}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-6 max-w-sm">
+              {t.chatHistory.loginPrompt || "請登入以使用對話紀錄功能。登入後，您的對話將自動儲存並可在不同裝置間同步。"}
+            </p>
+            <Button 
+              onClick={() => setShowAuthDialog(true)}
+              className="gap-2"
+            >
+              <LogIn className="h-4 w-4" />
+              {t.auth.signIn}
+            </Button>
+            <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
+          </div>
+        ) : (
+          <ScrollArea className="h-[calc(100vh-180px)] px-6">
             {isLoading ? (
-              <div className="text-center text-muted-foreground py-8">
-                {t.common?.loading || 'Loading...'}
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-muted-foreground">{t.common.loading}</p>
               </div>
             ) : sessions.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
-                <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>{t.chatHistory?.noHistory || 'No chat history yet'}</p>
-                <p className="text-sm mt-1">
-                  {t.chatHistory?.startConversation || 'Start a conversation to see it here'}
-                </p>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">{t.chatHistory.noHistory}</p>
               </div>
             ) : (
-              sessions.map((session) => (
-                <ChatHistoryItem
-                  key={session.id}
-                  session={session}
-                  onLoad={handleLoadSession}
-                  onDelete={handleDeleteSession}
-                  formatDate={formatDate}
-                />
-              ))
+              <div className="space-y-2 pb-4">
+                {sessions.map((session) => (
+                  <ChatHistoryItem
+                    key={session.id}
+                    session={session}
+                    onLoad={handleLoadSession}
+                    onDelete={handleDeleteSession}
+                    formatDate={formatDate}
+                  />
+                ))}
+              </div>
             )}
-          </div>
-        </ScrollArea>
+          </ScrollArea>
+        )}
       </SheetContent>
     </Sheet>
   )

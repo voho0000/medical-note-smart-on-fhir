@@ -467,11 +467,15 @@ export const en = {
   },
 
   chatHistory: {
-    title: 'Chat History',
+    title: "Chat History",
     description: 'View your previous conversations',
     conversationsFor: 'Conversations for',
-    newChat: 'New Chat',
-    noHistory: 'No chat history yet',
+    newChat: "New Chat",
+    deleteConfirm: "Are you sure you want to delete this chat?",
+    loading: "Loading...",
+    loginRequired: "Login Required",
+    loginPrompt: "Please log in to use chat history. Your conversations will be automatically saved and synced across devices.",
+    noHistory: "No chat history yet",
     startConversation: 'Start a conversation to see it here',
     confirmDelete: 'Delete this conversation?',
     justNow: 'Just now',
