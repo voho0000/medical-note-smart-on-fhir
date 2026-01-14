@@ -18,6 +18,7 @@ import { ChevronDown, Loader2, Square, Sparkles, Maximize2, Minimize2, Trash2, S
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { InsightExpandedOverlay } from './InsightExpandedOverlay'
 import type { InsightPanelProps } from '../types'
 
 export function InsightPanel({
@@ -108,6 +109,82 @@ export function InsightPanel({
       document.body.style.overflow = ''
     }
   }, [isPromptExpanded, promptExpandable])
+
+  // Response content for expanded overlay
+  const responseContent = (
+    <>
+      {isEditingResponse || isLoading ? (
+        <Textarea
+          value={response}
+          onChange={(event) => onResponseChange(event.target.value)}
+          placeholder={t.clinicalInsights.responsePlaceholder}
+          className="flex-1 resize-none text-sm overflow-y-auto"
+          disabled={isLoading}
+        />
+      ) : (
+        <div 
+          className="flex-1 overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm cursor-text"
+          onClick={() => setIsEditingResponse(true)}
+        >
+          {response ? (
+            <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({node, ...props}) => <h1 className="text-lg font-bold border-b pb-1 mb-2" {...props} />,
+                  h2: ({node, ...props}) => <h2 className="text-base font-bold mt-4 mb-2" {...props} />,
+                  h3: ({node, ...props}) => <h3 className="text-sm font-semibold mt-3 mb-1" {...props} />,
+                  ul: ({node, ...props}) => <ul className="list-disc pl-5 space-y-1" {...props} />,
+                  ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-1" {...props} />,
+                  li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                  p: ({node, ...props}) => <p className="leading-relaxed" {...props} />,
+                  a: ({node, ...props}) => (
+                    <a 
+                      className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      {...props} 
+                    />
+                  ),
+                  code: ({node, inline, ...props}: any) => 
+                    inline ? (
+                      <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props} />
+                    ) : (
+                      <code className="block bg-muted p-2 rounded text-xs font-mono overflow-x-auto" {...props} />
+                    ),
+                  strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
+                  em: ({node, ...props}) => <em className="italic" {...props} />,
+                  hr: ({node, ...props}) => <hr className="my-3 border-border" {...props} />,
+                  blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-muted-foreground/30 pl-3 italic my-2" {...props} />,
+                }}
+              >
+                {response}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <span className="text-muted-foreground">{t.clinicalInsights.responsePlaceholder}</span>
+          )}
+        </div>
+      )}
+      <div className="flex justify-between text-xs text-muted-foreground mt-2">
+        <span>
+          {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : t.clinicalInsights.readyToGenerate}
+        </span>
+        <span>{response.length} {t.clinicalInsights.chars}</span>
+      </div>
+    </>
+  )
+
+  // Render expanded overlay or normal view
+  if (isExpanded) {
+    return (
+      <InsightExpandedOverlay
+        insightContent={responseContent}
+        onCollapse={responseExpandable.collapse}
+        title={title}
+      />
+    )
+  }
 
   return (
     <>
@@ -305,97 +382,10 @@ export function InsightPanel({
       </CardContent>
     </Card>
     
-    {/* Expanded overlay for response */}
-    {isExpanded && (
-      <div 
-        className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
-        onClick={responseExpandable.collapse}
-      >
-        {/* Floating minimize button */}
-        <button
-          onClick={responseExpandable.collapse}
-          className="absolute top-4 right-4 z-10 p-2 rounded-full bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shadow-md"
-          title={t.common.minimize}
-        >
-          <Minimize2 className="h-5 w-5" />
-        </button>
-        
-        {/* Title */}
-        <div className="pt-4 px-6 text-center">
-          <h2 className="text-lg font-semibold">{title}</h2>
-        </div>
-        
-        <div 
-          className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 flex flex-col min-h-0"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {isEditingResponse || isLoading ? (
-            <Textarea
-              value={response}
-              onChange={(event) => onResponseChange(event.target.value)}
-              placeholder={t.clinicalInsights.responsePlaceholder}
-              className="flex-1 resize-none text-sm overflow-y-auto"
-              disabled={isLoading}
-            />
-          ) : (
-            <div 
-              className="flex-1 overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm cursor-text"
-              onClick={() => setIsEditingResponse(true)}
-            >
-              {response ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:mt-3 prose-headings:mb-2 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      h1: ({node, ...props}) => <h1 className="text-lg font-bold border-b pb-1 mb-2" {...props} />,
-                      h2: ({node, ...props}) => <h2 className="text-base font-bold mt-4 mb-2" {...props} />,
-                      h3: ({node, ...props}) => <h3 className="text-sm font-semibold mt-3 mb-1" {...props} />,
-                      ul: ({node, ...props}) => <ul className="list-disc pl-5 space-y-1" {...props} />,
-                      ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-1" {...props} />,
-                      li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
-                      p: ({node, ...props}) => <p className="leading-relaxed" {...props} />,
-                      a: ({node, ...props}) => (
-                        <a 
-                          className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          {...props} 
-                        />
-                      ),
-                      code: ({node, inline, ...props}: any) => 
-                        inline ? (
-                          <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props} />
-                        ) : (
-                          <code className="block bg-muted p-2 rounded text-xs font-mono overflow-x-auto" {...props} />
-                        ),
-                      strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
-                      em: ({node, ...props}) => <em className="italic" {...props} />,
-                      hr: ({node, ...props}) => <hr className="my-3 border-border" {...props} />,
-                      blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-muted-foreground/30 pl-3 italic my-2" {...props} />,
-                    }}
-                  >
-                    {response}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                <span className="text-muted-foreground">{t.clinicalInsights.responsePlaceholder}</span>
-              )}
-            </div>
-          )}
-          <div className="flex justify-between text-xs text-muted-foreground mt-2">
-            <span>
-              {isLoading ? t.clinicalInsights.generating : isEdited ? t.clinicalInsights.edited : response ? t.clinicalInsights.generated : t.clinicalInsights.readyToGenerate}
-            </span>
-            <span>{response.length} {t.clinicalInsights.chars}</span>
-          </div>
-        </div>
-      </div>
-    )}
-
     {/* Expanded overlay for prompt */}
     {isPromptExpanded && (
       <div 
-        className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col"
+        className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm flex flex-col"
         onClick={promptExpandable.collapse}
       >
         {/* Floating minimize button */}
