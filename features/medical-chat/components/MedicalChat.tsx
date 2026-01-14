@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import { AlertCircle } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import { useModel, useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ChatMessageList } from "./ChatMessageList"
@@ -28,6 +29,7 @@ import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const model = useModel()
   const setModel = useAiConfigStore((state) => state.setModel)
   const openAiKey = useAiConfigStore((state) => state.apiKey)
@@ -81,22 +83,23 @@ export default function MedicalChat() {
   // API key validation
   const { hasApiKey } = useApiKeyValidation(model, openAiKey, geminiKey)
 
-  // Hide warning when API key is set
+  // Hide warning when API key is set or user is logged in
   useEffect(() => {
-    if (isAgentMode && hasApiKey()) {
+    if (isAgentMode && (hasApiKey() || !!user)) {
       agentMode.hideWarning()
     }
-  }, [isAgentMode, hasApiKey, agentMode])
+  }, [isAgentMode, hasApiKey, !!user, agentMode])
 
   // Handle agent mode toggle with API key check
   const handleAgentModeToggle = useCallback((enabled: boolean) => {
-    if (enabled && !hasApiKey()) {
+    // Only show warning if user is not logged in and has no API key
+    if (enabled && !hasApiKey() && !user) {
       agentMode.showWarning()
     } else {
       agentMode.hideWarning()
     }
     agentMode.setIsAgentMode(enabled)
-  }, [hasApiKey, agentMode])
+  }, [hasApiKey, user, agentMode])
 
   // Handlers
   const handleSend = useCallback(async () => {
