@@ -49,8 +49,9 @@ export class OpenAiService {
       stream: false,
     }
 
-    // Special handling for gpt-5-mini
-    if (request.modelId === 'gpt-5-mini') {
+    // Special handling for gpt-5-mini and gpt-5-nano
+    // Firebase proxy only supports temperature = 1 for these models
+    if (request.modelId === 'gpt-5-mini' || request.modelId === 'gpt-5-nano') {
       body.temperature = 1
     } else if (request.temperature !== undefined) {
       body.temperature = request.temperature

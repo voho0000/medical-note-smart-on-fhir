@@ -33,6 +33,7 @@ export interface CreateChatSessionDto {
   patientId: string
   messages: ChatMessage[]
   title?: string
+  locale?: string // User's language preference for title generation
 }
 
 export interface UpdateChatSessionDto {

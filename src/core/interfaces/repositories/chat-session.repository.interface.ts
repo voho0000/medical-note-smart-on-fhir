@@ -10,6 +10,8 @@ export interface IChatSessionRepository {
   
   update(chatId: string, userId: string, dto: UpdateChatSessionDto): Promise<void>
   
+  updateTitle(chatId: string, userId: string, title: string): Promise<void>
+  
   getById(chatId: string, userId: string): Promise<ChatSessionEntity | null>
   
   listByPatient(

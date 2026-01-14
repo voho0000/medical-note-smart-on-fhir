@@ -113,7 +113,7 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
       userId: dto.userId,
       fhirServerUrl: dto.fhirServerUrl,
       patientId: dto.patientId,
-      title: dto.title || this.generateDefaultTitle(dto.messages),
+      title: dto.title || this.generateDefaultTitle(dto.messages, dto.locale),
       summary: undefined,
       messages: dto.messages,
       createdAt: now,
@@ -129,6 +129,16 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
 
     await setDoc(chatRef, firestoreDoc)
     return entity
+  }
+
+  async updateTitle(chatId: string, userId: string, title: string): Promise<void> {
+    if (!db) throw new Error('Firestore not initialized')
+
+    const chatRef = doc(db, 'users', userId, this.COLLECTION_NAME, chatId)
+    await updateDoc(chatRef, {
+      title,
+      updatedAt: Timestamp.now(),
+    })
   }
 
   async update(chatId: string, userId: string, dto: UpdateChatSessionDto): Promise<void> {
@@ -237,13 +247,18 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
     })
   }
 
-  private generateDefaultTitle(messages: any[]): string {
+  private generateDefaultTitle(messages: any[], locale?: string): string {
     if (messages.length === 0) return 'New Conversation'
     
     const firstUserMessage = messages.find(m => m.role === 'user')
     if (!firstUserMessage) return 'New Conversation'
     
     const { content } = firstUserMessage
-    return content.length > 50 ? content.substring(0, 50) + '...' : content
+    
+    // Use different max length based on user's language preference (matching ChatGPT UX)
+    // Chinese: 20 chars, English: 40 chars
+    const isChinese = locale === 'zh-TW'
+    const maxLength = isChinese ? 20 : 40
+    return content.length > maxLength ? content.substring(0, maxLength) + '...' : content
   }
 }

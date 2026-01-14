@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/src/application/providers/auth.provider'
+import { useLanguage } from '@/src/application/providers/language.provider'
 import { useChatStore } from '@/src/application/stores/chat.store'
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
 import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
@@ -24,6 +25,7 @@ export function useAutoSaveChat({
   enabled = true
 }: UseAutoSaveChatOptions) {
   const { user } = useAuth()
+  const { locale } = useLanguage()
   const messages = useChatStore(state => state.messages)
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const setCurrentSessionId = useChatHistoryStore(state => state.setCurrentSessionId)
@@ -93,6 +95,7 @@ export function useAutoSaveChat({
           fhirServerUrl,
           patientId,
           messages: currentMessages,
+          locale,
         })
 
         setCurrentSessionId(newSession.id)

@@ -28,6 +28,7 @@ import { useApiKeyValidation } from "../hooks/useApiKeyValidation"
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts"
 import { useFhirContext } from "@/src/application/hooks/chat/use-fhir-context.hook"
 import { useAutoSaveChat } from "@/src/application/hooks/chat/use-auto-save-chat.hook"
+import { useSmartTitleGeneration } from "@/src/application/hooks/chat/use-smart-title-generation.hook"
 import { ChatHistoryDrawer } from "@/features/chat-history"
 
 export default function MedicalChat() {
@@ -64,6 +65,9 @@ export default function MedicalChat() {
     debounceMs: 5000,
     enabled: !!user && !!patientId && !!fhirServerUrl,
   })
+
+  // AI smart title generation (after first response)
+  useSmartTitleGeneration()
 
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
