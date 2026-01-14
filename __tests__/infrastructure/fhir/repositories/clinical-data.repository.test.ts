@@ -32,14 +32,16 @@ describe('FhirClinicalDataRepository', () => {
       const mockEncounter = { id: 'enc-1', status: 'finished' }
 
       mockFhirClient.request.mockImplementation((url: string) => {
-        if (url.includes('Condition')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.includes('MedicationRequest')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.includes('AllergyIntolerance')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.includes('Observation') && url.includes('laboratory')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.includes('Observation') && url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.includes('DiagnosticReport')) return Promise.resolve({ entry: [{ resource: { resourceType: 'DiagnosticReport' } }] })
-        if (url.includes('Procedure')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.includes('Encounter')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Condition')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('AllergyIntolerance')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Observation') && url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Observation') && !url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('DiagnosticReport')) return Promise.resolve({ entry: [{ resource: { resourceType: 'DiagnosticReport' } }] })
+        if (url.startsWith('Procedure')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Encounter')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('DocumentReference')) return Promise.resolve({ entry: [] })
+        if (url.startsWith('Composition')) return Promise.resolve({ entry: [] })
         return Promise.resolve({ entry: [] })
       })
 
@@ -178,7 +180,7 @@ describe('FhirClinicalDataRepository', () => {
   })
 
   describe('fetchObservations', () => {
-    it('should fetch laboratory observations', async () => {
+    it('should fetch all observations', async () => {
       const mockResponse = {
         entry: [{ resource: { id: 'obs-1', code: { text: 'Glucose' } } }]
       }
@@ -189,21 +191,8 @@ describe('FhirClinicalDataRepository', () => {
 
       expect(result).toHaveLength(1)
       expect(mockFhirClient.request).toHaveBeenCalledWith(
-        expect.stringContaining('category=laboratory')
+        expect.stringContaining('Observation?patient=patient-123')
       )
-    })
-
-    it('should fallback to all observations if no laboratory results', async () => {
-      const mockResponse = { entry: [{ resource: { id: 'obs-1' } }] }
-      mockFhirClient.request
-        .mockResolvedValueOnce({ entry: [] })
-        .mockResolvedValueOnce(mockResponse)
-      mockMapper.toObservation.mockReturnValue({ id: 'obs-1', code: { text: 'Test' }, status: 'final' })
-
-      const result = await repository.fetchObservations('patient-123')
-
-      expect(result).toHaveLength(1)
-      expect(mockFhirClient.request).toHaveBeenCalledTimes(2)
     })
 
     it('should return empty array on error', async () => {

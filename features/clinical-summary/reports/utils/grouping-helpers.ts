@@ -23,14 +23,27 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
     if (concept?.coding) {
       for (const coding of concept.coding) {
         const system = coding.system?.toLowerCase() || ''
-        const code = coding.code?.toUpperCase() || ''
+        const code = coding.code?.toLowerCase() || ''
+        
+        // Check for observation-category system (procedure category)
+        if (system.includes('observation-category')) {
+          if (code === 'procedure') {
+            return 'procedures'
+          }
+          if (code === 'laboratory') {
+            return 'lab'
+          }
+          if (code === 'imaging') {
+            return 'imaging'
+          }
+        }
         
         // Check v2-0074 Diagnostic Service Section ID
         if (system.includes('v2-0074')) {
-          if (code === 'LAB' || code === 'HM' || code === 'CH' || code === 'MB') {
+          if (code === 'lab' || code === 'hm' || code === 'ch' || code === 'mb') {
             return 'lab'
           }
-          if (code === 'RAD' || code === 'IMG' || code === 'CT' || code === 'MR' || code === 'US') {
+          if (code === 'rad' || code === 'img' || code === 'ct' || code === 'mr' || code === 'us') {
             return 'imaging'
           }
         }
@@ -64,6 +77,10 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
   // Fallback to keyword matching (case-insensitive)
   const tokens = collectCategoryTokens(category)
   const tokenArray = Array.from(tokens)
+  
+  if (tokenArray.some((token) => token === "procedure")) {
+    return "procedures"
+  }
   
   if (tokenArray.some((token) => 
     token.includes("lab") || 

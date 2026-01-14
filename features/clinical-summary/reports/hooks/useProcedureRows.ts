@@ -4,11 +4,34 @@ import type { Observation, Row } from '../types'
 import { getCodeableConceptText, getConceptText, formatDate } from '../utils/fhir-helpers'
 import { useLanguage } from "@/src/application/providers/language.provider"
 
-export function useProcedureRows(procedures: any[]) {
+export function useProcedureRows(procedures: any[], observations: any[] = []) {
   const { t } = useLanguage()
   
   return useMemo(() => {
     if (!Array.isArray(procedures)) return []
+
+    // Debug: log all observations and their categories
+    console.log('[useProcedureRows] total observations received:', observations.length)
+    observations.slice(0, 5).forEach((obs: any, i: number) => {
+      console.log(`[useProcedureRows] obs[${i}] category:`, obs?.category, 'code:', obs?.code?.text || obs?.code?.coding?.[0]?.display)
+    })
+    
+    // Filter observations with category "procedure"
+    const procedureObservations = observations.filter((obs: any) => {
+      if (!obs?.category) return false
+      const categories = Array.isArray(obs.category) ? obs.category : [obs.category]
+      return categories.some((cat: any) => {
+        const coding = cat?.coding?.[0]
+        const isProcedure = coding?.code?.toLowerCase() === 'procedure'
+        if (isProcedure) {
+          console.log('[useProcedureRows] Found procedure observation:', obs?.code?.text || obs?.code?.coding?.[0]?.display, 'encounter:', obs?.encounter?.reference)
+        }
+        return isProcedure
+      })
+    })
+    
+    console.log('[useProcedureRows] procedureObservations:', procedureObservations.length, procedureObservations)
+    console.log('[useProcedureRows] procedures:', procedures.length, procedures)
 
     return procedures.map((procedure: any) => {
       const title = getCodeableConceptText(procedure?.code) || "Procedure"
@@ -89,13 +112,25 @@ export function useProcedureRows(procedures: any[]) {
         component: components,
       }
 
+      // Find related observations with category "procedure" that share the same encounter
+      const procEncounter = procedure?.encounter?.reference
+      console.log('[useProcedureRows] procedure encounter:', procEncounter, 'title:', title)
+      
+      const relatedObservations = procedureObservations.filter((obs: any) => {
+        const obsEncounter = obs?.encounter?.reference
+        console.log('[useProcedureRows] comparing obs encounter:', obsEncounter, 'with proc encounter:', procEncounter)
+        return obsEncounter && procEncounter && obsEncounter === procEncounter
+      })
+      
+      console.log('[useProcedureRows] relatedObservations for', title, ':', relatedObservations.length, relatedObservations)
+
       return {
         id: procedure?.id || `procedure-row-${Math.random().toString(36).slice(2, 10)}`,
         title,
         meta: `Procedure • ${procedure?.status || "—"} • ${formatDate(performed)}`,
-        obs: [observation],
+        obs: [observation, ...relatedObservations],
         group: "procedures" as const
       }
     })
-  }, [procedures, t])
+  }, [procedures, observations, t])
 }

@@ -54,7 +54,8 @@ export class ClinicalDataMapper {
       component: fhirResource.component,
       effectiveDateTime: fhirResource.effectiveDateTime,
       status: fhirResource.status,
-      category: fhirResource.category
+      category: fhirResource.category,
+      encounter: fhirResource.encounter
     }
   }
 

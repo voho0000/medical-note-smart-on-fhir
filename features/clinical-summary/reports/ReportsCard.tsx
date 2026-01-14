@@ -18,8 +18,38 @@ export function ReportsCard() {
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
 
   const { reportRows, seenIds } = useReportsData(diagnosticReports)
-  const orphanRows = useOrphanObservations(observations, seenIds)
-  const procedureRows = useProcedureRows(procedures)
+  const procedureRows = useProcedureRows(procedures, observations)
+  
+  // Mark procedure-category observations as seen so they don't appear as orphans
+  const procedureObsIds = useMemo(() => {
+    const ids = new Set<string>()
+    observations.forEach((obs: any) => {
+      if (!obs?.category || !obs?.id) return
+      const categories = Array.isArray(obs.category) ? obs.category : [obs.category]
+      const isProcedureObs = categories.some((cat: any) => {
+        const coding = cat?.coding?.[0]
+        return coding?.code?.toLowerCase() === 'procedure'
+      })
+      if (isProcedureObs && obs.encounter?.reference) {
+        // Check if this observation is linked to a procedure
+        const hasMatchingProcedure = procedures.some((proc: any) => 
+          proc?.encounter?.reference === obs.encounter.reference
+        )
+        if (hasMatchingProcedure) {
+          ids.add(obs.id)
+        }
+      }
+    })
+    return ids
+  }, [observations, procedures])
+  
+  const allSeenIds = useMemo(() => {
+    const combined = new Set(seenIds)
+    procedureObsIds.forEach(id => combined.add(id))
+    return combined
+  }, [seenIds, procedureObsIds])
+  
+  const orphanRows = useOrphanObservations(observations, allSeenIds)
 
   const rows: Row[] = useMemo(() => {
     const all = [...reportRows, ...orphanRows, ...procedureRows]

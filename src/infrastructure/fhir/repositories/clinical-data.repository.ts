@@ -100,15 +100,10 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchObservations(patientId: string): Promise<ObservationEntity[]> {
     try {
-      let response = await fhirClient.request(
-        `Observation?patient=${patientId}&category=laboratory&_count=200&_sort=-date`
+      // Fetch all observations (laboratory, procedure, etc.)
+      const response = await fhirClient.request(
+        `Observation?patient=${patientId}&_count=200&_sort=-date`
       )
-
-      if (!response?.entry?.length) {
-        response = await fhirClient.request(
-          `Observation?patient=${patientId}&_count=200&_sort=-date`
-        )
-      }
 
       return response.entry?.map((e: any) => ClinicalDataMapper.toObservation(e.resource)) || []
     } catch (error) {
