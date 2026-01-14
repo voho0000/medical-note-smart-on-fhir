@@ -12,7 +12,7 @@ import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
 import { ChatModeSelector } from "./ChatModeSelector"
 import { ChatInputArea } from "./ChatInputArea"
-import { ChatExpandedOverlay } from "./ChatExpandedOverlay"
+import { ExpandedOverlay } from '@/src/shared/components/ExpandedOverlay'
 import { useStreamingChat } from "../hooks/useStreamingChat"
 import { useAgentChat } from "../hooks/useAgentChat"
 import { useVoiceRecording } from "../hooks/useVoiceRecording"
@@ -203,9 +203,10 @@ export default function MedicalChat() {
   // Render expanded overlay or normal view
   if (isExpanded) {
     return (
-      <ChatExpandedOverlay
-        chatContent={chatContent}
+      <ExpandedOverlay
+        content={chatContent}
         onCollapse={expandable.collapse}
+        placeholderText={t.chat.expandedMode}
       />
     )
   }

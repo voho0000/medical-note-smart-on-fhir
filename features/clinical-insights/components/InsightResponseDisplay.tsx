@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Maximize2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { MarkdownRenderer } from './MarkdownRenderer'
+import { MarkdownRenderer } from '@/src/shared/components/MarkdownRenderer'
 
 interface InsightResponseDisplayProps {
   response: string

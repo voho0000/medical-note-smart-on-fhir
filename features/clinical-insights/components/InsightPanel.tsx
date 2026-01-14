@@ -7,12 +7,12 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
-import { InsightExpandedOverlay } from './InsightExpandedOverlay'
+import { ExpandedOverlay } from '@/src/shared/components/ExpandedOverlay'
+import { MarkdownRenderer } from '@/src/shared/components/MarkdownRenderer'
 import { InsightPanelHeader } from './InsightPanelHeader'
 import { InsightPromptEditor } from './InsightPromptEditor'
 import { InsightPromptExpandedOverlay } from './InsightPromptExpandedOverlay'
 import { InsightResponseDisplay } from './InsightResponseDisplay'
-import { MarkdownRenderer } from './MarkdownRenderer'
 import type { InsightPanelProps } from '../types'
 
 export function InsightPanel({
@@ -89,8 +89,8 @@ export function InsightPanel({
   // Render expanded overlay or normal view
   if (isExpanded) {
     return (
-      <InsightExpandedOverlay
-        insightContent={responseContent}
+      <ExpandedOverlay
+        content={responseContent}
         onCollapse={responseExpandable.collapse}
         title={title}
       />
