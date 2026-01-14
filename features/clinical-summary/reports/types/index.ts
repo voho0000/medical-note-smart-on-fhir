@@ -11,7 +11,7 @@ export type {
   Procedure,
 } from '@/src/shared/types/fhir.types'
 
-export type ReportGroup = "lab" | "imaging" | "procedures" | "other"
+export type ReportGroup = "lab" | "imaging" | "procedures" | "vitals" | "other"
 
 export type Row = { 
   id: string

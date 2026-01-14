@@ -25,7 +25,7 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
         const system = coding.system?.toLowerCase() || ''
         const code = coding.code?.toLowerCase() || ''
         
-        // Check for observation-category system (procedure category)
+        // Check for observation-category system
         if (system.includes('observation-category')) {
           if (code === 'procedure') {
             return 'procedures'
@@ -35,6 +35,9 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
           }
           if (code === 'imaging') {
             return 'imaging'
+          }
+          if (code === 'vital-signs') {
+            return 'vitals'
           }
         }
         
@@ -80,6 +83,13 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
   
   if (tokenArray.some((token) => token === "procedure")) {
     return "procedures"
+  }
+  
+  if (tokenArray.some((token) => 
+    token.includes("vital") || 
+    token === "vital-signs"
+  )) {
+    return "vitals"
   }
   
   if (tokenArray.some((token) => 

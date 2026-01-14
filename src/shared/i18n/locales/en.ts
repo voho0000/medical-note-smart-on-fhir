@@ -119,6 +119,7 @@ export const en = {
       all: 'All',
       lab: 'Labs',
       imaging: 'Imaging',
+      vitals: 'Vitals',
       procedures: 'Procedures',
     },
     labels: {

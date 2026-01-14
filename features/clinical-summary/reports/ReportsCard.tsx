@@ -71,13 +71,15 @@ export function ReportsCard() {
       { value: "all", label: `${reportTabs.all} (${groupedRows.all.length})`, rows: groupedRows.all },
       { value: "lab", label: `${reportTabs.lab} (${groupedRows.lab.length})`, rows: groupedRows.lab },
       { value: "imaging", label: `${reportTabs.imaging} (${groupedRows.imaging.length})`, rows: groupedRows.imaging },
+      { value: "vitals", label: `${reportTabs.vitals} (${groupedRows.vitals.length})`, rows: groupedRows.vitals },
       { value: "procedures", label: `${reportTabs.procedures} (${groupedRows.procedures.length})`, rows: groupedRows.procedures },
     ]
-    // Always show All, Lab, Imaging tabs; only hide Procedures if empty
+    // Always show All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
     return configs.filter((config) => 
       config.value === "all" || 
       config.value === "lab" || 
       config.value === "imaging" || 
+      config.value === "vitals" ||
       config.rows.length > 0
     )
   }, [groupedRows, t])

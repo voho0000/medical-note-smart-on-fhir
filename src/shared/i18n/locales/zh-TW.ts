@@ -121,6 +121,7 @@ export const zhTW = {
       all: '全部',
       lab: '檢驗',
       imaging: '影像',
+      vitals: '生命徵象',
       procedures: '處置',
     },
     labels: {
