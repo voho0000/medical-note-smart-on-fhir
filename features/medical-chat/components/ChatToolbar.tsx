@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { Plus, Trash2, FileText, Settings, ChevronDown } from "lucide-react"
+import { ChatHistoryDrawer } from "@/features/chat-history"
 
 interface Template {
   id: string
@@ -47,6 +48,7 @@ export function ChatToolbar({
   
   return (
     <div className="flex items-center gap-1">
+      <ChatHistoryDrawer />
       <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
         <Button variant="ghost" size="sm" onClick={onInsertContext} className="h-7 gap-1 px-1.5 text-xs">
           <Plus className="h-3 w-3" />

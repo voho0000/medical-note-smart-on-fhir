@@ -466,6 +466,20 @@ export const en = {
     deepModeFeatures: '• Auto-query FHIR patient data\n• Use Perplexity AI for latest medical info\n• AI Agent autonomous query strategy',
   },
 
+  chatHistory: {
+    title: 'Chat History',
+    description: 'View your previous conversations',
+    conversationsFor: 'Conversations for',
+    newChat: 'New Chat',
+    noHistory: 'No chat history yet',
+    startConversation: 'Start a conversation to see it here',
+    confirmDelete: 'Delete this conversation?',
+    justNow: 'Just now',
+    minutesAgo: 'm ago',
+    hoursAgo: 'h ago',
+    daysAgo: 'd ago',
+  },
+
   auth: (() => {
     const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
     return {

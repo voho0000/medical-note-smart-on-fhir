@@ -324,6 +324,9 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
   const handleReset = useCallback(() => {
     abortControllerRef.current?.abort()
     setChatMessages([])
+    // Clear current session ID to start a new conversation
+    const { setCurrentSessionId } = require('@/src/application/stores/chat-history.store').useChatHistoryStore.getState()
+    setCurrentSessionId(null)
   }, [setChatMessages])
 
   const stopGeneration = useCallback(() => {

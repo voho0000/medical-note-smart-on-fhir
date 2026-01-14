@@ -468,6 +468,20 @@ export const zhTW = {
     deepModeFeatures: '• 自動查詢 FHIR 病人資料\n• 使用 Perplexity AI 查詢最新醫學資訊\n• AI Agent 自主決策查詢策略',
   },
 
+  chatHistory: {
+    title: '對話紀錄',
+    description: '查看您的歷史對話',
+    conversationsFor: '對話紀錄：',
+    newChat: '新對話',
+    noHistory: '尚無對話紀錄',
+    startConversation: '開始對話後將顯示在這裡',
+    confirmDelete: '確定要刪除此對話嗎？',
+    justNow: '剛剛',
+    minutesAgo: '分鐘前',
+    hoursAgo: '小時前',
+    daysAgo: '天前',
+  },
+
   auth: (() => {
     const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
     return {

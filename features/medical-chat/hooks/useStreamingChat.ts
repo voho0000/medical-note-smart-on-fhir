@@ -9,7 +9,12 @@ import { getUserErrorMessage } from "@/src/core/errors"
 import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
 import { addMessagePair } from "@/src/shared/utils/chat-message.utils"
 
-export function useStreamingChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
+export function useStreamingChat(
+  systemPrompt: string, 
+  modelId: string, 
+  onInputClear?: () => void,
+  onStreamComplete?: () => void
+) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
   const { locale } = useLanguage()
@@ -74,10 +79,24 @@ export function useStreamingChat(systemPrompt: string, modelId: string, onInputC
             )
           },
         })
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return
         
-        const errorMessage = getUserErrorMessage(err)
+        // Trigger save after streaming completes
+        console.log('[Streaming] Completed, onStreamComplete exists:', !!onStreamComplete)
+        if (onStreamComplete) {
+          console.log('[Streaming] Calling onStreamComplete callback')
+          try {
+            await onStreamComplete()
+            console.log('[Streaming] onStreamComplete callback completed')
+          } catch (error) {
+            console.error('[Streaming] onStreamComplete callback failed:', error)
+          }
+        } else {
+          console.warn('[Streaming] No onStreamComplete callback provided')
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return
+        
+        const errorMessage = getUserErrorMessage(error)
         const errorObj = new Error(errorMessage)
         setError(errorObj)
         
@@ -86,12 +105,15 @@ export function useStreamingChat(systemPrompt: string, modelId: string, onInputC
         )
       }
     },
-    [chatMessages, modelId, setChatMessages, systemPrompt, ai, onInputClear]
+    [chatMessages, modelId, setChatMessages, systemPrompt, ai, onInputClear, onStreamComplete]
   )
 
   const handleReset = useCallback(() => {
     ai.stop()
     setChatMessages([])
+    // Clear current session ID to start a new conversation
+    const { setCurrentSessionId } = require('@/src/application/stores/chat-history.store').useChatHistoryStore.getState()
+    setCurrentSessionId(null)
   }, [setChatMessages, ai])
 
   const stopGeneration = useCallback(() => {

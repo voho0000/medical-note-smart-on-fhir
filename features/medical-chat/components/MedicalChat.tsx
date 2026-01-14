@@ -26,6 +26,8 @@ import { useClinicalContext } from "@/src/application/hooks/use-clinical-context
 import { useTextareaAutoResize } from "../hooks/useTextareaAutoResize"
 import { useApiKeyValidation } from "../hooks/useApiKeyValidation"
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts"
+import { useFhirContext } from "@/src/application/hooks/chat/use-fhir-context.hook"
+import { useAutoSaveChat } from "@/src/application/hooks/chat/use-auto-save-chat.hook"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -50,6 +52,18 @@ export default function MedicalChat() {
   // Header visibility state (default collapsed for more chat space)
   const [showHeader, setShowHeader] = useState(false)
   
+  // FHIR context for chat history (patient ID and server URL)
+  const { patientId, patientName, fhirServerUrl } = useFhirContext()
+  
+  // Auto-save chat to Firestore (debounced)
+  // Note: patientName is only used for UI display, never stored in Firestore
+  const { forceSave } = useAutoSaveChat({
+    patientId: patientId || undefined,
+    fhirServerUrl: fhirServerUrl || undefined,
+    debounceMs: 5000,
+    enabled: !!user && !!patientId && !!fhirServerUrl,
+  })
+
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
     input.clear()
@@ -58,7 +72,7 @@ export default function MedicalChat() {
     }
   }, [input])
   
-  const normalChat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight)
+  const normalChat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
   const agentChat = useAgentChat(systemPrompt, model, clearInputAndResetHeight)
   const chat = isAgentMode ? agentChat : normalChat
   
