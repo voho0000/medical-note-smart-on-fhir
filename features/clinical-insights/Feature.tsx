@@ -30,14 +30,11 @@ export default function ClinicalInsightsFeature() {
 
   const [context, setContext] = useState("")
   const [activeTabId, setActiveTabId] = useState<string>("")
-  const [isEditMode, setIsEditMode] = useState(false)
   
   const panels = configPanels
 
-  // Prompts management (no state ownership)
-  const { prompts, handlePromptChange } = useInsightPanels(panels, (panelId, prompt) => {
-    updatePanel(panelId, { prompt })
-  })
+  // Prompts management (temporary local state, not saved)
+  const { prompts, handlePromptChange } = useInsightPanels(panels)
 
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
@@ -105,7 +102,6 @@ export default function ClinicalInsightsFeature() {
         props: {
           panelId: panel.id,
           title: panel.title,
-          subtitle: panel.subtitle,
           prompt: prompts[panel.id] ?? panel.prompt,
           onPromptChange: (value: string) => handlePromptChange(panel.id, value),
           onRegenerate: () => runPanel(panel.id, { force: true }),
@@ -121,11 +117,10 @@ export default function ClinicalInsightsFeature() {
           modelMetadata: responseEntry.metadata ?? null,
           fallbackModelId: model,
           autoGenerate: panel.autoGenerate ?? false,
-          isEditMode,
         },
       }
     })
-  }, [canGenerate, hasData, handlePromptChange, handleResponseChange, clearResponse, model, panelStatus, panels, prompts, responses, runPanel, stopPanel, isEditMode])
+  }, [canGenerate, hasData, handlePromptChange, handleResponseChange, clearResponse, model, panelStatus, panels, prompts, responses, runPanel, stopPanel])
 
   return (
     <ScrollArea className="h-full pr-3">
@@ -136,8 +131,6 @@ export default function ClinicalInsightsFeature() {
             <TabManagementToolbar 
               currentTabId={activeTabId} 
               onTabChange={setActiveTabId}
-              isEditMode={isEditMode}
-              onEditModeChange={setIsEditMode}
             />
             <Tabs value={activeTabId} onValueChange={setActiveTabId} className="space-y-4">
             <TabsList className="grid w-full gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length}, minmax(0, 1fr))` }}>

@@ -8,14 +8,15 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { ModelAndKeySettings } from "./components/ApiKeyField"
 import { ChatTemplatesSettings } from "./components/ChatTemplatesSettings"
+import { ClinicalInsightsSettings } from "./components/ClinicalInsightsSettings"
 
 export function SettingsFeature() {
   const { t } = useLanguage()
   const { settingsTab, setActiveTab, activeTab } = useRightPanel()
 
-  // Reset to 'ai' tab when manually navigating to settings (not from manage templates button)
+  // Reset to 'ai' tab when manually navigating to settings
   useEffect(() => {
-    if (activeTab === 'settings' && settingsTab !== 'templates') {
+    if (activeTab === 'settings' && settingsTab !== 'templates' && settingsTab !== 'insights') {
       setActiveTab('settings', 'ai')
     }
   }, [activeTab])
@@ -23,9 +24,10 @@ export function SettingsFeature() {
   return (
     <div className="space-y-4">
       <Tabs value={settingsTab} onValueChange={(value) => setActiveTab('settings', value)} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
+        <TabsList className="grid w-full grid-cols-3 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
           <TabsTrigger value="ai" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.aiPreferences}</TabsTrigger>
           <TabsTrigger value="templates" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.chatTemplates}</TabsTrigger>
+          <TabsTrigger value="insights" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.clinicalInsightsTabs}</TabsTrigger>
         </TabsList>
         <TabsContent value="ai" className="space-y-6">
           <Card>
@@ -38,6 +40,13 @@ export function SettingsFeature() {
           <Card>
             <CardContent className="pt-6">
               <ChatTemplatesSettings />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="insights" className="space-y-4">
+          <Card>
+            <CardContent className="pt-6">
+              <ClinicalInsightsSettings />
             </CardContent>
           </Card>
         </TabsContent>

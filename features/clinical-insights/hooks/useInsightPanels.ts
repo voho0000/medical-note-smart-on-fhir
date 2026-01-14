@@ -5,7 +5,7 @@
  * State ownership: Does NOT own responses or panelStatus
  * Those are owned by useInsightGeneration
  */
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 interface Panel {
   id: string
@@ -15,20 +15,24 @@ interface Panel {
 }
 
 export function useInsightPanels(panels: Panel[], onPromptUpdate?: (panelId: string, prompt: string) => void) {
-  // Resolve prompts from panels configuration
+  // Local state for temporary prompt edits
+  const [localPrompts, setLocalPrompts] = useState<Record<string, string>>({})
+
+  // Resolve prompts: use local edits if available, otherwise use panel defaults
   const resolvedPrompts = useMemo(() => {
     return panels.reduce<Record<string, string>>((acc, panel) => {
-      acc[panel.id] = panel.prompt
+      acc[panel.id] = localPrompts[panel.id] ?? panel.prompt
       return acc
     }, {})
-  }, [panels])
+  }, [panels, localPrompts])
 
-  // Handle prompt changes (delegates to parent)
+  // Handle prompt changes (stores locally, does not persist)
   const handlePromptChange = useCallback((panelId: string, value: string) => {
-    if (onPromptUpdate) {
-      onPromptUpdate(panelId, value)
-    }
-  }, [onPromptUpdate])
+    setLocalPrompts(prev => ({
+      ...prev,
+      [panelId]: value
+    }))
+  }, [])
 
   return {
     prompts: resolvedPrompts,

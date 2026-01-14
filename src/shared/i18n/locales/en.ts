@@ -333,7 +333,9 @@ export const en = {
     promptPlaceholderInsight: 'Describe what this insight should produce using the available clinical context.',
     addTab: 'Add tab',
     resetToDefaults: 'Reset to defaults',
-    tabsInUse: 'tabs in use. Edits are saved to this browser.',
+    tabsInUse: 'tabs in use',
+    savedToAccount: 'Saved to account',
+    savedToBrowser: 'Saved to browser',
     clinicalInsightsSettingsTitle: 'Clinical Insights Tabs',
     clinicalInsightsSettingsDesc: 'Configure AI-generated insight panels displayed alongside patient data.',
     clinicalInsightsLanguageWarning: 'Note: Modified tabs will not automatically update when switching languages. Reset to defaults to see language-specific tabs.',
@@ -373,6 +375,8 @@ export const en = {
     autoGenerateTooltip: 'When enabled, this insight will automatically generate when you enter the Clinical Insights page with patient data loaded. Disable to manually trigger generation only when needed.',
     languageWarning: 'Note: Modified tabs will not automatically update when switching languages. Reset to defaults to see language-specific tabs.',
     manageModels: 'Manage Models',
+    temporaryEditHint: 'This is a temporary edit and will not be saved.',
+    goToSettings: 'Go to Settings for permanent changes →',
   },
 
   recording: {

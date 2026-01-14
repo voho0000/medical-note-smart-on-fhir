@@ -335,7 +335,9 @@ export const zhTW = {
     promptPlaceholderInsight: '描述此洞察應使用可用的臨床資料產生什麼內容。',
     addTab: '新增標籤',
     resetToDefaults: '重設為預設',
-    tabsInUse: '個標籤使用中。編輯會儲存到此瀏覽器。',
+    tabsInUse: '個標籤使用中',
+    savedToAccount: '儲存至帳號',
+    savedToBrowser: '儲存至瀏覽器',
     clinicalInsightsSettingsTitle: '臨床洞察標籤',
     clinicalInsightsSettingsDesc: '設定與病人資料一起顯示的 AI 生成洞察面板。',
     clinicalInsightsLanguageWarning: '注意：修改過的標籤在切換語言時不會自動更新。重設為預設值以查看對應語言的標籤。',
@@ -375,6 +377,8 @@ export const zhTW = {
     autoGenerateTooltip: '啟用時，進入臨床洞察頁面且病患資料已載入時，此判讀分頁會自動產生。停用則僅在需要時手動觸發產生。',
     languageWarning: '注意：修改過的標籤在切換語言時不會自動更新。重設為預設值以查看對應語言的標籤。',
     manageModels: '管理模型',
+    temporaryEditHint: '這是臨時修改，不會被保存。',
+    goToSettings: '前往 Settings 永久修改 →',
   },
 
   recording: {
