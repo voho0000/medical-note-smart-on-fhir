@@ -169,6 +169,7 @@ export const zhTW = {
     insertTemplate: '插入範本',
     manageTemplates: '管理範本',
     manageModels: '管理模型',
+    settings: '設定',
     characters: '字元',
     latestVoiceInput: '最新語音輸入：',
     microphoneHint: '點擊麥克風進行語音輸入，然後修改或傳送您的訊息。',

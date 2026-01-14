@@ -98,7 +98,7 @@ export function ChatToolbar({
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" className="h-7 gap-1 px-1.5 text-xs border rounded-md bg-muted/30">
             <Settings className="h-3 w-3" />
-            Settings
+            {t.chat.settings}
             <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>

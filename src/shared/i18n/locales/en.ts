@@ -167,6 +167,7 @@ export const en = {
     insertTemplate: 'Template',
     manageTemplates: 'Templates',
     manageModels: 'Models',
+    settings: 'Settings',
     characters: 'characters',
     latestVoiceInput: 'Latest voice input:',
     microphoneHint: 'Tap the microphone to dictate, then refine or send your message.',
