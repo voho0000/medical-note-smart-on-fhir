@@ -2,6 +2,15 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { useLanguage } from "./language.provider"
+import { useAuth } from "./auth.provider"
+import { 
+  getUserTemplates, 
+  saveTemplate, 
+  deleteTemplate, 
+  subscribeToTemplates,
+  batchSaveTemplates,
+  type PromptTemplate as FirestoreTemplate
+} from "@/src/infrastructure/firebase/template-sync"
 
 type PromptTemplate = {
   id: string
@@ -86,58 +95,112 @@ function getDefaultTemplates(language: 'en' | 'zh-TW' = 'en'): PromptTemplate[] 
 
 export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
+  const { user } = useAuth()
   const [templates, setTemplates] = useState<PromptTemplate[]>(() => getDefaultTemplates())
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomTemplates, setIsCustomTemplates] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
+  // Load templates from Firestore (for logged-in users) or localStorage
   useEffect(() => {
     if (typeof window === "undefined") return
     if (hasLoadedFromStorage) return
     
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY)
-      if (!stored) {
-        const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
-        setTemplates(getDefaultTemplates(currentLang))
-        setIsCustomTemplates(false)
-        setHasLoadedFromStorage(true)
-        return
-      }
-      const parsed = JSON.parse(stored)
-      if (!Array.isArray(parsed)) return
-      const sanitized = parsed.reduce<PromptTemplate[]>((acc, entry) => {
-        if (!entry || typeof entry !== "object") return acc
-        const candidate = entry as Record<string, unknown>
-        const label = typeof candidate.label === "string" ? candidate.label : ""
-        const content = typeof candidate.content === "string" ? candidate.content : ""
-
-        const template: PromptTemplate = {
-          id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
-          label: label || "Untitled Template",
-          content,
+    const loadTemplates = async () => {
+      // If user is logged in, load from Firestore
+      if (user?.uid) {
+        try {
+          const firestoreTemplates = await getUserTemplates(user.uid)
+          
+          if (firestoreTemplates.length > 0) {
+            setTemplates(firestoreTemplates.slice(0, MAX_TEMPLATES))
+            setIsCustomTemplates(true)
+            setHasLoadedFromStorage(true)
+            return
+          }
+          
+          // No Firestore templates, check if we should migrate from localStorage
+          const stored = window.localStorage.getItem(STORAGE_KEY)
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const sanitized = parsed.reduce<PromptTemplate[]>((acc, entry) => {
+                if (!entry || typeof entry !== "object") return acc
+                const candidate = entry as Record<string, unknown>
+                const template: PromptTemplate = {
+                  id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
+                  label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
+                  content: typeof candidate.content === "string" ? candidate.content : "",
+                }
+                if (typeof candidate.description === "string" && candidate.description.trim()) {
+                  template.description = candidate.description.trim()
+                }
+                acc.push(template)
+                return acc
+              }, [])
+              
+              // Migrate to Firestore
+              if (sanitized.length > 0) {
+                await batchSaveTemplates(user.uid, sanitized.slice(0, MAX_TEMPLATES))
+                setTemplates(sanitized.slice(0, MAX_TEMPLATES))
+                setIsCustomTemplates(true)
+                // Clear localStorage after migration
+                window.localStorage.removeItem(STORAGE_KEY)
+                setHasLoadedFromStorage(true)
+                return
+              }
+            }
+          }
+          
+          // No templates found, use defaults
+          const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
+          setTemplates(getDefaultTemplates(currentLang))
+          setIsCustomTemplates(false)
+        } catch (error) {
+          console.warn("Failed to load templates from Firestore", error)
         }
-
-        if (typeof candidate.description === "string" && candidate.description.trim()) {
-          template.description = candidate.description.trim()
-        }
-
-        acc.push(template)
-        return acc
-      }, [])
-
-      if (sanitized.length > 0) {
-        console.log('[Prompt Templates] Loaded', sanitized.length, 'templates from storage')
-        setTemplates(sanitized.slice(0, MAX_TEMPLATES))
-        setIsCustomTemplates(true)
       } else {
-        setHasLoadedFromStorage(true)
+        // Not logged in, use localStorage
+        try {
+          const stored = window.localStorage.getItem(STORAGE_KEY)
+          if (!stored) {
+            const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
+            setTemplates(getDefaultTemplates(currentLang))
+            setIsCustomTemplates(false)
+            setHasLoadedFromStorage(true)
+            return
+          }
+          const parsed = JSON.parse(stored)
+          if (!Array.isArray(parsed)) return
+          const sanitized = parsed.reduce<PromptTemplate[]>((acc, entry) => {
+            if (!entry || typeof entry !== "object") return acc
+            const candidate = entry as Record<string, unknown>
+            const template: PromptTemplate = {
+              id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
+              label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
+              content: typeof candidate.content === "string" ? candidate.content : "",
+            }
+            if (typeof candidate.description === "string" && candidate.description.trim()) {
+              template.description = candidate.description.trim()
+            }
+            acc.push(template)
+            return acc
+          }, [])
+
+          if (sanitized.length > 0) {
+            setTemplates(sanitized.slice(0, MAX_TEMPLATES))
+            setIsCustomTemplates(true)
+          }
+        } catch (error) {
+          console.warn("Failed to load prompt templates from storage", error)
+        }
       }
-    } catch (error) {
-      console.warn("Failed to load prompt templates from storage", error)
+      
+      setHasLoadedFromStorage(true)
     }
     
-    setHasLoadedFromStorage(true)
-  }, [hasLoadedFromStorage, locale])
+    loadTemplates()
+  }, [hasLoadedFromStorage, user?.uid, locale])
   
   // Update templates when language changes (only if using default templates)
   useEffect(() => {
@@ -149,9 +212,25 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
     setTemplates(defaults)
   }, [isCustomTemplates, locale, hasLoadedFromStorage])
 
+  // Subscribe to real-time updates for logged-in users
+  useEffect(() => {
+    if (!user?.uid || !hasLoadedFromStorage) return
+    
+    const unsubscribe = subscribeToTemplates(user.uid, (updatedTemplates) => {
+      if (!isSyncing) {
+        setTemplates(updatedTemplates.slice(0, MAX_TEMPLATES))
+        setIsCustomTemplates(updatedTemplates.length > 0)
+      }
+    })
+    
+    return () => unsubscribe()
+  }, [user?.uid, hasLoadedFromStorage, isSyncing])
+  
+  // Persist to localStorage for non-logged-in users
   useEffect(() => {
     if (typeof window === "undefined") return
     if (!hasLoadedFromStorage) return
+    if (user?.uid) return // Don't use localStorage if logged in
     
     try {
       const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
@@ -175,41 +254,80 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.warn("Failed to persist prompt templates", error)
     }
-  }, [templates, hasLoadedFromStorage, locale])
+  }, [templates, hasLoadedFromStorage, locale, user?.uid])
 
-  const addTemplate = () => {
+  const addTemplate = async () => {
+    const newTemplate: PromptTemplate = {
+      id: generateTemplateId(),
+      label: "New Prompt Template",
+      description: "",
+      content: "",
+    }
+    
     setTemplates((prev) => {
       if (prev.length >= MAX_TEMPLATES) return prev
-      return [
-        ...prev,
-        {
-          id: generateTemplateId(),
-          label: "New Prompt Template",
-          description: "",
-          content: "",
-        },
-      ]
+      return [...prev, newTemplate]
     })
     setIsCustomTemplates(true)
+    
+    // Save to Firestore if logged in
+    if (user?.uid) {
+      setIsSyncing(true)
+      await saveTemplate(user.uid, newTemplate)
+      setIsSyncing(false)
+    }
   }
 
-  const updateTemplate = (id: string, patch: Partial<Omit<PromptTemplate, "id">>) => {
-    setTemplates((prev) => prev.map((template) => (template.id === id ? { ...template, ...patch, id } : template)))
+  const updateTemplate = async (id: string, patch: Partial<Omit<PromptTemplate, "id">>) => {
+    let updatedTemplate: PromptTemplate | undefined
+    
+    setTemplates((prev) => prev.map((template) => {
+      if (template.id === id) {
+        updatedTemplate = { ...template, ...patch, id }
+        return updatedTemplate
+      }
+      return template
+    }))
     setIsCustomTemplates(true)
+    
+    // Save to Firestore if logged in
+    if (user?.uid && updatedTemplate) {
+      setIsSyncing(true)
+      await saveTemplate(user.uid, updatedTemplate)
+      setIsSyncing(false)
+    }
   }
 
-  const removeTemplate = (id: string) => {
+  const removeTemplate = async (id: string) => {
     setTemplates((prev) => {
       if (prev.length <= 1) return prev
       return prev.filter((template) => template.id !== id)
     })
     setIsCustomTemplates(true)
+    
+    // Delete from Firestore if logged in
+    if (user?.uid) {
+      setIsSyncing(true)
+      await deleteTemplate(user.uid, id)
+      setIsSyncing(false)
+    }
   }
 
-  const resetTemplates = () => {
+  const resetTemplates = async () => {
     const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
-    setTemplates(getDefaultTemplates(currentLang))
+    const defaultTemplates = getDefaultTemplates(currentLang)
+    setTemplates(defaultTemplates)
     setIsCustomTemplates(false)
+    
+    // If logged in, delete all custom templates from Firestore
+    if (user?.uid) {
+      setIsSyncing(true)
+      const currentTemplates = templates
+      for (const template of currentTemplates) {
+        await deleteTemplate(user.uid, template.id)
+      }
+      setIsSyncing(false)
+    }
   }
 
   const value = useMemo(
