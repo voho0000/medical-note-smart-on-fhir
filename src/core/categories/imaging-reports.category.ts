@@ -2,42 +2,17 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { isWithinTimeRange, getMostRecentDate } from '../utils/date-filter.utils'
+import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { ImagingReportFilter } from '@/features/data-selection/components/DataFilters'
 
-const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
-  if (!dateString || range === 'all') return true
-  const date = new Date(dateString)
-  if (Number.isNaN(date.getTime())) return false
-  
-  const now = new Date()
-  const diffInMs = now.getTime() - date.getTime()
-  const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
-  
-  switch (range) {
-    case '1w': return diffInDays <= 7
-    case '1m': return diffInDays <= 30
-    case '3m': return diffInDays <= 90
-    case '6m': return diffInDays <= 180
-    case '1y': return diffInDays <= 365
-    default: return true
-  }
-}
-
-const getLatestByName = (reports: DiagnosticReport[]): DiagnosticReport[] => {
-  const byName = new Map<string, DiagnosticReport>()
-  
-  const sorted = [...reports].sort((a, b) => 
-    (b.effectiveDateTime || b.issued || '').localeCompare(a.effectiveDateTime || a.issued || '')
+// Helper to get latest imaging reports by name
+const getLatestImagingReports = (reports: DiagnosticReport[]): DiagnosticReport[] => {
+  return getLatestByName(
+    reports,
+    (report) => getCodeableConceptText(report.code),
+    (report) => getMostRecentDate(report.effectiveDateTime, report.issued)
   )
-  
-  sorted.forEach(report => {
-    const name = report.code?.text || 'Unknown'
-    if (!byName.has(name)) {
-      byName.set(name, report)
-    }
-  })
-  
-  return Array.from(byName.values())
 }
 
 export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
@@ -103,7 +78,7 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
     }
     
     if (filters.imagingReportVersion === 'latest') {
-      filtered = getLatestByName(filtered)
+      filtered = getLatestImagingReports(filtered)
     }
     
     return filtered.length
@@ -126,7 +101,7 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
     }
     
     if (filters.imagingReportVersion === 'latest') {
-      filtered = getLatestByName(filtered)
+      filtered = getLatestImagingReports(filtered)
     }
     
     const observations = allClinicalData?.observations || []

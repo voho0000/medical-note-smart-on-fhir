@@ -3,6 +3,8 @@ import type { DataCategory, ClinicalContextSection } from '../interfaces/data-ca
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory, inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
 import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
+import { isWithinTimeRange, getMostRecentDate } from '../utils/date-filter.utils'
+import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { LabReportFilter } from '@/features/data-selection/components/DataFilters'
 
 // Union type for lab data (can be DiagnosticReport or standalone Observation)
@@ -13,43 +15,21 @@ function isObservation(item: LabData): item is Observation {
   return (item as any).resourceType === 'Observation' || !!(item as Observation).valueQuantity || !!(item as Observation).valueString
 }
 
-const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
-  if (!dateString || range === 'all') return true
-  const date = new Date(dateString)
-  if (Number.isNaN(date.getTime())) return false
-  
-  const now = new Date()
-  const diffInMs = now.getTime() - date.getTime()
-  const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
-  
-  switch (range) {
-    case '1w': return diffInDays <= 7
-    case '1m': return diffInDays <= 30
-    case '3m': return diffInDays <= 90
-    case '6m': return diffInDays <= 180
-    case '1y': return diffInDays <= 365
-    default: return true
+// Helper to get date from either DiagnosticReport or Observation
+const getLabDataDate = (item: LabData): string | undefined => {
+  if (isObservation(item)) {
+    return item.effectiveDateTime
   }
+  return getMostRecentDate(item.effectiveDateTime, item.issued)
 }
 
-const getLatestByName = (items: LabData[]): LabData[] => {
-  const byName = new Map<string, LabData>()
-  
-  // Sort by date descending first
-  const sorted = [...items].sort((a, b) => {
-    const dateA = (a as DiagnosticReport).effectiveDateTime || (a as DiagnosticReport).issued || (a as Observation).effectiveDateTime || ''
-    const dateB = (b as DiagnosticReport).effectiveDateTime || (b as DiagnosticReport).issued || (b as Observation).effectiveDateTime || ''
-    return dateB.localeCompare(dateA)
-  })
-  
-  sorted.forEach(item => {
-    const name = item.code?.text || 'Unknown'
-    if (!byName.has(name)) {
-      byName.set(name, item)
-    }
-  })
-  
-  return Array.from(byName.values())
+// Helper to get latest lab data by name
+const getLatestLabData = (items: LabData[]): LabData[] => {
+  return getLatestByName(
+    items,
+    (item) => getCodeableConceptText(item.code),
+    getLabDataDate
+  )
 }
 
 export const labReportsCategory: DataCategory<LabData> = {
@@ -156,7 +136,7 @@ export const labReportsCategory: DataCategory<LabData> = {
     // Apply version filter - with safe access and default value
     const version = (filters?.labReportVersion as string) || 'latest'
     if (version === 'latest') {
-      filtered = getLatestByName(filtered)
+      filtered = getLatestLabData(filtered)
     }
     
     return filtered.length
@@ -185,7 +165,7 @@ export const labReportsCategory: DataCategory<LabData> = {
     // Apply version filter - with safe access and default value
     const version = (filters?.labReportVersion as string) || 'latest'
     if (version === 'latest') {
-      filtered = getLatestByName(filtered)
+      filtered = getLatestLabData(filtered)
     }
     
     // Get observations for reports

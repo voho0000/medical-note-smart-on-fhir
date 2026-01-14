@@ -1,48 +1,24 @@
 // Procedures Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Procedure } from '@/src/shared/types/fhir.types'
+import { isWithinTimeRange, getMostRecentDate } from '../utils/date-filter.utils'
+import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { ProcedureFilter } from '@/features/data-selection/components/DataFilters'
 
-const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
-  if (!dateString || range === 'all') return true
-  const date = new Date(dateString)
-  if (Number.isNaN(date.getTime())) return false
-  
-  const now = new Date()
-  const diffInMs = now.getTime() - date.getTime()
-  const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
-  
-  switch (range) {
-    case '1w': return diffInDays <= 7
-    case '1m': return diffInDays <= 30
-    case '3m': return diffInDays <= 90
-    case '6m': return diffInDays <= 180
-    case '1y': return diffInDays <= 365
-    default: return true
-  }
-}
-
 const getPerformedDate = (procedure: Procedure): string | undefined => {
-  return procedure.performedDateTime || 
-         procedure.performedPeriod?.end || 
-         procedure.performedPeriod?.start
+  return getMostRecentDate(
+    procedure.performedDateTime,
+    procedure.performedPeriod?.end,
+    procedure.performedPeriod?.start
+  )
 }
 
-const getLatestByName = (procedures: Procedure[]): Procedure[] => {
-  const byName = new Map<string, Procedure>()
-  
-  const sorted = [...procedures].sort((a, b) => 
-    (getPerformedDate(b) || '').localeCompare(getPerformedDate(a) || '')
+const getLatestProcedures = (procedures: Procedure[]): Procedure[] => {
+  return getLatestByName(
+    procedures,
+    (proc) => getCodeableConceptText(proc.code, 'Procedure'),
+    getPerformedDate
   )
-  
-  sorted.forEach(procedure => {
-    const name = procedure.code?.text || procedure.code?.coding?.[0]?.display || 'Procedure'
-    if (!byName.has(name)) {
-      byName.set(name, procedure)
-    }
-  })
-  
-  return Array.from(byName.values())
 }
 
 export const proceduresCategory: DataCategory<Procedure> = {
@@ -94,7 +70,7 @@ export const proceduresCategory: DataCategory<Procedure> = {
     }
     
     if (filters.procedureVersion === 'latest') {
-      filtered = getLatestByName(filtered)
+      filtered = getLatestProcedures(filtered)
     }
     
     return filtered.length
@@ -115,7 +91,7 @@ export const proceduresCategory: DataCategory<Procedure> = {
     }
     
     if (filters.procedureVersion === 'latest') {
-      filtered = getLatestByName(filtered)
+      filtered = getLatestProcedures(filtered)
     }
     
     const items = filtered.map(procedure => {

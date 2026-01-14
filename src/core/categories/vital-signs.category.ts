@@ -1,26 +1,9 @@
 // Vital Signs Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Observation } from '@/src/shared/types/fhir.types'
+import { isWithinTimeRange } from '../utils/date-filter.utils'
+import { getCodeableConceptText } from '../utils/data-grouping.utils'
 import { VitalSignsFilter } from '@/features/data-selection/components/DataFilters'
-
-const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
-  if (!dateString || range === 'all') return true
-  const date = new Date(dateString)
-  if (Number.isNaN(date.getTime())) return false
-  
-  const now = new Date()
-  const diffInMs = now.getTime() - date.getTime()
-  const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
-  
-  switch (range) {
-    case '1w': return diffInDays <= 7
-    case '1m': return diffInDays <= 30
-    case '3m': return diffInDays <= 90
-    case '6m': return diffInDays <= 180
-    case '1y': return diffInDays <= 365
-    default: return true
-  }
-}
 
 const getVitalSignType = (obs: Observation): string => {
   let type = obs.code?.text || obs.code?.coding?.[0]?.display
