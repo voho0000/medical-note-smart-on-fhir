@@ -25,7 +25,7 @@ export function SettingsFeature() {
       <Tabs value={settingsTab} onValueChange={(value) => setActiveTab('settings', value)} className="space-y-4">
         <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
           <TabsTrigger value="ai" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.aiPreferences}</TabsTrigger>
-          <TabsTrigger value="templates" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.promptTemplates}</TabsTrigger>
+          <TabsTrigger value="templates" className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.settings.chatTemplates}</TabsTrigger>
         </TabsList>
         <TabsContent value="ai" className="space-y-6">
           <Card>

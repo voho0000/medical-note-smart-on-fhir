@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
-import { usePromptTemplates } from "@/src/application/providers/prompt-templates.provider"
+import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 
 export function useTemplateSelector() {
-  const { templates } = usePromptTemplates()
+  const { templates } = useChatTemplates()
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("")
 
   const selectedTemplate = useMemo(() => {

@@ -1,4 +1,4 @@
-// Template Sync with Firestore
+// Chat Template Sync with Firestore
 import { 
   collection, 
   doc, 
@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
 
-export interface PromptTemplate {
+export interface ChatTemplate {
   id: string
   label: string
   description?: string
@@ -22,7 +22,7 @@ export interface PromptTemplate {
   updatedAt?: Date
 }
 
-interface FirestoreTemplate {
+interface FirestoreChatTemplate {
   id: string
   label: string
   description?: string
@@ -32,18 +32,18 @@ interface FirestoreTemplate {
 }
 
 /**
- * Get all templates for a user
+ * Get all chat templates for a user
  */
-export async function getUserTemplates(userId: string): Promise<PromptTemplate[]> {
+export async function getUserChatTemplates(userId: string): Promise<ChatTemplate[]> {
   if (!db) return []
 
   try {
-    const templatesRef = collection(db, 'users', userId, 'templates')
+    const templatesRef = collection(db, 'users', userId, 'chatTemplates')
     const q = query(templatesRef, orderBy('createdAt', 'asc'))
     const snapshot = await getDocs(q)
     
     return snapshot.docs.map(doc => {
-      const data = doc.data() as FirestoreTemplate
+      const data = doc.data() as FirestoreChatTemplate
       return {
         id: doc.id,
         label: data.label,
@@ -60,16 +60,16 @@ export async function getUserTemplates(userId: string): Promise<PromptTemplate[]
 }
 
 /**
- * Save or update a template
+ * Save or update a chat template
  */
-export async function saveTemplate(
+export async function saveChatTemplate(
   userId: string, 
-  template: PromptTemplate
+  template: ChatTemplate
 ): Promise<boolean> {
   if (!db) return false
 
   try {
-    const templateRef = doc(db, 'users', userId, 'templates', template.id)
+    const templateRef = doc(db, 'users', userId, 'chatTemplates', template.id)
     const now = Timestamp.now()
     
     await setDoc(templateRef, {
@@ -89,16 +89,16 @@ export async function saveTemplate(
 }
 
 /**
- * Delete a template
+ * Delete a chat template
  */
-export async function deleteTemplate(
+export async function deleteChatTemplate(
   userId: string, 
   templateId: string
 ): Promise<boolean> {
   if (!db) return false
 
   try {
-    const templateRef = doc(db, 'users', userId, 'templates', templateId)
+    const templateRef = doc(db, 'users', userId, 'chatTemplates', templateId)
     await deleteDoc(templateRef)
     return true
   } catch (error) {
@@ -108,20 +108,20 @@ export async function deleteTemplate(
 }
 
 /**
- * Subscribe to real-time template updates
+ * Subscribe to real-time chat template updates
  */
-export function subscribeToTemplates(
+export function subscribeToChatTemplates(
   userId: string,
-  onUpdate: (templates: PromptTemplate[]) => void
+  onUpdate: (templates: ChatTemplate[]) => void
 ): Unsubscribe {
   if (!db) return () => {}
 
-  const templatesRef = collection(db, 'users', userId, 'templates')
+  const templatesRef = collection(db, 'users', userId, 'chatTemplates')
   const q = query(templatesRef, orderBy('createdAt', 'asc'))
   
   return onSnapshot(q, (snapshot) => {
     const templates = snapshot.docs.map(doc => {
-      const data = doc.data() as FirestoreTemplate
+      const data = doc.data() as FirestoreChatTemplate
       return {
         id: doc.id,
         label: data.label,
@@ -138,20 +138,50 @@ export function subscribeToTemplates(
 }
 
 /**
- * Batch save multiple templates (for migration)
+ * Batch save multiple chat templates (for migration)
  */
-export async function batchSaveTemplates(
+export async function batchSaveChatTemplates(
   userId: string,
-  templates: PromptTemplate[]
+  templates: ChatTemplate[]
 ): Promise<boolean> {
   if (!db) return false
 
   try {
-    const promises = templates.map(template => saveTemplate(userId, template))
+    const promises = templates.map(template => saveChatTemplate(userId, template))
     await Promise.all(promises)
     return true
   } catch (error) {
     console.error('[Template Sync] Error batch saving templates:', error)
+    return false
+  }
+}
+
+/**
+ * Replace all chat templates (delete all existing, then save new ones)
+ */
+export async function replaceAllChatTemplates(
+  userId: string,
+  templates: ChatTemplate[]
+): Promise<boolean> {
+  if (!db) return false
+
+  try {
+    // First, get all existing templates
+    const existingTemplates = await getUserChatTemplates(userId)
+    
+    // Delete all existing templates
+    const deletePromises = existingTemplates.map(template => 
+      deleteChatTemplate(userId, template.id)
+    )
+    await Promise.all(deletePromises)
+    
+    // Then save new templates
+    const savePromises = templates.map(template => saveChatTemplate(userId, template))
+    await Promise.all(savePromises)
+    
+    return true
+  } catch (error) {
+    console.error('[Template Sync] Error replacing templates:', error)
     return false
   }
 }

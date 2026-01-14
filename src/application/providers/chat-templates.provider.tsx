@@ -4,31 +4,34 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { useLanguage } from "./language.provider"
 import { useAuth } from "./auth.provider"
 import { 
-  getUserTemplates, 
-  saveTemplate, 
-  deleteTemplate, 
-  subscribeToTemplates,
-  batchSaveTemplates,
-  type PromptTemplate as FirestoreTemplate
+  getUserChatTemplates, 
+  saveChatTemplate, 
+  deleteChatTemplate, 
+  subscribeToChatTemplates,
+  batchSaveChatTemplates,
+  replaceAllChatTemplates,
+  type ChatTemplate as FirestoreChatTemplate
 } from "@/src/infrastructure/firebase/template-sync"
 
-type PromptTemplate = {
+type ChatTemplate = {
   id: string
   label: string
   description?: string
   content: string
 }
 
-type PromptTemplatesContextValue = {
-  templates: PromptTemplate[]
+type ChatTemplatesContextValue = {
+  templates: ChatTemplate[]
   addTemplate: () => void
-  updateTemplate: (id: string, patch: Partial<Omit<PromptTemplate, "id">>) => void
+  updateTemplate: (id: string, patch: Partial<Omit<ChatTemplate, "id">>) => void
   removeTemplate: (id: string) => void
   resetTemplates: () => void
+  saveTemplates: () => Promise<void>
   maxTemplates: number
+  isSaving: boolean
 }
 
-const DEFAULT_TEMPLATES_EN: PromptTemplate[] = [
+const DEFAULT_TEMPLATES_EN: ChatTemplate[] = [
   {
     id: "summary",
     label: "Summarize Medical Information",
@@ -52,7 +55,7 @@ const DEFAULT_TEMPLATES_EN: PromptTemplate[] = [
   },
 ]
 
-const DEFAULT_TEMPLATES_ZH: PromptTemplate[] = [
+const DEFAULT_TEMPLATES_ZH: ChatTemplate[] = [
   {
     id: "summary",
     label: "醫療資訊摘要",
@@ -76,7 +79,7 @@ const DEFAULT_TEMPLATES_ZH: PromptTemplate[] = [
   },
 ]
 
-const STORAGE_KEY = "medical-chat-prompt-templates"
+const STORAGE_KEY = "medical-chat-templates"
 const MAX_TEMPLATES = 6
 
 function generateTemplateId() {
@@ -86,20 +89,21 @@ function generateTemplateId() {
   return `template_${Math.random().toString(36).slice(2, 10)}`
 }
 
-const PromptTemplatesContext = createContext<PromptTemplatesContextValue | null>(null)
+const ChatTemplatesContext = createContext<ChatTemplatesContextValue | null>(null)
 
-function getDefaultTemplates(language: 'en' | 'zh-TW' = 'en'): PromptTemplate[] {
+function getDefaultTemplates(language: 'en' | 'zh-TW' = 'en'): ChatTemplate[] {
   const templates = language === 'zh-TW' ? DEFAULT_TEMPLATES_ZH : DEFAULT_TEMPLATES_EN
   return templates.map((template) => ({ ...template }))
 }
 
-export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
+export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
   const { user } = useAuth()
-  const [templates, setTemplates] = useState<PromptTemplate[]>(() => getDefaultTemplates())
+  const [templates, setTemplates] = useState<ChatTemplate[]>(() => getDefaultTemplates())
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomTemplates, setIsCustomTemplates] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Load templates from Firestore (for logged-in users) or localStorage
   useEffect(() => {
@@ -110,7 +114,7 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
       // If user is logged in, load from Firestore
       if (user?.uid) {
         try {
-          const firestoreTemplates = await getUserTemplates(user.uid)
+          const firestoreTemplates = await getUserChatTemplates(user.uid)
           
           if (firestoreTemplates.length > 0) {
             setTemplates(firestoreTemplates.slice(0, MAX_TEMPLATES))
@@ -124,10 +128,10 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
           if (stored) {
             const parsed = JSON.parse(stored)
             if (Array.isArray(parsed) && parsed.length > 0) {
-              const sanitized = parsed.reduce<PromptTemplate[]>((acc, entry) => {
+              const sanitized = parsed.reduce<ChatTemplate[]>((acc, entry) => {
                 if (!entry || typeof entry !== "object") return acc
                 const candidate = entry as Record<string, unknown>
-                const template: PromptTemplate = {
+                const template: ChatTemplate = {
                   id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
                   label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
                   content: typeof candidate.content === "string" ? candidate.content : "",
@@ -141,7 +145,7 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
               
               // Migrate to Firestore
               if (sanitized.length > 0) {
-                await batchSaveTemplates(user.uid, sanitized.slice(0, MAX_TEMPLATES))
+                await batchSaveChatTemplates(user.uid, sanitized.slice(0, MAX_TEMPLATES))
                 setTemplates(sanitized.slice(0, MAX_TEMPLATES))
                 setIsCustomTemplates(true)
                 // Clear localStorage after migration
@@ -172,10 +176,10 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
           }
           const parsed = JSON.parse(stored)
           if (!Array.isArray(parsed)) return
-          const sanitized = parsed.reduce<PromptTemplate[]>((acc, entry) => {
+          const sanitized = parsed.reduce<ChatTemplate[]>((acc, entry) => {
             if (!entry || typeof entry !== "object") return acc
             const candidate = entry as Record<string, unknown>
-            const template: PromptTemplate = {
+            const template: ChatTemplate = {
               id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
               label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
               content: typeof candidate.content === "string" ? candidate.content : "",
@@ -216,15 +220,22 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.uid || !hasLoadedFromStorage) return
     
-    const unsubscribe = subscribeToTemplates(user.uid, (updatedTemplates) => {
+    const unsubscribe = subscribeToChatTemplates(user.uid, (updatedTemplates: ChatTemplate[]) => {
       if (!isSyncing) {
-        setTemplates(updatedTemplates.slice(0, MAX_TEMPLATES))
-        setIsCustomTemplates(updatedTemplates.length > 0)
+        if (updatedTemplates.length > 0) {
+          setTemplates(updatedTemplates.slice(0, MAX_TEMPLATES))
+          setIsCustomTemplates(true)
+        } else {
+          // If Firestore is empty, use default templates
+          const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
+          setTemplates(getDefaultTemplates(currentLang))
+          setIsCustomTemplates(false)
+        }
       }
     })
     
     return () => unsubscribe()
-  }, [user?.uid, hasLoadedFromStorage, isSyncing])
+  }, [user?.uid, hasLoadedFromStorage, isSyncing, locale])
   
   // Persist to localStorage for non-logged-in users
   useEffect(() => {
@@ -256,8 +267,8 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
     }
   }, [templates, hasLoadedFromStorage, locale, user?.uid])
 
-  const addTemplate = async () => {
-    const newTemplate: PromptTemplate = {
+  const addTemplate = () => {
+    const newTemplate: ChatTemplate = {
       id: generateTemplateId(),
       label: "New Prompt Template",
       description: "",
@@ -269,81 +280,82 @@ export function PromptTemplatesProvider({ children }: { children: ReactNode }) {
       return [...prev, newTemplate]
     })
     setIsCustomTemplates(true)
-    
-    // Save to Firestore if logged in
-    if (user?.uid) {
-      setIsSyncing(true)
-      await saveTemplate(user.uid, newTemplate)
-      setIsSyncing(false)
-    }
   }
 
-  const updateTemplate = async (id: string, patch: Partial<Omit<PromptTemplate, "id">>) => {
-    let updatedTemplate: PromptTemplate | undefined
-    
-    setTemplates((prev) => prev.map((template) => {
-      if (template.id === id) {
-        updatedTemplate = { ...template, ...patch, id }
-        return updatedTemplate
-      }
-      return template
-    }))
+  const updateTemplate = (id: string, patch: Partial<Omit<ChatTemplate, "id">>) => {
+    setTemplates((prev) => prev.map((template) => 
+      template.id === id ? { ...template, ...patch, id } : template
+    ))
     setIsCustomTemplates(true)
-    
-    // Save to Firestore if logged in
-    if (user?.uid && updatedTemplate) {
-      setIsSyncing(true)
-      await saveTemplate(user.uid, updatedTemplate)
-      setIsSyncing(false)
-    }
   }
 
-  const removeTemplate = async (id: string) => {
+  const removeTemplate = (id: string) => {
     setTemplates((prev) => {
       if (prev.length <= 1) return prev
       return prev.filter((template) => template.id !== id)
     })
     setIsCustomTemplates(true)
-    
-    // Delete from Firestore if logged in
-    if (user?.uid) {
-      setIsSyncing(true)
-      await deleteTemplate(user.uid, id)
-      setIsSyncing(false)
-    }
   }
 
   const resetTemplates = async () => {
     const currentLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
     const defaultTemplates = getDefaultTemplates(currentLang)
+    
+    // Update local state immediately
     setTemplates(defaultTemplates)
     setIsCustomTemplates(false)
     
-    // If logged in, delete all custom templates from Firestore
+    // If logged in, save default templates to Firestore
     if (user?.uid) {
       setIsSyncing(true)
-      const currentTemplates = templates
-      for (const template of currentTemplates) {
-        await deleteTemplate(user.uid, template.id)
+      try {
+        await batchSaveChatTemplates(user.uid, defaultTemplates)
+      } catch (error) {
+        console.error('[Chat Templates] Reset failed:', error)
+      } finally {
+        setIsSyncing(false)
       }
+    }
+  }
+
+  const saveTemplates = async () => {
+    if (!user?.uid) return
+    
+    setIsSaving(true)
+    setIsSyncing(true)
+    try {
+      await replaceAllChatTemplates(user.uid, templates)
+    } catch (error) {
+      console.error('[Chat Templates] Save failed:', error)
+    } finally {
+      setIsSaving(false)
       setIsSyncing(false)
     }
   }
 
   const value = useMemo(
-    () => ({ templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, maxTemplates: MAX_TEMPLATES }),
-    [templates],
+    () => ({ 
+      templates, 
+      addTemplate, 
+      updateTemplate, 
+      removeTemplate, 
+      resetTemplates, 
+      saveTemplates,
+      maxTemplates: MAX_TEMPLATES,
+      isSaving
+    }),
+    [templates, isSaving],
   )
 
-  return <PromptTemplatesContext.Provider value={value}>{children}</PromptTemplatesContext.Provider>
+  return <ChatTemplatesContext.Provider value={value}>{children}</ChatTemplatesContext.Provider>
 }
 
-export function usePromptTemplates() {
-  const context = useContext(PromptTemplatesContext)
+export function useChatTemplates() {
+  const context = useContext(ChatTemplatesContext)
   if (!context) {
-    throw new Error("usePromptTemplates must be used within PromptTemplatesProvider")
+    throw new Error("useChatTemplates must be used within ChatTemplatesProvider")
   }
   return context
 }
 
-export type { PromptTemplate }
+export type { ChatTemplate }

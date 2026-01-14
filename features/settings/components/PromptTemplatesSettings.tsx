@@ -4,12 +4,12 @@
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { usePromptTemplates } from "@/src/application/providers/prompt-templates.provider"
+import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
 
 export function PromptTemplatesSettings() {
   const { t } = useLanguage()
-  const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, maxTemplates } = usePromptTemplates()
+  const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, saveTemplates, maxTemplates, isSaving } = useChatTemplates()
 
   const canAddTemplate = templates.length < maxTemplates
   const canRemoveTemplate = templates.length > 1
@@ -23,12 +23,12 @@ export function PromptTemplatesSettings() {
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold leading-tight">{t.settings.promptTemplatesTitle}</h3>
+        <h3 className="text-base font-semibold leading-tight">{t.settings.chatTemplatesTitle}</h3>
         <p className="text-xs text-muted-foreground">
-          {t.settings.promptTemplatesDesc}
+          {t.settings.chatTemplatesDesc}
         </p>
         <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2 mt-2">
-          {t.settings.promptTemplatesLanguageWarning}
+          {t.settings.chatTemplatesLanguageWarning}
         </p>
       </div>
 
@@ -75,6 +75,15 @@ export function PromptTemplatesSettings() {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
+        <Button 
+          type="button" 
+          variant="default" 
+          onClick={saveTemplates}
+          disabled={isSaving}
+          className="bg-primary hover:bg-primary/90"
+        >
+          {isSaving ? t.settings.saving : t.settings.saveTemplates}
+        </Button>
         <Button type="button" variant="outline" onClick={resetTemplates} className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10">
           {t.settings.resetDefaults}
         </Button>

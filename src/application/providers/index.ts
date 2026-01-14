@@ -16,7 +16,7 @@ export { AsrProvider, useAsr } from './asr.provider'
 export { ClinicalInsightsConfigProvider, useClinicalInsightsConfig } from './clinical-insights-config.provider'
 export { DataSelectionProvider, useDataSelection } from './data-selection.provider'
 export { LanguageProvider, useLanguage } from './language.provider'
-export { PromptTemplatesProvider, usePromptTemplates } from './prompt-templates.provider'
+export { ChatTemplatesProvider, useChatTemplates } from './chat-templates.provider'
 export { RightPanelProvider, useRightPanel } from './right-panel.provider'
 export { ThemeProvider, useTheme } from './theme.provider'
 

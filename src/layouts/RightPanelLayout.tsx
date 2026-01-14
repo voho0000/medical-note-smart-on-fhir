@@ -23,7 +23,7 @@ import SettingsFeature from "@/features/settings/Feature"
 import { DataSelectionProvider } from "@/src/application/providers/data-selection.provider"
 import { AsrProvider } from "@/src/application/providers/asr.provider"
 import { ClinicalInsightsConfigProvider } from "@/src/application/providers/clinical-insights-config.provider"
-import { PromptTemplatesProvider } from "@/src/application/providers/prompt-templates.provider"
+import { ChatTemplatesProvider } from "@/src/application/providers/chat-templates.provider"
 
 // ============================================================================
 // FEATURE COMPONENT MAP - Map feature IDs to their components
@@ -44,11 +44,11 @@ function RightPanelProviders({ children }: { children: ReactNode }) {
   return (
     <DataSelectionProvider>
       <AsrProvider>
-        <PromptTemplatesProvider>
+        <ChatTemplatesProvider>
           <ClinicalInsightsConfigProvider>
             {children}
           </ClinicalInsightsConfigProvider>
-        </PromptTemplatesProvider>
+        </ChatTemplatesProvider>
       </AsrProvider>
     </DataSelectionProvider>
   )
