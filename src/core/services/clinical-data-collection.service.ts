@@ -1,14 +1,23 @@
-// Clinical Data Mapper Service
-// Abstracts the logic for transforming raw clinical data into ClinicalDataCollection
+// Clinical Data Collection Service
+// Provides utility methods for working with ClinicalDataCollection
 // Following Dependency Inversion Principle - depends on abstractions not concrete implementations
 
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 
 /**
- * Service for mapping raw clinical data to standardized ClinicalDataCollection format
- * This abstraction allows for easier testing and future data source changes
+ * ClinicalDataCollectionService - 臨床資料集合服務
+ * 
+ * 提供 ClinicalDataCollection 的工具方法：
+ * - 建立空集合
+ * - 驗證資料
+ * - 檢查是否有資料
+ * 
+ * 注意：這不是 Mapper，不做資料轉換
+ * - FhirMapper: 將 FHIR 資源轉換為 Domain Entity
+ * - Repository: 從 Server 取得資料
+ * - 這個 Service: 提供 Collection 的工具方法
  */
-export class ClinicalDataMapper {
+export class ClinicalDataCollectionService {
   /**
    * Transforms raw clinical data into ClinicalDataCollection
    * Handles fallback values and data normalization

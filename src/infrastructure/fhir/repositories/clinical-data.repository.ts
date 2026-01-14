@@ -13,7 +13,7 @@ import type {
   ClinicalDataCollection
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient } from '../client/fhir-client.service'
-import { ClinicalDataMapper } from '../mappers/clinical-data.mapper'
+import { FhirMapper } from '../mappers/fhir.mapper'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
@@ -61,12 +61,12 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `Condition?patient=${patientId}&_sort=-recorded-date&_count=100`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toCondition(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
     } catch (error) {
       console.warn('Failed to sort conditions, trying without sort:', error)
       try {
         const response = await fhirClient.request(`Condition?patient=${patientId}&_count=100`)
-        return response.entry?.map((e: any) => ClinicalDataMapper.toCondition(e.resource)) || []
+        return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
       } catch (fallbackError) {
         console.error('Failed to fetch conditions:', fallbackError)
         return []
@@ -79,7 +79,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `MedicationRequest?patient=${patientId}&_sort=-authoredon&_count=100`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toMedication(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toMedication(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch medications:', error)
       return []
@@ -91,7 +91,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `AllergyIntolerance?patient=${patientId}&_count=100`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toAllergy(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toAllergy(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch allergies:', error)
       return []
@@ -105,7 +105,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         `Observation?patient=${patientId}&_count=200&_sort=-date`
       )
 
-      return response.entry?.map((e: any) => ClinicalDataMapper.toObservation(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch observations:', error)
       return []
@@ -117,7 +117,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=200`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toObservation(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch vital signs:', error)
       return []
@@ -137,10 +137,10 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
       const observations = entries
         .filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.OBSERVATION)
-        .map((e: any) => ClinicalDataMapper.toObservation(e.resource))
+        .map((e: any) => FhirMapper.toObservation(e.resource))
 
       return reports.map((report: any) => 
-        ClinicalDataMapper.toDiagnosticReport(report, observations)
+        FhirMapper.toDiagnosticReport(report, observations)
       )
     } catch (error) {
       console.error('Failed to fetch diagnostic reports:', error)
@@ -153,7 +153,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `Procedure?patient=${patientId}&_count=100&_sort=-date`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toProcedure(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toProcedure(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch procedures:', error)
       return []
@@ -165,7 +165,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `Encounter?patient=${patientId}&_sort=-date&_count=100&_include=Encounter:patient&_include=Encounter:location`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toEncounter(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toEncounter(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch encounters:', error)
       return []
@@ -177,7 +177,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `DocumentReference?patient=${patientId}&_sort=-date&_count=100`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toDocumentReference(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toDocumentReference(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch document references:', error)
       return []
@@ -189,7 +189,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.request(
         `Composition?patient=${patientId}&_sort=-date&_count=100`
       )
-      return response.entry?.map((e: any) => ClinicalDataMapper.toComposition(e.resource)) || []
+      return response.entry?.map((e: any) => FhirMapper.toComposition(e.resource)) || []
     } catch (error) {
       console.error('Failed to fetch compositions:', error)
       return []

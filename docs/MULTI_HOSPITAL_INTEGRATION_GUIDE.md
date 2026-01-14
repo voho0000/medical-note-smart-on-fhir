@@ -36,20 +36,15 @@
 src/
 ├── core/
 │   ├── entities/                    # Domain Entities
-│   │   ├── observation.entity.ts
-│   │   ├── diagnostic-report.entity.ts
-│   │   ├── procedure.entity.ts
-│   │   ├── medication.entity.ts
-│   │   ├── condition.entity.ts
-│   │   └── allergy.entity.ts
+│   │   └── clinical-data.entity.ts  # 所有臨床資料實體定義
 │   │
 │   └── interfaces/
-│       └── data-mapper.interface.ts  # Mapper 契約
+│       └── data-mapper.interface.ts  # Mapper 契約和 Registry
 │
 ├── infrastructure/
-│   └── mappers/
-│       ├── fhir-data.mapper.ts              # FHIR 實作
-│       └── example-hospital-data.mapper.ts   # 範例模板
+│   └── fhir/
+│       └── mappers/
+│           └── fhir.mapper.ts           # FhirMapper (實作 IDataMapper)
 │
 └── shared/
     └── types/

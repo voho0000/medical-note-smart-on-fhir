@@ -2,12 +2,17 @@
 // Defines the contract for mapping from any data source to domain entities
 // This allows supporting multiple hospital data formats (FHIR, HL7, custom APIs, etc.)
 
-import type { ObservationEntity } from '../entities/observation.entity'
-import type { DiagnosticReportEntity } from '../entities/diagnostic-report.entity'
-import type { ProcedureEntity } from '../entities/procedure.entity'
-import type { MedicationEntity } from '../entities/medication.entity'
-import type { ConditionEntity } from '../entities/condition.entity'
-import type { AllergyEntity } from '../entities/allergy.entity'
+import type {
+  ObservationEntity,
+  DiagnosticReportEntity,
+  ProcedureEntity,
+  MedicationEntity,
+  ConditionEntity,
+  AllergyEntity,
+  EncounterEntity,
+  DocumentReferenceEntity,
+  CompositionEntity
+} from '../entities/clinical-data.entity'
 
 /**
  * Generic data mapper interface
@@ -27,7 +32,7 @@ export interface IDataMapper<TSourceType = any> {
   /**
    * Map source diagnostic report to domain entity
    */
-  mapDiagnosticReport(source: TSourceType): DiagnosticReportEntity
+  mapDiagnosticReport(source: TSourceType, observations?: ObservationEntity[]): DiagnosticReportEntity
   
   /**
    * Map source procedure to domain entity
@@ -48,6 +53,21 @@ export interface IDataMapper<TSourceType = any> {
    * Map source allergy to domain entity
    */
   mapAllergy(source: TSourceType): AllergyEntity
+  
+  /**
+   * Map source encounter to domain entity
+   */
+  mapEncounter(source: TSourceType): EncounterEntity
+  
+  /**
+   * Map source document reference to domain entity
+   */
+  mapDocumentReference(source: TSourceType): DocumentReferenceEntity
+  
+  /**
+   * Map source composition to domain entity
+   */
+  mapComposition(source: TSourceType): CompositionEntity
 }
 
 /**

@@ -13,6 +13,9 @@ export interface ConditionEntity {
   clinicalStatus?: string
   verificationStatus?: string
   recordedDate?: string
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface MedicationEntity {
@@ -47,6 +50,9 @@ export interface MedicationEntity {
       }
     }>
   }>
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface AllergyEntity {
@@ -68,6 +74,9 @@ export interface AllergyEntity {
     severity?: string
   }>
   recordedDate?: string
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface ObservationEntity {
@@ -153,6 +162,9 @@ export interface ObservationEntity {
   encounter?: {
     reference?: string
   }
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface DiagnosticReportEntity {
@@ -179,6 +191,9 @@ export interface DiagnosticReportEntity {
   encounter?: {
     reference?: string
   }
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface ProcedureEntity {
@@ -198,6 +213,9 @@ export interface ProcedureEntity {
   encounter?: {
     reference?: string
   }
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface EncounterEntity {
@@ -217,6 +235,9 @@ export interface EncounterEntity {
   reasonCode?: Array<{
     text?: string
   }>
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface DocumentReferenceEntity {
@@ -265,6 +286,9 @@ export interface DocumentReferenceEntity {
       end?: string
     }
   }
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface CompositionEntity {
@@ -314,6 +338,9 @@ export interface CompositionEntity {
       reference?: string
     }>
   }>
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
 }
 
 export interface ClinicalDataCollection {
