@@ -459,6 +459,8 @@ export const zhTW = {
     agentModeDescription: 'AI 可自動查詢 FHIR 資料',
     apiKeyWarningTitle: '深入模式需要 API Key',
     apiKeyWarningMessage: '請先在「設定」頁面中設定您的 API Key，或改用一般模式。',
+    deepModeFeaturesTitle: '深入模式額外功能：',
+    deepModeFeatures: '• 自動查詢 FHIR 病人資料\n• 使用 Perplexity AI 查詢最新醫學資訊\n• AI Agent 自主決策查詢策略',
   },
 
   auth: (() => {

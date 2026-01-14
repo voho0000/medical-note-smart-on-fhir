@@ -165,8 +165,8 @@ export const en = {
     clearAsr: 'Voice',
     resetChat: 'Chat',
     insertTemplate: 'Template',
-    manageTemplates: 'Manage Templates',
-    manageModels: 'Manage Models',
+    manageTemplates: 'Templates',
+    manageModels: 'Models',
     characters: 'characters',
     latestVoiceInput: 'Latest voice input:',
     microphoneHint: 'Tap the microphone to dictate, then refine or send your message.',
@@ -374,7 +374,7 @@ export const en = {
     autoGenerate: 'Auto-generate',
     autoGenerateTooltip: 'When enabled, this insight will automatically generate when you enter the Clinical Insights page with patient data loaded. Disable to manually trigger generation only when needed.',
     languageWarning: 'Note: Modified tabs will not automatically update when switching languages. Reset to defaults to see language-specific tabs.',
-    manageModels: 'Manage Models',
+    manageModels: 'Models',
     temporaryEditHint: 'This is a temporary edit and will not be saved.',
     goToSettings: 'Go to Settings for permanent changes →',
   },
@@ -457,6 +457,8 @@ export const en = {
     agentModeDescription: 'AI can automatically query FHIR data',
     apiKeyWarningTitle: 'Deep Mode Requires API Key',
     apiKeyWarningMessage: 'Please set your API Key in the Settings page first, or switch to Normal Mode.',
+    deepModeFeaturesTitle: 'Deep Mode Features:',
+    deepModeFeatures: '• Auto-query FHIR patient data\n• Use Perplexity AI for latest medical info\n• AI Agent autonomous query strategy',
   },
 
   auth: (() => {

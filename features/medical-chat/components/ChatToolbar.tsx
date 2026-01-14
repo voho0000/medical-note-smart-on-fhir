@@ -2,9 +2,10 @@
 
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
-import { Plus, Trash2, FileText, Settings } from "lucide-react"
+import { Plus, Trash2, FileText, Settings, ChevronDown } from "lucide-react"
 
 interface Template {
   id: string
@@ -45,7 +46,7 @@ export function ChatToolbar({
   }
   
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto">
+    <div className="flex items-center gap-1 overflow-x-auto">
       <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
         <Button variant="ghost" size="sm" onClick={onInsertContext} className="h-7 gap-1 px-1.5 text-xs">
           <Plus className="h-3 w-3" />
@@ -54,10 +55,22 @@ export function ChatToolbar({
       </div>
       {templates.length > 0 ? (
         <div className="flex items-center gap-0.5 rounded-md border bg-primary/5 p-0.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onInsertTemplate}
+            disabled={!hasTemplateContent}
+            className="h-7 gap-1 px-1 text-xs hover:bg-primary/10"
+          >
+            <Plus className="h-3 w-3" />
+            <FileText className="h-3 w-3" />
+            <span className="max-w-[90px] truncate">
+              {templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
+            </span>
+          </Button>
           <Select value={selectedTemplateId} onValueChange={onTemplateChange}>
-            <SelectTrigger className="h-7 max-w-[180px] gap-1 border-0 bg-transparent px-1.5 text-xs shadow-none hover:bg-primary/10">
-              <FileText className="h-3 w-3 shrink-0" />
-              <SelectValue placeholder={t.chat.insertTemplate} className="truncate" />
+            <SelectTrigger className="h-7 w-6 gap-0 border-0 bg-transparent px-1 py-0 shadow-none hover:bg-primary/10">
             </SelectTrigger>
             <SelectContent align="start" className="w-[200px] text-xs">
               {templates.map((template) => (
@@ -67,17 +80,6 @@ export function ChatToolbar({
               ))}
             </SelectContent>
           </Select>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onInsertTemplate}
-            disabled={!hasTemplateContent}
-            className="h-7 gap-1 px-1.5 text-xs hover:bg-primary/10"
-          >
-            <Plus className="h-3 w-3" />
-            {t.chat.insertTemplate}
-          </Button>
         </div>
       ) : null}
       <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5">
@@ -92,26 +94,25 @@ export function ChatToolbar({
           {t.chat.resetChat}
         </Button>
       </div>
-      <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleManageModels}
-          className="h-7 gap-1 px-1.5 text-xs"
-        >
-          <Settings className="h-3 w-3" />
-          {t.chat.manageModels || "管理模型"}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleManageTemplates}
-          className="h-7 gap-1 px-1.5 text-xs"
-        >
-          <Settings className="h-3 w-3" />
-          {t.chat.manageTemplates || "管理範本"}
-        </Button>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-7 gap-1 px-1.5 text-xs border rounded-md bg-muted/30">
+            <Settings className="h-3 w-3" />
+            Settings
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[160px]">
+          <DropdownMenuItem onClick={handleManageModels} className="gap-2 cursor-pointer">
+            <Settings className="h-3.5 w-3.5" />
+            {t.chat.manageModels || "管理模型"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleManageTemplates} className="gap-2 cursor-pointer">
+            <Settings className="h-3.5 w-3.5" />
+            {t.chat.manageTemplates || "管理範本"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

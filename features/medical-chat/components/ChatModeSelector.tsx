@@ -1,7 +1,9 @@
 // Chat Mode Selector Component
 "use client"
 
-import { Sparkles, MessageSquare, AlertCircle } from "lucide-react"
+import { Sparkles, MessageSquare } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface ChatModeSelectorProps {
@@ -18,49 +20,34 @@ export function ChatModeSelector({
   const { t } = useLanguage()
 
   return (
-    <>
-      <div className="flex items-center justify-between gap-2 px-1">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => onModeToggle(false)}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
-              !isAgentMode
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            {t.medicalChat.normalMode}
-          </button>
-          <button
-            type="button"
-            onClick={() => onModeToggle(true)}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
-              isAgentMode
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {t.medicalChat.deepMode}
-          </button>
-        </div>
-        {isAgentMode && (
-          <span className="text-[10px] text-muted-foreground/60">
-            {t.medicalChat.agentModeDescription}
-          </span>
-        )}
-      </div>
-      {showApiKeyWarning && (
-        <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
-          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-          <div className="flex-1 text-amber-800 dark:text-amber-200">
-            <div className="font-medium mb-1">{t.medicalChat.apiKeyWarningTitle}</div>
-            <div className="text-amber-700 dark:text-amber-300">{t.medicalChat.apiKeyWarningMessage}</div>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1.5 rounded-md border bg-muted/30 px-2 py-0.5 h-[42px] cursor-pointer w-[110px]">
+            {isAgentMode ? (
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+            ) : (
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+            )}
+            <span className="text-xs font-medium flex-1 leading-tight">
+              {isAgentMode ? t.medicalChat.deepMode : t.medicalChat.normalMode}
+            </span>
+            <Switch 
+              checked={isAgentMode} 
+              onCheckedChange={onModeToggle}
+              className="scale-75 data-[state=checked]:bg-primary shrink-0"
+            />
           </div>
-        </div>
-      )}
-    </>
+        </TooltipTrigger>
+        {isAgentMode && (
+          <TooltipContent side="top" className="max-w-xs">
+            <p className="font-semibold mb-1">
+              {t.medicalChat.deepModeFeaturesTitle}
+            </p>
+            <p className="text-xs whitespace-pre-line">{t.medicalChat.deepModeFeatures}</p>
+          </TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
   )
 }
