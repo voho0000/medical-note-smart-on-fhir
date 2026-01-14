@@ -1,24 +1,8 @@
 // Imaging Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
 import { ImagingReportFilter } from '@/features/data-selection/components/DataFilters'
-
-interface DiagnosticReport {
-  id?: string
-  code?: { text?: string }
-  category?: any
-  effectiveDateTime?: string
-  issued?: string
-  conclusion?: string
-  result?: Array<{ reference?: string }>
-}
-
-interface Observation {
-  id?: string
-  code?: { text?: string }
-  valueQuantity?: { value?: number; unit?: string }
-  valueString?: string
-}
 
 const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
   if (!dateString || range === 'all') return true

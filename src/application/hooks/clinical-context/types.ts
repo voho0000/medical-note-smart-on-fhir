@@ -1,63 +1,24 @@
 // Clinical Context Types
-export interface CodeText { 
-  text?: string
-  coding?: Array<{ 
-    display?: string
-    code?: string
-  }>
-}
+// Re-export shared FHIR types to maintain backward compatibility
+// Following Single Source of Truth (SSOT) principle
+export type {
+  CodeableConcept,
+  Quantity,
+  Observation,
+  DiagnosticReport,
+  Procedure,
+  Condition,
+  MedicationRequest,
+  AllergyIntolerance
+} from '@/src/shared/types/fhir.types'
 
-export interface ValueQuantity { 
-  value?: number | string
-  unit?: string 
-}
-
-export interface Observation {
-  id?: string
-  code?: CodeText
-  valueQuantity?: ValueQuantity
-  valueString?: string
-  effectiveDateTime?: string
-  component?: Array<{
-    code?: {
-      text?: string
-      coding?: Array<{ display?: string }>
-    }
-    valueQuantity?: ValueQuantity
-  }>
-}
-
-export interface DiagnosticReport {
-  id?: string
-  code?: CodeText
-  result?: Array<{ reference?: string }>
-  conclusion?: string
-  effectiveDateTime?: string
-}
-
-export interface ProcedureResource {
-  code?: {
-    text?: string
-    coding?: Array<{ display?: string }>
-  }
-  status?: string
-  performedDateTime?: string
-  performedPeriod?: {
-    start?: string
-    end?: string
-  }
-}
-
+// Domain-specific type for clinical data collection
 export type ClinicalData = {
-  conditions?: Array<{ code?: CodeText }>
-  medications?: Array<{ 
-    medicationCodeableConcept?: CodeText
-    status?: string
-    authoredOn?: string
-  }>
-  allergies?: Array<{ code?: CodeText }>
-  diagnosticReports?: DiagnosticReport[]
-  observations?: Observation[]
-  vitalSigns?: Observation[]
-  procedures?: ProcedureResource[]
+  conditions?: Array<import('@/src/shared/types/fhir.types').Condition>
+  medications?: Array<import('@/src/shared/types/fhir.types').MedicationRequest>
+  allergies?: Array<import('@/src/shared/types/fhir.types').AllergyIntolerance>
+  diagnosticReports?: Array<import('@/src/shared/types/fhir.types').DiagnosticReport>
+  observations?: Array<import('@/src/shared/types/fhir.types').Observation>
+  vitalSigns?: Array<import('@/src/shared/types/fhir.types').Observation>
+  procedures?: Array<import('@/src/shared/types/fhir.types').Procedure>
 }

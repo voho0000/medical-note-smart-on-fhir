@@ -1,16 +1,7 @@
 // Procedures Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import type { Procedure } from '@/src/shared/types/fhir.types'
 import { ProcedureFilter } from '@/features/data-selection/components/DataFilters'
-
-interface Procedure {
-  code?: { 
-    text?: string
-    coding?: Array<{ display?: string }>
-  }
-  performedDateTime?: string
-  performedPeriod?: { start?: string; end?: string }
-  status?: string
-}
 
 const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
   if (!dateString || range === 'all') return true

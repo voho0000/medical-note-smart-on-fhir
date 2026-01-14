@@ -1,31 +1,12 @@
 // Lab Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory, inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
 import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
 import { LabReportFilter } from '@/features/data-selection/components/DataFilters'
 
-interface DiagnosticReport {
-  id?: string
-  code?: { text?: string }
-  category?: any
-  effectiveDateTime?: string
-  issued?: string
-  conclusion?: string
-  result?: Array<{ reference?: string }>
-  resourceType?: string
-}
-
-interface Observation {
-  id?: string
-  code?: { text?: string }
-  category?: any
-  effectiveDateTime?: string
-  valueQuantity?: { value?: number; unit?: string }
-  valueString?: string
-  resourceType?: string
-}
-
 // Union type for lab data (can be DiagnosticReport or standalone Observation)
+// Using shared FHIR types following SSOT principle
 type LabData = DiagnosticReport | Observation
 
 function isObservation(item: LabData): item is Observation {

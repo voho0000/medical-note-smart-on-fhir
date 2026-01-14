@@ -1,18 +1,13 @@
 // Medications Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import type { MedicationRequest } from '@/src/shared/types/fhir.types'
 import { MedicationFilter } from '@/features/data-selection/components/DataFilters'
 
-interface Medication {
-  medicationCodeableConcept?: { text?: string }
-  status?: string
-  authoredOn?: string
-}
-
-const isActiveMedication = (med: Medication): boolean => {
+const isActiveMedication = (med: MedicationRequest): boolean => {
   return med.status === 'active' || med.status === 'completed'
 }
 
-export const medicationsCategory: DataCategory<Medication> = {
+export const medicationsCategory: DataCategory<MedicationRequest> = {
   id: 'medications',
   label: 'Medications',
   labelKey: 'dataSelection.medications',

@@ -1,21 +1,7 @@
 // Vital Signs Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import type { Observation } from '@/src/shared/types/fhir.types'
 import { VitalSignsFilter } from '@/features/data-selection/components/DataFilters'
-
-interface Observation {
-  id?: string
-  code?: { 
-    text?: string
-    coding?: Array<{ display?: string }>
-  }
-  effectiveDateTime?: string
-  valueQuantity?: { value?: number; unit?: string }
-  valueString?: string
-  component?: Array<{
-    code?: { text?: string; coding?: Array<{ display?: string }> }
-    valueQuantity?: { value?: number; unit?: string }
-  }>
-}
 
 const isWithinTimeRange = (dateString: string | undefined, range: string): boolean => {
   if (!dateString || range === 'all') return true

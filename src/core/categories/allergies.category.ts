@@ -1,11 +1,8 @@
 // Allergies Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
+import type { AllergyIntolerance } from '@/src/shared/types/fhir.types'
 
-interface Allergy {
-  code?: { text?: string }
-}
-
-export const allergiesCategory: DataCategory<Allergy> = {
+export const allergiesCategory: DataCategory<AllergyIntolerance> = {
   id: 'allergies',
   label: 'Allergies',
   labelKey: 'dataSelection.allergies',
