@@ -128,22 +128,24 @@ export default function ClinicalInsightsFeature() {
         {!canGenerate && <ApiKeyWarning />}
         {panelEntries.length > 0 ? (
           <>
-            <TabManagementToolbar 
-              currentTabId={activeTabId} 
-              onTabChange={setActiveTabId}
-            />
             <Tabs value={activeTabId} onValueChange={setActiveTabId} className="space-y-4">
-            <TabsList className="grid w-full gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length}, minmax(0, 1fr))` }}>
-              {panelEntries.map((panel) => (
-                <TabsTrigger
-                  key={panel.id}
-                  value={panel.id}
-                  className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0"
-                >
-                  <span className="truncate" title={panel.label}>{panel.label}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <div className="flex items-center gap-2">
+              <TabsList className="grid flex-1 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length}, minmax(0, 1fr))` }}>
+                {panelEntries.map((panel) => (
+                  <TabsTrigger
+                    key={panel.id}
+                    value={panel.id}
+                    className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0"
+                  >
+                    <span className="truncate" title={panel.label}>{panel.label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <TabManagementToolbar 
+                currentTabId={activeTabId} 
+                onTabChange={setActiveTabId}
+              />
+            </div>
             {panelEntries.map((panel) => (
               <TabsContent key={panel.id} value={panel.id} className="mt-0">
                 <InsightPanel {...panel.props} />
