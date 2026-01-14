@@ -8,7 +8,6 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 interface Template {
   id: string
   label: string
-  description?: string
   content: string
 }
 
@@ -89,18 +88,6 @@ export function TemplateEditor({
             value={template.label}
             onChange={(event) => onUpdate(template.id, { label: event.target.value })}
             placeholder={t.settings.labelPlaceholder}
-          />
-        </div>
-
-        <div className="grid gap-1.5">
-          <Label className="text-xs uppercase text-muted-foreground" htmlFor={`template-description-${template.id}`}>
-            {t.settings.descriptionOptional}
-          </Label>
-          <Input
-            id={`template-description-${template.id}`}
-            value={template.description ?? ""}
-            onChange={(event) => onUpdate(template.id, { description: event.target.value })}
-            placeholder={t.settings.descriptionPlaceholder}
           />
         </div>
 

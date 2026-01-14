@@ -16,7 +16,6 @@ import { db } from '@/src/shared/config/firebase.config'
 export interface ChatTemplate {
   id: string
   label: string
-  description?: string
   content: string
   createdAt?: Date
   updatedAt?: Date
@@ -25,7 +24,6 @@ export interface ChatTemplate {
 interface FirestoreChatTemplate {
   id: string
   label: string
-  description?: string
   content: string
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -47,7 +45,6 @@ export async function getUserChatTemplates(userId: string): Promise<ChatTemplate
       return {
         id: doc.id,
         label: data.label,
-        description: data.description,
         content: data.content,
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
@@ -75,7 +72,6 @@ export async function saveChatTemplate(
     await setDoc(templateRef, {
       id: template.id,
       label: template.label,
-      description: template.description || '',
       content: template.content,
       createdAt: template.createdAt ? Timestamp.fromDate(template.createdAt) : now,
       updatedAt: now,
@@ -125,7 +121,6 @@ export function subscribeToChatTemplates(
       return {
         id: doc.id,
         label: data.label,
-        description: data.description,
         content: data.content,
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),

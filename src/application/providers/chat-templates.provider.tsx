@@ -16,7 +16,6 @@ import {
 type ChatTemplate = {
   id: string
   label: string
-  description?: string
   content: string
 }
 
@@ -35,21 +34,18 @@ const DEFAULT_TEMPLATES_EN: ChatTemplate[] = [
   {
     id: "summary",
     label: "Summarize Medical Information",
-    description: "Concise, problem-oriented patient summary.",
     content:
       "Provide a structured summary of the patient's current presentation, key diagnoses, treatments, and pending follow-ups. Highlight urgent issues and recommended next steps.",
   },
   {
     id: "plan",
     label: "Care Plan Recommendations",
-    description: "Outline plan of care and monitoring items.",
     content:
       "Review the patient's data and propose a prioritized plan of care, including medications, monitoring recommendations, patient counseling, and follow-up scheduling.",
   },
   {
     id: "handoff",
     label: "Shift Handoff Note",
-    description: "Key updates for handoff communication.",
     content:
       "Draft a handoff note covering patient status, recent changes, active issues, anticipated problems, and action items for the next clinician.",
   },
@@ -59,21 +55,18 @@ const DEFAULT_TEMPLATES_ZH: ChatTemplate[] = [
   {
     id: "summary",
     label: "醫療資訊摘要",
-    description: "簡明、以問題為導向的病人摘要。",
     content:
       "提供病人目前狀況、主要診斷、治療和待追蹤事項的結構化摘要。突顯緊急問題和建議的下一步行動。",
   },
   {
     id: "plan",
     label: "照護計畫建議",
-    description: "概述照護計畫和監測項目。",
     content:
       "檢視病人資料並提出優先順序的照護計畫，包括藥物、監測建議、病人衛教和後續追蹤安排。",
   },
   {
     id: "handoff",
     label: "交班紀錄",
-    description: "交班溝通的關鍵更新。",
     content:
       "起草交班紀錄，涵蓋病人狀態、近期變化、活動中的問題、預期問題和下一位臨床人員的行動項目。",
   },
@@ -136,9 +129,6 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
                   label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
                   content: typeof candidate.content === "string" ? candidate.content : "",
                 }
-                if (typeof candidate.description === "string" && candidate.description.trim()) {
-                  template.description = candidate.description.trim()
-                }
                 acc.push(template)
                 return acc
               }, [])
@@ -183,9 +173,6 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
               id: typeof candidate.id === "string" ? candidate.id : generateTemplateId(),
               label: typeof candidate.label === "string" ? candidate.label : "Untitled Template",
               content: typeof candidate.content === "string" ? candidate.content : "",
-            }
-            if (typeof candidate.description === "string" && candidate.description.trim()) {
-              template.description = candidate.description.trim()
             }
             acc.push(template)
             return acc
@@ -271,7 +258,6 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     const newTemplate: ChatTemplate = {
       id: generateTemplateId(),
       label: "New Prompt Template",
-      description: "",
       content: "",
     }
     
