@@ -378,6 +378,7 @@ export const en = {
     autoGenerateTooltip: 'When enabled, this insight will automatically generate when you enter the Clinical Insights page with patient data loaded. Disable to manually trigger generation only when needed.',
     languageWarning: 'Note: Modified tabs will not automatically update when switching languages. Reset to defaults to see language-specific tabs.',
     manageModels: 'Models',
+    manageSettings: 'Manage Settings',
     temporaryEditHint: 'This is a temporary edit and will not be saved.',
     goToSettings: 'Go to Settings for permanent changes →',
   },

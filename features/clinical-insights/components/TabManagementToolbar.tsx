@@ -33,7 +33,7 @@ export function TabManagementToolbar({ currentTabId, onTabChange }: TabManagemen
           variant="outline"
           size="icon"
           className="h-8 w-8"
-          title={t.clinicalInsights.manageSettings || "管理設定"}
+          title={t.clinicalInsights.manageSettings}
         >
           <Settings className="h-4 w-4" />
         </Button>

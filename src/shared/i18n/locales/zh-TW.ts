@@ -380,6 +380,7 @@ export const zhTW = {
     autoGenerateTooltip: '啟用時，進入臨床洞察頁面且病患資料已載入時，此判讀分頁會自動產生。停用則僅在需要時手動觸發產生。',
     languageWarning: '注意：修改過的標籤在切換語言時不會自動更新。重設為預設值以查看對應語言的標籤。',
     manageModels: '管理模型',
+    manageSettings: '管理設定',
     temporaryEditHint: '這是臨時修改，不會被保存。',
     goToSettings: '前往 Settings 永久修改 →',
   },
