@@ -5,11 +5,11 @@ export function useChatInput() {
   const [input, setInput] = useState("")
 
   const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>, onSend: () => Promise<void>, isLoading?: boolean) => {
+    (event: React.KeyboardEvent<HTMLTextAreaElement>, onSend: () => Promise<void>, isLoading?: boolean, disabled?: boolean) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault()
-        // Prevent double-submit when loading or input is empty
-        if (isLoading || !input.trim()) return
+        // Prevent double-submit when loading, input is empty, or disabled
+        if (isLoading || !input.trim() || disabled) return
         onSend().catch((err) => console.error("Send message failed", err))
       }
     },

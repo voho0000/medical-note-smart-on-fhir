@@ -9,7 +9,7 @@ interface ChatInputAreaProps {
   input: {
     input: string
     setInput: (value: string | ((prev: string) => string)) => void
-    handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>, handleSend: () => Promise<void>, isLoading?: boolean) => void
+    handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>, handleSend: () => Promise<void>, isLoading?: boolean, disabled?: boolean) => void
   }
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
   isLoading: boolean
@@ -24,6 +24,7 @@ interface ChatInputAreaProps {
     startRecordingRef: React.MutableRefObject<() => void>
     stopRecordingRef: React.MutableRefObject<() => void>
   }
+  disabled?: boolean
 }
 
 export function ChatInputArea({
@@ -32,7 +33,8 @@ export function ChatInputArea({
   isLoading,
   onSend,
   onStopGeneration,
-  voice
+  voice,
+  disabled = false
 }: ChatInputAreaProps) {
   const { t } = useLanguage()
 
@@ -44,7 +46,7 @@ export function ChatInputArea({
             ref={textareaRef}
             value={input.input}
             onChange={(event) => input.setInput(event.target.value)}
-            onKeyDown={(e) => input.handleKeyDown(e, onSend, isLoading)}
+            onKeyDown={(e) => input.handleKeyDown(e, onSend, isLoading, disabled)}
             placeholder={t.chat.placeholder}
             spellCheck={false}
             rows={1}
@@ -72,7 +74,7 @@ export function ChatInputArea({
         ) : (
           <button
             onClick={() => onSend()}
-            disabled={!input.input.trim() || isLoading}
+            disabled={!input.input.trim() || isLoading || disabled}
             className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
           >
             {t.common.send}

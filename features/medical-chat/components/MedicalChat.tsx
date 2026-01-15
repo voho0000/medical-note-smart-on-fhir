@@ -30,6 +30,8 @@ import { useFhirContext } from "@/src/application/hooks/chat/use-fhir-context.ho
 import { useAutoSaveChat } from "@/src/application/hooks/chat/use-auto-save-chat.hook"
 import { useSmartTitleGeneration } from "@/src/application/hooks/chat/use-smart-title-generation.hook"
 import { ChatHistoryDrawer } from "@/features/chat-history"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -57,13 +59,18 @@ export default function MedicalChat() {
   // FHIR context for chat history (patient ID and server URL)
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
   
+  // FHIR error handling
+  const { error: patientError } = usePatient()
+  const { error: clinicalDataError } = useClinicalData()
+  
   // Auto-save chat to Firestore (debounced)
   // Note: patientName is only used for UI display, never stored in Firestore
+  // Auto-save is enabled when user is logged in, even without FHIR data
   const { forceSave } = useAutoSaveChat({
     patientId: patientId || undefined,
     fhirServerUrl: fhirServerUrl || undefined,
     debounceMs: 5000,
-    enabled: !!user && !!patientId && !!fhirServerUrl,
+    enabled: !!user,
   })
 
   // AI smart title generation (after first response)
@@ -105,23 +112,26 @@ export default function MedicalChat() {
   // API key validation
   const { hasApiKey } = useApiKeyValidation(model, openAiKey, geminiKey)
 
-  // Hide warning when API key is set or user is logged in
+  // Show/hide warning based on API key status (deep mode requires API key, proxy not supported)
+  const apiKeyAvailable = hasApiKey()
   useEffect(() => {
-    if (isAgentMode && (hasApiKey() || !!user)) {
+    if (isAgentMode && !apiKeyAvailable) {
+      agentMode.showWarning()
+    } else {
       agentMode.hideWarning()
     }
-  }, [isAgentMode, hasApiKey, !!user, agentMode])
+  }, [isAgentMode, apiKeyAvailable, agentMode])
 
   // Handle agent mode toggle with API key check
   const handleAgentModeToggle = useCallback((enabled: boolean) => {
-    // Only show warning if user is not logged in and has no API key
-    if (enabled && !hasApiKey() && !user) {
+    // Show warning if no API key (deep mode requires API key, proxy not supported)
+    if (enabled && !hasApiKey()) {
       agentMode.showWarning()
     } else {
       agentMode.hideWarning()
     }
     agentMode.setIsAgentMode(enabled)
-  }, [hasApiKey, user, agentMode])
+  }, [hasApiKey, agentMode])
 
   // Handlers
   const handleSend = useCallback(async () => {
@@ -196,6 +206,16 @@ export default function MedicalChat() {
       )}
       
       <CardContent className={`flex-1 p-0 overflow-y-auto min-h-0 bg-gradient-to-b from-muted/20 to-background ${isExpanded || !showHeader ? '' : 'border-t'}`}>
+        {(patientError || clinicalDataError) && (
+          <div className="mx-4 mt-4 mb-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-sm">
+            <div className="font-medium text-amber-800 dark:text-amber-200 mb-1">{t.medicalChat.fhirDataWarning}</div>
+            <div className="text-amber-700 dark:text-amber-300 text-xs">
+              {patientError && <div>• {t.errors.fetchPatient}</div>}
+              {clinicalDataError && <div>• {t.errors.fetchClinicalData}</div>}
+              {isAgentMode && <div className="mt-1">• {t.medicalChat.deepModeLimited}</div>}
+            </div>
+          </div>
+        )}
         <ChatMessageList messages={chatMessages} isLoading={chat.isLoading} />
       </CardContent>
 
@@ -234,6 +254,7 @@ export default function MedicalChat() {
             onSend={handleSend}
             onStopGeneration={() => chat.stopGeneration()}
             voice={voice}
+            disabled={isAgentMode && !hasApiKey()}
           />
         </div>
       </CardFooter>

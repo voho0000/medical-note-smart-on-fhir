@@ -45,11 +45,6 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const trimmed = input.trim()
       if (!trimmed) return
 
-      if (!patient?.id) {
-        setError(new Error("Patient ID not available"))
-        return
-      }
-
       // Create user message
       const userMessage = createUserMessage(trimmed)
       const newMessages = [...chatMessages, userMessage]
@@ -77,6 +72,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const isGemini = modelId.startsWith("gemini") || modelId.startsWith("models/gemini")
         const apiKey = isGemini ? geminiKey : openAiKey
 
+        // Deep mode requires API key (proxy not supported for tool calling)
         if (!apiKey) {
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
@@ -92,6 +88,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
         const clinicalContext = getFullClinicalContext()
         const hasClinicalData = clinicalContext.trim().length > 0
+        const hasPatientId = !!patient?.id
 
         const sp = t.agent.systemPrompt
         const td = sp.toolDescriptions
@@ -100,9 +97,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
 ${sp.deepModeIntro}
 
-**${sp.currentPatient}**
+${hasPatientId ? `**${sp.currentPatient}**
 - ${sp.patientId.replace('{id}', patient.id)}
-- ${sp.hasPermission}
+- ${sp.hasPermission}` : `**${sp.currentPatient}**
+- No patient context available
+- FHIR query tools will not work without patient ID`}
 
 ${hasClinicalData ? `**${sp.organizedClinicalData}**
 ${sp.organizedClinicalDataDesc}
