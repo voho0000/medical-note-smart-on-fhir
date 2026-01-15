@@ -47,7 +47,7 @@ export function ModelSelector({ models, selectedModel, onSelectModel, getModelSt
               <div className="flex-1">
                 <span className="block text-sm font-medium leading-tight">{entry.label}</span>
                 <span className="text-xs text-muted-foreground">
-                  {locale === 'zh-TW' && definition?.descriptionZh ? definition.descriptionZh : entry.description}
+                  {entry.description}
                 </span>
                 {status && (
                   <span className="mt-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">

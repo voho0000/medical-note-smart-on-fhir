@@ -1,7 +1,7 @@
 // OpenAI Service Implementation
 import type { AiQueryRequest, AiQueryResponse, AiMessage } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
-import { isBuiltInModelId, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import { isGptModelId, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 import { AiError, AiErrorCode } from '@/src/core/errors'
 import type { IAiProvider, AiProviderConfig, StreamingOptions } from '@/src/core/interfaces/services/ai-provider.interface'
 
@@ -20,7 +20,7 @@ export class OpenAiService {
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
     const modelDef = getModelDefinition(request.modelId)
-    const shouldUseProxy = !this.apiKey && isBuiltInModelId(request.modelId) && ENV_CONFIG.hasChatProxy
+    const shouldUseProxy = !this.apiKey && isGptModelId(request.modelId) && !modelDef?.requiresUserKey && ENV_CONFIG.hasChatProxy
 
     if (!shouldUseProxy && !this.apiKey) {
       if (modelDef?.requiresUserKey) {

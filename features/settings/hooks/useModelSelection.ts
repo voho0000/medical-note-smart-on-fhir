@@ -2,9 +2,8 @@
 import { useMemo } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
-  BUILT_IN_MODELS,
+  GPT_MODELS,
   GEMINI_MODELS,
-  PREMIUM_MODELS,
   DEFAULT_MODEL_ID,
   getModelDefinition,
   isModelId,
@@ -27,33 +26,32 @@ export function useModelSelection(
 ) {
   const { t } = useLanguage()
   const gptModels = useMemo(() => {
-    const models = [...BUILT_IN_MODELS, ...PREMIUM_MODELS]
-    return models.map((entry): ModelEntry => {
+    return GPT_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
       const isLocked = definition?.requiresUserKey && !apiKey
+      const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
       return {
-        ...entry,
+        id: entry.id,
+        label: entry.label,
+        description,
         isLocked: isLocked || false
       }
-    }).filter((entry) => {
-      const definition = getModelDefinition(entry.id)
-      return !!definition
     })
-  }, [apiKey])
+  }, [apiKey, t.settings.modelDescriptions])
 
   const geminiModels = useMemo(() => {
     return GEMINI_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
       const isLocked = definition?.requiresUserKey && !geminiKey
+      const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
       return {
-        ...entry,
+        id: entry.id,
+        label: entry.label,
+        description,
         isLocked: isLocked || false
       }
-    }).filter((entry) => {
-      const definition = getModelDefinition(entry.id)
-      return !!definition
     })
-  }, [geminiKey])
+  }, [geminiKey, t.settings.modelDescriptions])
 
   const handleSelectModel = (candidate: string) => {
     if (!isModelId(candidate)) return
