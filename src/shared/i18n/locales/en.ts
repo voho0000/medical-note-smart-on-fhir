@@ -394,6 +394,8 @@ export const en = {
     manageSettings: 'Manage Settings',
     temporaryEditHint: 'This is a temporary edit and will not be saved.',
     goToSettings: 'Go to Settings for permanent changes →',
+    fhirDataRequired: 'Clinical Insights Requires FHIR Data',
+    fhirDataRequiredDesc: 'This feature requires patient clinical data to be loaded from the FHIR server. Please ensure the FHIR server connection is working properly.',
   },
 
   recording: {
@@ -417,6 +419,7 @@ export const en = {
     organizingResults: 'Organizing query results...',
     noTextGenerated: 'AI executed the query but did not generate a response. Please try again or rephrase your question.',
     apiKeyRequired: '⚠️ Deep Mode Requires API Key\n\nDeep Mode (AI Agent) requires direct communication with AI providers to use tool calling features, and currently cannot work through Firebase Proxy.\n\nPlease set your OpenAI or Gemini API Key in the "Settings" page, or switch to "Normal Mode".',
+    geminiRequiresApiKey: 'Gemini models require an API key for deep mode. Please add your Gemini API key in Settings or switch to an OpenAI model.',
     toolNames: {
       queryConditions: 'Querying conditions',
       queryMedications: 'Querying medications',
@@ -476,6 +479,8 @@ export const en = {
     apiKeyWarningMessage: 'Please set your API Key in the Settings page first, or switch to Normal Mode.',
     deepModeFeaturesTitle: 'Deep Mode Features:',
     deepModeFeatures: '• Auto-query FHIR patient data\n• Use Perplexity AI for latest medical info\n• AI Agent autonomous query strategy',
+    fhirDataWarning: 'FHIR Data Loading Failed',
+    deepModeLimited: 'Deep mode FHIR query tools may also be unavailable',
   },
 
   chatHistory: {

@@ -51,24 +51,23 @@ export function useAutoSaveChat({
     
     console.log('[Auto-save] saveSession called, currentSessionId:', currentSessionId, 'messages:', currentMessages.length)
     
-    // Strict validation: ensure all required fields are non-empty strings
-    if (!user?.uid || !patientId || !fhirServerUrl) {
-      console.log('[Auto-save] Skipping save - missing required fields:', {
-        hasUser: !!user?.uid,
-        hasPatientId: !!patientId,
-        hasFhirServerUrl: !!fhirServerUrl,
-      })
+    // Only require user to be logged in
+    if (!user?.uid) {
+      console.log('[Auto-save] Skipping save - user not logged in')
       return
     }
 
-    // Ensure they are strings, not null or undefined
-    if (typeof patientId !== 'string' || typeof fhirServerUrl !== 'string') {
-      console.warn('[Auto-save] Invalid field types:', {
-        patientId: typeof patientId,
-        fhirServerUrl: typeof fhirServerUrl,
-      })
-      return
-    }
+    // Use fallback values when FHIR data is not available
+    const effectivePatientId = patientId || 'no-patient'
+    const effectiveFhirServerUrl = fhirServerUrl || 'no-fhir-server'
+
+    console.log('[Auto-save] Save context:', {
+      hasUser: !!user?.uid,
+      hasPatientId: !!patientId,
+      hasFhirServerUrl: !!fhirServerUrl,
+      effectivePatientId,
+      effectiveFhirServerUrl,
+    })
 
     if (currentMessages.length === 0) {
       console.log('[Auto-save] Skipping save - no messages')
@@ -92,8 +91,8 @@ export function useAutoSaveChat({
         console.log('[Auto-save] Creating new session')
         const newSession = await saveChatSessionUseCase.execute({
           userId: user.uid,
-          fhirServerUrl,
-          patientId,
+          fhirServerUrl: effectiveFhirServerUrl,
+          patientId: effectivePatientId,
           messages: currentMessages,
           locale,
         })
@@ -152,11 +151,23 @@ export function useAutoSaveChat({
     
     prevMessageCountRef.current = messageCount
     
-    // Skip if last message is empty (streaming just started, not ready to save)
+    // Skip if last message is empty or still in thinking state (streaming just started or incomplete)
     const lastMessage = messages[messages.length - 1]
-    if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.content.trim()) {
-      console.log('[Auto-save] Skipped - streaming just started (empty assistant message)')
-      return
+    if (lastMessage && lastMessage.role === 'assistant') {
+      const content = lastMessage.content.trim()
+      // Check if message is empty or still showing thinking state
+      if (!content || content.includes('🤔') || content.includes('思考中')) {
+        console.log('[Auto-save] Skipped - streaming just started or in thinking state')
+        return
+      }
+      // Check if message has agentStates (deep mode) - wait for completion
+      if ('agentStates' in lastMessage && Array.isArray(lastMessage.agentStates) && lastMessage.agentStates.length > 0) {
+        const lastState = lastMessage.agentStates[lastMessage.agentStates.length - 1]
+        if (lastState?.state?.includes('🤔') || lastState?.state?.includes('思考中')) {
+          console.log('[Auto-save] Skipped - agent still thinking')
+          return
+        }
+      }
     }
     
     console.log('[Auto-save] Message count changed:', {

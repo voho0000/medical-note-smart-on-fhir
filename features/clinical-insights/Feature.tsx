@@ -25,7 +25,7 @@ export default function ClinicalInsightsFeature() {
   const { panels: configPanels, updatePanel } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext()
-  const { isLoading: clinicalDataLoading } = useClinicalData()
+  const { isLoading: clinicalDataLoading, error: clinicalDataError } = useClinicalData()
   const model = useModel()
 
   const [context, setContext] = useState("")
@@ -89,7 +89,29 @@ export default function ClinicalInsightsFeature() {
   }, [panels, activeTabId])
 
   // Only enable insights when data is fully loaded and context is available
-  const hasData = !clinicalDataLoading && context.trim().length > 0
+  const hasData = !clinicalDataLoading && !clinicalDataError && context.trim().length > 0
+
+  // If FHIR data failed to load, show error and disable the feature
+  if (clinicalDataError) {
+    return (
+      <ScrollArea className="h-full pr-3">
+        <div className="space-y-4">
+          <Card className="border-destructive">
+            <CardContent className="pt-6">
+              <div className="text-sm">
+                <div className="font-medium text-destructive mb-2">{t.clinicalInsights.fhirDataRequired}</div>
+                <div className="text-muted-foreground mb-3">{t.clinicalInsights.fhirDataRequiredDesc}</div>
+                <div className="text-destructive">
+                  <div className="font-medium mb-1">{t.common.error}:</div>
+                  <div>{clinicalDataError instanceof Error ? clinicalDataError.message : t.errors.fetchClinicalData}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ScrollArea>
+    )
+  }
 
   const panelEntries = useMemo(() => {
     return panels.map((panel) => {

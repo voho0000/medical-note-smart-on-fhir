@@ -85,7 +85,7 @@ export const vitalSignsCategory: DataCategory<Observation> = {
   
   getContextSection: (data, filters): ClinicalContextSection[] => {
     if (data.length === 0) {
-      return [{ title: 'Vital Signs', items: ['No vital signs data available.'] }]
+      return []
     }
     
     // Deduplicate by id

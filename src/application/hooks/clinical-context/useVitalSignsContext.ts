@@ -16,7 +16,7 @@ export function useVitalSignsContext(
     const allVitalSigns = [...(clinicalData?.vitalSigns ?? [])]
 
     if (allVitalSigns.length === 0) {
-      return [{ title: "Vital Signs", items: ["No vital signs data available."] }]
+      return []
     }
 
     // Deduplicate by id

@@ -396,6 +396,8 @@ export const zhTW = {
     manageSettings: '管理設定',
     temporaryEditHint: '這是臨時修改，不會被保存。',
     goToSettings: '前往 Settings 永久修改 →',
+    fhirDataRequired: '臨床洞察需要 FHIR 資料',
+    fhirDataRequiredDesc: '此功能需要從 FHIR 伺服器載入病患的臨床資料才能運作。請確認 FHIR 伺服器連線正常。',
   },
 
   recording: {
@@ -419,6 +421,7 @@ export const zhTW = {
     organizingResults: '正在整理查詢結果...',
     noTextGenerated: 'AI 執行了查詢但沒有生成回應。請重新嘗試或換個方式提問。',
     apiKeyRequired: '⚠️ 深入模式需要 API Key\n\n深入模式（AI Agent）需要直接與 AI 服務商通訊以使用工具查詢功能，目前無法透過 Firebase Proxy 運作。\n\n請在「設定」頁面中設定您的 OpenAI 或 Gemini API Key，或改用「一般模式」。',
+    geminiRequiresApiKey: 'Gemini 模型在深入模式需要 API Key。請在「設定」中新增 Gemini API Key，或切換至 OpenAI 模型。',
     toolNames: {
       queryConditions: '查詢診斷資料',
       queryMedications: '查詢用藥資料',
@@ -478,6 +481,8 @@ export const zhTW = {
     apiKeyWarningMessage: '請先在「設定」頁面中設定您的 API Key，或改用一般模式。',
     deepModeFeaturesTitle: '深入模式額外功能：',
     deepModeFeatures: '• 自動查詢 FHIR 病人資料\n• 使用 Perplexity AI 查詢最新醫學資訊\n• AI Agent 自主決策查詢策略',
+    fhirDataWarning: 'FHIR 資料載入失敗',
+    deepModeLimited: '深入模式的 FHIR 查詢工具可能也無法使用',
   },
 
   chatHistory: {

@@ -23,6 +23,7 @@ interface RawClinicalData {
   encounters?: unknown[]
   procedures?: unknown[]
   isLoading: boolean
+  error?: Error | null
 }
 
 export function DataSelectionFeature() {
@@ -54,6 +55,19 @@ export function DataSelectionFeature() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
           <p className="text-sm text-muted-foreground">{t.dataSelection.loadingData}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (rawClinicalData.error) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center max-w-md">
+          <div className="text-destructive mb-2">
+            <div className="font-medium mb-1">{t.common.error}</div>
+            <p className="text-sm">{rawClinicalData.error instanceof Error ? rawClinicalData.error.message : t.errors.fetchClinicalData}</p>
+          </div>
         </div>
       </div>
     )

@@ -262,7 +262,7 @@ export class GenerateClinicalContextUseCase {
     timeRange: TimeRange
   ): ClinicalContextSection[] {
     if (vitalSigns.length === 0) {
-      return [{ title: 'Vital Signs', items: ['No vital signs data available.'] }]
+      return []
     }
 
     const filtered = this.filterByTimeRange(vitalSigns, timeRange, v => v.effectiveDateTime)
