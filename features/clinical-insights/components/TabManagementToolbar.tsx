@@ -7,10 +7,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { Settings, Share2, Library } from "lucide-react"
+import { Settings, Share2, Library, Lock } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
+import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 
 interface TabManagementToolbarProps {
   currentTabId: string
@@ -29,8 +31,10 @@ export function TabManagementToolbar({
 }: TabManagementToolbarProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
+  const { user } = useAuth()
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showGalleryDialog, setShowGalleryDialog] = useState(false)
+  const [showLoginDialog, setShowLoginDialog] = useState(false)
 
   const handleManageModels = () => {
     setActiveTab('settings', 'ai')
@@ -41,6 +45,10 @@ export function TabManagementToolbar({
   }
 
   const handleSharePrompt = () => {
+    if (!user) {
+      setShowLoginDialog(true)
+      return
+    }
     setShowShareDialog(true)
   }
 
@@ -77,8 +85,13 @@ export function TabManagementToolbar({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={handleSharePrompt}>
-          <Share2 className="h-4 w-4 mr-2" />
+          {user ? (
+            <Share2 className="h-4 w-4 mr-2" />
+          ) : (
+            <Lock className="h-4 w-4 mr-2" />
+          )}
           {t.promptGallery?.sharePrompt || "分享模板"}
+          {!user && <span className="ml-2 text-xs text-muted-foreground">(需登入)</span>}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={handleBrowseGallery}>
           <Library className="h-4 w-4 mr-2" />
@@ -109,6 +122,12 @@ export function TabManagementToolbar({
       onOpenChange={setShowGalleryDialog}
       mode="insight"
       onSelectPrompt={handleSelectPrompt}
+    />
+
+    {/* Login Required Dialog */}
+    <LoginRequiredDialog
+      open={showLoginDialog}
+      onOpenChange={setShowLoginDialog}
     />
     </>
   )

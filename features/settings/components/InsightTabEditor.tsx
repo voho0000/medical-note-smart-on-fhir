@@ -1,4 +1,5 @@
 // Insight Tab Editor Component
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -10,8 +11,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info, Share2 } from "lucide-react"
+import { Info, Share2, Lock } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
+import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 
 interface InsightPanel {
   id: string
@@ -44,6 +47,18 @@ export function InsightTabEditor({
   onShare,
 }: InsightTabEditorProps) {
   const { t } = useLanguage()
+  const { user } = useAuth()
+  const [showLoginDialog, setShowLoginDialog] = useState(false)
+
+  const handleShareClick = () => {
+    if (!user) {
+      setShowLoginDialog(true)
+      return
+    }
+    if (onShare) {
+      onShare(panel)
+    }
+  }
   
   return (
     <div className="space-y-3 rounded-lg border p-4">
@@ -53,16 +68,34 @@ export function InsightTabEditor({
             <p className="text-sm font-semibold">{t.settings.tab} {index + 1}</p>
             <div className="flex gap-2">
               {onShare && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onShare(panel)}
-                  className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
-                >
-                  <Share2 className="h-3.5 w-3.5 mr-1.5" />
-                  {t.promptGallery?.sharePrompt || "分享"}
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleShareClick}
+                        className={user 
+                          ? "border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
+                          : "border-2 border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50"
+                        }
+                      >
+                        {user ? (
+                          <Share2 className="h-3.5 w-3.5 mr-1.5" />
+                        ) : (
+                          <Lock className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        {t.promptGallery?.sharePrompt || "分享"}
+                      </Button>
+                    </TooltipTrigger>
+                    {!user && (
+                      <TooltipContent>
+                        <p>請先登入以分享模板</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               )}
               {canRemove && (
                 <Button
@@ -149,6 +182,12 @@ export function InsightTabEditor({
           />
         </div>
       </div>
+
+      {/* Login Required Dialog */}
+      <LoginRequiredDialog
+        open={showLoginDialog}
+        onOpenChange={setShowLoginDialog}
+      />
     </div>
   )
 }
