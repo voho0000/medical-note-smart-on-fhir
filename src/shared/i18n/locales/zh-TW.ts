@@ -498,6 +498,13 @@ export const zhTW = {
     daysAgo: '天前',
   },
 
+  connectionInfo: {
+    title: '連線資訊',
+    fhirServer: 'FHIR 伺服器',
+    patientId: '患者 ID',
+    patientName: '患者姓名',
+  },
+
   auth: (() => {
     const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
     return {

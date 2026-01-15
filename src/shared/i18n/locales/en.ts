@@ -496,6 +496,13 @@ export const en = {
     daysAgo: 'd ago',
   },
 
+  connectionInfo: {
+    title: 'Connection Info',
+    fhirServer: 'FHIR Server',
+    patientId: 'Patient ID',
+    patientName: 'Patient Name',
+  },
+
   auth: (() => {
     const { QUOTA_CONFIG } = require('@/src/shared/config/quota.config')
     return {
