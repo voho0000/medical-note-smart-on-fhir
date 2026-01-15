@@ -32,6 +32,8 @@ import { useSmartTitleGeneration } from "@/src/application/hooks/chat/use-smart-
 import { ChatHistoryDrawer } from "@/features/chat-history"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
+import { PromptGalleryDialog } from "@/features/prompt-gallery"
+import type { SharedPrompt } from "@/features/prompt-gallery"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -55,6 +57,9 @@ export default function MedicalChat() {
   
   // Header visibility state (default collapsed for more chat space)
   const [showHeader, setShowHeader] = useState(false)
+  
+  // Prompt Gallery state
+  const [showPromptGallery, setShowPromptGallery] = useState(false)
   
   // FHIR context for chat history (patient ID and server URL)
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
@@ -167,6 +172,13 @@ export default function MedicalChat() {
     }
   }, [input, template.selectedTemplate, scrollTextareaToBottom])
 
+  // Handle prompt selection from gallery
+  const handleSelectPrompt = useCallback((prompt: SharedPrompt) => {
+    // Insert prompt content into chat input
+    input.insertTextWithTrim(prompt.prompt)
+    scrollTextareaToBottom()
+  }, [input, scrollTextareaToBottom])
+
   // Keyboard shortcuts
   useKeyboardShortcuts(isExpanded, expandable.collapse)
 
@@ -237,6 +249,7 @@ export default function MedicalChat() {
               selectedTemplateId={template.selectedTemplate?.id}
               onTemplateChange={template.setSelectedTemplateId}
               hasTemplateContent={!!template.selectedTemplate?.content?.trim()}
+              onOpenGallery={() => setShowPromptGallery(true)}
             />
           </div>
           {showApiKeyWarning && (
@@ -265,13 +278,31 @@ export default function MedicalChat() {
   // Render expanded overlay or normal view
   if (isExpanded) {
     return (
-      <ExpandedOverlay
-        content={chatContent}
-        onCollapse={expandable.collapse}
-        placeholderText={t.chat.expandedMode}
-      />
+      <>
+        <ExpandedOverlay
+          content={chatContent}
+          onCollapse={expandable.collapse}
+          placeholderText={t.chat.expandedMode}
+        />
+        <PromptGalleryDialog
+          open={showPromptGallery}
+          onOpenChange={setShowPromptGallery}
+          mode="chat"
+          onSelectPrompt={handleSelectPrompt}
+        />
+      </>
     )
   }
 
-  return chatContent
+  return (
+    <>
+      {chatContent}
+      <PromptGalleryDialog
+        open={showPromptGallery}
+        onOpenChange={setShowPromptGallery}
+        mode="chat"
+        onSelectPrompt={handleSelectPrompt}
+      />
+    </>
+  )
 }

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Share2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface Template {
@@ -20,6 +21,7 @@ interface TemplateEditorProps {
   onUpdate: (id: string, updates: Partial<Template>) => void
   onRemove: (id: string) => void
   onMove: (id: string, direction: "up" | "down") => void
+  onShare?: (template: Template) => void
 }
 
 export function TemplateEditor({ 
@@ -30,7 +32,8 @@ export function TemplateEditor({
   canMoveDown,
   onUpdate, 
   onRemove,
-  onMove
+  onMove,
+  onShare
 }: TemplateEditorProps) {
   const { t } = useLanguage()
   
@@ -64,6 +67,18 @@ export function TemplateEditor({
           </div>
         </div>
         <div className="flex gap-2">
+          {onShare && template.content.trim() && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onShare(template)}
+              className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
+            >
+              <Share2 className="h-4 w-4 mr-1" />
+              {t.promptGallery.sharePrompt}
+            </Button>
+          )}
           {canRemove && (
             <Button
               type="button"

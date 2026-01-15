@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
-import { Plus, Trash2, FileText, Settings, ChevronDown } from "lucide-react"
+import { Plus, Trash2, FileText, Settings, ChevronDown, Library } from "lucide-react"
 
 interface Template {
   id: string
@@ -22,6 +22,7 @@ interface ChatToolbarProps {
   selectedTemplateId?: string
   onTemplateChange: (id: string) => void
   hasTemplateContent: boolean
+  onOpenGallery?: () => void
 }
 
 export function ChatToolbar({
@@ -33,6 +34,7 @@ export function ChatToolbar({
   selectedTemplateId,
   onTemplateChange,
   hasTemplateContent,
+  onOpenGallery,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
@@ -43,6 +45,12 @@ export function ChatToolbar({
 
   const handleManageModels = () => {
     setActiveTab('settings', 'ai')
+  }
+
+  const handleOpenGallery = () => {
+    if (onOpenGallery) {
+      onOpenGallery()
+    }
   }
   
   return (
@@ -103,6 +111,12 @@ export function ChatToolbar({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[160px]">
+          {onOpenGallery && (
+            <DropdownMenuItem onClick={handleOpenGallery} className="gap-2 cursor-pointer">
+              <Library className="h-3.5 w-3.5" />
+              {t.promptGallery.browseGallery}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={handleManageModels} className="gap-2 cursor-pointer">
             <Settings className="h-3.5 w-3.5" />
             {t.chat.manageModels || "管理模型"}

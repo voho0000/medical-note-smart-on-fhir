@@ -10,10 +10,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info } from "lucide-react"
+import { Info, Library } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
+import { PromptGalleryDialog, SharePromptDialog } from "@/features/prompt-gallery"
+import type { SharedPrompt } from "@/features/prompt-gallery"
 
 export function ChatTemplatesSettings() {
   const { t } = useLanguage()
@@ -23,6 +25,9 @@ export function ChatTemplatesSettings() {
   const canRemoveTemplate = templates.length > 1
 
   const [activeTab, setActiveTab] = useState(templates[0]?.id || "")
+  const [showPromptGallery, setShowPromptGallery] = useState(false)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [templateToShare, setTemplateToShare] = useState<{ label: string; content: string } | null>(null)
 
   const handleAddTemplate = () => {
     const newTemplateId = addTemplate()
@@ -50,6 +55,25 @@ export function ChatTemplatesSettings() {
     if (newIndex < 0 || newIndex >= templates.length) return
     
     moveTemplate(currentIndex, newIndex)
+  }
+
+  const handleSelectPrompt = (prompt: SharedPrompt) => {
+    // Add prompt as a new template
+    if (canAddTemplate) {
+      const newTemplateId = addTemplate()
+      if (newTemplateId) {
+        updateTemplate(newTemplateId, {
+          label: prompt.title,
+          content: prompt.prompt,
+        })
+        setActiveTab(newTemplateId)
+      }
+    }
+  }
+
+  const handleShareTemplate = (template: { label: string; content: string }) => {
+    setTemplateToShare(template)
+    setShowShareDialog(true)
   }
 
   return (
@@ -109,6 +133,7 @@ export function ChatTemplatesSettings() {
                 onUpdate={updateTemplate}
                 onRemove={handleRemoveTemplate}
                 onMove={handleMove}
+                onShare={handleShareTemplate}
               />
             </TabsContent>
           ))}
@@ -125,6 +150,16 @@ export function ChatTemplatesSettings() {
         >
           {isSaving ? t.settings.saving : t.settings.saveTemplates}
         </Button>
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={() => setShowPromptGallery(true)}
+          disabled={!canAddTemplate}
+          className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
+        >
+          <Library className="h-4 w-4 mr-2" />
+          {t.promptGallery.browseGallery}
+        </Button>
         <Button type="button" variant="outline" onClick={resetTemplates} className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10">
           {t.settings.resetDefaults}
         </Button>
@@ -132,6 +167,21 @@ export function ChatTemplatesSettings() {
           {templates.length}/{maxTemplates} {t.settings.templatesAvailable}
         </span>
       </div>
+
+      <PromptGalleryDialog
+        open={showPromptGallery}
+        onOpenChange={setShowPromptGallery}
+        mode="chat"
+        onSelectPrompt={handleSelectPrompt}
+      />
+
+      <SharePromptDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        initialTitle={templateToShare?.label || ''}
+        initialPrompt={templateToShare?.content || ''}
+        initialType="chat"
+      />
     </div>
   )
 }
