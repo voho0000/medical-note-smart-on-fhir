@@ -17,7 +17,6 @@ export interface ChatMessage extends AiMessage {
 export interface AiModelDefinition {
   id: string
   label: string
-  description: string
   provider: AiProvider
   requiresUserKey?: boolean
 }
