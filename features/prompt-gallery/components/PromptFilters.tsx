@@ -26,6 +26,8 @@ interface PromptFiltersProps {
   onCategoryChange: (category?: PromptCategory) => void
   selectedSpecialty?: PromptSpecialty
   onSpecialtyChange: (specialty?: PromptSpecialty) => void
+  sortBy?: 'latest' | 'popular'
+  onSortChange: (sort: 'latest' | 'popular') => void
   onClearFilters: () => void
   hasActiveFilters: boolean
 }
@@ -39,12 +41,14 @@ export function PromptFilters({
   onCategoryChange,
   selectedSpecialty,
   onSpecialtyChange,
+  sortBy = 'latest',
+  onSortChange,
   onClearFilters,
   hasActiveFilters,
 }: PromptFiltersProps) {
   const { t } = useLanguage()
 
-  const types: (PromptType | 'all')[] = ['all', 'chat', 'insight', 'both']
+  const types: (PromptType | 'all')[] = ['all', 'chat', 'insight']
   const categories: (PromptCategory | 'all')[] = [
     'all',
     'soap',
@@ -76,8 +80,6 @@ export function PromptFilters({
         return t.promptGallery.typeChat
       case 'insight':
         return t.promptGallery.typeInsight
-      case 'both':
-        return t.promptGallery.typeBoth
       default:
         return type
     }
@@ -168,6 +170,23 @@ export function PromptFilters({
                   {getSpecialtyLabel(specialty)}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Sort By */}
+        <div className="space-y-1.5">
+          <Label className="text-xs">排序方式</Label>
+          <Select
+            value={sortBy}
+            onValueChange={(value) => onSortChange(value as 'latest' | 'popular')}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="latest">最新優先</SelectItem>
+              <SelectItem value="popular">熱門優先</SelectItem>
             </SelectContent>
           </Select>
         </div>

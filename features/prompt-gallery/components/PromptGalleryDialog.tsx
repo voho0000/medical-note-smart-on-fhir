@@ -42,6 +42,7 @@ export function PromptGalleryDialog({
   const [sharePrompt, setSharePrompt] = useState<SharedPrompt | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest')
   const itemsPerPage = 8
 
   // Refresh prompts when dialog opens
@@ -91,11 +92,21 @@ export function PromptGalleryDialog({
     filter.specialty
   )
 
+  // Sort prompts
+  const sortedPrompts = useMemo(() => {
+    const sorted = [...prompts]
+    if (sortBy === 'popular') {
+      return sorted.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
+    }
+    // Default: latest (already sorted by createdAt desc from Firestore)
+    return sorted
+  }, [prompts, sortBy])
+
   // Pagination
-  const totalPages = Math.ceil(prompts.length / itemsPerPage)
+  const totalPages = Math.ceil(sortedPrompts.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const currentPrompts = prompts.slice(startIndex, endIndex)
+  const currentPrompts = sortedPrompts.slice(startIndex, endIndex)
 
   // Reset to page 1 when filters change
   const handleFilterChange = (newFilter: any) => {
@@ -123,6 +134,8 @@ export function PromptGalleryDialog({
               onCategoryChange={(category) => handleFilterChange({ category })}
               selectedSpecialty={filter.specialty}
               onSpecialtyChange={(specialty) => handleFilterChange({ specialty })}
+              sortBy={sortBy}
+              onSortChange={(sort) => { setSortBy(sort); setCurrentPage(1); }}
               onClearFilters={() => { clearFilter(); setCurrentPage(1); }}
               hasActiveFilters={hasActiveFilters}
             />
