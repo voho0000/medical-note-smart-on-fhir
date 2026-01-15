@@ -1,6 +1,6 @@
 // API Key Input Component
 import { useState } from "react"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, Info } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -40,9 +40,27 @@ export function ApiKeyInput({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={id} className="text-xs uppercase text-muted-foreground">
-        {label}
-      </Label>
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={id} className="text-xs uppercase text-muted-foreground">
+          {label}
+        </Label>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="說明"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              <p className="text-xs">{helpText}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative sm:flex-1">
           <Input
@@ -87,7 +105,6 @@ export function ApiKeyInput({
           </TooltipProvider>
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">{helpText}</p>
     </div>
   )
 }
