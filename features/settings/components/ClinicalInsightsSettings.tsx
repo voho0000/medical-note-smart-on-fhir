@@ -10,12 +10,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info, Library, Share2 } from "lucide-react"
+import { Info, Library, Share2, Lock } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { InsightTabEditor } from './InsightTabEditor'
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
+import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import type { SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
 
 export function ClinicalInsightsSettings() {
@@ -39,6 +40,7 @@ export function ClinicalInsightsSettings() {
   const [activeTab, setActiveTab] = useState(panels[0]?.id || "")
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showGalleryDialog, setShowGalleryDialog] = useState(false)
+  const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [promptToShare, setPromptToShare] = useState<{ title: string; prompt: string } | null>(null)
 
   const handleAddPanel = () => {
@@ -170,15 +172,36 @@ export function ClinicalInsightsSettings() {
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-3">
-          <Button 
-            type="button" 
-            variant="default" 
-            onClick={savePanels}
-            disabled={isSaving}
-            className="bg-primary hover:bg-primary/90"
-          >
-            {isSaving ? t.settings.saving : t.settings.saveTemplates}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  type="button" 
+                  variant="default" 
+                  onClick={() => {
+                    if (!user) {
+                      setShowLoginDialog(true)
+                      return
+                    }
+                    savePanels()
+                  }}
+                  disabled={isSaving}
+                  className={user 
+                    ? "bg-primary hover:bg-primary/90"
+                    : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                  }
+                >
+                  {!user && <Lock className="h-4 w-4 mr-2" />}
+                  {isSaving ? t.settings.saving : t.settings.saveTemplates}
+                </Button>
+              </TooltipTrigger>
+              {!user && (
+                <TooltipContent>
+                  <p>請先登入以儲存模板</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
           <Button 
             type="button" 
             variant="outline" 
@@ -212,6 +235,12 @@ export function ClinicalInsightsSettings() {
         onOpenChange={setShowGalleryDialog}
         mode="insight"
         onSelectPrompt={handleSelectPrompt}
+      />
+
+      {/* Login Required Dialog */}
+      <LoginRequiredDialog
+        open={showLoginDialog}
+        onOpenChange={setShowLoginDialog}
       />
     </div>
   )

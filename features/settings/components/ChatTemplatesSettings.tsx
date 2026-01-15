@@ -10,15 +10,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info, Library } from "lucide-react"
+import { Info, Library, Lock } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
 import { PromptGalleryDialog, SharePromptDialog } from "@/features/prompt-gallery"
+import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import type { SharedPrompt } from "@/features/prompt-gallery"
 
 export function ChatTemplatesSettings() {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, saveTemplates, maxTemplates, isSaving, moveTemplate } = useChatTemplates()
 
   const canAddTemplate = templates.length < maxTemplates
@@ -27,6 +30,7 @@ export function ChatTemplatesSettings() {
   const [activeTab, setActiveTab] = useState(templates[0]?.id || "")
   const [showPromptGallery, setShowPromptGallery] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [templateToShare, setTemplateToShare] = useState<{ label: string; content: string } | null>(null)
 
   const handleAddTemplate = () => {
@@ -148,15 +152,36 @@ export function ChatTemplatesSettings() {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button 
-          type="button" 
-          variant="default" 
-          onClick={saveTemplates}
-          disabled={isSaving}
-          className="bg-primary hover:bg-primary/90"
-        >
-          {isSaving ? t.settings.saving : t.settings.saveTemplates}
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                type="button" 
+                variant="default" 
+                onClick={() => {
+                  if (!user) {
+                    setShowLoginDialog(true)
+                    return
+                  }
+                  saveTemplates()
+                }}
+                disabled={isSaving}
+                className={user 
+                  ? "bg-primary hover:bg-primary/90"
+                  : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                }
+              >
+                {!user && <Lock className="h-4 w-4 mr-2" />}
+                {isSaving ? t.settings.saving : t.settings.saveTemplates}
+              </Button>
+            </TooltipTrigger>
+            {!user && (
+              <TooltipContent>
+                <p>請先登入以儲存模板</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
         <Button 
           type="button" 
           variant="outline" 
@@ -188,6 +213,11 @@ export function ChatTemplatesSettings() {
         initialTitle={templateToShare?.label || ''}
         initialPrompt={templateToShare?.content || ''}
         initialType="chat"
+      />
+
+      <LoginRequiredDialog
+        open={showLoginDialog}
+        onOpenChange={setShowLoginDialog}
       />
     </div>
   )
