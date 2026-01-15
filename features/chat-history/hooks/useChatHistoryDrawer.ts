@@ -22,10 +22,6 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
 
   const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    
-    if (!confirm(t.chatHistory?.confirmDelete || 'Delete this conversation?')) {
-      return
-    }
 
     try {
       await deleteSession(sessionId)
