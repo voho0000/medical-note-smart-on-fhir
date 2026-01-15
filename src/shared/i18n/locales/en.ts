@@ -288,7 +288,7 @@ export const en = {
     generationModel: 'Generation Model',
     builtInGptNote: 'GPT models will route through a Firebase Functions proxy when no OpenAI key is saved.',
     geminiProxyNote: 'Gemini models will route through a Firebase Functions proxy when no Gemini key is saved.',
-    modelProxyNote: 'Models will route through a Firebase Functions proxy when no corresponding API key is saved.',
+    modelProxyNote: 'Uses Firebase proxy without key, personal key when available. Premium models require key.',
     modelDescriptions: {
       'gpt-5-nano': 'Ultra-fast, simple tasks',
       'gpt-5-mini': 'Cost-efficient, daily use',

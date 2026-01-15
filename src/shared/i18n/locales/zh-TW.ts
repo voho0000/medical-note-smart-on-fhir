@@ -290,7 +290,7 @@ export const zhTW = {
     generationModel: '生成模型',
     builtInGptNote: '未儲存 OpenAI 金鑰時，GPT 模型將透過 Firebase Functions 代理路由。',
     geminiProxyNote: '未儲存 Gemini 金鑰時，Gemini 模型將透過 Firebase Functions 代理路由。',
-    modelProxyNote: '未儲存對應 API 金鑰時，模型將透過 Firebase Functions 代理路由。',
+    modelProxyNote: '無金鑰時使用 Firebase 代理，有金鑰則使用個人金鑰。進階模型必須輸入金鑰。',
     modelDescriptions: {
       'gpt-5-nano': '極速回應，簡單任務',
       'gpt-5-mini': '經濟實惠，日常使用',
