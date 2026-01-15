@@ -10,8 +10,8 @@ export interface ModelDefinition {
 }
 
 export const BUILT_IN_MODELS = [
-  { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Cost-efficient base model", descriptionZh: "經濟實惠的基礎模型", provider: "openai" },
   { id: "gpt-5-nano", label: "GPT-5 Nano", description: "Ultra-lightweight model for simple tasks", descriptionZh: "超輕量模型用於簡單任務", provider: "openai" },
+  { id: "gpt-5-mini", label: "GPT-5 Mini", description: "Cost-efficient base model", descriptionZh: "經濟實惠的基礎模型", provider: "openai" },
 ] as const satisfies readonly ModelDefinition[]
 
 export const PREMIUM_MODELS = [
@@ -20,6 +20,7 @@ export const PREMIUM_MODELS = [
 ] as const satisfies readonly ModelDefinition[]
 
 export const GEMINI_MODELS = [
+  { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite", description: "Ultra-lightweight Gemini model", descriptionZh: "超輕量 Gemini 模型", provider: "gemini" },
   { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", description: "Preview Gemini 3 Flash", descriptionZh: "預覽版 Gemini 3 Flash", provider: "gemini" },
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Advanced Gemini model", descriptionZh: "進階 Gemini 模型", provider: "gemini", requiresUserKey: true },
   { id: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview", description: "Premium Gemini 3 Pro", descriptionZh: "高級 Gemini 3 Pro", provider: "gemini", requiresUserKey: true },

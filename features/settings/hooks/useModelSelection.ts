@@ -12,6 +12,13 @@ import {
 } from "@/src/shared/constants/ai-models.constants"
 import { hasChatProxy, hasGeminiProxy } from "@/src/shared/config/env.config"
 
+export interface ModelEntry {
+  id: string
+  label: string
+  description: string
+  isLocked: boolean
+}
+
 export function useModelSelection(
   apiKey: string | null,
   geminiKey: string | null,
@@ -21,20 +28,30 @@ export function useModelSelection(
   const { t } = useLanguage()
   const gptModels = useMemo(() => {
     const models = [...BUILT_IN_MODELS, ...PREMIUM_MODELS]
-    return models.filter((entry) => {
+    return models.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      if (!definition) return false
-      if (definition.requiresUserKey && !apiKey) return false
-      return true
+      const isLocked = definition?.requiresUserKey && !apiKey
+      return {
+        ...entry,
+        isLocked: isLocked || false
+      }
+    }).filter((entry) => {
+      const definition = getModelDefinition(entry.id)
+      return !!definition
     })
   }, [apiKey])
 
   const geminiModels = useMemo(() => {
-    return GEMINI_MODELS.filter((entry) => {
+    return GEMINI_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      if (!definition) return false
-      if (definition.requiresUserKey && !geminiKey) return false
-      return true
+      const isLocked = definition?.requiresUserKey && !geminiKey
+      return {
+        ...entry,
+        isLocked: isLocked || false
+      }
+    }).filter((entry) => {
+      const definition = getModelDefinition(entry.id)
+      return !!definition
     })
   }, [geminiKey])
 
