@@ -10,11 +10,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info } from "lucide-react"
+import { Info, Library, Share2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { InsightTabEditor } from './InsightTabEditor'
+import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
+import type { SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
 
 export function ClinicalInsightsSettings() {
   const { t } = useLanguage()
@@ -35,6 +37,9 @@ export function ClinicalInsightsSettings() {
   const canRemovePanel = panels.length > 1
   
   const [activeTab, setActiveTab] = useState(panels[0]?.id || "")
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [showGalleryDialog, setShowGalleryDialog] = useState(false)
+  const [promptToShare, setPromptToShare] = useState<{ title: string; prompt: string } | null>(null)
 
   const handleAddPanel = () => {
     const newPanelId = addPanel()
@@ -65,6 +70,32 @@ export function ClinicalInsightsSettings() {
     const [removed] = orderIds.splice(currentIndex, 1)
     orderIds.splice(targetIndex, 0, removed)
     reorderPanels(orderIds)
+  }
+
+  const handleSharePrompt = () => {
+    const currentPanel = panels.find(p => p.id === activeTab)
+    if (currentPanel) {
+      setPromptToShare({
+        title: currentPanel.title,
+        prompt: currentPanel.prompt
+      })
+      setShowShareDialog(true)
+    }
+  }
+
+  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
+    // Only update insight panel if useAs is 'insight' or undefined (default)
+    if (useAs === 'chat') {
+      return
+    }
+
+    // Update current panel with selected prompt
+    if (activeTab) {
+      updatePanel(activeTab, {
+        title: prompt.title,
+        prompt: prompt.prompt
+      })
+    }
   }
 
   return (
@@ -127,6 +158,10 @@ export function ClinicalInsightsSettings() {
                   onUpdate={updatePanel}
                   onRemove={handleRemovePanel}
                   onMove={handleMove}
+                  onShare={(panel) => {
+                    setPromptToShare({ title: panel.title, prompt: panel.prompt })
+                    setShowShareDialog(true)
+                  }}
                 />
               </TabsContent>
             ))}
@@ -144,6 +179,15 @@ export function ClinicalInsightsSettings() {
           >
             {isSaving ? t.settings.saving : t.settings.saveTemplates}
           </Button>
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => setShowGalleryDialog(true)}
+            className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
+          >
+            <Library className="h-4 w-4 mr-2" />
+            {t.promptGallery?.browseGallery || "瀏覽範本庫"}
+          </Button>
           <Button type="button" variant="outline" onClick={resetPanels} className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10">
             {t.settings.resetToDefaults}
           </Button>
@@ -152,6 +196,23 @@ export function ClinicalInsightsSettings() {
           </span>
         </div>
       </div>
+
+      {/* Share Prompt Dialog */}
+      <SharePromptDialog
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+        initialTitle={promptToShare?.title || ''}
+        initialPrompt={promptToShare?.prompt || ''}
+        initialType="insight"
+      />
+
+      {/* Prompt Gallery Dialog */}
+      <PromptGalleryDialog
+        open={showGalleryDialog}
+        onOpenChange={setShowGalleryDialog}
+        mode="insight"
+        onSelectPrompt={handleSelectPrompt}
+      />
     </div>
   )
 }

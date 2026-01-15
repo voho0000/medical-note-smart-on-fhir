@@ -30,12 +30,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ChevronDown } from 'lucide-react'
 
 interface PromptPreviewDialogProps {
   prompt: SharedPrompt | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onUse: (prompt: SharedPrompt) => void
+  onUse: (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => void
   onShare?: (prompt: SharedPrompt) => void
   onDelete?: () => void
 }
@@ -207,7 +214,30 @@ export function PromptPreviewDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 {t.common.close}
               </Button>
-              <Button onClick={handleUse}>{t.promptGallery.use}</Button>
+              {prompt.types.length > 1 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button>
+                      {t.promptGallery.use}
+                      <ChevronDown className="h-4 w-4 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {prompt.types.includes('chat') && (
+                      <DropdownMenuItem onClick={() => { onUse(prompt, 'chat'); onOpenChange(false); }}>
+                        使用為 Chat Template
+                      </DropdownMenuItem>
+                    )}
+                    {prompt.types.includes('insight') && (
+                      <DropdownMenuItem onClick={() => { onUse(prompt, 'insight'); onOpenChange(false); }}>
+                        使用為 Clinical Insight
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button onClick={handleUse}>{t.promptGallery.use}</Button>
+              )}
             </div>
           </div>
         </DialogFooter>

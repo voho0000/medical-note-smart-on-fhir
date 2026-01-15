@@ -27,7 +27,7 @@ interface PromptGalleryDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mode?: 'chat' | 'insight' | 'all'
-  onSelectPrompt: (prompt: SharedPrompt) => void
+  onSelectPrompt: (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => void
 }
 
 export function PromptGalleryDialog({
@@ -74,8 +74,8 @@ export function PromptGalleryDialog({
     setPreviewOpen(true)
   }
 
-  const handleUse = (prompt: SharedPrompt) => {
-    onSelectPrompt(prompt)
+  const handleUse = (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
+    onSelectPrompt(prompt, useAs)
     trackUsage(prompt.id)
   }
 

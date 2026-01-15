@@ -166,6 +166,9 @@ export default function ClinicalInsightsFeature() {
               <TabManagementToolbar 
                 currentTabId={activeTabId} 
                 onTabChange={setActiveTabId}
+                currentPrompt={prompts[activeTabId] ?? panels.find(p => p.id === activeTabId)?.prompt ?? ''}
+                currentTitle={panels.find(p => p.id === activeTabId)?.title ?? ''}
+                onPromptChange={(prompt) => handlePromptChange(activeTabId, prompt)}
               />
             </div>
             {panelEntries.map((panel) => (

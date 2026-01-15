@@ -57,7 +57,14 @@ export function ChatTemplatesSettings() {
     moveTemplate(currentIndex, newIndex)
   }
 
-  const handleSelectPrompt = (prompt: SharedPrompt) => {
+  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
+    // Only add to chat templates if useAs is 'chat' or undefined (default)
+    if (useAs === 'insight') {
+      // If user wants to use as insight, do nothing here
+      // (they should use it from Clinical Insights page)
+      return
+    }
+    
     // Add prompt as a new template
     if (canAddTemplate) {
       const newTemplateId = addTemplate()

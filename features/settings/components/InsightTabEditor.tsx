@@ -10,7 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info } from "lucide-react"
+import { Info, Share2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface InsightPanel {
@@ -29,6 +29,7 @@ interface InsightTabEditorProps {
   onUpdate: (id: string, updates: Partial<InsightPanel>) => void
   onRemove: (id: string) => void
   onMove: (id: string, direction: "up" | "down") => void
+  onShare?: (panel: InsightPanel) => void
 }
 
 export function InsightTabEditor({
@@ -40,6 +41,7 @@ export function InsightTabEditor({
   onUpdate,
   onRemove,
   onMove,
+  onShare,
 }: InsightTabEditorProps) {
   const { t } = useLanguage()
   
@@ -49,17 +51,31 @@ export function InsightTabEditor({
         <div className="flex-1 space-y-1">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">{t.settings.tab} {index + 1}</p>
-            {canRemove && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRemove(panel.id)}
-                className="border-2 border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10"
-              >
-                {t.settings.remove}
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {onShare && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onShare(panel)}
+                  className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
+                >
+                  <Share2 className="h-3.5 w-3.5 mr-1.5" />
+                  {t.promptGallery?.sharePrompt || "分享"}
+                </Button>
+              )}
+              {canRemove && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onRemove(panel.id)}
+                  className="border-2 border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10"
+                >
+                  {t.settings.remove}
+                </Button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{t.settings.orderControls}</span>
