@@ -177,8 +177,31 @@ export class OpenAiStreamAdapter {
         for (const line of lines) {
           if (!line.trim()) continue
 
-          // Vercel AI SDK data stream format: "0:\"text\"\n" or "d:{...}\n"
-          if (line.startsWith("0:")) {
+          // OpenAI native SSE format: "data: {"choices":[...]}"
+          if (line.startsWith("data: ") && line !== "data: [DONE]") {
+            try {
+              const jsonStr = line.slice(6) // Remove "data: " prefix
+              const data = JSON.parse(jsonStr)
+              const delta = data.choices?.[0]?.delta?.content
+              if (delta) {
+                content += delta
+                textChunkCount++
+                onChunk(content)
+                
+                if (textChunkCount === 1) {
+                  console.log("[OpenAI Stream] First text chunk parsed", {
+                    text: content.substring(0, 50),
+                  })
+                }
+              }
+            } catch (e) {
+              console.warn("[OpenAI Stream] Failed to parse OpenAI chunk", {
+                line: line.substring(0, 100),
+                error: e instanceof Error ? e.message : String(e),
+              })
+            }
+          } else if (line.startsWith("0:")) {
+            // Legacy Vercel AI SDK data stream format: "0:\"text\"\n"
             try {
               const text = JSON.parse(line.slice(2))
               content += text
@@ -186,7 +209,7 @@ export class OpenAiStreamAdapter {
               onChunk(content)
               
               if (textChunkCount === 1) {
-                console.log("[OpenAI Stream] First text chunk parsed", {
+                console.log("[OpenAI Stream] First text chunk parsed (legacy)", {
                   text: text.substring(0, 50),
                 })
               }
@@ -206,6 +229,9 @@ export class OpenAiStreamAdapter {
                 error: e instanceof Error ? e.message : String(e),
               })
             }
+          } else if (line === "data: [DONE]") {
+            // OpenAI stream end marker
+            console.log("[OpenAI Stream] Received [DONE] marker")
           } else {
             console.log("[OpenAI Stream] Unknown line format", {
               prefix: line.substring(0, 20),

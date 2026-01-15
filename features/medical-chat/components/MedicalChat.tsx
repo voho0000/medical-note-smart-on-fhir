@@ -85,7 +85,7 @@ export default function MedicalChat() {
   }, [input])
   
   const normalChat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
-  const agentChat = useAgentChat(systemPrompt, model, clearInputAndResetHeight)
+  const agentChat = useAgentChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
   const chat = isAgentMode ? agentChat : normalChat
   
   // Ensure chat.messages is always an array
@@ -112,26 +112,27 @@ export default function MedicalChat() {
   // API key validation
   const { hasApiKey } = useApiKeyValidation(model, openAiKey, geminiKey)
 
-  // Show/hide warning based on API key status (deep mode requires API key, proxy not supported)
+  // Show/hide warning based on API key status and login status
+  // Logged-in users can use Firebase Proxy, so they don't need API key
   const apiKeyAvailable = hasApiKey()
   useEffect(() => {
-    if (isAgentMode && !apiKeyAvailable) {
+    if (isAgentMode && !apiKeyAvailable && !user) {
       agentMode.showWarning()
     } else {
       agentMode.hideWarning()
     }
-  }, [isAgentMode, apiKeyAvailable, agentMode])
+  }, [isAgentMode, apiKeyAvailable, user, agentMode])
 
   // Handle agent mode toggle with API key check
   const handleAgentModeToggle = useCallback((enabled: boolean) => {
-    // Show warning if no API key (deep mode requires API key, proxy not supported)
-    if (enabled && !hasApiKey()) {
+    // Show warning only if no API key AND not logged in (logged-in users can use proxy)
+    if (enabled && !hasApiKey() && !user) {
       agentMode.showWarning()
     } else {
       agentMode.hideWarning()
     }
     agentMode.setIsAgentMode(enabled)
-  }, [hasApiKey, agentMode])
+  }, [hasApiKey, user, agentMode])
 
   // Handlers
   const handleSend = useCallback(async () => {
@@ -254,7 +255,7 @@ export default function MedicalChat() {
             onSend={handleSend}
             onStopGeneration={() => chat.stopGeneration()}
             voice={voice}
-            disabled={isAgentMode && !hasApiKey()}
+            disabled={isAgentMode && !hasApiKey() && !user}
           />
         </div>
       </CardFooter>

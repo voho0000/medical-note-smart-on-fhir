@@ -14,14 +14,17 @@ import { useClinicalContext } from "@/src/application/hooks/use-clinical-context
 import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
 import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-tools.hook"
 import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
+import { useAuth } from "@/src/application/providers/auth.provider"
+import { ENV_CONFIG } from "@/src/shared/config/env.config"
 
-export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void) {
+export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
   const { apiKey: openAiKey, geminiKey, perplexityKey } = useAllApiKeys()
   const { patient } = usePatient()
   const { locale, t } = useLanguage()
   const { getFullClinicalContext } = useClinicalContext()
+  const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -72,8 +75,8 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const isGemini = modelId.startsWith("gemini") || modelId.startsWith("models/gemini")
         const apiKey = isGemini ? geminiKey : openAiKey
 
-        // Deep mode requires API key (proxy not supported for tool calling)
-        if (!apiKey) {
+        // Check if user can use deep mode: either has API key or is logged in (can use Firebase Proxy)
+        if (!apiKey && !user) {
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
           )
@@ -81,10 +84,156 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           return
         }
 
-        const provider = isGemini 
-          ? createGoogleGenerativeAI({ apiKey })
-          : createOpenAI({ apiKey })
-        const model = provider(modelId)
+        // Check proxy availability for logged-in users without API key
+        const useProxy = !apiKey && !!user
+        if (useProxy) {
+          if (isGemini && !ENV_CONFIG.hasGeminiProxy) {
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId ? { 
+                ...m, 
+                content: t.agent.geminiRequiresApiKey || 'Gemini models require an API key for deep mode. Please add your Gemini API key in Settings or switch to an OpenAI model.' 
+              } : m)
+            )
+            setIsLoading(false)
+            return
+          }
+          if (!isGemini && !ENV_CONFIG.hasChatProxy) {
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
+            )
+            setIsLoading(false)
+            return
+          }
+        }
+
+        // Configure provider with proxy or direct API
+        let provider
+        let model
+        if (useProxy) {
+          // Custom fetch to use proxy without Authorization header
+          const proxyUrl = isGemini ? ENV_CONFIG.geminiProxyUrl : ENV_CONFIG.chatProxyUrl
+          const originalFetch = globalThis.fetch
+          const customFetch: typeof fetch = async (url, init) => {
+            const headers = new Headers(init?.headers)
+            headers.delete('authorization')
+            headers.delete('x-goog-api-key')
+            if (ENV_CONFIG.proxyClientKey) {
+              headers.set('x-proxy-key', ENV_CONFIG.proxyClientKey)
+            }
+            
+            // For OpenAI proxy: convert "developer" role to "system"
+            // AI SDK uses "developer" for newer OpenAI models, but OpenAI API expects "system"
+            if (!isGemini) {
+              let body = init?.body
+              if (body && typeof body === 'string') {
+                try {
+                  const parsed = JSON.parse(body)
+                  if (parsed.messages && Array.isArray(parsed.messages)) {
+                    parsed.messages = parsed.messages.map((msg: { role: string; content: string }) => ({
+                      ...msg,
+                      role: msg.role === 'developer' ? 'system' : msg.role
+                    }))
+                    body = JSON.stringify(parsed)
+                  }
+                } catch {
+                  // Keep original body if parsing fails
+                }
+              }
+              return originalFetch(url, { ...init, headers, body })
+            }
+            
+            // For Gemini proxy: convert AI SDK Gemini native format to proxy expected format
+            // AI SDK sends: { contents: [...], tools: [...], generationConfig: {...} }
+            // Proxy expects: { model, messages: [...], stream: true, tools: [...] }
+            let body = init?.body
+            if (body && typeof body === 'string') {
+              try {
+                const parsed = JSON.parse(body)
+                
+                // Convert contents to messages format
+                const messages: Array<{ role: string; content: string }> = []
+                
+                // Add system instruction as system message
+                if (parsed.systemInstruction?.parts) {
+                  const systemText = parsed.systemInstruction.parts
+                    .map((p: { text?: string }) => p.text || '')
+                    .join('\n')
+                  if (systemText) {
+                    messages.push({ role: 'system', content: systemText })
+                  }
+                }
+                
+                // Convert contents to messages
+                if (Array.isArray(parsed.contents)) {
+                  for (const content of parsed.contents) {
+                    const role = content.role === 'model' ? 'assistant' : 'user'
+                    const text = content.parts
+                      ?.map((p: { text?: string }) => p.text || '')
+                      .join('') || ''
+                    if (text) {
+                      messages.push({ role, content: text })
+                    }
+                  }
+                }
+                
+                // Build proxy request body
+                const proxyBody: Record<string, unknown> = {
+                  model: modelId,
+                  messages,
+                  stream: true,
+                }
+                
+                // Forward tools if present
+                if (parsed.tools) {
+                  proxyBody.tools = parsed.tools
+                }
+                if (parsed.toolConfig) {
+                  proxyBody.toolConfig = parsed.toolConfig
+                }
+                if (parsed.generationConfig) {
+                  proxyBody.generationConfig = parsed.generationConfig
+                }
+                if (parsed.safetySettings) {
+                  proxyBody.safetySettings = parsed.safetySettings
+                }
+                
+                body = JSON.stringify(proxyBody)
+              } catch {
+                // Keep original body if parsing fails
+              }
+            }
+            
+            return originalFetch(proxyUrl, { ...init, headers, body })
+          }
+          
+          // Use appropriate provider based on model type
+          // Both proxies now return native SSE format
+          if (isGemini) {
+            provider = createGoogleGenerativeAI({
+              baseURL: proxyUrl,
+              apiKey: 'proxy', // Dummy key required by SDK
+              fetch: customFetch
+            })
+            model = provider(modelId)
+          } else {
+            provider = createOpenAI({
+              baseURL: proxyUrl,
+              apiKey: 'proxy', // Dummy key required by SDK
+              fetch: customFetch
+            })
+            // Use .chat() to force Chat Completions API instead of Responses API
+            model = provider.chat(modelId)
+          }
+        } else {
+          // Direct API access with user's API key
+          if (isGemini) {
+            provider = createGoogleGenerativeAI({ apiKey: apiKey! })
+            model = provider(modelId)
+          } else {
+            provider = createOpenAI({ apiKey: apiKey! })
+            model = provider.chat(modelId)
+          }
+        }
 
         const clinicalContext = getFullClinicalContext()
         const hasClinicalData = clinicalContext.trim().length > 0
@@ -315,9 +464,20 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
       } finally {
         setIsLoading(false)
         abortControllerRef.current = null
+        
+        // Trigger save after agent completes
+        if (onStreamComplete) {
+          console.log('[Agent] Calling onStreamComplete callback')
+          try {
+            await onStreamComplete()
+            console.log('[Agent] onStreamComplete callback completed')
+          } catch (error) {
+            console.error('[Agent] onStreamComplete callback failed:', error)
+          }
+        }
       }
     },
-    [chatMessages, modelId, openAiKey, geminiKey, patient, setChatMessages, systemPrompt, onInputClear, locale, tools]
+    [chatMessages, modelId, openAiKey, geminiKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, locale, tools]
   )
 
   const handleReset = useCallback(() => {

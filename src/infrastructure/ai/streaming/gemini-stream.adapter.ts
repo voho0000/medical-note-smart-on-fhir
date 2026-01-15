@@ -186,8 +186,40 @@ export class GeminiStreamAdapter {
         for (const line of lines) {
           if (!line.trim()) continue
 
-          // Vercel AI SDK data stream format: "0:\"text\"\n" or "d:{...}\n"
-          if (line.startsWith("0:")) {
+          // Gemini native SSE format: "data: {"candidates": [...]}"
+          if (line.startsWith("data: ")) {
+            try {
+              const jsonStr = line.slice(6) // Remove "data: " prefix
+              const data = JSON.parse(jsonStr)
+              
+              // Extract text from Gemini response format
+              const candidates = data.candidates
+              if (Array.isArray(candidates) && candidates.length > 0) {
+                const parts = candidates[0]?.content?.parts
+                if (Array.isArray(parts)) {
+                  for (const part of parts) {
+                    if (part.text) {
+                      content += part.text
+                      textChunkCount++
+                    }
+                  }
+                  onChunk(content)
+                  
+                  if (textChunkCount === 1) {
+                    console.log("[Gemini Stream] First text chunk parsed", {
+                      text: content.substring(0, 50),
+                    })
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn("[Gemini Stream] Failed to parse Gemini chunk", {
+                line: line.substring(0, 100),
+                error: e instanceof Error ? e.message : String(e),
+              })
+            }
+          } else if (line.startsWith("0:")) {
+            // Legacy Vercel AI SDK data stream format: "0:\"text\"\n"
             try {
               const text = JSON.parse(line.slice(2))
               content += text
@@ -195,7 +227,7 @@ export class GeminiStreamAdapter {
               onChunk(content)
               
               if (textChunkCount === 1) {
-                console.log("[Gemini Stream] First text chunk parsed", {
+                console.log("[Gemini Stream] First text chunk parsed (legacy)", {
                   text: text.substring(0, 50),
                 })
               }

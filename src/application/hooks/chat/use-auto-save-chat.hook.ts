@@ -141,22 +141,35 @@ export function useAutoSaveChat({
     updateSession,
   ])
 
+  // Track last message content to detect when streaming completes
+  const lastMessageContentRef = useRef<string>('')
+  
   useEffect(() => {
     const messageCount = messages.length
+    const lastMessage = messages[messages.length - 1]
+    const lastMessageContent = lastMessage?.content || ''
     
-    // Only proceed if message count actually changed
-    if (messageCount === prevMessageCountRef.current) {
+    // Check if this is a meaningful change (count changed OR content changed from thinking state)
+    const countChanged = messageCount !== prevMessageCountRef.current
+    const contentChanged = lastMessageContent !== lastMessageContentRef.current
+    const wasThinking = lastMessageContentRef.current.includes('🤔') || lastMessageContentRef.current.includes('思考中') || lastMessageContentRef.current.includes('🔍') || lastMessageContentRef.current.includes('📝')
+    const isNowComplete = !lastMessageContent.includes('🤔') && !lastMessageContent.includes('思考中') && !lastMessageContent.includes('🔍') && !lastMessageContent.includes('📝')
+    
+    // Update refs
+    lastMessageContentRef.current = lastMessageContent
+    
+    // Skip if nothing meaningful changed
+    if (!countChanged && !(contentChanged && wasThinking && isNowComplete)) {
       return
     }
     
     prevMessageCountRef.current = messageCount
     
     // Skip if last message is empty or still in thinking state (streaming just started or incomplete)
-    const lastMessage = messages[messages.length - 1]
     if (lastMessage && lastMessage.role === 'assistant') {
       const content = lastMessage.content.trim()
       // Check if message is empty or still showing thinking state
-      if (!content || content.includes('🤔') || content.includes('思考中')) {
+      if (!content || content.includes('🤔') || content.includes('思考中') || content.includes('🔍') || content.includes('📝')) {
         console.log('[Auto-save] Skipped - streaming just started or in thinking state')
         return
       }
