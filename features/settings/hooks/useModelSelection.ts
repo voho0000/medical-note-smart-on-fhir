@@ -87,6 +87,9 @@ export function useModelSelection(
     }
 
     if (definition.provider === "gemini") {
+      if (definition.requiresUserKey) {
+        return geminiKey ? t.settings.usingPersonalGeminiKey : t.settings.requiresGeminiKey
+      }
       if (geminiKey) return t.settings.usingPersonalGeminiKey
       if (hasGeminiProxy) return t.settings.routedViaProxy
       return t.settings.requiresGeminiKeyOrProxy

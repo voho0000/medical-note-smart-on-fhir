@@ -49,11 +49,6 @@ export function ModelSelector({ models, selectedModel, onSelectModel, getModelSt
                 <span className="text-xs text-muted-foreground">
                   {entry.description}
                 </span>
-                {status && (
-                  <span className="mt-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    {status}
-                  </span>
-                )}
               </div>
               {isLocked && (
                 <Lock className="h-4 w-4 text-muted-foreground/60 shrink-0" />
@@ -62,26 +57,21 @@ export function ModelSelector({ models, selectedModel, onSelectModel, getModelSt
           </button>
         )
 
-        if (isLocked) {
-          return (
-            <TooltipProvider key={entry.id}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {button}
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="text-xs">
-                    {definition?.provider === 'openai' 
-                      ? locale === 'zh-TW' ? '需要 OpenAI API 金鑰' : 'Requires OpenAI API key'
-                      : locale === 'zh-TW' ? '需要 Gemini API 金鑰' : 'Requires Gemini API key'}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )
-        }
-
-        return button
+        // Always show tooltip with status on hover
+        return (
+          <TooltipProvider key={entry.id}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {button}
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {status || (locale === 'zh-TW' ? '可用' : 'Available')}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )
       })}
     </div>
   )
