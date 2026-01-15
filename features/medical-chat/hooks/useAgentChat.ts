@@ -1,11 +1,9 @@
-// Agent Chat Hook - AI Agent with Client-Side FHIR Tool Calling
+// Agent Chat Hook - Refactored
 "use client"
 
 import { useState, useCallback, useRef, useMemo } from "react"
 import { streamText } from "ai"
-import { createOpenAI } from "@ai-sdk/openai"
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { useChatMessages, useSetChatMessages, type ChatMessage, type AgentState } from "@/src/application/stores/chat.store"
+import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/application/stores/chat.store"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
@@ -15,7 +13,10 @@ import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
 import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-tools.hook"
 import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
-import { ENV_CONFIG } from "@/src/shared/config/env.config"
+import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
+import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
+import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-agent-stream.use-case"
+import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
@@ -30,7 +31,6 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const abortControllerRef = useRef<AbortController | null>(null)
   const hasReceivedChunkRef = useRef(false)
 
-  // Use Application Layer hooks for tools (Clean Architecture)
   const fhirTools = useFhirTools(patient?.id)
   const literatureTools = useLiteratureTools(perplexityKey)
 
@@ -75,7 +75,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const isGemini = modelId.startsWith("gemini") || modelId.startsWith("models/gemini")
         const apiKey = isGemini ? geminiKey : openAiKey
 
-        // Check if user can use deep mode: either has API key or is logged in (can use Firebase Proxy)
+        // Check if user can use deep mode
         if (!apiKey && !user) {
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
@@ -84,231 +84,51 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           return
         }
 
-        // Check proxy availability for logged-in users without API key
+        // Validate proxy availability for logged-in users without API key
         const useProxy = !apiKey && !!user
         if (useProxy) {
-          if (isGemini && !ENV_CONFIG.hasGeminiProxy) {
+          const validation = aiProviderFactory.validateProxyAvailability(modelId)
+          if (!validation.available) {
             setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { 
-                ...m, 
-                content: t.agent.geminiRequiresApiKey || 'Gemini models require an API key for deep mode. Please add your Gemini API key in Settings or switch to an OpenAI model.' 
-              } : m)
-            )
-            setIsLoading(false)
-            return
-          }
-          if (!isGemini && !ENV_CONFIG.hasChatProxy) {
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: validation.error || t.agent.apiKeyRequired } : m)
             )
             setIsLoading(false)
             return
           }
         }
 
-        // Configure provider with proxy or direct API
-        let provider
-        let model
-        if (useProxy) {
-          // Custom fetch to use proxy without Authorization header
-          const proxyUrl = isGemini ? ENV_CONFIG.geminiProxyUrl : ENV_CONFIG.chatProxyUrl
-          const originalFetch = globalThis.fetch
-          const customFetch: typeof fetch = async (url, init) => {
-            const headers = new Headers(init?.headers)
-            headers.delete('authorization')
-            headers.delete('x-goog-api-key')
-            if (ENV_CONFIG.proxyClientKey) {
-              headers.set('x-proxy-key', ENV_CONFIG.proxyClientKey)
-            }
-            
-            // For OpenAI proxy: convert "developer" role to "system"
-            // AI SDK uses "developer" for newer OpenAI models, but OpenAI API expects "system"
-            if (!isGemini) {
-              let body = init?.body
-              if (body && typeof body === 'string') {
-                try {
-                  const parsed = JSON.parse(body)
-                  if (parsed.messages && Array.isArray(parsed.messages)) {
-                    parsed.messages = parsed.messages.map((msg: { role: string; content: string }) => ({
-                      ...msg,
-                      role: msg.role === 'developer' ? 'system' : msg.role
-                    }))
-                    body = JSON.stringify(parsed)
-                  }
-                } catch {
-                  // Keep original body if parsing fails
-                }
-              }
-              return originalFetch(url, { ...init, headers, body })
-            }
-            
-            // For Gemini proxy: convert AI SDK Gemini native format to proxy expected format
-            // AI SDK sends: { contents: [...], tools: [...], generationConfig: {...} }
-            // Proxy expects: { model, messages: [...], stream: true, tools: [...] }
-            let body = init?.body
-            if (body && typeof body === 'string') {
-              try {
-                const parsed = JSON.parse(body)
-                
-                // Convert contents to messages format
-                const messages: Array<{ role: string; content: string }> = []
-                
-                // Add system instruction as system message
-                if (parsed.systemInstruction?.parts) {
-                  const systemText = parsed.systemInstruction.parts
-                    .map((p: { text?: string }) => p.text || '')
-                    .join('\n')
-                  if (systemText) {
-                    messages.push({ role: 'system', content: systemText })
-                  }
-                }
-                
-                // Convert contents to messages
-                if (Array.isArray(parsed.contents)) {
-                  for (const content of parsed.contents) {
-                    const role = content.role === 'model' ? 'assistant' : 'user'
-                    const text = content.parts
-                      ?.map((p: { text?: string }) => p.text || '')
-                      .join('') || ''
-                    if (text) {
-                      messages.push({ role, content: text })
-                    }
-                  }
-                }
-                
-                // Build proxy request body
-                const proxyBody: Record<string, unknown> = {
-                  model: modelId,
-                  messages,
-                  stream: true,
-                }
-                
-                // Forward tools if present
-                if (parsed.tools) {
-                  proxyBody.tools = parsed.tools
-                }
-                if (parsed.toolConfig) {
-                  proxyBody.toolConfig = parsed.toolConfig
-                }
-                if (parsed.generationConfig) {
-                  proxyBody.generationConfig = parsed.generationConfig
-                }
-                if (parsed.safetySettings) {
-                  proxyBody.safetySettings = parsed.safetySettings
-                }
-                
-                body = JSON.stringify(proxyBody)
-              } catch {
-                // Keep original body if parsing fails
-              }
-            }
-            
-            return originalFetch(proxyUrl, { ...init, headers, body })
-          }
-          
-          // Use appropriate provider based on model type
-          // Both proxies now return native SSE format
-          if (isGemini) {
-            provider = createGoogleGenerativeAI({
-              baseURL: proxyUrl,
-              apiKey: 'proxy', // Dummy key required by SDK
-              fetch: customFetch
-            })
-            model = provider(modelId)
-          } else {
-            provider = createOpenAI({
-              baseURL: proxyUrl,
-              apiKey: 'proxy', // Dummy key required by SDK
-              fetch: customFetch
-            })
-            // Use .chat() to force Chat Completions API instead of Responses API
-            model = provider.chat(modelId)
-          }
-        } else {
-          // Direct API access with user's API key
-          if (isGemini) {
-            provider = createGoogleGenerativeAI({ apiKey: apiKey! })
-            model = provider(modelId)
-          } else {
-            provider = createOpenAI({ apiKey: apiKey! })
-            model = provider.chat(modelId)
-          }
-        }
+        // Create AI provider using factory
+        const { model } = aiProviderFactory.create({
+          modelId,
+          apiKey: apiKey || undefined,
+          useProxy,
+        })
 
-        const clinicalContext = getFullClinicalContext()
-        const hasClinicalData = clinicalContext.trim().length > 0
-        const hasPatientId = !!patient?.id
-
-        const sp = t.agent.systemPrompt
-        const td = sp.toolDescriptions
-        
-        const enhancedSystemPrompt = `${systemPrompt}
-
-${sp.deepModeIntro}
-
-${hasPatientId ? `**${sp.currentPatient}**
-- ${sp.patientId.replace('{id}', patient.id)}
-- ${sp.hasPermission}` : `**${sp.currentPatient}**
-- No patient context available
-- FHIR query tools will not work without patient ID`}
-
-${hasClinicalData ? `**${sp.organizedClinicalData}**
-${sp.organizedClinicalDataDesc}
-
-${clinicalContext}
-
----` : ''}
-
-**${sp.availableTools}**
-${hasClinicalData ? sp.availableToolsPrefix : ''}${sp.availableToolsSuffix}
-
-1. queryConditions - ${td.queryConditions}
-2. queryMedications - ${td.queryMedications}
-3. queryAllergies - ${td.queryAllergies}
-4. queryDiagnosticReports - ${td.queryDiagnosticReports}
-5. queryObservations - ${td.queryObservations}
-6. queryProcedures - ${td.queryProcedures}
-7. queryEncounters - ${td.queryEncounters}${perplexityKey ? `
-8. searchMedicalLiterature - ${td.searchMedicalLiterature}` : ''}
-
-${sp.importantNote}
-
-**${sp.usageGuidelines}**
-${hasClinicalData ? `- ${sp.prioritizeClinicalData}
-- ${sp.useToolsWhenNeeded}` : `- ${sp.useToolsDirectly}`}
-- ${sp.noAuthNeeded}
-- ${sp.mustExplainResults}
-- ${sp.provideAnalysis}
-- ${sp.indicateNoRecords}
-
-${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
+        // Build enhanced system prompt using use case
+        const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
+          baseSystemPrompt: systemPrompt,
+          clinicalContext: getFullClinicalContext(),
+          patientId: patient?.id,
+          hasPerplexityKey: !!perplexityKey,
+          translations: t.agent.systemPrompt,
+        })
 
         const apiMessages = [
           { role: "system" as const, content: enhancedSystemPrompt },
           ...newMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         ]
 
+        // Stream with tools
         const result = await streamText({
           model,
           messages: apiMessages,
           tools,
           abortSignal: abortControllerRef.current.signal,
-          onStepFinish: ({ toolCalls, toolResults }) => {
+          onStepFinish: ({ toolCalls }) => {
             if (toolCalls && toolCalls.length > 0) {
-              
-              const toolNames = toolCalls.map(tc => {
-                const name = tc?.toolName || ''
-                const displayNames: Record<string, string> = {
-                  'queryConditions': '查詢診斷資料',
-                  'queryMedications': '查詢用藥資料',
-                  'queryAllergies': '查詢過敏史',
-                  'queryObservations': '查詢檢驗數據',
-                  'queryProcedures': '查詢處置紀錄',
-                  'queryEncounters': '查詢就診紀錄',
-                  'searchMedicalLiterature': '搜尋醫學文獻',
-                }
-                return displayNames[name] || name
-              }).join('、')
+              const toolNames = toolCalls
+                .map(tc => getToolDisplayName(tc?.toolName || ''))
+                .join('、')
               
               const newState = `🔍 正在${toolNames}...`
               setChatMessages((prev) =>
@@ -321,13 +141,13 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
                   : m)
               )
             }
-            
           },
         })
 
         let accumulatedContent = ""
         let toolResults: Array<{ toolName: string; result: unknown }> = []
 
+        // Process stream chunks
         for await (const chunk of result.fullStream) {
           if (chunk.type === 'text-delta') {
             accumulatedContent += chunk.text
@@ -341,8 +161,7 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
               prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
             )
           } else if (chunk.type === 'tool-call') {
-            const toolNameKey = chunk.toolName as keyof typeof t.agent.toolNames
-            const displayName = t.agent.toolNames[toolNameKey] || chunk.toolName
+            const displayName = getToolDisplayName(chunk.toolName)
             const newState = `🔍 ${displayName}...`
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId 
@@ -354,16 +173,14 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
                 : m)
             )
           } else if (chunk.type === 'tool-result') {
-            // AI SDK v6 tool-result chunk structure may vary, try multiple ways to get the result
             const chunkAny = chunk as any
             const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
             toolResults.push({ toolName: chunk.toolName, result })
           }
         }
         
-        // If there are tool results but no text generated, send a follow-up request
+        // Handle follow-up if there are tool results but no text
         if (toolResults.length > 0 && accumulatedContent.length === 0) {
-          
           const organizingState = `📝 ${t.agent.organizingResults}`
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId 
@@ -375,43 +192,26 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
               : m)
           )
           
-          // Build follow-up messages containing tool results
-          // Also collect citations for post-processing
-          let literatureCitations: string[] = []
+          // Build tool results summary using use case
+          const { summary: toolResultsSummary, citations: literatureCitations } = 
+            processAgentStreamUseCase.buildToolResultsSummary(toolResults, {
+              queryResult: t.agent.queryResult,
+              queryFailed: t.agent.queryFailed,
+              noData: t.agent.noData,
+              noDataFound: t.agent.noDataFound,
+              foundRecords: t.agent.foundRecords,
+            })
           
-          const toolResultsSummary = toolResults.map(tr => {
-            const r = tr.result as any
-            
-            // Handle literature search results differently from FHIR results
-            if (tr.toolName === 'searchMedicalLiterature') {
-              if (r?.success && r?.content) {
-                // Store citations for post-processing AI response
-                if (r?.citations && Array.isArray(r.citations)) {
-                  literatureCitations = r.citations
-                }
-                return `${tr.toolName} ${t.agent.queryResult}:\n${r.content}`
-              } else {
-                return `${tr.toolName} ${t.agent.queryFailed}: ${r?.content || t.agent.noData}`
-              }
-            }
-            
-            // Handle FHIR tool results (with count field)
-            const countInfo = r?.count === 0 
-              ? t.agent.noDataFound.replace('{summary}', r?.summary || '')
-              : t.agent.foundRecords.replace('{count}', String(r?.count || 0))
-            return `${tr.toolName} ${t.agent.queryResult}: ${r?.success ? countInfo : t.agent.queryFailed}\n${r?.count > 0 ? JSON.stringify(r?.data?.slice(0, 10) || [], null, 2) : t.agent.noData}`
-          }).join('\n\n')
-          
-          // Get the user's original question
           const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
-          
-          const assistantMsg = `${t.agent.queriedFhirData}\n\n${toolResultsSummary}`
-          const userMsg = t.agent.answerQuestion.replace('{question}', originalQuestion)
-          const followUpMessages = [
-            ...apiMessages,
-            { role: "assistant" as const, content: assistantMsg },
-            { role: "user" as const, content: userMsg }
-          ]
+          const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
+            apiMessages,
+            toolResultsSummary,
+            originalQuestion,
+            {
+              queriedFhirData: t.agent.queriedFhirData,
+              answerQuestion: t.agent.answerQuestion,
+            }
+          )
           
           const followUpResult = await streamText({
             model,
@@ -429,27 +229,16 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
             }
           }
           
-          // Post-process: Convert citation numbers [1][2] to clickable links if we have citations
+          // Process citations if available
           if (literatureCitations.length > 0) {
-            let processedContent = followUpContent
-            
-            // Replace citation numbers like [1] with clickable markdown links
-            literatureCitations.forEach((citation, index) => {
-              const citationNum = index + 1
-              const regex = new RegExp(`\\[${citationNum}\\]`, 'g')
-              processedContent = processedContent.replace(regex, `[[${citationNum}]](${citation})`)
+            const { processedContent } = processAgentStreamUseCase.processCitations({
+              content: followUpContent,
+              citations: literatureCitations,
             })
             
-            // Add sources list at the bottom if not already present
-            if (!processedContent.includes('**Sources:**') && !processedContent.includes('**參考來源**')) {
-              processedContent += '\n\n**Sources:**\n' + literatureCitations.map((c, i) => `${i + 1}. [${c}](${c})`).join('\n')
-            }
-            
-            // Update the message with processed content
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
             )
-            
           }
         }
       } catch (err) {
@@ -477,13 +266,12 @@ ${hasClinicalData ? sp.helpWithClinicalData : sp.helpWithTools}`
         }
       }
     },
-    [chatMessages, modelId, openAiKey, geminiKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, locale, tools]
+    [chatMessages, modelId, openAiKey, geminiKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, locale, tools, user, perplexityKey, getFullClinicalContext, t]
   )
 
   const handleReset = useCallback(() => {
     abortControllerRef.current?.abort()
     setChatMessages([])
-    // Clear current session ID to start a new conversation
     const { setCurrentSessionId } = require('@/src/application/stores/chat-history.store').useChatHistoryStore.getState()
     setCurrentSessionId(null)
   }, [setChatMessages])
