@@ -2,43 +2,74 @@
 
 ## 概述
 
-Prompt Gallery 是一個統一的 Prompt 範本庫，讓使用者可以瀏覽和使用預先建立的 Prompt。此功能整合了 Chat Prompts 和 Clinical Insights，提供一致的使用體驗。
+Prompt Gallery 是一個完整的 Prompt 範本分享平台，讓使用者可以分享、瀏覽和使用 Prompt 範本。此功能整合了 Chat Templates 和 Clinical Insights，提供一致且友善的使用體驗。
 
 ## 功能特色
 
-### 1. 統一的資料結構
-- **類型區分**：Chat（對話）、Insight（洞察）、Both（兩者皆可）
-- **分類系統**：SOAP、入院、出院、安全警示、臨床摘要等
+### 1. 完整的分享功能
+- **匿名分享**：可選擇匿名或實名分享
+- **多類型支援**：Chat、Insight 或兩者皆可
+- **豐富的分類**：SOAP、入院、出院、安全警示、臨床摘要等
 - **科別標籤**：內科、外科、急診、小兒科等
 - **自訂標籤**：支援多個自訂標籤
+- **作者管理**：作者可刪除自己分享的 Prompt
 
 ### 2. 強大的搜尋和篩選
-- **關鍵字搜尋**：搜尋標題、描述和標籤
-- **類型篩選**：依 Chat/Insight/Both 篩選
+- **全文搜尋**：搜尋標題、描述、內容、作者和標籤
+- **類型篩選**：依 Chat/Insight 篩選
 - **分類篩選**：依臨床分類篩選
 - **科別篩選**：依專科篩選
+- **排序功能**：最新優先或熱門優先（依使用次數）
 
-### 3. 使用統計
-- 追蹤每個 Prompt 的使用次數
-- 顯示建立時間
-- 未來可擴展評分和評論功能
+### 3. 智能使用邏輯
+- **多類型選擇**：當 Prompt 有多個類型時，可選擇使用方式
+- **自動整合**：選擇後自動加入 Chat Templates 或 Clinical Insights
+- **使用統計**：追蹤每個 Prompt 的使用次數
+- **即時更新**：列表自動更新
+
+### 4. 登入保護機制
+- **分享功能**：需要登入才能分享 Prompt
+- **儲存功能**：需要登入才能儲存模板到帳號
+- **友善提示**：未登入時顯示鎖圖示和說明
+- **無縫登入**：一鍵導航到登入對話框
+- **瀏覽開放**：所有人都可以瀏覽範本庫（包括未登入使用者）
 
 ## 使用方式
 
-### 從 Chat 開啟
+### 分享 Prompt
 
-1. 在 Medical Chat 的工具列中
-2. 點擊「設定」下拉選單
-3. 選擇「瀏覽範本庫」
-4. 瀏覽並選擇 Prompt
-5. Prompt 內容會自動插入到輸入框
+#### 從 Chat Templates 分享
+1. 進入 Settings > Chat Templates
+2. 編輯您的模板
+3. 點擊「分享」按鈕（需要登入）
+4. 填寫標題、描述、選擇類型和分類
+5. 選擇是否匿名分享
+6. 點擊「分享」完成
 
-### 從 Settings 開啟
+#### 從 Clinical Insights 分享
+1. 進入 Settings > Clinical Insights 或 Clinical Insights 頁面
+2. 點擊「分享模板」按鈕（需要登入）
+3. 填寫相關資訊並分享
 
-1. 進入 Settings > Prompt Templates
+### 瀏覽和使用 Prompt
+
+#### 從 Chat Templates 瀏覽
+1. 進入 Settings > Chat Templates
 2. 點擊「瀏覽範本庫」按鈕
-3. 選擇 Prompt
-4. 會自動建立一個新的範本
+3. 使用搜尋和篩選找到合適的 Prompt
+4. 點擊「預覽」查看詳細內容
+5. 點擊「使用」，會自動建立一個新的 Chat Template
+
+#### 從 Clinical Insights 瀏覽
+1. 進入 Settings > Clinical Insights 或 Clinical Insights 頁面
+2. 點擊「瀏覽範本庫」
+3. 選擇 Prompt 後會自動更新當前標籤的內容
+
+#### 多類型 Prompt 的使用
+當 Prompt 同時支援 Chat 和 Insight 時：
+1. 點擊「使用」按鈕會顯示下拉選單
+2. 選擇「使用為 Chat Template」或「使用為 Clinical Insight」
+3. 系統會根據您的選擇自動整合到對應位置
 
 ## 資料結構
 
@@ -52,15 +83,20 @@ interface SharedPrompt {
   prompt: string
   
   // 分類
-  type: 'chat' | 'insight' | 'both'
+  types: ('chat' | 'insight')[]  // 支援多類型
   category: 'soap' | 'admission' | 'discharge' | 'safety' | 'summary' | ...
-  specialty: ('general' | 'internal' | 'surgery' | 'emergency' | ...)[]
+  specialties: ('general' | 'internal' | 'surgery' | 'emergency' | ...)[]
   tags: string[]
+  
+  // 作者資訊
+  authorId: string
+  authorName: string
+  isAnonymous: boolean  // 是否匿名分享
   
   // 元資料
   createdAt: Date
   updatedAt: Date
-  usageCount?: number
+  usageCount: number
 }
 ```
 
@@ -74,10 +110,13 @@ sharedPrompts/
     title: string
     description?: string
     prompt: string
-    type: 'chat' | 'insight' | 'both'
+    types: string[]  // ['chat', 'insight']
     category: string
-    specialty: string[]
+    specialties: string[]
     tags: string[]
+    authorId: string
+    authorName: string
+    isAnonymous: boolean
     createdAt: Timestamp
     updatedAt: Timestamp
     usageCount: number
@@ -88,17 +127,20 @@ sharedPrompts/
 ```
 features/prompt-gallery/
 ├── types/
-│   └── prompt.types.ts          # 類型定義
+│   └── prompt.types.ts              # 類型定義
 ├── services/
-│   └── prompt-gallery.service.ts # Firestore CRUD 操作
+│   └── prompt-gallery.service.ts    # Firestore CRUD 操作
 ├── hooks/
-│   └── usePromptGallery.ts      # 狀態管理 Hook
+│   └── usePromptGallery.ts          # 狀態管理 Hook
 ├── components/
-│   ├── PromptCard.tsx           # Prompt 卡片
-│   ├── PromptFilters.tsx        # 篩選控制
-│   ├── PromptPreviewDialog.tsx  # 預覽對話框
-│   └── PromptGalleryDialog.tsx  # 主對話框
-└── index.ts                     # 匯出
+│   ├── PromptCard.tsx               # Prompt 卡片元件
+│   ├── PromptFilters.tsx            # 篩選和排序控制
+│   ├── PromptPreviewDialog.tsx      # 預覽對話框
+│   ├── PromptGalleryDialog.tsx      # 主對話框（整合所有功能）
+│   ├── SharePromptDialog.tsx        # 分享 Prompt 對話框
+│   ├── LoginRequiredDialog.tsx      # 登入提示對話框
+│   └── index.ts                     # 元件匯出
+└── index.ts                         # 功能匯出
 ```
 
 ## API 說明
@@ -189,25 +231,53 @@ function MyComponent() {
 - AI 推薦相似 Prompts
 - 使用分析和統計
 
+## Firestore 安全規則
+
+```javascript
+match /sharedPrompts/{promptId} {
+  // 所有人可以讀取（包括未登入使用者）
+  allow read: if true;
+  
+  // 只有登入使用者可以建立
+  allow create: if request.auth != null;
+  
+  // 只有作者可以更新
+  allow update: if request.auth != null && request.auth.uid == resource.data.authorId;
+  
+  // 只有作者可以刪除
+  allow delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+}
+```
+
 ## 注意事項
 
 1. **隱私保護**：確保分享的 Prompt 不包含病患資訊
-2. **權限控制**：目前所有登入使用者都可以讀取 Prompts
+2. **權限控制**：
+   - 所有人都可以瀏覽範本庫（包括未登入使用者）
+   - 只有登入使用者可以分享 Prompt
+   - 只有作者可以修改或刪除自己的 Prompt
 3. **資料驗證**：建立 Prompt 時應驗證必填欄位
 4. **效能考量**：使用 Firestore 查詢限制（limit: 100）
+5. **匿名分享**：即使匿名分享，仍保留 authorId 用於刪除權限
 
 ## 測試
 
 建議測試項目：
 
 1. ✅ 開啟 Gallery Dialog
-2. ✅ 搜尋功能
-3. ✅ 篩選功能
-4. ✅ 預覽 Prompt
-5. ✅ 選擇 Prompt（Chat 模式）
-6. ✅ 選擇 Prompt（Settings 模式）
-7. ✅ 使用次數追蹤
-8. ✅ 響應式設計（手機、平板、桌面）
+2. ✅ 搜尋功能（標題、描述、內容、作者、標籤）
+3. ✅ 篩選功能（類型、分類、科別）
+4. ✅ 排序功能（最新優先、熱門優先）
+5. ✅ 預覽 Prompt
+6. ✅ 分享 Prompt（匿名/實名）
+7. ✅ 選擇 Prompt（Chat 模式）
+8. ✅ 選擇 Prompt（Insight 模式）
+9. ✅ 多類型 Prompt 的使用選擇
+10. ✅ 使用次數追蹤
+11. ✅ 作者刪除功能
+12. ✅ 未登入鎖定功能（分享、儲存）
+13. ✅ 登入對話框導航
+14. ✅ 響應式設計（手機、平板、桌面）
 
 ## 疑難排解
 
