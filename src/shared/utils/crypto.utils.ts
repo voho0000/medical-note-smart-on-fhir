@@ -36,21 +36,21 @@ async function deriveKey(password: string, salt: BufferSource): Promise<CryptoKe
 }
 
 /**
- * Get or create a session-based encryption password
- * This is stored in sessionStorage and cleared when browser closes
+ * Get or create a persistent encryption password
+ * This is stored in localStorage to persist across browser sessions
  */
 function getSessionPassword(): string {
   if (typeof window === 'undefined') return ''
   
   const STORAGE_KEY = '__crypto_session_key__'
-  let password = sessionStorage.getItem(STORAGE_KEY)
+  let password = localStorage.getItem(STORAGE_KEY)
   
   if (!password) {
-    // Generate a random password for this session
+    // Generate a random password for encryption
     const array = new Uint8Array(32)
     crypto.getRandomValues(array)
     password = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
-    sessionStorage.setItem(STORAGE_KEY, password)
+    localStorage.setItem(STORAGE_KEY, password)
   }
   
   return password
@@ -156,11 +156,11 @@ export function isEncrypted(value: string): boolean {
 }
 
 /**
- * Clear the session encryption key
- * Call this on logout
+ * Clear the encryption key
+ * Call this on logout or when clearing all data
  */
 export function clearSessionKey(): void {
   if (typeof window !== 'undefined') {
-    sessionStorage.removeItem('__crypto_session_key__')
+    localStorage.removeItem('__crypto_session_key__')
   }
 }

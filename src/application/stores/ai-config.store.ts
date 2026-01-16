@@ -96,21 +96,30 @@ export const useAiConfigStore = create<AiConfigState>()(
       
       // Actions
       setApiKey: (key) => {
+        console.log('[AI Config Store] Setting OpenAI API Key:', key ? '***' : 'null')
         set({ apiKey: key })
         // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.OPENAI_API_KEY, key).catch(console.error)
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.OPENAI_API_KEY, key)
+          .then(() => console.log('[AI Config Store] OpenAI API Key saved successfully'))
+          .catch((error) => console.error('[AI Config Store] Failed to save OpenAI API Key:', error))
       },
       
       setGeminiKey: (key) => {
+        console.log('[AI Config Store] Setting Gemini API Key:', key ? '***' : 'null')
         set({ geminiKey: key })
         // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.GEMINI_API_KEY, key).catch(console.error)
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.GEMINI_API_KEY, key)
+          .then(() => console.log('[AI Config Store] Gemini API Key saved successfully'))
+          .catch((error) => console.error('[AI Config Store] Failed to save Gemini API Key:', error))
       },
       
       setPerplexityKey: (key) => {
+        console.log('[AI Config Store] Setting Perplexity API Key:', key ? '***' : 'null')
         set({ perplexityKey: key })
         // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.PERPLEXITY_API_KEY, key).catch(console.error)
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.PERPLEXITY_API_KEY, key)
+          .then(() => console.log('[AI Config Store] Perplexity API Key saved successfully'))
+          .catch((error) => console.error('[AI Config Store] Failed to save Perplexity API Key:', error))
       },
       
       setStorageType: (type) => {
@@ -159,9 +168,12 @@ export const useAiConfigStore = create<AiConfigState>()(
       onRehydrateStorage: () => async (state) => {
         if (!state || typeof window === 'undefined') return
         
+        console.log('[AI Config Store] Starting rehydration...')
+        
         // Load storage type preference
         const savedStorageType = window.localStorage.getItem(STORAGE_KEYS.STORAGE_TYPE) as StorageType | null
         const storageType = savedStorageType || 'localStorage'
+        console.log('[AI Config Store] Storage type:', storageType)
         
         // Load encrypted keys from appropriate storage (async)
         const [apiKey, geminiKey, perplexityKey] = await Promise.all([
@@ -170,10 +182,19 @@ export const useAiConfigStore = create<AiConfigState>()(
           loadEncryptedKey(storageType, STORAGE_KEYS.PERPLEXITY_API_KEY),
         ])
         
+        console.log('[AI Config Store] Loaded keys:', {
+          openai: apiKey ? '***' : 'null',
+          gemini: geminiKey ? '***' : 'null',
+          perplexity: perplexityKey ? '***' : 'null',
+        })
+        
+        // Update state - this will trigger re-renders in components
         state.apiKey = apiKey
         state.geminiKey = geminiKey
         state.perplexityKey = perplexityKey
         state.storageType = storageType
+        
+        console.log('[AI Config Store] Rehydration complete')
       },
     }
   )
