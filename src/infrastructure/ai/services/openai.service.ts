@@ -20,7 +20,9 @@ export class OpenAiService {
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
     const modelDef = getModelDefinition(request.modelId)
-    const shouldUseProxy = !this.apiKey && isGptModelId(request.modelId) && !modelDef?.requiresUserKey && ENV_CONFIG.hasChatProxy
+    // Check if model is OpenAI (including internal models) and can use proxy
+    const isOpenAIModel = modelDef?.provider === 'openai'
+    const shouldUseProxy = !this.apiKey && isOpenAIModel && !modelDef?.requiresUserKey && ENV_CONFIG.hasChatProxy
 
     if (!shouldUseProxy && !this.apiKey) {
       if (modelDef?.requiresUserKey) {
