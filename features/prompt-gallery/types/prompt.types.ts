@@ -59,6 +59,7 @@ export interface SharedPrompt {
   // Optional: For future community features
   authorId?: string
   authorName?: string
+  isAnonymous?: boolean
   usageCount?: number
 }
 
