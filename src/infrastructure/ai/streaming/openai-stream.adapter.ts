@@ -14,14 +14,6 @@ export class OpenAiStreamAdapter {
   async stream(config: StreamConfig): Promise<void> {
     const useProxy = this.shouldUseProxy(config.apiKey, config.model)
     
-    console.log("[OpenAI Adapter] Stream method called", {
-      model: config.model,
-      hasApiKey: !!config.apiKey,
-      useProxy,
-      hasChatProxy: ENV_CONFIG.hasChatProxy,
-      chatProxyUrl: ENV_CONFIG.chatProxyUrl,
-    })
-    
     if (useProxy) {
       await this.streamViaProxy(config)
     } else {
@@ -44,28 +36,18 @@ export class OpenAiStreamAdapter {
       headers["x-proxy-key"] = ENV_CONFIG.proxyClientKey
     }
 
-    console.log("[OpenAI Proxy] Starting streaming request", {
-      url: ENV_CONFIG.chatProxyUrl,
-      model: config.model,
-      messageCount: config.messages.length,
-    })
 
     const res = await fetch(ENV_CONFIG.chatProxyUrl, {
       method: "POST",
       headers,
       body: JSON.stringify({ 
-        model: config.model, 
-        messages: config.messages, 
+        model: config.model,
+        messages: config.messages,
         stream: true  // Enable streaming
       }),
       signal: config.signal,
     })
 
-    console.log("[OpenAI Proxy] Response received", {
-      status: res.status,
-      contentType: res.headers.get("content-type"),
-      hasBody: !!res.body,
-    })
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))

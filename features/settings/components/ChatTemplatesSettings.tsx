@@ -214,11 +214,6 @@ export function ChatTemplatesSettings() {
         initialPrompt={templateToShare?.content || ''}
         initialType="chat"
       />
-
-      <LoginRequiredDialog
-        open={showLoginDialog}
-        onOpenChange={setShowLoginDialog}
-      />
     </div>
   )
 }

@@ -40,7 +40,6 @@ function convertToSharedPrompt(id: string, data: any): SharedPrompt {
     updatedAt: data.updatedAt?.toDate() || new Date(),
     authorId: data.authorId,
     authorName: data.authorName,
-    isAnonymous: data.isAnonymous,
     usageCount: data.usageCount || 0,
   }
 }

@@ -236,12 +236,6 @@ export function ClinicalInsightsSettings() {
         mode="insight"
         onSelectPrompt={handleSelectPrompt}
       />
-
-      {/* Login Required Dialog */}
-      <LoginRequiredDialog
-        open={showLoginDialog}
-        onOpenChange={setShowLoginDialog}
-      />
     </div>
   )
 }

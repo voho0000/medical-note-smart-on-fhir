@@ -85,13 +85,8 @@ export function TabManagementToolbar({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={handleSharePrompt}>
-          {user ? (
-            <Share2 className="h-4 w-4 mr-2" />
-          ) : (
-            <Lock className="h-4 w-4 mr-2" />
-          )}
+          <Share2 className="h-4 w-4 mr-2" />
           {t.promptGallery?.sharePrompt || "分享模板"}
-          {!user && <span className="ml-2 text-xs text-muted-foreground">(需登入)</span>}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={handleBrowseGallery}>
           <Library className="h-4 w-4 mr-2" />
@@ -122,12 +117,6 @@ export function TabManagementToolbar({
       onOpenChange={setShowGalleryDialog}
       mode="insight"
       onSelectPrompt={handleSelectPrompt}
-    />
-
-    {/* Login Required Dialog */}
-    <LoginRequiredDialog
-      open={showLoginDialog}
-      onOpenChange={setShowLoginDialog}
     />
     </>
   )

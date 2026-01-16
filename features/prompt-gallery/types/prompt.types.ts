@@ -56,9 +56,8 @@ export interface SharedPrompt {
   createdAt: Date
   updatedAt: Date
   
-  // Author information
+  // Optional: For future community features
   authorId?: string
-  isAnonymous?: boolean
   authorName?: string
   usageCount?: number
 }
