@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { AuthDialog } from './AuthDialog'
-import { LogIn, User } from 'lucide-react'
+import { LogIn, User, Info } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 export function HeaderAuthButton() {
   const { t } = useLanguage()
@@ -57,7 +62,17 @@ export function HeaderAuthButton() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">{t.auth.usageToday}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-muted-foreground flex items-center gap-1 cursor-help">
+                    {t.auth.usageToday}
+                    <Info className="h-3 w-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {t.auth.usageTodayTooltip}
+                </TooltipContent>
+              </Tooltip>
               <span className="font-medium">{dailyUsage} / {dailyLimit}</span>
             </div>
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">

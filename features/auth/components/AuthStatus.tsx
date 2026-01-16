@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { AuthDialog } from './AuthDialog'
-import { LogIn, LogOut, User } from 'lucide-react'
+import { LogIn, LogOut, User, Info } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 export function AuthStatus() {
   const { t } = useLanguage()
@@ -85,7 +90,17 @@ export function AuthStatus() {
 
       <div className="pt-3 border-t">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{t.auth.usageToday}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-muted-foreground flex items-center gap-1 cursor-help">
+                {t.auth.usageToday}
+                <Info className="h-3 w-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {t.auth.usageTodayTooltip}
+            </TooltipContent>
+          </Tooltip>
           <span className="font-medium">
             {dailyUsage} / {dailyLimit}
           </span>
