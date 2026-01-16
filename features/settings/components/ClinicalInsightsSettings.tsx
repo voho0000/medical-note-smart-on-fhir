@@ -3,7 +3,13 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Tooltip,
   TooltipContent,
@@ -123,34 +129,35 @@ export function ClinicalInsightsSettings() {
 
       <div className="space-y-5">
 
-        {/* Insight Tabs */}
+        {/* Insight Panel Selector */}
         {panels.length > 0 && (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 overflow-hidden">
+          <div className="space-y-4">
             <div className="flex items-center gap-2 w-full">
-              <TabsList className="flex flex-1 flex-nowrap gap-1 rounded-md bg-muted/50 p-1 min-w-0 w-full h-9 border">
-                {panels.map((panel, index) => (
-                  <TabsTrigger
-                    key={panel.id}
-                    value={panel.id}
-                    className="flex-1 min-w-[40px] px-2 py-1 text-xs font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                  >
-                    {index + 1}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <Select value={activeTab} onValueChange={setActiveTab}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="選擇範本" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
+                  {panels.map((panel, index) => (
+                    <SelectItem key={panel.id} value={panel.id}>
+                      {index + 1}. {panel.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={handleAddPanel}
                 disabled={!canAddPanel}
-                className="h-9 w-9 shrink-0 p-0 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 text-lg font-semibold"
+                className="h-10 w-10 shrink-0 p-0 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 text-lg font-semibold"
               >
                 +
               </Button>
             </div>
             {panels.map((panel, index) => (
-              <TabsContent key={panel.id} value={panel.id} className="mt-0">
+              <div key={panel.id} className={activeTab === panel.id ? "block" : "hidden"}>
                 <InsightTabEditor
                   panel={panel}
                   index={index}
@@ -165,9 +172,9 @@ export function ClinicalInsightsSettings() {
                     setShowShareDialog(true)
                   }}
                 />
-              </TabsContent>
+              </div>
             ))}
-          </Tabs>
+          </div>
         )}
 
         {/* Actions */}
@@ -214,9 +221,6 @@ export function ClinicalInsightsSettings() {
           <Button type="button" variant="outline" onClick={resetPanels} className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10">
             {t.settings.resetToDefaults}
           </Button>
-          <span className="text-xs text-muted-foreground">
-            {panels.length}/{maxPanels} {t.settings.tabsInUse} {user ? t.settings.savedToAccount : t.settings.savedToBrowser}
-          </span>
         </div>
       </div>
 

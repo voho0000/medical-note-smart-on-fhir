@@ -81,7 +81,7 @@ const DEFAULT_TEMPLATES_ZH: ChatTemplate[] = [
 ]
 
 const STORAGE_KEY = "medical-chat-templates"
-const MAX_TEMPLATES = 6
+const MAX_TEMPLATES = 999
 
 function generateTemplateId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

@@ -74,7 +74,7 @@ const DEFAULT_PANELS_ZH: InsightPanelConfig[] = [
 ]
 
 const STORAGE_KEY = "clinical-insights-panels"
-const MAX_PANELS = 6
+const MAX_PANELS = 999
 
 function generatePanelId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

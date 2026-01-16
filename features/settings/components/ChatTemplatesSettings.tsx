@@ -3,7 +3,13 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Tooltip,
   TooltipContent,
@@ -109,32 +115,33 @@ export function ChatTemplatesSettings() {
       </p>
 
       {templates.length > 0 ? (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 overflow-hidden">
+        <div className="space-y-4">
           <div className="flex items-center gap-2 w-full">
-            <TabsList className="flex flex-1 flex-nowrap gap-1 rounded-md bg-muted/50 p-1 min-w-0 w-full h-9 border">
-              {templates.map((template, index) => (
-                <TabsTrigger
-                  key={template.id}
-                  value={template.id}
-                  className="flex-1 min-w-[40px] px-2 py-1 text-xs font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
-                >
-                  {index + 1}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <Select value={activeTab} onValueChange={setActiveTab}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="選擇範本" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px] overflow-y-auto">
+                {templates.map((template, index) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {index + 1}. {template.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={handleAddTemplate}
               disabled={!canAddTemplate}
-              className="h-9 w-9 shrink-0 p-0 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 text-lg font-semibold"
+              className="h-10 w-10 shrink-0 p-0 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 text-lg font-semibold"
             >
               +
             </Button>
           </div>
           {templates.map((template, index) => (
-            <TabsContent key={template.id} value={template.id} className="mt-0">
+            <div key={template.id} className={activeTab === template.id ? "block" : "hidden"}>
               <TemplateEditor
                 template={template}
                 index={index}
@@ -146,9 +153,9 @@ export function ChatTemplatesSettings() {
                 onMove={handleMove}
                 onShare={handleShareTemplate}
               />
-            </TabsContent>
+            </div>
           ))}
-        </Tabs>
+        </div>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -195,9 +202,6 @@ export function ChatTemplatesSettings() {
         <Button type="button" variant="outline" onClick={resetTemplates} className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10">
           {t.settings.resetDefaults}
         </Button>
-        <span className="text-xs text-muted-foreground">
-          {templates.length}/{maxTemplates} {t.settings.templatesAvailable}
-        </span>
       </div>
 
       <PromptGalleryDialog
