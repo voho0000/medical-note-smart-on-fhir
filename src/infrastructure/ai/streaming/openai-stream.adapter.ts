@@ -122,8 +122,6 @@ export class OpenAiStreamAdapter {
     const reader = response.body?.getReader()
     if (!reader) throw new Error("No response body")
 
-    console.log("[OpenAI Stream] Starting to read stream...")
-
     const decoder = new TextDecoder()
     let buffer = ""
     let content = ""
@@ -134,24 +132,12 @@ export class OpenAiStreamAdapter {
       while (true) {
         const { done, value } = await reader.read()
         if (done) {
-          console.log("[OpenAI Stream] Stream completed", {
-            totalChunks: chunkCount,
-            textChunks: textChunkCount,
-            finalLength: content.length,
-          })
           break
         }
 
         chunkCount++
         const decoded = decoder.decode(value, { stream: true })
         buffer += decoded
-
-        if (chunkCount === 1) {
-          console.log("[OpenAI Stream] First chunk received", {
-            length: decoded.length,
-            preview: decoded.substring(0, 100),
-          })
-        }
 
         const lines = buffer.split("\n")
         buffer = lines.pop() || ""
@@ -169,12 +155,6 @@ export class OpenAiStreamAdapter {
                 content += delta
                 textChunkCount++
                 onChunk(content)
-                
-                if (textChunkCount === 1) {
-                  console.log("[OpenAI Stream] First text chunk parsed", {
-                    text: content.substring(0, 50),
-                  })
-                }
               }
             } catch (e) {
               console.warn("[OpenAI Stream] Failed to parse OpenAI chunk", {
@@ -189,46 +169,20 @@ export class OpenAiStreamAdapter {
               content += text
               textChunkCount++
               onChunk(content)
-              
-              if (textChunkCount === 1) {
-                console.log("[OpenAI Stream] First text chunk parsed (legacy)", {
-                  text: text.substring(0, 50),
-                })
-              }
             } catch (e) {
               console.warn("[OpenAI Stream] Failed to parse text chunk", {
                 line: line.substring(0, 100),
                 error: e instanceof Error ? e.message : String(e),
               })
             }
-          } else if (line.startsWith("d:")) {
-            try {
-              const data = JSON.parse(line.slice(2))
-              console.log("[OpenAI Stream] Finish reason:", data.finishReason)
-            } catch (e) {
-              console.warn("[OpenAI Stream] Failed to parse finish data", {
-                line: line.substring(0, 100),
-                error: e instanceof Error ? e.message : String(e),
-              })
-            }
           } else if (line === "data: [DONE]") {
             // OpenAI stream end marker
-            console.log("[OpenAI Stream] Received [DONE] marker")
-          } else {
-            console.log("[OpenAI Stream] Unknown line format", {
-              prefix: line.substring(0, 20),
-            })
           }
         }
       }
     } catch (error) {
       // Most errors during streaming are abort errors from user clicking stop
-      // Just log and return gracefully instead of throwing
-      console.log("[OpenAI Stream] Stream interrupted", {
-        chunkCount,
-        textChunkCount,
-      })
-      // Don't throw - return gracefully
+      // Return gracefully instead of throwing
       return
     }
   }

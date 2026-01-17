@@ -256,10 +256,8 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         
         // Trigger save after agent completes
         if (onStreamComplete) {
-          console.log('[Agent] Calling onStreamComplete callback')
           try {
             await onStreamComplete()
-            console.log('[Agent] onStreamComplete callback completed')
           } catch (error) {
             console.error('[Agent] onStreamComplete callback failed:', error)
           }

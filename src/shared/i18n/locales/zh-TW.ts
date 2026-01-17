@@ -414,6 +414,21 @@ export const zhTW = {
     emptyAudio: '音訊檔案為空',
     network: '網路錯誤',
     unknown: '發生未知錯誤',
+    // AppError codes
+    NETWORK_ERROR: '網路連線錯誤，請檢查您的網路連線',
+    TIMEOUT_ERROR: '請求逾時，請稍後再試',
+    AUTH_REQUIRED: '需要登入才能執行此操作',
+    AUTH_FAILED: '驗證失敗，請重新登入',
+    PERMISSION_DENIED: '您沒有權限執行此操作',
+    VALIDATION_ERROR: '輸入資料驗證失敗',
+    INVALID_INPUT: '輸入資料格式不正確',
+    FHIR_SERVER_ERROR: 'FHIR 伺服器錯誤',
+    FHIR_RESOURCE_NOT_FOUND: '找不到 FHIR 資源',
+    FIREBASE_ERROR: 'Firebase 服務錯誤',
+    FIRESTORE_ERROR: 'Firestore 資料庫錯誤',
+    AI_SERVICE_ERROR: 'AI 服務錯誤',
+    AI_QUOTA_EXCEEDED: 'AI 服務配額已用完',
+    UNKNOWN_ERROR: '發生未知錯誤',
   },
 
   agent: {

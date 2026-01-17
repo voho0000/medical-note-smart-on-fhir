@@ -81,17 +81,12 @@ export function useStreamingChat(
         })
         
         // Trigger save after streaming completes
-        console.log('[Streaming] Completed, onStreamComplete exists:', !!onStreamComplete)
         if (onStreamComplete) {
-          console.log('[Streaming] Calling onStreamComplete callback')
           try {
             await onStreamComplete()
-            console.log('[Streaming] onStreamComplete callback completed')
           } catch (error) {
             console.error('[Streaming] onStreamComplete callback failed:', error)
           }
-        } else {
-          console.warn('[Streaming] No onStreamComplete callback provided')
         }
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return

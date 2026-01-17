@@ -1,5 +1,8 @@
 import type { ChatMessage } from '@/src/application/stores/chat.store'
 import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
+import { logger } from '@/src/shared/services/logger.service'
+
+const titleLogger = logger.scope('AI Title')
 
 export interface GenerateSmartTitleOptions {
   userMessage: string
@@ -34,11 +37,9 @@ export class GenerateSmartTitleUseCase {
       const generatedTitle = response.text?.trim()
       
       if (!generatedTitle) {
-        console.error('[AI Title] No title in response')
+        titleLogger.error('No title in response')
         throw new Error('No title generated')
       }
-      
-      console.log('[AI Title] Generated title:', generatedTitle)
 
       // Clean up the title (remove quotes, extra spaces)
       const cleanTitle = generatedTitle.replace(/^["']|["']$/g, '').trim()
@@ -49,7 +50,7 @@ export class GenerateSmartTitleUseCase {
         ? cleanTitle.substring(0, maxLength) 
         : cleanTitle
     } catch (error) {
-      console.error('[AI Title] Failed to generate smart title:', error)
+      titleLogger.error('Failed to generate smart title', error)
       // Fallback: use first few words of user message
       const fallback = userMessage.substring(0, locale === 'zh-TW' ? 12 : 25)
       return fallback

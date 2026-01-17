@@ -96,15 +96,6 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
   async create(dto: CreateChatSessionDto): Promise<ChatSessionEntity> {
     if (!db) throw new Error('Firestore not initialized')
 
-    // Debug: Log all incoming DTO fields
-    console.log('[Repository] Creating chat session with DTO:', {
-      userId: dto.userId,
-      fhirServerUrl: dto.fhirServerUrl,
-      patientId: dto.patientId,
-      title: dto.title,
-      messagesCount: dto.messages?.length,
-    })
-
     const chatRef = doc(collection(db, 'users', dto.userId, this.COLLECTION_NAME))
     const now = new Date()
     
@@ -123,9 +114,6 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
     }
 
     const firestoreDoc = this.toFirestoreDoc(entity)
-    
-    // Debug: Log the final Firestore document
-    console.log('[Repository] Firestore document to save:', JSON.stringify(firestoreDoc, null, 2))
 
     await setDoc(chatRef, firestoreDoc)
     return entity

@@ -81,9 +81,15 @@ export function validateAndLogEnvironment(config: EnvConfig): void {
 export function validateAppEnvironment(): void {
   validateAndLogEnvironment({
     required: [
-      // Add required variables here if any
+      'NEXT_PUBLIC_FIREBASE_API_KEY',
+      'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
+      'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+      'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
+      'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+      'NEXT_PUBLIC_FIREBASE_APP_ID',
     ],
     optional: [
+      'NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID',
       'NEXT_PUBLIC_PRISMACARE_CHAT_URL',
       'NEXT_PUBLIC_PRISMACARE_WHISPER_URL',
       'NEXT_PUBLIC_PRISMACARE_GEMINI_URL',

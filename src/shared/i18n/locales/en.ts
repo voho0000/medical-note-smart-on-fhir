@@ -412,6 +412,21 @@ export const en = {
     emptyAudio: 'Audio blob is empty',
     network: 'Network error',
     unknown: 'An unknown error occurred',
+    // AppError codes
+    NETWORK_ERROR: 'Network connection error, please check your internet connection',
+    TIMEOUT_ERROR: 'Request timeout, please try again later',
+    AUTH_REQUIRED: 'Authentication required for this operation',
+    AUTH_FAILED: 'Authentication failed, please login again',
+    PERMISSION_DENIED: 'You do not have permission to perform this operation',
+    VALIDATION_ERROR: 'Input validation failed',
+    INVALID_INPUT: 'Invalid input format',
+    FHIR_SERVER_ERROR: 'FHIR server error',
+    FHIR_RESOURCE_NOT_FOUND: 'FHIR resource not found',
+    FIREBASE_ERROR: 'Firebase service error',
+    FIRESTORE_ERROR: 'Firestore database error',
+    AI_SERVICE_ERROR: 'AI service error',
+    AI_QUOTA_EXCEEDED: 'AI service quota exceeded',
+    UNKNOWN_ERROR: 'An unknown error occurred',
   },
 
   agent: {

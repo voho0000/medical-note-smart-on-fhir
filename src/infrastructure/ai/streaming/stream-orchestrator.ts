@@ -12,17 +12,6 @@ export class StreamOrchestrator {
     const modelDef = getModelDefinition(config.model)
     const provider = modelDef?.provider ?? "openai"
 
-    console.log("[StreamOrchestrator] Routing stream request", {
-      model: config.model,
-      provider,
-      hasApiKey: !!config.apiKey,
-      modelDef: modelDef ? {
-        id: modelDef.id,
-        provider: modelDef.provider,
-        requiresUserKey: modelDef.requiresUserKey,
-      } : null,
-    })
-
     switch (provider) {
       case "openai":
         await this.openAiAdapter.stream(config)

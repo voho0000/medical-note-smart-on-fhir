@@ -59,8 +59,6 @@ export function useSmartTitleGeneration() {
     apiKey: string | null
   ) => {
     try {
-      console.log('[Smart Title] Generating AI title for session:', sessionId)
-      
       const smartTitle = await generateSmartTitleUseCase.execute({
         userMessage,
         assistantMessage,
@@ -68,15 +66,11 @@ export function useSmartTitleGeneration() {
         apiKey,  // Pass decrypted API key from store
       })
       
-      console.log('[Smart Title] Generated title:', smartTitle)
-      
       // Update Firestore
       await repository.updateTitle(sessionId, userId, smartTitle)
       
       // Update Zustand store for immediate UI update
       updateSession(sessionId, { title: smartTitle })
-      
-      console.log('[Smart Title] Title updated successfully')
     } catch (error) {
       console.error('[Smart Title] Failed to generate or update title:', error)
     }

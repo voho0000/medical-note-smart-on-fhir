@@ -46,7 +46,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
       description: 'Query patient conditions/diagnoses from FHIR server. Use this to get information about patient diagnoses, problems, or medical conditions.',
       inputSchema: conditionsSchema,
       execute: async ({ category, clinicalStatus }: z.infer<typeof conditionsSchema>) => {
-        console.log('[Tool] queryConditions started', { patientId, category, clinicalStatus })
         try {
           const parameters: Record<string, string> = {}
           if (category) parameters.category = category
@@ -56,11 +55,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
             { resourceType: 'Condition', patientId, parameters },
             fhirClient
           )
-          
-          console.log('[Tool] queryConditions completed', { 
-            success: result.success, 
-            count: result.data?.entry?.length || 0 
-          })
           
           return {
             success: result.success,
@@ -73,7 +67,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
             })) || []
           }
         } catch (error) {
-          console.error('[Tool] queryConditions error:', error)
           return {
             success: false,
             summary: `Error querying conditions: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -141,7 +134,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
       description: 'Query patient observations (lab results, vital signs) from FHIR server. Use this to get lab test results, vital signs, or other clinical observations. Supports date range filtering.',
       inputSchema: observationsSchema,
       execute: async ({ category, code, dateFrom, dateTo }: z.infer<typeof observationsSchema>) => {
-        console.log('[Tool] queryObservations started', { patientId, category, code, dateFrom, dateTo })
         try {
           const parameters: Record<string, string> = {}
           if (category) parameters.category = category
@@ -166,13 +158,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
             })
           }
           
-          console.log('[Tool] queryObservations completed', { 
-            success: result.success, 
-            totalCount: result.data?.entry?.length || 0,
-            filteredCount: entries.length,
-            dateRange: { dateFrom, dateTo }
-          })
-          
           const noDataMessage = dateFrom || dateTo 
             ? `在指定時間範圍內（${dateFrom || '開始'} 至 ${dateTo || '現在'}）沒有找到檢驗數據`
             : '沒有找到檢驗數據'
@@ -191,7 +176,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
             }))
           }
         } catch (error) {
-          console.error('[Tool] queryObservations error:', error)
           return {
             success: false,
             summary: `Error querying observations: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -257,7 +241,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
       description: 'Query patient diagnostic reports (lab panels, radiology reports) from FHIR server. This is the PRIMARY tool for querying lab test results like Basic Metabolic Panel, Lipid Panel, CBC, etc. Use this instead of queryObservations for lab results. Returns detailed test results.',
       inputSchema: diagnosticReportsSchema,
       execute: async ({ category, dateFrom, dateTo }: z.infer<typeof diagnosticReportsSchema>) => {
-        console.log('[Tool] queryDiagnosticReports started', { patientId, category, dateFrom, dateTo })
         try {
           const parameters: Record<string, string> = {}
           if (category) parameters.category = category
@@ -293,14 +276,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
             if (obs.resource?.id) {
               observationMap.set(obs.resource.id, obs.resource)
             }
-          })
-          
-          console.log('[Tool] queryDiagnosticReports completed', { 
-            success: result.success, 
-            totalCount: result.data?.entry?.length || 0,
-            filteredCount: entries.length,
-            observationsCount: allObservations.length,
-            dateRange: { dateFrom, dateTo }
           })
           
           const noDataMessage = dateFrom || dateTo 
