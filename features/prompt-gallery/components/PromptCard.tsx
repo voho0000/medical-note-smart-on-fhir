@@ -51,12 +51,12 @@ export function PromptCard({ prompt, onPreview }: PromptCardProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="!pb-2 !pt-2 !px-3 space-y-1">
-        <p className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">
+      <CardContent className="!pb-2 !pt-2 !px-3 flex flex-col gap-1">
+        <p className="text-[11px] text-muted-foreground line-clamp-2 leading-tight h-[30px]">
           {prompt.prompt}
         </p>
 
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 min-h-[18px]">
           <Badge variant="secondary" className="text-[10px] px-1 py-0">
             {getCategoryLabel(prompt.category)}
           </Badge>
@@ -72,12 +72,10 @@ export function PromptCard({ prompt, onPreview }: PromptCardProps) {
           )}
         </div>
 
-        {prompt.usageCount !== undefined && prompt.usageCount > 0 && (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <TrendingUp className="h-2.5 w-2.5" />
-            <span>{prompt.usageCount}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground h-[16px]">
+          <TrendingUp className="h-2.5 w-2.5" />
+          <span>使用 {prompt.usageCount || 0} 次</span>
+        </div>
       </CardContent>
     </Card>
   )

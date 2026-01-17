@@ -118,9 +118,9 @@ export function PromptPreviewDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] w-[90vw]">
         <DialogHeader>
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-6">
             <DialogTitle className="text-xl">{prompt.title}</DialogTitle>
-            <div className="flex gap-1">
+            <div className="flex gap-1 shrink-0 mr-2">
               {prompt.types.map((type) => (
                 <Badge key={type} variant="outline">{getTypeLabel(type)}</Badge>
               ))}
@@ -168,14 +168,12 @@ export function PromptPreviewDialog({
                   <span>作者：匿名</span>
                 </div>
               )}
-              {prompt.usageCount !== undefined && prompt.usageCount > 0 && (
-                <div className="flex items-center gap-1">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>
-                    {t.promptGallery.usageCount}: {prompt.usageCount || 0}
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center gap-1">
+                <TrendingUp className="h-4 w-4" />
+                <span>
+                  {t.promptGallery.usageCount}: {prompt.usageCount || 0}
+                </span>
+              </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
                 <span>

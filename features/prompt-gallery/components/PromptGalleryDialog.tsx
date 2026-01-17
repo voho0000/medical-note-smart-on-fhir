@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,14 @@ import {
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { PromptFilters } from './PromptFilters'
 import { PromptCard } from './PromptCard'
@@ -123,7 +131,7 @@ export function PromptGalleryDialog({
             <DialogDescription>{t.promptGallery.description}</DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+          <div className="flex-1 flex flex-col gap-3 overflow-hidden">
             {/* Filters */}
             <PromptFilters
               searchQuery={filter.searchQuery || ''}
@@ -134,11 +142,72 @@ export function PromptGalleryDialog({
               onCategoryChange={(category) => handleFilterChange({ category })}
               selectedSpecialty={filter.specialty}
               onSpecialtyChange={(specialty) => handleFilterChange({ specialty })}
-              sortBy={sortBy}
-              onSortChange={(sort) => { setSortBy(sort); setCurrentPage(1); }}
-              onClearFilters={() => { clearFilter(); setCurrentPage(1); }}
-              hasActiveFilters={hasActiveFilters}
             />
+
+            {/* Active Filters & Results Count */}
+            {(hasActiveFilters || prompts.length > 0) && !loading && (
+              <div className="flex items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {prompts.length > 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      共 {prompts.length} 個範本
+                    </span>
+                  )}
+                  {filter.type && (
+                    <Badge variant="secondary" className="text-xs">
+                      {filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeInsight}
+                      <X
+                        className="ml-1 h-3 w-3 cursor-pointer"
+                        onClick={() => handleFilterChange({ type: undefined })}
+                      />
+                    </Badge>
+                  )}
+                  {filter.category && (
+                    <Badge variant="secondary" className="text-xs">
+                      {t.promptGallery.categories[filter.category as keyof typeof t.promptGallery.categories]}
+                      <X
+                        className="ml-1 h-3 w-3 cursor-pointer"
+                        onClick={() => handleFilterChange({ category: undefined })}
+                      />
+                    </Badge>
+                  )}
+                  {filter.specialty && (
+                    <Badge variant="secondary" className="text-xs">
+                      {t.promptGallery.specialties[filter.specialty as keyof typeof t.promptGallery.specialties]}
+                      <X
+                        className="ml-1 h-3 w-3 cursor-pointer"
+                        onClick={() => handleFilterChange({ specialty: undefined })}
+                      />
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { clearFilter(); setCurrentPage(1); }}
+                      className="h-7 text-xs"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      清除篩選
+                    </Button>
+                  )}
+                  <Select
+                    value={sortBy}
+                    onValueChange={(value) => { setSortBy(value as 'latest' | 'popular'); setCurrentPage(1); }}
+                  >
+                    <SelectTrigger className="w-[130px] h-7">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="latest">最新優先</SelectItem>
+                      <SelectItem value="popular">熱門優先</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
 
             {/* Error */}
             {error && (

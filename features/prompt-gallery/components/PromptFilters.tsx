@@ -26,10 +26,6 @@ interface PromptFiltersProps {
   onCategoryChange: (category?: PromptCategory) => void
   selectedSpecialty?: PromptSpecialty
   onSpecialtyChange: (specialty?: PromptSpecialty) => void
-  sortBy?: 'latest' | 'popular'
-  onSortChange: (sort: 'latest' | 'popular') => void
-  onClearFilters: () => void
-  hasActiveFilters: boolean
 }
 
 export function PromptFilters({
@@ -41,10 +37,6 @@ export function PromptFilters({
   onCategoryChange,
   selectedSpecialty,
   onSpecialtyChange,
-  sortBy = 'latest',
-  onSortChange,
-  onClearFilters,
-  hasActiveFilters,
 }: PromptFiltersProps) {
   const { t } = useLanguage()
 
@@ -96,7 +88,7 @@ export function PromptFilters({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -104,106 +96,64 @@ export function PromptFilters({
           placeholder={t.promptGallery.searchPlaceholder}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9"
+          className="pl-9 h-9"
         />
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* Type Filter */}
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t.promptGallery.filterByType}</Label>
-          <Select
-            value={selectedType || 'all'}
-            onValueChange={(value) => onTypeChange(value === 'all' ? undefined : (value as PromptType))}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {types.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {getTypeLabel(type)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Category Filter */}
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t.promptGallery.filterByCategory}</Label>
-          <Select
-            value={selectedCategory || 'all'}
-            onValueChange={(value) =>
-              onCategoryChange(value === 'all' ? undefined : (value as PromptCategory))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {getCategoryLabel(category)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Specialty Filter */}
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t.promptGallery.filterBySpecialty}</Label>
-          <Select
-            value={selectedSpecialty || 'all'}
-            onValueChange={(value) =>
-              onSpecialtyChange(value === 'all' ? undefined : (value as PromptSpecialty))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {specialties.map((specialty) => (
-                <SelectItem key={specialty} value={specialty}>
-                  {getSpecialtyLabel(specialty)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Sort By */}
-        <div className="space-y-1.5">
-          <Label className="text-xs">排序方式</Label>
-          <Select
-            value={sortBy}
-            onValueChange={(value) => onSortChange(value as 'latest' | 'popular')}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="latest">最新優先</SelectItem>
-              <SelectItem value="popular">熱門優先</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Clear Filters */}
-      {hasActiveFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearFilters}
-          className="w-full"
+      {/* Filters - Compact Single Row */}
+      <div className="flex items-center gap-2">
+        <Select
+          value={selectedType || 'all'}
+          onValueChange={(value) => onTypeChange(value === 'all' ? undefined : (value as PromptType))}
         >
-          <X className="h-4 w-4 mr-2" />
-          {t.promptGallery.clearFilters}
-        </Button>
-      )}
+          <SelectTrigger className="h-9 w-[140px]">
+            <SelectValue placeholder={t.promptGallery.filterByType} />
+          </SelectTrigger>
+          <SelectContent>
+            {types.map((type) => (
+              <SelectItem key={type} value={type}>
+                {getTypeLabel(type)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={selectedCategory || 'all'}
+          onValueChange={(value) =>
+            onCategoryChange(value === 'all' ? undefined : (value as PromptCategory))
+          }
+        >
+          <SelectTrigger className="h-9 w-[140px]">
+            <SelectValue placeholder={t.promptGallery.filterByCategory} />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((category) => (
+              <SelectItem key={category} value={category}>
+                {getCategoryLabel(category)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={selectedSpecialty || 'all'}
+          onValueChange={(value) =>
+            onSpecialtyChange(value === 'all' ? undefined : (value as PromptSpecialty))
+          }
+        >
+          <SelectTrigger className="h-9 w-[140px]">
+            <SelectValue placeholder={t.promptGallery.filterBySpecialty} />
+          </SelectTrigger>
+          <SelectContent>
+            {specialties.map((specialty) => (
+              <SelectItem key={specialty} value={specialty}>
+                {getSpecialtyLabel(specialty)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   )
 }
