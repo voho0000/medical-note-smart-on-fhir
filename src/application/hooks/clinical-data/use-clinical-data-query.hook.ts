@@ -38,7 +38,11 @@ export function useClinicalDataQuery() {
 
 // Backward compatibility hook that matches the old ClinicalDataProvider API
 export function useClinicalData() {
-  const { data, isLoading, error, refetch } = useClinicalDataQuery()
+  const { data: patient, isLoading: patientLoading } = usePatientQuery()
+  const { data, isLoading: clinicalDataLoading, error, refetch } = useClinicalDataQuery()
+  
+  // Consider loading if either patient or clinical data is loading
+  const isLoading = patientLoading || clinicalDataLoading
   
   return {
     conditions: data?.conditions ?? [],

@@ -66,7 +66,7 @@ export default function MedicalChat() {
   
   // FHIR error handling
   const { error: patientError } = usePatient()
-  const { error: clinicalDataError } = useClinicalData()
+  const { error: clinicalDataError, isLoading: isLoadingClinicalData } = useClinicalData()
   
   // Auto-save chat to Firestore (debounced)
   // Note: patientName is only used for UI display, never stored in Firestore
@@ -250,6 +250,7 @@ export default function MedicalChat() {
               onTemplateChange={template.setSelectedTemplateId}
               hasTemplateContent={!!template.selectedTemplate?.content?.trim()}
               onOpenGallery={() => setShowPromptGallery(true)}
+              isLoadingClinicalData={isLoadingClinicalData}
             />
           </div>
           {showApiKeyWarning && (

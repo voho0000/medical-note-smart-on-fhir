@@ -23,6 +23,7 @@ interface ChatToolbarProps {
   onTemplateChange: (id: string) => void
   hasTemplateContent: boolean
   onOpenGallery?: () => void
+  isLoadingClinicalData?: boolean
 }
 
 export function ChatToolbar({
@@ -35,6 +36,7 @@ export function ChatToolbar({
   onTemplateChange,
   hasTemplateContent,
   onOpenGallery,
+  isLoadingClinicalData = false,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
@@ -56,9 +58,16 @@ export function ChatToolbar({
   return (
     <div className="flex items-center gap-1">
       <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
-        <Button variant="ghost" size="sm" onClick={onInsertContext} className="h-7 gap-1 px-1.5 text-xs">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={onInsertContext} 
+          disabled={isLoadingClinicalData}
+          className="h-7 gap-1 px-1.5 text-xs"
+          title={isLoadingClinicalData ? t.chat.loadingClinicalData : undefined}
+        >
           <Plus className="h-3 w-3" />
-          {t.chat.insertContext}
+          {isLoadingClinicalData ? t.chat.loading : t.chat.insertContext}
         </Button>
       </div>
       {templates.length > 0 ? (
