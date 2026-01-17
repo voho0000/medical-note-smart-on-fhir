@@ -15,6 +15,7 @@ import {
   where,
   orderBy,
   limit,
+  increment,
   Timestamp,
   QueryConstraint,
 } from 'firebase/firestore'
@@ -141,24 +142,12 @@ export async function getSharedPrompt(id: string): Promise<SharedPrompt | null> 
 export async function createSharedPrompt(
   prompt: Omit<SharedPrompt, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
-  console.log('createSharedPrompt 開始')
-  
   if (!db) {
-    const error = new Error('Firestore database is not initialized. Make sure you are on the client side.')
-    console.error('❌ Firestore 未初始化:', error)
-    throw error
+    throw new Error('Firestore database is not initialized. Make sure you are on the client side.')
   }
 
   try {
-    console.log('準備寫入 Firestore，collection:', COLLECTION_NAME)
-    console.log('資料:', prompt)
-    
     const now = Timestamp.now()
-    
-    // 加入 timeout 機制
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Firestore 寫入超時（10秒）')), 10000)
-    })
     
     // Build data object, filtering out undefined values
     const data: any = {
@@ -187,20 +176,10 @@ export async function createSharedPrompt(
       data.isAnonymous = prompt.isAnonymous
     }
     
-    const writePromise = addDoc(collection(db, COLLECTION_NAME), data)
-    
-    console.log('開始寫入 Firestore...')
-    const docRef = await Promise.race([writePromise, timeoutPromise]) as any
-    
-    console.log('✅ Firestore 寫入成功，文件 ID:', docRef.id)
+    const docRef = await addDoc(collection(db, COLLECTION_NAME), data)
     return docRef.id
   } catch (error) {
-    console.error('❌ Firestore 寫入失敗:', error)
-    if (error instanceof Error) {
-      console.error('錯誤訊息:', error.message)
-      console.error('錯誤堆疊:', error.stack)
-      console.error('錯誤類型:', error.constructor.name)
-    }
+    console.error('Error creating shared prompt:', error)
     throw error
   }
 }
@@ -243,14 +222,9 @@ export async function updateSharedPrompt(
 export async function incrementPromptUsage(id: string): Promise<void> {
   try {
     const docRef = doc(db, COLLECTION_NAME, id)
-    const docSnap = await getDoc(docRef)
-    
-    if (docSnap.exists()) {
-      const currentCount = docSnap.data().usageCount || 0
-      await updateDoc(docRef, {
-        usageCount: currentCount + 1,
-      })
-    }
+    await updateDoc(docRef, {
+      usageCount: increment(1),
+    })
   } catch (error) {
     console.error('Error incrementing prompt usage:', error)
     // Don't throw - this is not critical
