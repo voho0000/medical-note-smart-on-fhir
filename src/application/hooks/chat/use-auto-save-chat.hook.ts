@@ -3,6 +3,7 @@ import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useChatStore } from '@/src/application/stores/chat.store'
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
+import { useAddSessionMutation, useUpdateSessionMutation } from './use-chat-sessions-query.hook'
 import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
 import { SaveChatSessionUseCase } from '@/src/core/use-cases/chat/save-chat-session.use-case'
 import { UpdateChatSessionUseCase } from '@/src/core/use-cases/chat/update-chat-session.use-case'
@@ -31,8 +32,8 @@ export function useAutoSaveChat({
   const messages = useChatStore(state => state.messages)
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const setCurrentSessionId = useChatHistoryStore(state => state.setCurrentSessionId)
-  const addSession = useChatHistoryStore(state => state.addSession)
-  const updateSession = useChatHistoryStore(state => state.updateSession)
+  const { addSession } = useAddSessionMutation()
+  const { updateSession } = useUpdateSessionMutation()
   
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const lastSavedMessageCountRef = useRef(0)
@@ -84,28 +85,39 @@ export function useAutoSaveChat({
         })
 
         setCurrentSessionId(newSession.id)
-        addSession({
-          id: newSession.id,
-          userId: newSession.userId,
-          fhirServerUrl: newSession.fhirServerUrl,
-          patientId: newSession.patientId,
-          title: newSession.title,
-          summary: newSession.summary,
-          createdAt: newSession.createdAt,
-          updatedAt: newSession.updatedAt,
-          messageCount: newSession.messageCount,
-          tags: newSession.tags,
-        })
+        addSession(
+          user.uid,
+          effectivePatientId,
+          effectiveFhirServerUrl,
+          {
+            id: newSession.id,
+            userId: newSession.userId,
+            fhirServerUrl: newSession.fhirServerUrl,
+            patientId: newSession.patientId,
+            title: newSession.title,
+            summary: newSession.summary,
+            createdAt: newSession.createdAt,
+            updatedAt: newSession.updatedAt,
+            messageCount: newSession.messageCount,
+            tags: newSession.tags,
+          }
+        )
 
       } else {
         await updateChatSessionUseCase.execute(currentSessionId, user.uid, {
           messages: currentMessages,
         })
 
-        updateSession(currentSessionId, {
-          updatedAt: new Date(),
-          messageCount: currentMessages.length,
-        })
+        updateSession(
+          user.uid,
+          effectivePatientId,
+          effectiveFhirServerUrl,
+          currentSessionId,
+          {
+            updatedAt: new Date(),
+            messageCount: currentMessages.length,
+          }
+        )
 
       }
 

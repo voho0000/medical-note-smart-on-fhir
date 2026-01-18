@@ -4,6 +4,8 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { useChatStore } from '@/src/application/stores/chat.store'
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
+import { useUpdateSessionMutation } from './use-chat-sessions-query.hook'
+import { useFhirContext } from './use-fhir-context.hook'
 import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
 import { GenerateSmartTitleUseCase } from '@/src/core/use-cases/chat/generate-smart-title.use-case'
 
@@ -13,10 +15,11 @@ const generateSmartTitleUseCase = new GenerateSmartTitleUseCase()
 export function useSmartTitleGeneration() {
   const { user } = useAuth()
   const { locale } = useLanguage()
-  const apiKey = useAiConfigStore(state => state.apiKey)  // Get decrypted API key from store
+  const { patientId, fhirServerUrl } = useFhirContext()
+  const apiKey = useAiConfigStore(state => state.apiKey)
   const messages = useChatStore(state => state.messages)
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
-  const updateSession = useChatHistoryStore(state => state.updateSession)
+  const { updateSession } = useUpdateSessionMutation()
   const hasGeneratedRef = useRef(false)
 
   useEffect(() => {
@@ -69,8 +72,10 @@ export function useSmartTitleGeneration() {
       // Update Firestore
       await repository.updateTitle(sessionId, userId, smartTitle)
       
-      // Update Zustand store for immediate UI update
-      updateSession(sessionId, { title: smartTitle })
+      // Update React Query cache for immediate UI update
+      if (patientId && fhirServerUrl) {
+        updateSession(userId, patientId, fhirServerUrl, sessionId, { title: smartTitle })
+      }
     } catch (error) {
       console.error('[Smart Title] Failed to generate or update title:', error)
     }
