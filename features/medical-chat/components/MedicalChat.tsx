@@ -6,6 +6,7 @@ import { AlertCircle, Maximize2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useModel, useAiConfigStore } from "@/src/application/stores/ai-config.store"
+import { useChatStore } from "@/src/application/stores/chat.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ChatMessageList } from "./ChatMessageList"
 import { ChatHeader } from "./ChatHeader"
@@ -143,8 +144,21 @@ export default function MedicalChat() {
   const handleSend = useCallback(async () => {
     const trimmed = input.input.trim()
     if (!trimmed) return
-    await chat.handleSend(trimmed)
-  }, [input, chat])
+    
+    // Auto-include clinical context if enabled
+    const autoIncludeContext = useChatStore.getState().autoIncludeContext
+    let messageToSend = trimmed
+    
+    if (autoIncludeContext) {
+      const context = getFullClinicalContext()
+      if (context.trim()) {
+        // Put user input first, then clinical context below
+        messageToSend = `${trimmed}\n\n${context}`
+      }
+    }
+    
+    await chat.handleSend(messageToSend)
+  }, [input, chat, getFullClinicalContext])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
@@ -232,8 +246,8 @@ export default function MedicalChat() {
         <ChatMessageList messages={chatMessages} isLoading={chat.isLoading} />
       </CardContent>
 
-      <CardFooter className="flex flex-col gap-2 border-t pt-1 shrink-0">
-        <div className="flex w-full flex-col gap-2">
+      <CardFooter className="flex flex-col gap-2 border-t px-6 !pt-2 pb-2 shrink-0">
+        <div className="flex w-full flex-col gap-1">
           <div className="flex items-center gap-1 overflow-x-auto">
             <ChatModeSelector
               isAgentMode={isAgentMode}

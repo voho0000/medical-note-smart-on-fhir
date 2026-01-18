@@ -162,7 +162,7 @@ export const en = {
     title: 'Medical Note Chat',
     description: 'Ask follow-up questions or dictate updates using the microphone.',
     placeholder: 'Type your question or instruction…',
-    insertContext: 'Context',
+    insertContext: 'Data',
     insertAsr: 'Voice',
     clearAsr: 'Voice',
     resetChat: 'Chat',
@@ -188,6 +188,10 @@ export const en = {
     expandedMode: 'Chat is expanded. Press ESC or click minimize to return.',
     loading: 'Loading...',
     loadingClinicalData: 'Loading clinical data...',
+    autoInclude: 'Auto',
+    autoIncludeEnabled: 'Auto-include enabled',
+    autoIncludeContextTooltipOn: 'Automatically include clinical context with every message',
+    autoIncludeContextTooltipOff: 'Click "Data" button to manually include',
   },
 
   dataSelection: {
@@ -490,8 +494,8 @@ export const en = {
   },
 
   medicalChat: {
-    deepMode: 'Deep Mode',
-    normalMode: 'Normal Mode',
+    deepMode: 'Deep',
+    normalMode: 'Normal',
     agentModeDescription: 'AI can automatically query FHIR data',
     apiKeyWarningTitle: 'Deep Mode Requires API Key',
     apiKeyWarningMessage: 'Please set your API Key in the Settings page first, or switch to Normal Mode.',

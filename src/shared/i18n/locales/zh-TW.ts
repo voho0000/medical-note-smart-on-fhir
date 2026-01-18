@@ -164,7 +164,7 @@ export const zhTW = {
     title: '醫療對話',
     description: '與 AI 進行醫療相關對話',
     placeholder: '輸入您的問題或指令…',
-    insertContext: '臨床資料',
+    insertContext: '病歷',
     insertAsr: '插入語音',
     clearAsr: '清除語音',
     resetChat: '重設對話',
@@ -190,6 +190,10 @@ export const zhTW = {
     expandedMode: '對話已展開。按 ESC 或點擊最小化返回。',
     loading: '載入中...',
     loadingClinicalData: '臨床資料載入中...',
+    autoInclude: '自動帶入',
+    autoIncludeEnabled: '自動帶入已啟用',
+    autoIncludeContextTooltipOn: '每次發送訊息時自動包含病歷資料',
+    autoIncludeContextTooltipOff: '點擊「臨床資料」按鈕手動帶入',
   },
 
   dataSelection: {
@@ -492,8 +496,8 @@ export const zhTW = {
   },
 
   medicalChat: {
-    deepMode: '深入模式',
-    normalMode: '一般模式',
+    deepMode: '深入',
+    normalMode: '一般',
     agentModeDescription: 'AI 可自動查詢 FHIR 資料',
     apiKeyWarningTitle: '深入模式需要 API Key',
     apiKeyWarningMessage: '請先在「設定」頁面中設定您的 API Key，或改用一般模式。',
