@@ -43,7 +43,35 @@ export class PerplexityService {
           max_tokens: 1500,
           temperature: 0.2,
           top_p: 0.9,
-          search_domain_filter: ['pubmed.ncbi.nlm.nih.gov', 'nih.gov', 'who.int', 'uptodate.com'],
+          search_domain_filter: [
+            // Primary medical literature databases
+            'pubmed.ncbi.nlm.nih.gov',
+            'nih.gov',
+            'cochrane.org',
+            // Top medical journals
+            'nejm.org',
+            'thelancet.com',
+            'jamanetwork.com',
+            'bmj.com',
+            // Clinical decision support & guidelines
+            'uptodate.com',
+            'who.int',
+            'cdc.gov',
+            'fda.gov',          // 美國食品藥物管理局
+            'ema.europa.eu',    // 歐洲藥品管理局
+            'nice.org.uk',      // 英國 NICE 臨床指南
+            // Clinical information resources
+            'mayoclinic.org',
+            'medscape.com',
+            // Professional medical associations
+            'aafp.org',         // 美國家庭醫學會
+            'acc.org',          // 美國心臟病學會
+            // Taiwan government health resources
+            'mohw.gov.tw',      // 衛生福利部
+            'cdc.gov.tw',       // 疾病管制署
+            'fda.gov.tw',       // 食品藥物管理署
+            'nhia.gov.tw',      // 健保署
+          ],
           return_citations: true,
           return_images: false,
           stream: false, // Non-streaming for tool calling
