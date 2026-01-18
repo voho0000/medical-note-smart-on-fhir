@@ -1,8 +1,27 @@
-# Chat History Implementation Guide
+# Medical Chat 功能指南
 
-## 概述
+> 包含 AI 對話、對話歷史、語音錄製等完整功能說明
 
-本文檔說明 Chat History（對話紀錄）功能的完整實作，包括架構設計、資料結構、以及如何解決多沙盒環境下的病人 ID 衝突問題。
+## 🎯 功能概述
+
+Medical Chat 是本系統的核心 AI 功能，提供：
+
+### AI 對話模式
+- **一般模式**：基本 AI 對話，快速回應臨床問題
+- **深入模式（AI Agent）**：自動調用 8 種工具查詢 FHIR 資料和醫學文獻
+- 支援 OpenAI、Google Gemini、Perplexity 多種 AI 模型
+
+### 對話歷史
+- 📝 依病人分類自動儲存對話
+- 🔍 查看特定病人的歷史對話
+- 🏥 支援多個 FHIR 沙盒/醫院環境
+- 🔄 即時同步對話更新
+- 🗑️ 刪除不需要的對話
+
+### 其他功能
+- 🎤 語音錄製和 Whisper 轉錄
+- 📋 提示範本快速套用
+- 📊 資料選擇整合
 
 ## 核心設計理念
 
@@ -29,7 +48,61 @@ WHERE patientId == "123"
 - 在 Cerner 沙盒的病人 123 ≠ Epic 沙盒的病人 123
 - 同一個醫師在不同醫院工作時，資料不會混淆
 
-## 資料結構
+---
+
+## 🚀 快速開始
+
+### 1. 必要設定
+
+#### Firestore Security Rules
+
+在 Firebase Console 中設定以下規則：
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Chat sessions sub-collection
+      match /chats/{chatId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
+```
+
+#### Firestore Indexes
+
+建立複合索引以支援查詢：
+
+**方法 1：自動建立**
+- 執行應用程式後，Firestore 會提示建立索引
+- 點擊連結自動建立
+
+**方法 2：手動建立**
+1. 前往 Firebase Console > Firestore > Indexes
+2. 建立複合索引：
+   - Collection: `users/{userId}/chats`
+   - Fields:
+     - `patientId` (Ascending)
+     - `fhirServerUrl` (Ascending)
+     - `updatedAt` (Descending)
+
+### 2. 使用流程
+
+1. **登入 Firebase Auth**：在應用程式右上角點擊登入按鈕
+2. **透過 SMART Launch 進入**：訪問 SMART Launch URL
+3. **開始對話**：在 "Note Chat" 標籤中與 AI 對話
+4. **自動儲存**：等待 5 秒，對話會自動儲存
+5. **查看歷史**：點擊聊天工具列的 **"History"** 按鈕
+
+---
+
+## 📊 資料結構
 
 ### Firestore Schema
 
@@ -56,21 +129,43 @@ WHERE patientId == "123"
 }
 ```
 
-### 複合索引 (Composite Index)
+### 文件範例
 
-Firestore 需要建立以下索引以支援查詢：
-
+```json
+{
+  "id": "abc123",
+  "userId": "firebase-user-id",
+  "fhirServerUrl": "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4",
+  "patientId": "eVj5Y.E3TEecZF8RMv4Mag3",
+  "patientName": "John Doe",
+  "title": "高血壓藥物調整諮詢",
+  "messages": [
+    {
+      "id": "msg1",
+      "role": "user",
+      "content": "這位病人的血壓控制如何？",
+      "timestamp": 1705276800000
+    },
+    {
+      "id": "msg2",
+      "role": "assistant",
+      "content": "根據最近的生命徵象...",
+      "timestamp": 1705276805000
+    }
+  ],
+  "createdAt": "2024-01-15T00:00:00.000Z",
+  "updatedAt": "2024-01-15T00:05:00.000Z",
+  "messageCount": 2
+}
 ```
-Collection: users/{userId}/chats
-Fields:
-  - patientId (Ascending)
-  - fhirServerUrl (Ascending)
-  - updatedAt (Descending)
-```
 
-## 架構層級
+---
 
-### 1. Core Layer (核心層)
+## 🏗️ 架構設計
+
+### 架構層級
+
+#### 1. Core Layer (核心層)
 
 **Entities** (`src/core/entities/chat-session.entity.ts`):
 - `ChatSessionEntity`: 完整的對話實體
@@ -89,33 +184,33 @@ Fields:
 - `DeleteChatSessionUseCase`: 刪除對話
 - `GenerateChatTitleUseCase`: AI 生成對話標題
 
-### 2. Infrastructure Layer (基礎設施層)
+#### 2. Infrastructure Layer (基礎設施層)
 
 **Repository** (`src/infrastructure/firebase/repositories/chat-session.repository.ts`):
 - 實作 Firestore CRUD 操作
 - 處理 Timestamp 轉換
 - 提供 real-time subscription
 
-### 3. Application Layer (應用層)
+#### 3. Application Layer (應用層)
 
 **Stores** (`src/application/stores/`):
 - `chat-history.store.ts`: 管理對話列表狀態
-- `chat.store.ts`: 管理當前對話訊息（已存在）
+- `chat.store.ts`: 管理當前對話訊息
 
 **Hooks** (`src/application/hooks/chat/`):
 - `use-chat-history.hook.ts`: 載入和管理歷史紀錄
 - `use-chat-session.hook.ts`: 載入特定對話
 - `use-auto-save-chat.hook.ts`: 自動儲存對話（防抖）
-- `use-fhir-context.hook.ts`: 取得 FHIR 上下文（病人 ID、伺服器 URL）
+- `use-fhir-context.hook.ts`: 取得 FHIR 上下文
 
-### 4. Presentation Layer (展示層)
+#### 4. Presentation Layer (展示層)
 
 **Components** (`features/chat-history/components/`):
 - `ChatHistoryDrawer.tsx`: 左側抽屜式歷史紀錄面板
 
-## 核心功能
+### 關鍵功能實作
 
-### 1. 自動儲存 (Auto-save)
+#### 1. 自動儲存 (Auto-save)
 
 **特點**：
 - 使用 **debounce** 機制，預設 5 秒後才儲存
@@ -134,7 +229,7 @@ useAutoSaveChat({
 })
 ```
 
-### 2. Real-time 同步
+#### 2. Real-time 同步
 
 使用 Firestore `onSnapshot` 實現即時同步：
 
@@ -153,7 +248,7 @@ useEffect(() => {
 }, [userId, patientId, fhirServerUrl])
 ```
 
-### 3. 對話標題生成
+#### 3. 對話標題生成
 
 **預設行為**：取第一則使用者訊息的前 50 字
 
@@ -164,7 +259,9 @@ const title = await generateChatTitleUseCase.execute(messages, aiService)
 // 例如："高血壓藥物調整諮詢"
 ```
 
-## UI/UX 設計
+---
+
+## 🎨 UI/UX 設計
 
 ### 歷史紀錄面板
 
@@ -181,8 +278,6 @@ const title = await generateChatTitleUseCase.execute(messages, aiService)
 - 引導使用者開始對話
 
 ### 國際化 (i18n)
-
-已新增以下翻譯鍵：
 
 **英文** (`src/shared/i18n/locales/en.ts`):
 ```typescript
@@ -218,60 +313,102 @@ chatHistory: {
 }
 ```
 
-## 測試指南
+---
 
-### 1. 基本功能測試
+## 🔧 開發者指南
 
-**測試步驟**：
-1. 登入 Firebase Auth
-2. 透過 SMART Launch 進入應用程式
-3. 開始一段對話（至少 2-3 則訊息）
-4. 等待 5 秒（auto-save debounce）
-5. 點擊 "History" 按鈕
-6. 確認對話出現在列表中
+### 關鍵 Hooks
 
-**預期結果**：
-- ✅ 對話標題顯示正確
-- ✅ 訊息數量正確
-- ✅ 時間顯示正確
+```typescript
+// 取得 FHIR 上下文（病人 ID、伺服器 URL）
+const { patientId, patientName, fhirServerUrl } = useFhirContext()
 
-### 2. 多沙盒測試
+// 自動儲存對話
+useAutoSaveChat({
+  patientId,
+  patientName,
+  fhirServerUrl,
+  debounceMs: 5000,
+  enabled: !!user && !!patientId,
+})
 
-**測試步驟**：
-1. 在 Cerner 沙盒中，對病人 ID "123" 進行對話
-2. 在 Epic 沙盒中，對病人 ID "123" 進行對話
-3. 分別查看兩個沙盒的歷史紀錄
+// 載入歷史紀錄
+const { sessions, isLoading, deleteSession } = useChatHistory(
+  patientId,
+  fhirServerUrl
+)
 
-**預期結果**：
-- ✅ 兩個沙盒的對話**不會混淆**
-- ✅ 每個沙盒只顯示該沙盒的對話
+// 載入特定對話
+const { loadSession, startNewSession } = useChatSession()
+```
 
-### 3. 載入對話測試
+### 主要檔案
 
-**測試步驟**：
-1. 點擊歷史紀錄中的某一則對話
-2. 確認對話內容完整載入
-3. 繼續對話，新增訊息
-4. 重新整理頁面
+**Core Layer:**
+- `src/core/entities/chat-session.entity.ts`
+- `src/core/use-cases/chat/*.use-case.ts`
 
-**預期結果**：
-- ✅ 對話內容完整載入
-- ✅ 新訊息自動儲存
-- ✅ 重新整理後對話保留
+**Infrastructure:**
+- `src/infrastructure/firebase/repositories/chat-session.repository.ts`
 
-### 4. 刪除對話測試
+**Application:**
+- `src/application/stores/chat-history.store.ts`
+- `src/application/hooks/chat/use-chat-history.hook.ts`
+- `src/application/hooks/chat/use-auto-save-chat.hook.ts`
 
-**測試步驟**：
-1. 滑鼠懸停在某則對話上
-2. 點擊刪除按鈕
-3. 確認刪除對話框
-4. 確認刪除
+**UI:**
+- `features/chat-history/components/ChatHistoryDrawer.tsx`
+- `features/medical-chat/components/ChatToolbar.tsx`
 
-**預期結果**：
-- ✅ 對話從列表中移除
-- ✅ Firestore 中的資料被刪除
+---
 
-## 安全性考量
+## 🐛 常見問題排查
+
+### 問題 1: 對話沒有自動儲存
+
+**檢查項目:**
+- ✅ 使用者已登入 Firebase Auth
+- ✅ 有 FHIR 上下文（patientId 和 fhirServerUrl 不為 null）
+- ✅ 等待至少 5 秒（debounce 時間）
+- ✅ 瀏覽器 Console 沒有錯誤訊息
+
+**除錯方法:**
+```typescript
+// 在 MedicalChat.tsx 中加入 console.log
+console.log('[Chat History Debug]', {
+  user: !!user,
+  patientId,
+  fhirServerUrl,
+  messagesCount: messages.length
+})
+```
+
+### 問題 2: 歷史紀錄是空的
+
+**檢查項目:**
+- ✅ Firestore Security Rules 設定正確
+- ✅ Firestore Indexes 已建立
+- ✅ 使用者 ID 與儲存時的 ID 一致
+
+**除錯方法:**
+前往 Firebase Console > Firestore，檢查 `/users/{userId}/chats` 是否有資料。
+
+### 問題 3: 不同沙盒的對話混在一起
+
+**原因:** `fhirServerUrl` 沒有正確取得
+
+**解決方法:**
+檢查 `useFhirContext` hook 是否正確取得 `client.state.serverUrl`。
+
+### 問題 4: 點擊歷史紀錄沒有反應
+
+**檢查項目:**
+- ✅ `useChatSession` hook 正確整合
+- ✅ `useChatStore` 的 `setMessages` 函數正常運作
+
+---
+
+## 🔒 安全性考量
 
 ### 1. 資料隔離
 
@@ -291,7 +428,9 @@ match /users/{userId}/chats/{chatId} {
   - 使用 Firestore 的 encryption at rest
   - 定期清理舊對話（例如 90 天後自動刪除）
 
-## 效能優化
+---
+
+## ⚡ 效能優化
 
 ### 1. 分頁載入
 
@@ -311,7 +450,9 @@ async listByUser(userId: string, limit: number = 50, startAfter?: Date)
 - 使用 debounce 減少寫入次數
 - 只儲存 metadata 在列表中，完整訊息在點擊時才載入
 
-## 未來擴充
+---
+
+## 🚀 未來擴充
 
 ### 1. AI 摘要生成
 
@@ -342,66 +483,53 @@ searchChats(userId: string, query: string)
 exportChat(chatId: string, format: 'pdf' | 'txt')
 ```
 
-## 常見問題
+---
 
-### Q1: 為什麼使用 fhirServerUrl 而不是 iss？
+## 📋 測試指南
 
-A: `fhirServerUrl` 是從 SMART client 的 `state.serverUrl` 取得，更穩定且一致。`iss` 參數可能在不同實作中有差異。
+### 基本功能測試
 
-### Q2: 對話會自動儲存嗎？
+**測試步驟**：
+1. 登入 Firebase Auth
+2. 透過 SMART Launch 進入應用程式
+3. 開始一段對話（至少 2-3 則訊息）
+4. 等待 5 秒（auto-save debounce）
+5. 點擊 "History" 按鈕
+6. 確認對話出現在列表中
 
-A: 是的，只要使用者已登入且有病人上下文，對話會在 5 秒 debounce 後自動儲存。
+**預期結果**：
+- ✅ 對話標題顯示正確
+- ✅ 訊息數量正確
+- ✅ 時間顯示正確
 
-### Q3: 如何手動觸發儲存？
+### 多沙盒測試
 
-A: 可以使用 `useAutoSaveChat` hook 回傳的 `forceSave()` 函數：
+**測試步驟**：
+1. 在 Cerner 沙盒中，對病人 ID "123" 進行對話
+2. 在 Epic 沙盒中，對病人 ID "123" 進行對話
+3. 分別查看兩個沙盒的歷史紀錄
 
-```typescript
-const { forceSave } = useAutoSaveChat({ ... })
-await forceSave()
-```
+**預期結果**：
+- ✅ 兩個沙盒的對話**不會混淆**
+- ✅ 每個沙盒只顯示該沙盒的對話
 
-### Q4: 離線時對話會遺失嗎？
+---
 
-A: 目前實作需要網路連線。未來可以整合 Firestore offline persistence 來支援離線模式。
+## ✅ 部署檢查清單
 
-## 相關檔案
+- [ ] Firebase Auth 已設定
+- [ ] Firestore Security Rules 已更新
+- [ ] Firestore Indexes 已建立
+- [ ] 測試基本儲存/載入功能
+- [ ] 測試多沙盒情境
+- [ ] 測試刪除功能
+- [ ] UI 在手機上正常顯示
+- [ ] i18n 翻譯完整
 
-### Core
-- `src/core/entities/chat-session.entity.ts`
-- `src/core/interfaces/repositories/chat-session.repository.interface.ts`
-- `src/core/use-cases/chat/*.use-case.ts`
+---
 
-### Infrastructure
-- `src/infrastructure/firebase/repositories/chat-session.repository.ts`
+## 📚 相關資源
 
-### Application
-- `src/application/stores/chat-history.store.ts`
-- `src/application/hooks/chat/use-chat-history.hook.ts`
-- `src/application/hooks/chat/use-chat-session.hook.ts`
-- `src/application/hooks/chat/use-auto-save-chat.hook.ts`
-- `src/application/hooks/chat/use-fhir-context.hook.ts`
-
-### Presentation
-- `features/chat-history/components/ChatHistoryDrawer.tsx`
-- `features/chat-history/index.ts`
-- `features/medical-chat/components/MedicalChat.tsx`
-- `features/medical-chat/components/ChatToolbar.tsx`
-
-### i18n
-- `src/shared/i18n/locales/en.ts`
-- `src/shared/i18n/locales/zh-TW.ts`
-
-## 總結
-
-Chat History 功能已完整實作，包含：
-
-✅ 以病人為中心的設計  
-✅ 多沙盒/多醫院支援  
-✅ 自動儲存（防抖）  
-✅ Real-time 同步  
-✅ 完整的 Clean Architecture  
-✅ 國際化支援  
-✅ UI/UX 整合  
-
-這個實作為 SMART on FHIR 比賽提供了強大的連續性照護功能，展現了系統的專業性與實用性。
+- [Firebase Firestore 文檔](https://firebase.google.com/docs/firestore)
+- [SMART on FHIR 規範](http://www.hl7.org/fhir/smart-app-launch/)
+- [Clean Architecture 指南](./ARCHITECTURE.md)
