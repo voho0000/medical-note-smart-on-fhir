@@ -8,6 +8,7 @@ import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { MarkdownRenderer } from "@/src/shared/components/MarkdownRenderer"
 import type { ChatMessage } from "@/src/application/stores/chat.store"
 import { AgentStateHistory } from "./AgentStateHistory"
+import { CollapsibleMessage } from "./CollapsibleMessage"
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
@@ -103,7 +104,7 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                   {message.role === "assistant" ? (
                     <MarkdownRenderer content={message.content} />
                   ) : (
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{message.content}</pre>
+                    <CollapsibleMessage content={message.content} />
                   )}
                 </div>
               </div>
