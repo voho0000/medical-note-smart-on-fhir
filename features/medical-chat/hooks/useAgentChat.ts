@@ -105,9 +105,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         })
 
         // Build enhanced system prompt using use case
+        // Note: Clinical context is no longer automatically included
+        // Users can choose to include it via the auto-include toggle (consistent with normal mode)
         const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
           baseSystemPrompt: systemPrompt,
-          clinicalContext: getFullClinicalContext(),
+          clinicalContext: '', // Empty - let user control via toggle
           patientId: patient?.id,
           hasPerplexityKey: !!perplexityKey,
           translations: t.agent.systemPrompt,
