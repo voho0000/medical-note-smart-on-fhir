@@ -1,7 +1,8 @@
 // Chat History Item Component
-import { Clock, Trash2 } from 'lucide-react'
+import { Clock, Trash2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useIsTitleGenerating, useCurrentSessionId } from '@/src/application/stores/chat-history.store'
 import type { ChatSessionMetadata } from '@/src/core/entities/chat-session.entity'
 
 interface ChatHistoryItemProps {
@@ -9,9 +10,19 @@ interface ChatHistoryItemProps {
   onLoad: (sessionId: string) => void
   onDelete: (sessionId: string, e: React.MouseEvent) => void
   formatDate: (date: Date) => string
+  locale?: string
 }
 
-export function ChatHistoryItem({ session, onLoad, onDelete, formatDate }: ChatHistoryItemProps) {
+export function ChatHistoryItem({ session, onLoad, onDelete, formatDate, locale = 'en' }: ChatHistoryItemProps) {
+  const isTitleGenerating = useIsTitleGenerating()
+  const currentSessionId = useCurrentSessionId()
+  
+  // Check if this is the current session and title is being generated
+  const isGeneratingThisTitle = isTitleGenerating && currentSessionId === session.id
+  
+  // Determine if this is a default title (not yet generated)
+  const isDefaultTitle = session.title === 'New Conversation' || session.title === '新對話'
+  
   return (
     <div className="w-full text-left p-3 rounded-lg border bg-card hover:bg-accent transition-colors group cursor-pointer">
       <div className="flex items-start justify-between gap-2">
@@ -19,8 +30,22 @@ export function ChatHistoryItem({ session, onLoad, onDelete, formatDate }: ChatH
           className="flex-1 min-w-0"
           onClick={() => onLoad(session.id)}
         >
-          <h4 className="font-medium text-sm line-clamp-2 mb-1">
-            {session.title}
+          <h4 className="font-medium text-sm line-clamp-2 mb-1 flex items-center gap-2">
+            {isGeneratingThisTitle ? (
+              <>
+                <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+                <span className="text-muted-foreground italic">
+                  {locale === 'zh-TW' ? '生成標題中...' : 'Generating title...'}
+                </span>
+              </>
+            ) : (
+              <>
+                {isDefaultTitle && currentSessionId === session.id && (
+                  <Sparkles className="h-3.5 w-3.5 text-muted-foreground/50" />
+                )}
+                {session.title}
+              </>
+            )}
           </h4>
           {session.summary && (
             <p className="text-xs text-muted-foreground line-clamp-2 mb-2">

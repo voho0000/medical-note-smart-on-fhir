@@ -16,7 +16,7 @@ import { EmptyState } from './EmptyState'
 import { formatRelativeDate } from '../utils/date-formatter'
 
 export function ChatHistoryDrawer() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
   const { user } = useAuth()
   
@@ -102,6 +102,7 @@ export function ChatHistoryDrawer() {
                     onLoad={handleLoadSession}
                     onDelete={handleDeleteSession}
                     formatDate={formatDate}
+                    locale={locale}
                   />
                 ))}
               </div>

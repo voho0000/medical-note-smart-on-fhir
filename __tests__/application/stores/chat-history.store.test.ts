@@ -5,6 +5,7 @@ describe('chat-history.store', () => {
     // Reset store state
     useChatHistoryStore.setState({
       currentSessionId: null,
+      isTitleGenerating: false,
     })
   })
 
@@ -12,6 +13,11 @@ describe('chat-history.store', () => {
     it('should have null currentSessionId initially', () => {
       const state = useChatHistoryStore.getState()
       expect(state.currentSessionId).toBeNull()
+    })
+
+    it('should have isTitleGenerating false initially', () => {
+      const state = useChatHistoryStore.getState()
+      expect(state.isTitleGenerating).toBe(false)
     })
   })
 
@@ -31,6 +37,25 @@ describe('chat-history.store', () => {
       setCurrentSessionId(null)
       
       expect(useChatHistoryStore.getState().currentSessionId).toBeNull()
+    })
+  })
+
+  describe('setIsTitleGenerating', () => {
+    it('should set title generating state to true', () => {
+      const { setIsTitleGenerating } = useChatHistoryStore.getState()
+
+      setIsTitleGenerating(true)
+
+      expect(useChatHistoryStore.getState().isTitleGenerating).toBe(true)
+    })
+
+    it('should set title generating state to false', () => {
+      const { setIsTitleGenerating } = useChatHistoryStore.getState()
+
+      setIsTitleGenerating(true)
+      setIsTitleGenerating(false)
+
+      expect(useChatHistoryStore.getState().isTitleGenerating).toBe(false)
     })
   })
 

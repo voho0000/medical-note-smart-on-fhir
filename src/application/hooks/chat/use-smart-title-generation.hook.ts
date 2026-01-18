@@ -19,6 +19,7 @@ export function useSmartTitleGeneration() {
   const apiKey = useAiConfigStore(state => state.apiKey)
   const messages = useChatStore(state => state.messages)
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
+  const setIsTitleGenerating = useChatHistoryStore(state => state.setIsTitleGenerating)
   const { updateSession } = useUpdateSessionMutation()
   const hasGeneratedRef = useRef(false)
 
@@ -62,6 +63,9 @@ export function useSmartTitleGeneration() {
     apiKey: string | null
   ) => {
     try {
+      // Set generating state to true
+      setIsTitleGenerating(true)
+      
       const smartTitle = await generateSmartTitleUseCase.execute({
         userMessage,
         assistantMessage,
@@ -69,8 +73,22 @@ export function useSmartTitleGeneration() {
         apiKey,  // Pass decrypted API key from store
       })
       
-      // Update Firestore
-      await repository.updateTitle(sessionId, userId, smartTitle)
+      // Wait a bit to ensure auto-save has completed
+      // This prevents "No document to update" error
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Update Firestore - check if document exists first
+      try {
+        await repository.updateTitle(sessionId, userId, smartTitle)
+      } catch (firestoreError: any) {
+        // If document doesn't exist yet, just update React Query cache
+        // The title will be saved when auto-save runs next time
+        if (firestoreError?.code === 'not-found' || firestoreError?.message?.includes('No document to update')) {
+          console.warn('[Smart Title] Document not yet saved, will update on next auto-save')
+        } else {
+          throw firestoreError
+        }
+      }
       
       // Update React Query cache for immediate UI update
       if (patientId && fhirServerUrl) {
@@ -78,6 +96,9 @@ export function useSmartTitleGeneration() {
       }
     } catch (error) {
       console.error('[Smart Title] Failed to generate or update title:', error)
+    } finally {
+      // Always reset generating state
+      setIsTitleGenerating(false)
     }
   }
 
