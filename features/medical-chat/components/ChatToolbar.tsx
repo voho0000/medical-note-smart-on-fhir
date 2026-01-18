@@ -118,7 +118,7 @@ export function ChatToolbar({
             </span>
           </Button>
           <Select value={selectedTemplateId} onValueChange={onTemplateChange}>
-            <SelectTrigger className="h-6 w-6 gap-0 border-0 rounded bg-black/10 dark:bg-white/20 px-1 py-0 shadow-none hover:bg-black/20 dark:hover:bg-white/30">
+            <SelectTrigger className="h-6 w-6 gap-0 border-0 rounded bg-primary/15 dark:bg-primary/30 px-1 py-0 shadow-none hover:bg-primary/25 dark:hover:bg-primary/40">
             </SelectTrigger>
             <SelectContent align="start" className="w-[200px] text-xs">
               {templates.map((template) => (
