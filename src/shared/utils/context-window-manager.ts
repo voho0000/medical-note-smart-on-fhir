@@ -43,7 +43,6 @@ export function truncateToContextWindow(
     
     if (currentTokens + msgTokens > remainingTokens) {
       // Would exceed limit, stop here
-      console.log(`[ContextWindow] Truncated to ${truncatedMessages.length}/${messages.length} messages (${currentTokens} tokens)`)
       break
     }
     

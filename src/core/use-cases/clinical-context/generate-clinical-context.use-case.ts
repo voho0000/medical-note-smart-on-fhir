@@ -51,10 +51,6 @@ export class GenerateClinicalContextUseCase {
         .filter(m => filters.medicationStatus === 'all' || m.status === 'active')
       
       if (filtered.length > 0) {
-        // Debug: log medication statuses
-        console.log('[Clinical Context] Medication statuses:', 
-          filtered.map(m => ({ name: m.medicationCodeableConcept?.text, status: m.status }))
-        )
         
         // Separate active and stopped medications
         // Active statuses: active, completed

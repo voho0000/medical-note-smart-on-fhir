@@ -71,8 +71,6 @@ export function validateAndLogEnvironment(config: EnvConfig): void {
     console.warn('⚠️  Environment warnings:')
     result.warnings.forEach(warning => console.warn(`  - ${warning}`))
   }
-
-  console.log('✅ Environment validation passed')
 }
 
 /**

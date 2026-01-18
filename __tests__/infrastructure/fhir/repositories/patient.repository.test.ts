@@ -75,7 +75,7 @@ describe('FhirPatientRepository', () => {
       mockFhirClient.request.mockRejectedValue(error)
 
       // Act & Assert
-      await expect(repository.getCurrentPatient()).rejects.toThrow('Failed to fetch patient data')
+      await expect(repository.getCurrentPatient()).rejects.toThrow('Network error')
     })
 
     it('should log error when fetch fails', async () => {
@@ -92,7 +92,7 @@ describe('FhirPatientRepository', () => {
       }
 
       // Assert
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch current patient:', error)
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[Patient Repository] Failed to fetch current patient:', error)
       consoleErrorSpy.mockRestore()
     })
   })
@@ -149,7 +149,7 @@ describe('FhirPatientRepository', () => {
       mockFhirClient.request.mockRejectedValue(error)
 
       // Act & Assert
-      await expect(repository.getPatientById(patientId)).rejects.toThrow('Failed to fetch patient data')
+      await expect(repository.getPatientById(patientId)).rejects.toThrow('Patient not found')
     })
 
     it('should log error with patient ID when fetch fails', async () => {
@@ -167,7 +167,7 @@ describe('FhirPatientRepository', () => {
       }
 
       // Assert
-      expect(consoleErrorSpy).toHaveBeenCalledWith(`Failed to fetch patient ${patientId}:`, error)
+      expect(consoleErrorSpy).toHaveBeenCalledWith(`[Patient Repository] Failed to fetch patient ${patientId}:`, error)
       consoleErrorSpy.mockRestore()
     })
 

@@ -11,8 +11,8 @@ export class FhirPatientRepository implements IPatientRepository {
       const response = await fhirClient.request(FHIR_RESOURCES.PATIENT)
       return PatientMapper.fromBundle(response)
     } catch (error) {
-      console.error('Failed to fetch current patient:', error)
-      throw new Error('Failed to fetch patient data')
+      console.error('[Patient Repository] Failed to fetch current patient:', error)
+      throw error
     }
   }
 
@@ -21,8 +21,8 @@ export class FhirPatientRepository implements IPatientRepository {
       const response = await fhirClient.request(`Patient/${patientId}`)
       return PatientMapper.toDomain(response)
     } catch (error) {
-      console.error(`Failed to fetch patient ${patientId}:`, error)
-      throw new Error('Failed to fetch patient data')
+      console.error(`[Patient Repository] Failed to fetch patient ${patientId}:`, error)
+      throw error
     }
   }
 }

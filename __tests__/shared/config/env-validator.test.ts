@@ -129,14 +129,15 @@ describe('Environment Validator', () => {
       consoleLogSpy.mockRestore()
     })
 
-    it('should log success when validation passes', () => {
+    it('should not throw when validation passes', () => {
       process.env.REQUIRED_VAR = 'value'
 
-      validateAndLogEnvironment({
-        required: ['REQUIRED_VAR']
-      })
+      expect(() => {
+        validateAndLogEnvironment({
+          required: ['REQUIRED_VAR']
+        })
+      }).not.toThrow()
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Environment validation passed')
       expect(consoleErrorSpy).not.toHaveBeenCalled()
     })
 
@@ -160,7 +161,6 @@ describe('Environment Validator', () => {
       })
 
       expect(consoleWarnSpy).toHaveBeenCalled()
-      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Environment validation passed')
     })
 
     it('should log all missing variables in error', () => {
@@ -183,7 +183,6 @@ describe('Environment Validator', () => {
       })
 
       expect(consoleWarnSpy).toHaveBeenCalledWith('⚠️  Environment warnings:')
-      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Environment validation passed')
     })
   })
 })
