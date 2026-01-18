@@ -109,16 +109,16 @@ export function ChatToolbar({
             variant="ghost"
             onClick={onInsertTemplate}
             disabled={!hasTemplateContent}
-            className="h-7 gap-0.5 px-1 text-xs hover:bg-primary/10"
+            className="h-7 gap-0.5 px-1 text-xs hover:bg-primary/10 w-[100px]"
             title={templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
           >
-            <FileText className="h-3 w-3" />
-            <span className="max-w-[50px] truncate hidden sm:inline">
+            <FileText className="h-3 w-3 shrink-0" />
+            <span className="truncate hidden sm:inline">
               {templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
             </span>
           </Button>
           <Select value={selectedTemplateId} onValueChange={onTemplateChange}>
-            <SelectTrigger className="h-7 w-6 gap-0 border-0 bg-transparent px-1 py-0 shadow-none hover:bg-primary/10">
+            <SelectTrigger className="h-6 w-6 gap-0 border-0 rounded bg-black/10 dark:bg-white/20 px-1 py-0 shadow-none hover:bg-black/20 dark:hover:bg-white/30">
             </SelectTrigger>
             <SelectContent align="start" className="w-[200px] text-xs">
               {templates.map((template) => (
