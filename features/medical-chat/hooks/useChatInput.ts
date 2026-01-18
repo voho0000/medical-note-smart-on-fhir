@@ -6,6 +6,10 @@ export function useChatInput() {
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>, onSend: () => Promise<void>, isLoading?: boolean, disabled?: boolean) => {
+      // Skip if IME is composing (e.g., Chinese/Japanese input methods)
+      // This prevents sending message when user presses Enter to confirm IME input
+      if (event.nativeEvent.isComposing || event.keyCode === 229) return
+      
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault()
         // Prevent double-submit when loading, input is empty, or disabled
