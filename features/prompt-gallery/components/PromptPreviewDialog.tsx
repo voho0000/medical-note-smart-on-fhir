@@ -59,6 +59,7 @@ export function PromptPreviewDialog({
   const { user } = useAuth()
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   if (!prompt) return null
 
@@ -99,6 +100,7 @@ export function PromptPreviewDialog({
   const handleConfirmDelete = async () => {
     setShowDeleteConfirm(false)
     setDeleting(true)
+    setDeleteError(null)
     try {
       await deleteSharedPrompt(prompt.id)
       onOpenChange(false)
@@ -106,8 +108,8 @@ export function PromptPreviewDialog({
         onDelete()
       }
     } catch (error) {
-      console.error('刪除失敗:', error)
-      alert('刪除失敗，請稍後再試')
+      const errorMessage = error instanceof Error ? error.message : t.promptGallery.deleteErrorMessage
+      setDeleteError(errorMessage)
     } finally {
       setDeleting(false)
     }
@@ -194,6 +196,12 @@ export function PromptPreviewDialog({
           </div>
         </ScrollArea>
 
+        {deleteError && (
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+            {deleteError}
+          </div>
+        )}
+
         <DialogFooter>
           <div className="flex w-full justify-between">
             <div>
@@ -204,7 +212,7 @@ export function PromptPreviewDialog({
                   disabled={deleting}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
-                  {deleting ? '刪除中...' : '刪除'}
+                  {deleting ? t.common.deleting : t.common.delete}
                 </Button>
               )}
             </div>

@@ -200,13 +200,10 @@ export function SharePromptDialog({
         setSuccess(false)
       }, 2000)
     } catch (err) {
-      console.error('❌ 分享 Prompt 失敗:', err)
       const errorMessage = err instanceof Error ? err.message : t.promptGallery.shareError
       setError(errorMessage)
-      console.error('錯誤詳情:', errorMessage)
     } finally {
       setLoading(false)
-      console.log('=== SharePromptDialog: handleShare 結束 ===')
     }
   }
 
