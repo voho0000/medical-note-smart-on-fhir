@@ -112,7 +112,6 @@ export function ChatToolbar({
             className="h-7 gap-0.5 px-1 text-xs hover:bg-primary/10"
             title={templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
           >
-            <Plus className="h-3 w-3" />
             <FileText className="h-3 w-3" />
             <span className="max-w-[50px] truncate hidden sm:inline">
               {templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
