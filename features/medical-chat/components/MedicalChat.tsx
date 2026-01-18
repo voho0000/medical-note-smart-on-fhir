@@ -145,11 +145,13 @@ export default function MedicalChat() {
     const trimmed = input.input.trim()
     if (!trimmed) return
     
-    // Auto-include clinical context if enabled
+    // Auto-include clinical context if enabled AND this is the first message in the conversation
+    // This prevents redundant context inclusion in follow-up questions
     const autoIncludeContext = useChatStore.getState().autoIncludeContext
+    const isFirstMessage = chatMessages.length === 0
     let messageToSend = trimmed
     
-    if (autoIncludeContext) {
+    if (autoIncludeContext && isFirstMessage) {
       const context = getFullClinicalContext()
       if (context.trim()) {
         // Put user input first, then clinical context below
@@ -158,7 +160,7 @@ export default function MedicalChat() {
     }
     
     await chat.handleSend(messageToSend)
-  }, [input, chat, getFullClinicalContext])
+  }, [input, chat, getFullClinicalContext, chatMessages.length])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
