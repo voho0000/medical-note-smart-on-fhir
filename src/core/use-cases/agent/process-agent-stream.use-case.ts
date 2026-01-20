@@ -68,6 +68,15 @@ export class ProcessAgentStreamUseCase {
           }
         }
 
+        // Handle queryPatientInfo (returns patient demographics, not count-based)
+        if (tr.toolName === 'queryPatientInfo') {
+          if (r?.success && r?.data) {
+            return `${tr.toolName} ${translations.queryResult}:\n${JSON.stringify(r.data, null, 2)}`
+          } else {
+            return `${tr.toolName} ${translations.queryFailed}: ${r?.summary || translations.noData}`
+          }
+        }
+
         // Handle FHIR tool results (with count field)
         const countInfo =
           r?.count === 0

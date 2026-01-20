@@ -19,6 +19,7 @@ export interface BuildAgentSystemPromptInput {
     availableToolsPrefix: string
     availableToolsSuffix: string
     toolDescriptions: {
+      queryPatientInfo: string
       queryConditions: string
       queryMedications: string
       queryAllergies: string
@@ -69,15 +70,16 @@ ${clinicalContext}
       : ''
 
     // Build tools list
-    const toolsList = `1. queryConditions - ${t.toolDescriptions.queryConditions}
-2. queryMedications - ${t.toolDescriptions.queryMedications}
-3. queryAllergies - ${t.toolDescriptions.queryAllergies}
-4. queryDiagnosticReports - ${t.toolDescriptions.queryDiagnosticReports}
-5. queryObservations - ${t.toolDescriptions.queryObservations}
-6. queryProcedures - ${t.toolDescriptions.queryProcedures}
-7. queryEncounters - ${t.toolDescriptions.queryEncounters}${
+    const toolsList = `1. queryPatientInfo - ${t.toolDescriptions.queryPatientInfo}
+2. queryConditions - ${t.toolDescriptions.queryConditions}
+3. queryMedications - ${t.toolDescriptions.queryMedications}
+4. queryAllergies - ${t.toolDescriptions.queryAllergies}
+5. queryDiagnosticReports - ${t.toolDescriptions.queryDiagnosticReports}
+6. queryObservations - ${t.toolDescriptions.queryObservations}
+7. queryProcedures - ${t.toolDescriptions.queryProcedures}
+8. queryEncounters - ${t.toolDescriptions.queryEncounters}${
       hasPerplexityKey ? `
-8. searchMedicalLiterature - ${t.toolDescriptions.searchMedicalLiterature}` : ''
+9. searchMedicalLiterature - ${t.toolDescriptions.searchMedicalLiterature}` : ''
     }`
 
     // Build usage guidelines

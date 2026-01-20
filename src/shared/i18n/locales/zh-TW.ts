@@ -472,6 +472,7 @@ export const zhTW = {
       availableToolsPrefix: '如果上述臨床資料不足以回答問題，',
       availableToolsSuffix: '你可以調用以下工具來查詢額外的病人資料：',
       toolDescriptions: {
+        queryPatientInfo: '查詢病人基本資料（ID、性別、出生日期/年齡）。注意：基於隱私保護，無法取得病人姓名，僅提供匿名化資料',
         queryConditions: '查詢診斷/病況資料',
         queryMedications: '查詢用藥記錄',
         queryAllergies: '查詢過敏史',

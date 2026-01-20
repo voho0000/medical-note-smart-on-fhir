@@ -237,6 +237,74 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
       },
     }),
 
+    queryPatientInfo: tool({
+      description: 'Query patient demographic information (ID, gender, birth date for age calculation). Note: Patient name is NOT available due to privacy protection - only anonymized data is accessible.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        console.log('[queryPatientInfo] Starting patient info query...')
+        try {
+          console.log('[queryPatientInfo] Getting patient ID from SMART context...')
+          // Get the patient ID from SMART context
+          const patientContext = await fhirClient.patient.read()
+          console.log('[queryPatientInfo] Patient context:', JSON.stringify(patientContext, null, 2))
+          
+          if (!patientContext || patientContext.resourceType !== 'Patient') {
+            console.log('[queryPatientInfo] Invalid patient context')
+            return {
+              success: false,
+              summary: 'Patient not found in SMART context',
+              data: null
+            }
+          }
+          
+          console.log('[queryPatientInfo] Anonymizing patient data...')
+          // Anonymize patient data
+          const patient = {
+            resourceType: patientContext.resourceType,
+            id: patientContext.id,
+            gender: patientContext.gender,
+            birthDate: patientContext.birthDate,
+            identifier: patientContext.identifier,
+            _anonymized: true
+          }
+          
+          console.log('[queryPatientInfo] Calculating age...')
+          // Calculate age from birthDate
+          let age = null
+          if (patient.birthDate) {
+            const birthDate = new Date(patient.birthDate)
+            const today = new Date()
+            age = today.getFullYear() - birthDate.getFullYear()
+            const monthDiff = today.getMonth() - birthDate.getMonth()
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+              age--
+            }
+          }
+          
+          const result = {
+            success: true,
+            summary: `Patient demographics retrieved (anonymized)`,
+            data: {
+              id: patient.id,
+              gender: patient.gender,
+              birthDate: patient.birthDate,
+              age: age,
+              _note: 'Patient name is not available due to privacy protection'
+            }
+          }
+          console.log('[queryPatientInfo] Returning result:', JSON.stringify(result, null, 2))
+          return result
+        } catch (error) {
+          console.error('[queryPatientInfo] Error occurred:', error)
+          return {
+            success: false,
+            summary: `Error querying patient info: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            data: null
+          }
+        }
+      },
+    }),
+
     queryDiagnosticReports: tool({
       description: 'Query patient diagnostic reports (lab panels, radiology reports) from FHIR server. This is the PRIMARY tool for querying lab test results like Basic Metabolic Panel, Lipid Panel, CBC, etc. Use this instead of queryObservations for lab results. Returns detailed test results.',
       inputSchema: diagnosticReportsSchema,

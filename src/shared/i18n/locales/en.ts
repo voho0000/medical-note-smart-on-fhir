@@ -470,6 +470,7 @@ export const en = {
       availableToolsPrefix: 'If the above clinical data is insufficient to answer the question, ',
       availableToolsSuffix: 'you can call the following tools to query additional patient data:',
       toolDescriptions: {
+        queryPatientInfo: 'Query patient demographics (ID, gender, birth date/age). Note: Patient name is NOT available due to privacy protection - only anonymized data is accessible',
         queryConditions: 'Query diagnosis/condition data',
         queryMedications: 'Query medication records',
         queryAllergies: 'Query allergy history',

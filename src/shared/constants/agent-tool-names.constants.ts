@@ -4,6 +4,7 @@
  */
 
 export const AGENT_TOOL_DISPLAY_NAMES: Record<string, string> = {
+  queryPatientInfo: '查詢病人基本資料',
   queryConditions: '查詢診斷資料',
   queryMedications: '查詢用藥資料',
   queryAllergies: '查詢過敏史',

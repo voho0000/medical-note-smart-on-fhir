@@ -182,7 +182,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
         
         // Handle follow-up if there are tool results but no text
+        console.log('[Agent] Tool results count:', toolResults.length, 'Accumulated content length:', accumulatedContent.length)
         if (toolResults.length > 0 && accumulatedContent.length === 0) {
+          console.log('[Agent] Starting follow-up response generation...')
           const organizingState = `📝 ${t.agent.organizingResults}`
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId 
@@ -195,6 +197,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           )
           
           // Build tool results summary using use case
+          console.log('[Agent] Building tool results summary...')
           const { summary: toolResultsSummary, citations: literatureCitations } = 
             processAgentStreamUseCase.buildToolResultsSummary(toolResults, {
               queryResult: t.agent.queryResult,
@@ -203,8 +206,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               noDataFound: t.agent.noDataFound,
               foundRecords: t.agent.foundRecords,
             })
+          console.log('[Agent] Tool results summary:', toolResultsSummary)
           
           const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
+          console.log('[Agent] Original question:', originalQuestion)
           const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
             apiMessages,
             toolResultsSummary,
@@ -214,7 +219,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               answerQuestion: t.agent.answerQuestion,
             }
           )
+          console.log('[Agent] Follow-up messages:', followUpMessages)
           
+          console.log('[Agent] Starting follow-up stream...')
           const followUpResult = await streamText({
             model,
             messages: followUpMessages,
@@ -230,6 +237,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               )
             }
           }
+          console.log('[Agent] Follow-up content generated:', followUpContent)
           
           // Process citations if available
           if (literatureCitations.length > 0) {
