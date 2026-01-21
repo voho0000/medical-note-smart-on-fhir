@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useObservationHistory, useComponentHistory, useCompositeHistory } from '../hooks/useObservationHistory'
 import { ObservationTrendChart } from './ObservationTrendChart'
 import { MultiLineTrendChart } from './MultiLineTrendChart'
@@ -77,8 +78,8 @@ export function ObservationTrendDialog({ observation, open, onOpenChange }: Obse
 
         <Tabs defaultValue="table" className="w-full mt-4">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="table" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30">歷史記錄</TabsTrigger>
-            <TabsTrigger value="chart" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30">趨勢圖表</TabsTrigger>
+            <TabsTrigger value="table" className={TAB_ACTIVE_CLASSES.clinical}>歷史記錄</TabsTrigger>
+            <TabsTrigger value="chart" className={TAB_ACTIVE_CLASSES.clinical}>趨勢圖表</TabsTrigger>
           </TabsList>
 
           <TabsContent value="table" className="mt-4">

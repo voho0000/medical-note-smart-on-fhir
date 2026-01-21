@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useCallback } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
@@ -96,7 +97,7 @@ export default function ClinicalInsightsFeature() {
     return (
       <ScrollArea className="h-full pr-3">
         <div className="space-y-4">
-          <Card className="border-destructive border-l-4 border-l-violet-500">
+          <Card className={`border-destructive ${CARD_BORDER_CLASSES.insight}`}>
             <CardContent className="pt-6">
               <div className="text-sm">
                 <div className="font-medium text-destructive mb-2">{t.clinicalInsights.fhirDataRequired}</div>
@@ -157,7 +158,7 @@ export default function ClinicalInsightsFeature() {
                   <TabsTrigger
                     key={panel.id}
                     value={panel.id}
-                    className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-violet-500/10 dark:data-[state=active]:text-violet-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-violet-500/30 min-w-0"
+                    className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.insight} min-w-0`}
                   >
                     <span className="truncate" title={panel.label}>{panel.label}</span>
                   </TabsTrigger>
@@ -178,7 +179,7 @@ export default function ClinicalInsightsFeature() {
             ))}
           </Tabs>
           </> ) : (
-          <Card className="border-l-4 border-l-violet-500">
+          <Card className={CARD_BORDER_CLASSES.insight}>
             <CardContent className="py-6 text-sm text-muted-foreground">
               {t.clinicalInsights.noTabsConfigured}
             </CardContent>

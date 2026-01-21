@@ -3,6 +3,7 @@ import { useState } from "react"
 import { useExpandable } from "@/src/shared/hooks/ui/use-expandable.hook"
 import { useExpandedOverlay } from "@/src/shared/hooks/ui/use-expanded-overlay.hook"
 import { Card, CardContent } from "@/components/ui/card"
+import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -99,7 +100,7 @@ export function InsightPanel({
 
   return (
     <>
-      <Card className="border-l-4 border-l-violet-500">
+      <Card className={CARD_BORDER_CLASSES.insight}>
         <InsightPanelHeader
           title={title}
           fallbackModelId={fallbackModelId}

@@ -1,6 +1,7 @@
 "use client"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useDataFiltering } from "../hooks/useDataFiltering"
@@ -49,8 +50,8 @@ export function DataSelectionPanel({
   return (
     <Tabs defaultValue="selection" className="w-full space-y-4">
       <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50">
-        <TabsTrigger value="selection" className="text-sm data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30">{t.dataSelection.title}</TabsTrigger>
-        <TabsTrigger value="preview" className="text-sm data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30">{t.common.preview}</TabsTrigger>
+        <TabsTrigger value="selection" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>{t.dataSelection.title}</TabsTrigger>
+        <TabsTrigger value="preview" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>{t.common.preview}</TabsTrigger>
       </TabsList>
       <TabsContent value="selection">
         <DataSelectionTab

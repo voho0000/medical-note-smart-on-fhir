@@ -192,28 +192,84 @@ export const FEATURE_CARD_THEMES: Record<string, { icon: LucideIcon; colorKey: k
 }
 
 // ============================================================================
+// CENTRALIZED STYLE CLASSES
+// These are static strings for Tailwind JIT to properly detect
+// ============================================================================
+
+/**
+ * Tab active state classes - use these directly in TabsTrigger components
+ * Light mode: colored backgrounds
+ * Dark mode: subtle backgrounds with ring borders
+ */
+export const TAB_ACTIVE_CLASSES = {
+  chat: 'data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-500/10 dark:data-[state=active]:text-blue-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-blue-500/30',
+  insight: 'data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-violet-500/10 dark:data-[state=active]:text-violet-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-violet-500/30',
+  selection: 'data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30',
+  settings: 'data-[state=active]:bg-slate-100 data-[state=active]:text-slate-700 dark:data-[state=active]:bg-slate-500/10 dark:data-[state=active]:text-slate-300 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-slate-500/30',
+  clinical: 'data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30',
+} as const
+
+/**
+ * Card left border classes - use these directly in Card components
+ */
+export const CARD_BORDER_CLASSES = {
+  chat: 'border-l-4 border-l-blue-500',
+  insight: 'border-l-4 border-l-violet-500',
+  selection: 'border-l-4 border-l-amber-500',
+  settings: 'border-l-4 border-l-slate-500',
+  clinical: 'border-l-4 border-l-emerald-500',
+} as const
+
+/**
+ * Badge classes for different panel types
+ */
+export const BADGE_CLASSES = {
+  chat: 'bg-blue-200 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 border-0',
+  insight: 'bg-violet-200 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400 border-0',
+  selection: 'bg-amber-200 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400 border-0',
+  settings: 'bg-slate-200 text-slate-800 dark:bg-slate-500/20 dark:text-slate-400 border-0',
+  clinical: 'bg-emerald-200 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 border-0',
+} as const
+
+// Type for panel keys
+export type PanelType = keyof typeof TAB_ACTIVE_CLASSES
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
 /**
- * Get combined Tailwind classes for a color theme (active state)
+ * Get tab active classes for a panel type
  */
-export function getActiveTabClasses(colorKey: keyof typeof UI_COLORS): string {
-  const color = UI_COLORS[colorKey]
-  return `data-[state=active]:${color.light.activeBg} data-[state=active]:${color.light.activeText} ${color.dark.activeBg.replace('dark:', 'data-[state=active]:dark:')} ${color.dark.activeText.replace('dark:', 'data-[state=active]:dark:')}`
+export function getTabClasses(panel: PanelType): string {
+  return TAB_ACTIVE_CLASSES[panel]
 }
 
 /**
- * Get border color class for a color theme
+ * Get card border classes for a panel type
+ */
+export function getCardClasses(panel: PanelType): string {
+  return CARD_BORDER_CLASSES[panel]
+}
+
+/**
+ * Get badge classes for a panel type
+ */
+export function getBadgeClasses(panel: PanelType): string {
+  return BADGE_CLASSES[panel]
+}
+
+// Legacy helper functions for backward compatibility
+/**
+ * @deprecated Use getTabClasses() instead
+ */
+export function getActiveTabClasses(colorKey: keyof typeof UI_COLORS): string {
+  return TAB_ACTIVE_CLASSES[colorKey] || TAB_ACTIVE_CLASSES.settings
+}
+
+/**
+ * @deprecated Use getCardClasses() instead
  */
 export function getBorderClass(colorKey: keyof typeof UI_COLORS): string {
   return UI_COLORS[colorKey].light.border
-}
-
-/**
- * Get badge classes for a color theme
- */
-export function getBadgeClasses(colorKey: keyof typeof UI_COLORS): string {
-  const color = UI_COLORS[colorKey]
-  return `${color.light.bg} ${color.light.text} ${color.dark.bg} ${color.dark.text} border-0`
 }

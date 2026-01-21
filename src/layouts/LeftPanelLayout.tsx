@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { LEFT_PANEL_TAB_THEMES, UI_COLORS } from "@/src/shared/config/ui-theme.config"
+import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -43,12 +43,6 @@ export default function ClinicalSummaryFeature() {
   // Helper to get tab theme
   const getTabTheme = (tabId: string) => {
     return LEFT_PANEL_TAB_THEMES[tabId] || LEFT_PANEL_TAB_THEMES['patient']
-  }
-
-  // Static class mappings for Tailwind (dynamic class names don't work with Tailwind's JIT)
-  // Light mode: colored backgrounds, Dark mode: subtle borders with muted backgrounds
-  const TAB_ACTIVE_CLASSES: Record<string, string> = {
-    clinical: 'data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30',
   }
 
   return (

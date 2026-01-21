@@ -4,6 +4,7 @@
 import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
@@ -90,7 +91,7 @@ export function ReportsCard() {
 
   if (isLoading) {
     return (
-      <Card className="border-l-4 border-l-emerald-500">
+      <Card className={CARD_BORDER_CLASSES.clinical}>
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -103,7 +104,7 @@ export function ReportsCard() {
 
   if (error) {
     return (
-      <Card className="border-l-4 border-l-emerald-500">
+      <Card className={CARD_BORDER_CLASSES.clinical}>
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -116,7 +117,7 @@ export function ReportsCard() {
 
   if (rows.length === 0) {
     return (
-      <Card className="border-l-4 border-l-emerald-500">
+      <Card className={CARD_BORDER_CLASSES.clinical}>
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -128,7 +129,7 @@ export function ReportsCard() {
   }
 
   return (
-    <Card className="border-l-4 border-l-emerald-500">
+    <Card className={CARD_BORDER_CLASSES.clinical}>
       <CardContent className="px-4 pb-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* Desktop tabs - hidden on small screens */}
@@ -137,7 +138,7 @@ export function ReportsCard() {
               <TabsTrigger 
                 key={tab.value} 
                 value={tab.value} 
-                className="capitalize text-sm data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30 truncate"
+                className={`capitalize text-sm ${TAB_ACTIVE_CLASSES.clinical} truncate`}
               >
                 {tab.label}
               </TabsTrigger>

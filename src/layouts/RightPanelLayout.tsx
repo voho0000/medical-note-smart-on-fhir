@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { RightPanelProvider, useRightPanel } from '@/src/application/providers/right-panel.provider'
 
 // ============================================================================
@@ -117,7 +118,6 @@ function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
 // ============================================================================
 // RIGHT PANEL CONTENT - Dynamic tab rendering from registry
 // ============================================================================
-import { RIGHT_PANEL_TAB_THEMES, UI_COLORS } from '@/src/shared/config/ui-theme.config'
 
 function RightPanelContentInner() {
   const { t } = useLanguage()
@@ -133,16 +133,6 @@ function RightPanelContentInner() {
   // Helper to get tab theme
   const getTabTheme = (featureId: string) => {
     return RIGHT_PANEL_TAB_THEMES[featureId] || RIGHT_PANEL_TAB_THEMES['settings']
-  }
-
-  // Static class mappings for Tailwind (dynamic class names don't work with Tailwind's JIT)
-  // Light mode: colored backgrounds, Dark mode: subtle borders with muted backgrounds
-  const TAB_ACTIVE_CLASSES: Record<string, string> = {
-    chat: 'data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-500/10 dark:data-[state=active]:text-blue-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-blue-500/30',
-    insight: 'data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-violet-500/10 dark:data-[state=active]:text-violet-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-violet-500/30',
-    selection: 'data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30',
-    settings: 'data-[state=active]:bg-slate-100 data-[state=active]:text-slate-700 dark:data-[state=active]:bg-slate-500/10 dark:data-[state=active]:text-slate-300 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-slate-500/30',
-    clinical: 'data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30',
   }
 
   return (

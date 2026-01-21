@@ -1,6 +1,7 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
+import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -34,7 +35,7 @@ export function DataCategoryItem({
   const { t } = useLanguage()
   
   return (
-    <Card className="p-4 hover:bg-muted/50 transition-colors border-l-4 border-l-amber-500">
+    <Card className={`p-4 hover:bg-muted/50 transition-colors ${CARD_BORDER_CLASSES.selection}`}>
       <div className="flex items-start space-x-3">
         <Checkbox
           id={`data-${item.id}`}

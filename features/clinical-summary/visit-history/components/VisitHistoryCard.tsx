@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useVisitHistory } from "../hooks/useVisitHistory"
 import { useEncounterDetails } from "../hooks/useEncounterDetails"
 import { useClinicalNotes } from "../hooks/useClinicalNotes"
@@ -30,7 +31,7 @@ export function VisitHistoryCard() {
   const encounterDetails = useEncounterDetails(medications, diagnosticReports, observations, procedures, clinicalNotes, locale)
 
   return (
-    <Card className="border-l-4 border-l-emerald-500">
+    <Card className={CARD_BORDER_CLASSES.clinical}>
       <CardHeader>
         <CardTitle>{t.tabs.visits}</CardTitle>
       </CardHeader>
