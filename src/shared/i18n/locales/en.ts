@@ -188,6 +188,13 @@ export const en = {
     expandedMode: 'Chat is expanded. Press ESC or click minimize to return.',
     loading: 'Loading...',
     loadingClinicalData: 'Loading clinical data...',
+    imageUpload: {
+      invalidType: 'Invalid file type: {type}. Supported: JPEG, PNG, GIF, WebP',
+      fileTooLarge: 'File too large: {size}MB. Max: 20MB',
+      largeFileWarning: 'Large file ({size}MB). May affect performance.',
+      tooManyImages: 'Cannot upload more than {max} images. Currently: {current}, Trying to add: {adding}',
+      totalSizeExceeded: 'Total size limit exceeded. Current: {current}MB, Adding: {adding}MB, Total: {total}MB. Max: 20MB',
+    },
     autoInclude: 'Auto',
     autoIncludeEnabled: 'Auto-include enabled',
     autoIncludeContextTooltipOn: 'Automatically include clinical context with every message',
