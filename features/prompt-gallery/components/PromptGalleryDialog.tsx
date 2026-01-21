@@ -152,16 +152,23 @@ export function PromptGalleryDialog({
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="all" className="flex items-center gap-2">
+            <TabsList className="grid w-full grid-cols-2 h-11 p-1">
+              <TabsTrigger 
+                value="all" 
+                className="flex items-center gap-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-900/50 dark:data-[state=active]:text-blue-300"
+              >
                 <Library className="h-4 w-4" />
                 所有範本
               </TabsTrigger>
-              <TabsTrigger value="my" className="flex items-center gap-2" disabled={!user}>
+              <TabsTrigger 
+                value="my" 
+                className="flex items-center gap-2 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-900/50 dark:data-[state=active]:text-emerald-300" 
+                disabled={!user}
+              >
                 <User className="h-4 w-4" />
                 我的範本
                 {user && myPromptsHook.prompts.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
+                  <Badge className="ml-1 bg-emerald-200 text-emerald-800 dark:bg-emerald-800 dark:text-emerald-200 border-0">
                     {myPromptsHook.prompts.length}
                   </Badge>
                 )}
