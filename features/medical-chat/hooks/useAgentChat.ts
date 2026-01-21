@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useRef, useMemo } from "react"
 import { streamText } from "ai"
-import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/application/stores/chat.store"
+import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
@@ -43,13 +43,13 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   }, [fhirTools, literatureTools])
 
   const handleSend = useCallback(
-    async (input: string) => {
+    async (input: string, images?: ChatImage[]) => {
       hasReceivedChunkRef.current = false
       const trimmed = input.trim()
-      if (!trimmed) return
+      if (!trimmed && (!images || images.length === 0)) return
 
-      // Create user message
-      const userMessage = createUserMessage(trimmed)
+      // Create user message with images
+      const userMessage = createUserMessage(trimmed, images)
       const newMessages = [...chatMessages, userMessage]
       setChatMessages(newMessages)
 

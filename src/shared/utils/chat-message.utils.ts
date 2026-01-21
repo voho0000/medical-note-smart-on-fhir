@@ -4,17 +4,18 @@
  * Shared utilities for creating and managing chat messages.
  * Eliminates code duplication across chat hooks.
  */
-import type { ChatMessage, AgentState } from "@/src/application/stores/chat.store"
+import type { ChatMessage, AgentState, ChatImage } from "@/src/application/stores/chat.store"
 
 /**
  * Create a user message
  */
-export function createUserMessage(content: string): ChatMessage {
+export function createUserMessage(content: string, images?: ChatImage[]): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role: "user",
     content: content.trim(),
     timestamp: Date.now(),
+    images,
   }
 }
 
@@ -55,9 +56,10 @@ export function addMessagePair(
   userInput: string,
   modelId?: string,
   assistantInitialContent?: string,
+  images?: ChatImage[],
   agentStates?: AgentState[]
 ): { messages: ChatMessage[]; assistantMessageId: string } {
-  const userMessage = createUserMessage(userInput)
+  const userMessage = createUserMessage(userInput, images)
   const messagesWithUser = [...currentMessages, userMessage]
   
   const assistantMessage = createAssistantMessage(

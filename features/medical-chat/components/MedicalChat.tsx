@@ -21,7 +21,10 @@ import { useVoiceRecording } from "../hooks/useVoiceRecording"
 import { useTemplateSelector } from "../hooks/useTemplateSelector"
 import { useChatInput } from "../hooks/useChatInput"
 import { useSystemPrompt } from "../hooks/useSystemPrompt"
+import { useImageUpload } from "../hooks/useImageUpload"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
+import { fileToBase64 } from "@/src/shared/utils/file-to-base64.utils"
+import type { ChatImage } from "@/src/application/stores/chat.store"
 import { useAgentMode } from "../hooks/useAgentMode"
 import { useExpandable } from "@/src/shared/hooks/ui/use-expandable.hook"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
@@ -47,6 +50,7 @@ export default function MedicalChat() {
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { getFullClinicalContext } = useClinicalContext()
   const input = useChatInput()
+  const imageUpload = useImageUpload()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
   // Agent mode state (logically related: agent mode + API key warning)
@@ -141,10 +145,18 @@ export default function MedicalChat() {
     agentMode.setIsAgentMode(enabled)
   }, [hasApiKey, user, agentMode])
 
+  // Clear images after sending message
+  const clearImagesAfterSend = useCallback(() => {
+    imageUpload.clearImages()
+  }, [imageUpload])
+
   // Handlers
   const handleSend = useCallback(async () => {
     const trimmed = input.input.trim()
-    if (!trimmed) return
+    const hasImages = imageUpload.images.length > 0
+    
+    // Require either text or images
+    if (!trimmed && !hasImages) return
     
     // Auto-include clinical context if enabled AND this is the first message in the conversation
     // This prevents redundant context inclusion in follow-up questions
@@ -160,8 +172,25 @@ export default function MedicalChat() {
       }
     }
     
-    await chat.handleSend(messageToSend)
-  }, [input, chat, getFullClinicalContext, chatMessages.length])
+    // Convert File objects to ChatImage (base64) for API
+    let chatImages: ChatImage[] | undefined
+    if (hasImages) {
+      chatImages = await Promise.all(
+        imageUpload.images.map(async (img) => ({
+          data: await fileToBase64(img.file),
+          mimeType: img.file.type,
+          fileName: img.file.name,
+          size: img.file.size,
+        }))
+      )
+    }
+    
+    // Pass images to chat handler
+    await chat.handleSend(messageToSend, chatImages)
+    
+    // Clear images after successful send
+    clearImagesAfterSend()
+  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
@@ -286,6 +315,7 @@ export default function MedicalChat() {
             onSend={handleSend}
             onStopGeneration={() => chat.stopGeneration()}
             voice={voice}
+            images={imageUpload}
             disabled={isAgentMode && !hasApiKey() && !user}
           />
         </div>

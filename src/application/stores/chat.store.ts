@@ -8,6 +8,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export interface ChatImage {
+  data: string        // base64 data URL for API (full size)
+  thumbnail?: string  // base64 data URL for storage/display (compressed)
+  mimeType: string    // image/jpeg, image/png, etc.
+  fileName?: string   // original file name
+  size?: number       // file size in bytes
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant" | "system"
@@ -15,6 +23,7 @@ export interface ChatMessage {
   timestamp: number
   modelId?: string
   agentStates?: AgentState[]
+  images?: ChatImage[]  // Support multiple images
 }
 
 export interface AgentState {

@@ -3,7 +3,7 @@ import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 
 export interface StreamConfig {
-  messages: { role: string; content: string }[]
+  messages: { role: string; content: string; images?: any[] }[]
   model: string
   apiKey: string | null
   signal: AbortSignal
@@ -42,7 +42,7 @@ export class OpenAiStreamAdapter {
       headers,
       body: JSON.stringify({ 
         model: config.model,
-        messages: config.messages,
+        messages: config.messages, // Messages now include images field
         stream: true  // Enable streaming
       }),
       signal: config.signal,
@@ -63,6 +63,28 @@ export class OpenAiStreamAdapter {
       throw new Error("OpenAI API key required")
     }
 
+    // Transform messages with images to OpenAI Vision API format
+    const apiMessages = config.messages.map(msg => {
+      // If message has images, use multimodal content format
+      if (msg.images && msg.images.length > 0) {
+        return {
+          role: msg.role,
+          content: [
+            { type: 'text', text: msg.content },
+            ...msg.images.map(img => ({
+              type: 'image_url',
+              image_url: { url: img.data }
+            }))
+          ]
+        }
+      }
+      // Text-only messages
+      return {
+        role: msg.role,
+        content: msg.content
+      }
+    })
+
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -71,7 +93,7 @@ export class OpenAiStreamAdapter {
       },
       body: JSON.stringify({ 
         model: config.model, 
-        messages: config.messages, 
+        messages: apiMessages, 
         stream: true 
       }),
       signal: config.signal,

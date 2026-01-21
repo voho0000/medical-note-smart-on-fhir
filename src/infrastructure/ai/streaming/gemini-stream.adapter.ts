@@ -23,14 +23,35 @@ export class GeminiStreamAdapter {
     return !modelDef?.requiresUserKey
   }
 
-  private convertToGeminiFormat(messages: { role: string; content: string }[]) {
+  private convertToGeminiFormat(messages: { role: string; content: string; images?: any[] }[]) {
     const systemPrompt = messages.find((m) => m.role === "system")?.content
     const contents = messages
       .filter((m) => m.role !== "system")
-      .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }))
+      .map((m) => {
+        const parts: any[] = [{ text: m.content }]
+        
+        // Add images if present
+        if (m.images && m.images.length > 0) {
+          m.images.forEach(img => {
+            // Extract base64 data from data URL
+            const base64Match = img.data.match(/^data:image\/(\w+);base64,(.+)$/)
+            if (base64Match) {
+              const [, mimeType, base64Data] = base64Match
+              parts.push({
+                inlineData: {
+                  mimeType: `image/${mimeType}`,
+                  data: base64Data
+                }
+              })
+            }
+          })
+        }
+        
+        return {
+          role: m.role === "assistant" ? "model" : "user",
+          parts
+        }
+      })
 
     return { systemPrompt, contents }
   }

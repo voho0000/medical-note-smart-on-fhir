@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/application/stores/chat.store"
+import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
@@ -23,17 +23,19 @@ export function useStreamingChat(
   const hasReceivedChunkRef = useRef(false)
 
   const handleSend = useCallback(
-    async (input: string) => {
+    async (input: string, images?: ChatImage[]) => {
       hasReceivedChunkRef.current = false
       const trimmed = input.trim()
-      if (!trimmed) return
+      if (!trimmed && (!images || images.length === 0)) return
 
       // Create user message and assistant placeholder
       const { messages: newMessages, assistantMessageId } = addMessagePair(
         chatMessages,
         trimmed,
         modelId,
-        "" // Empty initial content
+        "", // Empty initial content
+        images,
+        undefined // agentStates
       )
       setChatMessages(newMessages)
 
@@ -43,26 +45,37 @@ export function useStreamingChat(
         // Prepare messages (exclude the empty assistant placeholder)
         const userMessages = newMessages
           .filter(m => m.id !== assistantMessageId)
-          .map((m) => ({ role: m.role, content: m.content }))
         
-        // Check token usage and truncate if needed
-        const stats = getTokenStats(userMessages, { modelId, systemPrompt })
+        // Check token usage and truncate if needed (use text-only for counting)
+        const messagesForTokenCount = userMessages.map((m) => {
+          let content = m.content
+          if (m.images && m.images.length > 0) {
+            content = `${m.content}\n[${m.images.length} image${m.images.length > 1 ? 's' : ''} attached]`
+          }
+          return { role: m.role, content }
+        })
+        
+        const stats = getTokenStats(messagesForTokenCount, { modelId, systemPrompt })
         console.log(`[Chat] Token usage: ${stats.totalTokens}/${stats.contextLimit} (${stats.utilizationPercent}%)`)
         
         // Truncate to fit context window
-        const truncatedMessages = truncateToContextWindow(userMessages, { 
+        const truncatedMessages = truncateToContextWindow(messagesForTokenCount, { 
           modelId, 
           systemPrompt,
           maxResponseTokens: 4000 
         })
 
-        // Build final messages for API with proper typing
+        // Build final messages for API - pass full message objects with images
+        // The StreamOrchestrator/Proxy will handle multimodal formatting
         const apiMessages = [
           { role: "system" as const, content: systemPrompt },
-          ...truncatedMessages.map(m => ({
-            role: m.role as "user" | "assistant" | "system",
-            content: m.content
-          })),
+          ...userMessages
+            .slice(-truncatedMessages.length)
+            .map(m => ({
+              role: m.role as "user" | "assistant" | "system",
+              content: m.content,
+              ...(m.images && m.images.length > 0 && { images: m.images })
+            })),
         ]
 
         // Stream response using unified AI

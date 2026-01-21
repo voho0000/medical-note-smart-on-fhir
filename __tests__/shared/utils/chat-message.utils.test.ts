@@ -161,7 +161,7 @@ describe('chat-message.utils', () => {
 
     it('should add assistant message with agent states', () => {
       const agentStates = [{ state: 'analyzing', timestamp: Date.now() }]
-      const result = addMessagePair([], 'Hello', undefined, '', agentStates)
+      const result = addMessagePair([], 'Hello', undefined, '', undefined, agentStates)
       
       expect(result.messages[1].agentStates).toEqual(agentStates)
     })

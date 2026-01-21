@@ -101,6 +101,31 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
                       : "rounded-2xl rounded-tr-sm bg-blue-500 text-white shadow-md",
                   )}
                 >
+                  {/* Display images if present */}
+                  {message.images && message.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {message.images.map((image, idx) => (
+                        <div
+                          key={idx}
+                          className="relative rounded-lg overflow-hidden border border-white/20"
+                          style={{ maxWidth: '200px', maxHeight: '200px' }}
+                        >
+                          <img
+                            src={image.thumbnail || image.data}
+                            alt={image.fileName || `Image ${idx + 1}`}
+                            className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => {
+                              // Open full image in new tab
+                              const win = window.open()
+                              if (win) {
+                                win.document.write(`<img src="${image.data}" style="max-width:100%;height:auto;" />`)
+                              }
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {message.role === "assistant" ? (
                     <MarkdownRenderer content={message.content} />
                   ) : (

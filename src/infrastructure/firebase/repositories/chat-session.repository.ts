@@ -33,14 +33,24 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
     }
     
     // Clean messages to remove any undefined values
-    const cleanMessages = (entity.messages || []).map(msg => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      timestamp: msg.timestamp,
-      ...(msg.modelId && { modelId: msg.modelId }),
-      ...(msg.agentStates && { agentStates: msg.agentStates }),
-    }))
+    // Only store thumbnails for images, not full-size data
+    const cleanMessages = (entity.messages || []).map(msg => {
+      const cleanMsg: any = {
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+      }
+      
+      if (msg.modelId) cleanMsg.modelId = msg.modelId
+      if (msg.agentStates) cleanMsg.agentStates = msg.agentStates
+      
+      // DO NOT store images in Firestore (too large, not needed for history)
+      // Images are only used for sending to AI API, not for storage
+      // If we need to show "user sent N images" in history, add a simple counter instead
+      
+      return cleanMsg
+    })
     
     const doc: any = {
       userId: entity.userId,
