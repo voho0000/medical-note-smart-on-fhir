@@ -147,9 +147,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         })
 
         let accumulatedContent = ""
-        let toolResults: Array<{ toolName: string; result: unknown }> = []
+        let updateScheduled = false
+        let hasToolCalls = false
 
-        // Process stream chunks
+        // Process stream chunks with performance optimization
         for await (const chunk of result.fullStream) {
           if (chunk.type === 'text-delta') {
             accumulatedContent += chunk.text
@@ -159,10 +160,18 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               onInputClear()
             }
 
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
-            )
+            // Batch updates using requestAnimationFrame to reduce re-renders
+            if (!updateScheduled) {
+              updateScheduled = true
+              requestAnimationFrame(() => {
+                setChatMessages((prev) =>
+                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+                )
+                updateScheduled = false
+              })
+            }
           } else if (chunk.type === 'tool-call') {
+            hasToolCalls = true
             const displayName = getToolDisplayName(chunk.toolName)
             const newState = `🔍 ${displayName}...`
             setChatMessages((prev) =>
@@ -174,17 +183,16 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
                   } 
                 : m)
             )
-          } else if (chunk.type === 'tool-result') {
-            const chunkAny = chunk as any
-            const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
-            toolResults.push({ toolName: chunk.toolName, result })
           }
         }
         
-        // Handle follow-up if there are tool results but no text
-        console.log('[Agent] Tool results count:', toolResults.length, 'Accumulated content length:', accumulatedContent.length)
-        if (toolResults.length > 0 && accumulatedContent.length === 0) {
-          console.log('[Agent] Starting follow-up response generation...')
+        // Final update to ensure all content is displayed
+        setChatMessages((prev) =>
+          prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+        )
+
+        // Manual follow-up if tools were called but no text response
+        if (hasToolCalls && accumulatedContent.length === 0) {
           const organizingState = `📝 ${t.agent.organizingResults}`
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId 
@@ -195,61 +203,42 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
                 } 
               : m)
           )
-          
-          // Build tool results summary using use case
-          console.log('[Agent] Building tool results summary...')
-          const { summary: toolResultsSummary, citations: literatureCitations } = 
-            processAgentStreamUseCase.buildToolResultsSummary(toolResults, {
-              queryResult: t.agent.queryResult,
-              queryFailed: t.agent.queryFailed,
-              noData: t.agent.noData,
-              noDataFound: t.agent.noDataFound,
-              foundRecords: t.agent.foundRecords,
-            })
-          console.log('[Agent] Tool results summary:', toolResultsSummary)
-          
-          const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
-          console.log('[Agent] Original question:', originalQuestion)
-          const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
-            apiMessages,
-            toolResultsSummary,
-            originalQuestion,
-            {
-              queriedFhirData: t.agent.queriedFhirData,
-              answerQuestion: t.agent.answerQuestion,
-            }
-          )
-          console.log('[Agent] Follow-up messages:', followUpMessages)
-          
-          console.log('[Agent] Starting follow-up stream...')
+
+          // Generate follow-up response
           const followUpResult = await streamText({
             model,
-            messages: followUpMessages,
+            messages: [
+              ...apiMessages,
+              { role: 'assistant' as const, content: t.agent.queriedFhirData },
+              { role: 'user' as const, content: t.agent.answerQuestion },
+            ],
             abortSignal: abortControllerRef.current?.signal,
           })
-          
+
           let followUpContent = ""
+          let followUpUpdateScheduled = false
+          
           for await (const chunk of followUpResult.fullStream) {
             if (chunk.type === 'text-delta') {
               followUpContent += chunk.text
-              setChatMessages((prev) =>
-                prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
-              )
+              
+              // Batch follow-up updates too
+              if (!followUpUpdateScheduled) {
+                followUpUpdateScheduled = true
+                requestAnimationFrame(() => {
+                  setChatMessages((prev) =>
+                    prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+                  )
+                  followUpUpdateScheduled = false
+                })
+              }
             }
           }
-          console.log('[Agent] Follow-up content generated:', followUpContent)
           
-          // Process citations if available
-          if (literatureCitations.length > 0) {
-            const { processedContent } = processAgentStreamUseCase.processCitations({
-              content: followUpContent,
-              citations: literatureCitations,
-            })
-            
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
-            )
-          }
+          // Final follow-up update
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+          )
         }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return
