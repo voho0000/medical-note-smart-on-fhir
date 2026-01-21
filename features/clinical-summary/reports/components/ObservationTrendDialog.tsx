@@ -77,8 +77,8 @@ export function ObservationTrendDialog({ observation, open, onOpenChange }: Obse
 
         <Tabs defaultValue="table" className="w-full mt-4">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="table">歷史記錄</TabsTrigger>
-            <TabsTrigger value="chart">趨勢圖表</TabsTrigger>
+            <TabsTrigger value="table" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30">歷史記錄</TabsTrigger>
+            <TabsTrigger value="chart" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30">趨勢圖表</TabsTrigger>
           </TabsList>
 
           <TabsContent value="table" className="mt-4">

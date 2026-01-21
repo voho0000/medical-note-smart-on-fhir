@@ -30,7 +30,7 @@ export function VisitHistoryCard() {
   const encounterDetails = useEncounterDetails(medications, diagnosticReports, observations, procedures, clinicalNotes, locale)
 
   return (
-    <Card>
+    <Card className="border-l-4 border-l-emerald-500">
       <CardHeader>
         <CardTitle>{t.tabs.visits}</CardTitle>
       </CardHeader>

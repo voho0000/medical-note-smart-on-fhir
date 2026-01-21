@@ -15,6 +15,7 @@ export function MedListCard() {
   return (
     <FeatureCard 
       title={t.medications.title}
+      featureId="medications"
       isLoading={isLoading} 
       error={error}
       isEmpty={rows.length === 0}

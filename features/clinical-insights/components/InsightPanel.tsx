@@ -99,7 +99,7 @@ export function InsightPanel({
 
   return (
     <>
-      <Card>
+      <Card className="border-l-4 border-l-violet-500">
         <InsightPanelHeader
           title={title}
           fallbackModelId={fallbackModelId}

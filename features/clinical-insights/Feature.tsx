@@ -96,7 +96,7 @@ export default function ClinicalInsightsFeature() {
     return (
       <ScrollArea className="h-full pr-3">
         <div className="space-y-4">
-          <Card className="border-destructive">
+          <Card className="border-destructive border-l-4 border-l-violet-500">
             <CardContent className="pt-6">
               <div className="text-sm">
                 <div className="font-medium text-destructive mb-2">{t.clinicalInsights.fhirDataRequired}</div>
@@ -157,7 +157,7 @@ export default function ClinicalInsightsFeature() {
                   <TabsTrigger
                     key={panel.id}
                     value={panel.id}
-                    className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm min-w-0"
+                    className="text-sm rounded-sm overflow-hidden data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-violet-500/10 dark:data-[state=active]:text-violet-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-violet-500/30 min-w-0"
                   >
                     <span className="truncate" title={panel.label}>{panel.label}</span>
                   </TabsTrigger>
@@ -178,7 +178,7 @@ export default function ClinicalInsightsFeature() {
             ))}
           </Tabs>
           </> ) : (
-          <Card>
+          <Card className="border-l-4 border-l-violet-500">
             <CardContent className="py-6 text-sm text-muted-foreground">
               {t.clinicalInsights.noTabsConfigured}
             </CardContent>

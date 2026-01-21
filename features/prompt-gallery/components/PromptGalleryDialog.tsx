@@ -155,20 +155,20 @@ export function PromptGalleryDialog({
             <TabsList className="grid w-full grid-cols-2 h-11 p-1">
               <TabsTrigger 
                 value="all" 
-                className="flex items-center gap-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-900/50 dark:data-[state=active]:text-blue-300"
+                className="flex items-center gap-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-500/10 dark:data-[state=active]:text-blue-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-blue-500/30"
               >
                 <Library className="h-4 w-4" />
                 所有範本
               </TabsTrigger>
               <TabsTrigger 
                 value="my" 
-                className="flex items-center gap-2 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-900/50 dark:data-[state=active]:text-emerald-300" 
+                className="flex items-center gap-2 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30" 
                 disabled={!user}
               >
                 <User className="h-4 w-4" />
                 我的範本
                 {user && myPromptsHook.prompts.length > 0 && (
-                  <Badge className="ml-1 bg-emerald-200 text-emerald-800 dark:bg-emerald-800 dark:text-emerald-200 border-0">
+                  <Badge className="ml-1 bg-emerald-200 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 border-0">
                     {myPromptsHook.prompts.length}
                   </Badge>
                 )}

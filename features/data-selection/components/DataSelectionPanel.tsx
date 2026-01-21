@@ -49,8 +49,8 @@ export function DataSelectionPanel({
   return (
     <Tabs defaultValue="selection" className="w-full space-y-4">
       <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50">
-        <TabsTrigger value="selection" className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.dataSelection.title}</TabsTrigger>
-        <TabsTrigger value="preview" className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">{t.common.preview}</TabsTrigger>
+        <TabsTrigger value="selection" className="text-sm data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30">{t.dataSelection.title}</TabsTrigger>
+        <TabsTrigger value="preview" className="text-sm data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30">{t.common.preview}</TabsTrigger>
       </TabsList>
       <TabsContent value="selection">
         <DataSelectionTab

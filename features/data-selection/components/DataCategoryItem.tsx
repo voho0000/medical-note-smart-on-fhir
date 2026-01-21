@@ -34,7 +34,7 @@ export function DataCategoryItem({
   const { t } = useLanguage()
   
   return (
-    <Card className="p-4 hover:bg-muted/50 transition-colors">
+    <Card className="p-4 hover:bg-muted/50 transition-colors border-l-4 border-l-amber-500">
       <div className="flex items-start space-x-3">
         <Checkbox
           id={`data-${item.id}`}

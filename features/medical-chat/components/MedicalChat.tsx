@@ -199,7 +199,7 @@ export default function MedicalChat() {
   useKeyboardShortcuts(isExpanded, expandable.collapse)
 
   const chatContent = (
-    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : ''} !gap-0 !py-0`}>
+    <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : 'border-l-4 border-l-blue-500'} !gap-0 !py-0`}>
       {!isExpanded && (
         <div className="relative flex items-center justify-between px-2 py-1">
           <ChatHistoryDrawer />

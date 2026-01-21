@@ -15,6 +15,7 @@ export function VitalsCard() {
   return (
     <FeatureCard 
       title={t.vitals.title}
+      featureId="vitals"
       isLoading={isLoading} 
       error={error}
       isEmpty={false}

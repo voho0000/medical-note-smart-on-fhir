@@ -90,7 +90,7 @@ export function ReportsCard() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="border-l-4 border-l-emerald-500">
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -103,7 +103,7 @@ export function ReportsCard() {
 
   if (error) {
     return (
-      <Card>
+      <Card className="border-l-4 border-l-emerald-500">
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -116,7 +116,7 @@ export function ReportsCard() {
 
   if (rows.length === 0) {
     return (
-      <Card>
+      <Card className="border-l-4 border-l-emerald-500">
         <CardHeader>
           <CardTitle>{t.reports.title}</CardTitle>
         </CardHeader>
@@ -128,7 +128,7 @@ export function ReportsCard() {
   }
 
   return (
-    <Card>
+    <Card className="border-l-4 border-l-emerald-500">
       <CardContent className="px-4 pb-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* Desktop tabs - hidden on small screens */}
@@ -137,7 +137,7 @@ export function ReportsCard() {
               <TabsTrigger 
                 key={tab.value} 
                 value={tab.value} 
-                className="capitalize text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm truncate"
+                className="capitalize text-sm data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 dark:data-[state=active]:bg-emerald-500/10 dark:data-[state=active]:text-emerald-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-emerald-500/30 truncate"
               >
                 {tab.label}
               </TabsTrigger>
@@ -160,7 +160,7 @@ export function ReportsCard() {
                   <DropdownMenuItem
                     key={tab.value}
                     onClick={() => setActiveTab(tab.value)}
-                    className={activeTab === tab.value ? "bg-primary text-primary-foreground" : ""}
+                    className={activeTab === tab.value ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : ""}
                   >
                     {tab.label}
                   </DropdownMenuItem>

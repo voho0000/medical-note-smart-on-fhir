@@ -15,6 +15,7 @@ export function DiagnosesCard() {
   return (
     <FeatureCard 
       title={t.conditions.title}
+      featureId="diagnosis"
       isLoading={isLoading} 
       error={error}
       isEmpty={rows.length === 0}

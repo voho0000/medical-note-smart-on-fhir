@@ -17,6 +17,7 @@ export function PatientInfoCard() {
   return (
     <FeatureCard 
       title={t.patient.info}
+      featureId="patient-info"
       isLoading={loading} 
       error={errorObj}
       isEmpty={!patientInfo}

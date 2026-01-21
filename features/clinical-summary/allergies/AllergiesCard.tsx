@@ -15,6 +15,7 @@ export function AllergiesCard() {
   return (
     <FeatureCard 
       title={t.allergies.title}
+      featureId="allergies"
       isLoading={isLoading} 
       error={error}
       isEmpty={activeAllergies.length === 0}
