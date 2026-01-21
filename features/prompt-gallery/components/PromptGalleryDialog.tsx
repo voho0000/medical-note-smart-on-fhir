@@ -145,7 +145,7 @@ export function PromptGalleryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[85vh] w-[85vw] flex flex-col">
+        <DialogContent className="max-w-5xl h-[85vh]! w-[85vw] flex! flex-col!">
           <DialogHeader>
             <DialogTitle>{t.promptGallery.title}</DialogTitle>
             <DialogDescription>{t.promptGallery.description}</DialogDescription>
@@ -182,8 +182,9 @@ export function PromptGalleryDialog({
             />
 
             {/* Active Filters & Results Count */}
-            {(hasActiveFilters || prompts.length > 0) && !loading && (
-              <div className="flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center justify-between gap-2 px-1 min-h-[32px]">
+              {(hasActiveFilters || prompts.length > 0) && !loading && (
+                <>
                 <div className="flex items-center gap-2 flex-wrap">
                   {prompts.length > 0 && (
                     <span className="text-sm text-muted-foreground">
@@ -243,29 +244,34 @@ export function PromptGalleryDialog({
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            )}
-
-            {/* Error */}
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            {/* Loading */}
-            {loading && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            )}
+                </>
+              )}
+            </div>
 
             {/* Results */}
-            {!loading && !error && (
-              <div className="flex-1 overflow-y-auto min-h-[400px]">
+            <div className="flex-1 overflow-y-auto">
+              {/* Loading */}
+              {loading && (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              {/* Error */}
+              {!loading && error && (
+                <div className="flex items-center justify-center h-full">
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                </div>
+              )}
+
+              {/* Content */}
+              {!loading && !error && (
+                <>
                 {prompts.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="flex flex-col items-center justify-center h-full text-center">
                     <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium">
                       {activeTab === 'my' ? '您還沒有分享任何範本' : t.promptGallery.noResults}
@@ -324,8 +330,9 @@ export function PromptGalleryDialog({
                     )}
                   </>
                 )}
-              </div>
-            )}
+                </>
+              )}
+            </div>
             </TabsContent>
           </Tabs>
         </DialogContent>
