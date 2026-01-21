@@ -13,10 +13,12 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 interface PromptCardProps {
   prompt: SharedPrompt
   onPreview: (prompt: SharedPrompt) => void
+  currentUserId?: string // To identify if this is user's own prompt
 }
 
-export function PromptCard({ prompt, onPreview }: PromptCardProps) {
+export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps) {
   const { t } = useLanguage()
+  const isMyPrompt = currentUserId && prompt.authorId === currentUserId
 
   const getTypeLabel = (type: string) => {
     switch (type) {
@@ -40,7 +42,14 @@ export function PromptCard({ prompt, onPreview }: PromptCardProps) {
     >
       <CardHeader className="!pb-0 !pt-2 !px-3">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-sm line-clamp-1 leading-tight">{prompt.title}</CardTitle>
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <CardTitle className="text-sm line-clamp-1 leading-tight">{prompt.title}</CardTitle>
+            {isMyPrompt && (
+              <Badge variant="default" className="text-[9px] px-1 py-0 h-3.5 shrink-0">
+                我的
+              </Badge>
+            )}
+          </div>
           <div className="flex gap-1 shrink-0">
             {prompt.types.map((type) => (
               <Badge key={type} variant="outline" className="text-[10px] px-1 py-0 h-4">

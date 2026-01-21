@@ -230,3 +230,78 @@ export async function incrementPromptUsage(id: string): Promise<void> {
     // Don't throw - this is not critical
   }
 }
+
+/**
+ * Get prompts created by a specific user
+ */
+export async function getMySharedPrompts(
+  userId: string,
+  filter?: Omit<PromptGalleryFilter, 'authorId'>,
+  sort?: PromptGallerySort
+): Promise<SharedPrompt[]> {
+  try {
+    const constraints: QueryConstraint[] = []
+
+    // Filter by author
+    constraints.push(where('authorId', '==', userId))
+
+    // Apply additional filters
+    // Note: Firestore allows only one array-contains per query
+    // Priority: types > specialty (specialty will be filtered client-side if both exist)
+    if (filter?.type) {
+      constraints.push(where('types', 'array-contains', filter.type))
+    }
+    if (filter?.category) {
+      constraints.push(where('category', '==', filter.category))
+    }
+    // Only add specialty to Firestore query if types is not present
+    if (filter?.specialty && !filter?.type) {
+      constraints.push(where('specialty', 'array-contains', filter.specialty))
+    }
+
+    // Apply sorting
+    if (sort) {
+      constraints.push(orderBy(sort.field, sort.direction))
+    } else {
+      constraints.push(orderBy('createdAt', 'desc'))
+    }
+
+    // Limit results
+    constraints.push(limit(100))
+
+    const q = query(collection(db, COLLECTION_NAME), ...constraints)
+    const querySnapshot = await getDocs(q)
+
+    let prompts = querySnapshot.docs.map((doc) =>
+      convertToSharedPrompt(doc.id, doc.data())
+    )
+
+    // Client-side filtering for search query, tags, and specialty (when types is also present)
+    if (filter?.searchQuery) {
+      const searchLower = filter.searchQuery.toLowerCase()
+      prompts = prompts.filter(
+        (p) =>
+          p.title.toLowerCase().includes(searchLower) ||
+          p.description?.toLowerCase().includes(searchLower) ||
+          p.prompt.toLowerCase().includes(searchLower) ||
+          p.tags.some((tag) => tag.toLowerCase().includes(searchLower))
+      )
+    }
+
+    if (filter?.tags && filter.tags.length > 0) {
+      prompts = prompts.filter((p) =>
+        filter.tags!.some((tag) => p.tags.includes(tag))
+      )
+    }
+
+    // Filter by specialty on client-side if types filter is also present
+    if (filter?.specialty && filter?.type) {
+      prompts = prompts.filter((p) => p.specialty.includes(filter.specialty!))
+    }
+
+    return prompts
+  } catch (error) {
+    console.error('Error fetching my shared prompts:', error)
+    throw error
+  }
+}

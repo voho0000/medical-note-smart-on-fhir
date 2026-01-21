@@ -7,14 +7,25 @@ import { useState, useEffect, useCallback } from 'react'
 import type { SharedPrompt, PromptGalleryFilter, PromptGallerySort } from '../types/prompt.types'
 import {
   getSharedPrompts,
+  getMySharedPrompts,
   incrementPromptUsage,
 } from '../services/prompt-gallery.service'
 
-export function usePromptGallery(initialFilter?: PromptGalleryFilter) {
+interface UsePromptGalleryOptions {
+  initialFilter?: PromptGalleryFilter
+  userId?: string // If provided, fetch only user's prompts
+}
+
+export function usePromptGallery(options?: UsePromptGalleryOptions | PromptGalleryFilter) {
+  // Support both old API (initialFilter) and new API (options object)
+  const { initialFilter, userId } = typeof options === 'object' && 'userId' in options
+    ? options
+    : { initialFilter: options, userId: undefined }
+
   const [prompts, setPrompts] = useState<SharedPrompt[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<PromptGalleryFilter>(initialFilter || {})
+  const [filter, setFilter] = useState<PromptGalleryFilter>((initialFilter as PromptGalleryFilter) || {})
   const [sort, setSort] = useState<PromptGallerySort>({
     field: 'createdAt',
     direction: 'desc',
@@ -25,7 +36,14 @@ export function usePromptGallery(initialFilter?: PromptGalleryFilter) {
     setLoading(true)
     setError(null)
     try {
-      const fetchedPrompts = await getSharedPrompts(filter, sort)
+      let fetchedPrompts: SharedPrompt[]
+      if (userId) {
+        // Fetch only user's prompts
+        fetchedPrompts = await getMySharedPrompts(userId, filter, sort)
+      } else {
+        // Fetch all prompts
+        fetchedPrompts = await getSharedPrompts(filter, sort)
+      }
       setPrompts(fetchedPrompts)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch prompts')
@@ -33,7 +51,7 @@ export function usePromptGallery(initialFilter?: PromptGalleryFilter) {
     } finally {
       setLoading(false)
     }
-  }, [filter, sort])
+  }, [filter, sort, userId])
 
   // Fetch on mount and when filter/sort changes
   useEffect(() => {
