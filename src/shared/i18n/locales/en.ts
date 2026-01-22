@@ -662,6 +662,42 @@ export const en = {
     browseGallery: 'Browse Gallery',
     openGallery: 'Open Prompt Gallery',
   },
+
+  feedback: {
+    title: 'Report Issue',
+    description: 'Please describe the issue you encountered, and we will address it as soon as possible.',
+    email: 'Your Email',
+    emailDescription: 'Used to contact you and track issue resolution progress',
+    emailRequired: 'Please enter your email',
+    emailInvalid: 'Please enter a valid email address',
+    issueType: 'Issue Type',
+    issueTypeRequired: 'Please select an issue type',
+    selectIssueType: 'Select type',
+    types: {
+      bug: 'Bug',
+      ui: 'UI/UX Issue',
+      performance: 'Performance Issue',
+      feature: 'Feature Request',
+      other: 'Other',
+    },
+    severity: 'Severity',
+    severityLevels: {
+      low: 'Low',
+      medium: 'Medium',
+      high: 'High',
+      critical: 'Critical',
+    },
+    descriptionLabel: 'Issue Description',
+    descriptionPlaceholder: 'Please describe the issue you encountered in detail...',
+    descriptionRequired: 'Please enter an issue description',
+    descriptionTooShort: 'Issue description must be at least 20 characters',
+    descriptionHint: 'At least 20 characters',
+    stepsToReproduce: 'Steps to Reproduce',
+    stepsPlaceholder: '1. Click...\n2. Enter...\n3. Observe...',
+    stepsHint: 'Optional, helps us reproduce the issue',
+    successMessage: 'Issue report submitted successfully! Thank you for your feedback.',
+    errorMessage: 'Submission failed, please try again later.',
+  },
 }
 
 export type Translation = typeof en

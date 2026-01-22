@@ -6,6 +6,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import { ThemeToggle } from "@/src/shared/components/ThemeToggle"
 import { ConnectionInfo } from "@/src/shared/components/ConnectionInfo"
+import { FeedbackButton } from "@/features/feedback"
 import { HeaderAuthButton } from "@/features/auth"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
@@ -37,6 +38,7 @@ function PageContent() {
             <h1 className="text-base sm:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <FeedbackButton />
             <ConnectionInfo />
             <ThemeToggle />
             <LanguageSwitcher />
