@@ -193,6 +193,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
         // Manual follow-up if tools were called but no text response
         if (hasToolCalls && accumulatedContent.length === 0) {
+          console.log('[Agent] Tools were called but no text response, generating follow-up...')
           const organizingState = `📝 ${t.agent.organizingResults}`
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId 
@@ -204,41 +205,58 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               : m)
           )
 
-          // Generate follow-up response
-          const followUpResult = await streamText({
-            model,
-            messages: [
-              ...apiMessages,
-              { role: 'assistant' as const, content: t.agent.queriedFhirData },
-              { role: 'user' as const, content: t.agent.answerQuestion },
-            ],
-            abortSignal: abortControllerRef.current?.signal,
-          })
+          try {
+            // Get the original user question
+            const originalQuestion = newMessages.find(m => m.role === 'user')?.content || ''
+            
+            // Generate follow-up response with proper prompt
+            const followUpPrompt = locale === 'zh-TW'
+              ? `請根據上述查詢結果，用繁體中文回答我的原始問題。\n\n**重要**：\n1. 直接回答問題，不要輸出你的思考過程\n2. 如果查詢結果中包含引用編號（如 [1][2][3]），請在回答中保留這些引用編號\n3. 如果查詢結果顯示沒有資料，請明確告知\n\n原始問題：「${originalQuestion}」`
+              : `Please answer my original question based on the query results above.\n\n**Important**:\n1. Answer directly without showing your thinking process\n2. If the results contain citation numbers (like [1][2][3]), keep them in your answer\n3. If no data was found, clearly state that\n\nOriginal question: "${originalQuestion}"`
+            
+            const followUpResult = await streamText({
+              model,
+              messages: [
+                ...apiMessages,
+                { role: 'assistant' as const, content: t.agent.queriedFhirData },
+                { role: 'user' as const, content: followUpPrompt },
+              ],
+              abortSignal: abortControllerRef.current?.signal,
+            })
 
-          let followUpContent = ""
-          let followUpUpdateScheduled = false
-          
-          for await (const chunk of followUpResult.fullStream) {
-            if (chunk.type === 'text-delta') {
-              followUpContent += chunk.text
-              
-              // Batch follow-up updates too
-              if (!followUpUpdateScheduled) {
-                followUpUpdateScheduled = true
-                requestAnimationFrame(() => {
-                  setChatMessages((prev) =>
-                    prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
-                  )
-                  followUpUpdateScheduled = false
-                })
+            let followUpContent = ""
+            let followUpUpdateScheduled = false
+            
+            for await (const chunk of followUpResult.fullStream) {
+              if (chunk.type === 'text-delta') {
+                followUpContent += chunk.text
+                
+                // Batch follow-up updates too
+                if (!followUpUpdateScheduled) {
+                  followUpUpdateScheduled = true
+                  requestAnimationFrame(() => {
+                    setChatMessages((prev) =>
+                      prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+                    )
+                    followUpUpdateScheduled = false
+                  })
+                }
               }
             }
+            
+            // Final follow-up update
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+            )
+            console.log('[Agent] Follow-up completed, content length:', followUpContent.length)
+          } catch (followUpError) {
+            console.error('[Agent] Follow-up generation failed:', followUpError)
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId 
+                ? { ...m, content: `❌ ${t.agent.organizingResults}失敗，請重試` } 
+                : m)
+            )
           }
-          
-          // Final follow-up update
-          setChatMessages((prev) =>
-            prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
-          )
         }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return
