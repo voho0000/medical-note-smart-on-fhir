@@ -56,7 +56,6 @@ export function useStreamingChat(
         })
         
         const stats = getTokenStats(messagesForTokenCount, { modelId, systemPrompt })
-        console.log(`[Chat] Token usage: ${stats.totalTokens}/${stats.contextLimit} (${stats.utilizationPercent}%)`)
         
         // Truncate to fit context window
         const truncatedMessages = truncateToContextWindow(messagesForTokenCount, { 

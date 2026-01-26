@@ -107,11 +107,13 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         // Build enhanced system prompt using use case
         // Note: Clinical context is no longer automatically included
         // Users can choose to include it via the auto-include toggle (consistent with normal mode)
+        // Literature search is available if user has Perplexity API key OR is authenticated (can use proxy)
+        const hasLiteratureSearch = !!perplexityKey || !!user
         const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
           baseSystemPrompt: systemPrompt,
           clinicalContext: '', // Empty - let user control via toggle
           patientId: patient?.id,
-          hasPerplexityKey: !!perplexityKey,
+          hasPerplexityKey: hasLiteratureSearch,
           translations: t.agent.systemPrompt,
         })
 
@@ -147,10 +149,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         })
 
         let accumulatedContent = ""
-        let updateScheduled = false
-        let hasToolCalls = false
+        let toolResults: Array<{ toolName: string; result: unknown }> = []
 
-        // Process stream chunks with performance optimization
+        // Process stream chunks
         for await (const chunk of result.fullStream) {
           if (chunk.type === 'text-delta') {
             accumulatedContent += chunk.text
@@ -160,18 +161,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               onInputClear()
             }
 
-            // Batch updates using requestAnimationFrame to reduce re-renders
-            if (!updateScheduled) {
-              updateScheduled = true
-              requestAnimationFrame(() => {
-                setChatMessages((prev) =>
-                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
-                )
-                updateScheduled = false
-              })
-            }
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+            )
           } else if (chunk.type === 'tool-call') {
-            hasToolCalls = true
             const displayName = getToolDisplayName(chunk.toolName)
             const newState = `🔍 ${displayName}...`
             setChatMessages((prev) =>
@@ -183,17 +176,16 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
                   } 
                 : m)
             )
+          } else if (chunk.type === 'tool-result') {
+            // Collect tool results - handle both 'result' and 'output' properties
+            const chunkAny = chunk as any
+            const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
+            toolResults.push({ toolName: chunk.toolName, result })
           }
         }
         
-        // Final update to ensure all content is displayed
-        setChatMessages((prev) =>
-          prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
-        )
-
-        // Manual follow-up if tools were called but no text response
-        if (hasToolCalls && accumulatedContent.length === 0) {
-          console.log('[Agent] Tools were called but no text response, generating follow-up...')
+        // Handle follow-up if there are tool results but no text
+        if (toolResults.length > 0 && accumulatedContent.length === 0) {
           const organizingState = `📝 ${t.agent.organizingResults}`
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId 
@@ -204,57 +196,74 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
                 } 
               : m)
           )
-
-          try {
-            // Get the original user question
-            const originalQuestion = newMessages.find(m => m.role === 'user')?.content || ''
-            
-            // Generate follow-up response with proper prompt
-            const followUpPrompt = locale === 'zh-TW'
-              ? `請根據上述查詢結果，用繁體中文回答我的原始問題。\n\n**重要**：\n1. 直接回答問題，不要輸出你的思考過程\n2. 如果查詢結果中包含引用編號（如 [1][2][3]），請在回答中保留這些引用編號\n3. 如果查詢結果顯示沒有資料，請明確告知\n\n原始問題：「${originalQuestion}」`
-              : `Please answer my original question based on the query results above.\n\n**Important**:\n1. Answer directly without showing your thinking process\n2. If the results contain citation numbers (like [1][2][3]), keep them in your answer\n3. If no data was found, clearly state that\n\nOriginal question: "${originalQuestion}"`
-            
-            const followUpResult = await streamText({
-              model,
-              messages: [
-                ...apiMessages,
-                { role: 'assistant' as const, content: t.agent.queriedFhirData },
-                { role: 'user' as const, content: followUpPrompt },
-              ],
-              abortSignal: abortControllerRef.current?.signal,
+          
+          // Build tool results summary using use case
+          const { summary: toolResultsSummary, citations: literatureCitations } = 
+            processAgentStreamUseCase.buildToolResultsSummary(toolResults, {
+              queryResult: t.agent.queryResult,
+              queryFailed: t.agent.queryFailed,
+              noData: t.agent.noData,
+              noDataFound: t.agent.noDataFound,
+              foundRecords: t.agent.foundRecords,
             })
-
-            let followUpContent = ""
-            let followUpUpdateScheduled = false
-            
-            for await (const chunk of followUpResult.fullStream) {
-              if (chunk.type === 'text-delta') {
-                followUpContent += chunk.text
-                
-                // Batch follow-up updates too
-                if (!followUpUpdateScheduled) {
-                  followUpUpdateScheduled = true
-                  requestAnimationFrame(() => {
-                    setChatMessages((prev) =>
-                      prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
-                    )
-                    followUpUpdateScheduled = false
-                  })
-                }
-              }
+          
+          const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
+          const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
+            apiMessages,
+            toolResultsSummary,
+            originalQuestion,
+            {
+              queriedFhirData: t.agent.queriedFhirData,
+              answerQuestion: t.agent.answerQuestion,
             }
+          )
+          
+          const followUpResult = await streamText({
+            model,
+            messages: followUpMessages,
+            abortSignal: abortControllerRef.current?.signal,
+          })
+          
+          let followUpContent = ""
+          for await (const chunk of followUpResult.fullStream) {
+            if (chunk.type === 'text-delta') {
+              followUpContent += chunk.text
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+              )
+            }
+          }
+          
+          // Process citations if available
+          if (literatureCitations.length > 0) {
+            const { processedContent } = processAgentStreamUseCase.processCitations({
+              content: followUpContent,
+              citations: literatureCitations,
+            })
             
-            // Final follow-up update
             setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
             )
-            console.log('[Agent] Follow-up completed, content length:', followUpContent.length)
-          } catch (followUpError) {
-            console.error('[Agent] Follow-up generation failed:', followUpError)
+          }
+        } else if (toolResults.length > 0 && accumulatedContent.length > 0) {
+          // AI generated response directly with tool calls - process citations
+          const { citations: literatureCitations } = 
+            processAgentStreamUseCase.buildToolResultsSummary(toolResults, {
+              queryResult: t.agent.queryResult,
+              queryFailed: t.agent.queryFailed,
+              noData: t.agent.noData,
+              noDataFound: t.agent.noDataFound,
+              foundRecords: t.agent.foundRecords,
+            })
+          
+          if (literatureCitations.length > 0) {
+            const { processedContent } = processAgentStreamUseCase.processCitations({
+              content: accumulatedContent,
+              citations: literatureCitations,
+            })
+            
             setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId 
-                ? { ...m, content: `❌ ${t.agent.organizingResults}失敗，請重試` } 
-                : m)
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
             )
           }
         }
