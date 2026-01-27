@@ -78,12 +78,21 @@ export function ChatTemplatesSettings() {
     // Add prompt as a new template
     if (canAddTemplate) {
       const newTemplateId = addTemplate()
+      
       if (newTemplateId) {
         updateTemplate(newTemplateId, {
           label: prompt.title,
           content: prompt.prompt,
         })
         setActiveTab(newTemplateId)
+        
+        // Trigger auto-save via useEffect by setting a flag
+        setShowPromptGallery(false)
+        
+        // Save immediately after state updates
+        setTimeout(async () => {
+          await saveTemplates()
+        }, 200)
       }
     }
   }

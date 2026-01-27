@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useMemo, useState, useRef, type ReactNode } from "react"
 import { useLanguage } from "./language.provider"
 import { useAuth } from "./auth.provider"
 import { 
@@ -101,10 +101,16 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   const { locale } = useLanguage()
   const { user } = useAuth()
   const [templates, setTemplates] = useState<ChatTemplate[]>(() => getDefaultTemplates())
+  const templatesRef = useRef<ChatTemplate[]>(templates)
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomTemplates, setIsCustomTemplates] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    templatesRef.current = templates
+  }, [templates])
 
   // Load templates from Firestore (for logged-in users) or localStorage
   useEffect(() => {
@@ -326,13 +332,16 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   }
 
   const saveTemplates = async () => {
+    // Use ref to get the latest templates value
+    const currentTemplates = templatesRef.current
+    
     if (!user?.uid) return
     
     setIsSaving(true)
     setIsSyncing(true)
     try {
       // Update order before saving
-      const templatesWithOrder = templates.map((template, index) => ({
+      const templatesWithOrder = currentTemplates.map((template, index) => ({
         ...template,
         order: index
       }))

@@ -92,6 +92,7 @@ type ClinicalInsightsConfigContextValue = {
   panels: InsightPanelConfig[]
   addPanel: () => string | null
   updatePanel: (id: string, patch: Partial<InsightPanelConfig>) => void
+  updatePanelAndSave: (id: string, patch: Partial<InsightPanelConfig>) => Promise<void>
   removePanel: (id: string) => void
   resetPanels: () => Promise<void>
   savePanels: () => Promise<void>
@@ -106,10 +107,16 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   const { locale } = useLanguage()
   const { user } = useAuth()
   const [panels, setPanels] = useState<InsightPanelConfig[]>(() => getDefaultClinicalInsightPanels())
+  const panelsRef = useRef<InsightPanelConfig[]>(panels)
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [isCustomPanels, setIsCustomPanels] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    panelsRef.current = panels
+  }, [panels])
 
   // Load panels from Firestore (for logged-in users) or localStorage
   useEffect(() => {
@@ -280,6 +287,44 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     setIsCustomPanels(true)
   }
 
+  const updatePanelAndSave = async (id: string, patch: Partial<InsightPanelConfig>) => {
+    return new Promise<void>((resolve, reject) => {
+      // Update panel state and capture the updated value
+      setPanels((prev) => {
+        const updated = prev.map((panel) => (panel.id === id ? { ...panel, ...patch, id: panel.id } : panel))
+        
+        // Save immediately after state update using the updated value
+        if (user?.uid) {
+          setIsSaving(true)
+          // Don't set isSyncing here to allow real-time listener to update UI
+          const panelsWithOrder = updated.map((panel, index) => ({
+            ...panel,
+            order: index
+          }))
+          
+          // Execute save and resolve/reject the promise
+          replaceAllClinicalInsightPanels(user.uid, panelsWithOrder)
+            .then(() => {
+              resolve()
+            })
+            .catch((error) => {
+              console.error('[Clinical Insights] Save failed:', error)
+              reject(error)
+            })
+            .finally(() => {
+              setIsSaving(false)
+            })
+        } else {
+          // No user, just resolve
+          resolve()
+        }
+        
+        return updated
+      })
+      setIsCustomPanels(true)
+    })
+  }
+
   const removePanel = (id: string) => {
     setPanels((prev) => {
       if (prev.length <= 1) return prev
@@ -310,13 +355,16 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   }
 
   const savePanels = async () => {
+    // Use ref to get the latest panels value
+    const currentPanels = panelsRef.current
+    
     if (!user?.uid) return
     
     setIsSaving(true)
     setIsSyncing(true)
     try {
       // Update order before saving
-      const panelsWithOrder = panels.map((panel, index) => ({
+      const panelsWithOrder = currentPanels.map((panel, index) => ({
         ...panel,
         order: index
       }))
@@ -346,7 +394,8 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     () => ({ 
       panels, 
       addPanel, 
-      updatePanel, 
+      updatePanel,
+      updatePanelAndSave,
       removePanel, 
       resetPanels, 
       savePanels,

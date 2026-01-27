@@ -13,6 +13,7 @@ import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
 import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
+import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 
 interface TabManagementToolbarProps {
   currentTabId: string
@@ -32,6 +33,7 @@ export function TabManagementToolbar({
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
   const { user } = useAuth()
+  const { panels, addPanel, updatePanel, savePanels, maxPanels } = useClinicalInsightsConfig()
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showGalleryDialog, setShowGalleryDialog] = useState(false)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
@@ -56,17 +58,28 @@ export function TabManagementToolbar({
     setShowGalleryDialog(true)
   }
 
-  const handleSelectPrompt = (prompt: any, useAs?: 'chat' | 'insight') => {
-    // Only update insight prompt if useAs is 'insight' or undefined (default)
+  const handleSelectPrompt = async (prompt: any, useAs?: 'chat' | 'insight') => {
+    // Only add insight panel if useAs is 'insight' or undefined (default)
     if (useAs === 'chat') {
       // If user wants to use as chat template, do nothing here
       // (they should use it from Settings page)
       return
     }
     
-    // 使用選擇的 Prompt 更新當前標籤的 Prompt
-    if (onPromptChange && prompt.prompt) {
-      onPromptChange(prompt.prompt)
+    // Add prompt as a new panel (similar to Chat Templates behavior)
+    if (panels.length < maxPanels) {
+      const newPanelId = addPanel()
+      if (newPanelId) {
+        updatePanel(newPanelId, {
+          title: prompt.title,
+          prompt: prompt.prompt
+        })
+        
+        // Auto-save to Firestore after adding panel
+        setTimeout(async () => {
+          await savePanels()
+        }, 200)
+      }
     }
   }
 

@@ -39,6 +39,7 @@ import { usePatient } from "@/src/application/hooks/patient/use-patient-query.ho
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { PromptGalleryDialog } from "@/features/prompt-gallery"
 import type { SharedPrompt } from "@/features/prompt-gallery"
+import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -49,6 +50,7 @@ export default function MedicalChat() {
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { getFullClinicalContext } = useClinicalContext()
+  const { addTemplate, updateTemplate, saveTemplates, maxTemplates, templates } = useChatTemplates()
   const input = useChatInput()
   const imageUpload = useImageUpload()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -219,11 +221,27 @@ export default function MedicalChat() {
   }, [input, template.selectedTemplate, scrollTextareaToBottom])
 
   // Handle prompt selection from gallery
-  const handleSelectPrompt = useCallback((prompt: SharedPrompt) => {
+  const handleSelectPrompt = useCallback((prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
     // Insert prompt content into chat input
     input.insertTextWithTrim(prompt.prompt)
     scrollTextareaToBottom()
-  }, [input, scrollTextareaToBottom])
+    
+    // Also add to chat templates if useAs is 'chat' or undefined
+    if (useAs !== 'insight' && templates.length < maxTemplates) {
+      const newTemplateId = addTemplate()
+      if (newTemplateId) {
+        updateTemplate(newTemplateId, {
+          label: prompt.title,
+          content: prompt.prompt,
+        })
+        
+        // Auto-save to Firestore after adding template
+        setTimeout(async () => {
+          await saveTemplates()
+        }, 200)
+      }
+    }
+  }, [input, scrollTextareaToBottom, addTemplate, updateTemplate, saveTemplates, templates.length, maxTemplates])
 
   // Keyboard shortcuts
   useKeyboardShortcuts(isExpanded, expandable.collapse)

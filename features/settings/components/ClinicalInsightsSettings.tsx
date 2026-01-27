@@ -91,18 +91,28 @@ export function ClinicalInsightsSettings() {
     }
   }
 
-  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
-    // Only update insight panel if useAs is 'insight' or undefined (default)
+  const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
+    // Only add insight panel if useAs is 'insight' or undefined (default)
     if (useAs === 'chat') {
       return
     }
 
-    // Update current panel with selected prompt
-    if (activeTab) {
-      updatePanel(activeTab, {
-        title: prompt.title,
-        prompt: prompt.prompt
-      })
+    // Add prompt as a new panel (similar to Chat Templates behavior)
+    if (canAddPanel) {
+      const newPanelId = addPanel()
+      if (newPanelId) {
+        updatePanel(newPanelId, {
+          title: prompt.title,
+          prompt: prompt.prompt
+        })
+        setActiveTab(newPanelId)
+        
+        // Wait for state update to complete before saving
+        await new Promise(resolve => setTimeout(resolve, 200))
+        
+        // Auto-save to Firestore after adding panel from gallery
+        await savePanels()
+      }
     }
   }
 
