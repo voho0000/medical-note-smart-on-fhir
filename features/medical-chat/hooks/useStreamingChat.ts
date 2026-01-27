@@ -77,7 +77,12 @@ export function useStreamingChat(
             })),
         ]
 
-        // Stream response using unified AI
+        // Stream response using unified AI with batched updates
+        let updateScheduled = false
+        let latestContent = ""
+        let lastUpdateTime = 0
+        const UPDATE_INTERVAL = 50 // ms - balance between smoothness and performance
+        
         await ai.stream(apiMessages, {
           modelId,
           onChunk: (content: string) => {
@@ -86,9 +91,22 @@ export function useStreamingChat(
               hasReceivedChunkRef.current = true
               onInputClear()
             }
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content } : m)
-            )
+            
+            // Store latest content
+            latestContent = content
+            
+            // Batch updates with time-based throttling to reduce re-renders
+            const now = Date.now()
+            if (!updateScheduled && now - lastUpdateTime >= UPDATE_INTERVAL) {
+              updateScheduled = true
+              lastUpdateTime = now
+              requestAnimationFrame(() => {
+                setChatMessages((prev) =>
+                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: latestContent } : m)
+                )
+                updateScheduled = false
+              })
+            }
           },
         })
         

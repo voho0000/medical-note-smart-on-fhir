@@ -39,7 +39,10 @@ export class OpenAiService {
       )
     }
 
-    const targetUrl = shouldUseProxy ? ENV_CONFIG.chatProxyUrl : '/api/llm'
+    // Use Firebase proxy or direct OpenAI API (not /api/llm for GitHub Pages compatibility)
+    const targetUrl = shouldUseProxy 
+      ? ENV_CONFIG.chatProxyUrl 
+      : 'https://api.openai.com/v1/chat/completions'
     
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -62,7 +65,7 @@ export class OpenAiService {
     if (shouldUseProxy && ENV_CONFIG.proxyClientKey) {
       headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
     } else if (this.apiKey) {
-      headers['x-openai-key'] = this.apiKey
+      headers['Authorization'] = `Bearer ${this.apiKey}`
     }
 
     const controller = new AbortController()
