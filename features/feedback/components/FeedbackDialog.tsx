@@ -89,10 +89,14 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         patientId: patientId || "無",
       }
 
-      const response = await fetch("/api/feedback", {
+      const feedbackUrl = process.env.NEXT_PUBLIC_FEEDBACK_URL || "/api/feedback"
+      const clientKey = process.env.NEXT_PUBLIC_PROXY_KEY || ""
+      
+      const response = await fetch(feedbackUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(clientKey && { "X-Client-Key": clientKey }),
         },
         body: JSON.stringify({
           ...formData,
