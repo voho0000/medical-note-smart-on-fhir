@@ -18,6 +18,13 @@ export default function SmartLaunchPage() {
       const baseUrl = `${window.location.origin}${prefix}`.replace(/\/+$/, "")
       const redirectUri = `${baseUrl}/smart/callback` // 無結尾斜線（和 Pages 設定一致）
 
+      // 如果沒有參數，重定向到預設的完整 URL（方便評審直接使用）
+      if (!iss && !launch) {
+        const defaultUrl = `${baseUrl}/smart/launch?iss=https%3A%2F%2Flaunch.smarthealthit.org%2Fv%2Fr4%2Ffhir&launch=WzAsIjJjZGE1YWFkLWU0MDktNDA3MC05YTE1LWUxYzM1YzQ2ZWQ1YSIsIjFlMzhiNzcxLWVhODctNDM0My1hNWE4LTYwMDIyMzc0Y2JhYSIsIlByYWN0aXRpb25lci81MjkxOTA5OS02YTdhLTQ0MmMtYjBkNS0yYjAyYzBkZDRiNzQiLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0`
+        window.location.href = defaultUrl
+        return
+      }
+
       await FHIR.oauth2.authorize({
         clientId: "my_web_app",
         scope: "launch openid fhirUser patient/*.read online_access",
