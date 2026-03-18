@@ -1,5 +1,6 @@
 // Shared Error Message Component
 import { AlertCircle, ServerCrash } from 'lucide-react'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 interface ErrorMessageProps {
   error: Error | unknown
@@ -17,40 +18,56 @@ function isFhirServerError(message: string): { isFhirError: boolean; serverUrl?:
   }
 }
 
+function getStatusCodeText(statusCode: string): { en: string; zh: string } {
+  switch (statusCode) {
+    case '502':
+      return { en: 'Bad Gateway', zh: '閘道錯誤' }
+    case '503':
+      return { en: 'Service Unavailable', zh: '服務無法使用' }
+    case '504':
+      return { en: 'Gateway Timeout', zh: '閘道逾時' }
+    default:
+      return { en: 'Server Error', zh: '伺服器錯誤' }
+  }
+}
+
 export function ErrorMessage({ error, context }: ErrorMessageProps) {
+  const { t, locale } = useLanguage()
   const message = error instanceof Error ? error.message : String(error)
   const { isFhirError, serverUrl, statusCode } = isFhirServerError(message)
   
   if (isFhirError) {
+    const statusText = statusCode ? getStatusCodeText(statusCode) : null
+    
     return (
       <div className="space-y-2 text-sm">
         <div className="flex items-start gap-2 text-amber-600 dark:text-amber-500">
           <ServerCrash className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            <div className="font-medium">FHIR 伺服器暫時無法使用</div>
+            <div className="font-medium">{t.errors.fhirServerUnavailable}</div>
             <div className="text-xs mt-1 text-muted-foreground">
-              這不是應用程式的問題，而是外部 FHIR 伺服器正在維護或暫時無法回應
+              {t.errors.fhirServerUnavailableDesc}
             </div>
           </div>
         </div>
         
         {serverUrl && (
           <div className="pl-6 text-xs">
-            <div className="text-muted-foreground">FHIR 伺服器:</div>
+            <div className="text-muted-foreground">{t.errors.fhirServerLabel}:</div>
             <div className="font-mono text-xs bg-muted px-2 py-1 rounded mt-1 break-all">
               {serverUrl.replace(/\/Patient.*$/, '')}
             </div>
           </div>
         )}
         
-        {statusCode && (
+        {statusCode && statusText && (
           <div className="pl-6 text-xs text-muted-foreground">
-            錯誤代碼: {statusCode} ({statusCode === '502' ? 'Bad Gateway' : statusCode === '503' ? 'Service Unavailable' : 'Server Error'})
+            {t.errors.errorCode}: {statusCode} ({locale === 'en' ? statusText.en : statusText.zh})
           </div>
         )}
         
         <div className="pl-6 text-xs text-muted-foreground">
-          💡 請稍後再試，或使用其他 FHIR 伺服器
+          💡 {t.errors.fhirServerRetry}
         </div>
       </div>
     )

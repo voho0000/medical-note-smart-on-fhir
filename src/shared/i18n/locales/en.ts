@@ -426,6 +426,11 @@ export const en = {
     emptyAudio: 'Audio blob is empty',
     network: 'Network error',
     unknown: 'An unknown error occurred',
+    fhirServerUnavailable: 'FHIR Server Temporarily Unavailable',
+    fhirServerUnavailableDesc: 'This is not an application issue, but the external FHIR server is under maintenance or temporarily unresponsive',
+    fhirServerLabel: 'FHIR Server',
+    errorCode: 'Error Code',
+    fhirServerRetry: 'Please try again later, or use a different FHIR server',
     // AppError codes
     NETWORK_ERROR: 'Network connection error, please check your internet connection',
     TIMEOUT_ERROR: 'Request timeout, please try again later',

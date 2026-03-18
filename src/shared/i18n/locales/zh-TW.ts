@@ -428,6 +428,11 @@ export const zhTW = {
     emptyAudio: '音訊檔案為空',
     network: '網路錯誤',
     unknown: '發生未知錯誤',
+    fhirServerUnavailable: 'FHIR 伺服器暫時無法使用',
+    fhirServerUnavailableDesc: '這不是應用程式的問題，而是外部 FHIR 伺服器正在維護或暫時無法回應',
+    fhirServerLabel: 'FHIR 伺服器',
+    errorCode: '錯誤代碼',
+    fhirServerRetry: '請稍後再試，或使用其他 FHIR 伺服器',
     // AppError codes
     NETWORK_ERROR: '網路連線錯誤，請檢查您的網路連線',
     TIMEOUT_ERROR: '請求逾時，請稍後再試',
