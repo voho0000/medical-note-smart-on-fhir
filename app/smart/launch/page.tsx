@@ -26,7 +26,7 @@ export default function SmartLaunchPage() {
       }
 
       const authConfig: any = {
-        clientId: process.env.NEXT_PUBLIC_SMART_CLIENT_ID || "my_web_app",
+        clientId: (process.env.NEXT_PUBLIC_SMART_CLIENT_ID || "my_web_app").trim(),
         scope: "launch openid fhirUser patient/*.read online_access",
         redirectUri,
         iss,
@@ -36,7 +36,7 @@ export default function SmartLaunchPage() {
 
       // Only add clientSecret if provided (for confidential client mode)
       if (process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET) {
-        authConfig.clientSecret = process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET
+        authConfig.clientSecret = process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET.trim()
       }
 
       await FHIR.oauth2.authorize(authConfig)
