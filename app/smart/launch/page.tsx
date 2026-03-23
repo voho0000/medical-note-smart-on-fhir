@@ -25,14 +25,21 @@ export default function SmartLaunchPage() {
         return
       }
 
-      await FHIR.oauth2.authorize({
-        clientId: "my_web_app",
+      const authConfig: any = {
+        clientId: process.env.NEXT_PUBLIC_SMART_CLIENT_ID || "my_web_app",
         scope: "launch openid fhirUser patient/*.read online_access",
         redirectUri,
         iss,
         launch,
         completeInTarget: true,
-      })
+      }
+
+      // Only add clientSecret if provided (for confidential client mode)
+      if (process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET) {
+        authConfig.clientSecret = process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET
+      }
+
+      await FHIR.oauth2.authorize(authConfig)
     })()
   }, [])
 

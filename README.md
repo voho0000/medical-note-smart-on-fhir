@@ -103,6 +103,8 @@ npm test:coverage
 
 ## 🔐 SMART on FHIR 配置
 
+### 公開客戶端模式（Public Client）
+
 1. 在 SMART 沙盒註冊應用程式
 2. 配置：
    - Launch URL: `http://localhost:3000/smart/launch`
@@ -110,6 +112,95 @@ npm test:coverage
    - Client Type: Public（PKCE）
    - Scopes: `launch openid fhirUser patient/*.read online_access`
 3. 透過 SMART launcher 啟動
+
+### 機密客戶端模式（Confidential Client）
+
+如需使用 `clientSecret`（例如比賽測試要求）：
+
+1. 設定環境變數：
+   ```bash
+   NEXT_PUBLIC_SMART_CLIENT_ID=your_client_id
+   NEXT_PUBLIC_SMART_CLIENT_SECRET=your_client_secret
+   ```
+
+2. 部署到支援環境變數的平台（如 Vercel）
+
+3. 應用程式會自動偵測環境變數並使用機密客戶端模式
+
+> ⚠️ **安全提醒**：`clientSecret` 會暴露在前端，僅在受信任的測試環境使用
+
+---
+
+## 🚀 部署
+
+### GitHub Pages（公開客戶端模式）
+
+**自動部署**：
+- Push 到 `master` 分支會自動觸發 GitHub Actions
+- 部署到：`https://voho0000.github.io/medical-note-smart-on-fhir/`
+
+**手動部署**：
+```bash
+npm run deploy
+```
+
+### Vercel（支援機密客戶端模式）
+
+**步驟**：
+
+1. **連接 GitHub Repo**
+   - 前往 [Vercel Dashboard](https://vercel.com/new)
+   - 選擇此 repository
+   - 點擊 "Import"
+
+2. **配置環境變數**
+   
+   在 Vercel 專案設定中添加：
+   
+   **必要（機密客戶端模式）**：
+   ```
+   NEXT_PUBLIC_SMART_CLIENT_ID=your_client_id
+   NEXT_PUBLIC_SMART_CLIENT_SECRET=your_client_secret
+   ```
+   
+   **選用（API 服務）**：
+   ```
+   NEXT_PUBLIC_CHAT_URL=your_chat_url
+   NEXT_PUBLIC_WHISPER_URL=your_whisper_url
+   NEXT_PUBLIC_GEMINI_URL=your_gemini_url
+   NEXT_PUBLIC_PROXY_KEY=your_proxy_key
+   ```
+   
+   **選用（Firebase）**：
+   ```
+   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
+   ```
+
+3. **部署**
+   - Vercel 會自動偵測 Next.js 並部署
+   - 部署完成後會提供 URL（例如：`https://your-app.vercel.app`）
+
+4. **更新 SMART 配置**
+   
+   在 FHIR 伺服器註冊應用程式時使用：
+   - Launch URL: `https://your-app.vercel.app/smart/launch`
+   - Redirect URL: `https://your-app.vercel.app/smart/callback`
+
+**比較**：
+
+| 功能 | GitHub Pages | Vercel |
+|------|-------------|---------|
+| 部署方式 | 靜態網站 | Full-stack |
+| 客戶端模式 | ✅ 公開模式 | ✅ 公開 + 機密模式 |
+| 環境變數 | ❌ 不支援私密變數 | ✅ 完整支援 |
+| 自動部署 | ✅ GitHub Actions | ✅ Git push |
+| 費用 | 免費 | 免費（Hobby 方案） |
 
 ---
 
