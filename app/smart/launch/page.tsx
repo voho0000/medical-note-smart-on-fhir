@@ -35,9 +35,14 @@ export default function SmartLaunchPage() {
       }
 
       // Only add clientSecret if provided (for confidential client mode)
-      if (process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET) {
-        authConfig.clientSecret = process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET.trim()
+      const clientSecret = process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET
+      if (clientSecret) {
+        authConfig.clientSecret = clientSecret.trim()
+        console.log('🔐 Using CONFIDENTIAL client mode with clientSecret')
+      } else {
+        console.log('🔓 Using PUBLIC client mode (no clientSecret)')
       }
+      console.log('Client ID:', authConfig.clientId)
 
       await FHIR.oauth2.authorize(authConfig)
     })()
