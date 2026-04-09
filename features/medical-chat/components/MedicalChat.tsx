@@ -40,6 +40,7 @@ import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clini
 import { PromptGalleryDialog } from "@/features/prompt-gallery"
 import type { SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
+import { AuthDialog } from "@/features/auth"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -68,6 +69,9 @@ export default function MedicalChat() {
   
   // Prompt Gallery state
   const [showPromptGallery, setShowPromptGallery] = useState(false)
+  
+  // Auth Dialog state
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
   
   // FHIR context for chat history (patient ID and server URL)
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
@@ -322,7 +326,21 @@ export default function MedicalChat() {
               <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
               <div className="flex-1 text-amber-800 dark:text-amber-200">
                 <div className="font-medium mb-1">{t.medicalChat.apiKeyWarningTitle}</div>
-                <div className="text-amber-700 dark:text-amber-300">{t.medicalChat.apiKeyWarningMessage}</div>
+                <div className="text-amber-700 dark:text-amber-300">
+                  {t.medicalChat.apiKeyWarningMessage.split(t.medicalChat.loginLink).map((part, index, array) => (
+                    index < array.length - 1 ? (
+                      <span key={index}>
+                        {part}
+                        <button
+                          onClick={() => setShowAuthDialog(true)}
+                          className="underline hover:text-amber-900 dark:hover:text-amber-100 font-medium"
+                        >
+                          {t.medicalChat.loginLink}
+                        </button>
+                      </span>
+                    ) : part
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -356,6 +374,10 @@ export default function MedicalChat() {
           mode="chat"
           onSelectPrompt={handleSelectPrompt}
         />
+        <AuthDialog
+          open={showAuthDialog}
+          onOpenChange={setShowAuthDialog}
+        />
       </>
     )
   }
@@ -368,6 +390,10 @@ export default function MedicalChat() {
         onOpenChange={setShowPromptGallery}
         mode="chat"
         onSelectPrompt={handleSelectPrompt}
+      />
+      <AuthDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
       />
     </>
   )
