@@ -3,7 +3,9 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { 
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -51,6 +53,12 @@ const convertFirebaseUser = (firebaseUser: FirebaseUser): User => ({
 // Helper: Get today's date string (YYYY-MM-DD)
 const getTodayString = () => new Date().toISOString().split('T')[0]
 
+// Helper: Detect if user is on mobile device
+const isMobileDevice = () => {
+  if (typeof window === 'undefined') return false
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -79,6 +87,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setDailyUsage(0)
     }
   }
+
+  // Handle redirect result on mount (for mobile Google sign-in)
+  useEffect(() => {
+    if (!auth) return
+    
+    const handleRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+        if (result) {
+          // User successfully signed in via redirect
+          // onAuthStateChanged will handle the rest
+        }
+      } catch (error) {
+        console.error('Redirect sign-in error:', error)
+      }
+    }
+    
+    handleRedirect()
+  }, [])
 
   // Firebase Auth state listener
   useEffect(() => {
@@ -151,10 +178,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     try {
       const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
-      // User state will be updated by onAuthStateChanged listener
-    } finally {
+      
+      // Use redirect for mobile devices, popup for desktop
+      if (isMobileDevice()) {
+        await signInWithRedirect(auth, provider)
+        // Don't set loading to false here - page will redirect
+      } else {
+        await signInWithPopup(auth, provider)
+        setLoading(false)
+      }
+    } catch (error) {
       setLoading(false)
+      throw error
     }
   }
 
