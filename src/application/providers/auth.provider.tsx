@@ -197,11 +197,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     try {
       const provider = new GoogleAuthProvider()
+      
+      // Add custom parameters to improve popup behavior
+      provider.setCustomParameters({
+        prompt: 'select_account',
+        // Ensure popup closes after authentication
+        display: 'popup'
+      })
+      
       const isMobile = isMobileDevice()
-      
       console.log('[Auth] Starting Google sign-in, isMobile:', isMobile)
-      
-      // Always use popup, but handle mobile-specific issues
       console.log('[Auth] Using signInWithPopup')
       
       // Set persistence before sign-in
