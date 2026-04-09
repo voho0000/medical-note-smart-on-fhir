@@ -201,19 +201,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('[Auth] Starting Google sign-in, isMobile:', isMobile)
       
-      // Use redirect for mobile devices, popup for desktop
-      if (isMobile) {
-        console.log('[Auth] Using signInWithRedirect for mobile')
-        await signInWithRedirect(auth, provider)
-        // Don't set loading to false here - page will redirect
-      } else {
-        console.log('[Auth] Using signInWithPopup for desktop')
-        await signInWithPopup(auth, provider)
-        setLoading(false)
-      }
+      // Always use popup, but handle mobile-specific issues
+      console.log('[Auth] Using signInWithPopup')
+      
+      // Set persistence before sign-in
+      await setPersistence(auth, browserLocalPersistence)
+      
+      const result = await signInWithPopup(auth, provider)
+      console.log('[Auth] Sign-in successful:', result.user.email)
+      setLoading(false)
     } catch (error: any) {
       console.error('[Auth] Google sign-in error:', error)
       console.error('[Auth] Error code:', error.code)
+      console.error('[Auth] Error message:', error.message)
+      
+      // If popup was blocked or closed, provide helpful message
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log('[Auth] User closed the popup')
+      } else if (error.code === 'auth/popup-blocked') {
+        console.log('[Auth] Popup was blocked by browser')
+      }
+      
       setLoading(false)
       throw error
     }
