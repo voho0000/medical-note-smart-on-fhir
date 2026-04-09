@@ -6,7 +6,6 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import { ThemeToggle } from "@/src/shared/components/ThemeToggle"
 import { ConnectionInfo } from "@/src/shared/components/ConnectionInfo"
-import { MobileConsole } from "@/src/shared/components/MobileConsole"
 import { FeedbackButton } from "@/features/feedback"
 import { HeaderAuthButton } from "@/features/auth"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
@@ -107,9 +106,6 @@ function PageContent() {
           <RightPanelFeature />
         </section>
       </main>
-      
-      {/* Mobile Console for debugging */}
-      <MobileConsole />
     </div>
   )
 }
