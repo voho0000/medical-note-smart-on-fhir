@@ -28,6 +28,10 @@ if (typeof window !== 'undefined') {
   }
   
   auth = getAuth(app)
+  
+  // Set language to user's preferred language
+  auth.languageCode = 'zh-TW'
+  
   // Use named database 'mediprisma'
   db = getFirestore(app, 'mediprisma')
 }

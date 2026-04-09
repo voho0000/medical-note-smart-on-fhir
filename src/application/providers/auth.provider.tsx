@@ -12,6 +12,8 @@ import {
   sendPasswordResetEmail,
   sendEmailVerification,
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
   GoogleAuthProvider,
   type User as FirebaseUser
 } from 'firebase/auth'
@@ -95,18 +97,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleRedirect = async () => {
       try {
         console.log('[Auth] Checking for redirect result...')
+        console.log('[Auth] Current URL:', window.location.href)
+        
+        // Set persistence to local storage
+        await setPersistence(auth, browserLocalPersistence)
+        console.log('[Auth] Persistence set to local storage')
+        
         const result = await getRedirectResult(auth)
+        console.log('[Auth] getRedirectResult returned:', result ? 'User object' : 'null')
+        
         if (result) {
-          console.log('[Auth] Redirect sign-in successful:', result.user.email)
+          console.log('[Auth] Redirect sign-in successful!')
+          console.log('[Auth] User email:', result.user.email)
+          console.log('[Auth] User UID:', result.user.uid)
           // User successfully signed in via redirect
           // onAuthStateChanged will handle the rest
         } else {
-          console.log('[Auth] No redirect result found')
+          console.log('[Auth] No redirect result found (this is normal on first load)')
         }
       } catch (error: any) {
         console.error('[Auth] Redirect sign-in error:', error)
         console.error('[Auth] Error code:', error.code)
         console.error('[Auth] Error message:', error.message)
+        console.error('[Auth] Full error:', JSON.stringify(error, null, 2))
       }
     }
     
