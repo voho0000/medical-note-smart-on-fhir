@@ -94,13 +94,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const handleRedirect = async () => {
       try {
+        console.log('[Auth] Checking for redirect result...')
         const result = await getRedirectResult(auth)
         if (result) {
+          console.log('[Auth] Redirect sign-in successful:', result.user.email)
           // User successfully signed in via redirect
           // onAuthStateChanged will handle the rest
+        } else {
+          console.log('[Auth] No redirect result found')
         }
-      } catch (error) {
-        console.error('Redirect sign-in error:', error)
+      } catch (error: any) {
+        console.error('[Auth] Redirect sign-in error:', error)
+        console.error('[Auth] Error code:', error.code)
+        console.error('[Auth] Error message:', error.message)
       }
     }
     
@@ -178,16 +184,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     try {
       const provider = new GoogleAuthProvider()
+      const isMobile = isMobileDevice()
+      
+      console.log('[Auth] Starting Google sign-in, isMobile:', isMobile)
       
       // Use redirect for mobile devices, popup for desktop
-      if (isMobileDevice()) {
+      if (isMobile) {
+        console.log('[Auth] Using signInWithRedirect for mobile')
         await signInWithRedirect(auth, provider)
         // Don't set loading to false here - page will redirect
       } else {
+        console.log('[Auth] Using signInWithPopup for desktop')
         await signInWithPopup(auth, provider)
         setLoading(false)
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[Auth] Google sign-in error:', error)
+      console.error('[Auth] Error code:', error.code)
       setLoading(false)
       throw error
     }
