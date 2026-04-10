@@ -77,11 +77,11 @@ export function useStreamingChat(
             })),
         ]
 
-        // Stream response using unified AI with batched updates
-        let updateScheduled = false
+        // Stream response with throttled updates (similar to Vercel AI SDK experimental_throttle)
         let latestContent = ""
         let lastUpdateTime = 0
-        const UPDATE_INTERVAL = 50 // ms - balance between smoothness and performance
+        const THROTTLE_MS = 50 // Same as Vercel AI SDK default
+        let pendingUpdate = false
         
         await ai.stream(apiMessages, {
           modelId,
@@ -92,23 +92,37 @@ export function useStreamingChat(
               onInputClear()
             }
             
-            // Store latest content
+            // Always store latest content
             latestContent = content
             
-            // Batch updates with time-based throttling to reduce re-renders
+            // Throttle UI updates
             const now = Date.now()
-            if (!updateScheduled && now - lastUpdateTime >= UPDATE_INTERVAL) {
-              updateScheduled = true
+            const timeSinceLastUpdate = now - lastUpdateTime
+            
+            if (timeSinceLastUpdate >= THROTTLE_MS && !pendingUpdate) {
+              // Update immediately if enough time has passed
               lastUpdateTime = now
-              requestAnimationFrame(() => {
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === assistantMessageId ? { ...m, content: latestContent } : m)
+              )
+            } else if (!pendingUpdate) {
+              // Schedule a delayed update
+              pendingUpdate = true
+              setTimeout(() => {
+                lastUpdateTime = Date.now()
                 setChatMessages((prev) =>
                   prev.map((m) => m.id === assistantMessageId ? { ...m, content: latestContent } : m)
                 )
-                updateScheduled = false
-              })
+                pendingUpdate = false
+              }, THROTTLE_MS - timeSinceLastUpdate)
             }
           },
         })
+        
+        // Ensure final content is displayed
+        setChatMessages((prev) =>
+          prev.map((m) => m.id === assistantMessageId ? { ...m, content: latestContent } : m)
+        )
         
         // Trigger save after streaming completes
         if (onStreamComplete) {
