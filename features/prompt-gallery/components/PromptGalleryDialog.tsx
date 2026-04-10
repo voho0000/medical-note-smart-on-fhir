@@ -159,7 +159,7 @@ export function PromptGalleryDialog({
                 className={`flex items-center gap-2 ${TAB_ACTIVE_CLASSES.chat}`}
               >
                 <Library className="h-4 w-4" />
-                所有範本
+                {t.promptGallery.allPrompts}
               </TabsTrigger>
               <TabsTrigger 
                 value="my" 
@@ -167,7 +167,7 @@ export function PromptGalleryDialog({
                 disabled={!user}
               >
                 <User className="h-4 w-4" />
-                我的範本
+                {t.promptGallery.myPrompts}
                 {user && myPromptsHook.prompts.length > 0 && (
                   <Badge className={`ml-1 ${BADGE_CLASSES.clinical}`}>
                     {myPromptsHook.prompts.length}
@@ -196,7 +196,7 @@ export function PromptGalleryDialog({
                 <div className="flex items-center gap-2 flex-wrap">
                   {prompts.length > 0 && (
                     <span className="text-sm text-muted-foreground">
-                      共 {prompts.length} 個範本
+                      {t.promptGallery.promptsCount.replace('{count}', prompts.length.toString())}
                     </span>
                   )}
                   {filter.type && (
@@ -236,7 +236,7 @@ export function PromptGalleryDialog({
                       className="h-7 text-xs"
                     >
                       <X className="h-3 w-3 mr-1" />
-                      清除篩選
+                      {t.promptGallery.clearFilters}
                     </Button>
                   )}
                   <Select
@@ -247,8 +247,8 @@ export function PromptGalleryDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="latest">最新優先</SelectItem>
-                      <SelectItem value="popular">熱門優先</SelectItem>
+                      <SelectItem value="latest">{t.promptGallery.sortLatest}</SelectItem>
+                      <SelectItem value="popular">{t.promptGallery.sortPopular}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -282,11 +282,11 @@ export function PromptGalleryDialog({
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium">
-                      {activeTab === 'my' ? '您還沒有分享任何範本' : t.promptGallery.noResults}
+                      {activeTab === 'my' ? t.promptGallery.noMyPrompts : t.promptGallery.noResults}
                     </h3>
                     <p className="text-sm text-muted-foreground mt-2">
                       {activeTab === 'my' 
-                        ? '開始分享您的第一個範本，讓其他使用者也能受益！' 
+                        ? t.promptGallery.noMyPromptsDesc 
                         : t.promptGallery.noResultsDescription}
                     </p>
                     {activeTab === 'my' && (
@@ -295,7 +295,7 @@ export function PromptGalleryDialog({
                         className="mt-4"
                         onClick={() => setShareOpen(true)}
                       >
-                        分享第一個範本
+                        {t.promptGallery.shareFirstPrompt}
                       </Button>
                     )}
                   </div>
@@ -324,7 +324,10 @@ export function PromptGalleryDialog({
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <span className="text-sm">
-                          第 {currentPage} / {totalPages} 頁 ({prompts.length} 個範本)
+                          {t.promptGallery.pagination
+                            .replace('{current}', currentPage.toString())
+                            .replace('{total}', totalPages.toString())
+                            .replace('{count}', prompts.length.toString())}
                         </span>
                         <Button
                           variant="outline"

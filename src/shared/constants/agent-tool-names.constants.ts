@@ -1,22 +1,28 @@
 /**
  * Agent Tool Names Constants
- * Single Source of Truth for tool display names
+ * Tool name keys for i18n lookup
  */
 
-export const AGENT_TOOL_DISPLAY_NAMES: Record<string, string> = {
-  queryPatientInfo: '查詢病人基本資料',
-  queryConditions: '查詢診斷資料',
-  queryMedications: '查詢用藥資料',
-  queryAllergies: '查詢過敏史',
-  queryObservations: '查詢檢驗數據',
-  queryDiagnosticReports: '查詢檢驗報告',
-  queryProcedures: '查詢處置紀錄',
-  queryEncounters: '查詢就診紀錄',
-  searchMedicalLiterature: '搜尋醫學文獻',
-} as const
+export const AGENT_TOOL_NAMES = [
+  'queryPatientInfo',
+  'queryConditions',
+  'queryMedications',
+  'queryAllergies',
+  'queryObservations',
+  'queryDiagnosticReports',
+  'queryProcedures',
+  'queryEncounters',
+  'searchMedicalLiterature',
+] as const
 
-export type AgentToolName = keyof typeof AGENT_TOOL_DISPLAY_NAMES
+export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number]
 
-export function getToolDisplayName(toolName: string): string {
-  return AGENT_TOOL_DISPLAY_NAMES[toolName as AgentToolName] || toolName
+/**
+ * Get tool display name from i18n
+ * @param toolName - The tool name key
+ * @param t - Translation object from useLanguage hook
+ * @returns Localized tool display name
+ */
+export function getToolDisplayName(toolName: string, toolNames: Record<string, string>): string {
+  return toolNames[toolName as AgentToolName] || toolName
 }

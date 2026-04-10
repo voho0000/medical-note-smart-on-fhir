@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import type { AgentState } from "@/src/application/stores/chat.store"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface AgentStateHistoryProps {
   states: AgentState[]
@@ -21,6 +22,7 @@ function formatStateTimestamp(timestamp: number): string {
 
 export function AgentStateHistory({ states, currentState }: AgentStateHistoryProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const { t } = useLanguage()
 
   if (!states || states.length <= 1) {
     return null
@@ -40,10 +42,10 @@ export function AgentStateHistory({ states, currentState }: AgentStateHistoryPro
           ) : (
             <ChevronRight className="h-3.5 w-3.5" />
           )}
-          <span>思考過程 ({states.length} 個步驟)</span>
+          <span>{t.chat.thinkingProcess} ({states.length} {t.chat.steps})</span>
         </div>
         <span className="text-[10px] text-muted-foreground/60">
-          {isExpanded ? '收起' : '展開查看'}
+          {isExpanded ? t.chat.collapse : t.chat.expand}
         </span>
       </button>
       

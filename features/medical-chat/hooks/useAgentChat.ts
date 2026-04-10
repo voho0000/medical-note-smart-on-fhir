@@ -131,10 +131,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           onStepFinish: ({ toolCalls }) => {
             if (toolCalls && toolCalls.length > 0) {
               const toolNames = toolCalls
-                .map(tc => getToolDisplayName(tc?.toolName || ''))
+                .map(tc => getToolDisplayName(tc?.toolName || '', t.agent.toolNames))
                 .join('、')
               
-              const newState = `🔍 正在${toolNames}...`
+              const newState = `🔍 ${toolNames}...`
               setChatMessages((prev) =>
                 prev.map((m) => m.id === assistantMessageId 
                   ? { 
@@ -181,7 +181,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               }, UPDATE_INTERVAL - (now - lastUpdateTime))
             }
           } else if (chunk.type === 'tool-call') {
-            const displayName = getToolDisplayName(chunk.toolName)
+            const displayName = getToolDisplayName(chunk.toolName, t.agent.toolNames)
             const newState = `🔍 ${displayName}...`
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId 

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface CollapsibleMessageProps {
   content: string
@@ -18,6 +19,7 @@ export function CollapsibleMessage({
   className 
 }: CollapsibleMessageProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const { t } = useLanguage()
   
   // Check if message is long enough to collapse
   const isLongMessage = content.length > maxChars || content.split('\n').length > maxLines
@@ -48,12 +50,12 @@ export function CollapsibleMessage({
         {isExpanded ? (
           <>
             <ChevronUp className="h-3 w-3" />
-            <span>收起</span>
+            <span>{t.chat.showLess}</span>
           </>
         ) : (
           <>
             <ChevronDown className="h-3 w-3" />
-            <span>展開更多</span>
+            <span>{t.chat.showMore}</span>
           </>
         )}
       </button>
