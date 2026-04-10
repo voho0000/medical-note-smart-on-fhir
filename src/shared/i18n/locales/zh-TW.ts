@@ -306,10 +306,9 @@ export const zhTW = {
     geminiProxyNote: '未儲存 Gemini 金鑰時，Gemini 模型將透過 Firebase Functions 代理路由。',
     modelProxyNote: '無金鑰時使用 Firebase 代理，有金鑰則使用個人金鑰。進階模型必須輸入金鑰。',
     modelDescriptions: {
-      'gpt-5-nano': '極速回應，簡單任務',
-      'gpt-5-mini': '經濟實惠，日常使用',
-      'gpt-5.1': '進階功能，專業任務',
-      'gpt-5.2': '最新頂級模型',
+      'gpt-5.4-nano': '極速回應，經濟實惠',
+      'gpt-5.4-mini': '平衡效能與成本',
+      'gpt-5.4': '最新旗艦模型',
       'gemini-2.5-flash-lite': '極速回應，簡單任務',
       'gemini-3-flash-preview': '快速準確，推薦使用',
       'gemini-2.5-pro': '深度分析，複雜任務',

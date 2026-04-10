@@ -304,10 +304,9 @@ export const en = {
     geminiProxyNote: 'Gemini models will route through a Firebase Functions proxy when no Gemini key is saved.',
     modelProxyNote: 'Uses Firebase proxy without key, personal key when available. Premium models require key.',
     modelDescriptions: {
-      'gpt-5-nano': 'Ultra-fast, simple tasks',
-      'gpt-5-mini': 'Cost-efficient, daily use',
-      'gpt-5.1': 'Advanced features, professional tasks',
-      'gpt-5.2': 'Latest premium model',
+      'gpt-5.4-nano': 'Ultra-fast, cost-efficient',
+      'gpt-5.4-mini': 'Balanced performance & cost',
+      'gpt-5.4': 'Latest flagship model',
       'gemini-2.5-flash-lite': 'Ultra-fast, simple tasks',
       'gemini-3-flash-preview': 'Fast & accurate, recommended',
       'gemini-2.5-pro': 'Deep analysis, complex tasks',

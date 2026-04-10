@@ -10,15 +10,15 @@ export interface ModelDefinition {
 
 // Internal models for AI title generation (not shown to users)
 export const INTERNAL_MODELS = [
-  { id: "gpt-5-nano", label: "GPT-5 Nano", provider: "openai" as const },
+  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai" as const },
   { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite", provider: "gemini" as const },
 ] as const satisfies readonly ModelDefinition[]
 
 // User-selectable models
 export const GPT_MODELS = [
-  { id: "gpt-5-mini", label: "GPT-5 Mini", provider: "openai" },
-  { id: "gpt-5.1", label: "GPT-5.1", provider: "openai", requiresUserKey: true },
-  { id: "gpt-5.2", label: "GPT-5.2", provider: "openai", requiresUserKey: true },
+  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai" },
+  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "openai", requiresUserKey: true },
+  { id: "gpt-5.4", label: "GPT-5.4", provider: "openai", requiresUserKey: true },
 ] as const satisfies readonly ModelDefinition[]
 
 export const GEMINI_MODELS = [
