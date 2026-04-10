@@ -517,6 +517,7 @@ export const en = {
     deepModeFeatures: '• Auto-query FHIR patient data\n• Use Perplexity AI for latest medical info\n• AI Agent autonomous query strategy',
     fhirDataWarning: 'FHIR Data Loading Failed',
     deepModeLimited: 'Deep mode FHIR query tools may also be unavailable',
+    agentModeDisabledForModel: 'This model does not support deep mode (known function calling issues)',
   },
 
   chatHistory: {

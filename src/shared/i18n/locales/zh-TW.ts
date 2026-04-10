@@ -519,6 +519,7 @@ export const zhTW = {
     deepModeFeatures: '• 自動查詢 FHIR 病人資料\n• 使用 Perplexity AI 查詢最新醫學資訊\n• AI Agent 自主決策查詢策略',
     fhirDataWarning: 'FHIR 資料載入失敗',
     deepModeLimited: '深入模式的 FHIR 查詢工具可能也無法使用',
+    agentModeDisabledForModel: '此模型不支援深入模式（已知工具調用問題）',
   },
 
   chatHistory: {

@@ -5,6 +5,7 @@ export interface ModelDefinition {
   label: string
   provider: ModelProvider
   requiresUserKey?: boolean
+  disableAgentMode?: boolean // Models with known function calling issues
 }
 
 // Internal models for AI title generation (not shown to users)
@@ -23,7 +24,7 @@ export const GPT_MODELS = [
 export const GEMINI_MODELS = [
   { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", provider: "gemini" },
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "gemini", requiresUserKey: true },
-  { id: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview", provider: "gemini", requiresUserKey: true },
+  { id: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview", provider: "gemini", requiresUserKey: true, disableAgentMode: true },
 ] as const satisfies readonly ModelDefinition[]
 
 export type GptModelId = (typeof GPT_MODELS)[number]["id"]

@@ -41,6 +41,7 @@ import { PromptGalleryDialog } from "@/features/prompt-gallery"
 import type { SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { AuthDialog } from "@/features/auth"
+import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -59,6 +60,17 @@ export default function MedicalChat() {
   // Agent mode state (logically related: agent mode + API key warning)
   const agentMode = useAgentMode()
   const { isAgentMode, showApiKeyWarning } = agentMode
+  
+  // Check if current model supports agent mode
+  const currentModelDef = getModelDefinition(model)
+  const isAgentModeDisabled = currentModelDef?.disableAgentMode || false
+  
+  // Auto-disable agent mode when switching to unsupported model
+  useEffect(() => {
+    if (isAgentModeDisabled && isAgentMode) {
+      agentMode.setIsAgentMode(false)
+    }
+  }, [isAgentModeDisabled, isAgentMode, agentMode])
   
   // Expand/collapse state (independent UI state)
   const expandable = useExpandable()
@@ -326,6 +338,8 @@ export default function MedicalChat() {
               isAgentMode={isAgentMode}
               showApiKeyWarning={showApiKeyWarning}
               onModeToggle={handleAgentModeToggle}
+              disabled={isAgentModeDisabled}
+              disabledReason={isAgentModeDisabled ? t.medicalChat.agentModeDisabledForModel : undefined}
             />
             <ChatToolbar
               onInsertContext={handleInsertContext}

@@ -10,12 +10,16 @@ interface ChatModeSelectorProps {
   isAgentMode: boolean
   showApiKeyWarning: boolean
   onModeToggle: (enabled: boolean) => void
+  disabled?: boolean
+  disabledReason?: string
 }
 
 export function ChatModeSelector({ 
   isAgentMode, 
   showApiKeyWarning, 
-  onModeToggle 
+  onModeToggle,
+  disabled = false,
+  disabledReason
 }: ChatModeSelectorProps) {
   const { t } = useLanguage()
 
@@ -23,7 +27,7 @@ export function ChatModeSelector({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-1.5 py-0.5 h-8 cursor-pointer w-[100px] shrink-0">
+          <div className={`flex items-center gap-1 rounded-md border bg-muted/30 px-1.5 py-0.5 h-8 w-[100px] shrink-0 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
             {isAgentMode ? (
               <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
             ) : (
@@ -35,18 +39,23 @@ export function ChatModeSelector({
             <Switch 
               checked={isAgentMode} 
               onCheckedChange={onModeToggle}
+              disabled={disabled}
               className="scale-75 data-[state=checked]:bg-primary shrink-0"
             />
           </div>
         </TooltipTrigger>
-        {isAgentMode && (
-          <TooltipContent side="top" className="max-w-xs">
-            <p className="font-semibold mb-1">
-              {t.medicalChat.deepModeFeaturesTitle}
-            </p>
-            <p className="text-xs whitespace-pre-line">{t.medicalChat.deepModeFeatures}</p>
-          </TooltipContent>
-        )}
+        <TooltipContent side="top" className="max-w-xs">
+          {disabled && disabledReason ? (
+            <p className="text-xs">{disabledReason}</p>
+          ) : isAgentMode ? (
+            <>
+              <p className="font-semibold mb-1">
+                {t.medicalChat.deepModeFeaturesTitle}
+              </p>
+              <p className="text-xs whitespace-pre-line">{t.medicalChat.deepModeFeatures}</p>
+            </>
+          ) : null}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   )
