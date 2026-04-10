@@ -30,6 +30,7 @@ interface InsightTabEditorProps {
   canMoveUp: boolean
   canMoveDown: boolean
   onUpdate: (id: string, updates: Partial<InsightPanel>) => void
+  onUpdateAndSave?: (id: string, updates: Partial<InsightPanel>) => Promise<void>
   onRemove: (id: string) => void
   onMove: (id: string, direction: "up" | "down") => void
   onShare?: (panel: InsightPanel) => void
@@ -42,6 +43,7 @@ export function InsightTabEditor({
   canMoveUp,
   canMoveDown,
   onUpdate,
+  onUpdateAndSave,
   onRemove,
   onMove,
   onShare,
@@ -136,7 +138,14 @@ export function InsightTabEditor({
               <Checkbox
                 id={`auto-generate-${panel.id}`}
                 checked={panel.autoGenerate}
-                onCheckedChange={(checked) => onUpdate(panel.id, { autoGenerate: checked as boolean })}
+                onCheckedChange={(checked) => {
+                  // Use updateAndSave if available (for logged-in users), otherwise just update
+                  if (onUpdateAndSave) {
+                    onUpdateAndSave(panel.id, { autoGenerate: checked as boolean })
+                  } else {
+                    onUpdate(panel.id, { autoGenerate: checked as boolean })
+                  }
+                }}
                 className="border-2 border-primary/60 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
               />
               <Label

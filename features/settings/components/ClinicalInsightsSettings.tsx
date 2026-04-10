@@ -30,7 +30,8 @@ export function ClinicalInsightsSettings() {
   const { user } = useAuth()
   const { 
     panels, 
-    updatePanel, 
+    updatePanel,
+    updatePanelAndSave, 
     addPanel, 
     removePanel, 
     resetPanels, 
@@ -175,6 +176,7 @@ export function ClinicalInsightsSettings() {
                   canMoveUp={index > 0}
                   canMoveDown={index < panels.length - 1}
                   onUpdate={updatePanel}
+                  onUpdateAndSave={user ? updatePanelAndSave : undefined}
                   onRemove={handleRemovePanel}
                   onMove={handleMove}
                   onShare={(panel) => {
