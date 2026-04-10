@@ -191,12 +191,15 @@ export default function MedicalChat() {
       )
     }
     
-    // Pass images to chat handler
-    await chat.handleSend(messageToSend, chatImages)
+    // Clear input and reset height immediately after sending
+    clearInputAndResetHeight()
     
     // Clear images after successful send
     clearImagesAfterSend()
-  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend])
+    
+    // Pass images to chat handler
+    await chat.handleSend(messageToSend, chatImages)
+  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
