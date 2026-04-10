@@ -77,11 +77,11 @@ export function useStreamingChat(
             })),
         ]
 
-        // Stream response with throttled updates (similar to Vercel AI SDK experimental_throttle)
+        // Stream response with throttled updates to prevent main thread blocking
         let latestContent = ""
         let lastUpdateTime = 0
-        const THROTTLE_MS = 50 // Same as Vercel AI SDK default
-        let pendingUpdate = false
+        let timeoutId: NodeJS.Timeout | null = null
+        const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
         
         await ai.stream(apiMessages, {
           modelId,
@@ -95,26 +95,22 @@ export function useStreamingChat(
             // Always store latest content
             latestContent = content
             
-            // Throttle UI updates
+            // Throttle updates to prevent main thread blocking during fast streaming
             const now = Date.now()
-            const timeSinceLastUpdate = now - lastUpdateTime
-            
-            if (timeSinceLastUpdate >= THROTTLE_MS && !pendingUpdate) {
-              // Update immediately if enough time has passed
+            if (now - lastUpdateTime >= UPDATE_INTERVAL) {
               lastUpdateTime = now
               setChatMessages((prev) =>
                 prev.map((m) => m.id === assistantMessageId ? { ...m, content: latestContent } : m)
               )
-            } else if (!pendingUpdate) {
-              // Schedule a delayed update
-              pendingUpdate = true
-              setTimeout(() => {
+            } else if (!timeoutId) {
+              // Schedule update if not already scheduled
+              timeoutId = setTimeout(() => {
                 lastUpdateTime = Date.now()
                 setChatMessages((prev) =>
                   prev.map((m) => m.id === assistantMessageId ? { ...m, content: latestContent } : m)
                 )
-                pendingUpdate = false
-              }, THROTTLE_MS - timeSinceLastUpdate)
+                timeoutId = null
+              }, UPDATE_INTERVAL - (now - lastUpdateTime))
             }
           },
         })

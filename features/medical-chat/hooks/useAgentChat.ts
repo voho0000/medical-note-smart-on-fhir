@@ -150,6 +150,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
         let accumulatedContent = ""
         let toolResults: Array<{ toolName: string; result: unknown }> = []
+        let lastUpdateTime = 0
+        let timeoutId: NodeJS.Timeout | null = null
+        const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
 
         // Process stream chunks
         for await (const chunk of result.fullStream) {
@@ -161,9 +164,22 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               onInputClear()
             }
 
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
-            )
+            // Throttle updates to prevent main thread blocking
+            const now = Date.now()
+            if (now - lastUpdateTime >= UPDATE_INTERVAL) {
+              lastUpdateTime = now
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+              )
+            } else if (!timeoutId) {
+              timeoutId = setTimeout(() => {
+                lastUpdateTime = Date.now()
+                setChatMessages((prev) =>
+                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+                )
+                timeoutId = null
+              }, UPDATE_INTERVAL - (now - lastUpdateTime))
+            }
           } else if (chunk.type === 'tool-call') {
             const displayName = getToolDisplayName(chunk.toolName)
             const newState = `🔍 ${displayName}...`
@@ -182,6 +198,13 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
             toolResults.push({ toolName: chunk.toolName, result })
           }
+        }
+        
+        // Ensure final content is displayed after main stream
+        if (accumulatedContent.length > 0) {
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+          )
         }
         
         // Handle follow-up if there are tool results but no text
@@ -225,14 +248,36 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           })
           
           let followUpContent = ""
+          let followUpLastUpdateTime = 0
+          let followUpTimeoutId: NodeJS.Timeout | null = null
+          
           for await (const chunk of followUpResult.fullStream) {
             if (chunk.type === 'text-delta') {
               followUpContent += chunk.text
-              setChatMessages((prev) =>
-                prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
-              )
+              
+              // Throttle follow-up updates too
+              const now = Date.now()
+              if (now - followUpLastUpdateTime >= UPDATE_INTERVAL) {
+                followUpLastUpdateTime = now
+                setChatMessages((prev) =>
+                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+                )
+              } else if (!followUpTimeoutId) {
+                followUpTimeoutId = setTimeout(() => {
+                  followUpLastUpdateTime = Date.now()
+                  setChatMessages((prev) =>
+                    prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+                  )
+                  followUpTimeoutId = null
+                }, UPDATE_INTERVAL - (now - followUpLastUpdateTime))
+              }
             }
           }
+          
+          // Ensure final follow-up content is displayed
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+          )
           
           // Process citations if available
           if (literatureCitations.length > 0) {

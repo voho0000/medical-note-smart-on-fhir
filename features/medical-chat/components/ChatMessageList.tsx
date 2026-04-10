@@ -120,11 +120,31 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const prevMessagesLengthRef = useRef(0)
   const scrollAreaRef = useRef<HTMLDivElement | null>(null)
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Auto-scroll with debouncing to prevent blocking during fast streaming
   useEffect(() => {
-    if (messages.length > prevMessagesLengthRef.current && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    // Clear any pending scroll
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current)
     }
+
+    // Debounce scroll updates during streaming (100ms)
+    scrollTimeoutRef.current = setTimeout(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+      }
+    }, 100)
+
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+    }
+  }, [messages])
+
+  // Track message count for other purposes
+  useEffect(() => {
     prevMessagesLengthRef.current = messages.length
   }, [messages.length])
 
