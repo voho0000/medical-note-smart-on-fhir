@@ -197,9 +197,25 @@ export default function MedicalChat() {
     // Clear images after successful send
     clearImagesAfterSend()
     
-    // Pass images to chat handler
-    await chat.handleSend(messageToSend, chatImages)
-  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight])
+    // Pass images to chat handler (this will add user message to state)
+    // Note: handleSend is async and will start streaming, but user message is added to state immediately
+    const sendPromise = chat.handleSend(messageToSend, chatImages)
+    
+    // Stage 1: Save user message immediately after it's added to state (prevent data loss)
+    // This ensures user input is never lost even if AI response fails or gets interrupted
+    // Use queueMicrotask to ensure state update has been processed
+    queueMicrotask(async () => {
+      try {
+        await forceSave()
+      } catch (error) {
+        console.error('[Chat] Failed to save user message:', error)
+      }
+    })
+    
+    // Wait for AI response to complete
+    await sendPromise
+    // Stage 2: AI response completion will trigger another forceSave to update with full conversation
+  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight, forceSave])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
