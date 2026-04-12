@@ -15,7 +15,7 @@ export function createLiteratureTools(perplexityKey: string | null, isUserAuthen
   // If no key is provided, it will use Firebase Proxy (if user is authenticated)
   return {
     searchMedicalLiterature: tool({
-      description: 'IMPORTANT: Use this tool to search medical literature, clinical guidelines, and evidence-based medical information. **You MUST use this tool when the user question contains keywords like: "guideline", "治療建議", "treatment recommendation", "最新研究", "latest research", "文獻", "literature", "evidence", "建議", "recommendation"**. This tool searches recent medical literature from authoritative sources like PubMed, NIH, and WHO. Use it for: treatment guidelines, drug information, disease mechanisms, clinical trials, latest medical findings, evidence-based medicine. DO NOT use this for patient-specific data (use FHIR tools for that).',
+      description: 'Search medical literature, clinical guidelines, and evidence-based medical information from authoritative sources (PubMed, NIH, WHO, medical journals). Use this for: treatment guidelines, drug information, disease mechanisms, clinical trials, latest research findings, and evidence-based recommendations. Returns synthesized information with citations.',
       inputSchema: literatureSearchSchema,
       execute: async ({ query, searchDepth = 'basic' }: z.infer<typeof literatureSearchSchema>) => {
         // Check if user has access to Perplexity (either via API key or authenticated for proxy)

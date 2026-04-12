@@ -31,32 +31,32 @@ const encountersSchema = z.object({
 export function createFhirToolDefinitions() {
   return {
     queryConditions: tool({
-      description: 'Query patient conditions/diagnoses from FHIR server. Use this to get information about patient diagnoses, problems, or medical conditions.',
+      description: 'Query the current patient\'s conditions and diagnoses from the FHIR server. Returns the patient\'s medical conditions, problems, and diagnosis history.',
       inputSchema: conditionsSchema,
     }),
 
     queryMedications: tool({
-      description: 'Query patient medications from FHIR server. Use this to get information about current or past medications.',
+      description: 'Query the current patient\'s medication records from the FHIR server. Returns current and past medications, including dosages and administration details.',
       inputSchema: medicationsSchema,
     }),
 
     queryAllergies: tool({
-      description: 'Query patient allergies and intolerances from FHIR server. Use this to get information about allergies, adverse reactions, or intolerances.',
+      description: 'Query the current patient\'s allergies and intolerances from the FHIR server. Returns known allergies, adverse reactions, and intolerances.',
       inputSchema: allergiesSchema,
     }),
 
     queryObservations: tool({
-      description: 'Query patient observations (lab results, vital signs) from FHIR server. Use this to get lab test results, vital signs, or other clinical observations.',
+      description: 'Query the current patient\'s clinical observations from the FHIR server. Returns lab results, vital signs, and other clinical measurements.',
       inputSchema: observationsSchema,
     }),
 
     queryProcedures: tool({
-      description: 'Query patient procedures from FHIR server. Use this to get information about surgical procedures, treatments, or interventions performed.',
+      description: 'Query the current patient\'s procedure history from the FHIR server. Returns surgical procedures, treatments, and clinical interventions performed on this patient.',
       inputSchema: proceduresSchema,
     }),
 
     queryEncounters: tool({
-      description: 'Query patient encounters (visits, admissions) from FHIR server. Use this to get information about hospital visits, appointments, or admissions.',
+      description: 'Query the current patient\'s encounter history from the FHIR server. Returns hospital visits, appointments, admissions, and discharge information.',
       inputSchema: encountersSchema,
     }),
   }
