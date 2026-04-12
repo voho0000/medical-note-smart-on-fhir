@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useChatHistory } from '@/src/application/hooks/chat/use-chat-history.hook'
 import { useChatSession } from '@/src/application/hooks/chat/use-chat-session.hook'
+import { useAutoSaveChat } from '@/src/application/hooks/chat/use-auto-save-chat.hook'
 
 export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string) {
   const { t } = useLanguage()
@@ -10,9 +11,12 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const { sessions, isLoading, deleteSession } = useChatHistory(patientId, fhirServerUrl)
   const { loadSession, startNewSession } = useChatSession()
+  const { forceSave } = useAutoSaveChat({ patientId, fhirServerUrl })
 
   const handleLoadSession = async (sessionId: string) => {
     try {
+      // Force save current session before switching
+      await forceSave()
       await loadSession(sessionId)
       setOpen(false)
     } catch (error) {
@@ -30,9 +34,18 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
     }
   }
 
-  const handleNewChat = () => {
-    startNewSession()
-    setOpen(false)
+  const handleNewChat = async () => {
+    try {
+      // Force save current session before starting new chat
+      await forceSave()
+      startNewSession()
+      setOpen(false)
+    } catch (error) {
+      console.error('Failed to save before new chat:', error)
+      // Still allow new chat even if save fails
+      startNewSession()
+      setOpen(false)
+    }
   }
 
   const handleOpenAuthDialog = () => {
