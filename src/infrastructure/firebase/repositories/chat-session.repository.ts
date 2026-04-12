@@ -133,9 +133,10 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
     if (!db) throw new Error('Firestore not initialized')
 
     const chatRef = doc(db, 'users', userId, this.COLLECTION_NAME, chatId)
+    // Don't update updatedAt when only changing title
+    // Title changes are cosmetic and shouldn't affect sort order
     await updateDoc(chatRef, {
       title,
-      updatedAt: Timestamp.now(),
     })
   }
 

@@ -42,16 +42,27 @@ export function useAutoSaveChat({
 
   // Track last message content to detect when streaming completes
   const lastMessageContentRef = useRef<string>('')
+  const isSessionChangingRef = useRef(false)
 
   // Reset refs when session changes
   useEffect(() => {
+    // Set flag to skip auto-save during session change
+    isSessionChangingRef.current = true
+    
     // Set to current message count to avoid triggering save when just loading a session
     lastSavedMessageCountRef.current = messages.length
     prevMessageCountRef.current = messages.length
     // Also update content ref to current state
     const lastMessage = messages[messages.length - 1]
     lastMessageContentRef.current = lastMessage?.content || ''
-  }, [currentSessionId, messages])
+    
+    // Reset flag after a short delay to allow effects to settle
+    const timer = setTimeout(() => {
+      isSessionChangingRef.current = false
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [currentSessionId])
 
   const saveSession = useCallback(async (force: boolean = false) => {
     // Get fresh messages from store to avoid closure issues
@@ -149,6 +160,11 @@ export function useAutoSaveChat({
   ])
   
   useEffect(() => {
+    // Skip if session is changing (loading a session)
+    if (isSessionChangingRef.current) {
+      return
+    }
+    
     const messageCount = messages.length
     const lastMessage = messages[messages.length - 1]
     const lastMessageContent = lastMessage?.content || ''

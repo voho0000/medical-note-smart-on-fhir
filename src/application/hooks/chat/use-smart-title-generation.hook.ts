@@ -23,6 +23,16 @@ export function useSmartTitleGeneration() {
   const { updateSession } = useUpdateSessionMutation()
   const generatedSessionsRef = useRef<Set<string>>(new Set())
   const sessionIdForTitleRef = useRef<string | null>(null)
+  const prevMessageCountRef = useRef<number>(0)
+  const prevSessionIdRef = useRef<string | null>(null)
+
+  // Reset message count when session changes
+  useEffect(() => {
+    if (currentSessionId !== prevSessionIdRef.current) {
+      prevMessageCountRef.current = messages.length
+      prevSessionIdRef.current = currentSessionId
+    }
+  }, [currentSessionId, messages.length])
 
   useEffect(() => {
     // Only generate title once per session
@@ -32,8 +42,17 @@ export function useSmartTitleGeneration() {
     // Skip if already generated for this session
     if (generatedSessionsRef.current.has(currentSessionId)) return
     
-    // Check if this is the first complete conversation (1 user + 1 assistant message)
-    if (messages.length !== 2) return
+    // IMPORTANT: Only generate when message count changes from 0 to 2
+    // This prevents generating title when loading an existing 2-message session
+    const isNewConversation = prevMessageCountRef.current === 0 && messages.length === 2
+    if (!isNewConversation) {
+      // Update count for next check
+      prevMessageCountRef.current = messages.length
+      return
+    }
+    
+    // Update count
+    prevMessageCountRef.current = messages.length
     
     const userMessage = messages.find(m => m.role === 'user')
     const assistantMessage = messages.find(m => m.role === 'assistant')
