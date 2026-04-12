@@ -542,6 +542,10 @@ export const en = {
     minutesAgo: 'm ago',
     hoursAgo: 'h ago',
     daysAgo: 'd ago',
+    switchWhileStreamingTitle: 'Switch Conversation',
+    switchWhileStreamingDescription: 'A response is currently being generated. Switching now will lose the incomplete content. Continue?',
+    switchWhileStreamingCancel: 'Cancel',
+    switchWhileStreamingConfirm: 'Switch Anyway',
   },
 
   connectionInfo: {

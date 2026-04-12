@@ -544,6 +544,10 @@ export const zhTW = {
     minutesAgo: '分鐘前',
     hoursAgo: '小時前',
     daysAgo: '天前',
+    switchWhileStreamingTitle: '切換對話確認',
+    switchWhileStreamingDescription: '目前有對話正在生成回答，切換將會丟失未完成的內容。確定要切換嗎？',
+    switchWhileStreamingCancel: '取消',
+    switchWhileStreamingConfirm: '確定切換',
   },
 
   connectionInfo: {

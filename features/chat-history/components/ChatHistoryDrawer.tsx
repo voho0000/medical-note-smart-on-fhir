@@ -5,6 +5,16 @@ import { History, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useFhirContext } from '@/src/application/hooks/chat/use-fhir-context.hook'
@@ -25,12 +35,15 @@ export function ChatHistoryDrawer() {
     setOpen,
     showAuthDialog,
     setShowAuthDialog,
+    showStreamingConfirm,
     sessions,
     isLoading,
     handleLoadSession,
     handleDeleteSession,
     handleNewChat,
     handleOpenAuthDialog,
+    handleConfirmSwitch,
+    handleCancelSwitch,
   } = useChatHistoryDrawer(patientId || undefined, fhirServerUrl || undefined)
 
   const formatDate = (date: Date) => {
@@ -110,6 +123,24 @@ export function ChatHistoryDrawer() {
           </ScrollArea>
         )}
       </SheetContent>
+
+      {/* Streaming Confirmation Dialog */}
+      <AlertDialog open={showStreamingConfirm} onOpenChange={handleCancelSwitch}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.chatHistory.switchWhileStreamingTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.chatHistory.switchWhileStreamingDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.chatHistory.switchWhileStreamingCancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSwitch} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t.chatHistory.switchWhileStreamingConfirm}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   )
 }

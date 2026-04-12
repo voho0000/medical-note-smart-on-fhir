@@ -21,14 +21,16 @@ export function useSmartTitleGeneration() {
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const setIsTitleGenerating = useChatHistoryStore(state => state.setIsTitleGenerating)
   const { updateSession } = useUpdateSessionMutation()
-  const hasGeneratedRef = useRef(false)
+  const generatedSessionsRef = useRef<Set<string>>(new Set())
   const sessionIdForTitleRef = useRef<string | null>(null)
 
   useEffect(() => {
-    // Only generate title once for the first conversation
-    if (hasGeneratedRef.current) return
+    // Only generate title once per session
     if (!currentSessionId) return
     if (!user?.uid) return
+    
+    // Skip if already generated for this session
+    if (generatedSessionsRef.current.has(currentSessionId)) return
     
     // Check if this is the first complete conversation (1 user + 1 assistant message)
     if (messages.length !== 2) return
@@ -41,8 +43,8 @@ export function useSmartTitleGeneration() {
     // Check if assistant message has content (streaming completed)
     if (!assistantMessage.content || assistantMessage.content.trim().length === 0) return
     
-    // Mark as generated to prevent multiple calls
-    hasGeneratedRef.current = true
+    // Mark this session as generated to prevent multiple calls
+    generatedSessionsRef.current.add(currentSessionId)
     
     // Capture the session ID at the time of generation
     // This prevents generating title for wrong session if user switches during generation
@@ -115,11 +117,6 @@ export function useSmartTitleGeneration() {
       setIsTitleGenerating(false)
     }
   }
-
-  // Reset when session changes
-  useEffect(() => {
-    hasGeneratedRef.current = false
-  }, [currentSessionId])
 
   return {
     // Expose nothing for now, this hook works automatically
