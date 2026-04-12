@@ -20,6 +20,7 @@ export const LOINC = {
   WEIGHT: "29463-7",
   BMI: "39156-5",
   BP_PANEL: "85354-9",
+  BP_PANEL_ALT: "55284-4", // Alternative blood pressure panel code
   BP_SYS: "8480-6",
   BP_DIA: "8462-4",
   HR: "8867-4",

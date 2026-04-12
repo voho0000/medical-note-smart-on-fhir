@@ -16,7 +16,9 @@ export function useVitalsView(vitalSigns: any[]) {
     // Blood Pressure - try panel first, fallback to individual
     let bpS: string | null = null
     let bpD: string | null = null
-    const bpPanel = pickLatestByCode(vitalObservations, LOINC.BP_PANEL)
+    const bpPanel = pickLatestByCode(vitalObservations, LOINC.BP_PANEL) || 
+                    pickLatestByCode(vitalObservations, LOINC.BP_PANEL_ALT)
+    
     if (bpPanel?.component?.length) {
       const s = bpPanel.component.find((c: ObsComponent) => 
         (c.code?.coding || []).some((x: Coding) => x.code === LOINC.BP_SYS)
