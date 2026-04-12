@@ -90,7 +90,7 @@ ${clinicalContext}
       : `- ${t.useToolsDirectly}`
 
     // Compose final prompt
-    return `${baseSystemPrompt}
+    const finalPrompt = `${baseSystemPrompt}
 
 ${t.deepModeIntro}
 
@@ -114,6 +114,8 @@ ${usageGuidelines}
 ${hasPerplexityKey ? `\n${t.literatureKeywords}` : ''}
 
 ${hasClinicalData ? t.helpWithClinicalData : t.helpWithTools}`
+    
+    return finalPrompt
   }
 }
 

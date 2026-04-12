@@ -510,7 +510,7 @@ export const zhTW = {
       mustExplainResults: '重要：使用工具查詢後，必須用繁體中文整理並解釋查詢結果',
       provideAnalysis: '不要只返回工具結果，要提供有意義的分析和說明',
       indicateNoRecords: '如果查詢結果為空，說明該病人沒有相關記錄',
-      literatureKeywords: '**關鍵提示**：當用戶問題包含「guideline」、「指引」、「治療建議」、「最新研究」、「文獻」、「evidence」、「建議」等關鍵字時，請務必使用 searchMedicalLiterature 工具查詢最新的醫學文獻和臨床指引',
+      literatureKeywords: '**強制要求**：當用戶問題包含「guideline」、「指引」、「治療建議」、「最新研究」、「文獻」、「evidence」、「建議」等關鍵字時，你**絕對不能**憑記憶回答，**必須先使用 searchMedicalLiterature 工具**查詢最新資訊。不使用工具而直接回答將被視為錯誤。',
       helpWithTools: '現在請根據用戶的問題，使用工具來提供幫助。記得在使用工具後，一定要生成文字回應來解釋結果。',
       helpWithClinicalData: '現在請根據用戶的問題，優先使用已提供的臨床資料，必要時使用工具來提供幫助。記得在使用工具後，一定要生成文字回應來解釋結果。',
     },

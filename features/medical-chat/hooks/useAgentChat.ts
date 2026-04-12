@@ -252,10 +252,12 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           const followUpResult = await streamText({
             model,
             messages: followUpMessages,
+            tools, // Allow AI to call more tools in follow-up (e.g., searchMedicalLiterature after FHIR query)
             abortSignal: abortControllerRef.current?.signal,
           })
           
           let followUpContent = ""
+          let followUpToolResults: Array<{ toolName: string; result: unknown }> = []
           let followUpLastUpdateTime = 0
           let followUpTimeoutId: NodeJS.Timeout | null = null
           
@@ -279,12 +281,86 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
                   followUpTimeoutId = null
                 }, UPDATE_INTERVAL - (now - followUpLastUpdateTime))
               }
+            } else if (chunk.type === 'tool-call') {
+              const displayName = getToolDisplayName(chunk.toolName, t.agent.toolNames)
+              const newState = `🔍 ${displayName}...`
+              
+              // Track tool name
+              if (!usedToolNames.includes(chunk.toolName)) {
+                usedToolNames.push(chunk.toolName)
+              }
+              
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === assistantMessageId 
+                  ? { 
+                      ...m, 
+                      content: newState,
+                      agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }],
+                      toolCalls: usedToolNames
+                    } 
+                  : m)
+              )
+            } else if (chunk.type === 'tool-result') {
+              // Collect tool results from follow-up
+              const chunkAny = chunk as any
+              const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
+              followUpToolResults.push({ toolName: chunk.toolName, result })
             }
           }
           
-          // Ensure final follow-up content is displayed
+          // If follow-up had tool results but no text, force AI to generate response
+          if (followUpToolResults.length > 0 && followUpContent.length === 0) {
+            const finalOrgState = `📝 ${t.agent.organizingResults}`
+            setChatMessages((prev) =>
+              prev.map((m) => m.id === assistantMessageId 
+                ? { 
+                    ...m, 
+                    content: finalOrgState,
+                    agentStates: [...(m.agentStates || []), { state: finalOrgState, timestamp: Date.now() }]
+                  } 
+                : m)
+            )
+            
+            // Build summary from follow-up tool results
+            const { summary: finalToolSummary } = 
+              processAgentStreamUseCase.buildToolResultsSummary(followUpToolResults, {
+                queryResult: t.agent.queryResult,
+                queryFailed: t.agent.queryFailed,
+                noData: t.agent.noData,
+                noDataFound: t.agent.noDataFound,
+                foundRecords: t.agent.foundRecords,
+              })
+            
+            // Force AI to generate final response with all tool results
+            const finalMessages = [
+              ...followUpMessages,
+              {
+                role: 'user' as const,
+                content: `${finalToolSummary}\n\nIMPORTANT: You MUST now provide a comprehensive answer in Traditional Chinese based on ALL the tool results above. Do NOT call any more tools. Just synthesize and present the information.`
+              }
+            ]
+            
+            const finalResult = await streamText({
+              model,
+              messages: finalMessages,
+              abortSignal: abortControllerRef.current?.signal,
+            })
+            
+            let finalContent = ""
+            for await (const chunk of finalResult.fullStream) {
+              if (chunk.type === 'text-delta') {
+                finalContent += chunk.text
+                setChatMessages((prev) =>
+                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: finalContent } : m)
+                )
+              }
+            }
+            
+            followUpContent = finalContent
+          }
+          
           setChatMessages((prev) =>
-            prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent, toolCalls: usedToolNames.length > 0 ? usedToolNames : undefined } : m)
           )
           
           // Process citations if available

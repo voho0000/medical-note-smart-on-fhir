@@ -508,7 +508,7 @@ export const en = {
       mustExplainResults: 'IMPORTANT: After using tools to query data, you MUST organize and explain the query results',
       provideAnalysis: 'Do not just return tool results, provide meaningful analysis and explanation',
       indicateNoRecords: 'If query results are empty, indicate that the patient has no relevant records',
-      literatureKeywords: '**KEY REMINDER**: When user questions contain keywords like "guideline", "treatment recommendation", "latest research", "literature", "evidence", "recommendation", etc., you MUST use the searchMedicalLiterature tool to query the latest medical literature and clinical guidelines',
+      literatureKeywords: '**MANDATORY REQUIREMENT**: When user questions contain keywords like "guideline", "treatment recommendation", "latest research", "literature", "evidence", "recommendation", etc., you are **ABSOLUTELY FORBIDDEN** from answering based on your training data. You **MUST first use the searchMedicalLiterature tool** to query current information. Answering without using the tool will be considered an error.',
       helpWithTools: 'Now, based on the user\'s question, use tools to help. Remember to always generate a text response to explain the results after using tools.',
       helpWithClinicalData: 'Now, based on the user\'s question, prioritize using the provided clinical data, and if necessary, use tools to help. Remember to always generate a text response to explain the results after using tools.',
     },

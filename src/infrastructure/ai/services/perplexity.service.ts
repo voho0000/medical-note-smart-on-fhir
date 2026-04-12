@@ -60,16 +60,6 @@ export class PerplexityService {
       const content = data.choices?.[0]?.message?.content || ''
       // Citations can be in multiple places depending on API version
       const citations = data.citations || data.choices?.[0]?.message?.citations || []
-      
-      // Debug: log the response structure to understand citations format
-      console.log('[Perplexity API] Response structure:', {
-        hasCitations: !!data.citations,
-        hasMessageCitations: !!data.choices?.[0]?.message?.citations,
-        citationsLength: citations.length,
-        sampleCitation: citations[0],
-        responseKeys: Object.keys(data),
-        messageKeys: Object.keys(data.choices?.[0]?.message || {})
-      })
 
       return {
         success: true,
