@@ -7,7 +7,7 @@ export const QUOTA_CONFIG = {
   /**
    * Daily API usage limit for authenticated users using proxy
    */
-  DAILY_LIMIT: 50,
+  DAILY_LIMIT: 200,
 } as const
 
 export type QuotaConfig = typeof QUOTA_CONFIG
