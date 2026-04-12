@@ -38,6 +38,7 @@ export interface BuildAgentSystemPromptInput {
     mustExplainResults: string
     provideAnalysis: string
     indicateNoRecords: string
+    literatureKeywords: string
     helpWithClinicalData: string
     helpWithTools: string
   }
@@ -110,6 +111,7 @@ ${usageGuidelines}
 - ${t.mustExplainResults}
 - ${t.provideAnalysis}
 - ${t.indicateNoRecords}
+${hasPerplexityKey ? `\n${t.literatureKeywords}` : ''}
 
 ${hasClinicalData ? t.helpWithClinicalData : t.helpWithTools}`
   }
