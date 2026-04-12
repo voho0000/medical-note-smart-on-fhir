@@ -1,9 +1,9 @@
 /**
  * Login Required Dialog
- * Shows when user tries to share without being logged in
+ * Shows when user tries to use features that require authentication
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,45 +15,87 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAuth } from '@/src/application/providers/auth.provider'
 import { AuthDialog } from '@/features/auth/components/AuthDialog'
 
 interface LoginRequiredDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  title?: string
+  description?: string
+  features?: string[]
+  onLoginSuccess?: () => void
 }
 
 export function LoginRequiredDialog({
   open,
   onOpenChange,
+  title,
+  description,
+  features,
+  onLoginSuccess,
 }: LoginRequiredDialogProps) {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [wasLoggedOut, setWasLoggedOut] = useState(true)
+
+  // Track initial login state when dialog opens
+  useEffect(() => {
+    if (open) {
+      setWasLoggedOut(!user)
+    }
+  }, [open])
+
+  // Detect when user successfully logs in
+  useEffect(() => {
+    if (user && wasLoggedOut && showAuthDialog) {
+      // User just logged in successfully
+      setShowAuthDialog(false)
+      onOpenChange(false)
+      
+      // Execute callback after a short delay to ensure dialog closes
+      if (onLoginSuccess) {
+        setTimeout(() => {
+          onLoginSuccess()
+        }, 100)
+      }
+    }
+  }, [user, wasLoggedOut, showAuthDialog, onLoginSuccess, onOpenChange])
 
   const handleLogin = () => {
     onOpenChange(false)
     setShowAuthDialog(true)
   }
 
+  const defaultFeatures = [
+    t.promptGallery.loginFeature1,
+    t.promptGallery.loginFeature2,
+    t.promptGallery.loginFeature3,
+    t.promptGallery.loginFeature4,
+  ]
+
   return (
     <>
       <AlertDialog open={open} onOpenChange={onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>需要登入</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>此功能需要登入才能使用。</p>
-              <p className="text-sm">登入後您可以：</p>
-              <ul className="list-disc list-inside text-sm space-y-1 ml-2">
-                <li>分享您的模板給其他使用者</li>
-                <li>儲存模板到您的帳號</li>
-                <li>管理您分享的模板</li>
-                <li>追蹤模板的使用情況</li>
-              </ul>
+            <AlertDialogTitle>{title || t.promptGallery.loginRequired}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>{description || t.promptGallery.loginRequiredDesc}</div>
+                <div className="text-sm">{t.promptGallery.loginBenefits}</div>
+                <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                  {(features || defaultFeatures).map((feature, index) => (
+                    <li key={index}>{feature}</li>
+                  ))}
+                </ul>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLogin}>前往登入</AlertDialogAction>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogin}>{t.promptGallery.goToLogin}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -687,6 +687,16 @@ export const en = {
     deleteErrorMessage: 'Failed to delete. Please try again later.',
     browseGallery: 'Browse Gallery',
     openGallery: 'Open Prompt Gallery',
+    loginRequired: 'Login Required',
+    loginRequiredDesc: 'This feature requires you to be logged in.',
+    loginBenefits: 'After logging in, you can:',
+    loginFeature1: 'Use prompts from the gallery',
+    loginFeature2: 'Share your prompts with other users',
+    loginFeature3: 'Manage your shared prompts',
+    loginFeature4: 'Track prompt usage statistics',
+    goToLogin: 'Go to Login',
+    usePromptLoginRequired: 'Login Required to Use Prompt',
+    usePromptLoginDesc: 'Please log in to use this prompt template and enjoy more features.',
   },
 
   feedback: {

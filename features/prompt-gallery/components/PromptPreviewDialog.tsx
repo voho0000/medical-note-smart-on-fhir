@@ -20,6 +20,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { deleteSharedPrompt } from '../services/prompt-gallery.service'
 import { useState } from 'react'
+import { LoginRequiredDialog } from './LoginRequiredDialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +61,8 @@ export function PromptPreviewDialog({
   const [deleting, setDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showLoginDialog, setShowLoginDialog] = useState(false)
+  const [pendingAction, setPendingAction] = useState<{ prompt: SharedPrompt; useAs?: 'chat' | 'insight' } | null>(null)
 
   if (!prompt) return null
 
@@ -88,9 +91,27 @@ export function PromptPreviewDialog({
     }).format(date)
   }
 
-  const handleUse = () => {
-    onUse(prompt)
+  const handleUse = (useAs?: 'chat' | 'insight') => {
+    // Check if user is logged in
+    if (!user) {
+      // Store the pending action and show login dialog
+      setPendingAction({ prompt, useAs })
+      setShowLoginDialog(true)
+      return
+    }
+    
+    // User is logged in, proceed with the action
+    onUse(prompt, useAs)
     onOpenChange(false)
+  }
+
+  const handleLoginSuccess = () => {
+    // Execute the pending action after successful login
+    if (pendingAction) {
+      onUse(pendingAction.prompt, pendingAction.useAs)
+      setPendingAction(null)
+      onOpenChange(false)
+    }
   }
 
   const handleDeleteClick = () => {
@@ -128,11 +149,9 @@ export function PromptPreviewDialog({
               ))}
             </div>
           </div>
-          {prompt.description && (
-            <DialogDescription className="text-base">
-              {prompt.description}
-            </DialogDescription>
-          )}
+          <DialogDescription className={prompt.description ? "text-base" : "sr-only"}>
+            {prompt.description || t.promptGallery.promptDetails}
+          </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[50vh] pr-4">
@@ -230,19 +249,19 @@ export function PromptPreviewDialog({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     {prompt.types.includes('chat') && (
-                      <DropdownMenuItem onClick={() => { onUse(prompt, 'chat'); onOpenChange(false); }}>
+                      <DropdownMenuItem onClick={() => handleUse('chat')}>
                         使用為 Chat Template
                       </DropdownMenuItem>
                     )}
                     {prompt.types.includes('insight') && (
-                      <DropdownMenuItem onClick={() => { onUse(prompt, 'insight'); onOpenChange(false); }}>
+                      <DropdownMenuItem onClick={() => handleUse('insight')}>
                         使用為 Clinical Insight
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button onClick={handleUse}>{t.promptGallery.use}</Button>
+                <Button onClick={() => handleUse()}>{t.promptGallery.use}</Button>
               )}
             </div>
           </div>
@@ -267,6 +286,15 @@ export function PromptPreviewDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Login Required Dialog */}
+      <LoginRequiredDialog
+        open={showLoginDialog}
+        onOpenChange={setShowLoginDialog}
+        title={t.promptGallery.usePromptLoginRequired}
+        description={t.promptGallery.usePromptLoginDesc}
+        onLoginSuccess={handleLoginSuccess}
+      />
     </>
   )
 }

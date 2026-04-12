@@ -689,6 +689,16 @@ export const zhTW = {
     deleteErrorMessage: '刪除失敗，請稍後再試',
     browseGallery: '瀏覽範本庫',
     openGallery: '開啟 Prompt 範本庫',
+    loginRequired: '需要登入',
+    loginRequiredDesc: '此功能需要登入才能使用。',
+    loginBenefits: '登入後您可以：',
+    loginFeature1: '使用範本庫中的 Prompt',
+    loginFeature2: '分享您的 Prompt 給其他使用者',
+    loginFeature3: '管理您分享的 Prompt',
+    loginFeature4: '追蹤 Prompt 的使用情況',
+    goToLogin: '前往登入',
+    usePromptLoginRequired: '使用 Prompt 需要登入',
+    usePromptLoginDesc: '登入後即可使用此 Prompt 範本，並享受更多功能。',
   },
 
   feedback: {
