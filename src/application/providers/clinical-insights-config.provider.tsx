@@ -345,7 +345,7 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     if (user?.uid) {
       setIsSyncing(true)
       try {
-        await batchSaveClinicalInsightPanels(user.uid, defaultPanels)
+        await replaceAllClinicalInsightPanels(user.uid, defaultPanels)
       } catch (error) {
         console.error('[Clinical Insights] Reset failed:', error)
       } finally {
