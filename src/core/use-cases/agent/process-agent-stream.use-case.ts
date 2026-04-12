@@ -22,14 +22,23 @@ export class ProcessAgentStreamUseCase {
     let processedContent = content
 
     // Replace citation numbers like [1] with clickable markdown links
+    // Only replace standalone [N] that are NOT already part of a link [N](url)
+    // This prevents double-processing and messy output
     citations.forEach((citation, index) => {
       const citationNum = index + 1
-      const regex = new RegExp(`\\[${citationNum}\\]`, 'g')
-      processedContent = processedContent.replace(regex, `[[${citationNum}]](${citation})`)
+      // Negative lookahead to avoid replacing [N] that's already followed by (url)
+      const regex = new RegExp(`\\[${citationNum}\\](?!\\()`, 'g')
+      // Keep the brackets in the link text for clarity: [1](url) displays as "[1]"
+      const replacement = `[[${citationNum}]](${citation})`
+      processedContent = processedContent.replace(regex, replacement)
     })
 
-    // Add sources list at the bottom if not already present
-    if (!processedContent.includes('**Sources:**') && !processedContent.includes('**參考來源**')) {
+    // Always add sources list at the bottom for easy reference
+    // Remove any existing sources section first to avoid duplication
+    processedContent = processedContent.replace(/\n\n\*\*Sources:\*\*[\s\S]*$/, '')
+    processedContent = processedContent.replace(/\n\n\*\*參考來源\*\*[\s\S]*$/, '')
+    
+    if (citations.length > 0) {
       processedContent += '\n\n**Sources:**\n' + citations.map((c, i) => `${i + 1}. [${c}](${c})`).join('\n')
     }
 

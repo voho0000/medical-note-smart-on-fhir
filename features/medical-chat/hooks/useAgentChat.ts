@@ -350,6 +350,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             for await (const chunk of finalResult.fullStream) {
               if (chunk.type === 'text-delta') {
                 finalContent += chunk.text
+                // Show streaming content in real-time
                 setChatMessages((prev) =>
                   prev.map((m) => m.id === assistantMessageId ? { ...m, content: finalContent } : m)
                 )
@@ -359,21 +360,26 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             followUpContent = finalContent
           }
           
-          setChatMessages((prev) =>
-            prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent, toolCalls: usedToolNames.length > 0 ? usedToolNames : undefined } : m)
-          )
+          // Clear any pending timeouts to prevent them from overwriting our final content
+          if (followUpTimeoutId) {
+            clearTimeout(followUpTimeoutId)
+            followUpTimeoutId = null
+          }
           
-          // Process citations if available
+          // Process citations BEFORE updating UI
+          let finalDisplayContent = followUpContent
           if (literatureCitations.length > 0) {
             const { processedContent } = processAgentStreamUseCase.processCitations({
               content: followUpContent,
               citations: literatureCitations,
             })
-            
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
-            )
+            finalDisplayContent = processedContent
           }
+          
+          // Update UI once with final processed content
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content: finalDisplayContent, toolCalls: usedToolNames.length > 0 ? usedToolNames : undefined } : m)
+          )
         } else if (toolResults.length > 0 && accumulatedContent.length > 0) {
           // AI generated response directly with tool calls - process citations
           const { citations: literatureCitations } = 
