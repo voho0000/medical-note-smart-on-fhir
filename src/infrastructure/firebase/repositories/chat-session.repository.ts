@@ -143,8 +143,11 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
     if (!db) throw new Error('Firestore not initialized')
 
     const chatRef = doc(db, 'users', userId, this.COLLECTION_NAME, chatId)
-    const updateData: any = {
-      updatedAt: Timestamp.now(),
+    const updateData: any = {}
+
+    // Only update updatedAt if skipUpdatedAt is not true
+    if (!dto.skipUpdatedAt) {
+      updateData.updatedAt = Timestamp.now()
     }
 
     if (dto.messages !== undefined && dto.messages !== null) {

@@ -242,26 +242,26 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
       inputSchema: z.object({}),
       execute: async () => {
         try {
-          // Get the patient ID from SMART context
-          const patientContext = await fhirClient.patient.read()
+          // Use the patientId passed to createFhirTools instead of SMART context
+          // This ensures we query the correct patient
+          const patient = await fhirClient.request(`Patient/${patientId}`)
           
-          if (!patientContext || patientContext.resourceType !== 'Patient') {
+          if (!patient || patient.resourceType !== 'Patient') {
             return {
               success: false,
-              summary: 'Patient not found in SMART context',
+              summary: 'Patient not found',
               data: null
             }
           }
           
-          // Anonymize patient data
-          const patient = {
-            resourceType: patientContext.resourceType,
-            id: patientContext.id,
-            gender: patientContext.gender,
-            birthDate: patientContext.birthDate,
-            identifier: patientContext.identifier,
-            _anonymized: true
-          }
+          // Debug: log the raw patient data to check birthDate
+          console.log('[queryPatientInfo] Raw patient data:', {
+            id: patient.id,
+            birthDate: patient.birthDate,
+            gender: patient.gender,
+            resourceType: patient.resourceType,
+            queriedPatientId: patientId
+          })
           
           // Calculate age from birthDate
           let age = null
@@ -275,7 +275,7 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
             }
           }
           
-          const result = {
+          return {
             success: true,
             summary: `Patient demographics retrieved (anonymized)`,
             data: {
@@ -286,7 +286,6 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
               _note: 'Patient name is not available due to privacy protection'
             }
           }
-          return result
         } catch (error) {
           console.error('[queryPatientInfo] Error occurred:', error)
           return {

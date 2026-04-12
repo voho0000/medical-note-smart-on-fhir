@@ -33,7 +33,7 @@ export class PerplexityService {
           messages: [
             {
               role: 'system',
-              content: 'You are a medical literature search assistant. Provide accurate, evidence-based medical information with citations from authoritative medical sources including: PubMed, NIH, Cochrane Library, NEJM, The Lancet, JAMA, BMJ, UpToDate, WHO, CDC, FDA, Mayo Clinic, and other peer-reviewed medical journals and clinical guidelines. Always cite your sources with links when available.'
+              content: 'You are a medical literature search assistant. Provide accurate, evidence-based medical information with citations from authoritative medical sources including: PubMed, NIH, Cochrane Library, NEJM, The Lancet, JAMA, BMJ, UpToDate, WHO, CDC, FDA, Mayo Clinic, and other peer-reviewed medical journals and clinical guidelines. IMPORTANT: In your "Sources" section at the end, ONLY list the URLs that you directly cited with reference numbers [1][2][3] etc. in your response. Do not list additional URLs that you searched but did not cite.'
             },
             {
               role: 'user',

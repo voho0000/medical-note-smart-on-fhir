@@ -40,13 +40,20 @@ export function useAutoSaveChat({
   const isSavingRef = useRef(false)
   const prevMessageCountRef = useRef(0)
 
-  // Reset lastSavedMessageCountRef when session changes
-  useEffect(() => {
-    lastSavedMessageCountRef.current = 0
-    prevMessageCountRef.current = 0
-  }, [currentSessionId])
+  // Track last message content to detect when streaming completes
+  const lastMessageContentRef = useRef<string>('')
 
-  const saveSession = useCallback(async () => {
+  // Reset refs when session changes
+  useEffect(() => {
+    // Set to current message count to avoid triggering save when just loading a session
+    lastSavedMessageCountRef.current = messages.length
+    prevMessageCountRef.current = messages.length
+    // Also update content ref to current state
+    const lastMessage = messages[messages.length - 1]
+    lastMessageContentRef.current = lastMessage?.content || ''
+  }, [currentSessionId, messages])
+
+  const saveSession = useCallback(async (force: boolean = false) => {
     // Get fresh messages from store to avoid closure issues
     const { messages: currentMessages } = useChatStore.getState()
     const { currentSessionId } = useChatHistoryStore.getState()
@@ -64,7 +71,8 @@ export function useAutoSaveChat({
       return
     }
 
-    if (currentMessages.length === lastSavedMessageCountRef.current) {
+    // Skip count check if force is true (when forceSave is called)
+    if (!force && currentMessages.length === lastSavedMessageCountRef.current) {
       return
     }
 
@@ -104,17 +112,20 @@ export function useAutoSaveChat({
         )
 
       } else {
+        // Only update messages in Firestore, don't update updatedAt
+        // updatedAt will be updated by Firestore trigger only when messages actually change
         await updateChatSessionUseCase.execute(currentSessionId, user.uid, {
           messages: currentMessages,
         })
 
+        // Update local cache with new message count but keep original updatedAt
+        // The updatedAt will be synced from Firestore if it actually changed
         updateSession(
           user.uid,
           effectivePatientId,
           effectiveFhirServerUrl,
           currentSessionId,
           {
-            updatedAt: new Date(),
             messageCount: currentMessages.length,
           }
         )
@@ -134,10 +145,8 @@ export function useAutoSaveChat({
     setCurrentSessionId,
     addSession,
     updateSession,
+    locale,
   ])
-
-  // Track last message content to detect when streaming completes
-  const lastMessageContentRef = useRef<string>('')
   
   useEffect(() => {
     const messageCount = messages.length
@@ -209,7 +218,7 @@ export function useAutoSaveChat({
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current)
     }
-    await saveSession()
+    await saveSession(true)
   }, [saveSession])
 
   return {

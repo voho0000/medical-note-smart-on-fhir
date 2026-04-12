@@ -41,4 +41,5 @@ export interface UpdateChatSessionDto {
   title?: string
   summary?: string
   tags?: string[]
+  skipUpdatedAt?: boolean // If true, don't update the updatedAt timestamp
 }
