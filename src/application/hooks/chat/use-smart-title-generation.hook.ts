@@ -22,6 +22,7 @@ export function useSmartTitleGeneration() {
   const setIsTitleGenerating = useChatHistoryStore(state => state.setIsTitleGenerating)
   const { updateSession } = useUpdateSessionMutation()
   const hasGeneratedRef = useRef(false)
+  const sessionIdForTitleRef = useRef<string | null>(null)
 
   useEffect(() => {
     // Only generate title once for the first conversation
@@ -43,9 +44,14 @@ export function useSmartTitleGeneration() {
     // Mark as generated to prevent multiple calls
     hasGeneratedRef.current = true
     
+    // Capture the session ID at the time of generation
+    // This prevents generating title for wrong session if user switches during generation
+    const capturedSessionId = currentSessionId
+    sessionIdForTitleRef.current = capturedSessionId
+    
     // Generate smart title in background
     generateSmartTitle(
-      currentSessionId,
+      capturedSessionId,
       user.uid,
       userMessage.content,
       assistantMessage.content,
@@ -76,6 +82,14 @@ export function useSmartTitleGeneration() {
       // Wait a bit to ensure auto-save has completed
       // This prevents "No document to update" error
       await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Verify we're still on the same session before updating
+      // This prevents updating the wrong session if user switched during generation
+      const currentId = useChatHistoryStore.getState().currentSessionId
+      if (currentId !== sessionId) {
+        console.warn('[Smart Title] Session changed during generation, skipping update')
+        return
+      }
       
       // Update Firestore - check if document exists first
       try {
