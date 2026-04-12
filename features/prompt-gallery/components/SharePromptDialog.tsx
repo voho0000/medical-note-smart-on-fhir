@@ -138,17 +138,17 @@ export function SharePromptDialog({
     console.log('=== SharePromptDialog: handleShare 開始 ===')
     
     if (!title.trim()) {
-      setError(t.promptGallery.shareError + ': 請輸入標題')
+      setError(t.promptGallery.shareError + ': ' + t.promptGallery.errorTitleRequired)
       return
     }
 
     if (!prompt.trim()) {
-      setError(t.promptGallery.shareError + ': 請輸入 Prompt 內容')
+      setError(t.promptGallery.shareError + ': ' + t.promptGallery.errorPromptRequired)
       return
     }
 
     if (selectedSpecialties.length === 0) {
-      setError(t.promptGallery.shareError + ': 請選擇至少一個科別')
+      setError(t.promptGallery.shareError + ': ' + t.promptGallery.errorSpecialtyRequired)
       return
     }
 
@@ -226,23 +226,23 @@ export function SharePromptDialog({
         <div className="space-y-4 py-4">
           {/* Title */}
           <div className="space-y-2">
-            <Label htmlFor="title">標題 *</Label>
+            <Label htmlFor="title">{t.promptGallery.titleLabel} *</Label>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="例：SOAP 筆記範本"
+              placeholder={t.promptGallery.titlePlaceholder}
             />
           </div>
 
           {/* Prompt Content */}
           <div className="space-y-2">
-            <Label htmlFor="prompt">Prompt 內容 *</Label>
+            <Label htmlFor="prompt">{t.promptGallery.promptLabel} *</Label>
             <Textarea
               id="prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="輸入 Prompt 內容..."
+              placeholder={t.promptGallery.promptPlaceholder}
               rows={8}
               className="font-mono text-sm"
             />
@@ -251,14 +251,14 @@ export function SharePromptDialog({
           {/* Type */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 shrink-0">
-              <Label>類型 *</Label>
+              <Label>{t.promptGallery.typeLabel} *</Label>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="h-4 w-4 text-muted-foreground cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">可同時選擇多個類型，篩選時只要符合任一類型即可顯示</p>
+                    <p className="text-xs">{t.promptGallery.typeTooltip}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -279,7 +279,7 @@ export function SharePromptDialog({
 
           {/* Category */}
           <div className="space-y-2">
-            <Label>分類 *</Label>
+            <Label>{t.promptGallery.categoryLabel} *</Label>
             <Select value={category} onValueChange={(value) => setCategory(value as PromptCategory)}>
               <SelectTrigger>
                 <SelectValue />
@@ -296,20 +296,20 @@ export function SharePromptDialog({
 
           {/* Specialties */}
           <div className="space-y-2">
-            <Label>科別 * （可多選）</Label>
+            <Label>{t.promptGallery.specialtyLabel} *</Label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full justify-between">
                   <span className="truncate">
                     {selectedSpecialties.length === 0
-                      ? '請選擇科別'
-                      : `已選擇 ${selectedSpecialties.length} 個科別`}
+                      ? t.promptGallery.selectSpecialty
+                      : t.promptGallery.selectedSpecialties.replace('{count}', String(selectedSpecialties.length))}
                   </span>
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-[400px] max-h-[300px] overflow-y-auto">
-                <DropdownMenuLabel>選擇科別</DropdownMenuLabel>
+                <DropdownMenuLabel>{t.promptGallery.selectSpecialtyLabel}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {specialties.map((spec) => (
                   <DropdownMenuCheckboxItem
@@ -347,12 +347,12 @@ export function SharePromptDialog({
           <div className="flex items-center justify-between space-x-2 rounded-lg border p-3">
             <div className="space-y-0.5">
               <Label htmlFor="anonymous" className="text-sm font-medium">
-                匿名分享
+                {t.promptGallery.anonymousLabel}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {isAnonymous 
-                  ? '將以匿名方式分享，不會顯示您的名稱' 
-                  : '將顯示您的名稱作為作者'}
+                  ? t.promptGallery.anonymousOn
+                  : t.promptGallery.anonymousOff}
               </p>
             </div>
             <Switch
@@ -364,7 +364,7 @@ export function SharePromptDialog({
 
           {/* Tags */}
           <div className="space-y-2">
-            <Label htmlFor="tags">標籤（選填）</Label>
+            <Label htmlFor="tags">{t.promptGallery.tagsLabel}</Label>
             <div className="flex gap-2">
               <Input
                 id="tags"
@@ -376,10 +376,10 @@ export function SharePromptDialog({
                     handleAddTag()
                   }
                 }}
-                placeholder="輸入標籤後按 Enter"
+                placeholder={t.promptGallery.tagsPlaceholder}
               />
               <Button type="button" onClick={handleAddTag} variant="outline">
-                新增
+                {t.promptGallery.addTag}
               </Button>
             </div>
             {tags.length > 0 && (

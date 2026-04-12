@@ -72,7 +72,7 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
             <CardTitle className="text-sm line-clamp-1 leading-tight">{prompt.title}</CardTitle>
             {isMyPrompt && (
               <Badge className="text-[9px] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border-0">
-                我的
+                {t.promptGallery.myBadge}
               </Badge>
             )}
             {isPopular && (
@@ -123,7 +123,7 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
           ) : (
             <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/30" />
           )}
-          <span>使用 {prompt.usageCount || 0} 次</span>
+          <span>{t.promptGallery.usedTimes.replace('{count}', String(prompt.usageCount || 0))}</span>
         </div>
       </CardContent>
     </Card>
