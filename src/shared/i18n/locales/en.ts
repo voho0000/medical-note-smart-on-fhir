@@ -205,6 +205,7 @@ export const en = {
     steps: 'steps',
     expand: 'Expand',
     collapse: 'Collapse',
+    loginToSaveChat: 'Sign in to save chat history',
   },
 
   dataSelection: {

@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAutoIncludeContext, useSetAutoIncludeContext } from "@/src/application/stores/chat.store"
 import { Plus, Trash2, FileText, Settings, ChevronDown, Library, Sparkles } from "lucide-react"
@@ -41,6 +43,7 @@ export function ChatToolbar({
   isLoadingClinicalData = false,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
+  const { user } = useAuth()
   const { setActiveTab } = useRightPanel()
   const autoIncludeContext = useAutoIncludeContext()
   const setAutoIncludeContext = useSetAutoIncludeContext()
@@ -131,16 +134,36 @@ export function ChatToolbar({
         </div>
       ) : null}
       <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5 h-8">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onResetChat}
-          disabled={!hasChatMessages}
-          className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="h-3 w-3" />
-          {t.chat.resetChat}
-        </Button>
+        {!user ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onResetChat}
+                disabled={!hasChatMessages}
+                className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+                {t.chat.resetChat}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[200px]">
+              {t.chat.loginToSaveChat || "登入後可保留對話記錄"}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onResetChat}
+            disabled={!hasChatMessages}
+            className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-3 w-3" />
+            {t.chat.resetChat}
+          </Button>
+        )}
       </div>
       <div className="h-8 flex items-center">
         <DropdownMenu>

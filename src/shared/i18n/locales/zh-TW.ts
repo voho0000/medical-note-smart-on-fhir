@@ -207,6 +207,7 @@ export const zhTW = {
     steps: '個步驟',
     expand: '展開查看',
     collapse: '收起',
+    loginToSaveChat: '登入後可保留對話記錄',
   },
 
   dataSelection: {
