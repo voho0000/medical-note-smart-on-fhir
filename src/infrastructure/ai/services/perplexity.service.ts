@@ -43,8 +43,8 @@ export class PerplexityService {
           max_tokens: 1500,
           temperature: 0.2,
           top_p: 0.9,
-          return_citations: true,
-          return_images: false,
+          // Note: return_citations is not supported in Chat Completions API
+          // Citations are automatically included in the response
         }),
       })
 
@@ -58,7 +58,18 @@ export class PerplexityService {
 
       const data = await response.json()
       const content = data.choices?.[0]?.message?.content || ''
-      const citations = data.citations || []
+      // Citations can be in multiple places depending on API version
+      const citations = data.citations || data.choices?.[0]?.message?.citations || []
+      
+      // Debug: log the response structure to understand citations format
+      console.log('[Perplexity API] Response structure:', {
+        hasCitations: !!data.citations,
+        hasMessageCitations: !!data.choices?.[0]?.message?.citations,
+        citationsLength: citations.length,
+        sampleCitation: citations[0],
+        responseKeys: Object.keys(data),
+        messageKeys: Object.keys(data.choices?.[0]?.message || {})
+      })
 
       return {
         success: true,

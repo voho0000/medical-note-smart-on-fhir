@@ -150,6 +150,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
         let accumulatedContent = ""
         let toolResults: Array<{ toolName: string; result: unknown }> = []
+        let usedToolNames: string[] = [] // Track which tools were called
         let lastUpdateTime = 0
         let timeoutId: NodeJS.Timeout | null = null
         const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
@@ -183,12 +184,19 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           } else if (chunk.type === 'tool-call') {
             const displayName = getToolDisplayName(chunk.toolName, t.agent.toolNames)
             const newState = `🔍 ${displayName}...`
+            
+            // Track tool name
+            if (!usedToolNames.includes(chunk.toolName)) {
+              usedToolNames.push(chunk.toolName)
+            }
+            
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId 
                 ? { 
                     ...m, 
                     content: newState,
-                    agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }]
+                    agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }],
+                    toolCalls: usedToolNames
                   } 
                 : m)
             )
@@ -203,7 +211,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         // Ensure final content is displayed after main stream
         if (accumulatedContent.length > 0) {
           setChatMessages((prev) =>
-            prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent, toolCalls: usedToolNames.length > 0 ? usedToolNames : undefined } : m)
           )
         }
         

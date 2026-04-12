@@ -24,6 +24,7 @@ export interface ChatMessage {
   modelId?: string
   agentStates?: AgentState[]
   images?: ChatImage[]  // Support multiple images
+  toolCalls?: string[]  // List of tool names that were called
 }
 
 export interface AgentState {

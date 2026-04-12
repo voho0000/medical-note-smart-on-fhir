@@ -9,6 +9,7 @@ import { MarkdownRenderer } from "@/src/shared/components/MarkdownRenderer"
 import type { ChatMessage } from "@/src/application/stores/chat.store"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
+import { Sparkles } from "lucide-react"
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
@@ -59,6 +60,19 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
             ? t.chat.you
             : t.chat.system}
         </span>
+        {message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0 && (
+          <>
+            <span>•</span>
+            <span className="flex items-center gap-1 text-blue-500">
+              <Sparkles className="h-3 w-3" />
+              <span className="font-medium">
+                {message.toolCalls.includes('searchMedicalLiterature') ? 'Perplexity' : 
+                 message.toolCalls.includes('queryFhirData') ? 'FHIR' : 
+                 'Tools'}
+              </span>
+            </span>
+          </>
+        )}
         <span>•</span>
         <span>{formatTimestamp(message.timestamp)}</span>
       </div>
