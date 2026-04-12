@@ -477,7 +477,8 @@ export const en = {
     foundRecords: 'Found {count} records',
     noDataFound: 'No data found. {summary}',
     queriedFhirData: 'I have queried the FHIR data. Here are the results:',
-    answerQuestion: 'Based on the above query results, please answer my original question in English: "{question}"\n\n**IMPORTANT**: If the query results contain citation numbers (e.g., [1][2][3]), please **preserve these citation numbers** in your response so readers can trace the information sources. Place citation numbers at the end of relevant statements or paragraphs.\n\nIf the query results show no data, please clearly inform the user that no relevant data was found for the specified time range or conditions.',
+    answerQuestion: 'Based on the above query results, please answer my original question: "{question}"\n\n**IMPORTANT**: If the query results contain citation numbers (e.g., [1][2][3]), please **preserve these citation numbers** in your response so readers can trace the information sources. Place citation numbers at the end of relevant statements or paragraphs.\n\nIf the query results show no data, please clearly inform the user that no relevant data was found for the specified time range or conditions.',
+    synthesizeResults: 'IMPORTANT: You MUST now provide a comprehensive answer based on ALL the tool results above. Do NOT call any more tools. Just synthesize and present the information.',
     systemPrompt: {
       deepModeIntro: 'IMPORTANT: You are now in Deep Mode (AI Agent Mode) with the following capabilities:',
       currentPatient: 'Current Patient Information',

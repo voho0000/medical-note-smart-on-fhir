@@ -479,7 +479,8 @@ export const zhTW = {
     foundRecords: '找到 {count} 筆資料',
     noDataFound: '沒有找到資料。{summary}',
     queriedFhirData: '我已經查詢了 FHIR 資料，以下是結果：',
-    answerQuestion: '請根據上述查詢結果，用繁體中文回答我的原始問題：「{question}」\n\n**重要**：如果查詢結果中包含引用編號（如 [1][2][3]），請在你的回答中**保留這些引用編號**，讓讀者可以追溯資訊來源。將引用編號放在相關論述的句尾或段落中。\n\n如果查詢結果顯示沒有資料，請明確告知用戶在該時間範圍或條件下沒有找到相關資料。',
+    answerQuestion: '請根據上述查詢結果，回答我的原始問題：「{question}」\n\n**重要**：如果查詢結果中包含引用編號（如 [1][2][3]），請在你的回答中**保留這些引用編號**，讓讀者可以追溯資訊來源。將引用編號放在相關論述的句尾或段落中。\n\n如果查詢結果顯示沒有資料，請明確告知用戶在該時間範圍或條件下沒有找到相關資料。',
+    synthesizeResults: '重要：你現在必須根據上述所有工具查詢結果提供完整的回答。不要再調用任何工具。請直接整合並呈現資訊。',
     systemPrompt: {
       deepModeIntro: '重要：你現在處於深入模式（AI Agent 模式），擁有以下能力：',
       currentPatient: '當前病人資訊',
@@ -507,7 +508,7 @@ export const zhTW = {
       useToolsWhenNeeded: '在需要更詳細或特定的資訊時，使用工具查詢額外資料。如果問題同時涉及病人資料和醫學文獻，可以組合使用多個工具。',
       useToolsDirectly: '使用工具查詢所需的病人資料。如果問題同時涉及病人資料和醫學文獻，可以組合使用多個工具。',
       noAuthNeeded: '不要要求用戶提供病歷號或授權，你已經有權限',
-      mustExplainResults: '使用工具查詢後，用繁體中文整理並解釋查詢結果',
+      mustExplainResults: '使用工具查詢後，整理並解釋查詢結果',
       provideAnalysis: '提供有意義的分析和說明，而不只是返回原始工具結果',
       indicateNoRecords: '如果查詢結果為空，說明該病人沒有相關記錄',
       literatureKeywords: '當用戶詢問治療指引、最新研究、或循證醫學建議時，優先使用 searchMedicalLiterature 工具查詢最新資訊，而不是僅依賴訓練資料。',

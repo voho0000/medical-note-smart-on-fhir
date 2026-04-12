@@ -45,25 +45,11 @@ export function createLiteratureTools(perplexityKey: string | null, isUserAuthen
             }
           }
           
-          // Format response with citations as clickable markdown links
-          // Convert citation numbers [1][2] in content to clickable links
-          let formattedContent = result.content
-          
-          if (result.citations && result.citations.length > 0) {
-            // Replace citation numbers like [1] with clickable links
-            result.citations.forEach((citation, index) => {
-              const citationNum = index + 1
-              const regex = new RegExp(`\\[${citationNum}\\]`, 'g')
-              formattedContent = formattedContent.replace(regex, `[[${citationNum}]](${citation})`)
-            })
-            
-            // Add sources list at the bottom with anchor IDs
-            formattedContent += '\n\n**Sources:**\n' + result.citations.map((c, i) => `${i + 1}. [${c}](${c})`).join('\n')
-          }
-          
+          // Return raw content with citations
+          // Citation processing will be handled uniformly by process-agent-stream.use-case.ts
           return {
             success: true,
-            content: formattedContent,
+            content: result.content,
             source: 'Perplexity AI (Medical Literature Search)',
             searchDepth,
             citationsCount: result.citations?.length || 0,

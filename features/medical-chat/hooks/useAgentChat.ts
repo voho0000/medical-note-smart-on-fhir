@@ -336,7 +336,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               ...followUpMessages,
               {
                 role: 'user' as const,
-                content: `${finalToolSummary}\n\nIMPORTANT: You MUST now provide a comprehensive answer in Traditional Chinese based on ALL the tool results above. Do NOT call any more tools. Just synthesize and present the information.`
+                content: `${finalToolSummary}\n\n${t.agent.synthesizeResults}`
               }
             ]
             
