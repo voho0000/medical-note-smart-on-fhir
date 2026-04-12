@@ -27,10 +27,12 @@ interface TemplateEditorProps {
   canRemove: boolean
   canMoveUp: boolean
   canMoveDown: boolean
+  isDefault?: boolean
   onUpdate: (id: string, updates: Partial<Template>) => void
   onRemove: (id: string) => void
   onMove: (id: string, direction: "up" | "down") => void
   onShare?: (template: Template) => void
+  onSetAsDefault?: (id: string) => void
 }
 
 export function TemplateEditor({ 
@@ -39,10 +41,12 @@ export function TemplateEditor({
   canRemove, 
   canMoveUp,
   canMoveDown,
+  isDefault,
   onUpdate, 
   onRemove,
   onMove,
-  onShare
+  onShare,
+  onSetAsDefault
 }: TemplateEditorProps) {
   const { t } = useLanguage()
   const { user } = useAuth()
@@ -62,7 +66,14 @@ export function TemplateEditor({
     <div className="space-y-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-sm font-semibold">{t.settings.template} {index + 1}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold">{t.settings.template} {index + 1}</p>
+            {isDefault && (
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                {t.settings.defaultTemplate || 'Default'}
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{t.settings.orderControls}</span>
             <Button
@@ -85,6 +96,18 @@ export function TemplateEditor({
             >
               {t.settings.moveDown}
             </Button>
+            {onSetAsDefault && !isDefault && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onSetAsDefault(template.id)}
+                className="border-2 border-primary/50 hover:border-primary hover:bg-primary/10"
+                aria-label={`Set template ${index + 1} as default`}
+              >
+                {t.settings.setAsDefault || 'Set as Default'}
+              </Button>
+            )}
           </div>
         </div>
         <div className="flex gap-2">

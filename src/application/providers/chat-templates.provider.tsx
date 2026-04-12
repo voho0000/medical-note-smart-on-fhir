@@ -30,6 +30,7 @@ type ChatTemplatesContextValue = {
   saveTemplates: () => Promise<void>
   maxTemplates: number
   isSaving: boolean
+  isLoading: boolean
 }
 
 const DEFAULT_TEMPLATES_EN: ChatTemplate[] = [
@@ -106,6 +107,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
   const [isCustomTemplates, setIsCustomTemplates] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   
   // Keep ref in sync with state
   useEffect(() => {
@@ -118,17 +120,12 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
     if (hasLoadedFromStorage) return
     
     const loadTemplates = async () => {
-      // If user is logged in, load from Firestore
+      // If user is logged in, mark as loading and let subscription handle it
       if (user?.uid) {
         try {
-          const firestoreTemplates = await getUserChatTemplates(user.uid)
-          
-          if (firestoreTemplates.length > 0) {
-            setTemplates(firestoreTemplates.slice(0, MAX_TEMPLATES))
-            setIsCustomTemplates(true)
-            setHasLoadedFromStorage(true)
-            return
-          }
+          // Don't load here - let the subscription handle it to avoid race conditions
+          // Just check if we need to migrate from localStorage
+          setHasLoadedFromStorage(true)
           
           // No Firestore templates, check if we should migrate from localStorage
           const stored = window.localStorage.getItem(STORAGE_KEY)
@@ -204,6 +201,7 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       }
       
       setHasLoadedFromStorage(true)
+      // Don't set isLoading to false here - let subscription handle it
     }
     
     loadTemplates()
@@ -234,6 +232,8 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
           setTemplates(getDefaultTemplates(currentLang))
           setIsCustomTemplates(false)
         }
+        // Mark loading as complete after first subscription update
+        setIsLoading(false)
       }
     })
     
@@ -364,9 +364,10 @@ export function ChatTemplatesProvider({ children }: { children: ReactNode }) {
       resetTemplates, 
       saveTemplates,
       maxTemplates: MAX_TEMPLATES,
-      isSaving
+      isSaving,
+      isLoading
     }),
-    [templates, isSaving],
+    [templates, isSaving, isLoading],
   )
 
   return <ChatTemplatesContext.Provider value={value}>{children}</ChatTemplatesContext.Provider>

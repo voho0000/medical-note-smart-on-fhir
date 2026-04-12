@@ -24,11 +24,13 @@ import { TemplateEditor } from './TemplateEditor'
 import { PromptGalleryDialog, SharePromptDialog } from "@/features/prompt-gallery"
 import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import type { SharedPrompt } from "@/features/prompt-gallery"
+import { useTemplateSelector } from "@/features/medical-chat/hooks/useTemplateSelector"
 
 export function ChatTemplatesSettings() {
   const { t } = useLanguage()
   const { user } = useAuth()
   const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, saveTemplates, maxTemplates, isSaving, moveTemplate } = useChatTemplates()
+  const { selectedTemplateId, setAsDefault } = useTemplateSelector()
 
   const canAddTemplate = templates.length < maxTemplates
   const canRemoveTemplate = templates.length > 1
@@ -157,10 +159,12 @@ export function ChatTemplatesSettings() {
                 canRemove={canRemoveTemplate}
                 canMoveUp={index > 0}
                 canMoveDown={index < templates.length - 1}
+                isDefault={template.id === selectedTemplateId}
                 onUpdate={updateTemplate}
                 onRemove={handleRemoveTemplate}
                 onMove={handleMove}
                 onShare={handleShareTemplate}
+                onSetAsDefault={setAsDefault}
               />
             </div>
           ))}

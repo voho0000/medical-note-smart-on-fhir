@@ -117,7 +117,8 @@ export function subscribeToChatTemplates(
   if (!db) return () => {}
 
   const templatesRef = collection(db, 'users', userId, 'chatTemplates')
-  const q = query(templatesRef, orderBy('order', 'asc'))
+  // Don't use orderBy in Firestore - sort in memory to avoid index issues
+  const q = query(templatesRef)
   
   return onSnapshot(q, (snapshot) => {
     const templates = snapshot.docs.map(doc => {
@@ -131,6 +132,8 @@ export function subscribeToChatTemplates(
         updatedAt: data.updatedAt?.toDate(),
       }
     })
+    // Sort by order in memory
+    templates.sort((a, b) => a.order - b.order)
     onUpdate(templates)
   }, (error) => {
     console.error('[Template Sync] Error in subscription:', error)
