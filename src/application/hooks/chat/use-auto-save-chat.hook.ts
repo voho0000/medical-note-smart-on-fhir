@@ -147,14 +147,24 @@ export function useAutoSaveChat({
     // Check if this is a meaningful change (count changed OR content changed from thinking state)
     const countChanged = messageCount !== prevMessageCountRef.current
     const contentChanged = lastMessageContent !== lastMessageContentRef.current
-    const wasThinking = lastMessageContentRef.current.includes('🤔') || lastMessageContentRef.current.includes('思考中') || lastMessageContentRef.current.includes('🔍') || lastMessageContentRef.current.includes('📝')
-    const isNowComplete = !lastMessageContent.includes('🤔') && !lastMessageContent.includes('思考中') && !lastMessageContent.includes('🔍') && !lastMessageContent.includes('📝')
     
-    // Update refs
+    // Check thinking state BEFORE updating ref
+    const wasThinking = lastMessageContentRef.current.includes('🤔') || lastMessageContentRef.current.includes('思考中') || lastMessageContentRef.current.includes('🔍') || lastMessageContentRef.current.includes('📝')
+    const isNowThinking = lastMessageContent.includes('🤔') || lastMessageContent.includes('思考中') || lastMessageContent.includes('🔍') || lastMessageContent.includes('📝')
+    const justFinishedThinking = wasThinking && !isNowThinking && contentChanged
+    
+    // Check if message has agentStates (deep mode) - wait for completion
+    let hasActiveAgentState = false
+    if (lastMessage && lastMessage.role === 'assistant' && 'agentStates' in lastMessage && Array.isArray(lastMessage.agentStates) && lastMessage.agentStates.length > 0) {
+      const lastState = lastMessage.agentStates[lastMessage.agentStates.length - 1]
+      hasActiveAgentState = lastState?.state?.includes('🤔') || lastState?.state?.includes('思考中') || false
+    }
+    
+    // Update refs AFTER checking thinking state
     lastMessageContentRef.current = lastMessageContent
     
     // Skip if nothing meaningful changed
-    if (!countChanged && !(contentChanged && wasThinking && isNowComplete)) {
+    if (!countChanged && !justFinishedThinking) {
       return
     }
     
@@ -164,15 +174,8 @@ export function useAutoSaveChat({
     if (lastMessage && lastMessage.role === 'assistant') {
       const content = lastMessage.content.trim()
       // Check if message is empty or still showing thinking state
-      if (!content || content.includes('🤔') || content.includes('思考中') || content.includes('🔍') || content.includes('📝')) {
+      if (!content || isNowThinking || hasActiveAgentState) {
         return
-      }
-      // Check if message has agentStates (deep mode) - wait for completion
-      if ('agentStates' in lastMessage && Array.isArray(lastMessage.agentStates) && lastMessage.agentStates.length > 0) {
-        const lastState = lastMessage.agentStates[lastMessage.agentStates.length - 1]
-        if (lastState?.state?.includes('🤔') || lastState?.state?.includes('思考中')) {
-          return
-        }
       }
     }
     
