@@ -66,9 +66,7 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
             <span className="flex items-center gap-1 text-blue-500">
               <Sparkles className="h-3 w-3" />
               <span className="font-medium">
-                {message.toolCalls.includes('searchMedicalLiterature') ? 'Perplexity' : 
-                 message.toolCalls.includes('queryFhirData') ? 'FHIR' : 
-                 'Tools'}
+                {message.toolCalls.includes('searchMedicalLiterature') ? 'Perplexity' : 'FHIR'}
               </span>
             </span>
           </>
