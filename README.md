@@ -13,7 +13,8 @@
 - 🤖 **AI Agent 深入模式**：自動調用 8 種工具查詢 FHIR 資料和醫學文獻
 - 📚 **提示範本庫**：社群共享的提示範本
 - 💬 **對話歷史**：依病人分類儲存，支援跨裝置同步
-- 🔌 **可插拔架構**：透過 Registry 輕鬆新增或替換功能
+- � **使用者回饋**：即時收集使用者意見，持續改進系統
+- �🔌 **可插拔架構**：透過 Registry 輕鬆新增或替換功能
 
 ## 🌐 線上展示
 
@@ -30,7 +31,7 @@
 
 ### AI 功能
 - **AI Agent（深入模式）**：
-  - 7 種 FHIR 資源查詢工具
+  - 8 種 FHIR 資源查詢工具（病患資料、診斷、用藥、過敏、檢驗報告、生命徵象、處置、就診紀錄）
   - 醫學文獻搜尋（Perplexity API）
   - 客戶端 Tool Calling 架構
 - **筆記對話（一般模式）**：互動式 AI 助理
@@ -38,6 +39,7 @@
 - **提示範本庫**：瀏覽、搜尋、分享提示範本
 - **語音錄製**：Whisper 轉錄
 - **對話歷史**：依病人儲存，Firestore 雲端同步
+- **使用者回饋**：即時回饋系統，支援 Firebase 儲存
 
 ### 使用者體驗
 - 多語言支援（中英文）
@@ -208,12 +210,12 @@ npm run deploy
 在**設定**標籤配置 API 金鑰（選用）：
 
 **內建模型**（無需金鑰）：
-- GPT-5 Mini
+- GPT-5.4 Nano
 - Gemini 3 Flash Preview（預設）
 
 **進階模型**（需要金鑰）：
-- GPT-5.1、GPT-5.2
-- Gemini 2.5 Pro、Gemini 3 Pro Preview
+- GPT-5.4 Mini、GPT-5.4
+- Gemini 2.5 Pro、Gemini 3.1 Pro Preview
 
 ---
 
@@ -229,6 +231,7 @@ medical-note-smart-on-fhir/
 │   ├── clinical-insights/ # 臨床洞察
 │   ├── clinical-summary/  # 臨床摘要
 │   ├── data-selection/    # 資料選擇
+│   ├── feedback/          # 使用者回饋
 │   ├── medical-chat/      # AI 對話
 │   ├── prompt-gallery/    # 提示範本庫
 │   └── settings/          # 設定
@@ -237,10 +240,11 @@ medical-note-smart-on-fhir/
 │   ├── core/              # 領域層
 │   ├── infrastructure/    # 基礎設施層
 │   └── shared/            # 共用工具
-├── docs/                  # 📚 文件庫（6 個核心文件）
+├── docs/                  # 📚 文件庫（7 個核心文件）
 │   ├── AI_AGENT_IMPLEMENTATION.md
 │   ├── ARCHITECTURE.md
 │   ├── FEATURES.md
+│   ├── FEEDBACK_SETUP.md
 │   ├── MEDICAL_CHAT.md
 │   ├── PROMPT_GALLERY.md
 │   ├── SECURITY.md
@@ -284,7 +288,7 @@ medical-note-smart-on-fhir/
 
 **客戶端 Tool Calling**：
 - 在瀏覽器執行 tool calling
-- 7 個 FHIR Tools + 1 個 Literature Tool
+- 8 個 FHIR Tools + 1 個 Literature Tool
 - 安全且高效
 
 詳見：[AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md)
@@ -315,6 +319,7 @@ npm test:coverage     # 覆蓋率報告
 - [AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md) - AI Agent 實作
 - [MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md) - Medical Chat 功能
 - [PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md) - 提示範本庫
+- [FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md) - 使用者回饋系統
 - [FEATURES.md](./docs/FEATURES.md) - Feature 模組架構
 
 **部署與設定**：
@@ -347,6 +352,7 @@ An intelligent clinical documentation assistant built with **Next.js 16**, **SMA
 - 🤖 **AI Agent Deep Mode**: Auto-invokes 8 tools to query FHIR data and medical literature
 - 📚 **Prompt Gallery**: Community-shared prompt templates
 - 💬 **Chat History**: Patient-categorized storage with cross-device sync
+- 📝 **User Feedback**: Real-time feedback collection for continuous improvement
 - 🔌 **Pluggable Architecture**: Easy to add or replace features via Registry
 
 ## 🌐 Live Demo
@@ -364,12 +370,13 @@ An intelligent clinical documentation assistant built with **Next.js 16**, **SMA
 - Complete clinical data display
 
 ### AI Features
-- **AI Agent (Deep Mode)**: 7 FHIR tools + Medical literature search
+- **AI Agent (Deep Mode)**: 8 FHIR tools (patient info, conditions, medications, allergies, diagnostic reports, observations, procedures, encounters) + Medical literature search
 - **Note Chat (Normal Mode)**: Interactive AI assistant
 - **Clinical Insights**: Auto-generated summaries
 - **Prompt Gallery**: Browse, search, share templates
 - **Voice Recording**: Whisper transcription
 - **Chat History**: Patient-based storage with Firestore sync
+- **User Feedback**: Real-time feedback system with Firebase storage
 
 ### User Experience
 - Multi-language (EN/ZH-TW)
@@ -449,12 +456,12 @@ npm test:coverage
 Configure in **Settings** tab (optional):
 
 **Built-in Models** (no key needed):
-- GPT-5 Mini
+- GPT-5.4 Nano
 - Gemini 3 Flash Preview (default)
 
 **Advanced Models** (key required):
-- GPT-5.1, GPT-5.2
-- Gemini 2.5 Pro, Gemini 3 Pro Preview
+- GPT-5.4 Mini, GPT-5.4
+- Gemini 2.5 Pro, Gemini 3.1 Pro Preview
 
 ---
 
@@ -471,6 +478,13 @@ medical-note-smart-on-fhir/
 │   ├── infrastructure/    # Infrastructure layer
 │   └── shared/            # Shared utilities
 ├── docs/                  # 📚 Documentation (7 core files)
+│   ├── AI_AGENT_IMPLEMENTATION.md
+│   ├── ARCHITECTURE.md
+│   ├── FEATURES.md
+│   ├── FEEDBACK_SETUP.md
+│   ├── MEDICAL_CHAT.md
+│   ├── PROMPT_GALLERY.md
+│   └── SECURITY.md
 └── __tests__/             # Tests
 ```
 
@@ -520,6 +534,7 @@ npm test:coverage     # Coverage report
 - [AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md) - AI Agent
 - [MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md) - Medical Chat
 - [PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md) - Prompt Gallery
+- [FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md) - User Feedback System
 - [FEATURES.md](./docs/FEATURES.md) - Feature modules
 
 **Deployment**:
