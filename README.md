@@ -17,7 +17,6 @@
 
 ## 🌐 線上展示
 
-- **Demo**：https://voho0000.github.io/medical-note-smart-on-fhir
 - **Launch URL**：https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
 
 > 💡 透過 [SMART Health IT Launcher](https://launch.smarthealthit.org/) 輸入 Launch URL 啟動應用程式
