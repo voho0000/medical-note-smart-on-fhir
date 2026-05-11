@@ -44,10 +44,40 @@ function formatValue(obs: any): { value: string; unit?: string; isAbnormal: bool
   return { value, unit, isAbnormal, interpretationCode: interp }
 }
 
+// Map of common test aliases → canonical name. Add entries when source
+// data uses inconsistent names for the same analyte.
+const TEST_ALIASES: Record<string, string> = {
+  CREATININE: 'CREATININE',
+  CREAT: 'CREATININE',
+  'CREAT.': 'CREATININE',
+  CREA: 'CREATININE',
+  HEMOGLOBIN: 'HEMOGLOBIN',
+  HB: 'HEMOGLOBIN',
+  HGB: 'HEMOGLOBIN',
+  HCT: 'HEMATOCRIT',
+  HEMATOCRIT: 'HEMATOCRIT',
+  SODIUM: 'NA',
+  NA: 'NA',
+  POTASSIUM: 'K',
+  K: 'K',
+  CHLORIDE: 'CL',
+  CL: 'CL',
+  GLUCOSE: 'GLUCOSE',
+  GLU: 'GLUCOSE',
+  CHOLESTEROL: 'CHOL',
+  CHOL: 'CHOL',
+  TRIGLYCERIDE: 'TG',
+  TG: 'TG',
+}
+
 function pickKey(obs: any): string {
-  // Prefer the textual display name as the row identifier so VGH variants
-  // like "T.BILI" vs "T.BILI." are visually separated as the user expects.
-  return getTestDisplayName(obs).trim().toUpperCase()
+  // Strip parenthesized/bracketed qualifiers so "Creatinine(B)",
+  // "Creatinine(Blood)", "Creatinine [Mass/volume] in Serum or Plasma"
+  // all collapse to "Creatinine".
+  const raw = getTestDisplayName(obs).trim()
+  const stripped = raw.replace(/\s*[\(\[].*$/, '').trim() || raw
+  const norm = stripped.toUpperCase()
+  return TEST_ALIASES[norm] || norm
 }
 
 export function useLabPivot(observations: any[]): Record<string, LabPivot> {
@@ -84,12 +114,21 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         dateSet.add(date)
 
         const key = pickKey(obs)
-        const displayName = getTestDisplayName(obs)
+        // Strip parenthesized qualifiers from display too, so the row label
+        // shows "Creatinine" not "Creatinine(B)".
+        const raw = getTestDisplayName(obs)
+        const displayName = raw.replace(/\s*[\(\[].*$/, '').trim() || raw
         const { value, unit, isAbnormal, interpretationCode } = formatValue(obs)
 
         if (!testMap.has(key)) {
           testMap.set(key, { testKey: key, displayName, values: new Map() })
           unitCount.set(key, new Map())
+        } else {
+          // Prefer the shorter display name (cleaner labels)
+          const row = testMap.get(key)!
+          if (displayName.length < row.displayName.length) {
+            row.displayName = displayName
+          }
         }
         const row = testMap.get(key)!
         const cell: LabCell = {
