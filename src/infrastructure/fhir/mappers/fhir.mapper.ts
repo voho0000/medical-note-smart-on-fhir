@@ -76,6 +76,7 @@ export class FhirMapper implements IDataMapper {
       clinicalStatus: fhirResource.clinicalStatus?.coding?.[0]?.code,
       verificationStatus: fhirResource.verificationStatus?.coding?.[0]?.code,
       recordedDate: fhirResource.recordedDate || fhirResource.dateRecorded,
+      encounter: fhirResource.encounter,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -89,6 +90,8 @@ export class FhirMapper implements IDataMapper {
       intent: fhirResource.intent,
       authoredOn: fhirResource.authoredOn,
       dosageInstruction: fhirResource.dosageInstruction,
+      encounter: fhirResource.encounter,
+      dispenseRequest: fhirResource.dispenseRequest,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }

@@ -7,13 +7,14 @@ import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-co
 // Legacy default selection - includes both old and new category IDs
 export const DEFAULT_DATA_SELECTION: DataSelection = {
   patientInfo: true,
-  conditions: true,
-  medications: true,
+  encounters: true,        // New: encounter-centric view (preferred for AI context)
+  conditions: false,       // Off by default — covered by encounters section
+  medications: false,      // Off by default — covered by encounters section
   allergies: true,
-  diagnosticReports: true,  // Legacy - kept for backward compatibility
-  labReports: true,         // New
-  imagingReports: true,     // New
-  procedures: true,
+  diagnosticReports: false,
+  labReports: true,
+  imagingReports: true,
+  procedures: false,       // Off by default — covered by encounters section
   observations: true
 }
 

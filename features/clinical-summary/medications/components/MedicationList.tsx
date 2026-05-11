@@ -39,11 +39,11 @@ export function MedicationList({ medications, isLoading, error }: MedicationList
 
   return (
     <div className="space-y-4">
-      {/* Active Medications */}
+      {/* Currently in use Medications */}
       {activeMedications.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-foreground">
-            Active Medications ({activeMedications.length})
+            Currently in use ({activeMedications.length})
           </h3>
           <div className="space-y-2">
             {activeMedications.map((medication) => (

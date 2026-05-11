@@ -23,10 +23,10 @@ export interface TabConfig {
 }
 
 export const LEFT_PANEL_TABS: TabConfig[] = [
-  { id: 'patient', labelKey: 'patient', order: 0, enabled: true },
-  { id: 'reports', labelKey: 'reports', order: 1, enabled: true },
-  { id: 'meds', labelKey: 'medications', order: 2, enabled: true },
-  { id: 'visits', labelKey: 'visits', order: 3, enabled: true },
+  { id: 'patient', labelKey: 'patient',     order: 0, enabled: true },
+  { id: 'visits',  labelKey: 'visits',      order: 1, enabled: true },
+  { id: 'reports', labelKey: 'reports',     order: 2, enabled: true },
+  { id: 'meds',    labelKey: 'medications', order: 3, enabled: true },
 ]
 
 // ============================================================================
@@ -68,7 +68,7 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
     component: DiagnosesCard,
     tab: 'patient',
     order: 2,
-    enabled: true,
+    enabled: false,
   },
   // Reports Tab Features
   {

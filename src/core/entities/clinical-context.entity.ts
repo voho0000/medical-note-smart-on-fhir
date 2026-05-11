@@ -14,6 +14,8 @@ export type { FilterValue }
 
 export interface DataSelection {
   patientInfo: boolean
+  /** Encounter-centric view: each visit grouped with its diagnoses/meds/tests */
+  encounters: boolean
   conditions: boolean
   medications: boolean
   allergies: boolean

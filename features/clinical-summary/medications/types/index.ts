@@ -33,5 +33,10 @@ export interface MedicationRow {
   startedOn?: string
   stoppedOn?: string
   durationDays?: number
+  /** Computed end date: startedOn + durationDays (ISO date) */
+  endDate?: string
+  /** Days remaining until endDate (negative if already past) */
+  daysRemaining?: number
+  /** True if status is stopped/completed OR computed endDate has passed */
   isInactive: boolean
 }

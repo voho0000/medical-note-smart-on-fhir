@@ -4,7 +4,17 @@ import type { EncounterObservation } from "../components/EncounterObservationCar
 import type { EncounterMedication, EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
 
+export type EncounterDiagnosis = {
+  id: string
+  title: string
+  code?: string
+  clinicalStatus?: string
+  verificationStatus?: string
+  recordedDate?: string
+}
+
 export type EncounterDetails = {
+  diagnoses: EncounterDiagnosis[]
   medications: EncounterMedication[]
   tests: EncounterObservation[]
   procedures: EncounterProcedure[]
@@ -53,6 +63,7 @@ export function useEncounterDetails(
   observations: any[],
   procedures: any[],
   clinicalNotes: ClinicalNote[],
+  conditions: any[],
   locale: string = "en-US"
 ) {
   return useMemo(() => {
@@ -60,7 +71,7 @@ export function useEncounterDetails(
 
     const ensureEntry = (encounterId: string) => {
       if (!map.has(encounterId)) {
-        map.set(encounterId, { medications: [], tests: [], procedures: [], clinicalNotes: [] })
+        map.set(encounterId, { diagnoses: [], medications: [], tests: [], procedures: [], clinicalNotes: [] })
       }
       return map.get(encounterId)!
     }
@@ -145,6 +156,36 @@ export function useEncounterDetails(
       })
     }
 
+    // Group conditions by encounter reference
+    if (Array.isArray(conditions)) {
+      conditions.forEach((condition: any) => {
+        const encounterId = getReferenceId(condition?.encounter)
+        if (!encounterId) return
+        const entry = ensureEntry(encounterId)
+        const id = condition?.id || `${encounterId}-dx-${entry.diagnoses.length}`
+        if (entry.diagnoses.some((d) => d.id === id)) return
+
+        const coding = condition?.code?.coding
+        const icdCode = coding?.find((c: any) =>
+          c.system?.toLowerCase().includes('icd')
+        )?.code || coding?.[0]?.code
+
+        entry.diagnoses.push({
+          id,
+          title: condition?.code?.text
+            || coding?.[0]?.display
+            || coding?.[0]?.code
+            || 'Unknown diagnosis',
+          code: icdCode,
+          clinicalStatus: condition?.clinicalStatus?.coding?.[0]?.code
+            || (typeof condition?.clinicalStatus === 'string' ? condition.clinicalStatus : undefined),
+          verificationStatus: condition?.verificationStatus?.coding?.[0]?.code
+            || (typeof condition?.verificationStatus === 'string' ? condition.verificationStatus : undefined),
+          recordedDate: condition?.recordedDate || condition?.dateRecorded,
+        })
+      })
+    }
+
     return map
-  }, [medications, diagnosticReports, observations, procedures, clinicalNotes, locale])
+  }, [medications, diagnosticReports, observations, procedures, clinicalNotes, conditions, locale])
 }

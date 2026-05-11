@@ -3,6 +3,7 @@
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatDateTime } from "../utils/formatters"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import type { EncounterDiagnosis } from "../hooks/useEncounterDetails"
 
 export type EncounterMedication = {
   id: string
@@ -41,6 +42,41 @@ export function MedicationRow({ medication }: { medication: EncounterMedication 
                 : "border-muted bg-muted/60 text-muted-foreground"
             )}>
               {medication.status}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function DiagnosisTag({ diagnosis }: { diagnosis: EncounterDiagnosis }) {
+  const statusColorMap: Record<string, string> = {
+    active: 'border-rose-200 bg-rose-50 text-rose-700',
+    resolved: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    inactive: 'border-gray-200 bg-gray-50 text-gray-600',
+    remission: 'border-sky-200 bg-sky-50 text-sky-700',
+  }
+  const statusStyle =
+    (diagnosis.clinicalStatus && statusColorMap[diagnosis.clinicalStatus.toLowerCase()]) ||
+    'border-muted bg-muted/60 text-muted-foreground'
+
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-semibold text-foreground">{diagnosis.title}</span>
+          {diagnosis.code && (
+            <span className="font-mono text-xs text-muted-foreground">{diagnosis.code}</span>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1 text-right">
+          {diagnosis.recordedDate && (
+            <span className="text-xs text-muted-foreground">{diagnosis.recordedDate.slice(0, 10)}</span>
+          )}
+          {diagnosis.clinicalStatus && (
+            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs capitalize", statusStyle)}>
+              {diagnosis.clinicalStatus}
             </span>
           )}
         </div>

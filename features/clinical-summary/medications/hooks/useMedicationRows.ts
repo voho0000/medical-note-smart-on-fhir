@@ -30,7 +30,7 @@ export function useMedicationRows(medications: any[]) {
       }
 
       const status = med.status?.toLowerCase() || "unknown"
-      const isInactive = inactiveStatuses.has(status)
+      const statusInactive = inactiveStatuses.has(status)
 
       const doseSummary = humanDoseAmount(dosage?.doseAndRate, dosage?.text)
       const routeSummary = getCodeableConceptText(dosage?.route)
@@ -44,9 +44,34 @@ export function useMedicationRows(medications: any[]) {
       })
 
       const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start
-      const stopDateRaw = isInactive
+      const stopDateRaw = statusInactive
         ? med.dispenseRequest?.validityPeriod?.end || med.effectiveDateTime || med.authoredOn
         : undefined
+
+      const durationDays = computeDurationDays({
+        start: startDateRaw,
+        stop: stopDateRaw,
+        expectedDuration: med.dispenseRequest?.expectedSupplyDuration,
+        boundsDuration: dosage?.timing?.repeat?.boundsDuration,
+        boundsPeriod: dosage?.timing?.repeat?.boundsPeriod,
+        validityPeriod: med.dispenseRequest?.validityPeriod,
+      })
+
+      // Compute endDate from startDate + durationDays
+      let endDate: string | undefined
+      let daysRemaining: number | undefined
+      if (startDateRaw && durationDays) {
+        const start = new Date(startDateRaw)
+        if (!Number.isNaN(start.getTime())) {
+          const end = new Date(start)
+          end.setDate(end.getDate() + durationDays)
+          endDate = end.toISOString()
+          daysRemaining = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+        }
+      }
+
+      // Inactive = explicitly stopped/completed OR computed endDate has passed
+      const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
 
       return {
         id: med.id || Math.random().toString(36),
@@ -58,14 +83,9 @@ export function useMedicationRows(medications: any[]) {
         frequency: frequencySummary || undefined,
         startedOn: formatDate(startDateRaw),
         stoppedOn: stopDateRaw ? formatDate(stopDateRaw) : undefined,
-        durationDays: computeDurationDays({
-          start: startDateRaw,
-          stop: stopDateRaw,
-          expectedDuration: med.dispenseRequest?.expectedSupplyDuration,
-          boundsDuration: dosage?.timing?.repeat?.boundsDuration,
-          boundsPeriod: dosage?.timing?.repeat?.boundsPeriod,
-          validityPeriod: med.dispenseRequest?.validityPeriod,
-        }),
+        durationDays,
+        endDate: endDate ? formatDate(endDate) : undefined,
+        daysRemaining,
         isInactive,
         _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
       }

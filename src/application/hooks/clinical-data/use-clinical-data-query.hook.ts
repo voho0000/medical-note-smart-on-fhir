@@ -13,25 +13,29 @@
 import { useQuery } from '@tanstack/react-query'
 import { FetchClinicalDataUseCase } from '@/src/core/use-cases/clinical-data/fetch-clinical-data.use-case'
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
+import { LocalBundleRepository } from '@/src/infrastructure/fhir/repositories/local-bundle.repository'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import { usePatientQuery } from '../patient/use-patient-query.hook'
 
 export function useClinicalDataQuery() {
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
-  
+
   return useQuery({
     queryKey: ['clinical-data', patient?.id],
     queryFn: async (): Promise<ClinicalDataCollection> => {
       if (!patient?.id) {
         throw new Error('Patient ID is required')
       }
-      
-      const repository = new FhirClinicalDataRepository()
+
+      const repository = LocalBundleService.hasData()
+        ? new LocalBundleRepository()
+        : new FhirClinicalDataRepository()
       const useCase = new FetchClinicalDataUseCase(repository)
       return await useCase.execute(patient.id)
     },
-    enabled: !!patient?.id && !patientLoading, // Only run when patient is loaded
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!patient?.id && !patientLoading,
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   })
 }

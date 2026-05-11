@@ -13,17 +13,21 @@
 import { useQuery } from '@tanstack/react-query'
 import { GetPatientUseCase } from '@/src/core/use-cases/patient/get-patient.use-case'
 import { FhirPatientRepository } from '@/src/infrastructure/fhir/repositories/patient.repository'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 
 export function usePatientQuery() {
   return useQuery({
     queryKey: ['patient'],
     queryFn: async (): Promise<PatientEntity | null> => {
+      if (LocalBundleService.hasData()) {
+        return LocalBundleService.parseStored()?.patient ?? null
+      }
       const repository = new FhirPatientRepository()
       const useCase = new GetPatientUseCase(repository)
       return await useCase.execute()
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   })
 }

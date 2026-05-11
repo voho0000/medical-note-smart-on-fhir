@@ -2,18 +2,20 @@
 
 import { Badge } from "@/components/ui/badge"
 import { EncounterObservationCard } from "./EncounterObservationCard"
-import { MedicationRow, ProcedureRow } from "./EncounterCards"
+import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
 // import { NoteItem } from "./NoteItem" // TODO: 暫時隱藏，等有真實資料時再啟用測試
 import type { VisitRecord } from "../hooks/useVisitHistory"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
+import { resolveIcdCodes } from "@/src/shared/utils/icd-lookup"
 
 type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'other'
 
 interface VisitItemProps {
   visit: VisitRecord
   details?: EncounterDetails
+  icdDict?: Map<string, string>
   isExpanded: boolean
   onToggle: () => void
 }
@@ -31,11 +33,14 @@ const getTypeBadge = (type: VisitType, labels: any) => {
   return <Badge variant={variant}>{label}</Badge>
 }
 
-export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemProps) {
+export function VisitItem({ visit, details, icdDict, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
+  const reasonCodes = resolveIcdCodes(visit.reason, icdDict)
+  const hasIcdCodes = reasonCodes.length > 0 && /^[A-Z]\d/.test(reasonCodes[0].code)
   const hasDetails = !!(details && (
-    details.medications.length > 0 || 
-    details.tests.length > 0 || 
+    details.diagnoses.length > 0 ||
+    details.medications.length > 0 ||
+    details.tests.length > 0 ||
     details.procedures.length > 0
     // || details.clinicalNotes.length > 0 // TODO: 暫時隱藏病歷記錄判斷
   ))
@@ -77,7 +82,26 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
             {visit.reason && (
               <div>
                 <span className="font-medium text-muted-foreground">{t.visitHistory.reason}: </span>
-                <span>{visit.reason}</span>
+                {hasIcdCodes ? (
+                  <span className="inline-flex flex-wrap gap-1 align-middle">
+                    {reasonCodes.map((rc, i) => (
+                      <span
+                        key={`${rc.code}-${i}`}
+                        title={rc.description || rc.code}
+                        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-800"
+                      >
+                        <span className="font-mono font-medium">{rc.code}</span>
+                        {rc.description && (
+                          <span className="text-blue-700/80 max-w-[200px] truncate">
+                            {rc.description}
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span>{visit.reason}</span>
+                )}
               </div>
             )}
             {visit.diagnosis && (
@@ -105,6 +129,17 @@ export function VisitItem({ visit, details, isExpanded, onToggle }: VisitItemPro
         <div className="border-t bg-muted/30 px-3 py-3 text-sm">
           {hasDetails ? (
             <div className="space-y-4">
+              {details?.diagnoses.length ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.diagnoses}</div>
+                  <div className="grid gap-2">
+                    {details.diagnoses.map((dx) => (
+                      <DiagnosisTag key={dx.id} diagnosis={dx} />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {details?.tests.length ? (
                 <div className="space-y-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.tests}</div>

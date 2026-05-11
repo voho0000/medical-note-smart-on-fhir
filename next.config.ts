@@ -8,8 +8,11 @@ const basePath = isGhPages ? "/medical-note-smart-on-fhir" : "";
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
-  // 避免 Next 往上層亂抓 lockfile（雲端同步/家目錄）
-  outputFileTracingRoot: path.join(__dirname),
+  // worktree 模式：主專案根目錄（node_modules 在那裡）
+  outputFileTracingRoot: path.join(__dirname, '../../..'),
+  turbopack: {
+    root: path.join(__dirname, '../../..'),
+  },
   // 只有 GH Pages 才設定 basePath / assetPrefix
   ...(isGhPages
     ? {

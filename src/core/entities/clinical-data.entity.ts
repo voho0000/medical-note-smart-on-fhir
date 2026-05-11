@@ -13,6 +13,9 @@ export interface ConditionEntity {
   clinicalStatus?: string
   verificationStatus?: string
   recordedDate?: string
+  encounter?: {
+    reference?: string
+  }
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
@@ -50,6 +53,10 @@ export interface MedicationEntity {
       }
     }>
   }>
+  encounter?: {
+    reference?: string
+  }
+  dispenseRequest?: any
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

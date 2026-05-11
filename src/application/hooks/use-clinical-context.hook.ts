@@ -10,6 +10,7 @@ import { formatNumberSmart } from "@/features/clinical-summary/reports/utils/num
 import { usePatientContext } from "./clinical-context/usePatientContext"
 import { useConditionsContext } from "./clinical-context/useConditionsContext"
 import { useMedicationsContext } from "./clinical-context/useMedicationsContext"
+import { useEncountersContext } from "./clinical-context/useEncountersContext"
 import { useAllergiesContext } from "./clinical-context/useAllergiesContext"
 import { useReportsContext } from "./clinical-context/useReportsContext"
 import { useProceduresContext } from "./clinical-context/useProceduresContext"
@@ -45,6 +46,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
 
   // Use individual context hooks
   const patientSection = usePatientContext(selectedData.patientInfo ?? false)
+  const encountersSection = useEncountersContext(selectedData.encounters ?? false, clinicalData)
   const conditionsSection = useConditionsContext(selectedData.conditions ?? false, clinicalData, filters)
   const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters)
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
@@ -139,6 +141,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
     const sections: ClinicalContextSection[] = []
 
     if (patientSection) sections.push(patientSection)
+    if (encountersSection) sections.push(encountersSection)
     if (conditionsSection) sections.push(conditionsSection)
     if (medicationsSection) sections.push(medicationsSection)
     if (allergiesSection) sections.push(allergiesSection)
@@ -171,6 +174,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
     return sections
   }, [
     patientSection,
+    encountersSection,
     conditionsSection,
     medicationsSection,
     allergiesSection,

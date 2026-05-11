@@ -3,6 +3,7 @@
 
 import { registerDataCategory } from '../registry/data-category.registry'
 import { patientInfoCategory } from './patient-info.category'
+import { encountersCategory } from './encounters.category'
 import { conditionsCategory } from './conditions.category'
 import { medicationsCategory } from './medications.category'
 import { allergiesCategory } from './allergies.category'
@@ -14,6 +15,7 @@ import { vitalSignsCategory } from './vital-signs.category'
 // Register all categories
 export function initializeCategories(): void {
   registerDataCategory(patientInfoCategory)
+  registerDataCategory(encountersCategory)
   registerDataCategory(conditionsCategory)
   registerDataCategory(medicationsCategory)
   registerDataCategory(allergiesCategory)
@@ -26,6 +28,7 @@ export function initializeCategories(): void {
 // Export individual categories for direct access if needed
 export {
   patientInfoCategory,
+  encountersCategory,
   conditionsCategory,
   medicationsCategory,
   allergiesCategory,
