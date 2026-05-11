@@ -117,12 +117,16 @@ function CumulativeLabReportInner({ nonEmpty, activeId, setActiveId, locale, exp
   return (
     <div className={expanded ? 'flex h-full flex-col' : 'space-y-3'}>
       <Tabs value={activeId} onValueChange={setActiveId} className={expanded ? 'flex h-full w-full flex-col' : 'w-full'}>
-        <div className="flex items-center gap-2">
-          <TabsList className="flex-1 flex flex-wrap h-auto bg-muted/40 p-1 gap-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <TabsList className="flex-1 flex flex-nowrap overflow-x-auto h-auto bg-muted/40 p-1 gap-1 min-w-0 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
             {nonEmpty.map((p) => {
               const label = locale === 'zh-TW' ? p.category.labelZh : p.category.labelEn
               return (
-                <TabsTrigger key={p.category.id} value={p.category.id} className="text-xs h-7 data-[state=active]:bg-background">
+                <TabsTrigger
+                  key={p.category.id}
+                  value={p.category.id}
+                  className="text-xs h-7 shrink-0 whitespace-nowrap data-[state=active]:bg-background"
+                >
                   {label} ({p.rows.length})
                 </TabsTrigger>
               )

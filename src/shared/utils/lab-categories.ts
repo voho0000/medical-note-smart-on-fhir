@@ -179,9 +179,17 @@ export function categorizeObservation(obs: any): LabCategory | null {
     return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   }
 
-  // 4. HbA1c always wins over CBC (text contains "Hemoglobin" but is glucose)
-  if (/\bA1C\b|HBA1C|GLYCATED|GLYCOHEMOGLOBIN|GLYCO\s*HAEMOGLOBIN/.test(fullText)) {
+  // 4. HbA1c always wins over CBC (text contains "Hb" but is glucose)
+  //    Use lenient pattern: A1C with optional separator, HBA1C, Hb-A1c, etc.
+  if (/A1C|HBA1C|HB\s*A1C|HB-A1C|GLYCATED|GLYCOHEMOGLOBIN|GLYCO\s*HAEMOGLOBIN/i.test(fullText)) {
     return LAB_CATEGORIES.find((c) => c.id === 'glucose') || null
+  }
+
+  // 5. Serology / virology / autoimmune markers — not part of routine
+  //    cumulative report categories. Skip rather than miscategorize as CBC
+  //    (e.g., "HBs Ag" was being matched into CBC via "HB" overlap).
+  if (/\bHBS\s*AG\b|\bHBC\s*AG\b|\bHBE\s*AG\b|\bHBE\s*AB\b|ANTI[-\s]?HBS|ANTI[-\s]?HBC|ANTI[-\s]?HBE|ANTI[-\s]?HAV|ANTI[-\s]?HIV|\bHIV\b|\bVDRL\b|\bRPR\b|SYPHILIS|RHEUMATOID FACTOR|\bRF\b/i.test(fullText)) {
+    return null
   }
 
   // Pass 1: exact short-code match against `codes` (VGH style)
