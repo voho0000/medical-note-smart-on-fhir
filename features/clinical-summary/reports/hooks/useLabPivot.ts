@@ -45,29 +45,54 @@ function formatValue(obs: any): { value: string; unit?: string; isAbnormal: bool
 }
 
 // Map of common test aliases → canonical name. Add entries when source
-// data uses inconsistent names for the same analyte.
+// data uses inconsistent names for the same analyte (e.g. "ALT" / "ALT(GPT)" /
+// "ALT/GPT" / "GPT" should all merge into one row).
 const TEST_ALIASES: Record<string, string> = {
-  CREATININE: 'CREATININE',
-  CREAT: 'CREATININE',
-  'CREAT.': 'CREATININE',
-  CREA: 'CREATININE',
-  HEMOGLOBIN: 'HEMOGLOBIN',
-  HB: 'HEMOGLOBIN',
-  HGB: 'HEMOGLOBIN',
-  HCT: 'HEMATOCRIT',
-  HEMATOCRIT: 'HEMATOCRIT',
-  SODIUM: 'NA',
-  NA: 'NA',
-  POTASSIUM: 'K',
-  K: 'K',
-  CHLORIDE: 'CL',
-  CL: 'CL',
-  GLUCOSE: 'GLUCOSE',
-  GLU: 'GLUCOSE',
-  CHOLESTEROL: 'CHOL',
-  CHOL: 'CHOL',
-  TRIGLYCERIDE: 'TG',
-  TG: 'TG',
+  // Creatinine
+  CREATININE: 'CREATININE', CREAT: 'CREATININE', 'CREAT.': 'CREATININE', CREA: 'CREATININE',
+  // Hemoglobin / Hematocrit
+  HB: 'HB', HGB: 'HB', HEMOGLOBIN: 'HB',
+  HCT: 'HCT', HEMATOCRIT: 'HCT',
+  // Electrolytes
+  NA: 'NA', SODIUM: 'NA',
+  K: 'K', POTASSIUM: 'K',
+  CL: 'CL', CHLORIDE: 'CL',
+  CA: 'CA', CALCIUM: 'CA', CACAL: 'CA',
+  IP: 'IP', PHOSPHATE: 'IP', PHOSPHORUS: 'IP',
+  // Glucose
+  GLU: 'GLUCOSE', GLUCOSE: 'GLUCOSE',
+  // Lipids
+  CHOL: 'CHOL', 'CHOL.': 'CHOL', CHOLESTEROL: 'CHOL',
+  TG: 'TG', TRIG: 'TG', TRIGLYCERIDE: 'TG', TRIGLYCERIDES: 'TG',
+  HDL: 'HDLC', 'HDL-C': 'HDLC', HDLC: 'HDLC',
+  LDL: 'LDLC', 'LDL-C': 'LDLC', LDLC: 'LDLC',
+  // Liver enzymes (with GOT/GPT legacy aliases)
+  ALT: 'ALT', GPT: 'ALT', 'ALT/GPT': 'ALT', 'GPT/ALT': 'ALT', 'GPT(ALT)': 'ALT',
+  AST: 'AST', GOT: 'AST', 'AST/GOT': 'AST', 'GOT/AST': 'AST', 'GOT(AST)': 'AST',
+  GGT: 'GGT', 'G-GT': 'GGT', 'GAMMA GT': 'GGT', 'GAMMA-GT': 'GGT',
+  'ALK-P': 'ALK-P', ALKP: 'ALK-P', 'ALKALINE PHOSPHATASE': 'ALK-P',
+  LDH: 'LDH', 'LACTATE DEHYDROGENASE': 'LDH',
+  // Bilirubin
+  'T.BILI': 'T.BILI', 'T.BILI.': 'T.BILI', TBILI: 'T.BILI', BILIT: 'T.BILI', 'TOTAL BILIRUBIN': 'T.BILI', BILIRUBIN: 'T.BILI',
+  'D.BILI': 'D.BILI', DBILI: 'D.BILI', 'DIRECT BILIRUBIN': 'D.BILI',
+  // Protein
+  TP: 'TP', 'TOTAL PROTEIN': 'TP',
+  ALB: 'ALB', ALBUMIN: 'ALB',
+  // BUN
+  BUN: 'BUN', 'UREA NITROGEN': 'BUN', UREA: 'BUN',
+  // Uric acid
+  UA: 'URIC ACID', URATE: 'URIC ACID', 'URIC ACID': 'URIC ACID',
+  // CRP
+  CRP: 'CRP', 'C REACTIVE PROTEIN': 'CRP', 'C-REACTIVE PROTEIN': 'CRP', 'HS-CRP': 'CRP',
+  // Cardiac
+  CK: 'CK', 'CREATINE KINASE': 'CK',
+  CKMB: 'CKMB', 'CK-MB': 'CKMB',
+  TROP: 'TROP', TROPONIN: 'TROP', 'TROPONIN I': 'TROP', 'TROPONIN T': 'TROP',
+  // Iron
+  IRON: 'IRON', FE: 'IRON',
+  TIBC: 'TIBC',
+  // Glycated hemoglobin
+  HBA1C: 'HBA1C', 'HEMOGLOBIN A1C': 'HBA1C', 'GLYCATED HEMOGLOBIN': 'HBA1C', 'GLYCOHEMOGLOBIN': 'HBA1C',
 }
 
 function pickKey(obs: any): string {

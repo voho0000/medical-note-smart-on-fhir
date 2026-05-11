@@ -96,6 +96,17 @@ function normalize(s: string): string {
  * keywords win generic ones (e.g., "HEMOGLOBIN A1C" → glucose beats
  * "HEMOGLOBIN" → cbc).
  */
+// Qualitative dipstick results (Negative/Positive/Trace/+1...) are almost
+// always urinalysis tests — used to disambiguate "Bilirubin negative" (urine
+// dipstick) from "Bilirubin 0.8" (serum).
+const QUALITATIVE_RE = /^(negative|positive|trace|few|occasional|moderate|many|\d?\+|\+{1,4}|none)$/i
+
+function isQualitativeResult(obs: any): boolean {
+  if (obs.valueQuantity?.value !== undefined && obs.valueQuantity?.value !== null) return false
+  const v = String(obs.valueString || obs.valueCodeableConcept?.text || '').trim()
+  return !!v && QUALITATIVE_RE.test(v)
+}
+
 export function categorizeObservation(obs: any): LabCategory | null {
   if (!obs) return null
 
@@ -110,6 +121,13 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // Special case: urine specimen → urinalysis category
   const specimenText = obs.specimen?.display || obs.category?.[1]?.text
   if (specimenText && /urine|尿/i.test(String(specimenText))) {
+    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+  }
+
+  // Heuristic: qualitative dipstick values → urinalysis (handles cases like
+  // "Bilirubin: negative" that look like serum tests by name but are urine
+  // dipstick by value type).
+  if (isQualitativeResult(obs)) {
     return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   }
 
