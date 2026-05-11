@@ -151,13 +151,21 @@ export function categorizeObservation(obs: any): LabCategory | null {
   const fullText = [textNorm, ...displayNorms].filter(Boolean).join(' ')
 
   // ── Early special cases ──────────────────────────────────────────────────
-  // 1. FHIR specimen → urine
-  // Proper FHIR fills `Observation.specimen` referencing a urine specimen.
-  // Many bridges (incl. VGH) don't populate this, so we also fall back to
-  // text-based and value-based heuristics below.
-  const specimenText = obs.specimen?.display || obs.category?.[1]?.text
-  if (specimenText && /urine|尿/i.test(String(specimenText))) {
-    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+  // 1. FHIR specimen-based routing
+  // EHR-FHIR-Bridge now infers specimen from order name (尿/糞/CSF/胸水...).
+  // Use it as the most authoritative source.
+  const specimenText = String(obs.specimen?.display || obs.category?.[1]?.text || '')
+  if (specimenText) {
+    if (/urine|urinaly|尿/i.test(specimenText)) {
+      return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+    }
+    // Non-blood/serum/plasma specimens (stool, sputum, CSF, pleural fluid,
+    // ascites, smear, synovial fluid, amniotic, bone marrow…) — these aren't
+    // covered by our 5 cumulative-report categories. Skip rather than
+    // miscategorize them as blood chem/glucose/tumor.
+    if (!/blood|serum|plasma|whole\s*blood|venous|capillary|血/i.test(specimenText)) {
+      return null
+    }
   }
 
   // 2. Text mentions urine (LOINC long names like "Glucose [Presence] in Urine")
