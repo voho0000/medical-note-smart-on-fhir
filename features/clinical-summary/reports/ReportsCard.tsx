@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Menu } from "lucide-react"
+import { Menu, Maximize2, Minimize2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { useReportsData } from './hooks/useReportsData'
@@ -22,6 +22,7 @@ export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
+  const [expanded, setExpanded] = useState(false)
 
   const { reportRows, seenIds } = useReportsData(diagnosticReports)
   const procedureRows = useProcedureRows(procedures, observations)
@@ -132,58 +133,111 @@ export function ReportsCard() {
     )
   }
 
+  const reportsContent = (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className={expanded ? 'flex h-full w-full flex-col' : 'w-full'}>
+      {/* Desktop tabs row with maximize button on the right */}
+      <div className="hidden md:flex items-center gap-2 mb-6">
+        <TabsList className="flex-1 !flex !flex-nowrap !justify-start min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+          {tabConfigs.map((tab) => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className={`!flex-none px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title={expanded ? 'Minimize' : 'Expand to fullscreen'}
+        >
+          {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {/* Mobile dropdown - shown on small screens */}
+      <div className="mb-6 md:hidden flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="flex-1 justify-between">
+              <span className="truncate">
+                {tabConfigs.find(t => t.value === activeTab)?.label || tabConfigs[0]?.label}
+              </span>
+              <Menu className="ml-2 h-4 w-4 shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
+            {tabConfigs.map((tab) => (
+              <DropdownMenuItem
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={activeTab === tab.value ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : ""}
+              >
+                {tab.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title={expanded ? 'Minimize' : 'Expand to fullscreen'}
+        >
+          {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {tabConfigs.map((tab) =>
+        tab.isCumulative ? (
+          <TabsContent
+            key={tab.value}
+            value={tab.value}
+            className={expanded ? 'mt-0 flex-1 min-h-0' : 'mt-0'}
+          >
+            <CumulativeLabReport observations={observations} fullHeight={expanded} />
+          </TabsContent>
+        ) : (
+          <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} />
+        )
+      )}
+    </Tabs>
+  )
+
+  if (expanded) {
+    return (
+      <>
+        {/* Placeholder to maintain layout in original spot */}
+        <Card className={`${CARD_BORDER_CLASSES.clinical} opacity-30 pointer-events-none`}>
+          <CardContent className="px-4 pb-4 h-40 flex items-center justify-center text-muted-foreground">
+            <Maximize2 className="h-6 w-6 mr-2" />
+            <span className="text-sm">Reports expanded — click X to close</span>
+          </CardContent>
+        </Card>
+
+        {/* Fullscreen overlay */}
+        <div
+          className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm p-4 sm:p-6 flex flex-col"
+          onClick={() => setExpanded(false)}
+        >
+          <div
+            className="flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {reportsContent}
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <Card className={CARD_BORDER_CLASSES.clinical}>
       <CardContent className="px-4 pb-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          {/* Desktop tabs - hidden on small screens */}
-          <TabsList className="mb-6 hidden md:!flex !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
-            {tabConfigs.map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className={`!flex-none px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
-              >
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {/* Mobile dropdown - shown on small screens */}
-          <div className="mb-6 md:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full justify-between">
-                  <span className="truncate">
-                    {tabConfigs.find(t => t.value === activeTab)?.label || tabConfigs[0]?.label}
-                  </span>
-                  <Menu className="ml-2 h-4 w-4 shrink-0" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
-                {tabConfigs.map((tab) => (
-                  <DropdownMenuItem
-                    key={tab.value}
-                    onClick={() => setActiveTab(tab.value)}
-                    className={activeTab === tab.value ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : ""}
-                  >
-                    {tab.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {tabConfigs.map((tab) =>
-            tab.isCumulative ? (
-              <TabsContent key={tab.value} value={tab.value} className="mt-0">
-                <CumulativeLabReport observations={observations} />
-              </TabsContent>
-            ) : (
-              <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} />
-            )
-          )}
-        </Tabs>
+        {reportsContent}
       </CardContent>
     </Card>
   )

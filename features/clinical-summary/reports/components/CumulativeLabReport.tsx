@@ -3,23 +3,25 @@
 // Cumulative lab report view (VGH 累積報告 style).
 // Pivot: rows = tests, columns = dates (newest first).
 // Categories tabs: CBC, 生化, 血糖, 癌症指數, 尿液.
+// Expand/fullscreen is handled at the parent level (ReportsCard) so the
+// whole Reports section can be enlarged, not just this view.
 import { useMemo, useState } from "react"
-import { Maximize2, Minimize2 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useLabPivot, type LabPivot, type LabRow } from "../hooks/useLabPivot"
+import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
 import { LAB_CATEGORIES } from "@/src/shared/utils/lab-categories"
 
 interface CumulativeLabReportProps {
   observations: any[]
+  /** When true, allow table to take more vertical space (e.g., parent fullscreen mode) */
+  fullHeight?: boolean
 }
 
 function formatDateLabel(d: string): string {
-  // d is "YYYY-MM-DD"; show as YY/MM/DD to save column width
   return d.length >= 10 ? `${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}` : d
 }
 
-function LabPivotTable({ pivot, expanded = false }: { pivot: LabPivot; expanded?: boolean }) {
+function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHeight?: boolean }) {
   const { t } = useLanguage()
   if (pivot.rows.length === 0 || pivot.dates.length === 0) {
     return (
@@ -29,10 +31,10 @@ function LabPivotTable({ pivot, expanded = false }: { pivot: LabPivot; expanded?
     )
   }
 
-  const heightClass = expanded ? 'max-h-[calc(100vh-180px)]' : 'max-h-[60vh]'
+  const heightClass = fullHeight ? 'max-h-[calc(100vh-220px)]' : 'max-h-[60vh]'
   return (
     <div
-      className={`overflow-auto ${heightClass} rounded-md border [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
+      className={`w-full max-w-full overflow-x-auto overflow-y-auto ${heightClass} rounded-md border [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
       style={{ scrollbarWidth: 'thin' }}
     >
       <table className="text-xs border-collapse w-max min-w-full">
@@ -107,31 +109,29 @@ function renderRowsWithSubgroups(pivot: LabPivot) {
   return elements
 }
 
-interface InnerProps {
-  nonEmpty: LabPivot[]
-  activeId: string
-  setActiveId: (id: string) => void
-  locale: string
-  expanded: boolean
-  onToggleExpand: () => void
-}
+export function CumulativeLabReport({ observations, fullHeight = false }: CumulativeLabReportProps) {
+  const pivots = useLabPivot(observations)
+  const { locale } = useLanguage()
 
-function CumulativeLabReportInner({ nonEmpty, activeId, setActiveId, locale, expanded, onToggleExpand }: InnerProps) {
-  return (
-    <div className={expanded ? 'flex h-full flex-col' : 'space-y-3'}>
-      {/* Header row: expand/minimize control */}
-      <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={onToggleExpand}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title={expanded ? 'Minimize' : 'Expand to fullscreen'}
-        >
-          {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          <span>{expanded ? 'Minimize' : 'Fullscreen'}</span>
-        </button>
+  const nonEmpty = useMemo(() => {
+    return LAB_CATEGORIES
+      .map((cat) => pivots[cat.id])
+      .filter((p) => p && p.rows.length > 0)
+  }, [pivots])
+
+  const [activeId, setActiveId] = useState<string>(() => nonEmpty[0]?.category.id || 'cbc')
+
+  if (nonEmpty.length === 0) {
+    return (
+      <div className="text-sm text-muted-foreground p-4 text-center">
+        No cumulative lab data available.
       </div>
-      <Tabs value={activeId} onValueChange={setActiveId} className={expanded ? 'flex h-full w-full flex-col' : 'w-full'}>
+    )
+  }
+
+  return (
+    <div className={fullHeight ? 'flex h-full flex-col' : 'space-y-3'}>
+      <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full flex-col' : 'w-full'}>
         <TabsList className="!flex !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
           {nonEmpty.map((p) => {
             const label = locale === 'zh-TW' ? p.category.labelZh : p.category.labelEn
@@ -150,93 +150,12 @@ function CumulativeLabReportInner({ nonEmpty, activeId, setActiveId, locale, exp
           <TabsContent
             key={p.category.id}
             value={p.category.id}
-            className={expanded ? 'mt-3 flex-1 min-h-0' : 'mt-3'}
+            className={fullHeight ? 'mt-3 flex-1 min-h-0' : 'mt-3'}
           >
-            <LabPivotTable pivot={p} expanded={expanded} />
+            <LabPivotTable pivot={p} fullHeight={fullHeight} />
           </TabsContent>
         ))}
       </Tabs>
     </div>
-  )
-}
-
-export function CumulativeLabReport({ observations }: CumulativeLabReportProps) {
-  const pivots = useLabPivot(observations)
-  const { locale } = useLanguage()
-  const [expanded, setExpanded] = useState(false)
-
-  // Only show categories that have data
-  const nonEmpty = useMemo(() => {
-    return LAB_CATEGORIES
-      .map((cat) => pivots[cat.id])
-      .filter((p) => p && p.rows.length > 0)
-  }, [pivots])
-
-  const [activeId, setActiveId] = useState<string>(() => nonEmpty[0]?.category.id || 'cbc')
-
-  if (nonEmpty.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground p-4 text-center">
-        No cumulative lab data available.
-      </div>
-    )
-  }
-
-  if (expanded) {
-    return (
-      <>
-        {/* Placeholder to maintain layout */}
-        <div className="space-y-3 opacity-30 pointer-events-none select-none">
-          <div className="flex items-center gap-2">
-            <div className="flex-1 flex flex-wrap h-auto bg-muted/40 p-1 gap-1 rounded-md">
-              {nonEmpty.map((p) => {
-                const label = locale === 'zh-TW' ? p.category.labelZh : p.category.labelEn
-                return (
-                  <span key={p.category.id} className="text-xs h-7 px-3 inline-flex items-center">
-                    {label} ({p.rows.length})
-                  </span>
-                )
-              })}
-            </div>
-            <Maximize2 className="h-4 w-4 mx-2 text-muted-foreground" />
-          </div>
-          <div className="border rounded-md p-8 text-center text-muted-foreground">
-            <Maximize2 className="h-8 w-8 mx-auto mb-2" />
-            <div>Expanded mode</div>
-          </div>
-        </div>
-
-        {/* Fullscreen overlay */}
-        <div
-          className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm p-4 sm:p-6 flex flex-col"
-          onClick={() => setExpanded(false)}
-        >
-          <div
-            className="flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <CumulativeLabReportInner
-              nonEmpty={nonEmpty}
-              activeId={activeId}
-              setActiveId={setActiveId}
-              locale={locale}
-              expanded={true}
-              onToggleExpand={() => setExpanded(false)}
-            />
-          </div>
-        </div>
-      </>
-    )
-  }
-
-  return (
-    <CumulativeLabReportInner
-      nonEmpty={nonEmpty}
-      activeId={activeId}
-      setActiveId={setActiveId}
-      locale={locale}
-      expanded={false}
-      onToggleExpand={() => setExpanded(true)}
-    />
   )
 }
