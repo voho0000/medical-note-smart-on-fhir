@@ -137,12 +137,12 @@ export function ReportsCard() {
       <CardContent className="px-4 pb-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* Desktop tabs - hidden on small screens */}
-          <TabsList className="mb-6 hidden md:grid w-full h-9 bg-muted/40 p-1 border border-border/50" style={{ gridTemplateColumns: `repeat(${tabConfigs.length}, 1fr)` }}>
+          <TabsList className="mb-6 hidden md:!inline-flex !flex-nowrap !justify-start !w-auto max-w-full overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
             {tabConfigs.map((tab) => (
-              <TabsTrigger 
-                key={tab.value} 
-                value={tab.value} 
-                className={`capitalize text-sm ${TAB_ACTIVE_CLASSES.clinical} truncate`}
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className={`!flex-none px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
               >
                 {tab.label}
               </TabsTrigger>
