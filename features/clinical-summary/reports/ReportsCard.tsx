@@ -137,7 +137,7 @@ export function ReportsCard() {
       <CardContent className="px-4 pb-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* Desktop tabs - hidden on small screens */}
-          <TabsList className="mb-6 hidden md:!inline-flex !flex-nowrap !justify-start !w-auto max-w-full overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <TabsList className="mb-6 hidden md:!flex !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
             {tabConfigs.map((tab) => (
               <TabsTrigger
                 key={tab.value}

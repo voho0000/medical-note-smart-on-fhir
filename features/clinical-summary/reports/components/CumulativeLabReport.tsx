@@ -117,8 +117,8 @@ function CumulativeLabReportInner({ nonEmpty, activeId, setActiveId, locale, exp
   return (
     <div className={expanded ? 'flex h-full flex-col' : 'space-y-3'}>
       <Tabs value={activeId} onValueChange={setActiveId} className={expanded ? 'flex h-full w-full flex-col' : 'w-full'}>
-        <div className="flex items-center gap-2 min-w-0">
-          <TabsList className="flex-1 !inline-flex !flex-nowrap !justify-start !w-auto overflow-x-auto h-auto bg-muted/40 p-1 gap-1 min-w-0 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+        <div className="flex items-center gap-2 w-full">
+          <TabsList className="flex-1 min-w-0 !flex !flex-nowrap !justify-start overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
             {nonEmpty.map((p) => {
               const label = locale === 'zh-TW' ? p.category.labelZh : p.category.labelEn
               return (
