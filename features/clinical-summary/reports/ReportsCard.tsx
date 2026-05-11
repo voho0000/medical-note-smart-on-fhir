@@ -146,7 +146,7 @@ export function ReportsCard() {
   )
 
   const reportsContent = (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className={expanded ? 'flex h-full w-full flex-col' : 'w-full'}>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
       {/* Desktop tabs */}
       <TabsList className="hidden md:!flex mb-6 !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 pr-12 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
         {tabConfigs.map((tab) => (
@@ -190,7 +190,7 @@ export function ReportsCard() {
           <TabsContent
             key={tab.value}
             value={tab.value}
-            className={expanded ? 'mt-0 flex-1 min-h-0' : 'mt-0'}
+            className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
           >
             <CumulativeLabReport observations={observations} fullHeight={expanded} />
           </TabsContent>
@@ -218,7 +218,7 @@ export function ReportsCard() {
           onClick={() => setExpanded(false)}
         >
           <div
-            className="relative flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col"
+            className="relative flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {expandButton}
@@ -230,9 +230,9 @@ export function ReportsCard() {
   }
 
   return (
-    <Card className={`${CARD_BORDER_CLASSES.clinical} relative`}>
+    <Card className={`${CARD_BORDER_CLASSES.clinical} relative w-full max-w-full`}>
       {expandButton}
-      <CardContent className="px-4 pb-4">
+      <CardContent className="px-4 pb-4 overflow-hidden min-w-0">
         {reportsContent}
       </CardContent>
     </Card>
