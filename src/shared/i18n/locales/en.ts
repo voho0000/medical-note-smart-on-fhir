@@ -117,6 +117,7 @@ export const en = {
     status: 'Status',
     category: 'Category',
     tabs: {
+      cumulative: 'Cumulative',
       all: 'All',
       lab: 'Labs',
       imaging: 'Imaging',

@@ -119,6 +119,7 @@ export const zhTW = {
     status: '狀態',
     category: '類別',
     tabs: {
+      cumulative: '累積報告',
       all: '全部',
       lab: '檢驗',
       imaging: '影像',

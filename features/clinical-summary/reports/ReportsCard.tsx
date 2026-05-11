@@ -3,7 +3,7 @@
 
 import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
@@ -15,12 +15,13 @@ import { useOrphanObservations } from './hooks/useOrphanObservations'
 import { useProcedureRows } from './hooks/useProcedureRows'
 import { useGroupedRows } from './hooks/useGroupedRows'
 import { ReportsTabContent } from './components/ReportsTabContent'
+import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
 
 export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
-  const [activeTab, setActiveTab] = useState("all")
+  const [activeTab, setActiveTab] = useState("cumulative")
 
   const { reportRows, seenIds } = useReportsData(diagnosticReports)
   const procedureRows = useProcedureRows(procedures, observations)
@@ -72,18 +73,21 @@ export function ReportsCard() {
 
   const tabConfigs = useMemo(() => {
     const { tabs: reportTabs } = t.reports
+    const cumulativeLabel = (reportTabs as any).cumulative || 'Cumulative'
     const configs = [
-      { value: "all", label: `${reportTabs.all} (${groupedRows.all.length})`, rows: groupedRows.all },
-      { value: "lab", label: `${reportTabs.lab} (${groupedRows.lab.length})`, rows: groupedRows.lab },
-      { value: "imaging", label: `${reportTabs.imaging} (${groupedRows.imaging.length})`, rows: groupedRows.imaging },
-      { value: "vitals", label: `${reportTabs.vitals} (${groupedRows.vitals.length})`, rows: groupedRows.vitals },
-      { value: "procedures", label: `${reportTabs.procedures} (${groupedRows.procedures.length})`, rows: groupedRows.procedures },
+      { value: "cumulative", label: cumulativeLabel, rows: [] as Row[], isCumulative: true },
+      { value: "all", label: `${reportTabs.all} (${groupedRows.all.length})`, rows: groupedRows.all, isCumulative: false },
+      { value: "lab", label: `${reportTabs.lab} (${groupedRows.lab.length})`, rows: groupedRows.lab, isCumulative: false },
+      { value: "imaging", label: `${reportTabs.imaging} (${groupedRows.imaging.length})`, rows: groupedRows.imaging, isCumulative: false },
+      { value: "vitals", label: `${reportTabs.vitals} (${groupedRows.vitals.length})`, rows: groupedRows.vitals, isCumulative: false },
+      { value: "procedures", label: `${reportTabs.procedures} (${groupedRows.procedures.length})`, rows: groupedRows.procedures, isCumulative: false },
     ]
-    // Always show All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
-    return configs.filter((config) => 
-      config.value === "all" || 
-      config.value === "lab" || 
-      config.value === "imaging" || 
+    // Always show Cumulative, All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
+    return configs.filter((config) =>
+      config.value === "cumulative" ||
+      config.value === "all" ||
+      config.value === "lab" ||
+      config.value === "imaging" ||
       config.value === "vitals" ||
       config.rows.length > 0
     )
@@ -170,9 +174,15 @@ export function ReportsCard() {
             </DropdownMenu>
           </div>
 
-          {tabConfigs.map((tab) => (
-            <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} />
-          ))}
+          {tabConfigs.map((tab) =>
+            tab.isCumulative ? (
+              <TabsContent key={tab.value} value={tab.value} className="mt-0">
+                <CumulativeLabReport observations={observations} />
+              </TabsContent>
+            ) : (
+              <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} />
+            )
+          )}
         </Tabs>
       </CardContent>
     </Card>
