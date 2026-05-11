@@ -79,16 +79,24 @@ function normalize(s: string): string {
 /**
  * Determine which category a lab observation belongs to.
  * Returns null if it doesn't match any defined category.
+ *
+ * Looks at ALL coding entries (not just [0]) since HAPI / SMART sandbox often
+ * fills LOINC in coding[1] with a local code in coding[0].
+ *
+ * Keyword matching picks the LONGEST match across all categories so specific
+ * keywords win generic ones (e.g., "HEMOGLOBIN A1C" → glucose beats
+ * "HEMOGLOBIN" → cbc).
  */
 export function categorizeObservation(obs: any): LabCategory | null {
   if (!obs) return null
 
-  const codeNorm = obs.code?.coding?.[0]?.code ? normalize(obs.code.coding[0].code) : ''
+  const codings: any[] = Array.isArray(obs.code?.coding) ? obs.code.coding : []
+  const codeNorms = codings.map((c: any) => (c?.code ? normalize(c.code) : '')).filter(Boolean)
+  const displayNorms = codings.map((c: any) => (c?.display ? normalize(c.display) : '')).filter(Boolean)
   const textNorm = obs.code?.text ? normalize(obs.code.text) : ''
-  const displayNorm = obs.code?.coding?.[0]?.display ? normalize(obs.code.coding[0].display) : ''
 
-  const exactCandidates = [codeNorm, textNorm, displayNorm].filter(Boolean)
-  const fullText = [textNorm, displayNorm].filter(Boolean).join(' ')
+  const exactCandidates = [...codeNorms, textNorm, ...displayNorms].filter(Boolean)
+  const fullText = [textNorm, ...displayNorms].filter(Boolean).join(' ')
 
   // Special case: urine specimen → urinalysis category
   const specimenText = obs.specimen?.display || obs.category?.[1]?.text
@@ -96,7 +104,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
     return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   }
 
-  // Pass 1: exact short-code match (codes)
+  // Pass 1: exact short-code match against `codes` (VGH style)
   for (const cat of LAB_CATEGORIES) {
     const codeSet = new Set(cat.codes.map(normalize))
     for (const candidate of exactCandidates) {
@@ -104,19 +112,27 @@ export function categorizeObservation(obs: any): LabCategory | null {
     }
   }
 
-  // Pass 2: exact LOINC match
+  // Pass 2: exact LOINC match against any coding entry
   for (const cat of LAB_CATEGORIES) {
     if (!cat.loincCodes) continue
-    if (codeNorm && cat.loincCodes.some((c) => normalize(c) === codeNorm)) return cat
+    const loincSet = new Set(cat.loincCodes.map(normalize))
+    for (const cand of codeNorms) {
+      if (loincSet.has(cand)) return cat
+    }
   }
 
-  // Pass 3: substring keyword match in display text
+  // Pass 3: longest substring keyword match across all categories
+  let best: { cat: LabCategory; len: number } | null = null
   for (const cat of LAB_CATEGORIES) {
     if (!cat.nameKeywords) continue
     for (const kw of cat.nameKeywords) {
-      if (fullText.includes(normalize(kw))) return cat
+      const k = normalize(kw)
+      if (fullText.includes(k) && (!best || k.length > best.len)) {
+        best = { cat, len: k.length }
+      }
     }
   }
+  if (best) return best.cat
 
   return null
 }
