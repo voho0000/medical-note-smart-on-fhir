@@ -133,36 +133,38 @@ export function ReportsCard() {
     )
   }
 
+  const expandButton = (
+    <button
+      type="button"
+      onClick={() => setExpanded(!expanded)}
+      className="absolute top-2 right-2 z-30 inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-border bg-background/95 text-muted-foreground hover:bg-accent hover:text-foreground shadow-sm transition-colors"
+      title={expanded ? 'Minimize' : 'Expand to fullscreen'}
+    >
+      {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+      <span className="hidden sm:inline">{expanded ? 'Minimize' : 'Fullscreen'}</span>
+    </button>
+  )
+
   const reportsContent = (
     <Tabs value={activeTab} onValueChange={setActiveTab} className={expanded ? 'flex h-full w-full flex-col' : 'w-full'}>
-      {/* Desktop tabs row with maximize button on the right */}
-      <div className="hidden md:flex items-center gap-2 mb-6">
-        <TabsList className="flex-1 !flex !flex-nowrap !justify-start min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
-          {tabConfigs.map((tab) => (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className={`!flex-none px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
-            >
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title={expanded ? 'Minimize' : 'Expand to fullscreen'}
-        >
-          {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </button>
-      </div>
+      {/* Desktop tabs */}
+      <TabsList className="hidden md:!flex mb-6 !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 pr-12 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+        {tabConfigs.map((tab) => (
+          <TabsTrigger
+            key={tab.value}
+            value={tab.value}
+            className={`!flex-none px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
+          >
+            {tab.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
 
-      {/* Mobile dropdown - shown on small screens */}
-      <div className="mb-6 md:hidden flex items-center gap-2">
+      {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
+      <div className="mb-6 md:hidden pr-12">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="flex-1 justify-between">
+            <Button variant="outline" className="w-full justify-between">
               <span className="truncate">
                 {tabConfigs.find(t => t.value === activeTab)?.label || tabConfigs[0]?.label}
               </span>
@@ -181,14 +183,6 @@ export function ReportsCard() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title={expanded ? 'Minimize' : 'Expand to fullscreen'}
-        >
-          {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </button>
       </div>
 
       {tabConfigs.map((tab) =>
@@ -214,7 +208,7 @@ export function ReportsCard() {
         <Card className={`${CARD_BORDER_CLASSES.clinical} opacity-30 pointer-events-none`}>
           <CardContent className="px-4 pb-4 h-40 flex items-center justify-center text-muted-foreground">
             <Maximize2 className="h-6 w-6 mr-2" />
-            <span className="text-sm">Reports expanded — click X to close</span>
+            <span className="text-sm">Reports expanded — click outside to close</span>
           </CardContent>
         </Card>
 
@@ -224,9 +218,10 @@ export function ReportsCard() {
           onClick={() => setExpanded(false)}
         >
           <div
-            className="flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col"
+            className="relative flex-1 w-full max-w-7xl mx-auto min-h-0 bg-background rounded-lg border shadow-lg p-4 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
+            {expandButton}
             {reportsContent}
           </div>
         </div>
@@ -235,7 +230,8 @@ export function ReportsCard() {
   }
 
   return (
-    <Card className={CARD_BORDER_CLASSES.clinical}>
+    <Card className={`${CARD_BORDER_CLASSES.clinical} relative`}>
+      {expandButton}
       <CardContent className="px-4 pb-4">
         {reportsContent}
       </CardContent>
