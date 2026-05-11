@@ -148,12 +148,12 @@ export function ReportsCard() {
   const reportsContent = (
     <Tabs value={activeTab} onValueChange={setActiveTab} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
       {/* Desktop tabs */}
-      <TabsList className="hidden md:!flex mb-6 !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 pr-12 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+      <TabsList className="hidden md:!flex mb-6 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 pr-12 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
         {tabConfigs.map((tab) => (
           <TabsTrigger
             key={tab.value}
             value={tab.value}
-            className={`!flex-none px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
+            className={`!flex-1 !min-w-fit px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
           >
             {tab.label}
           </TabsTrigger>
