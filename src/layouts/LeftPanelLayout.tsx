@@ -17,7 +17,14 @@ function TabFeatureContent({ tabId }: { tabId: string }) {
   
   return (
     <ScrollArea className="h-full pr-2">
-      <div className="space-y-4">
+      {/*
+        CSS containment (`contain: inline-size`) decouples this wrapper's
+        intrinsic width from its children's content size. Without this,
+        Radix ScrollArea's internal `display:table; min-width:100%` wrapper
+        grows with the widest child (wide tables in CumulativeLabReport),
+        pushing absolute-positioned UI like the expand button off-screen.
+      */}
+      <div className="space-y-4 w-full" style={{ contain: 'inline-size' }}>
         {features.map(feature => {
           const Component = feature.component
           return <Component key={feature.id} />
