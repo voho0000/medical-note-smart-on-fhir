@@ -31,8 +31,11 @@ function LabPivotTable({ pivot, expanded = false }: { pivot: LabPivot; expanded?
 
   const heightClass = expanded ? 'max-h-[calc(100vh-180px)]' : 'max-h-[60vh]'
   return (
-    <div className={`overflow-auto ${heightClass} rounded-md border`}>
-      <table className="text-xs border-collapse w-full">
+    <div
+      className={`overflow-auto ${heightClass} rounded-md border [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
+      style={{ scrollbarWidth: 'thin' }}
+    >
+      <table className="text-xs border-collapse w-max min-w-full">
         <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
           <tr>
             <th className="sticky left-0 z-20 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[110px]">
@@ -116,31 +119,33 @@ interface InnerProps {
 function CumulativeLabReportInner({ nonEmpty, activeId, setActiveId, locale, expanded, onToggleExpand }: InnerProps) {
   return (
     <div className={expanded ? 'flex h-full flex-col' : 'space-y-3'}>
+      {/* Header row: expand/minimize control */}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title={expanded ? 'Minimize' : 'Expand to fullscreen'}
+        >
+          {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          <span>{expanded ? 'Minimize' : 'Fullscreen'}</span>
+        </button>
+      </div>
       <Tabs value={activeId} onValueChange={setActiveId} className={expanded ? 'flex h-full w-full flex-col' : 'w-full'}>
-        <div className="flex items-center gap-2 w-full">
-          <TabsList className="flex-1 min-w-0 !flex !flex-nowrap !justify-start overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
-            {nonEmpty.map((p) => {
-              const label = locale === 'zh-TW' ? p.category.labelZh : p.category.labelEn
-              return (
-                <TabsTrigger
-                  key={p.category.id}
-                  value={p.category.id}
-                  className="!flex-none text-xs h-7 px-3 whitespace-nowrap data-[state=active]:bg-background"
-                >
-                  {label} ({p.rows.length})
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            title={expanded ? 'Minimize' : 'Expand to fullscreen'}
-          >
-            {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-        </div>
+        <TabsList className="!flex !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+          {nonEmpty.map((p) => {
+            const label = locale === 'zh-TW' ? p.category.labelZh : p.category.labelEn
+            return (
+              <TabsTrigger
+                key={p.category.id}
+                value={p.category.id}
+                className="!flex-none text-xs h-7 px-3 whitespace-nowrap data-[state=active]:bg-background"
+              >
+                {label} ({p.rows.length})
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
         {nonEmpty.map((p) => (
           <TabsContent
             key={p.category.id}
