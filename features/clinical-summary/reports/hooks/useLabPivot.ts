@@ -16,6 +16,7 @@ export interface LabRow {
   displayName: string         // shown in left column
   unit?: string               // unit summary (most common across all dates)
   values: Map<string, LabCell>  // date "YYYY-MM-DD" → cell
+  subgroupId?: string         // assigned subgroup id (renal/liver/etc.)
 }
 
 export interface LabPivot {
@@ -185,9 +186,31 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         if (row) row.unit = bestUnit
       }
 
+      // Assign subgroupId to each row (matches against category.subgroups[].members)
+      if (cat.subgroups) {
+        const memberToGroup = new Map<string, string>()
+        for (const sg of cat.subgroups) {
+          for (const m of sg.members) {
+            memberToGroup.set(m.toUpperCase(), sg.id)
+          }
+        }
+        for (const row of testMap.values()) {
+          row.subgroupId = memberToGroup.get(row.testKey)
+        }
+      }
+
       const dates = [...dateSet].sort((a, b) => b.localeCompare(a))  // newest first
       const cmp = compareTestsByPreferred(cat)
-      const rows = [...testMap.values()].sort((a, b) => cmp(a.testKey, b.testKey))
+
+      // Sort by subgroup index first, then by preferredOrder within subgroup
+      const sgOrder = new Map<string, number>()
+      cat.subgroups?.forEach((sg, i) => sgOrder.set(sg.id, i))
+      const rows = [...testMap.values()].sort((a, b) => {
+        const ai = a.subgroupId ? sgOrder.get(a.subgroupId) ?? 999 : 999
+        const bi = b.subgroupId ? sgOrder.get(b.subgroupId) ?? 999 : 999
+        if (ai !== bi) return ai - bi
+        return cmp(a.testKey, b.testKey)
+      })
 
       result[cat.id] = { category: cat, dates, rows }
     }

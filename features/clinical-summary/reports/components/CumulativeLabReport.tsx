@@ -7,7 +7,7 @@ import { useMemo, useState } from "react"
 import { Maximize2, Minimize2 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
+import { useLabPivot, type LabPivot, type LabRow } from "../hooks/useLabPivot"
 import { LAB_CATEGORIES } from "@/src/shared/utils/lab-categories"
 
 interface CumulativeLabReportProps {
@@ -46,38 +46,62 @@ function LabPivotTable({ pivot, expanded = false }: { pivot: LabPivot; expanded?
           </tr>
         </thead>
         <tbody>
-          {pivot.rows.map((row, idx) => (
-            <tr key={row.testKey} className={idx % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-              <td className="sticky left-0 z-10 bg-inherit border-r p-2 font-medium whitespace-nowrap">
-                <div>{row.displayName}</div>
-                {row.unit && <div className="text-[10px] text-muted-foreground">{row.unit}</div>}
-              </td>
-              {pivot.dates.map((d) => {
-                const cell = row.values.get(d)
-                if (!cell) {
-                  return (
-                    <td key={d} className="border-l p-1.5 text-center text-muted-foreground">—</td>
-                  )
-                }
-                const cls = cell.isAbnormal
-                  ? "text-red-600 font-medium"
-                  : "text-foreground"
-                return (
-                  <td
-                    key={d}
-                    className={`border-l p-1.5 text-center ${cls}`}
-                    title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
-                  >
-                    {cell.value}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
+          {renderRowsWithSubgroups(pivot)}
         </tbody>
       </table>
     </div>
   )
+}
+
+function renderRowsWithSubgroups(pivot: LabPivot) {
+  const subgroups = pivot.category.subgroups || []
+  const elements: React.ReactElement[] = []
+  let lastSubgroupId: string | undefined | null = null
+  let rowIdx = 0
+  for (const row of pivot.rows) {
+    const sgId = row.subgroupId
+    if (subgroups.length > 0 && sgId !== lastSubgroupId) {
+      const sg = subgroups.find((s) => s.id === sgId)
+      const label = sg ? `${sg.labelZh} · ${sg.labelEn}` : 'Other'
+      elements.push(
+        <tr key={`sg-${sgId || 'other'}-${rowIdx}`} className="bg-muted/60">
+          <td
+            colSpan={pivot.dates.length + 1}
+            className="sticky left-0 z-10 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground border-y"
+          >
+            {label}
+          </td>
+        </tr>
+      )
+      lastSubgroupId = sgId
+    }
+    const idx = rowIdx++
+    elements.push(
+      <tr key={row.testKey} className={idx % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+        <td className="sticky left-0 z-10 bg-inherit border-r p-2 font-medium whitespace-nowrap">
+          <div>{row.displayName}</div>
+          {row.unit && <div className="text-[10px] text-muted-foreground">{row.unit}</div>}
+        </td>
+        {pivot.dates.map((d) => {
+          const cell = row.values.get(d)
+          if (!cell) {
+            return <td key={d} className="border-l p-1.5 text-center text-muted-foreground">—</td>
+          }
+          const cls = cell.isAbnormal ? "text-red-600 font-medium" : "text-foreground"
+          return (
+            <td
+              key={d}
+              className={`border-l p-1.5 text-center ${cls}`}
+              title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
+            >
+              {cell.value}
+            </td>
+          )
+        })}
+      </tr>
+    )
+  }
+  return elements
 }
 
 interface InnerProps {

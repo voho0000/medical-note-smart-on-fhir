@@ -10,6 +10,16 @@
 //     long English LOINC display names (e.g., "Sodium [Moles/volume] in
 //     Serum or Plasma" contains "SODIUM").
 
+export interface LabSubgroup {
+  /** Stable id */
+  id: string
+  labelEn: string
+  labelZh: string
+  /** Canonical row keys (uppercase) that belong to this subgroup.
+   *  Match against pickKey() result in useLabPivot. */
+  members: string[]
+}
+
 export interface LabCategory {
   id: string
   labelEn: string
@@ -22,6 +32,8 @@ export interface LabCategory {
   nameKeywords?: string[]
   /** Preferred column order — codes appearing here render first in this order */
   preferredOrder?: string[]
+  /** Clinically meaningful subgroups within this category (e.g., 腎功能/肝功能) */
+  subgroups?: LabSubgroup[]
 }
 
 export const LAB_CATEGORIES: LabCategory[] = [
@@ -29,19 +41,33 @@ export const LAB_CATEGORIES: LabCategory[] = [
     id: 'cbc',
     labelEn: 'CBC',
     labelZh: 'CBC 血液常規',
-    preferredOrder: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC', 'PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'],
+    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC', 'PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'],
     codes: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC', 'PT', 'PROTHROMBIN TIME', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'],
     loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '5902-2', '14979-9', '6301-6', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4'],
     nameKeywords: ['HEMOGLOBIN', 'HEMATOCRIT', 'LEUKOCYTE', 'ERYTHROCYTE', 'PLATELET', 'MEAN CORPUSCULAR', 'MEAN PLATELET', 'RED CELL DISTRIBUTION', 'NEUTROPHIL', 'LYMPHOCYTE', 'MONOCYTE', 'EOSINOPHIL', 'BASOPHIL', 'BAND CELL', 'PROTHROMBIN TIME', 'PARTIAL THROMBOPLASTIN', 'INR', 'D-DIMER', 'FIBRINOGEN'],
+    subgroups: [
+      { id: 'counts',    labelEn: 'Counts',        labelZh: '計數', members: ['WBC', 'RBC', 'HB', 'HCT', 'PLT', 'MPV'] },
+      { id: 'indices',   labelEn: 'RBC Indices',   labelZh: '紅血球指數', members: ['MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV'] },
+      { id: 'diff',      labelEn: 'Differential',  labelZh: '白血球分類', members: ['SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'BAND', 'ANC'] },
+      { id: 'coag',      labelEn: 'Coagulation',   labelZh: '凝血', members: ['PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'] },
+    ],
   },
   {
     id: 'chem',
     labelEn: 'Biochemistry',
     labelZh: '生化檢驗',
-    preferredOrder: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'D.BILI', 'DBILI', 'CK', 'CKMB', 'TROP', 'IRON', 'TIBC', 'CRP', 'FIB-4'],
+    preferredOrder: ['BUN', 'CREATININE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'URIC ACID', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CK', 'CKMB', 'TROP', 'CRP', 'FIB-4', 'IRON', 'TIBC'],
     codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CO2', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'CK', 'CKMB', 'CKMB(POCT)', 'TROP', 'TROP(POCT)', 'IRON', 'TIBC', 'CRP', 'FIB-4'],
     loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '2069-3', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '1988-5', '14647-2', '30522-7', '2157-6', '13969-1', '6598-7', '10839-9', '49563-0', '2498-4', '2500-7', '14935-1', '1759-0', '2532-0', '11051-0', '2243-4'],
     nameKeywords: ['SODIUM', 'POTASSIUM', 'CHLORIDE', 'BICARBONATE', 'CO2', 'UREA NITROGEN', 'CREATININE', 'GLOMERULAR FILTRATION', 'ALBUMIN', 'TOTAL PROTEIN', 'GLOBULIN', 'BILIRUBIN', 'ASPARTATE AMINOTRANSFERASE', 'ALANINE AMINOTRANSFERASE', 'ALKALINE PHOSPHATASE', 'GAMMA GLUTAMYL', 'GAMMA-GLUTAMYL', 'LACTATE DEHYDROGENASE', 'CALCIUM', 'PHOSPHATE', 'PHOSPHORUS', 'URATE', 'URIC ACID', 'C REACTIVE PROTEIN', 'C-REACTIVE PROTEIN', 'CREATINE KINASE', 'CK-MB', 'TROPONIN', 'IRON', 'TRANSFERRIN', 'FERRITIN'],
+    subgroups: [
+      { id: 'renal',       labelEn: 'Renal',        labelZh: '腎功能',   members: ['BUN', 'CREATININE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'URIC ACID'] },
+      { id: 'electrolyte', labelEn: 'Electrolytes', labelZh: '電解質',   members: ['NA', 'K', 'CL', 'CO2', 'CA', 'IP'] },
+      { id: 'liver',       labelEn: 'Liver',        labelZh: '肝功能',   members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB'] },
+      { id: 'cardiac',     labelEn: 'Cardiac',      labelZh: '心肌酵素', members: ['CK', 'CKMB', 'TROP'] },
+      { id: 'inflam',      labelEn: 'Inflammation', labelZh: '發炎指數', members: ['CRP', 'FIB-4'] },
+      { id: 'iron',        labelEn: 'Iron Studies', labelZh: '鐵代謝',   members: ['IRON', 'TIBC'] },
+    ],
   },
   {
     id: 'lipid',
@@ -78,6 +104,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'],
     loincCodes: ['5778-6', '5803-2', '5774-5', '5767-9', '5797-6', '5804-0', '5802-4', '5794-3', '5811-5', '5799-2', '20454-5', '5821-4', '5808-1'],
     nameKeywords: ['URINALYSIS', 'URINE COLOR', 'URINE APPEARANCE', 'SPECIFIC GRAVITY', 'UROBILINOGEN', 'NITRITE', 'KETONE', 'OCCULT BLOOD', 'EPITHELIAL CELL', 'BACTERIA', 'CASTS', 'CRYSTAL', 'SQUAMOUS EPITHELIAL'],
+    subgroups: [
+      { id: 'physical',  labelEn: 'Physical',   labelZh: '物理性狀', members: ['COLOR', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'PH'] },
+      { id: 'chemical',  labelEn: 'Chemistry',  labelZh: '化學分析', members: ['SUGAR', 'GLUCOSE', 'PROT', 'PROTEIN', 'KETON', 'KETONE', 'T.BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'BLOOD'] },
+      { id: 'micro',     labelEn: 'Microscopy', labelZh: '顯微鏡檢', members: ['WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3'] },
+      { id: 'ratio',     labelEn: 'Spot Ratios', labelZh: '尿蛋白/肌酸酐比值', members: ['PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'] },
+    ],
   },
 ]
 
