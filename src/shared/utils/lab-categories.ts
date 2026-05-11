@@ -73,10 +73,10 @@ export const LAB_CATEGORIES: LabCategory[] = [
     id: 'lipid',
     labelEn: 'Lipid Panel',
     labelZh: '血脂',
-    preferredOrder: ['CHOL', 'TG', 'HDLC', 'LDLC', 'LDL(計算值)', 'RISKF', 'VLDLC', 'NON-HDLC'],
-    codes: ['CHOL', 'CHOL.', 'CHOLESTEROL', 'TG', 'TRIG', 'HDLC', 'HDL', 'LDLC', 'LDL', 'LDL(計算值)', 'RISKF', 'VLDL', 'VLDLC', 'NON-HDLC'],
-    loincCodes: ['2093-3', '14647-2', '14646-4', '2571-8', '3043-7', '2085-9', '2086-7', '14646-4', '2089-1', '13457-7', '2090-9', '13457-7', '43396-1', '13458-5', '11054-4', '2089-1'],
-    nameKeywords: ['CHOLESTEROL', 'TRIGLYCERIDE', 'HDL CHOLESTEROL', 'LDL CHOLESTEROL', 'VLDL', 'NON-HDL', 'LIPID', 'HIGH DENSITY LIPOPROTEIN', 'LOW DENSITY LIPOPROTEIN'],
+    preferredOrder: ['CHOL', 'TG', 'HDL', 'LDL', 'LDL(計算值)', 'RISKF', 'VLDL', 'NON-HDL', 'APO-A1', 'APO-B', 'LP(A)'],
+    codes: ['CHOL', 'CHOL.', 'CHOLESTEROL', 'TG', 'TRIG', 'TRIGLYCERIDE', 'HDLC', 'HDL', 'HDL-C', 'HDLC.', 'LDLC', 'LDL', 'LDL-C', 'LDLC.', 'LDL(計算值)', 'RISKF', 'VLDL', 'VLDLC', 'VLDL-C', 'NON-HDLC', 'NON-HDL', 'NON-HDL-C', 'APO-A', 'APO-A1', 'APOA1', 'APO-B', 'APOB', 'LP(A)'],
+    loincCodes: ['2093-3', '14647-2', '14646-4', '2571-8', '3043-7', '2085-9', '2086-7', '14646-4', '2089-1', '13457-7', '2090-9', '13457-7', '43396-1', '13458-5', '11054-4', '2089-1', '13457-7', '18261-8', '18262-6', '10835-7'],
+    nameKeywords: ['CHOLESTEROL', 'TRIGLYCERIDE', 'HDL', 'LDL', 'VLDL', 'NON-HDL', 'LIPID', 'HIGH DENSITY LIPOPROTEIN', 'LOW DENSITY LIPOPROTEIN', 'APOLIPOPROTEIN', 'APO A', 'APO B', 'LIPOPROTEIN(A)'],
   },
   {
     id: 'glucose',
@@ -92,9 +92,9 @@ export const LAB_CATEGORIES: LabCategory[] = [
     labelEn: 'Tumor Markers',
     labelZh: '癌症指數',
     preferredOrder: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'FPSA/PSA', 'FPSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA'],
-    codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'FPSA/PSA', 'FPSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA', 'E2', 'FSH'],
-    loincCodes: ['1834-1', '2039-6', '10334-1', '24108-3', '2857-1', '10886-0', '24467-3', '47238-1'],
-    nameKeywords: ['ALPHA FETO', 'ALPHA-FETO', 'CARCINOEMBRYONIC', 'CA 125', 'CA 15-3', 'CA 15.3', 'CA 19-9', 'PROSTATE SPECIFIC', 'PROSTATE-SPECIFIC ANTIGEN', 'BETA-2 MICROGLOBULIN', 'BETA 2 MICROGLOBULIN', 'CHORIONIC GONADOTROPIN', 'CALCITONIN', 'CYFRA', 'NEURON SPECIFIC ENOLASE', 'NEURON-SPECIFIC ENOLASE', 'HEPATITIS C VIRUS', 'ANTI-HCV', 'PIVKA', 'SQUAMOUS CELL CARCINOMA ANTIGEN'],
+    codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'TPSA', 'T-PSA', 'PSA(T)', 'PSA-T', 'FPSA/PSA', 'FPSA', 'F-PSA', 'PSA-F', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'B-HCG', 'BETA-HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA', 'E2', 'FSH'],
+    loincCodes: ['1834-1', '2039-6', '10334-1', '24108-3', '2857-1', '10886-0', '24467-3', '47238-1', '83112-3', '19201-2', '53764-7', '15067-2', '15083-9', '47239-9'],
+    nameKeywords: ['ALPHA FETO', 'ALPHA-FETO', 'CARCINOEMBRYONIC', 'CA 125', 'CA 15-3', 'CA 15.3', 'CA 19-9', 'PROSTATE SPECIFIC', 'PROSTATE-SPECIFIC ANTIGEN', 'PROSTATE-SPECIFIC AG', 'BETA-2 MICROGLOBULIN', 'BETA 2 MICROGLOBULIN', 'CHORIONIC GONADOTROPIN', 'CALCITONIN', 'CYFRA', 'NEURON SPECIFIC ENOLASE', 'NEURON-SPECIFIC ENOLASE', 'HEPATITIS C VIRUS', 'ANTI-HCV', 'PIVKA', 'SQUAMOUS CELL CARCINOMA ANTIGEN', 'TUMOR MARKER'],
   },
   {
     id: 'urine',
@@ -129,9 +129,9 @@ function normalize(s: string): string {
  * "HEMOGLOBIN" → cbc).
  */
 // Qualitative dipstick results (Negative/Positive/Trace/+1...) are almost
-// always urinalysis tests — used to disambiguate "Bilirubin negative" (urine
-// dipstick) from "Bilirubin 0.8" (serum).
-const QUALITATIVE_RE = /^(negative|positive|trace|few|occasional|moderate|many|\d?\+|\+{1,4}|none)$/i
+// always urinalysis tests. Pattern is lenient — allows trailing content like
+// "4+ (2000)" or "Negative (mg/dL)" by not anchoring to end-of-string.
+const QUALITATIVE_RE = /^(negative|positive|trace|few|occasional|moderate|many|\d?\+|\+{1,4}|none|nil)\b/i
 
 function isQualitativeResult(obs: any): boolean {
   if (obs.valueQuantity?.value !== undefined && obs.valueQuantity?.value !== null) return false
@@ -150,17 +150,30 @@ export function categorizeObservation(obs: any): LabCategory | null {
   const exactCandidates = [...codeNorms, textNorm, ...displayNorms].filter(Boolean)
   const fullText = [textNorm, ...displayNorms].filter(Boolean).join(' ')
 
-  // Special case: urine specimen → urinalysis category
+  // ── Early special cases ──────────────────────────────────────────────────
+  // 1. FHIR specimen → urine
+  // Proper FHIR fills `Observation.specimen` referencing a urine specimen.
+  // Many bridges (incl. VGH) don't populate this, so we also fall back to
+  // text-based and value-based heuristics below.
   const specimenText = obs.specimen?.display || obs.category?.[1]?.text
   if (specimenText && /urine|尿/i.test(String(specimenText))) {
     return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   }
 
-  // Heuristic: qualitative dipstick values → urinalysis (handles cases like
-  // "Bilirubin: negative" that look like serum tests by name but are urine
-  // dipstick by value type).
+  // 2. Text mentions urine (LOINC long names like "Glucose [Presence] in Urine")
+  if (/\bURINE\b|尿/.test(fullText)) {
+    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+  }
+
+  // 3. Qualitative dipstick values → urinalysis (handles "Bilirubin: negative",
+  //    "Glucose 4+ (2000)", "Protein: trace", etc.)
   if (isQualitativeResult(obs)) {
     return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+  }
+
+  // 4. HbA1c always wins over CBC (text contains "Hemoglobin" but is glucose)
+  if (/\bA1C\b|HBA1C|GLYCATED|GLYCOHEMOGLOBIN|GLYCO\s*HAEMOGLOBIN/.test(fullText)) {
+    return LAB_CATEGORIES.find((c) => c.id === 'glucose') || null
   }
 
   // Pass 1: exact short-code match against `codes` (VGH style)
