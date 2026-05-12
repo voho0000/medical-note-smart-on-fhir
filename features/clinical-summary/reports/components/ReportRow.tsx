@@ -134,7 +134,14 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
     if (isLongText) {
       return (
         <>
-          <div className="rounded-lg border bg-muted/40 px-3 py-2">
+          <div
+            className="rounded-lg border bg-muted/40 px-3 py-2 cursor-pointer select-none"
+            onClick={(e) => {
+              // Don't toggle if clicking the trend button
+              if ((e.target as HTMLElement).closest('[aria-label="查看趨勢"]')) return
+              setTextExpanded(!textExpanded)
+            }}
+          >
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-semibold text-foreground">{row.title}</span>
@@ -145,12 +152,9 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
             <p className={cn('text-xs text-foreground/80 leading-relaxed', !textExpanded && 'line-clamp-1')}>
               {obs.valueString}
             </p>
-            <button
-              onClick={() => setTextExpanded(!textExpanded)}
-              className="text-xs text-primary hover:underline mt-0.5"
-            >
+            <span className="text-xs text-primary mt-0.5 inline-block">
               {textExpanded ? '收起' : '查看完整報告'}
-            </button>
+            </span>
           </div>
           <ObservationTrendDialog
             observation={firstObs}
