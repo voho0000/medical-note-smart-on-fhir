@@ -243,16 +243,45 @@ function normalizeTestName(raw: string): { stripped: string; collapsed: string }
   return { stripped, collapsed }
 }
 
-function pickKey(obs: any): string {
+// NHI system URI used by the 健康存摺 bridge
+const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
+
+// Returns the canonical analyte name (alias-resolved display key).
+// Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
+function canonicalTestKey(obs: any): string {
   const raw = getTestDisplayName(obs)
   if (!raw) return 'UNKNOWN'
   const { stripped, collapsed } = normalizeTestName(raw)
-  // Try exact stripped match first (preserves things like "T.BILI" vs "TBILI")
   if (TEST_ALIASES[stripped]) return TEST_ALIASES[stripped]
-  // Try collapsed match (handles "Hb-A1c", "HB A1C", "HbA1c" all → HBA1C)
   if (TEST_ALIASES[collapsed]) return TEST_ALIASES[collapsed]
-  // Fallback: use stripped form
   return stripped || collapsed || raw.toUpperCase()
+}
+
+// Returns { mapKey, testKey, displayName } for one observation.
+//
+// mapKey      – internal Map key for grouping; uses "NHI_CODE:testKey" when
+//               NHI code is present so cross-institution same-analyte records
+//               (e.g. "TSH" vs "Serum TSH(ECLIA...)") always land in the same
+//               row. Falls back to testKey alone for non-NHI FHIR sources
+//               (sandboxes, LOINC-only data) — alias normalisation still works.
+// testKey     – canonical analyte name; stable across data sources.
+// displayName – label shown in the table; prefers NHI official display name.
+function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayName: string } {
+  const raw = getTestDisplayName(obs)
+  if (!raw) return { mapKey: 'UNKNOWN', testKey: 'UNKNOWN', displayName: 'UNKNOWN' }
+
+  const testKey = canonicalTestKey(obs)
+
+  const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
+  const nhiCode = nhiCoding?.code as string | undefined
+  const mapKey = nhiCode ? `${nhiCode}:${testKey}` : testKey
+
+  // Prefer NHI official display; otherwise use stripped raw label
+  const nhiDisplay = nhiCoding?.display as string | undefined
+  const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
+  const displayName = nhiDisplay || rawDisplay
+
+  return { mapKey, testKey, displayName }
 }
 
 export function useLabPivot(observations: any[]): Record<string, LabPivot> {
@@ -288,34 +317,30 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         if (!date) continue
         dateSet.add(date)
 
-        const key = pickKey(obs)
-        // Strip parenthesized qualifiers from display too, so the row label
-        // shows "Creatinine" not "Creatinine(B)".
-        const raw = getTestDisplayName(obs)
-        const displayName = raw.replace(/\s*[\(\[].*$/, '').trim() || raw
+        const { mapKey, testKey, displayName } = buildTestEntry(obs)
         const fv = formatValue(obs)
         let { value, unit, numericValue, isAbnormal, interpretationCode } = fv
 
         // Layer B: hardcoded reference ranges when FHIR provides no referenceRange/interpretation
         if (!isAbnormal && numericValue !== undefined) {
-          const range = HARDCODED_REF_RANGES[key]
+          const range = HARDCODED_REF_RANGES[testKey]
           if (range) {
             if (range.low !== undefined && numericValue < range.low) isAbnormal = true
             if (range.high !== undefined && numericValue > range.high) isAbnormal = true
           }
         }
 
-        if (!testMap.has(key)) {
-          testMap.set(key, { testKey: key, displayName, values: new Map() })
-          unitCount.set(key, new Map())
+        if (!testMap.has(mapKey)) {
+          testMap.set(mapKey, { testKey, displayName, values: new Map() })
+          unitCount.set(mapKey, new Map())
         } else {
           // Prefer the shorter display name (cleaner labels)
-          const row = testMap.get(key)!
+          const row = testMap.get(mapKey)!
           if (displayName.length < row.displayName.length) {
             row.displayName = displayName
           }
         }
-        const row = testMap.get(key)!
+        const row = testMap.get(mapKey)!
         const cell: LabCell = {
           value,
           unit,
@@ -326,13 +351,13 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         // If multiple observations on same day, keep the last one (could be revised result)
         row.values.set(date, cell)
         if (unit) {
-          const ucMap = unitCount.get(key)!
+          const ucMap = unitCount.get(mapKey)!
           ucMap.set(unit, (ucMap.get(unit) || 0) + 1)
         }
       }
 
       // Pick most common unit per row
-      for (const [key, ucMap] of unitCount.entries()) {
+      for (const [mk, ucMap] of unitCount.entries()) {
         let bestUnit: string | undefined
         let bestCount = 0
         for (const [u, c] of ucMap.entries()) {
@@ -341,14 +366,16 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
             bestUnit = u
           }
         }
-        const row = testMap.get(key)
+        const row = testMap.get(mk)
         if (row) row.unit = bestUnit
       }
 
-      // Inject stub rows for pinned columns not present in patient data
+      // Inject stub rows for pinned columns not present in patient data.
+      // Must check by testKey (not mapKey) since mapKey may include NHI prefix.
       if (cat.pinnedColumns) {
+        const existingTestKeys = new Set([...testMap.values()].map(r => r.testKey))
         for (const pinKey of cat.pinnedColumns) {
-          if (!testMap.has(pinKey)) {
+          if (!existingTestKeys.has(pinKey)) {
             testMap.set(pinKey, { testKey: pinKey, displayName: pinKey, values: new Map() })
           }
         }
