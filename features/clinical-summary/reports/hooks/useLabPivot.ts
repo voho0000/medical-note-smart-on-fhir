@@ -110,6 +110,10 @@ const TEST_ALIASES: Record<string, string> = {
   UA: 'URIC ACID', URATE: 'URIC ACID', 'URIC ACID': 'URIC ACID',
   // CRP
   CRP: 'CRP', 'C REACTIVE PROTEIN': 'CRP', 'C-REACTIVE PROTEIN': 'CRP', 'HS-CRP': 'CRP',
+  // Procalcitonin (bacterial infection marker, NOT a tumor marker)
+  PCT: 'PCT', PROCALCITONIN: 'PCT',
+  ESR: 'ESR', 'ERYTHROCYTE SEDIMENTATION RATE': 'ESR',
+  LACTATE: 'LACTATE',
   // Cardiac
   CK: 'CK', 'CREATINE KINASE': 'CK',
   CKMB: 'CKMB', 'CK-MB': 'CKMB',
