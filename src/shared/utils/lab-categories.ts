@@ -192,6 +192,25 @@ export function categorizeObservation(obs: any): LabCategory | null {
     return null
   }
 
+  // 6. Specialized / less-common tests — exclude from cumulative report.
+  //    These are still visible in the 全部/檢驗 tabs, just hidden from the
+  //    pivot view. Add more entries here as users request.
+  const SPECIALIZED_RE = new RegExp(
+    [
+      '\\bTIBC\\b',                                        // Iron binding capacity (rarely tracked over time)
+      'MICRO\\s*ALBUMIN', 'MICROALBUMIN',                  // Microalbuminuria (kidney early marker)
+      '\\bPCO2\\b', '\\bTCO2\\b', '\\bPO2\\b', '\\bSO2\\b',  // ABG components
+      'BASE\\s*EXCESS', '\\bHCO3\\b',                      // ABG components
+      'ALTERNARIA', 'ALLERGEN', '过敏原|過敏原',            // Allergen panels
+      '(?:α|β|γ|ALPHA|BETA|GAMMA)\\s*[12]?\\s*[-]?\\s*GLOBULIN',  // Protein electrophoresis
+      'ELECTROPHORESIS', '蛋白\\s*電泳',
+    ].join('|'),
+    'i'
+  )
+  if (SPECIALIZED_RE.test(fullText)) {
+    return null
+  }
+
   // Pass 1: exact short-code match against `codes` (VGH style)
   for (const cat of LAB_CATEGORIES) {
     const codeSet = new Set(cat.codes.map(normalize))
