@@ -92,13 +92,19 @@ export function ReportsCard() {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return rows
     return rows.filter((row) => {
-      const dateStr = row.effectiveDate
-        ? new Date(row.effectiveDate).toLocaleDateString()
-        : ''
+      const dateStrs: string[] = []
+      if (row.effectiveDate) {
+        const d = new Date(row.effectiveDate)
+        dateStrs.push(d.toLocaleDateString())                          // 1/22/2026
+        const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate()
+        dateStrs.push(`${y}/${m}/${day}`)                              // 2026/1/22
+        dateStrs.push(`${y}/${String(m).padStart(2,'0')}/${String(day).padStart(2,'0')}`) // 2026/01/22
+        dateStrs.push(`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`) // 2026-01-22
+      }
       return (
         row.title.toLowerCase().includes(q) ||
         row.meta.toLowerCase().includes(q) ||
-        dateStr.toLowerCase().includes(q)
+        dateStrs.some(s => s.toLowerCase().includes(q))
       )
     })
   }, [rows, searchQuery])
