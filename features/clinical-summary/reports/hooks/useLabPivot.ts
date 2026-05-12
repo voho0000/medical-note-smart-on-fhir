@@ -72,7 +72,29 @@ function formatValue(obs: any): { value: string; unit?: string; numericValue?: n
   if (!isAbnormal && numericValue !== undefined) {
     const rr = obs.referenceRange?.[0]
     if (rr) {
-      const lo = rr.low?.value, hi = rr.high?.value
+      let lo = rr.low?.value, hi = rr.high?.value
+
+      // Layer A.5: parse referenceRange.text for simple numeric formats when
+      // structured low/high are absent (e.g. "0.35-4.94", "< 5.7", ">= 40").
+      // Sex-stratified text like "[男:13.7 女:11.1]..." is intentionally skipped —
+      // the bridge should provide structured low/high based on patient sex.
+      if (lo === undefined && hi === undefined && rr.text) {
+        const t = rr.text.trim()
+        // Range: "11.1 - 17.0" or "11.1~17.0"
+        const rangeM = t.match(/^([\d.]+)\s*[-~–]\s*([\d.]+)$/)
+        if (rangeM) {
+          lo = parseFloat(rangeM[1])
+          hi = parseFloat(rangeM[2])
+        } else {
+          // Upper-only: "< 5.7" or "<= 5.7"
+          const hiM = t.match(/^<[=]?\s*([\d.]+)$/)
+          if (hiM) hi = parseFloat(hiM[1])
+          // Lower-only: "> 40" or ">= 40"
+          const loM = t.match(/^>[=]?\s*([\d.]+)$/)
+          if (loM) lo = parseFloat(loM[1])
+        }
+      }
+
       if (lo !== undefined && numericValue < lo) isAbnormal = true
       if (hi !== undefined && numericValue > hi) isAbnormal = true
     }
@@ -247,6 +269,13 @@ function normalizeTestName(raw: string): { stripped: string; collapsed: string }
 // NHI system URI used by the 健康存摺 bridge
 const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
 
+// testKeys where different NHI codes represent clinically distinct analytes that
+// must remain as separate pivot columns. All other tests merge by testKey so
+// cross-institution same-analyte rows collapse into one column.
+const KEEP_SEPARATE_BY_NHI = new Set<string>([
+  'GLUCOSE',  // 09005C = fasting, 09140C = random — clinically meaningful distinction
+])
+
 // Returns the canonical analyte name (alias-resolved display key).
 // Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
 function canonicalTestKey(obs: any): string {
@@ -260,11 +289,10 @@ function canonicalTestKey(obs: any): string {
 
 // Returns { mapKey, testKey, displayName } for one observation.
 //
-// mapKey      – internal Map key for grouping; uses "NHI_CODE:testKey" when
-//               NHI code is present so cross-institution same-analyte records
-//               (e.g. "TSH" vs "Serum TSH(ECLIA...)") always land in the same
-//               row. Falls back to testKey alone for non-NHI FHIR sources
-//               (sandboxes, LOINC-only data) — alias normalisation still works.
+// mapKey      – pivot row key; equals testKey for most tests so same-analyte
+//               records from different institutions collapse into one column.
+//               Uses "NHI_CODE:testKey" only for tests in KEEP_SEPARATE_BY_NHI
+//               where the code distinguishes genuinely different analytes.
 // testKey     – canonical analyte name; stable across data sources.
 // displayName – label shown in the table; prefers NHI official display name.
 function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayName: string } {
@@ -275,7 +303,7 @@ function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayNam
 
   const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
   const nhiCode = nhiCoding?.code as string | undefined
-  const mapKey = nhiCode ? `${nhiCode}:${testKey}` : testKey
+  const mapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
 
   // Prefer NHI official display; otherwise use stripped raw label
   const nhiDisplay = nhiCoding?.display as string | undefined
