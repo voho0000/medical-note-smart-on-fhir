@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Menu, Maximize2, Minimize2 } from "lucide-react"
+import { Menu, Maximize2, Minimize2, Search, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { useReportsData } from './hooks/useReportsData'
@@ -22,7 +22,9 @@ export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
+  const handleTabChange = (val: string) => { setActiveTab(val); setSearchQuery("") }
   const [expanded, setExpanded] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
 
   const { reportRows, seenIds } = useReportsData(diagnosticReports)
   const procedureRows = useProcedureRows(procedures, observations)
@@ -70,7 +72,17 @@ export function ReportsCard() {
     return all
   }, [reportRows, orphanRows, procedureRows])
 
-  const groupedRows = useGroupedRows(rows)
+  const filteredRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter(
+      (row) =>
+        row.title.toLowerCase().includes(q) ||
+        row.meta.toLowerCase().includes(q)
+    )
+  }, [rows, searchQuery])
+
+  const groupedRows = useGroupedRows(filteredRows)
 
   const tabConfigs = useMemo(() => {
     const { tabs: reportTabs } = t.reports
@@ -146,7 +158,7 @@ export function ReportsCard() {
   )
 
   const reportsContent = (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
+    <Tabs value={activeTab} onValueChange={handleTabChange} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
       {/* Desktop tabs */}
       <TabsList className="hidden md:!flex mb-6 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 pr-12 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
         {tabConfigs.map((tab) => (
@@ -184,6 +196,29 @@ export function ReportsCard() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Search bar — hidden on cumulative tab */}
+      {activeTab !== "cumulative" && (
+        <div className="relative mb-3">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜尋檢驗名稱、日期..."
+            className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       {tabConfigs.map((tab) =>
         tab.isCumulative ? (

@@ -29,10 +29,34 @@ function dateKey(s?: string): string | null {
   return s ? s.slice(0, 10) : null
 }
 
-function formatValue(obs: any): { value: string; unit?: string; isAbnormal: boolean; interpretationCode?: string } {
+// Fallback reference ranges for common tests when FHIR data lacks referenceRange
+// and the source system (e.g. VGH bridge) doesn't set interpretation codes.
+// Values are typical adult ranges — verify against your lab's report header.
+const HARDCODED_REF_RANGES: Record<string, { low?: number; high?: number }> = {
+  // Thyroid
+  TSH:        { low: 0.35, high: 4.94 },   // uIU/mL
+  'FREE T4':  { low: 0.70, high: 1.48 },   // ng/dL
+  'FREE T3':  { low: 2.0,  high: 4.4  },   // pg/mL
+  T4:         { low: 4.5,  high: 12.5 },   // ug/dL
+  T3:         { low: 80,   high: 200  },   // ng/dL
+  // Adrenal
+  CORTISOL:   { low: 6.2,  high: 19.4 },   // ug/dL (AM)
+  // Lipid
+  TG:         {             high: 150  },   // mg/dL
+  CHOL:       {             high: 200  },   // mg/dL
+  LDL:        {             high: 130  },   // mg/dL
+  HDL:        { low: 40               },   // mg/dL (conservative; male floor)
+  // Glucose
+  GLUCOSE:    { low: 70,   high: 100  },   // mg/dL (fasting)
+  HBA1C:      {             high: 5.7 },   // %
+}
+
+function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string } {
   let value = '—'
   let unit: string | undefined
+  let numericValue: number | undefined
   if (obs.valueQuantity?.value !== undefined && obs.valueQuantity?.value !== null) {
+    numericValue = obs.valueQuantity.value
     value = String(obs.valueQuantity.value)
     unit = obs.valueQuantity.unit || obs.valueQuantity.code
   } else if (obs.valueString) {
@@ -41,8 +65,19 @@ function formatValue(obs: any): { value: string; unit?: string; isAbnormal: bool
     value = obs.valueCodeableConcept.text
   }
   const interp = obs.interpretation?.[0]?.coding?.[0]?.code || obs.interpretation?.coding?.[0]?.code
-  const isAbnormal = !!interp && !['N', 'NORMAL'].includes(String(interp).toUpperCase())
-  return { value, unit, isAbnormal, interpretationCode: interp }
+  let isAbnormal = !!interp && !['N', 'NORMAL'].includes(String(interp).toUpperCase())
+
+  // Layer A: use FHIR referenceRange when interpretation code is absent
+  if (!isAbnormal && numericValue !== undefined) {
+    const rr = obs.referenceRange?.[0]
+    if (rr) {
+      const lo = rr.low?.value, hi = rr.high?.value
+      if (lo !== undefined && numericValue < lo) isAbnormal = true
+      if (hi !== undefined && numericValue > hi) isAbnormal = true
+    }
+  }
+
+  return { value, unit, numericValue, isAbnormal, interpretationCode: interp }
 }
 
 // Map of common test aliases → canonical name. Add entries when source
@@ -258,7 +293,17 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         // shows "Creatinine" not "Creatinine(B)".
         const raw = getTestDisplayName(obs)
         const displayName = raw.replace(/\s*[\(\[].*$/, '').trim() || raw
-        const { value, unit, isAbnormal, interpretationCode } = formatValue(obs)
+        const fv = formatValue(obs)
+        let { value, unit, numericValue, isAbnormal, interpretationCode } = fv
+
+        // Layer B: hardcoded reference ranges when FHIR provides no referenceRange/interpretation
+        if (!isAbnormal && numericValue !== undefined) {
+          const range = HARDCODED_REF_RANGES[key]
+          if (range) {
+            if (range.low !== undefined && numericValue < range.low) isAbnormal = true
+            if (range.high !== undefined && numericValue > range.high) isAbnormal = true
+          }
+        }
 
         if (!testMap.has(key)) {
           testMap.set(key, { testKey: key, displayName, values: new Map() })
@@ -298,6 +343,15 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         }
         const row = testMap.get(key)
         if (row) row.unit = bestUnit
+      }
+
+      // Inject stub rows for pinned columns not present in patient data
+      if (cat.pinnedColumns) {
+        for (const pinKey of cat.pinnedColumns) {
+          if (!testMap.has(pinKey)) {
+            testMap.set(pinKey, { testKey: pinKey, displayName: pinKey, values: new Map() })
+          }
+        }
       }
 
       // Assign subgroupId to each row (matches against category.subgroups[].members)

@@ -34,6 +34,8 @@ export interface LabCategory {
   preferredOrder?: string[]
   /** Clinically meaningful subgroups within this category (e.g., 腎功能/肝功能) */
   subgroups?: LabSubgroup[]
+  /** Test keys that always appear as columns even when the patient has no data for them */
+  pinnedColumns?: string[]
 }
 
 export const LAB_CATEGORIES: LabCategory[] = [
@@ -89,7 +91,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     ],
     codes: [
       // Thyroid
-      'TSH', 'T3', 'T4', 'FT3', 'FT4', 'FREE T3', 'FREE T4', 'RT3', 'REVERSE T3',
+      'TSH', 'T3', 'T4', 'FT3', 'FT4', 'FREE T3', 'FREE T4', 'FREE-T3', 'FREE-T4', 'RT3', 'REVERSE T3',
       'ANTI-TPO', 'ANTI-TG', 'TG', 'THYROGLOBULIN', 'TRAB', 'TBII',
       // Parathyroid / Bone
       'PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D',
@@ -125,6 +127,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     ],
     nameKeywords: [
       'THYROID', 'THYROTROPIN', 'THYROXINE', 'TRIIODOTHYRONINE', 'THYROGLOBULIN', 'ANTI-THYROID',
+      '游離甲狀腺素', '甲促素', '三碘甲狀腺素', '游離三碘甲狀腺',
       'PARATHYROID HORMONE', 'PARATHYROID',
       'VITAMIN D', '25-HYDROXY',
       'CORTISOL', 'CORTICOTROPIN', 'ALDOSTERONE',
@@ -143,6 +146,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'pancreas', labelEn: 'Pancreas',      labelZh: '胰島',     members: ['INSULIN', 'C-PEPTIDE'] },
       { id: 'pituitary',labelEn: 'Pituitary/GH',  labelZh: '生長激素', members: ['GH', 'IGF-1', 'IGF1'] },
     ],
+    pinnedColumns: ['TSH', 'FREE T4', 'CORTISOL'],
   },
   {
     id: 'lipid',
