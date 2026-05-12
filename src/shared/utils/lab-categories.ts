@@ -70,6 +70,81 @@ export const LAB_CATEGORIES: LabCategory[] = [
     ],
   },
   {
+    id: 'endocrine',
+    labelEn: 'Endocrine',
+    labelZh: '內分泌',
+    preferredOrder: [
+      // Thyroid
+      'TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'FT4', 'FT3', 'RT3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN',
+      // Parathyroid / Bone
+      'PTH', 'VITAMIN D', '25-OH VITAMIN D', 'CALCITONIN',
+      // Adrenal
+      'CORTISOL', 'ACTH', 'ALDOSTERONE', 'RENIN', 'DHEA-S',
+      // Sex hormones
+      'LH', 'FSH', 'E2', 'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'PROLACTIN', 'AMH', 'SHBG',
+      // Diabetes
+      'INSULIN', 'C-PEPTIDE',
+      // Growth
+      'GH', 'IGF-1',
+    ],
+    codes: [
+      // Thyroid
+      'TSH', 'T3', 'T4', 'FT3', 'FT4', 'FREE T3', 'FREE T4', 'RT3', 'REVERSE T3',
+      'ANTI-TPO', 'ANTI-TG', 'TG', 'THYROGLOBULIN', 'TRAB', 'TBII',
+      // Parathyroid / Bone
+      'PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D',
+      // Adrenal
+      'CORTISOL', 'ACTH', 'ALDOSTERONE', 'RENIN', 'PRA', 'DHEA', 'DHEA-S', 'DHEAS',
+      // Sex hormones
+      'LH', 'FSH', 'E2', 'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'FREE TESTOSTERONE',
+      'PROLACTIN', 'PRL', 'AMH', 'SHBG',
+      // Diabetes / Pancreas
+      'INSULIN', 'C-PEPTIDE',
+      // Growth / Pituitary
+      'GH', 'IGF-1', 'IGF1',
+    ],
+    loincCodes: [
+      // Thyroid: TSH, T4, T3, FT4, FT3
+      '3016-3', '11580-8', '14999-7', '3024-7', '3026-2', '3051-0', '14920-3', '14998-9',
+      // Anti-TPO, Anti-Tg, Thyroglobulin
+      '8099-6', '8100-2', '11572-5',
+      // PTH (intact), Calcium-regulating
+      '2731-8', '14866-8',
+      // Vitamin D
+      '1989-3', '14635-7', '62292-8', '49054-0',
+      // Cortisol, ACTH
+      '2143-6', '2141-0',
+      // Sex hormones
+      '2986-8', '2243-4', '15067-2', '15083-9', '2839-9', '2842-3', '2243-4',
+      // E2, FSH, LH, Progesterone, Testosterone, Prolactin
+      '2243-4', '15067-2', '10501-5', '2991-8', '2986-8', '2842-3',
+      // Insulin, C-Peptide
+      '20448-7', '1986-9',
+      // IGF-1, GH
+      '2484-4', '2963-7',
+    ],
+    nameKeywords: [
+      'THYROID', 'THYROTROPIN', 'THYROXINE', 'TRIIODOTHYRONINE', 'THYROGLOBULIN', 'ANTI-THYROID',
+      'PARATHYROID HORMONE', 'PARATHYROID',
+      'VITAMIN D', '25-HYDROXY',
+      'CORTISOL', 'CORTICOTROPIN', 'ALDOSTERONE',
+      'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'PROLACTIN',
+      'FOLLICLE STIMULATING', 'LUTEINIZING', 'CHORIONIC GONADOTROP',
+      'INSULIN', 'C-PEPTIDE', 'C PEPTIDE',
+      'GROWTH HORMONE', 'INSULIN-LIKE GROWTH', 'INSULIN LIKE GROWTH', 'SOMATOMEDIN',
+      'DEHYDROEPIANDROSTERONE', 'DHEA',
+      'ANTI-MULLERIAN', 'SEX HORMONE BINDING',
+    ],
+    subgroups: [
+      { id: 'thyroid',  labelEn: 'Thyroid',       labelZh: '甲狀腺',   members: ['TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'FT4', 'FT3', 'RT3', 'REVERSE T3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN', 'TRAB', 'TBII'] },
+      { id: 'parathy',  labelEn: 'Parathyroid',   labelZh: '副甲狀腺', members: ['PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D', 'CALCITONIN'] },
+      { id: 'adrenal',  labelEn: 'Adrenal',       labelZh: '腎上腺',   members: ['CORTISOL', 'ACTH', 'ALDOSTERONE', 'RENIN', 'PRA', 'DHEA', 'DHEA-S', 'DHEAS'] },
+      { id: 'sexhorm',  labelEn: 'Sex Hormones',  labelZh: '性荷爾蒙', members: ['LH', 'FSH', 'E2', 'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'FREE TESTOSTERONE', 'PROLACTIN', 'PRL', 'AMH', 'SHBG'] },
+      { id: 'pancreas', labelEn: 'Pancreas',      labelZh: '胰島',     members: ['INSULIN', 'C-PEPTIDE'] },
+      { id: 'pituitary',labelEn: 'Pituitary/GH',  labelZh: '生長激素', members: ['GH', 'IGF-1', 'IGF1'] },
+    ],
+  },
+  {
     id: 'lipid',
     labelEn: 'Lipid Panel',
     labelZh: '血脂',
@@ -92,7 +167,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     labelEn: 'Tumor Markers',
     labelZh: '癌症指數',
     preferredOrder: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'FPSA/PSA', 'FPSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA'],
-    codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'TPSA', 'T-PSA', 'PSA(T)', 'PSA-T', 'FPSA/PSA', 'FPSA', 'F-PSA', 'PSA-F', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'B-HCG', 'BETA-HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA', 'E2', 'FSH'],
+    codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'TPSA', 'T-PSA', 'PSA(T)', 'PSA-T', 'FPSA/PSA', 'FPSA', 'F-PSA', 'PSA-F', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'B-HCG', 'BETA-HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA'],
     loincCodes: ['1834-1', '2039-6', '10334-1', '24108-3', '2857-1', '10886-0', '24467-3', '47238-1', '83112-3', '19201-2', '53764-7', '15067-2', '15083-9', '47239-9'],
     nameKeywords: ['ALPHA FETO', 'ALPHA-FETO', 'CARCINOEMBRYONIC', 'CA 125', 'CA 15-3', 'CA 15.3', 'CA 19-9', 'PROSTATE SPECIFIC', 'PROSTATE-SPECIFIC ANTIGEN', 'PROSTATE-SPECIFIC AG', 'BETA-2 MICROGLOBULIN', 'BETA 2 MICROGLOBULIN', 'CHORIONIC GONADOTROPIN', 'CALCITONIN', 'CYFRA', 'NEURON SPECIFIC ENOLASE', 'NEURON-SPECIFIC ENOLASE', 'HEPATITIS C VIRUS', 'ANTI-HCV', 'PIVKA', 'SQUAMOUS CELL CARCINOMA ANTIGEN', 'TUMOR MARKER'],
   },
