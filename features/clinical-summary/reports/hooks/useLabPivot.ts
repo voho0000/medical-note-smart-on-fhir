@@ -140,11 +140,16 @@ const TEST_ALIASES: Record<string, string> = {
   'GLYCATED HEMOGLOBIN': 'HBA1C', GLYCATEDHEMOGLOBIN: 'HBA1C',
   'GLYCOHEMOGLOBIN': 'HBA1C',
 
-  // ── Glucose (fasting / AC / random / Glu-AC / Finger sugar all merge) ──
+  // ── Glucose (fasting / AC / random / Glu-AC / Finger sugar / Sugar all merge) ──
+  // 「都算 glucose」per clinical context — both fasting and unmarked
   'GLU-AC': 'GLUCOSE', GLUAC: 'GLUCOSE', 'GLUCOSE AC': 'GLUCOSE', GLUCOSEAC: 'GLUCOSE',
   'GLUCOSE(AC)': 'GLUCOSE', 'GLU(AC)': 'GLUCOSE',
   'FINGER SUGAR': 'GLUCOSE', FINGERSUGAR: 'GLUCOSE',
-  'FASTING GLUCOSE': 'GLUCOSE',
+  'FASTING GLUCOSE': 'GLUCOSE', FASTINGGLUCOSE: 'GLUCOSE',
+  // Some clinics use "Sugar" for blood glucose (numeric).
+  // Urine dipstick "Sugar" with qualitative values goes to urine via the
+  // value heuristic in categorizeObservation BEFORE this alias is applied.
+  SUGAR: 'GLUCOSE',
 
   // ── Collapsed (no separators) lookups for pickKey's collapsed-form match ──
   // These handle "Hb-A1c" / "HbA1c" / "Hb A1c" → all become "HBA1C" after
