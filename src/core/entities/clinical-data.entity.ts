@@ -169,6 +169,7 @@ export interface ObservationEntity {
   encounter?: {
     reference?: string
   }
+  performer?: Array<{ display?: string; reference?: string }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

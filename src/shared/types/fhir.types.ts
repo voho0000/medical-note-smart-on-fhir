@@ -72,6 +72,7 @@ export interface Observation {
   referenceRange?: ReferenceRange[]
   hasMember?: Reference[]
   component?: ObservationComponent[]
+  performer?: Array<{ display?: string; reference?: string }>
 }
 
 // Diagnostic Report Types

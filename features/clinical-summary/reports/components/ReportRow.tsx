@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, Building2 } from 'lucide-react'
 import type { Row } from '../types'
 import { getConceptText } from '../utils/fhir-helpers'
 import { ObservationBlock } from './ObservationBlock'
@@ -61,6 +61,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
                 {row.obs[0]?.category && (
                   <span className="inline-flex items-center gap-1">
                     <span className="font-medium text-foreground/80">{t.reports.category}:</span> {getConceptText(row.obs[0]?.category)}
+                  </span>
+                )}
+                {row.institution && (
+                  <span className="inline-flex items-center gap-1 text-blue-600/80 dark:text-blue-400/80">
+                    <Building2 className="h-3 w-3" />
+                    {row.institution}
                   </span>
                 )}
               </div>

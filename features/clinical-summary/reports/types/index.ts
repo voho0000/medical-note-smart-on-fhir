@@ -13,10 +13,11 @@ export type {
 
 export type ReportGroup = "lab" | "imaging" | "procedures" | "vitals" | "other"
 
-export type Row = { 
+export type Row = {
   id: string
   title: string
   meta: string
   obs: Observation[]
-  group: ReportGroup 
+  group: ReportGroup
+  institution?: string
 }

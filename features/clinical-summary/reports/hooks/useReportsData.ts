@@ -64,12 +64,15 @@ export function useReportsData(diagnosticReports: any[]) {
         obsWithSummary.unshift(summaryObservation)
       }
 
+      const institution = obs[0] ? (obs[0] as any).performer?.[0]?.display : undefined
+
       rows.push({
         id: dr.id || Math.random().toString(36),
         title: getCodeableConceptText(dr.code) || "Unnamed Report",
         meta: `${category || "Laboratory"} • ${dr.status || "—"} • ${formatDate(dr.issued || dr.effectiveDateTime)}`,
         obs: obsWithSummary,
-        group: inferGroupFromCategory(dr.category)
+        group: inferGroupFromCategory(dr.category),
+        institution,
       })
     })
 

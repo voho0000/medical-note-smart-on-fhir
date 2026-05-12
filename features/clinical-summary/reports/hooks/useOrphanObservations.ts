@@ -34,12 +34,14 @@ export function useOrphanObservations(observations: any[], seenIds: Set<string>)
 
     return Array.from(groups.entries()).map(([k, lst]) => {
       const first = lst[0]
+      const institution = (first as any).performer?.[0]?.display
       return {
         id: `orphan:${k}`,
         title: getCodeableConceptText(first.code),
         meta: `Observation Group • ${formatDate(first.effectiveDateTime)}`,
         obs: lst,
-        group: inferGroupFromObservation(first)
+        group: inferGroupFromObservation(first),
+        institution,
       }
     })
   }, [observations, seenIds])

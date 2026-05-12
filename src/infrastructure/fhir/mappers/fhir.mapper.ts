@@ -117,11 +117,15 @@ export class FhirMapper implements IDataMapper {
       code: fhirResource.code,
       valueQuantity: fhirResource.valueQuantity,
       valueString: fhirResource.valueString,
+      valueCodeableConcept: fhirResource.valueCodeableConcept,
       component: fhirResource.component,
       effectiveDateTime: fhirResource.effectiveDateTime,
       status: fhirResource.status,
       category: fhirResource.category,
       encounter: fhirResource.encounter,
+      performer: fhirResource.performer,
+      referenceRange: fhirResource.referenceRange,
+      interpretation: fhirResource.interpretation,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
