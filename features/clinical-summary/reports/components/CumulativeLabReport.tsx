@@ -97,7 +97,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
             )}
             {flatTests.map((test) => (
               <th
-                key={test.testKey}
+                key={test.mapKey}
                 className="bg-muted/80 backdrop-blur border-b border-l p-2 text-center font-medium whitespace-nowrap min-w-[64px]"
               >
                 <div>{test.displayName}</div>
@@ -118,7 +118,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                 const cell = test.values.get(date)
                 if (!cell) {
                   return (
-                    <td key={test.testKey} className="border-l p-1.5 text-center text-muted-foreground">
+                    <td key={test.mapKey} className="border-l p-1.5 text-center text-muted-foreground">
                       —
                     </td>
                   )
@@ -126,7 +126,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                 const cls = cell.isAbnormal ? 'text-red-600 font-medium' : 'text-foreground'
                 return (
                   <td
-                    key={test.testKey}
+                    key={test.mapKey}
                     className={`border-l p-1.5 text-center ${cls}`}
                     title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
                   >

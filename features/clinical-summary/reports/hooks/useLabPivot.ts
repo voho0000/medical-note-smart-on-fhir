@@ -12,7 +12,8 @@ export interface LabCell {
 }
 
 export interface LabRow {
-  testKey: string             // normalized identifier (used as map key)
+  mapKey: string              // unique pivot key (NHI_CODE:testKey or testKey)
+  testKey: string             // canonical analyte name; may match across institutions
   displayName: string         // shown in left column
   unit?: string               // unit summary (most common across all dates)
   values: Map<string, LabCell>  // date "YYYY-MM-DD" → cell
@@ -331,7 +332,7 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         }
 
         if (!testMap.has(mapKey)) {
-          testMap.set(mapKey, { testKey, displayName, values: new Map() })
+          testMap.set(mapKey, { mapKey, testKey, displayName, values: new Map() })
           unitCount.set(mapKey, new Map())
         } else {
           // Prefer the shorter display name (cleaner labels)
@@ -376,7 +377,7 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         const existingTestKeys = new Set([...testMap.values()].map(r => r.testKey))
         for (const pinKey of cat.pinnedColumns) {
           if (!existingTestKeys.has(pinKey)) {
-            testMap.set(pinKey, { testKey: pinKey, displayName: pinKey, values: new Map() })
+            testMap.set(pinKey, { mapKey: pinKey, testKey: pinKey, displayName: pinKey, values: new Map() })
           }
         }
       }

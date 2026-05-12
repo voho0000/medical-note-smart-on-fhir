@@ -214,9 +214,9 @@ function normalize(s: string): string {
  * "HEMOGLOBIN" → cbc).
  */
 // Qualitative dipstick results (Negative/Positive/Trace/+1...) are almost
-// always urinalysis tests. Pattern is lenient — allows trailing content like
-// "4+ (2000)" or "Negative (mg/dL)" by not anchoring to end-of-string.
-const QUALITATIVE_RE = /^(negative|positive|trace|few|occasional|moderate|many|\d?\+|\+{1,4}|none|nil)\b/i
+// always urinalysis tests. Pattern allows trailing content like "4+ (2000)".
+// Uses (?!\w) instead of \b so "4+" and "3+" match ('+' is non-word, has no \b).
+const QUALITATIVE_RE = /^(negative|positive|trace|few|occasional|moderate|many|\d?\+|\+{1,4}|none|nil)(?!\w)/i
 
 function isQualitativeResult(obs: any): boolean {
   if (obs.valueQuantity?.value !== undefined && obs.valueQuantity?.value !== null) return false
