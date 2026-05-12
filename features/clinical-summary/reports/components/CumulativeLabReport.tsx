@@ -31,82 +31,115 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
     )
   }
 
+  // Transposed layout (matches VGH 累積報告): dates = rows, tests = columns.
+  // Group columns by subgroup; render a top-row of subgroup headers spanning
+  // their member columns.
+  const subgroups = pivot.category.subgroups || []
+  const groupedColumns: { sg: { id: string; labelEn: string; labelZh: string } | null; tests: typeof pivot.rows }[] = []
+  if (subgroups.length > 0) {
+    for (const sg of subgroups) {
+      const members = pivot.rows.filter((r) => r.subgroupId === sg.id)
+      if (members.length > 0) groupedColumns.push({ sg, tests: members })
+    }
+    const orphans = pivot.rows.filter((r) => !r.subgroupId || !subgroups.some((s) => s.id === r.subgroupId))
+    if (orphans.length > 0) groupedColumns.push({ sg: null, tests: orphans })
+  } else {
+    groupedColumns.push({ sg: null, tests: pivot.rows })
+  }
+  const flatTests = groupedColumns.flatMap((g) => g.tests)
+
   const heightClass = fullHeight ? 'max-h-[calc(100vh-220px)]' : 'max-h-[60vh]'
+  const hasSubgroups = groupedColumns.some((g) => g.sg !== null)
+
   return (
     <div
       className={`w-full max-w-full overflow-x-auto overflow-y-auto ${heightClass} rounded-md border [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
       style={{ scrollbarWidth: 'thin' }}
     >
       <table className="text-xs border-collapse w-max min-w-full">
-        <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
+        <thead className="sticky top-0 z-10">
+          {/* Subgroup header row */}
+          {hasSubgroups && (
+            <tr>
+              <th
+                rowSpan={2}
+                className="sticky left-0 z-30 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[88px]"
+              >
+                {pivot.category.labelEn}
+              </th>
+              {groupedColumns.map((g, i) =>
+                g.sg ? (
+                  <th
+                    key={`sg-${g.sg.id}`}
+                    colSpan={g.tests.length}
+                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold uppercase tracking-wide text-muted-foreground"
+                  >
+                    {g.sg.labelZh} · {g.sg.labelEn}
+                  </th>
+                ) : (
+                  <th
+                    key={`sg-other-${i}`}
+                    colSpan={g.tests.length}
+                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold uppercase tracking-wide text-muted-foreground"
+                  >
+                    Other
+                  </th>
+                )
+              )}
+            </tr>
+          )}
+          {/* Test name header row */}
           <tr>
-            <th className="sticky left-0 z-20 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[110px]">
-              {pivot.category.labelEn} / {pivot.category.labelZh.split(' ')[0]}
-            </th>
-            {pivot.dates.map((d) => (
-              <th key={d} className="border-b p-2 text-center font-medium whitespace-nowrap min-w-[68px]">
-                {formatDateLabel(d)}
+            {!hasSubgroups && (
+              <th className="sticky left-0 z-30 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[88px]">
+                {pivot.category.labelEn}
+              </th>
+            )}
+            {flatTests.map((test) => (
+              <th
+                key={test.testKey}
+                className="bg-muted/80 backdrop-blur border-b border-l p-2 text-center font-medium whitespace-nowrap min-w-[64px]"
+              >
+                <div>{test.displayName}</div>
+                {test.unit && (
+                  <div className="text-[10px] font-normal text-muted-foreground">{test.unit}</div>
+                )}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {renderRowsWithSubgroups(pivot)}
+          {pivot.dates.map((date, dateIdx) => (
+            <tr key={date} className={dateIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+              <td className="sticky left-0 z-10 bg-inherit border-r p-2 font-medium whitespace-nowrap">
+                {formatDateLabel(date)}
+              </td>
+              {flatTests.map((test) => {
+                const cell = test.values.get(date)
+                if (!cell) {
+                  return (
+                    <td key={test.testKey} className="border-l p-1.5 text-center text-muted-foreground">
+                      —
+                    </td>
+                  )
+                }
+                const cls = cell.isAbnormal ? 'text-red-600 font-medium' : 'text-foreground'
+                return (
+                  <td
+                    key={test.testKey}
+                    className={`border-l p-1.5 text-center ${cls}`}
+                    title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
+                  >
+                    {cell.value}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   )
-}
-
-function renderRowsWithSubgroups(pivot: LabPivot) {
-  const subgroups = pivot.category.subgroups || []
-  const elements: React.ReactElement[] = []
-  let lastSubgroupId: string | undefined | null = null
-  let rowIdx = 0
-  for (const row of pivot.rows) {
-    const sgId = row.subgroupId
-    if (subgroups.length > 0 && sgId !== lastSubgroupId) {
-      const sg = subgroups.find((s) => s.id === sgId)
-      const label = sg ? `${sg.labelZh} · ${sg.labelEn}` : 'Other'
-      elements.push(
-        <tr key={`sg-${sgId || 'other'}-${rowIdx}`} className="bg-muted/60">
-          <td
-            colSpan={pivot.dates.length + 1}
-            className="sticky left-0 z-10 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground border-y"
-          >
-            {label}
-          </td>
-        </tr>
-      )
-      lastSubgroupId = sgId
-    }
-    const idx = rowIdx++
-    elements.push(
-      <tr key={row.testKey} className={idx % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-        <td className="sticky left-0 z-10 bg-inherit border-r p-2 font-medium whitespace-nowrap">
-          <div>{row.displayName}</div>
-          {row.unit && <div className="text-[10px] text-muted-foreground">{row.unit}</div>}
-        </td>
-        {pivot.dates.map((d) => {
-          const cell = row.values.get(d)
-          if (!cell) {
-            return <td key={d} className="border-l p-1.5 text-center text-muted-foreground">—</td>
-          }
-          const cls = cell.isAbnormal ? "text-red-600 font-medium" : "text-foreground"
-          return (
-            <td
-              key={d}
-              className={`border-l p-1.5 text-center ${cls}`}
-              title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
-            >
-              {cell.value}
-            </td>
-          )
-        })}
-      </tr>
-    )
-  }
-  return elements
 }
 
 export function CumulativeLabReport({ observations, fullHeight = false }: CumulativeLabReportProps) {
