@@ -277,7 +277,39 @@ export function categorizeObservation(obs: any): LabCategory | null {
     return null
   }
 
-  // 6. Specialized / less-common tests — exclude from cumulative report.
+  // 6. Antibiotic susceptibility / MIC results — categorical S/I/R values,
+  //    not meaningful as cumulative numeric trends.
+  const ANTIBIOTIC_RE = new RegExp(
+    [
+      // Fluoroquinolones
+      'CIPROFLOXACIN', 'LEVOFLOXACIN', 'MOXIFLOXACIN', 'OFLOXACIN', 'NORFLOXACIN',
+      // Carbapenems
+      'ERTAPENEM', 'IMIPENEM', 'MEROPENEM', 'DORIPENEM',
+      // Aminoglycosides
+      'GENTAMICIN', 'TOBRAMYCIN', 'AMIKACIN', 'NETILMICIN',
+      // Beta-lactams & combos
+      'PIPERACILLIN', 'TAZOBACTAM', 'AMPICILLIN', 'AMOXICILLIN',
+      'CEFTRIAXONE', 'CEFTAZIDIME', 'CEFEPIME', 'CEFAZOLIN', 'CEFUROXIME',
+      'FLOMOXEF', 'OXACILLIN', 'NAFCILLIN', 'METHICILLIN',
+      // Other antibiotics
+      'TIGECYCLINE', 'COLISTIN', 'POLYMYXIN', 'VANCOMYCIN', 'TEICOPLANIN',
+      'LINEZOLID', 'DAPTOMYCIN', 'RIFAMPIN', 'RIFAMPICIN',
+      'TRIMETHOPRIM', 'SULFAMETHOXAZOLE', 'CLINDAMYCIN', 'ERYTHROMYCIN',
+      'AZITHROMYCIN', 'CLARITHROMYCIN', 'TETRACYCLINE', 'DOXYCYCLINE', 'MINOCYCLINE',
+      'CHLORAMPHENICOL', 'NITROFURANTOIN', 'FOSFOMYCIN',
+      // Antifungals
+      'FLUCONAZOLE', 'VORICONAZOLE', 'ITRACONAZOLE', 'AMPHOTERICIN',
+      // Misc tests not suitable for cumulative pivot
+      'RIVALTA',                                            // Peritoneal fluid protein test
+      'MINIMUM INHIBITORY', '\\bMIC\\b',                   // MIC values
+    ].join('|'),
+    'i'
+  )
+  if (ANTIBIOTIC_RE.test(fullText)) {
+    return null
+  }
+
+  // 7. Specialized / less-common tests — exclude from cumulative report.
   //    These are still visible in the 全部/檢驗 tabs, just hidden from the
   //    pivot view. Add more entries here as users request.
   const SPECIALIZED_RE = new RegExp(
