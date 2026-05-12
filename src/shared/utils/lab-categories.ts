@@ -336,6 +336,24 @@ export function categorizeObservation(obs: any): LabCategory | null {
     }
   }
 
+  // Pass 1.5: stripped display-name match — handles verbose names like
+  // "Serum TSH(ECLIA ...)" where stripping the prefix/parenthetical yields
+  // a short code ("TSH") that IS in codes[].
+  const strippedDisplays = [textNorm, ...displayNorms]
+    .map(n =>
+      n.replace(/\s*[\(\[（［].*$/, '')  // strip parenthetical and everything after
+       .replace(/^SERUM\s+/, '')          // strip "Serum " / "SERUM " prefix
+       .replace(/[.…]+$/, '')             // strip trailing dots
+       .trim()
+    )
+    .filter(Boolean)
+  for (const cat of LAB_CATEGORIES) {
+    const codeSet = new Set(cat.codes.map(normalize))
+    for (const candidate of strippedDisplays) {
+      if (codeSet.has(candidate)) return cat
+    }
+  }
+
   // Pass 2: exact LOINC match against any coding entry
   for (const cat of LAB_CATEGORIES) {
     if (!cat.loincCodes) continue
