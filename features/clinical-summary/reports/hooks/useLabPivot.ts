@@ -48,6 +48,9 @@ function formatValue(obs: any): { value: string; unit?: string; isAbnormal: bool
 // Map of common test aliases → canonical name. Add entries when source
 // data uses inconsistent names for the same analyte (e.g. "ALT" / "ALT(GPT)" /
 // "ALT/GPT" / "GPT" should all merge into one row).
+//
+// Both stripped and collapsed forms are looked up — so for "Hb-A1c" the
+// lookups try "HB-A1C" first then "HBA1C". Add either form.
 const TEST_ALIASES: Record<string, string> = {
   // Creatinine
   CREATININE: 'CREATININE', CREAT: 'CREATININE', 'CREAT.': 'CREATININE', CREA: 'CREATININE',
@@ -131,18 +134,106 @@ const TEST_ALIASES: Record<string, string> = {
   'CA-199': 'CA-199', CA199: 'CA-199', 'CA19-9': 'CA-199', 'CA 19-9': 'CA-199',
   FERRITIN: 'FERRITIN',
   HCG: 'HCG', 'BETA HCG': 'HCG', 'BETA-HCG': 'HCG', 'B-HCG': 'HCG',
-  // Glycated hemoglobin
-  HBA1C: 'HBA1C', 'HEMOGLOBIN A1C': 'HBA1C', 'GLYCATED HEMOGLOBIN': 'HBA1C', 'GLYCOHEMOGLOBIN': 'HBA1C',
+  // Glycated hemoglobin (Hb-A1c, HbA1c, Hemoglobin A1c all merge)
+  HBA1C: 'HBA1C', 'HB-A1C': 'HBA1C', 'HB A1C': 'HBA1C',
+  'HEMOGLOBIN A1C': 'HBA1C', 'HEMOGLOBINA1C': 'HBA1C',
+  'GLYCATED HEMOGLOBIN': 'HBA1C', GLYCATEDHEMOGLOBIN: 'HBA1C',
+  'GLYCOHEMOGLOBIN': 'HBA1C',
+
+  // ── Glucose (fasting / AC / random / Glu-AC / Finger sugar all merge) ──
+  'GLU-AC': 'GLUCOSE', GLUAC: 'GLUCOSE', 'GLUCOSE AC': 'GLUCOSE', GLUCOSEAC: 'GLUCOSE',
+  'GLUCOSE(AC)': 'GLUCOSE', 'GLU(AC)': 'GLUCOSE',
+  'FINGER SUGAR': 'GLUCOSE', FINGERSUGAR: 'GLUCOSE',
+  'FASTING GLUCOSE': 'GLUCOSE',
+
+  // ── CBC variant suffixes ──
+  // WBC
+  'WBC COUNT': 'WBC', WBCCOUNT: 'WBC',
+  // RBC
+  'RBC COUNT': 'RBC', RBCCOUNT: 'RBC',
+  // Hemoglobin variants
+  'HB(血色素)': 'HB',
+  // Hematocrit
+  HT: 'HCT', 'HCT(血球容)': 'HCT',
+  // Platelet (incl. typo "ccount")
+  'PLATELET COUNT': 'PLT', PLATELETCOUNT: 'PLT',
+  'PLATELET CCOUNT': 'PLT', PLATELETCCOUNT: 'PLT',
+  // Differential names with -s plural and Chinese annotation
+  'NEUTROPHIL SEGMENTED': 'NEU', NEUTROPHILSEGMENTED: 'NEU',
+  'NEUTROPHILIC SEGMENTED': 'NEU', NEUTROPHILICSEGMENTED: 'NEU',
+  'NEUTROPHILIC SEG': 'NEU', NEUTROPHILICSEG: 'NEU',
+  'NEUTROPHILIC SE': 'NEU', NEUTROPHILICSE: 'NEU',  // truncated display
+  SEGMENT: 'NEU', SEGS: 'NEU', SEG: 'NEU',
+  'EOSINOPHIL COUNT': 'EOS', EOSINOPHILCOUNT: 'EOS', 'EOSINOPHIL COUN': 'EOS', EOSINOPHILCOUN: 'EOS',
+
+  // ── Chem variants ──
+  ALBUMIN: 'ALB', 'ALBUMIN(BCG)': 'ALB',
+  'TOTAL BILIRUBIN': 'T.BILI', TOTALBILIRUBIN: 'T.BILI',
+  'T.P': 'TP', TP_: 'TP',
+  'R-GT': 'GGT', RGT: 'GGT',
+  'INORGANIC P': 'IP', INORGANICP: 'IP', P: 'IP',
+  CALCIUM: 'CA',
+  'ESTIMATED GFR': 'EGFR', ESTIMATEDGFR: 'EGFR',
+  'CREATININE(U)': 'CREATININE',
+  // SGOT (legacy 天門...) — anchor specifically for AST
+  'SGOT(AST)': 'AST',
+  // Troponin truncation
+  'TROPONIN I': 'TROP', TROPONINI: 'TROP',
+  'TROPONIN T': 'TROP', TROPONINT: 'TROP',
+
+  // ── Lipid variants ──
+  'T-CHOLESTEROL': 'CHOL', TCHOLESTEROL: 'CHOL', 'TOTAL CHOL': 'CHOL',
+  'LDL-CHOLESTEROL': 'LDL', LDLCHOLESTEROL: 'LDL',
+  'LDL-C(DIRECT)': 'LDL', 'LDL-C': 'LDL',
+  // Note: TRIGLYCERIDE already aliased to TG above
+
+  // ── Thyroid variants ──
+  'FREE-T4': 'FREE T4', FREET4: 'FREE T4',
+  'FREE-T3': 'FREE T3', FREET3: 'FREE T3',
+  TSH_: 'TSH', // (placeholder, exact TSH match exists)
+
+  // ── Coagulation ──
+  'P.T': 'PT', PT_: 'PT',
+  'D DIMER': 'D-DIMER',
+}
+
+// Aggressively normalize a test display name so equivalent variants merge.
+// Examples:
+//   "Creatinine(B)" → "CREATININE"
+//   "Creatinine(Bloo..." → "CREATININE"
+//   "MCV 平均紅血球體積" → "MCV"
+//   "WBC(白血球..." → "WBC"
+//   "Glucose(AC)(飯..." → "GLUCOSEAC"
+//   "Hb-A1c" → "HBA1C"
+//   "Serum Free T4(E..." → "FREET4"
+//   "Platelet ccount ..." → "PLATELETCCOUNT"
+function normalizeTestName(raw: string): { stripped: string; collapsed: string } {
+  let s = raw.trim()
+  // Strip everything after first paren/bracket (ASCII or CJK)
+  s = s.replace(/\s*[\(\[（［].*$/, '')
+  // Strip trailing CJK characters and whatever follows
+  s = s.replace(/\s*[一-鿿].*$/, '')
+  // Strip trailing ellipsis / dots that mark truncated names
+  s = s.replace(/[.…]+\s*$/, '').trim()
+  // Strip qualifier prefixes
+  s = s.replace(/^Serum\s+/i, '')
+  s = s.trim()
+  const stripped = s.toUpperCase()
+  // Collapse all non-alphanumeric (hyphens, dots, spaces) for fuzzy matching
+  const collapsed = stripped.replace(/[^A-Z0-9]/g, '')
+  return { stripped, collapsed }
 }
 
 function pickKey(obs: any): string {
-  // Strip parenthesized/bracketed qualifiers so "Creatinine(B)",
-  // "Creatinine(Blood)", "Creatinine [Mass/volume] in Serum or Plasma"
-  // all collapse to "Creatinine".
-  const raw = getTestDisplayName(obs).trim()
-  const stripped = raw.replace(/\s*[\(\[].*$/, '').trim() || raw
-  const norm = stripped.toUpperCase()
-  return TEST_ALIASES[norm] || norm
+  const raw = getTestDisplayName(obs)
+  if (!raw) return 'UNKNOWN'
+  const { stripped, collapsed } = normalizeTestName(raw)
+  // Try exact stripped match first (preserves things like "T.BILI" vs "TBILI")
+  if (TEST_ALIASES[stripped]) return TEST_ALIASES[stripped]
+  // Try collapsed match (handles "Hb-A1c", "HB A1C", "HbA1c" all → HBA1C)
+  if (TEST_ALIASES[collapsed]) return TEST_ALIASES[collapsed]
+  // Fallback: use stripped form
+  return stripped || collapsed || raw.toUpperCase()
 }
 
 export function useLabPivot(observations: any[]): Record<string, LabPivot> {
