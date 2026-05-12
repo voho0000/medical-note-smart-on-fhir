@@ -1,8 +1,8 @@
-// Observation Block Component
+// Observation Block Component - compact single-row display
 import { useState } from 'react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Observation } from '../types'
-import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, formatDate, getReferenceRangeText } from '../utils/fhir-helpers'
+import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
@@ -11,91 +11,137 @@ interface ObservationBlockProps {
   observation: Observation
 }
 
+function ObsRow({
+  name,
+  value,
+  originalValue,
+  interp,
+  refText,
+  onTrendClick,
+  isLongText,
+}: {
+  name: string
+  value: string
+  originalValue?: string
+  interp: ReturnType<typeof getInterpretationTag>
+  refText: string
+  onTrendClick?: () => void
+  isLongText?: boolean
+}) {
+  const isAbnormal = !!interp && interp.label !== 'Normal'
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
+      {/* Left: name + trend */}
+      <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+        <span className="text-sm font-medium text-foreground">{name}</span>
+        {onTrendClick && (
+          <button
+            onClick={onTrendClick}
+            className="text-muted-foreground hover:text-primary transition-colors"
+            aria-label="查看趨勢"
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      {/* Right: value + interp + ref */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {isLongText ? (
+          <span className="text-xs text-foreground/80 max-w-xs truncate">{value}</span>
+        ) : (
+          <span
+            className={cn('text-sm font-semibold tabular-nums', isAbnormal ? 'text-red-600 dark:text-red-400' : 'text-foreground')}
+            title={originalValue && originalValue !== value ? `原始值: ${originalValue}` : undefined}
+          >
+            {value}
+          </span>
+        )}
+        {interp && (
+          <span className={cn('inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium', interp.style)}>
+            {interp.label}
+          </span>
+        )}
+        {refText && (
+          <span className="text-xs text-muted-foreground">{refText}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function ObservationBlock({ observation }: ObservationBlockProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const title = getCodeableConceptText(observation.code)
   const interp = getInterpretationTag(observation.interpretation)
   const ref = getReferenceRangeText(observation.referenceRange)
+  const hasComponents = Array.isArray(observation.component) && observation.component.length > 0
+  const isReportSummary = observation.code?.text === 'Report Summary'
+
   const primaryValue = observation.valueQuantity
     ? getValueWithUnit(observation.valueQuantity)
-    : observation.valueString || "—"
+    : observation.valueString || '—'
   const originalPrimaryValue = observation.valueQuantity
     ? getOriginalValueWithUnit(observation.valueQuantity)
-    : observation.valueString || "—"
+    : observation.valueString || '—'
+  const isLongText = !observation.valueQuantity && (observation.valueString?.length ?? 0) > 80
+
+  // Report Summary block: show as plain text, no trend
+  if (isReportSummary) {
+    return (
+      <div className="text-xs text-muted-foreground px-2 py-1 whitespace-pre-wrap leading-relaxed">
+        {observation.valueString}
+        {Array.isArray(observation.component) && observation.component.map((c, i) => (
+          <div key={i} className="mt-1">
+            <span className="font-medium text-foreground/70">{getCodeableConceptText(c.code)}: </span>
+            {c.valueString}
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <>
-      <div className="rounded-lg border p-3 shadow-sm">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex-1">
-              <button
-                onClick={() => setDialogOpen(true)}
-                className="group flex items-center gap-2 text-left hover:text-primary transition-colors"
-              >
-                <div className="text-sm font-semibold text-foreground group-hover:text-primary">
-                  {title}
-                </div>
-                <TrendingUp className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-              </button>
-              <div className="text-xs text-muted-foreground">{formatDate(observation.effectiveDateTime)}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span 
-                className={cn("text-base font-semibold cursor-help", interp && "text-foreground")}
-                title={originalPrimaryValue !== primaryValue ? `原始值: ${originalPrimaryValue}` : undefined}
-              >
-                {primaryValue}
-              </span>
-              {interp && (
-                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", interp.style)}>
-                  {interp.label}
-                </span>
-              )}
-            </div>
-          </div>
+      <div>
+        {/* Main observation row */}
+        <ObsRow
+          name={title || '—'}
+          value={primaryValue}
+          originalValue={originalPrimaryValue}
+          interp={interp}
+          refText={ref}
+          onTrendClick={!hasComponents ? () => setDialogOpen(true) : undefined}
+          isLongText={isLongText}
+        />
 
-        {ref && <div className="text-xs text-muted-foreground">{ref}</div>}
-
-        {Array.isArray(observation.component) && observation.component.length > 0 && (
-          <div className="mt-2 divide-y rounded-md border bg-muted/40">
-            {observation.component.map((component, idx) => {
-              const name = getCodeableConceptText(component.code)
-              const value = component.valueQuantity
+        {/* Component sub-rows */}
+        {hasComponents && (
+          <div className="ml-4 border-l pl-3 mt-0.5 space-y-0">
+            {observation.component!.map((component, idx) => {
+              const cName = getCodeableConceptText(component.code)
+              const cValue = component.valueQuantity
                 ? getValueWithUnit(component.valueQuantity)
-                : component.valueString || "—"
-              const originalValue = component.valueQuantity
+                : component.valueString || '—'
+              const cOriginal = component.valueQuantity
                 ? getOriginalValueWithUnit(component.valueQuantity)
-                : component.valueString || "—"
-              const componentInterp = getInterpretationTag(component.interpretation)
-              const range = getReferenceRangeText(component.referenceRange)
-
+                : component.valueString || '—'
+              const cInterp = getInterpretationTag(component.interpretation)
+              const cRef = getReferenceRangeText(component.referenceRange)
               return (
-                <div key={idx} className="grid gap-1 px-3 py-2 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">{name}</span>
-                    <div className="flex items-center gap-2">
-                      <span 
-                        className={cn("font-semibold cursor-help", componentInterp && "text-foreground")}
-                        title={originalValue !== value ? `原始值: ${originalValue}` : undefined}
-                      >
-                        {value}
-                      </span>
-                      {componentInterp && (
-                        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", componentInterp.style)}>
-                          {componentInterp.label}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {range && <div className="text-xs text-muted-foreground">{range}</div>}
-                </div>
+                <ObsRow
+                  key={idx}
+                  name={cName || '—'}
+                  value={cValue}
+                  originalValue={cOriginal}
+                  interp={cInterp}
+                  refText={cRef}
+                />
               )
             })}
           </div>
         )}
       </div>
-    </div>
 
       <ObservationTrendDialog
         observation={observation}
