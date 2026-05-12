@@ -102,6 +102,14 @@ export interface ObservationEntity {
     unit?: string
   }
   valueString?: string
+  valueCodeableConcept?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }
   interpretation?: {
     text?: string
     coding?: Array<{
