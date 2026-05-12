@@ -109,9 +109,10 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
       return {
         id: procedure?.id || `procedure-row-${Math.random().toString(36).slice(2, 10)}`,
         title,
-        meta: `Procedure • ${procedure?.status || "—"} • ${formatDate(performed)}`,
+        meta: `Procedure • ${procedure?.status || "—"}`,
         obs: [observation, ...relatedObservations],
-        group: "procedures" as const
+        group: "procedures" as const,
+        effectiveDate: performed,
       }
     })
   }, [procedures, observations, t])

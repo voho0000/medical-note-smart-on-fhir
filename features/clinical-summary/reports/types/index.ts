@@ -20,4 +20,6 @@ export type Row = {
   obs: Observation[]
   group: ReportGroup
   institution?: string
+  effectiveDate?: string  // ISO date string for smart date display
+  showTime?: boolean      // true when multiple same-name results share the same date
 }

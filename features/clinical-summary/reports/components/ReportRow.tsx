@@ -16,6 +16,19 @@ interface ReportRowProps {
   defaultOpen: string[]
 }
 
+function formatDisplayDate(date?: string, showTime?: boolean): string {
+  if (!date) return ''
+  try {
+    const d = new Date(date)
+    if (showTime) {
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+    return d.toLocaleDateString()
+  } catch {
+    return date
+  }
+}
+
 function countAbnormal(obs: Observation[]): number {
   let count = 0
   for (const o of obs) {
@@ -102,6 +115,9 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
     const refText = getReferenceRangeText(obs.referenceRange)
     const isLongText = !obs.valueQuantity && (obs.valueString?.length ?? 0) > 80
 
+    const dateLabel = formatDisplayDate(row.effectiveDate, row.showTime)
+    const metaWithDate = row.meta + (dateLabel ? ` • ${dateLabel}` : '')
+
     const HeaderRight = () => (
       <div className="flex items-center gap-2 shrink-0">
         {row.institution && (
@@ -110,7 +126,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
             {row.institution}
           </span>
         )}
-        <Badge variant="outline" className="text-xs font-normal">{row.meta}</Badge>
+        <Badge variant="outline" className="text-xs font-normal">{metaWithDate}</Badge>
       </div>
     )
 
@@ -194,6 +210,8 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
 
   // Multi-item report: accordion with summary
   const abnormalCount = countAbnormal(displayObs)
+  const accordionDateLabel = formatDisplayDate(row.effectiveDate, row.showTime)
+  const accordionMeta = row.meta + (accordionDateLabel ? ` • ${accordionDateLabel}` : '')
 
   return (
     <>
@@ -218,7 +236,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{displayObs.length} 項</span>
-                  <Badge variant="outline" className="text-xs font-normal">{row.meta}</Badge>
+                  <Badge variant="outline" className="text-xs font-normal">{accordionMeta}</Badge>
                 </div>
               </div>
               <MetaInfo />

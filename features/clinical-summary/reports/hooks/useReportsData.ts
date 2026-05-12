@@ -66,13 +66,15 @@ export function useReportsData(diagnosticReports: any[]) {
 
       const institution = obs[0] ? (obs[0] as any).performer?.[0]?.display : undefined
 
+      const rawDate = dr.issued || dr.effectiveDateTime
       rows.push({
         id: dr.id || Math.random().toString(36),
         title: getCodeableConceptText(dr.code) || "Unnamed Report",
-        meta: `${category || "Laboratory"} • ${dr.status || "—"} • ${formatDate(dr.issued || dr.effectiveDateTime)}`,
+        meta: `${category || "Laboratory"} • ${dr.status || "—"}`,
         obs: obsWithSummary,
         group: inferGroupFromCategory(dr.category),
         institution,
+        effectiveDate: rawDate,
       })
     })
 

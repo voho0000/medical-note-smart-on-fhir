@@ -38,10 +38,11 @@ export function useOrphanObservations(observations: any[], seenIds: Set<string>)
       return {
         id: `orphan:${k}`,
         title: getCodeableConceptText(first.code),
-        meta: `Observation Group • ${formatDate(first.effectiveDateTime)}`,
+        meta: `Observation Group`,
         obs: lst,
         group: inferGroupFromObservation(first),
         institution,
+        effectiveDate: first.effectiveDateTime,
       }
     })
   }, [observations, seenIds])

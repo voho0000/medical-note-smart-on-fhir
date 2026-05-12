@@ -61,7 +61,7 @@ export function ReportsCard() {
   const orphanRows = useOrphanObservations(observations, allSeenIds)
 
   const rows: Row[] = useMemo(() => {
-    const all = [...reportRows, ...orphanRows, ...procedureRows]
+    const all: Row[] = [...reportRows, ...orphanRows, ...procedureRows] as Row[]
     all.sort((a, b) => {
       const dateA = a.obs[0]?.effectiveDateTime
       const dateB = b.obs[0]?.effectiveDateTime
@@ -69,17 +69,38 @@ export function ReportsCard() {
       const timeB = dateB ? new Date(dateB).getTime() : 0
       return timeB - timeA
     })
+    // Detect same-title rows sharing the same calendar date → need time for disambiguation
+    const titleDateCount = new Map<string, number>()
+    for (const row of all) {
+      const dateOnly = row.effectiveDate
+        ? new Date(row.effectiveDate).toISOString().slice(0, 10)
+        : ''
+      const key = `${row.title}|${dateOnly}`
+      titleDateCount.set(key, (titleDateCount.get(key) || 0) + 1)
+    }
+    for (const row of all) {
+      const dateOnly = row.effectiveDate
+        ? new Date(row.effectiveDate).toISOString().slice(0, 10)
+        : ''
+      const key = `${row.title}|${dateOnly}`
+      if ((titleDateCount.get(key) || 0) > 1) row.showTime = true
+    }
     return all
   }, [reportRows, orphanRows, procedureRows])
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return rows
-    return rows.filter(
-      (row) =>
+    return rows.filter((row) => {
+      const dateStr = row.effectiveDate
+        ? new Date(row.effectiveDate).toLocaleDateString()
+        : ''
+      return (
         row.title.toLowerCase().includes(q) ||
-        row.meta.toLowerCase().includes(q)
-    )
+        row.meta.toLowerCase().includes(q) ||
+        dateStr.toLowerCase().includes(q)
+      )
+    })
   }, [rows, searchQuery])
 
   const groupedRows = useGroupedRows(filteredRows)
