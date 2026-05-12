@@ -146,55 +146,34 @@ const TEST_ALIASES: Record<string, string> = {
   'FINGER SUGAR': 'GLUCOSE', FINGERSUGAR: 'GLUCOSE',
   'FASTING GLUCOSE': 'GLUCOSE',
 
-  // ── CBC variant suffixes ──
-  // WBC
-  'WBC COUNT': 'WBC', WBCCOUNT: 'WBC',
-  // RBC
-  'RBC COUNT': 'RBC', RBCCOUNT: 'RBC',
-  // Hemoglobin variants
-  'HB(血色素)': 'HB',
-  // Hematocrit
-  HT: 'HCT', 'HCT(血球容)': 'HCT',
-  // Platelet (incl. typo "ccount")
-  'PLATELET COUNT': 'PLT', PLATELETCOUNT: 'PLT',
-  'PLATELET CCOUNT': 'PLT', PLATELETCCOUNT: 'PLT',
-  // Differential names with -s plural and Chinese annotation
-  'NEUTROPHIL SEGMENTED': 'NEU', NEUTROPHILSEGMENTED: 'NEU',
-  'NEUTROPHILIC SEGMENTED': 'NEU', NEUTROPHILICSEGMENTED: 'NEU',
-  'NEUTROPHILIC SEG': 'NEU', NEUTROPHILICSEG: 'NEU',
-  'NEUTROPHILIC SE': 'NEU', NEUTROPHILICSE: 'NEU',  // truncated display
-  SEGMENT: 'NEU', SEGS: 'NEU', SEG: 'NEU',
-  'EOSINOPHIL COUNT': 'EOS', EOSINOPHILCOUNT: 'EOS', 'EOSINOPHIL COUN': 'EOS', EOSINOPHILCOUN: 'EOS',
-
-  // ── Chem variants ──
-  ALBUMIN: 'ALB', 'ALBUMIN(BCG)': 'ALB',
-  'TOTAL BILIRUBIN': 'T.BILI', TOTALBILIRUBIN: 'T.BILI',
-  'T.P': 'TP', TP_: 'TP',
-  'R-GT': 'GGT', RGT: 'GGT',
+  // ── Collapsed (no separators) lookups for pickKey's collapsed-form match ──
+  // These handle "Hb-A1c" / "HbA1c" / "Hb A1c" → all become "HBA1C" after
+  // collapsing, so this single entry catches them all.
+  WBCCOUNT: 'WBC',
+  RBCCOUNT: 'RBC',
+  PLATELETCOUNT: 'PLT', PLATELETCCOUNT: 'PLT',
+  HT: 'HCT', HTCT: 'HCT',
+  NEUTROPHILSEGMENTED: 'NEU', NEUTROPHILICSEGMENTED: 'NEU',
+  NEUTROPHILICSEG: 'NEU', NEUTROPHILICSE: 'NEU',
+  SEGS: 'NEU', SEGMENT: 'NEU',
+  EOSINOPHILCOUNT: 'EOS', EOSINOPHILCOUN: 'EOS',
+  // Chem extras
+  ALBUMINBCG: 'ALB',
+  TOTALBILIRUBIN: 'T.BILI',
+  TOTALPROTEIN: 'TP',
+  RGT: 'GGT', 'R-GT': 'GGT',
   'INORGANIC P': 'IP', INORGANICP: 'IP', P: 'IP',
-  CALCIUM: 'CA',
-  'ESTIMATED GFR': 'EGFR', ESTIMATEDGFR: 'EGFR',
-  'CREATININE(U)': 'CREATININE',
-  // SGOT (legacy 天門...) — anchor specifically for AST
-  'SGOT(AST)': 'AST',
-  // Troponin truncation
-  'TROPONIN I': 'TROP', TROPONINI: 'TROP',
-  'TROPONIN T': 'TROP', TROPONINT: 'TROP',
-
-  // ── Lipid variants ──
+  ESTIMATEDGFR: 'EGFR', 'ESTIMATED GFR': 'EGFR',
+  'CREATININE(U)': 'CREATININE', CREATININEU: 'CREATININE',
+  SGOTAST: 'AST', SGPTALT: 'ALT',
+  TROPONINI: 'TROP', TROPONINT: 'TROP',
+  // Lipid extras
   'T-CHOLESTEROL': 'CHOL', TCHOLESTEROL: 'CHOL', 'TOTAL CHOL': 'CHOL',
   'LDL-CHOLESTEROL': 'LDL', LDLCHOLESTEROL: 'LDL',
-  'LDL-C(DIRECT)': 'LDL', 'LDL-C': 'LDL',
-  // Note: TRIGLYCERIDE already aliased to TG above
-
-  // ── Thyroid variants ──
+  'LDL-C(DIRECT)': 'LDL', LDLCDIRECT: 'LDL',
+  // Thyroid extras
   'FREE-T4': 'FREE T4', FREET4: 'FREE T4',
   'FREE-T3': 'FREE T3', FREET3: 'FREE T3',
-  TSH_: 'TSH', // (placeholder, exact TSH match exists)
-
-  // ── Coagulation ──
-  'P.T': 'PT', PT_: 'PT',
-  'D DIMER': 'D-DIMER',
 }
 
 // Aggressively normalize a test display name so equivalent variants merge.
