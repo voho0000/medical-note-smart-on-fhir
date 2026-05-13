@@ -316,6 +316,9 @@ export function categorizeObservation(obs: any): LabCategory | null {
     [
       '\\bTIBC\\b',                                        // Iron binding capacity (rarely tracked over time)
       'MICRO[-\\s]*ALBUMIN', 'MICROALBUMIN',                 // Microalbuminuria (kidney early marker)
+      // eGFR by MDRD formula — exclude from cumulative report; CKD-EPI is the
+      // KDIGO 2012 standard. Bridge still shows MDRD in 全部/檢驗 tabs.
+      'EGFR\\s*\\(\\s*M(?:DRD)?\\s*\\)',
       '\\bPCO2\\b', '\\bTCO2\\b', '\\bPO2\\b', '\\bSO2\\b',  // ABG components
       'BASE\\s*EXCESS', '\\bHCO3\\b',                      // ABG components
       'ALTERNARIA', 'ALLERGEN', '过敏原|過敏原',            // Allergen panels
