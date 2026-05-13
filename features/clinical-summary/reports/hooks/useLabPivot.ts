@@ -148,12 +148,28 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
   let testKey = canonicalTestKey(obs)
   let displayOverride: string | undefined
 
-  // Glucose category fallback: if categorized as glucose (via LOINC) but the
-  // testKey isn't a known glucose-specific test (HbA1c, C-Peptide, GTT),
-  // treat it as glucose. Handles typos like "Glucosc" and unfamiliar variants
-  // without requiring an explicit alias for each.
-  if (categoryId === 'glucose' && !KNOWN_GLUCOSE_KEYS.has(testKey)) {
-    testKey = 'GLUCOSE'
+  if (categoryId === 'glucose') {
+    // Safety net for HbA1c mislabeled as glucose: % unit or small value
+    // (HbA1c % is typically 4-15; glucose mg/dL never below ~40 in vivo).
+    // Skip when unit is mmol/L since glucose in mmol/L is legitimately < 20.
+    const unit = String(obs?.valueQuantity?.unit ?? '').trim().toLowerCase()
+    const value = obs?.valueQuantity?.value
+    const isPercent = unit === '%' || unit === 'percent'
+    const isMmolMol = unit === 'mmol/mol'
+    const isMmolL = unit === 'mmol/l'
+
+    if (isPercent || isMmolMol) {
+      testKey = 'HBA1C'
+      displayOverride = 'HbA1c'
+    } else if (typeof value === 'number' && value > 0 && value < 20 && !isMmolL) {
+      testKey = 'HBA1C'
+      displayOverride = 'HbA1c'
+    } else if (!KNOWN_GLUCOSE_KEYS.has(testKey)) {
+      // Unknown glucose-category name (typos, unfamiliar variants) → fallback
+      // to GLUCOSE; subclassification below will route to finger / fasting /
+      // generic based on display + LOINC.
+      testKey = 'GLUCOSE'
+    }
   }
 
   // Glucose subclassification: split into fasting / finger-stick / generic
