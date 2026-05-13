@@ -315,7 +315,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
   const SPECIALIZED_RE = new RegExp(
     [
       '\\bTIBC\\b',                                        // Iron binding capacity (rarely tracked over time)
-      'MICRO\\s*ALBUMIN', 'MICROALBUMIN',                  // Microalbuminuria (kidney early marker)
+      'MICRO[-\\s]*ALBUMIN', 'MICROALBUMIN',                 // Microalbuminuria (kidney early marker)
       '\\bPCO2\\b', '\\bTCO2\\b', '\\bPO2\\b', '\\bSO2\\b',  // ABG components
       'BASE\\s*EXCESS', '\\bHCO3\\b',                      // ABG components
       'ALTERNARIA', 'ALLERGEN', '过敏原|過敏原',            // Allergen panels
