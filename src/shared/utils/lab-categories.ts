@@ -73,7 +73,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'endocrine',
-    labelEn: 'Endocrine',
+    labelEn: 'Endo',
     labelZh: '內分泌',
     preferredOrder: [
       // Thyroid
@@ -171,7 +171,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'tumor',
-    labelEn: 'Tumor Mkr',
+    labelEn: 'Tumor',
     labelZh: '癌症指數',
     preferredOrder: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'FPSA/PSA', 'FPSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA'],
     codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'TPSA', 'T-PSA', 'PSA(T)', 'PSA-T', 'FPSA/PSA', 'FPSA', 'F-PSA', 'PSA-F', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'B-HCG', 'BETA-HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA'],
