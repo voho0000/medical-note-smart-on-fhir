@@ -143,10 +143,17 @@ function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayNam
   const nhiCode = nhiCoding?.code as string | undefined
   const mapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
 
-  // Prefer NHI official display; otherwise use stripped raw label
+  // Prefer NHI official display; otherwise use stripped raw label.
+  // When the display name is a legacy alias (e.g. "SGOT", "GPT"), replace it
+  // with the canonical testKey ("AST", "ALT") so the column header is consistent
+  // regardless of which institution's naming convention the bridge sends.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
-  const displayName = nhiDisplay || rawDisplay
+  const candidateDisplay = nhiDisplay || rawDisplay
+  const { stripped: candidateStripped, collapsed: candidateCollapsed } = normalizeTestName(candidateDisplay)
+  const resolvedCanonical = TEST_ALIASES[candidateStripped] || TEST_ALIASES[candidateCollapsed]
+  const isAlias = !!resolvedCanonical && resolvedCanonical !== candidateStripped
+  const displayName = isAlias ? testKey : candidateDisplay
 
   return { mapKey, testKey, displayName }
 }
