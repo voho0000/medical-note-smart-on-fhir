@@ -149,19 +149,12 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
   let displayOverride: string | undefined
 
   if (categoryId === 'glucose') {
-    // Safety net for HbA1c mislabeled as glucose: % unit or small value
-    // (HbA1c % is typically 4-15; glucose mg/dL never below ~40 in vivo).
-    // Skip when unit is mmol/L since glucose in mmol/L is legitimately < 20.
+    // Safety net for HbA1c mislabeled as glucose: unit "%" or "mmol/mol"
+    // (the two standard HbA1c units) reclassifies the row as HBA1C.
     const unit = String(obs?.valueQuantity?.unit ?? '').trim().toLowerCase()
-    const value = obs?.valueQuantity?.value
-    const isPercent = unit === '%' || unit === 'percent'
-    const isMmolMol = unit === 'mmol/mol'
-    const isMmolL = unit === 'mmol/l'
+    const isHbA1cUnit = unit === '%' || unit === 'percent' || unit === 'mmol/mol'
 
-    if (isPercent || isMmolMol) {
-      testKey = 'HBA1C'
-      displayOverride = 'HbA1c'
-    } else if (typeof value === 'number' && value > 0 && value < 20 && !isMmolL) {
+    if (isHbA1cUnit) {
       testKey = 'HBA1C'
       displayOverride = 'HbA1c'
     } else if (!KNOWN_GLUCOSE_KEYS.has(testKey)) {
