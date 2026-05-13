@@ -92,7 +92,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     codes: [
       // Thyroid
       'TSH', 'T3', 'T4', 'FT3', 'FT4', 'FREE T3', 'FREE T4', 'FREE-T3', 'FREE-T4', 'RT3', 'REVERSE T3',
-      'ANTI-TPO', 'ANTI-TG', 'TG', 'THYROGLOBULIN', 'TRAB', 'TBII',
+      'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN', 'TRAB', 'TBII',
       // Parathyroid / Bone
       'PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D',
       // Adrenal
