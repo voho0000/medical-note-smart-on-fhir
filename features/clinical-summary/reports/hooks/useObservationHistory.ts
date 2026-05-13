@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
 import type { Observation } from '../types'
 
 export interface ObservationHistoryItem {
@@ -53,13 +54,15 @@ export function useCompositeHistory(observationCode?: string, componentNames?: s
     if (!observationCode || !componentNames || componentNames.length === 0) return []
 
     const compositeItems: CompositeHistoryItem[] = []
+    const targetKey = canonicalTestKeyFromString(observationCode)
 
     // Find all observations with matching code that have components
     observations.forEach((obs) => {
       const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
       const obsCodeCode = obs.code?.coding?.[0]?.code
+      const obsKey = canonicalTestKeyFromString(obsCodeText || obsCodeCode || '')
 
-      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+      if (obsKey === targetKey || obsCodeText === observationCode || obsCodeCode === observationCode) {
         const date = obs.effectiveDateTime || ''
         const components: CompositeHistoryItem['components'] = []
         
@@ -122,12 +125,15 @@ export function useComponentHistory(observationCode?: string, componentNames?: s
       color: COMPONENT_COLORS[index % COMPONENT_COLORS.length]
     }))
 
+    const targetKey = canonicalTestKeyFromString(observationCode)
+
     // Find all observations with matching code that have components
     observations.forEach((obs) => {
       const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
       const obsCodeCode = obs.code?.coding?.[0]?.code
+      const obsKey = canonicalTestKeyFromString(obsCodeText || obsCodeCode || '')
 
-      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+      if (obsKey === targetKey || obsCodeText === observationCode || obsCodeCode === observationCode) {
         const date = obs.effectiveDateTime || ''
         
         // Extract component values
@@ -194,13 +200,16 @@ export function useObservationHistory(observationCode?: string) {
       })
     })
 
+    const targetKey = canonicalTestKeyFromString(observationCode)
+
     // Find all observations with matching code
     observations.forEach((obs) => {
       const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
       const obsCodeCode = obs.code?.coding?.[0]?.code
+      const obsKey = canonicalTestKeyFromString(obsCodeText || obsCodeCode || '')
 
-      // Match by text or code
-      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+      // Match by canonical key (handles cross-institution name variants) or exact string
+      if (obsKey === targetKey || obsCodeText === observationCode || obsCodeCode === observationCode) {
         const value = obs.valueQuantity?.value ?? obs.valueString ?? '—'
         const unit = obs.valueQuantity?.unit
         const date = obs.effectiveDateTime || ''
