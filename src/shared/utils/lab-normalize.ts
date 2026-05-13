@@ -117,8 +117,8 @@ export const TEST_ALIASES: Record<string, string> = {
   'T-CHOLESTEROL': 'CHOL', TCHOLESTEROL: 'CHOL', 'TOTAL CHOL': 'CHOL',
   'LDL-CHOLESTEROL': 'LDL', LDLCHOLESTEROL: 'LDL',
   'LDL-C(DIRECT)': 'LDL', LDLCDIRECT: 'LDL',
-  'FREE-T4': 'FREE T4', FREET4: 'FREE T4',
-  'FREE-T3': 'FREE T3', FREET3: 'FREE T3',
+  'FREE-T4': 'FREE T4', FREET4: 'FREE T4', FT4: 'FREE T4',
+  'FREE-T3': 'FREE T3', FREET3: 'FREE T3', FT3: 'FREE T3',
 }
 
 // Normalize a raw test display name: strips parens, CJK, prefixes, then
