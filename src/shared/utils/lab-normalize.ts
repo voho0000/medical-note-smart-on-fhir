@@ -144,3 +144,54 @@ export function canonicalTestKeyFromString(raw: string): string {
   if (TEST_ALIASES[collapsed]) return TEST_ALIASES[collapsed]
   return stripped || collapsed || raw.toUpperCase()
 }
+
+// ── Glucose subclassification ───────────────────────────────────────────────
+// EHR-FHIR-Bridge is "faithful transport" — it doesn't reinterpret display
+// strings, just maps NHI codes to LOINC. Subclassification (fasting / finger /
+// generic) is the SMART app's job because we have UI context and rules can
+// evolve. Bridge gives us LOINC + NHI code + raw code.text — all trustworthy.
+
+export type GlucoseSubtype = 'finger' | 'fasting' | 'generic'
+
+export const GLUCOSE_SUBTYPE_LABEL: Record<GlucoseSubtype, { key: string; display: string }> = {
+  fasting: { key: 'GLUCOSE-AC', display: 'Glu-AC' },
+  finger:  { key: 'GLUCOSE-FS', display: 'Finger Sugar' },
+  generic: { key: 'GLUCOSE',    display: 'Glucose' },
+}
+
+/**
+ * Classify a glucose observation into fasting / finger-stick / generic.
+ *
+ * Priority order matters:
+ *  1. Finger-stick — display-only signal (highest priority).
+ *  2. Fasting — LOINC 1558-6 or display indicators.
+ *  3. Generic — random / post-meal / venous (default).
+ *
+ * Why order matters: hospitals sometimes bill finger sugar with NHI 09005C →
+ * bridge maps to LOINC 1558-6, but code.text still says "FINGER SUGAR". The
+ * display string is the source of truth for finger-stick — LOINC can't be
+ * trusted here because the NHI billing code drove the LOINC mapping.
+ */
+export function classifyGlucose(obs: any): GlucoseSubtype {
+  const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  const textParts = [
+    obs?.code?.text,
+    ...codings.map((c: any) => c?.display),
+  ].filter(Boolean).join(' ')
+
+  // 1. Finger-stick — display-only signal
+  if (/finger\s*sugar|指尖血糖|自我監測血糖|微血管/i.test(textParts)) {
+    return 'finger'
+  }
+
+  // 2. Fasting — LOINC 1558-6 or display indicators
+  if (codings.some((c: any) => c?.code === '1558-6')) {
+    return 'fasting'
+  }
+  if (/glu[-\s]*ac|空腹血糖|飯前血糖|\bfbs\b|\bfpg\b|fasting/i.test(textParts)) {
+    return 'fasting'
+  }
+
+  // 3. Default: generic
+  return 'generic'
+}

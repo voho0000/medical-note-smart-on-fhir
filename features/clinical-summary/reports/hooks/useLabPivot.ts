@@ -2,7 +2,7 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
-import { TEST_ALIASES, normalizeTestName } from '@/src/shared/utils/lab-normalize'
+import { TEST_ALIASES, normalizeTestName, classifyGlucose, GLUCOSE_SUBTYPE_LABEL } from '@/src/shared/utils/lab-normalize'
 
 export interface LabCell {
   value: string
@@ -48,8 +48,9 @@ const HARDCODED_REF_RANGES: Record<string, { low?: number; high?: number }> = {
   CHOL:       {             high: 200  },   // mg/dL
   LDL:        {             high: 130  },   // mg/dL
   HDL:        { low: 40               },   // mg/dL (conservative; male floor)
-  // Glucose
-  GLUCOSE:    { low: 70,   high: 100  },   // mg/dL (fasting)
+  // Glucose — fasting range applies only to AC (空腹) measurements.
+  // Generic glucose (random/post-meal) and finger sugar are context-dependent.
+  'GLUCOSE-AC': { low: 70, high: 100 },    // mg/dL (fasting)
   HBA1C:      {             high: 5.7 },   // %
 }
 
@@ -110,9 +111,10 @@ const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
 // testKeys where different NHI codes represent clinically distinct analytes that
 // must remain as separate pivot columns. All other tests merge by testKey so
 // cross-institution same-analyte rows collapse into one column.
-const KEEP_SEPARATE_BY_NHI = new Set<string>([
-  'GLUCOSE',  // 09005C = fasting, 09140C = random — clinically meaningful distinction
-])
+// Glucose was here but is now subclassified by display+LOINC (see
+// classifyGlucose in lab-normalize.ts), which is more reliable than NHI code
+// because some hospitals bill finger sugar under fasting NHI codes.
+const KEEP_SEPARATE_BY_NHI = new Set<string>([])
 
 // Returns the canonical analyte name (alias-resolved display key).
 // Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
@@ -137,7 +139,17 @@ function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayNam
   const raw = getTestDisplayName(obs)
   if (!raw) return { mapKey: 'UNKNOWN', testKey: 'UNKNOWN', displayName: 'UNKNOWN' }
 
-  const testKey = canonicalTestKey(obs)
+  let testKey = canonicalTestKey(obs)
+  let displayOverride: string | undefined
+
+  // Glucose subclassification: split into fasting / finger-stick / generic
+  // columns using display + LOINC (see classifyGlucose).
+  if (testKey === 'GLUCOSE') {
+    const sub = classifyGlucose(obs)
+    const label = GLUCOSE_SUBTYPE_LABEL[sub]
+    testKey = label.key
+    displayOverride = label.display
+  }
 
   const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
   const nhiCode = nhiCoding?.code as string | undefined
@@ -147,13 +159,14 @@ function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayNam
   // When the display name is a legacy alias (e.g. "SGOT", "GPT"), replace it
   // with the canonical testKey ("AST", "ALT") so the column header is consistent
   // regardless of which institution's naming convention the bridge sends.
+  // displayOverride (e.g. glucose subtypes) wins over both.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
   const candidateDisplay = nhiDisplay || rawDisplay
   const { stripped: candidateStripped, collapsed: candidateCollapsed } = normalizeTestName(candidateDisplay)
   const resolvedCanonical = TEST_ALIASES[candidateStripped] || TEST_ALIASES[candidateCollapsed]
   const isAlias = !!resolvedCanonical && resolvedCanonical !== candidateStripped
-  const displayName = isAlias ? testKey : candidateDisplay
+  const displayName = displayOverride || (isAlias ? testKey : candidateDisplay)
 
   return { mapKey, testKey, displayName }
 }

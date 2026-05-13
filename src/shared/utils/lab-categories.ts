@@ -161,7 +161,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     id: 'glucose',
     labelEn: 'Glucose',
     labelZh: '血糖',
-    preferredOrder: ['GLUCOSE', 'GLU', 'GLU-AC', 'SUGAR', 'FINGER SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'C-PEPTIDE'],
+    preferredOrder: ['GLUCOSE-AC', 'GLUCOSE', 'GLUCOSE-FS', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'C-PEPTIDE'],
     // SUGAR / FINGER SUGAR: some Taiwan clinics use these for blood glucose.
     // Urine dipstick "Sugar" with qualitative value (+, ++, 4+, negative)
     // is routed to urine via the qualitative-value heuristic earlier.
