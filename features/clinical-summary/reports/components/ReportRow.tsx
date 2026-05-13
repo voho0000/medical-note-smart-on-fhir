@@ -230,7 +230,6 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground">{row.title}</span>
-                  <TrendButton stopProp />
                   {abnormalCount > 0 && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                       <AlertCircle className="h-3 w-3" />
