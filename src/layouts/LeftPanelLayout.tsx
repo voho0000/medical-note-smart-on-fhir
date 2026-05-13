@@ -7,7 +7,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
-import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -55,9 +54,6 @@ export default function ClinicalSummaryFeature() {
 
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
-      <div className="flex items-center justify-end px-1 pb-1">
-        <ImportBundleButton />
-      </div>
       <Tabs defaultValue={defaultTab} className="flex h-full flex-col">
         <TabsList className="w-full grid grid-cols-4 gap-1 h-12 bg-muted/50 p-1 border">
           {tabs.map(tab => {
