@@ -26,23 +26,26 @@ export function useVisitHistory(encounters: any[]) {
       })
       .map((encounter: any) => {
         let type: VisitType = 'other'
-        const classCode = encounter.class?.code?.toLowerCase()
+        // Support both full-word and standard HL7 ActCode short codes (AMB, IMP, EMER…)
+        const classCode = (encounter.class?.code || encounter.class?.display || '').toLowerCase()
         const reasonText = (encounter.reasonCode?.[0]?.text || '').toLowerCase()
-        
-        if (classCode === 'ambulatory' || classCode === 'outpatient' || 
+
+        if (['amb', 'ambulatory', 'outpatient', 'op'].includes(classCode) ||
             reasonText.includes('prenatal') || reasonText.includes('check up') || reasonText.includes('postnatal')) {
           type = 'outpatient'
-        } 
-        else if (classCode === 'emergency' || reasonText.includes('emergency')) {
+        }
+        else if (['emer', 'emergency', 'ed'].includes(classCode) ||
+                 reasonText.includes('emergency')) {
           type = 'emergency'
         }
-        else if (classCode === 'inpatient' || reasonText.includes('admission') || reasonText.includes('hospital')) {
+        else if (['imp', 'inpatient', 'acute', 'ss', 'obsenc', 'prenc'].includes(classCode) ||
+                 reasonText.includes('admission') || reasonText.includes('hospital')) {
           type = 'inpatient'
         }
-        else if (classCode === 'home') {
+        else if (['hh', 'home'].includes(classCode)) {
           type = 'home'
         }
-        else if (classCode === 'virtual') {
+        else if (['vr', 'virtual', 'tele'].includes(classCode)) {
           type = 'virtual'
         }
         
@@ -59,20 +62,16 @@ export function useVisitHistory(encounters: any[]) {
         const diagnosis = encounter.diagnosis?.find((d: any) => d.rank === 1)?.condition?.display ||
                          encounter.diagnosis?.[0]?.condition?.display
 
-        let department = ''
-        let physician = ''
-        if (type === 'outpatient') {
-          department = encounter.type?.[0]?.coding?.[0]?.display || 
-                      encounter.type?.[0]?.text ||
-                      encounter.serviceType?.coding?.[0]?.display ||
-                      ''
-          department = department.replace('門診', '').trim()
+        let department = encounter.type?.[0]?.coding?.[0]?.display ||
+                        encounter.type?.[0]?.text ||
+                        encounter.serviceType?.coding?.[0]?.display ||
+                        ''
+        department = department.replace('門診', '').trim()
 
-          const participant = encounter.participant?.find((p: any) => 
-            p?.individual?.display || p?.actor?.display
-          )
-          physician = participant?.individual?.display || participant?.actor?.display || ''
-        }
+        const participant = encounter.participant?.find((p: any) =>
+          p?.individual?.display || p?.actor?.display
+        )
+        const physician = participant?.individual?.display || participant?.actor?.display || ''
 
         return {
           id: encounter.id,

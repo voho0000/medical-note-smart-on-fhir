@@ -243,7 +243,9 @@ export interface EncounterEntity {
   }
   type?: Array<{
     text?: string
+    coding?: Array<{ code?: string; display?: string; system?: string }>
   }>
+  serviceType?: { coding?: Array<{ display?: string }> }
   period?: {
     start?: string
     end?: string
@@ -251,6 +253,19 @@ export interface EncounterEntity {
   reasonCode?: Array<{
     text?: string
   }>
+  reasonReference?: Array<{ display?: string }>
+  diagnosis?: Array<{
+    rank?: number
+    condition?: { display?: string }
+  }>
+  participant?: Array<{
+    individual?: { display?: string }
+    actor?: { display?: string }
+  }>
+  location?: Array<{
+    location?: { display?: string }
+  }>
+  serviceProvider?: { display?: string }
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

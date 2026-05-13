@@ -12,16 +12,32 @@ export const valueWithUnit = (value?: Quantity, fallback?: string) => {
   return fallback ?? "—"
 }
 
+function parseVghBracketText(text: string): string {
+  // VGH format: "[low][high]" → "low–high", "[val][]" → "val", "[][val]" → "≤val"
+  const m = text.match(/^\[([^\]]*)\]\[([^\]]*)\]$/)
+  if (!m) return text
+  const [, lo, hi] = m
+  if (!lo && !hi) return ""
+  if (!lo) return `≤${hi}`
+  if (!hi) return lo  // qualitative like "Negative"
+  const loN = parseFloat(lo), hiN = parseFloat(hi)
+  if (!isNaN(loN) && !isNaN(hiN)) return `${lo}–${hi}`
+  return lo
+}
+
 export const refRangeText = (ranges?: ReferenceRange[]) => {
   if (!ranges?.length) return ""
   const range = ranges[0]
-  if (range.text) return `Ref: ${range.text}`
   const low = range.low?.value
   const high = range.high?.value
   const unit = range.low?.unit || range.high?.unit
-  if (low != null && high != null) return `Ref: ${low}–${high}${unit ? ` ${unit}` : ""}`
-  if (low != null) return `Ref: ≥${low}${unit ? ` ${unit}` : ""}`
-  if (high != null) return `Ref: ≤${high}${unit ? ` ${unit}` : ""}`
+  if (low != null && high != null) return `[${low}–${high}${unit ? ` ${unit}` : ""}]`
+  if (low != null) return `[≥${low}${unit ? ` ${unit}` : ""}]`
+  if (high != null) return `[≤${high}${unit ? ` ${unit}` : ""}]`
+  if (range.text) {
+    const cleaned = parseVghBracketText(range.text)
+    return cleaned ? `[${cleaned}]` : ""
+  }
   return ""
 }
 
