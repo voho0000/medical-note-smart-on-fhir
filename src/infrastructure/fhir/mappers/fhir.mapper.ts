@@ -202,8 +202,14 @@ export class FhirMapper implements IDataMapper {
       status: fhirResource.status,
       class: fhirResource.class,
       type: fhirResource.type,
+      serviceType: fhirResource.serviceType,
       period: fhirResource.period,
       reasonCode: fhirResource.reasonCode,
+      reasonReference: fhirResource.reasonReference,
+      diagnosis: fhirResource.diagnosis,
+      participant: fhirResource.participant,
+      location: fhirResource.location,
+      serviceProvider: fhirResource.serviceProvider,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }

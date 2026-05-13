@@ -53,8 +53,13 @@ export function VisitItem({ visit, details, icdDict, isExpanded, onToggle }: Vis
         className="w-full rounded-lg p-3 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40"
       >
         <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
+            {visit.location && (
+              <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+                {visit.location}
+              </span>
+            )}
             <div className="flex flex-col">
               <span className="font-medium">{formatDateUtil(visit.date, locale)}</span>
               {visit.department && (
@@ -70,11 +75,6 @@ export function VisitItem({ visit, details, icdDict, isExpanded, onToggle }: Vis
               </Badge>
             )}
           </div>
-          {visit.location && (
-            <span className="text-sm text-muted-foreground text-right">
-              {visit.location}
-            </span>
-          )}
         </div>
 
         {(visit.reason || visit.diagnosis) && (
@@ -113,7 +113,32 @@ export function VisitItem({ visit, details, icdDict, isExpanded, onToggle }: Vis
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+        {details && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {details.diagnoses.length > 0 && (
+              <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700">
+                {t.visitHistory.diagnoses} {details.diagnoses.length}
+              </span>
+            )}
+            {details.tests.length > 0 && (
+              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                {t.visitHistory.tests} {details.tests.length}
+              </span>
+            )}
+            {details.medications.length > 0 && (
+              <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-700">
+                {t.visitHistory.medications} {details.medications.length}
+              </span>
+            )}
+            {details.procedures.length > 0 && (
+              <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] text-orange-700">
+                {t.visitHistory.procedures} {details.procedures.length}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
           <span>
             {hasDetails
               ? isExpanded
@@ -141,9 +166,9 @@ export function VisitItem({ visit, details, icdDict, isExpanded, onToggle }: Vis
               ) : null}
 
               {details?.tests.length ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.tests}</div>
-                  <div className="grid gap-2">
+                  <div className="rounded-lg border bg-muted/40 divide-y overflow-hidden">
                     {details.tests.map((test) => (
                       <EncounterObservationCard key={test.id} observation={test} />
                     ))}
