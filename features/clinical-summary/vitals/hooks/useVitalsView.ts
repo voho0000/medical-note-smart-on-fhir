@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import type { Observation, VitalsView, ObsComponent, Coding } from '../types'
 import { LOINC } from '../types'
-import { pickLatestByCode, filterVitalSigns } from '../utils/observation-helpers'
+import { pickLatestByCode, pickLatestByDisplay, filterVitalSigns } from '../utils/observation-helpers'
 import { formatQuantity, formatDate } from '../utils/fhir-helpers'
 
 export function useVitalsView(vitalSigns: any[]) {
@@ -29,8 +29,8 @@ export function useVitalsView(vitalSigns: any[]) {
       if (s?.valueQuantity?.value != null) bpS = String(Math.round(Number(s.valueQuantity.value)))
       if (d?.valueQuantity?.value != null) bpD = String(Math.round(Number(d.valueQuantity.value)))
     } else {
-      const sObs = pickLatestByCode(vitalObservations, LOINC.BP_SYS)
-      const dObs = pickLatestByCode(vitalObservations, LOINC.BP_DIA)
+      const sObs = pickLatestByCode(vitalObservations, LOINC.BP_SYS) || pickLatestByDisplay(vitalObservations, 'systolic')
+      const dObs = pickLatestByCode(vitalObservations, LOINC.BP_DIA) || pickLatestByDisplay(vitalObservations, 'diastolic')
       if (sObs?.valueQuantity?.value != null) bpS = String(Math.round(Number(sObs.valueQuantity.value)))
       if (dObs?.valueQuantity?.value != null) bpD = String(Math.round(Number(dObs.valueQuantity.value)))
     }
