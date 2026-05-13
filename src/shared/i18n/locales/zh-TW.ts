@@ -283,6 +283,7 @@ export const zhTW = {
       virtual: '遠距就醫',
       other: '就診',
     },
+    filterAll: '全部',
     physician: '主治醫師：',
     reason: '就診原因：',
     diagnosis: '診斷：',

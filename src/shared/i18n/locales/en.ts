@@ -281,6 +281,7 @@ export const en = {
       virtual: 'Virtual Visit',
       other: 'Visit',
     },
+    filterAll: 'All',
     physician: 'Physician:',
     reason: 'Reason:',
     diagnosis: 'Diagnosis:',
