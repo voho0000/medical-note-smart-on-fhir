@@ -135,12 +135,26 @@ function canonicalTestKey(obs: any): string {
 //               where the code distinguishes genuinely different analytes.
 // testKey     – canonical analyte name; stable across data sources.
 // displayName – label shown in the table; prefers NHI official display name.
-function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayName: string } {
+// Known glucose-category testKeys that should NOT fall back to GLUCOSE generic.
+// Everything else in the glucose category (typos, unfamiliar names) is treated
+// as glucose and goes through subclassification, since the LOINC-based
+// categorization already told us it's a glucose measurement.
+const KNOWN_GLUCOSE_KEYS = new Set(['GLUCOSE', 'HBA1C', 'C-PEPTIDE', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC'])
+
+function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKey: string; displayName: string } {
   const raw = getTestDisplayName(obs)
   if (!raw) return { mapKey: 'UNKNOWN', testKey: 'UNKNOWN', displayName: 'UNKNOWN' }
 
   let testKey = canonicalTestKey(obs)
   let displayOverride: string | undefined
+
+  // Glucose category fallback: if categorized as glucose (via LOINC) but the
+  // testKey isn't a known glucose-specific test (HbA1c, C-Peptide, GTT),
+  // treat it as glucose. Handles typos like "Glucosc" and unfamiliar variants
+  // without requiring an explicit alias for each.
+  if (categoryId === 'glucose' && !KNOWN_GLUCOSE_KEYS.has(testKey)) {
+    testKey = 'GLUCOSE'
+  }
 
   // Glucose subclassification: split into fasting / finger-stick / generic
   // columns using display + LOINC (see classifyGlucose).
@@ -204,7 +218,7 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         if (!date) continue
         dateSet.add(date)
 
-        const { mapKey, testKey, displayName } = buildTestEntry(obs)
+        const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
         const fv = formatValue(obs)
         let { value, unit, numericValue, isAbnormal, interpretationCode } = fv
 
