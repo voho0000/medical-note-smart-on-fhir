@@ -39,8 +39,8 @@ export const TEST_ALIASES: Record<string, string> = {
   CL: 'CL', CHLORIDE: 'CL',
   CA: 'CA', CALCIUM: 'CA', CACAL: 'CA',
   IP: 'IP', PHOSPHATE: 'IP', PHOSPHORUS: 'IP',
-  // Glucose
-  GLU: 'GLUCOSE', GLUCOSE: 'GLUCOSE',
+  // Glucose (GLUCOSC is a known typo from some VGH bridge data)
+  GLU: 'GLUCOSE', GLUCOSE: 'GLUCOSE', GLUCOSC: 'GLUCOSE',
   // Lipids
   CHOL: 'CHOL', 'CHOL.': 'CHOL', CHOLESTEROL: 'CHOL', 'TOTAL CHOLESTEROL': 'CHOL',
   TG: 'TG', TRIG: 'TG', TRIGLYCERIDE: 'TG', TRIGLYCERIDES: 'TG',
