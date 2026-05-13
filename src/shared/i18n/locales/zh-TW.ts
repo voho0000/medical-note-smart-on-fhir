@@ -733,6 +733,14 @@ export const zhTW = {
     usePromptLoginDesc: '登入後即可使用此 Prompt 範本，並享受更多功能。',
   },
 
+  importBundle: {
+    button: '匯入資料',
+    importing: '匯入中…',
+    localData: '本地資料',
+    clearTitle: '清除本地資料',
+    importTitle: '匯入 FHIR Bundle JSON',
+  },
+
   feedback: {
     title: '問題回報',
     description: '請描述您遇到的問題，我們會盡快處理。',

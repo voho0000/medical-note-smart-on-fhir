@@ -731,6 +731,14 @@ export const en = {
     usePromptLoginDesc: 'Please log in to use this prompt template and enjoy more features.',
   },
 
+  importBundle: {
+    button: 'Import',
+    importing: 'Importing…',
+    localData: 'Local data',
+    clearTitle: 'Clear local data',
+    importTitle: 'Import FHIR Bundle JSON',
+  },
+
   feedback: {
     title: 'Report Issue',
     description: 'Please describe the issue you encountered, and we will address it as soon as possible.',
