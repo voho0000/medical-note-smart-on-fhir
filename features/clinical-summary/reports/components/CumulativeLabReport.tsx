@@ -22,7 +22,9 @@ function formatDateLabel(d: string): string {
 }
 
 function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHeight?: boolean }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const formatSubgroup = (sg: { labelZh: string; labelEn: string }) =>
+    locale === 'zh-TW' ? `${sg.labelZh} · ${sg.labelEn}` : sg.labelEn
   if (pivot.rows.length === 0 || pivot.dates.length === 0) {
     return (
       <div className="text-sm text-muted-foreground p-4 text-center">
@@ -74,7 +76,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                     colSpan={g.tests.length}
                     className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold tracking-wide text-muted-foreground"
                   >
-                    {g.sg.labelZh} · {g.sg.labelEn}
+                    {formatSubgroup(g.sg)}
                   </th>
                 ) : (
                   <th
