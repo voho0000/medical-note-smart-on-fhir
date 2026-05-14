@@ -22,9 +22,11 @@ function formatDateLabel(d: string): string {
 }
 
 function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHeight?: boolean }) {
-  const { t, locale } = useLanguage()
-  const formatSubgroup = (sg: { labelZh: string; labelEn: string }) =>
-    locale === 'zh-TW' ? `${sg.labelZh} · ${sg.labelEn}` : sg.labelEn
+  const { t } = useLanguage()
+  const categoryLabels = (t.reports as any).cumulativeCategories || {}
+  const subgroupLabels = (t.reports as any).cumulativeSubgroups || {}
+  const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
+  const subgroupLabel = (sgId: string) => subgroupLabels[sgId] || sgId
   if (pivot.rows.length === 0 || pivot.dates.length === 0) {
     return (
       <div className="text-sm text-muted-foreground p-4 text-center">
@@ -67,7 +69,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                 rowSpan={2}
                 className="sticky left-0 z-30 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[88px]"
               >
-                {pivot.category.labelEn}
+                {categoryLabel}
               </th>
               {groupedColumns.map((g, i) =>
                 g.sg ? (
@@ -76,7 +78,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                     colSpan={g.tests.length}
                     className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold tracking-wide text-muted-foreground"
                   >
-                    {formatSubgroup(g.sg)}
+                    {subgroupLabel(g.sg.id)}
                   </th>
                 ) : (
                   <th
@@ -94,7 +96,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
           <tr>
             {!hasSubgroups && (
               <th className="sticky left-0 z-30 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[88px]">
-                {pivot.category.labelEn}
+                {categoryLabel}
               </th>
             )}
             {flatTests.map((test) => (
@@ -146,7 +148,8 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
 
 export function CumulativeLabReport({ observations, fullHeight = false }: CumulativeLabReportProps) {
   const pivots = useLabPivot(observations)
-  const { locale } = useLanguage()
+  const { t } = useLanguage()
+  const categoryLabels = (t.reports as any).cumulativeCategories || {}
 
   const nonEmpty = useMemo(() => {
     return LAB_CATEGORIES
@@ -169,7 +172,7 @@ export function CumulativeLabReport({ observations, fullHeight = false }: Cumula
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
         <TabsList className="!flex !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
           {nonEmpty.map((p) => {
-            const label = locale === 'zh-TW' ? p.category.labelZh : p.category.labelEn
+            const label = categoryLabels[p.category.id] || p.category.id
             return (
               <TabsTrigger
                 key={p.category.id}
