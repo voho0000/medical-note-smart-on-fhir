@@ -131,6 +131,7 @@ export const en = {
       endocrine: 'Endo',
       lipid: 'Lipids',
       glucose: 'Sugar',
+      hep: 'Hep',
       tumor: 'Tumor',
       urine: 'Urine',
     },

@@ -133,6 +133,7 @@ export const zhTW = {
       endocrine: '內分泌',
       lipid: '血脂',
       glucose: '血糖',
+      hep: '肝炎',
       tumor: '癌症',
       urine: '尿液',
     },
