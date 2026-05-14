@@ -98,10 +98,40 @@ export function useReportsData(diagnosticReports: any[]) {
       kept.forEach(k => groupOrder.push(k))
     }
 
+    // Pre-pass: collect obs IDs claimed by multi-obs groups so that single-obs
+    // DRs whose observation already appears inside a panel can be suppressed.
+    // This prevents a rogue single-obs DR (e.g. "Uric Acid" referencing a urine
+    // pH observation that is also listed inside a "尿生化検查" 7-obs panel) from
+    // creating a duplicate standalone row.
+    const obsInMultiGroup = new Set<string>()
+    for (const key of groupOrder) {
+      const grp = groups.get(key)!
+      const totalObs = grp.reduce((n, dr) => {
+        const o: any[] = Array.isArray((dr as any)._observations) ? (dr as any)._observations : []
+        return n + o.length
+      }, 0)
+      if (totalObs > 1) {
+        for (const dr of grp) {
+          const o: any[] = Array.isArray((dr as any)._observations) ? (dr as any)._observations : []
+          o.forEach((obs: any) => { if (obs?.id) obsInMultiGroup.add(obs.id) })
+        }
+      }
+    }
+
     for (const key of groupOrder) {
       const grp = groups.get(key)!
       const head = grp[0]
       const isMulti = grp.length > 1
+
+      // Skip single-obs DR rows whose observation is already shown inside a panel
+      const groupObsIds = grp.flatMap(dr => {
+        const o: any[] = Array.isArray((dr as any)._observations) ? (dr as any)._observations : []
+        return o.map((obs: any) => obs?.id).filter(Boolean) as string[]
+      })
+      if (groupObsIds.length === 1 && obsInMultiGroup.has(groupObsIds[0])) {
+        groupObsIds.forEach(id => seen.add(id))
+        continue
+      }
 
       const groupText = (getCodeableConceptText(head.code) || '').trim()
       const summaryParts: string[] = []
