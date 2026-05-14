@@ -42,13 +42,28 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       this.fetchCompositions(patientId)
     ])
 
+    // Re-attach observations to DiagnosticReports that _include didn't populate.
+    // The bridge may not support _include; this mirrors what local-bundle.service does.
+    const obsMap = new Map(observations.map(o => [o.id, o]))
+    const enrichedDiagnosticReports = diagnosticReports.map(dr => {
+      if (Array.isArray((dr as any)._observations) && (dr as any)._observations.length > 0) {
+        return dr
+      }
+      if (!Array.isArray(dr.result) || dr.result.length === 0) return dr
+      const resultIds = (dr.result as any[])
+        .map((ref: any) => ref.reference?.split('/').pop())
+        .filter(Boolean) as string[]
+      const matched = resultIds.map(id => obsMap.get(id)).filter(Boolean)
+      return matched.length > 0 ? { ...dr, _observations: matched } : dr
+    })
+
     return {
       conditions,
       medications,
       allergies,
       observations,
       vitalSigns,
-      diagnosticReports,
+      diagnosticReports: enrichedDiagnosticReports,
       procedures,
       encounters,
       documentReferences,
@@ -127,7 +142,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
   async fetchDiagnosticReports(patientId: string): Promise<DiagnosticReportEntity[]> {
     try {
       const response = await fhirClient.request(
-        `DiagnosticReport?patient=${patientId}&_count=50&_sort=-date&_include=DiagnosticReport:result&_include:iterate=Observation:has-member`
+        `DiagnosticReport?patient=${patientId}&_count=500&_sort=-date&_include=DiagnosticReport:result&_include:iterate=Observation:has-member`
       )
 
       const entries = response.entry || []
