@@ -9,7 +9,7 @@ import { useMemo, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
-import { LAB_CATEGORIES } from "@/src/shared/utils/lab-categories"
+import { LAB_CATEGORIES, type LabSubgroup } from "@/src/shared/utils/lab-categories"
 
 interface CumulativeLabReportProps {
   observations: any[]
@@ -42,7 +42,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
   // Group columns by subgroup; render a top-row of subgroup headers spanning
   // their member columns.
   const subgroups = pivot.category.subgroups || []
-  const groupedColumns: { sg: { id: string; labelEn: string; labelZh: string } | null; tests: typeof pivot.rows }[] = []
+  const groupedColumns: { sg: LabSubgroup | null; tests: typeof pivot.rows }[] = []
   if (subgroups.length > 0) {
     for (const sg of subgroups) {
       const members = pivot.rows.filter((r) => r.subgroupId === sg.id)
