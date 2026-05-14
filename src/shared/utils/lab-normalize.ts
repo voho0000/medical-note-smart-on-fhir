@@ -87,6 +87,9 @@ export const TEST_ALIASES: Record<string, string> = {
   'CA-153': 'CA-153', CA153: 'CA-153', 'CA 15-3': 'CA-153',
   'CA-199': 'CA-199', CA199: 'CA-199', 'CA19-9': 'CA-199', 'CA 19-9': 'CA-199',
   FERRITIN: 'FERRITIN',
+  // Hepatitis B surface antigen — paired with Anti-HCV for HCC screening
+  HBSAG: 'HBSAG', 'HBS AG': 'HBSAG', 'HBS-AG': 'HBSAG',
+  'HEPATITIS B SURFACE ANTIGEN': 'HBSAG', 'HEPATITIS B SURFACE AG': 'HBSAG',
   HCG: 'HCG', 'BETA HCG': 'HCG', 'BETA-HCG': 'HCG', 'B-HCG': 'HCG',
   // Glycated hemoglobin
   HBA1C: 'HBA1C', 'HB-A1C': 'HBA1C', 'HB A1C': 'HBA1C',
