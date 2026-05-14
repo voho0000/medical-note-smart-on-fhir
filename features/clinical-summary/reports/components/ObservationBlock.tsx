@@ -6,6 +6,7 @@ import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, get
 import { getInterpretationTag } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface ObservationBlockProps {
   observation: Observation
@@ -34,7 +35,12 @@ function ObsRow({
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
       {/* Left: name + trend */}
       <div className="flex items-center gap-1.5 min-w-0 flex-1">
-        <span className="text-sm font-medium text-foreground truncate" title={name}>{name}</span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-sm font-medium text-foreground truncate">{name}</span>
+          </TooltipTrigger>
+          <TooltipContent>{name}</TooltipContent>
+        </Tooltip>
         {onTrendClick && (
           <button
             onClick={onTrendClick}
