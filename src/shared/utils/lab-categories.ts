@@ -169,14 +169,14 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'hep',
-    // Standard B 肝 panel = 3 antigens (HBsAg / HBcAg / HBeAg) + 3 antibodies
-    // (anti-HBs / anti-HBc / anti-HBe). HBcAg is rarely tested in serum but
-    // is part of the conceptual panel so we keep it pinned for layout.
-    preferredOrder: ['HBSAG', 'ANTI-HBS', 'HBCAG', 'ANTI-HBC', 'HBEAG', 'ANTI-HBE', 'ANTI-HCV'],
+    // Routine B 肝 screen = HBsAg + Anti-HBs + Anti-HBc (distinguishes vaccine
+    // vs natural immunity). HBeAg/Anti-HBe only ordered for known HBsAg(+)
+    // carriers; HBcAg not routinely tested in serum. Anti-HCV for C 肝.
+    preferredOrder: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HCV', 'HBCAG', 'HBEAG', 'ANTI-HBE'],
     codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HBS', 'HBCAG', 'HBC AG', 'HBC-AG', 'ANTI-HBC', 'HBEAG', 'HBE AG', 'HBE-AG', 'ANTI-HBE', 'ANTI-HCV'],
     loincCodes: ['5195-3', '5193-8', '13954-3', '13955-0', '13499-9', '22322-2', '16934-2'],
     nameKeywords: ['HEPATITIS B SURFACE', 'HBSAG', 'HBS AG', 'HEPATITIS B CORE', 'HBCAG', 'HBC AG', 'HEPATITIS B E ANTIGEN', 'HBE AG', 'HBEAG', 'ANTI-HEPATITIS', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HBE', 'HEPATITIS C VIRUS', 'ANTI-HCV'],
-    pinnedColumns: ['HBSAG', 'ANTI-HBS', 'HBCAG', 'ANTI-HBC', 'HBEAG', 'ANTI-HBE', 'ANTI-HCV'],
+    pinnedColumns: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HCV'],
   },
   {
     id: 'tumor',
