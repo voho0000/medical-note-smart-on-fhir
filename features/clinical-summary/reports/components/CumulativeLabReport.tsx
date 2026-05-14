@@ -72,7 +72,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                   <th
                     key={`sg-${g.sg.id}`}
                     colSpan={g.tests.length}
-                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold uppercase tracking-wide text-muted-foreground"
+                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold tracking-wide text-muted-foreground"
                   >
                     {g.sg.labelZh} · {g.sg.labelEn}
                   </th>
@@ -80,7 +80,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                   <th
                     key={`sg-other-${i}`}
                     colSpan={g.tests.length}
-                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold uppercase tracking-wide text-muted-foreground"
+                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold tracking-wide text-muted-foreground"
                   >
                     Other
                   </th>
