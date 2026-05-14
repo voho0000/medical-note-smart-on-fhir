@@ -257,7 +257,7 @@ export function ReportsCard() {
             <CumulativeLabReport observations={observations} fullHeight={expanded} />
           </TabsContent>
         ) : (
-          <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} />
+          <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} fullHeight={expanded} />
         )
       )}
     </Tabs>
