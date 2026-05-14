@@ -159,7 +159,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
                 </Tooltip>
                 <TrendButton />
               </div>
-              <HeaderRight />
+              <div className="flex items-center gap-2">
+                <HeaderRight />
+                {row.isPossibleDuplicate && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
+                )}
+              </div>
             </div>
             <p
               className={cn(
@@ -221,10 +226,18 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
               </span>
             )}
             {refText && (
-              <span className="text-xs text-muted-foreground shrink-0">{refText}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs text-muted-foreground max-w-[8rem] truncate">{refText}</span>
+                </TooltipTrigger>
+                <TooltipContent>{refText}</TooltipContent>
+              </Tooltip>
             )}
           </div>
           <HeaderRight />
+          {row.isPossibleDuplicate && (
+            <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
+          )}
         </div>
         <ObservationTrendDialog
           observation={firstObs}

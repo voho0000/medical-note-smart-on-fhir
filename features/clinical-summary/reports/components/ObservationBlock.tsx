@@ -69,7 +69,12 @@ function ObsRow({
           </span>
         )}
         {refText && (
-          <span className="text-xs text-muted-foreground">{refText}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-xs text-muted-foreground max-w-[8rem] truncate">{refText}</span>
+            </TooltipTrigger>
+            <TooltipContent>{refText}</TooltipContent>
+          </Tooltip>
         )}
       </div>
     </div>

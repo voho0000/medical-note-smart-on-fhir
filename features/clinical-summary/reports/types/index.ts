@@ -21,5 +21,6 @@ export type Row = {
   group: ReportGroup
   institution?: string
   effectiveDate?: string  // ISO date string for smart date display
-  showTime?: boolean      // true when multiple same-name results share the same date
+  showTime?: boolean           // true when multiple same-name results share the same date
+  isPossibleDuplicate?: boolean // true when same title+date+institution+value appears >1 time
 }
