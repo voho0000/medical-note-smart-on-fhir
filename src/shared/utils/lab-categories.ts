@@ -47,7 +47,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'diff',    members: ['SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'BAND', 'ANC'] },
       { id: 'indices', members: ['HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV'] },
     ],
-    pinnedColumns: ['WBC', 'RBC', 'HB', 'PLT', 'HCT', 'MCV'],
+    pinnedColumns: ['WBC', 'RBC', 'HB', 'PLT', 'HCT', 'MCV', 'NEU', 'LYM', 'MONO', 'EOS', 'BASO'],
   },
   {
     id: 'coag',
@@ -71,7 +71,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
       { id: 'iron',        members: ['IRON', 'TIBC'] },
     ],
-    pinnedColumns: ['BUN', 'CREA', 'NA', 'K', 'CL', 'AST', 'ALT', 'T.BILI'],
+    pinnedColumns: ['BUN', 'CREA', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'ALB'],
   },
   {
     id: 'endocrine',
@@ -146,7 +146,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'pancreas', members: ['INSULIN', 'C-PEPTIDE'] },
       { id: 'pituitary',members: ['GH', 'IGF-1', 'IGF1'] },
     ],
-    pinnedColumns: ['TSH', 'FREE T4', 'CORTISOL'],
+    pinnedColumns: ['TSH', 'FREE T4', 'FREE T3', 'CORTISOL'],
   },
   {
     id: 'lipid',
@@ -169,11 +169,14 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'hep',
-    preferredOrder: ['HBSAG', 'ANTI-HCV', 'HBEAG', 'ANTI-HBS'],
-    codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HCV', 'HBEAG', 'HBE AG', 'ANTI-HBS', 'ANTI-HBE'],
-    loincCodes: ['5195-3', '13954-3', '13955-0', '13499-9'],
-    nameKeywords: ['HEPATITIS B SURFACE', 'HBSAG', 'HBS AG', 'HEPATITIS C VIRUS', 'ANTI-HCV', 'HEPATITIS B E ANTIGEN', 'ANTI-HEPATITIS', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HBE'],
-    pinnedColumns: ['HBSAG', 'ANTI-HCV'],
+    // Standard B 肝 panel = 3 antigens (HBsAg / HBcAg / HBeAg) + 3 antibodies
+    // (anti-HBs / anti-HBc / anti-HBe). HBcAg is rarely tested in serum but
+    // is part of the conceptual panel so we keep it pinned for layout.
+    preferredOrder: ['HBSAG', 'ANTI-HBS', 'HBCAG', 'ANTI-HBC', 'HBEAG', 'ANTI-HBE', 'ANTI-HCV'],
+    codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HBS', 'HBCAG', 'HBC AG', 'HBC-AG', 'ANTI-HBC', 'HBEAG', 'HBE AG', 'HBE-AG', 'ANTI-HBE', 'ANTI-HCV'],
+    loincCodes: ['5195-3', '5193-8', '13954-3', '13955-0', '13499-9', '22322-2', '16934-2'],
+    nameKeywords: ['HEPATITIS B SURFACE', 'HBSAG', 'HBS AG', 'HEPATITIS B CORE', 'HBCAG', 'HBC AG', 'HEPATITIS B E ANTIGEN', 'HBE AG', 'HBEAG', 'ANTI-HEPATITIS', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HBE', 'HEPATITIS C VIRUS', 'ANTI-HCV'],
+    pinnedColumns: ['HBSAG', 'ANTI-HBS', 'HBCAG', 'ANTI-HBC', 'HBEAG', 'ANTI-HBE', 'ANTI-HCV'],
   },
   {
     id: 'tumor',
@@ -198,7 +201,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'micro',     members: ['WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3'] },
       { id: 'ratio',     members: ['PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'] },
     ],
-    pinnedColumns: ['COLOR', 'PROT', 'GLUCOSE', 'KETONE', 'OCCULT'],
+    pinnedColumns: ['COLOR', 'PH', 'GRAVIT', 'PROT', 'GLUCOSE', 'KETONE', 'BILI', 'UROBI', 'NITRITE', 'OCCULT'],
   },
 ]
 
