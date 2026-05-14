@@ -178,18 +178,19 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
   const nhiCode = nhiCoding?.code as string | undefined
   const mapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
 
-  // Prefer NHI official display; otherwise use stripped raw label.
-  // When the display name is a legacy alias (e.g. "SGOT", "GPT"), replace it
-  // with the canonical testKey ("AST", "ALT") so the column header is consistent
-  // regardless of which institution's naming convention the bridge sends.
-  // displayOverride (e.g. glucose subtypes) wins over both.
+  // Column header preference:
+  //   1. displayOverride (e.g. glucose subtypes) wins.
+  //   2. If the display name maps to a known canonical (alias OR self-key,
+  //      including verbose NHI forms like "Hct(血球容積比)"), use the clean
+  //      canonical testKey for a compact, consistent header.
+  //   3. Otherwise fall back to the bridge's NHI display or stripped raw label
+  //      so unknown tests keep whatever the source institution sent.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
   const candidateDisplay = nhiDisplay || rawDisplay
   const { stripped: candidateStripped, collapsed: candidateCollapsed } = normalizeTestName(candidateDisplay)
-  const resolvedCanonical = TEST_ALIASES[candidateStripped] || TEST_ALIASES[candidateCollapsed]
-  const isAlias = !!resolvedCanonical && resolvedCanonical !== candidateStripped
-  const displayName = displayOverride || (isAlias ? testKey : candidateDisplay)
+  const isKnown = !!(TEST_ALIASES[candidateStripped] || TEST_ALIASES[candidateCollapsed])
+  const displayName = displayOverride || (isKnown ? testKey : candidateDisplay)
 
   return { mapKey, testKey, displayName }
 }
