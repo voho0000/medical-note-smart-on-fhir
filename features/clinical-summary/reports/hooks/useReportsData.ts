@@ -179,6 +179,17 @@ export function useReportsData(diagnosticReports: any[]) {
         obsWithSummary.unshift(summaryObservation)
       }
 
+      // For a single-obs DR with no summary text, the observation's own code is
+      // more reliable than the DR title — bridge data sometimes assigns wrong DR
+      // codes (e.g. "Uric Acid" title for a urine pH observation). Prefer the
+      // obs code text when the DR title and obs title disagree.
+      const singleObsTitle = (allObs.length === 1 && summaryParts.length === 0)
+        ? (getCodeableConceptText((allObs[0] as any).code) || '').trim()
+        : null
+      const displayTitle = (singleObsTitle && singleObsTitle !== groupText)
+        ? singleObsTitle
+        : groupText
+
       const category = Array.isArray(head.category)
         ? head.category.map((c: any) => getCodeableConceptText(c)).filter(Boolean).join(', ')
         : getCodeableConceptText(head.category)
@@ -187,7 +198,7 @@ export function useReportsData(diagnosticReports: any[]) {
 
       rows.push({
         id: head.id || Math.random().toString(36),
-        title: deriveGroupTitle(groupText),
+        title: deriveGroupTitle(displayTitle),
         meta: `${category || 'Laboratory'} • ${head.status || '—'}`,
         obs: obsWithSummary,
         group: inferGroupFromCategory(head.category),
