@@ -85,6 +85,26 @@ export function ReportsCard() {
       const key = `${row.title}|${dateOnly}`
       if ((titleDateCount.get(key) || 0) > 1) row.showTime = true
     }
+
+    // Detect possible duplicates: same title + date + institution + single-obs value
+    const dupKey = (row: Row) => {
+      const dateOnly = row.effectiveDate
+        ? new Date(row.effectiveDate).toISOString().slice(0, 10)
+        : ''
+      const singleValue = row.obs.length === 1
+        ? (row.obs[0]?.valueQuantity?.value ?? row.obs[0]?.valueString ?? '')
+        : ''
+      return `${row.title}|${dateOnly}|${row.institution ?? ''}|${singleValue}`
+    }
+    const dupCount = new Map<string, number>()
+    for (const row of all) {
+      const k = dupKey(row)
+      dupCount.set(k, (dupCount.get(k) || 0) + 1)
+    }
+    for (const row of all) {
+      if ((dupCount.get(dupKey(row)) || 0) > 1) row.isPossibleDuplicate = true
+    }
+
     return all
   }, [reportRows, orphanRows, procedureRows])
 
