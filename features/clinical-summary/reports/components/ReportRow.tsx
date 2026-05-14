@@ -149,8 +149,8 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
             }}
           >
             <div className="flex items-center justify-between gap-2 mb-1">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold text-foreground">{row.title}</span>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className="text-sm font-semibold text-foreground truncate" title={row.title}>{row.title}</span>
                 <TrendButton />
               </div>
               <HeaderRight />
@@ -191,9 +191,9 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
           )}
         >
           {/* Left: title + value + interp + ref */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-sm font-semibold text-foreground">{row.title}</span>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <span className="text-sm font-semibold text-foreground truncate" title={row.title}>{row.title}</span>
               <TrendButton />
             </div>
             <span
@@ -241,8 +241,8 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
           <AccordionTrigger className="py-3">
             <div className="flex w-full flex-col gap-1 text-left">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground">{row.title}</span>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className="font-semibold text-foreground truncate" title={row.title}>{row.title}</span>
                   {abnormalCount > 0 && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                       <AlertCircle className="h-3 w-3" />

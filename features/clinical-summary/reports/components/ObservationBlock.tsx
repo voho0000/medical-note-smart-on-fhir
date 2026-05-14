@@ -33,8 +33,8 @@ function ObsRow({
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
       {/* Left: name + trend */}
-      <div className="flex items-center gap-1.5 min-w-0 shrink-0">
-        <span className="text-sm font-medium text-foreground">{name}</span>
+      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        <span className="text-sm font-medium text-foreground truncate" title={name}>{name}</span>
         {onTrendClick && (
           <button
             onClick={onTrendClick}
