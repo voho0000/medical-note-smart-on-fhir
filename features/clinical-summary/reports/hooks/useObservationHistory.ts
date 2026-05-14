@@ -38,6 +38,16 @@ export interface CompositeHistoryItem {
   }>
 }
 
+// Time-series history of a text-based DiagnosticReport (e.g. imaging, ECG).
+export interface ReportHistoryItem {
+  id: string
+  date: string
+  conclusion?: string
+  notes: string[]
+  status?: string
+  institution?: string
+}
+
 const COMPONENT_COLORS = [
   '#60a5fa', // blue
   '#f472b6', // pink
@@ -283,4 +293,47 @@ export function useObservationHistory(observationCode?: string) {
   }, [observationCode, observations, diagnosticReports, procedures])
 
   return history
+}
+
+/**
+ * Build a chronological history of text-based DiagnosticReports (imaging, ECG,
+ * pathology) that share the same report code/title. Used by the trend dialog
+ * when invoked from a report row whose firstObs is a synthetic Report Summary.
+ *
+ * Exact-match on report title (case-insensitive, trimmed) — different body
+ * parts ("CT 腹部" vs "CT 胸部") legitimately have different titles and should
+ * NOT merge.
+ */
+export function useReportHistory(reportCode?: string) {
+  const { diagnosticReports = [] } = useClinicalData()
+
+  return useMemo(() => {
+    if (!reportCode) return []
+    const target = reportCode.trim().toLowerCase()
+    if (!target) return []
+
+    const items: ReportHistoryItem[] = []
+    diagnosticReports.forEach((dr: any) => {
+      const drText = (dr.code?.text || dr.code?.coding?.[0]?.display || '').trim().toLowerCase()
+      if (!drText || drText !== target) return
+
+      const conclusion = dr.conclusion?.trim()
+      const notes = Array.isArray(dr.note)
+        ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
+        : []
+      if (!conclusion && notes.length === 0) return
+
+      items.push({
+        id: dr.id || `dr-${dr.issued || dr.effectiveDateTime || Math.random()}`,
+        date: dr.effectiveDateTime || dr.issued || '',
+        conclusion,
+        notes,
+        status: dr.status,
+        institution: dr.performer?.[0]?.display,
+      })
+    })
+
+    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return items
+  }, [reportCode, diagnosticReports])
 }

@@ -158,6 +158,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
           </div>
           <ObservationTrendDialog
             observation={firstObs}
+            reportTitle={row.title}
             open={trendDialogOpen}
             onOpenChange={setTrendDialogOpen}
           />
@@ -205,6 +206,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
         </div>
         <ObservationTrendDialog
           observation={firstObs}
+          reportTitle={row.title}
           open={trendDialogOpen}
           onOpenChange={setTrendDialogOpen}
         />
@@ -259,6 +261,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
       </Accordion>
       <ObservationTrendDialog
         observation={firstObs}
+        reportTitle={row.title}
         open={trendDialogOpen}
         onOpenChange={setTrendDialogOpen}
       />

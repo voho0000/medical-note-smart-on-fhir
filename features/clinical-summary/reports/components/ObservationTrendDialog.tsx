@@ -2,22 +2,31 @@ import { useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
-import { useObservationHistory, useComponentHistory, useCompositeHistory } from '../hooks/useObservationHistory'
+import { useObservationHistory, useComponentHistory, useCompositeHistory, useReportHistory } from '../hooks/useObservationHistory'
 import { ObservationTrendChart } from './ObservationTrendChart'
 import { MultiLineTrendChart } from './MultiLineTrendChart'
 import { ObservationHistoryTable } from './ObservationHistoryTable'
 import { CompositeHistoryTable } from './CompositeHistoryTable'
+import { ReportHistoryList } from './ReportHistoryList'
 import type { Observation } from '../types'
 
 interface ObservationTrendDialogProps {
   observation: Observation | null
+  /** Report title (DR code text) — supplied when invoked from a text-based
+   *  DiagnosticReport row whose firstObs is a synthetic "Report Summary". */
+  reportTitle?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function ObservationTrendDialog({ observation, open, onOpenChange }: ObservationTrendDialogProps) {
+export function ObservationTrendDialog({ observation, reportTitle, open, onOpenChange }: ObservationTrendDialogProps) {
   const observationCode = observation?.code?.text || observation?.code?.coding?.[0]?.display
-  
+  const isReportSummary = observation?.code?.text === 'Report Summary' && !!reportTitle
+
+  // Text-based DiagnosticReport history (imaging, ECG, pathology) — chronological
+  // list of conclusion text instead of numeric trend.
+  const reportHistory = useReportHistory(isReportSummary ? reportTitle : undefined)
+
   // Check if observation has components (like Blood Pressure with SBP/DBP)
   const hasComponents = observation?.component && observation.component.length > 0
   const componentNames = useMemo(() => {
@@ -36,13 +45,34 @@ export function ObservationTrendDialog({ observation, open, onOpenChange }: Obse
     })
   }, [observation, hasComponents])
   
-  const history = useObservationHistory(observationCode)
-  const componentHistory = useComponentHistory(observationCode, componentNames)
-  const compositeHistory = useCompositeHistory(observationCode, componentNames)
+  const history = useObservationHistory(isReportSummary ? undefined : observationCode)
+  const componentHistory = useComponentHistory(isReportSummary ? undefined : observationCode, componentNames)
+  const compositeHistory = useCompositeHistory(isReportSummary ? undefined : observationCode, componentNames)
 
-  const unit = observation?.valueQuantity?.unit || 
+  const unit = observation?.valueQuantity?.unit ||
     (hasComponents ? observation?.component?.[0]?.valueQuantity?.unit : undefined)
   const referenceRange = observation?.referenceRange?.[0]
+
+  // Text-based report (imaging / ECG / pathology) — chronological list of conclusions
+  if (isReportSummary) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              {reportTitle}
+            </DialogTitle>
+            <div className="text-sm text-muted-foreground">
+              共 {reportHistory.length} 筆記錄
+            </div>
+          </DialogHeader>
+          <div className="mt-4">
+            <ReportHistoryList data={reportHistory} />
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
