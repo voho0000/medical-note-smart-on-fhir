@@ -53,7 +53,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const resultIds = (dr.result as any[])
         .map((ref: any) => ref.reference?.split('/').pop())
         .filter(Boolean) as string[]
-      const matched = resultIds.map(id => obsMap.get(id)).filter(Boolean)
+      const matched = resultIds.map(id => obsMap.get(id)).filter((o): o is ObservationEntity => o !== undefined)
       return matched.length > 0 ? { ...dr, _observations: matched } : dr
     })
 
