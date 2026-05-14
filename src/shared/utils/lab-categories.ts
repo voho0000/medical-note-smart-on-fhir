@@ -11,19 +11,16 @@
 //     Serum or Plasma" contains "SODIUM").
 
 export interface LabSubgroup {
-  /** Stable id */
+  /** Stable id — matches a key under t.reports.cumulativeSubgroups for display. */
   id: string
-  labelEn: string
-  labelZh: string
   /** Canonical row keys (uppercase) that belong to this subgroup.
    *  Match against pickKey() result in useLabPivot. */
   members: string[]
 }
 
 export interface LabCategory {
+  /** Stable id — matches a key under t.reports.cumulativeCategories for display. */
   id: string
-  labelEn: string
-  labelZh: string
   /** Short codes / abbreviations (matched against code.code / code.text / coding.display) */
   codes: string[]
   /** Standard LOINC codes (matched against code.coding[].code) */
@@ -41,40 +38,43 @@ export interface LabCategory {
 export const LAB_CATEGORIES: LabCategory[] = [
   {
     id: 'cbc',
-    labelEn: 'CBC',
-    labelZh: 'CBC 血液常規',
-    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC', 'PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'],
-    codes: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC', 'PT', 'PROTHROMBIN TIME', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'],
-    loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '5902-2', '14979-9', '6301-6', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4'],
-    nameKeywords: ['HEMOGLOBIN', 'HEMATOCRIT', 'LEUKOCYTE', 'ERYTHROCYTE', 'PLATELET', 'MEAN CORPUSCULAR', 'MEAN PLATELET', 'RED CELL DISTRIBUTION', 'NEUTROPHIL', 'LYMPHOCYTE', 'MONOCYTE', 'EOSINOPHIL', 'BASOPHIL', 'BAND CELL', 'PROTHROMBIN TIME', 'PARTIAL THROMBOPLASTIN', 'INR', 'D-DIMER', 'FIBRINOGEN'],
+    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC'],
+    codes: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC'],
+    loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4'],
+    nameKeywords: ['HEMOGLOBIN', 'HEMATOCRIT', 'LEUKOCYTE', 'ERYTHROCYTE', 'PLATELET', 'MEAN CORPUSCULAR', 'MEAN PLATELET', 'RED CELL DISTRIBUTION', 'NEUTROPHIL', 'LYMPHOCYTE', 'MONOCYTE', 'EOSINOPHIL', 'BASOPHIL', 'BAND CELL'],
     subgroups: [
-      { id: 'counts',    labelEn: 'Counts',        labelZh: '計數', members: ['WBC', 'RBC', 'HB', 'HCT', 'PLT', 'MPV'] },
-      { id: 'indices',   labelEn: 'RBC Indices',   labelZh: '紅血球指數', members: ['MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV'] },
-      { id: 'diff',      labelEn: 'Differential',  labelZh: '白血球分類', members: ['SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'BAND', 'ANC'] },
-      { id: 'coag',      labelEn: 'Coagulation',   labelZh: '凝血', members: ['PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'] },
+      { id: 'counts',  members: ['WBC', 'RBC', 'HB', 'PLT', 'MPV'] },
+      { id: 'diff',    members: ['SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'BAND', 'ANC'] },
+      { id: 'indices', members: ['HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV'] },
     ],
+    pinnedColumns: ['WBC', 'RBC', 'HB', 'PLT', 'HCT', 'MCV'],
+  },
+  {
+    id: 'coag',
+    preferredOrder: ['PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIB'],
+    codes: ['PT', 'PROTHROMBIN TIME', 'APTT', 'INR', 'D-DIMER', 'DDIMER', 'D DIMER', 'FDP', 'FIBRINOGEN', 'FIB'],
+    loincCodes: ['5902-2', '6300-8', '14979-9', '3173-2', '6301-6', '34714-6', '30240-9', '48067-3', '7799-0', '48065-7', '3255-7', '30903-2', '13990-7', '4530-2'],
+    nameKeywords: ['PROTHROMBIN TIME', 'PARTIAL THROMBOPLASTIN', 'INR', 'D-DIMER', 'FIBRINOGEN', 'FIBRIN DEGRADATION'],
+    pinnedColumns: ['PT', 'APTT', 'INR', 'D-DIMER'],
   },
   {
     id: 'chem',
-    labelEn: 'Biochemistry',
-    labelZh: '生化檢驗',
-    preferredOrder: ['BUN', 'CREATININE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'URIC ACID', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CK', 'CKMB', 'TROP', 'CRP', 'FIB-4', 'IRON', 'TIBC'],
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CK', 'CKMB', 'TROP', 'CRP', 'FIB-4', 'IRON', 'TIBC'],
     codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CO2', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'CK', 'CKMB', 'CKMB(POCT)', 'TROP', 'TROP(POCT)', 'IRON', 'TIBC', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'LDH'],
     loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '2069-3', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '1988-5', '14647-2', '30522-7', '2157-6', '13969-1', '6598-7', '10839-9', '49563-0', '2498-4', '2500-7', '14935-1', '1759-0', '2532-0', '11051-0', '2243-4', '33959-8', '75241-0', '4537-7', '30341-2', '14338-8'],
     nameKeywords: ['SODIUM', 'POTASSIUM', 'CHLORIDE', 'BICARBONATE', 'CO2', 'UREA NITROGEN', 'CREATININE', 'GLOMERULAR FILTRATION', 'ALBUMIN', 'TOTAL PROTEIN', 'GLOBULIN', 'BILIRUBIN', 'ASPARTATE AMINOTRANSFERASE', 'ALANINE AMINOTRANSFERASE', 'ALKALINE PHOSPHATASE', 'GAMMA GLUTAMYL', 'GAMMA-GLUTAMYL', 'LACTATE DEHYDROGENASE', 'CALCIUM', 'PHOSPHATE', 'PHOSPHORUS', 'URATE', 'URIC ACID', 'C REACTIVE PROTEIN', 'C-REACTIVE PROTEIN', 'CREATINE KINASE', 'CK-MB', 'TROPONIN', 'IRON', 'TRANSFERRIN', 'FERRITIN', 'PROCALCITONIN', 'ERYTHROCYTE SEDIMENTATION RATE', 'LACTATE'],
     subgroups: [
-      { id: 'renal',       labelEn: 'Renal',        labelZh: '腎功能',   members: ['BUN', 'CREATININE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'URIC ACID'] },
-      { id: 'electrolyte', labelEn: 'Electrolytes', labelZh: '電解質',   members: ['NA', 'K', 'CL', 'CO2', 'CA', 'IP'] },
-      { id: 'liver',       labelEn: 'Liver',        labelZh: '肝功能',   members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB'] },
-      { id: 'cardiac',     labelEn: 'Cardiac',      labelZh: '心肌酵素', members: ['CK', 'CKMB', 'TROP'] },
-      { id: 'inflam',      labelEn: 'Inflammation', labelZh: '發炎/感染', members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
-      { id: 'iron',        labelEn: 'Iron Studies', labelZh: '鐵代謝',   members: ['IRON', 'TIBC'] },
+      { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA'] },
+      { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CO2', 'CA', 'IP'] },
+      { id: 'liver',       members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB'] },
+      { id: 'cardiac',     members: ['CK', 'CKMB', 'TROP'] },
+      { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
+      { id: 'iron',        members: ['IRON', 'TIBC'] },
     ],
+    pinnedColumns: ['BUN', 'CREA', 'NA', 'K', 'CL', 'AST', 'ALT', 'T.BILI'],
   },
   {
     id: 'endocrine',
-    labelEn: 'Endocrine',
-    labelZh: '內分泌',
     preferredOrder: [
       // Thyroid
       'TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'FT4', 'FT3', 'RT3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN',
@@ -92,7 +92,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     codes: [
       // Thyroid
       'TSH', 'T3', 'T4', 'FT3', 'FT4', 'FREE T3', 'FREE T4', 'FREE-T3', 'FREE-T4', 'RT3', 'REVERSE T3',
-      'ANTI-TPO', 'ANTI-TG', 'TG', 'THYROGLOBULIN', 'TRAB', 'TBII',
+      'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN', 'TRAB', 'TBII',
       // Parathyroid / Bone
       'PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D',
       // Adrenal
@@ -139,49 +139,52 @@ export const LAB_CATEGORIES: LabCategory[] = [
       'ANTI-MULLERIAN', 'SEX HORMONE BINDING',
     ],
     subgroups: [
-      { id: 'thyroid',  labelEn: 'Thyroid',       labelZh: '甲狀腺',   members: ['TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'FT4', 'FT3', 'RT3', 'REVERSE T3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN', 'TRAB', 'TBII'] },
-      { id: 'parathy',  labelEn: 'Parathyroid',   labelZh: '副甲狀腺', members: ['PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D', 'CALCITONIN'] },
-      { id: 'adrenal',  labelEn: 'Adrenal',       labelZh: '腎上腺',   members: ['CORTISOL', 'ACTH', 'ALDOSTERONE', 'RENIN', 'PRA', 'DHEA', 'DHEA-S', 'DHEAS'] },
-      { id: 'sexhorm',  labelEn: 'Sex Hormones',  labelZh: '性荷爾蒙', members: ['LH', 'FSH', 'E2', 'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'FREE TESTOSTERONE', 'PROLACTIN', 'PRL', 'AMH', 'SHBG'] },
-      { id: 'pancreas', labelEn: 'Pancreas',      labelZh: '胰島',     members: ['INSULIN', 'C-PEPTIDE'] },
-      { id: 'pituitary',labelEn: 'Pituitary/GH',  labelZh: '生長激素', members: ['GH', 'IGF-1', 'IGF1'] },
+      { id: 'thyroid',  members: ['TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'FT4', 'FT3', 'RT3', 'REVERSE T3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN', 'TRAB', 'TBII'] },
+      { id: 'parathy',  members: ['PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D', 'CALCITONIN'] },
+      { id: 'adrenal',  members: ['CORTISOL', 'ACTH', 'ALDOSTERONE', 'RENIN', 'PRA', 'DHEA', 'DHEA-S', 'DHEAS'] },
+      { id: 'sexhorm',  members: ['LH', 'FSH', 'E2', 'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'FREE TESTOSTERONE', 'PROLACTIN', 'PRL', 'AMH', 'SHBG'] },
+      { id: 'pancreas', members: ['INSULIN', 'C-PEPTIDE'] },
+      { id: 'pituitary',members: ['GH', 'IGF-1', 'IGF1'] },
     ],
     pinnedColumns: ['TSH', 'FREE T4', 'CORTISOL'],
   },
   {
     id: 'lipid',
-    labelEn: 'Lipid Panel',
-    labelZh: '血脂',
     preferredOrder: ['CHOL', 'TG', 'HDL', 'LDL', 'LDL(計算值)', 'RISKF', 'VLDL', 'NON-HDL', 'APO-A1', 'APO-B', 'LP(A)'],
     codes: ['CHOL', 'CHOL.', 'CHOLESTEROL', 'TG', 'TRIG', 'TRIGLYCERIDE', 'HDLC', 'HDL', 'HDL-C', 'HDLC.', 'LDLC', 'LDL', 'LDL-C', 'LDLC.', 'LDL(計算值)', 'RISKF', 'VLDL', 'VLDLC', 'VLDL-C', 'NON-HDLC', 'NON-HDL', 'NON-HDL-C', 'APO-A', 'APO-A1', 'APOA1', 'APO-B', 'APOB', 'LP(A)'],
     loincCodes: ['2093-3', '14647-2', '14646-4', '2571-8', '3043-7', '2085-9', '2086-7', '14646-4', '2089-1', '13457-7', '2090-9', '13457-7', '43396-1', '13458-5', '11054-4', '2089-1', '13457-7', '18261-8', '18262-6', '10835-7'],
     nameKeywords: ['CHOLESTEROL', 'TRIGLYCERIDE', 'HDL', 'LDL', 'VLDL', 'NON-HDL', 'LIPID', 'HIGH DENSITY LIPOPROTEIN', 'LOW DENSITY LIPOPROTEIN', 'APOLIPOPROTEIN', 'APO A', 'APO B', 'LIPOPROTEIN(A)'],
+    pinnedColumns: ['CHOL', 'TG', 'HDL', 'LDL'],
   },
   {
     id: 'glucose',
-    labelEn: 'Glucose',
-    labelZh: '血糖',
-    preferredOrder: ['GLUCOSE', 'GLU', 'GLU-AC', 'SUGAR', 'FINGER SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'C-PEPTIDE'],
+    preferredOrder: ['GLUCOSE-AC', 'GLUCOSE', 'GLUCOSE-FS', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'C-PEPTIDE'],
     // SUGAR / FINGER SUGAR: some Taiwan clinics use these for blood glucose.
     // Urine dipstick "Sugar" with qualitative value (+, ++, 4+, negative)
     // is routed to urine via the qualitative-value heuristic earlier.
     codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'SUGAR', 'FINGER SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE'],
     loincCodes: ['2345-7', '2339-0', '14749-6', '15074-8', '41653-7', '4548-4', '17856-6', '4549-2', '1986-9'],
     nameKeywords: ['GLUCOSE', 'HEMOGLOBIN A1C', 'GLYCATED HEMOGLOBIN', 'GLYCATED HAEMOGLOBIN', 'GLYCOHEMOGLOBIN', 'HBA1C', 'C PEPTIDE', 'C-PEPTIDE'],
+    pinnedColumns: ['GLUCOSE-AC', 'GLUCOSE', 'HBA1C'],
+  },
+  {
+    id: 'hep',
+    preferredOrder: ['HBSAG', 'ANTI-HCV', 'HBEAG', 'ANTI-HBS'],
+    codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HCV', 'HBEAG', 'HBE AG', 'ANTI-HBS', 'ANTI-HBE'],
+    loincCodes: ['5195-3', '13954-3', '13955-0', '13499-9'],
+    nameKeywords: ['HEPATITIS B SURFACE', 'HBSAG', 'HBS AG', 'HEPATITIS C VIRUS', 'ANTI-HCV', 'HEPATITIS B E ANTIGEN', 'ANTI-HEPATITIS', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HBE'],
+    pinnedColumns: ['HBSAG', 'ANTI-HCV'],
   },
   {
     id: 'tumor',
-    labelEn: 'Tumor Markers',
-    labelZh: '癌症指數',
-    preferredOrder: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'FPSA/PSA', 'FPSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA'],
-    codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'TPSA', 'T-PSA', 'PSA(T)', 'PSA-T', 'FPSA/PSA', 'FPSA', 'F-PSA', 'PSA-F', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'B-HCG', 'BETA-HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'ANTI-HCV', 'PIVKA-II', 'PIVKA'],
+    preferredOrder: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'FPSA/PSA', 'FPSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'PIVKA-II', 'PIVKA'],
+    codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'TPSA', 'T-PSA', 'PSA(T)', 'PSA-T', 'FPSA/PSA', 'FPSA', 'F-PSA', 'PSA-F', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'B-HCG', 'BETA-HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'PIVKA-II', 'PIVKA'],
     loincCodes: ['1834-1', '2039-6', '10334-1', '24108-3', '2857-1', '10886-0', '24467-3', '47238-1', '83112-3', '19201-2', '53764-7', '15067-2', '15083-9', '47239-9'],
-    nameKeywords: ['ALPHA FETO', 'ALPHA-FETO', 'CARCINOEMBRYONIC', 'CA 125', 'CA 15-3', 'CA 15.3', 'CA 19-9', 'PROSTATE SPECIFIC', 'PROSTATE-SPECIFIC ANTIGEN', 'PROSTATE-SPECIFIC AG', 'BETA-2 MICROGLOBULIN', 'BETA 2 MICROGLOBULIN', 'CHORIONIC GONADOTROPIN', 'CALCITONIN', 'CYFRA', 'NEURON SPECIFIC ENOLASE', 'NEURON-SPECIFIC ENOLASE', 'HEPATITIS C VIRUS', 'ANTI-HCV', 'PIVKA', 'SQUAMOUS CELL CARCINOMA ANTIGEN', 'TUMOR MARKER'],
+    nameKeywords: ['ALPHA FETO', 'ALPHA-FETO', 'CARCINOEMBRYONIC', 'CA 125', 'CA 15-3', 'CA 15.3', 'CA 19-9', 'PROSTATE SPECIFIC', 'PROSTATE-SPECIFIC ANTIGEN', 'PROSTATE-SPECIFIC AG', 'BETA-2 MICROGLOBULIN', 'BETA 2 MICROGLOBULIN', 'CHORIONIC GONADOTROPIN', 'CALCITONIN', 'CYFRA', 'NEURON SPECIFIC ENOLASE', 'NEURON-SPECIFIC ENOLASE', 'PIVKA', 'SQUAMOUS CELL CARCINOMA ANTIGEN', 'TUMOR MARKER'],
+    pinnedColumns: ['AFP', 'CEA', 'CA-199', 'CA-125', 'CA-153', 'PSA', 'FERRITIN'],
   },
   {
     id: 'urine',
-    labelEn: 'Urinalysis',
-    labelZh: '尿液檢驗',
     preferredOrder: ['COLOR', 'PH', 'SUGAR', 'TRANS', 'BILI', 'PROT', 'KETON', 'KETONE', 'UROBI', 'GRAVIT', 'NITRIT', 'NITRITE', 'OCCULT', 'WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'],
     // Note: SUGAR is NOT in urine codes — some clinics report blood glucose as
     // "Sugar". Urine dipstick sugar is detected via the qualitative-value
@@ -190,11 +193,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     loincCodes: ['5778-6', '5803-2', '5774-5', '5767-9', '5797-6', '5804-0', '5802-4', '5794-3', '5811-5', '5799-2', '20454-5', '5821-4', '5808-1'],
     nameKeywords: ['URINALYSIS', 'URINE COLOR', 'URINE APPEARANCE', 'SPECIFIC GRAVITY', 'UROBILINOGEN', 'NITRITE', 'KETONE', 'OCCULT BLOOD', 'EPITHELIAL CELL', 'BACTERIA', 'CASTS', 'CRYSTAL', 'SQUAMOUS EPITHELIAL'],
     subgroups: [
-      { id: 'physical',  labelEn: 'Physical',   labelZh: '物理性狀', members: ['COLOR', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'PH'] },
-      { id: 'chemical',  labelEn: 'Chemistry',  labelZh: '化學分析', members: ['SUGAR', 'GLUCOSE', 'PROT', 'PROTEIN', 'KETON', 'KETONE', 'T.BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'BLOOD'] },
-      { id: 'micro',     labelEn: 'Microscopy', labelZh: '顯微鏡檢', members: ['WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3'] },
-      { id: 'ratio',     labelEn: 'Spot Ratios', labelZh: '尿蛋白/肌酸酐比值', members: ['PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'] },
+      { id: 'physical',  members: ['COLOR', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'PH'] },
+      { id: 'chemical',  members: ['SUGAR', 'GLUCOSE', 'PROT', 'PROTEIN', 'KETON', 'KETONE', 'T.BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'BLOOD'] },
+      { id: 'micro',     members: ['WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3'] },
+      { id: 'ratio',     members: ['PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'] },
     ],
+    pinnedColumns: ['COLOR', 'PROT', 'GLUCOSE', 'KETONE', 'OCCULT'],
   },
 ]
 
@@ -214,8 +218,8 @@ function normalize(s: string): string {
  * "HEMOGLOBIN" → cbc).
  */
 // Qualitative dipstick results (Negative/Positive/Trace/+1...) are almost
-// always urinalysis tests. Uses (?!\w) instead of \b so "4+" and "3+" match
-// ('+' is non-word and has no word boundary).
+// always urinalysis tests. Pattern allows trailing content like "4+ (2000)".
+// Uses (?!\w) instead of \b so "4+" and "3+" match ('+' is non-word, has no \b).
 const QUALITATIVE_RE = /^(negative|positive|trace|few|occasional|moderate|many|\d?\+|\+{1,4}|none|nil)(?!\w)/i
 
 function isQualitativeResult(obs: any): boolean {
@@ -273,7 +277,9 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // 5. Serology / virology / autoimmune markers — not part of routine
   //    cumulative report categories. Skip rather than miscategorize as CBC
   //    (e.g., "HBs Ag" was being matched into CBC via "HB" overlap).
-  if (/\bHBS\s*AG\b|\bHBC\s*AG\b|\bHBE\s*AG\b|\bHBE\s*AB\b|ANTI[-\s]?HBS|ANTI[-\s]?HBC|ANTI[-\s]?HBE|ANTI[-\s]?HAV|ANTI[-\s]?HIV|\bHIV\b|\bVDRL\b|\bRPR\b|SYPHILIS|RHEUMATOID FACTOR|\bRF\b/i.test(fullText)) {
+  // HBsAg is kept in scope (it's an HCC screening marker paired with Anti-HCV
+  // and AFP in tumor markers), so it's deliberately excluded from this filter.
+  if (/\bHBC\s*AG\b|\bHBE\s*AG\b|\bHBE\s*AB\b|ANTI[-\s]?HBS|ANTI[-\s]?HBC|ANTI[-\s]?HBE|ANTI[-\s]?HAV|ANTI[-\s]?HIV|\bHIV\b|\bVDRL\b|\bRPR\b|SYPHILIS|RHEUMATOID FACTOR|\bRF\b/i.test(fullText)) {
     return null
   }
 
@@ -315,7 +321,10 @@ export function categorizeObservation(obs: any): LabCategory | null {
   const SPECIALIZED_RE = new RegExp(
     [
       '\\bTIBC\\b',                                        // Iron binding capacity (rarely tracked over time)
-      'MICRO\\s*ALBUMIN', 'MICROALBUMIN',                  // Microalbuminuria (kidney early marker)
+      'MICRO[-\\s]*ALBUMIN', 'MICROALBUMIN',                 // Microalbuminuria (kidney early marker)
+      // eGFR by MDRD formula — exclude from cumulative report; CKD-EPI is the
+      // KDIGO 2012 standard. Bridge still shows MDRD in 全部/檢驗 tabs.
+      'EGFR\\s*\\(\\s*M(?:DRD)?\\s*\\)',
       '\\bPCO2\\b', '\\bTCO2\\b', '\\bPO2\\b', '\\bSO2\\b',  // ABG components
       'BASE\\s*EXCESS', '\\bHCO3\\b',                      // ABG components
       'ALTERNARIA', 'ALLERGEN', '过敏原|過敏原',            // Allergen panels

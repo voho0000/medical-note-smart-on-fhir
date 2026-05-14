@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
 import type { Observation } from '../types'
 
 export interface ObservationHistoryItem {
@@ -37,6 +38,16 @@ export interface CompositeHistoryItem {
   }>
 }
 
+// Time-series history of a text-based DiagnosticReport (e.g. imaging, ECG).
+export interface ReportHistoryItem {
+  id: string
+  date: string
+  conclusion?: string
+  notes: string[]
+  status?: string
+  institution?: string
+}
+
 const COMPONENT_COLORS = [
   '#60a5fa', // blue
   '#f472b6', // pink
@@ -53,13 +64,15 @@ export function useCompositeHistory(observationCode?: string, componentNames?: s
     if (!observationCode || !componentNames || componentNames.length === 0) return []
 
     const compositeItems: CompositeHistoryItem[] = []
+    const targetKey = canonicalTestKeyFromString(observationCode)
 
     // Find all observations with matching code that have components
     observations.forEach((obs) => {
       const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
       const obsCodeCode = obs.code?.coding?.[0]?.code
+      const obsKey = canonicalTestKeyFromString(obsCodeText || obsCodeCode || '')
 
-      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+      if (obsKey === targetKey || obsCodeText === observationCode || obsCodeCode === observationCode) {
         const date = obs.effectiveDateTime || ''
         const components: CompositeHistoryItem['components'] = []
         
@@ -122,12 +135,15 @@ export function useComponentHistory(observationCode?: string, componentNames?: s
       color: COMPONENT_COLORS[index % COMPONENT_COLORS.length]
     }))
 
+    const targetKey = canonicalTestKeyFromString(observationCode)
+
     // Find all observations with matching code that have components
     observations.forEach((obs) => {
       const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
       const obsCodeCode = obs.code?.coding?.[0]?.code
+      const obsKey = canonicalTestKeyFromString(obsCodeText || obsCodeCode || '')
 
-      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+      if (obsKey === targetKey || obsCodeText === observationCode || obsCodeCode === observationCode) {
         const date = obs.effectiveDateTime || ''
         
         // Extract component values
@@ -194,13 +210,16 @@ export function useObservationHistory(observationCode?: string) {
       })
     })
 
+    const targetKey = canonicalTestKeyFromString(observationCode)
+
     // Find all observations with matching code
     observations.forEach((obs) => {
       const obsCodeText = obs.code?.text || obs.code?.coding?.[0]?.display
       const obsCodeCode = obs.code?.coding?.[0]?.code
+      const obsKey = canonicalTestKeyFromString(obsCodeText || obsCodeCode || '')
 
-      // Match by text or code
-      if (obsCodeText === observationCode || obsCodeCode === observationCode) {
+      // Match by canonical key (handles cross-institution name variants) or exact string
+      if (obsKey === targetKey || obsCodeText === observationCode || obsCodeCode === observationCode) {
         const value = obs.valueQuantity?.value ?? obs.valueString ?? '—'
         const unit = obs.valueQuantity?.unit
         const date = obs.effectiveDateTime || ''
@@ -274,4 +293,47 @@ export function useObservationHistory(observationCode?: string) {
   }, [observationCode, observations, diagnosticReports, procedures])
 
   return history
+}
+
+/**
+ * Build a chronological history of text-based DiagnosticReports (imaging, ECG,
+ * pathology) that share the same report code/title. Used by the trend dialog
+ * when invoked from a report row whose firstObs is a synthetic Report Summary.
+ *
+ * Exact-match on report title (case-insensitive, trimmed) — different body
+ * parts ("CT 腹部" vs "CT 胸部") legitimately have different titles and should
+ * NOT merge.
+ */
+export function useReportHistory(reportCode?: string) {
+  const { diagnosticReports = [] } = useClinicalData()
+
+  return useMemo(() => {
+    if (!reportCode) return []
+    const target = reportCode.trim().toLowerCase()
+    if (!target) return []
+
+    const items: ReportHistoryItem[] = []
+    diagnosticReports.forEach((dr: any) => {
+      const drText = (dr.code?.text || dr.code?.coding?.[0]?.display || '').trim().toLowerCase()
+      if (!drText || drText !== target) return
+
+      const conclusion = dr.conclusion?.trim()
+      const notes = Array.isArray(dr.note)
+        ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
+        : []
+      if (!conclusion && notes.length === 0) return
+
+      items.push({
+        id: dr.id || `dr-${dr.issued || dr.effectiveDateTime || Math.random()}`,
+        date: dr.effectiveDateTime || dr.issued || '',
+        conclusion,
+        notes,
+        status: dr.status,
+        institution: dr.performer?.[0]?.display,
+      })
+    })
+
+    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return items
+  }, [reportCode, diagnosticReports])
 }

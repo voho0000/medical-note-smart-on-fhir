@@ -16,15 +16,15 @@ export function pickLatestByCode(list: Observation[], code: string): Observation
 
 export function filterVitalSigns(observations: any[]): Observation[] {
   if (!observations || observations.length === 0) return []
-  
+
   return observations.filter((obs): obs is Observation => {
     if (!obs || typeof obs !== 'object') return false
-    
+
     const isVitalSign = obs.category?.some(
-      (cat: any) => Array.isArray(cat.coding) && 
+      (cat: any) => Array.isArray(cat.coding) &&
       cat.coding.some((c: any) => c?.code === 'vital-signs')
     )
-    
+
     return !!isVitalSign
   })
 }

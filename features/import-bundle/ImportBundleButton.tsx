@@ -5,10 +5,13 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Upload, Trash2, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { LocalBundleService } from "@/src/infrastructure/fhir/services/local-bundle.service"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 export function ImportBundleButton() {
   const fileRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+  const { t } = useLanguage()
+  const i18n = t.importBundle
   const [active, setActive] = useState(() => LocalBundleService.hasData())
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -52,29 +55,29 @@ export function ImportBundleButton() {
         {active && (
           <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
             <Database className="h-3 w-3" />
-            Local data
+            {i18n.localData}
           </span>
         )}
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="h-8 sm:h-9 gap-1.5 px-3 text-xs sm:text-sm"
           onClick={() => fileRef.current?.click()}
           disabled={loading}
-          title="Import FHIR Bundle JSON"
+          title={i18n.importTitle}
         >
-          <Upload className="h-3 w-3" />
-          {loading ? 'Importing…' : 'Import'}
+          <Upload className="h-3.5 w-3.5" />
+          {loading ? i18n.importing : i18n.button}
         </Button>
         {active && (
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs text-destructive hover:text-destructive"
+            size="icon"
+            className="h-8 w-8 sm:h-9 sm:w-9 text-destructive hover:text-destructive"
             onClick={handleClear}
-            title="Clear local data"
+            title={i18n.clearTitle}
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>

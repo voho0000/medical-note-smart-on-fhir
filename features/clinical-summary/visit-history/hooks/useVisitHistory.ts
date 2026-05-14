@@ -29,18 +29,30 @@ export function useVisitHistory(encounters: any[]) {
         // Support both full-word and standard HL7 ActCode short codes (AMB, IMP, EMER…)
         const classCode = (encounter.class?.code || encounter.class?.display || '').toLowerCase()
         const reasonText = (encounter.reasonCode?.[0]?.text || '').toLowerCase()
+        // NHI Taiwan may encode type in serviceType or type[].text instead of class.code
+        const serviceTypeText = (
+          encounter.serviceType?.coding?.[0]?.display ||
+          encounter.serviceType?.text || ''
+        ).toLowerCase()
+        const typeText = (
+          encounter.type?.[0]?.coding?.[0]?.display ||
+          encounter.type?.[0]?.text || ''
+        ).toLowerCase()
 
-        if (['amb', 'ambulatory', 'outpatient', 'op'].includes(classCode) ||
-            reasonText.includes('prenatal') || reasonText.includes('check up') || reasonText.includes('postnatal')) {
-          type = 'outpatient'
-        }
-        else if (['emer', 'emergency', 'ed'].includes(classCode) ||
-                 reasonText.includes('emergency')) {
+        if (['emer', 'emergency', 'ed'].includes(classCode) ||
+            reasonText.includes('emergency') ||
+            serviceTypeText.includes('急診') || typeText.includes('急診')) {
           type = 'emergency'
         }
         else if (['imp', 'inpatient', 'acute', 'ss', 'obsenc', 'prenc'].includes(classCode) ||
-                 reasonText.includes('admission') || reasonText.includes('hospital')) {
+                 reasonText.includes('admission') || reasonText.includes('hospital') ||
+                 serviceTypeText.includes('住院') || typeText.includes('住院')) {
           type = 'inpatient'
+        }
+        else if (['amb', 'ambulatory', 'outpatient', 'op'].includes(classCode) ||
+            reasonText.includes('prenatal') || reasonText.includes('check up') || reasonText.includes('postnatal') ||
+            serviceTypeText.includes('門診') || typeText.includes('門診')) {
+          type = 'outpatient'
         }
         else if (['hh', 'home'].includes(classCode)) {
           type = 'home'
@@ -66,7 +78,7 @@ export function useVisitHistory(encounters: any[]) {
                         encounter.type?.[0]?.text ||
                         encounter.serviceType?.coding?.[0]?.display ||
                         ''
-        department = department.replace('門診', '').trim()
+        department = department.replace(/門診|住院|急診/g, '').trim()
 
         const participant = encounter.participant?.find((p: any) =>
           p?.individual?.display || p?.actor?.display

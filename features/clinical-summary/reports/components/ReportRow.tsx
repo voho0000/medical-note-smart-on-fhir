@@ -29,6 +29,12 @@ function formatDisplayDate(date?: string, showTime?: boolean): string {
   }
 }
 
+// Collapse repeated blank lines so verbose hospital-report text doesn't waste
+// vertical space when expanded inline. Keeps single line breaks intact.
+function compactBlankLines(s: string): string {
+  return (s || '').replace(/(\r?\n)[ \t]*(?:\r?\n)+/g, '\n').trim()
+}
+
 function countAbnormal(obs: Observation[]): number {
   let count = 0
   for (const o of obs) {
@@ -149,8 +155,13 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
               </div>
               <HeaderRight />
             </div>
-            <p className={cn('text-xs text-foreground/80 leading-relaxed', !textExpanded && 'line-clamp-1')}>
-              {obs.valueString}
+            <p
+              className={cn(
+                'text-xs text-foreground/80 leading-relaxed',
+                textExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1'
+              )}
+            >
+              {textExpanded ? compactBlankLines(obs.valueString || '') : obs.valueString}
             </p>
             <span className="text-xs text-primary mt-0.5 inline-block">
               {textExpanded ? '收起' : '查看完整報告'}
@@ -158,6 +169,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
           </div>
           <ObservationTrendDialog
             observation={firstObs}
+            reportTitle={row.title}
             open={trendDialogOpen}
             onOpenChange={setTrendDialogOpen}
           />
@@ -205,6 +217,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
         </div>
         <ObservationTrendDialog
           observation={firstObs}
+          reportTitle={row.title}
           open={trendDialogOpen}
           onOpenChange={setTrendDialogOpen}
         />
@@ -230,7 +243,6 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground">{row.title}</span>
-                  <TrendButton stopProp />
                   {abnormalCount > 0 && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                       <AlertCircle className="h-3 w-3" />
@@ -260,6 +272,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
       </Accordion>
       <ObservationTrendDialog
         observation={firstObs}
+        reportTitle={row.title}
         open={trendDialogOpen}
         onOpenChange={setTrendDialogOpen}
       />

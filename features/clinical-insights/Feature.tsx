@@ -11,6 +11,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAllApiKeys, useModel } from "@/src/application/stores/ai-config.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
+import { useFhirContext } from "@/src/application/hooks/chat/use-fhir-context.hook"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { hasChatProxy } from "@/src/shared/config/env.config"
 
@@ -27,6 +28,7 @@ export default function ClinicalInsightsFeature() {
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext()
   const { isLoading: clinicalDataLoading, error: clinicalDataError } = useClinicalData()
+  const { patientId } = useFhirContext()
   const model = useModel()
 
   const [context, setContext] = useState("")
@@ -66,6 +68,11 @@ export default function ClinicalInsightsFeature() {
       [panelId]: { text: "", isEdited: false, metadata: null },
     }))
   }, [setResponses])
+
+  // Clear all responses when patient changes (new bundle imported)
+  useEffect(() => {
+    setResponses({})
+  }, [patientId, setResponses])
 
   // Update context when it changes (without resetting responses)
   useEffect(() => {

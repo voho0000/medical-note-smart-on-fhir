@@ -2,6 +2,7 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
+import { TEST_ALIASES, normalizeTestName, classifyGlucose, GLUCOSE_SUBTYPE_LABEL } from '@/src/shared/utils/lab-normalize'
 
 export interface LabCell {
   value: string
@@ -47,8 +48,9 @@ const HARDCODED_REF_RANGES: Record<string, { low?: number; high?: number }> = {
   CHOL:       {             high: 200  },   // mg/dL
   LDL:        {             high: 130  },   // mg/dL
   HDL:        { low: 40               },   // mg/dL (conservative; male floor)
-  // Glucose
-  GLUCOSE:    { low: 70,   high: 100  },   // mg/dL (fasting)
+  // Glucose — fasting range applies only to AC (空腹) measurements.
+  // Generic glucose (random/post-meal) and finger sugar are context-dependent.
+  'GLUCOSE-AC': { low: 70, high: 100 },    // mg/dL (fasting)
   HBA1C:      {             high: 5.7 },   // %
 }
 
@@ -103,178 +105,16 @@ function formatValue(obs: any): { value: string; unit?: string; numericValue?: n
   return { value, unit, numericValue, isAbnormal, interpretationCode: interp }
 }
 
-// Map of common test aliases → canonical name. Add entries when source
-// data uses inconsistent names for the same analyte (e.g. "ALT" / "ALT(GPT)" /
-// "ALT/GPT" / "GPT" should all merge into one row).
-//
-// Both stripped and collapsed forms are looked up — so for "Hb-A1c" the
-// lookups try "HB-A1C" first then "HBA1C". Add either form.
-const TEST_ALIASES: Record<string, string> = {
-  // Creatinine
-  CREATININE: 'CREATININE', CREAT: 'CREATININE', 'CREAT.': 'CREATININE', CREA: 'CREATININE',
-  // Hemoglobin / Hematocrit
-  HB: 'HB', HGB: 'HB', HEMOGLOBIN: 'HB',
-  HCT: 'HCT', HEMATOCRIT: 'HCT',
-  // White blood cell
-  WBC: 'WBC', 'WBC COUNT': 'WBC', 'WBC CCOUNT': 'WBC', LEUKOCYTE: 'WBC', LEUKOCYTES: 'WBC', 'WHITE BLOOD CELL': 'WBC', 'WHITE BLOOD CELLS': 'WBC',
-  // Red blood cell
-  RBC: 'RBC', 'RBC COUNT': 'RBC', ERYTHROCYTE: 'RBC', ERYTHROCYTES: 'RBC', 'RED BLOOD CELL': 'RBC', 'RED BLOOD CELLS': 'RBC',
-  // Platelet
-  PLT: 'PLT', PLATELET: 'PLT', PLATELETS: 'PLT', 'PLATELET COUNT': 'PLT', 'PLATELET CCOUNT': 'PLT',
-  // Differential — segs/bands/neutrophils
-  SEG: 'NEU', 'SEG.': 'NEU', NEU: 'NEU', 'NEU.': 'NEU', NEUTROPHIL: 'NEU', NEUTROPHILS: 'NEU', 'NEUTROPHIL SEGMENTED': 'NEU', 'NEUTROPHILIC SEGMENTED': 'NEU', 'NEUTROPHILIC SEG': 'NEU', 'NEUTROPHILIC SEGS': 'NEU', 'NEUTROPHILIC SEGMENT': 'NEU',
-  LYM: 'LYM', 'LYM.': 'LYM', LYMPHOCYTE: 'LYM', LYMPHOCYTES: 'LYM',
-  MONO: 'MONO', 'MONO.': 'MONO', MONOCYTE: 'MONO', MONOCYTES: 'MONO',
-  EOS: 'EOS', 'EOS.': 'EOS', EOSINOPHIL: 'EOS', EOSINOPHILS: 'EOS',
-  BASO: 'BASO', 'BASO.': 'BASO', BASOPHIL: 'BASO', BASOPHILS: 'BASO',
-  BAND: 'BAND', BANDS: 'BAND', 'BAND CELL': 'BAND', 'BAND CELLS': 'BAND',
-  ANC: 'ANC', 'ABSOLUTE NEUTROPHIL COUNT': 'ANC',
-  // RBC indices
-  MCV: 'MCV', MCH: 'MCH', MCHC: 'MCHC',
-  RDW: 'RDW', 'RDW-CV': 'RDW', 'RDW.CV': 'RDW',
-  MPV: 'MPV',
-  // Coagulation
-  PT: 'PT', 'PROTHROMBIN TIME': 'PT',
-  APTT: 'APTT', 'PARTIAL THROMBOPLASTIN TIME': 'APTT', 'ACTIVATED PARTIAL THROMBOPLASTIN TIME': 'APTT',
-  INR: 'INR',
-  'D-DIMER': 'D-DIMER', DDIMER: 'D-DIMER', 'D DIMER': 'D-DIMER',
-  FDP: 'FDP',
-  FIBRINOGEN: 'FIBRINOGEN', FIB: 'FIBRINOGEN',
-  // Electrolytes
-  NA: 'NA', SODIUM: 'NA',
-  K: 'K', POTASSIUM: 'K',
-  CL: 'CL', CHLORIDE: 'CL',
-  CA: 'CA', CALCIUM: 'CA', CACAL: 'CA',
-  IP: 'IP', PHOSPHATE: 'IP', PHOSPHORUS: 'IP',
-  // Glucose
-  GLU: 'GLUCOSE', GLUCOSE: 'GLUCOSE',
-  // Lipids
-  CHOL: 'CHOL', 'CHOL.': 'CHOL', CHOLESTEROL: 'CHOL', 'TOTAL CHOLESTEROL': 'CHOL',
-  TG: 'TG', TRIG: 'TG', TRIGLYCERIDE: 'TG', TRIGLYCERIDES: 'TG',
-  HDL: 'HDL', 'HDL-C': 'HDL', HDLC: 'HDL', 'HDLC.': 'HDL', 'HDL CHOLESTEROL': 'HDL', 'CHOLESTEROL IN HDL': 'HDL', 'HIGH DENSITY LIPOPROTEIN': 'HDL',
-  LDL: 'LDL', 'LDL-C': 'LDL', LDLC: 'LDL', 'LDLC.': 'LDL', 'LDL CHOLESTEROL': 'LDL', 'CHOLESTEROL IN LDL': 'LDL', 'LOW DENSITY LIPOPROTEIN': 'LDL',
-  // Liver enzymes (with GOT/GPT/SGOT/SGPT legacy aliases)
-  ALT: 'ALT', GPT: 'ALT', SGPT: 'ALT', 'ALT/GPT': 'ALT', 'GPT/ALT': 'ALT', 'GPT(ALT)': 'ALT', 'SGPT(ALT)': 'ALT',
-  AST: 'AST', GOT: 'AST', SGOT: 'AST', 'AST/GOT': 'AST', 'GOT/AST': 'AST', 'GOT(AST)': 'AST', 'SGOT(AST)': 'AST',
-  GGT: 'GGT', 'G-GT': 'GGT', 'GAMMA GT': 'GGT', 'GAMMA-GT': 'GGT',
-  'ALK-P': 'ALK-P', ALKP: 'ALK-P', 'ALKALINE PHOSPHATASE': 'ALK-P',
-  LDH: 'LDH', 'LACTATE DEHYDROGENASE': 'LDH',
-  // Bilirubin
-  'T.BILI': 'T.BILI', 'T.BILI.': 'T.BILI', TBILI: 'T.BILI', BILIT: 'T.BILI', 'TOTAL BILIRUBIN': 'T.BILI', BILIRUBIN: 'T.BILI',
-  'D.BILI': 'D.BILI', DBILI: 'D.BILI', 'DIRECT BILIRUBIN': 'D.BILI',
-  // Protein
-  TP: 'TP', 'TOTAL PROTEIN': 'TP',
-  ALB: 'ALB', ALBUMIN: 'ALB',
-  // BUN
-  BUN: 'BUN', 'UREA NITROGEN': 'BUN', UREA: 'BUN',
-  // Uric acid
-  UA: 'URIC ACID', URATE: 'URIC ACID', 'URIC ACID': 'URIC ACID',
-  // CRP
-  CRP: 'CRP', 'C REACTIVE PROTEIN': 'CRP', 'C-REACTIVE PROTEIN': 'CRP', 'HS-CRP': 'CRP',
-  // Procalcitonin (bacterial infection marker, NOT a tumor marker)
-  PCT: 'PCT', PROCALCITONIN: 'PCT',
-  ESR: 'ESR', 'ERYTHROCYTE SEDIMENTATION RATE': 'ESR',
-  LACTATE: 'LACTATE',
-  // Cardiac
-  CK: 'CK', 'CREATINE KINASE': 'CK',
-  CKMB: 'CKMB', 'CK-MB': 'CKMB',
-  TROP: 'TROP', TROPONIN: 'TROP', 'TROPONIN I': 'TROP', 'TROPONIN T': 'TROP',
-  // Iron
-  IRON: 'IRON', FE: 'IRON',
-  TIBC: 'TIBC',
-  // Tumor markers — variants
-  PSA: 'PSA', TPSA: 'PSA', 'T-PSA': 'PSA', 'TOTAL PSA': 'PSA', 'PROSTATE SPECIFIC AG': 'PSA', 'PROSTATE-SPECIFIC AG': 'PSA', 'PROSTATE SPECIFIC ANTIGEN': 'PSA', 'PROSTATE-SPECIFIC ANTIGEN': 'PSA',
-  FPSA: 'F-PSA', 'F-PSA': 'F-PSA', 'PSA-F': 'F-PSA', 'FREE PSA': 'F-PSA',
-  CEA: 'CEA', 'CARCINOEMBRYONIC ANTIGEN': 'CEA',
-  AFP: 'AFP', 'ALPHA FETOPROTEIN': 'AFP', 'ALPHA-FETOPROTEIN': 'AFP',
-  'CA-125': 'CA-125', CA125: 'CA-125', 'CA 125': 'CA-125',
-  'CA-153': 'CA-153', CA153: 'CA-153', 'CA 15-3': 'CA-153',
-  'CA-199': 'CA-199', CA199: 'CA-199', 'CA19-9': 'CA-199', 'CA 19-9': 'CA-199',
-  FERRITIN: 'FERRITIN',
-  HCG: 'HCG', 'BETA HCG': 'HCG', 'BETA-HCG': 'HCG', 'B-HCG': 'HCG',
-  // Glycated hemoglobin (Hb-A1c, HbA1c, Hemoglobin A1c all merge)
-  HBA1C: 'HBA1C', 'HB-A1C': 'HBA1C', 'HB A1C': 'HBA1C',
-  'HEMOGLOBIN A1C': 'HBA1C', 'HEMOGLOBINA1C': 'HBA1C',
-  'GLYCATED HEMOGLOBIN': 'HBA1C', GLYCATEDHEMOGLOBIN: 'HBA1C',
-  'GLYCOHEMOGLOBIN': 'HBA1C',
-
-  // ── Glucose (fasting / AC / random / Glu-AC / Finger sugar / Sugar all merge) ──
-  // 「都算 glucose」per clinical context — both fasting and unmarked
-  'GLU-AC': 'GLUCOSE', GLUAC: 'GLUCOSE', 'GLUCOSE AC': 'GLUCOSE', GLUCOSEAC: 'GLUCOSE',
-  'GLUCOSE(AC)': 'GLUCOSE', 'GLU(AC)': 'GLUCOSE',
-  'FINGER SUGAR': 'GLUCOSE', FINGERSUGAR: 'GLUCOSE',
-  'FASTING GLUCOSE': 'GLUCOSE', FASTINGGLUCOSE: 'GLUCOSE',
-  // Some clinics use "Sugar" for blood glucose (numeric).
-  // Urine dipstick "Sugar" with qualitative values goes to urine via the
-  // value heuristic in categorizeObservation BEFORE this alias is applied.
-  SUGAR: 'GLUCOSE',
-
-  // ── Collapsed (no separators) lookups for pickKey's collapsed-form match ──
-  // These handle "Hb-A1c" / "HbA1c" / "Hb A1c" → all become "HBA1C" after
-  // collapsing, so this single entry catches them all.
-  WBCCOUNT: 'WBC',
-  RBCCOUNT: 'RBC',
-  PLATELETCOUNT: 'PLT', PLATELETCCOUNT: 'PLT',
-  HT: 'HCT', HTCT: 'HCT',
-  NEUTROPHILSEGMENTED: 'NEU', NEUTROPHILICSEGMENTED: 'NEU',
-  NEUTROPHILICSEG: 'NEU', NEUTROPHILICSE: 'NEU',
-  SEGS: 'NEU', SEGMENT: 'NEU',
-  EOSINOPHILCOUNT: 'EOS', EOSINOPHILCOUN: 'EOS',
-  // Chem extras
-  ALBUMINBCG: 'ALB',
-  TOTALBILIRUBIN: 'T.BILI',
-  TOTALPROTEIN: 'TP',
-  RGT: 'GGT', 'R-GT': 'GGT',
-  'INORGANIC P': 'IP', INORGANICP: 'IP', P: 'IP',
-  ESTIMATEDGFR: 'EGFR', 'ESTIMATED GFR': 'EGFR',
-  'CREATININE(U)': 'CREATININE', CREATININEU: 'CREATININE',
-  SGOTAST: 'AST', SGPTALT: 'ALT',
-  TROPONINI: 'TROP', TROPONINT: 'TROP',
-  // Lipid extras
-  'T-CHOLESTEROL': 'CHOL', TCHOLESTEROL: 'CHOL', 'TOTAL CHOL': 'CHOL',
-  'LDL-CHOLESTEROL': 'LDL', LDLCHOLESTEROL: 'LDL',
-  'LDL-C(DIRECT)': 'LDL', LDLCDIRECT: 'LDL',
-  // Thyroid extras
-  'FREE-T4': 'FREE T4', FREET4: 'FREE T4',
-  'FREE-T3': 'FREE T3', FREET3: 'FREE T3',
-}
-
-// Aggressively normalize a test display name so equivalent variants merge.
-// Examples:
-//   "Creatinine(B)" → "CREATININE"
-//   "Creatinine(Bloo..." → "CREATININE"
-//   "MCV 平均紅血球體積" → "MCV"
-//   "WBC(白血球..." → "WBC"
-//   "Glucose(AC)(飯..." → "GLUCOSEAC"
-//   "Hb-A1c" → "HBA1C"
-//   "Serum Free T4(E..." → "FREET4"
-//   "Platelet ccount ..." → "PLATELETCCOUNT"
-function normalizeTestName(raw: string): { stripped: string; collapsed: string } {
-  let s = raw.trim()
-  // Strip everything after first paren/bracket (ASCII or CJK)
-  s = s.replace(/\s*[\(\[（［].*$/, '')
-  // Strip trailing CJK characters and whatever follows
-  s = s.replace(/\s*[一-鿿].*$/, '')
-  // Strip trailing ellipsis / dots that mark truncated names
-  s = s.replace(/[.…]+\s*$/, '').trim()
-  // Strip qualifier prefixes
-  s = s.replace(/^Serum\s+/i, '')
-  s = s.trim()
-  const stripped = s.toUpperCase()
-  // Collapse all non-alphanumeric (hyphens, dots, spaces) for fuzzy matching
-  const collapsed = stripped.replace(/[^A-Z0-9]/g, '')
-  return { stripped, collapsed }
-}
-
 // NHI system URI used by the 健康存摺 bridge
 const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
 
 // testKeys where different NHI codes represent clinically distinct analytes that
 // must remain as separate pivot columns. All other tests merge by testKey so
 // cross-institution same-analyte rows collapse into one column.
-const KEEP_SEPARATE_BY_NHI = new Set<string>([
-  'GLUCOSE',  // 09005C = fasting, 09140C = random — clinically meaningful distinction
-])
+// Glucose was here but is now subclassified by display+LOINC (see
+// classifyGlucose in lab-normalize.ts), which is more reliable than NHI code
+// because some hospitals bill finger sugar under fasting NHI codes.
+const KEEP_SEPARATE_BY_NHI = new Set<string>([])
 
 // Returns the canonical analyte name (alias-resolved display key).
 // Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
@@ -295,20 +135,62 @@ function canonicalTestKey(obs: any): string {
 //               where the code distinguishes genuinely different analytes.
 // testKey     – canonical analyte name; stable across data sources.
 // displayName – label shown in the table; prefers NHI official display name.
-function buildTestEntry(obs: any): { mapKey: string; testKey: string; displayName: string } {
+// Known glucose-category testKeys that should NOT fall back to GLUCOSE generic.
+// Everything else in the glucose category (typos, unfamiliar names) is treated
+// as glucose and goes through subclassification, since the LOINC-based
+// categorization already told us it's a glucose measurement.
+const KNOWN_GLUCOSE_KEYS = new Set(['GLUCOSE', 'HBA1C', 'C-PEPTIDE', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC'])
+
+function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKey: string; displayName: string } {
   const raw = getTestDisplayName(obs)
   if (!raw) return { mapKey: 'UNKNOWN', testKey: 'UNKNOWN', displayName: 'UNKNOWN' }
 
-  const testKey = canonicalTestKey(obs)
+  let testKey = canonicalTestKey(obs)
+  let displayOverride: string | undefined
+
+  if (categoryId === 'glucose') {
+    // Safety net for HbA1c mislabeled as glucose: unit "%" or "mmol/mol"
+    // (the two standard HbA1c units) reclassifies the row as HBA1C.
+    const unit = String(obs?.valueQuantity?.unit ?? '').trim().toLowerCase()
+    const isHbA1cUnit = unit === '%' || unit === 'percent' || unit === 'mmol/mol'
+
+    if (isHbA1cUnit) {
+      testKey = 'HBA1C'
+      displayOverride = 'HbA1c'
+    } else if (!KNOWN_GLUCOSE_KEYS.has(testKey)) {
+      // Unknown glucose-category name (typos, unfamiliar variants) → fallback
+      // to GLUCOSE; subclassification below will route to finger / fasting /
+      // generic based on display + LOINC.
+      testKey = 'GLUCOSE'
+    }
+  }
+
+  // Glucose subclassification: split into fasting / finger-stick / generic
+  // columns using display + LOINC (see classifyGlucose).
+  if (testKey === 'GLUCOSE') {
+    const sub = classifyGlucose(obs)
+    const label = GLUCOSE_SUBTYPE_LABEL[sub]
+    testKey = label.key
+    displayOverride = label.display
+  }
 
   const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
   const nhiCode = nhiCoding?.code as string | undefined
   const mapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
 
-  // Prefer NHI official display; otherwise use stripped raw label
+  // Column header preference:
+  //   1. displayOverride (e.g. glucose subtypes) wins.
+  //   2. If the display name maps to a known canonical (alias OR self-key,
+  //      including verbose NHI forms like "Hct(血球容積比)"), use the clean
+  //      canonical testKey for a compact, consistent header.
+  //   3. Otherwise fall back to the bridge's NHI display or stripped raw label
+  //      so unknown tests keep whatever the source institution sent.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
-  const displayName = nhiDisplay || rawDisplay
+  const candidateDisplay = nhiDisplay || rawDisplay
+  const { stripped: candidateStripped, collapsed: candidateCollapsed } = normalizeTestName(candidateDisplay)
+  const isKnown = !!(TEST_ALIASES[candidateStripped] || TEST_ALIASES[candidateCollapsed])
+  const displayName = displayOverride || (isKnown ? testKey : candidateDisplay)
 
   return { mapKey, testKey, displayName }
 }
@@ -332,10 +214,11 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
       buckets[cat.id].push(obs)
     }
 
-    // For each category, build the pivot
+    // For each category, build the pivot. Don't early-return on empty obsList —
+    // categories with pinnedColumns should still surface their standard headers
+    // even when the patient has no data for any test in that category.
     for (const cat of LAB_CATEGORIES) {
       const obsList = buckets[cat.id]
-      if (obsList.length === 0) continue
 
       const dateSet = new Set<string>()
       const testMap = new Map<string, LabRow>()
@@ -346,7 +229,7 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         if (!date) continue
         dateSet.add(date)
 
-        const { mapKey, testKey, displayName } = buildTestEntry(obs)
+        const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
         const fv = formatValue(obs)
         let { value, unit, numericValue, isAbnormal, interpretationCode } = fv
 
