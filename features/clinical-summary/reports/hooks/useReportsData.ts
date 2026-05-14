@@ -48,6 +48,49 @@ export function useReportsData(diagnosticReports: any[]) {
       groups.get(key)!.push(dr)
     })
 
+    // Second pass: merge conclusion-only groups (inst='') into same-text/date groups
+    // that have a real institution. This collapses bridge-emitted twin DRs (one with
+    // result refs, one with only conclusion text) into a single accordion row.
+    //
+    // The bridge emits result-bearing DRs with trailing commas and no spaces between
+    // test names (e.g. "FSH,E2,") while conclusion-only DRs use cleaned-up names
+    // (e.g. "FSH, E2" or "FSH, E2 (Hormonal Panel)"). We normalize both sides before
+    // comparing so they collapse correctly.
+    const normText = (t: string) =>
+      t.replace(/\s*\([^)]*\)/g, '')  // strip parenthetical labels
+       .replace(/^\*+/, '')            // strip leading stat-marker asterisks
+       .replace(/,\s*/g, ',')          // collapse "A, B" → "A,B"
+       .replace(/,+$/, '')             // strip trailing comma
+       .trim()
+       .toLowerCase()
+
+    const groupMeta = new Map<string, { text: string; date: string; inst: string; norm: string }>()
+    for (const key of groupOrder) {
+      const head = groups.get(key)![0]
+      const t = (getCodeableConceptText(head.code) || '').trim()
+      const d = ((head.effectiveDateTime || head.issued || '') as string).slice(0, 10)
+      const i = (((head as any)._observations?.[0]?.performer?.[0]?.display) || '').trim()
+      groupMeta.set(key, { text: t, date: d, inst: i, norm: normText(t) })
+    }
+    const toDelete = new Set<string>()
+    for (const key of groupOrder) {
+      const { date, inst, norm } = groupMeta.get(key)!
+      if (inst !== '') continue
+      const targetKey = groupOrder.find(k => {
+        const m = groupMeta.get(k)!
+        return m.norm === norm && m.date === date && m.inst !== ''
+      })
+      if (targetKey) {
+        groups.get(targetKey)!.push(...groups.get(key)!)
+        toDelete.add(key)
+      }
+    }
+    if (toDelete.size > 0) {
+      const kept = groupOrder.filter(k => !toDelete.has(k))
+      groupOrder.length = 0
+      kept.forEach(k => groupOrder.push(k))
+    }
+
     for (const key of groupOrder) {
       const grp = groups.get(key)!
       const head = grp[0]
@@ -67,9 +110,13 @@ export function useReportsData(diagnosticReports: any[]) {
         })
 
         // In a multi-DR group, relabel each obs with its parent DR's specific
-        // test name so the accordion children are distinguishable. We clone
+        // test name so the accordion children are distinguishable — but only
+        // when the DR's own title differs from the group title. When all DRs
+        // share the same name (e.g. same panel split across multiple DRs), the
+        // individual observation names are already the right labels. We clone
         // the obs (don't mutate the upstream resource).
-        const perTitle = isMulti ? derivePerDrTitle(dr) : null
+        const drTitle = derivePerDrTitle(dr)
+        const perTitle = (isMulti && drTitle !== groupText) ? drTitle : null
         for (const o of obs) {
           if (perTitle) {
             allObs.push({
