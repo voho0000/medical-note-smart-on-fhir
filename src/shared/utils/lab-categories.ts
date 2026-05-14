@@ -54,6 +54,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     codes: ['PT', 'PROTHROMBIN TIME', 'APTT', 'INR', 'D-DIMER', 'DDIMER', 'D DIMER', 'FDP', 'FIBRINOGEN', 'FIB'],
     loincCodes: ['5902-2', '6300-8', '14979-9', '3173-2', '6301-6', '34714-6', '30240-9', '48067-3', '7799-0', '48065-7', '3255-7', '30903-2', '13990-7', '4530-2'],
     nameKeywords: ['PROTHROMBIN TIME', 'PARTIAL THROMBOPLASTIN', 'INR', 'D-DIMER', 'FIBRINOGEN', 'FIBRIN DEGRADATION'],
+    pinnedColumns: ['PT', 'APTT', 'INR', 'D-DIMER'],
   },
   {
     id: 'chem',
