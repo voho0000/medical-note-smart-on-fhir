@@ -29,6 +29,12 @@ function formatDisplayDate(date?: string, showTime?: boolean): string {
   }
 }
 
+// Collapse repeated blank lines so verbose hospital-report text doesn't waste
+// vertical space when expanded inline. Keeps single line breaks intact.
+function compactBlankLines(s: string): string {
+  return (s || '').replace(/(\r?\n)[ \t]*(?:\r?\n)+/g, '\n').trim()
+}
+
 function countAbnormal(obs: Observation[]): number {
   let count = 0
   for (const o of obs) {
@@ -155,7 +161,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
                 textExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1'
               )}
             >
-              {obs.valueString}
+              {textExpanded ? compactBlankLines(obs.valueString || '') : obs.valueString}
             </p>
             <span className="text-xs text-primary mt-0.5 inline-block">
               {textExpanded ? '收起' : '查看完整報告'}
