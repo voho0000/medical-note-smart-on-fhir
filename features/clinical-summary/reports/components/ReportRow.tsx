@@ -149,7 +149,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
               </div>
               <HeaderRight />
             </div>
-            <p className={cn('text-xs text-foreground/80 leading-relaxed', !textExpanded && 'line-clamp-1')}>
+            <p
+              className={cn(
+                'text-xs text-foreground/80 leading-relaxed',
+                textExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1'
+              )}
+            >
               {obs.valueString}
             </p>
             <span className="text-xs text-primary mt-0.5 inline-block">
