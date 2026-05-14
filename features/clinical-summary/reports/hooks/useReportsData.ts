@@ -73,6 +73,11 @@ export function useReportsData(diagnosticReports: any[]) {
       groupMeta.set(key, { text: t, date: d, inst: i, norm: normText(t) })
     }
     const toDelete = new Set<string>()
+    // DRs that came from a conclusion-only group merged into a result-bearing
+    // group. Their conclusion text is just a restating of the structured
+    // observation values (e.g. "RESULT: 13.62 U/mL"), so we drop it from the
+    // accordion summary to avoid showing the same data twice.
+    const mergedConclusionDrs = new WeakSet<DiagnosticReport>()
     for (const key of groupOrder) {
       const { date, inst, norm } = groupMeta.get(key)!
       if (inst !== '') continue
@@ -81,7 +86,9 @@ export function useReportsData(diagnosticReports: any[]) {
         return m.norm === norm && m.date === date && m.inst !== ''
       })
       if (targetKey) {
-        groups.get(targetKey)!.push(...groups.get(key)!)
+        const conclusionDrs = groups.get(key)!
+        conclusionDrs.forEach(dr => mergedConclusionDrs.add(dr))
+        groups.get(targetKey)!.push(...conclusionDrs)
         toDelete.add(key)
       }
     }
@@ -133,7 +140,10 @@ export function useReportsData(diagnosticReports: any[]) {
         const notes = Array.isArray(dr.note)
           ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
           : []
-        if (conclusionText) summaryParts.push(`Conclusion: ${conclusionText}`)
+        // Skip conclusion text from merged conclusion-only DRs — the result-
+        // bearing DRs in the same group already render the value as a
+        // structured observation.
+        if (conclusionText && !mergedConclusionDrs.has(dr)) summaryParts.push(`Conclusion: ${conclusionText}`)
         if (conclusionCodes && conclusionCodes !== '—') summaryParts.push(`Conclusion Codes: ${conclusionCodes}`)
         if (notes.length > 0) summaryParts.push(notes.join('\n'))
 
