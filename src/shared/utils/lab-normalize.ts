@@ -4,7 +4,7 @@
 
 export const TEST_ALIASES: Record<string, string> = {
   // Creatinine
-  CREATININE: 'CREATININE', CREAT: 'CREATININE', 'CREAT.': 'CREATININE', CREA: 'CREATININE',
+  CREATININE: 'CREA', CREAT: 'CREA', 'CREAT.': 'CREA', CREA: 'CREA',
   // Hemoglobin / Hematocrit
   HB: 'HB', HGB: 'HB', HEMOGLOBIN: 'HB',
   HCT: 'HCT', HEMATOCRIT: 'HCT',
@@ -32,7 +32,7 @@ export const TEST_ALIASES: Record<string, string> = {
   INR: 'INR',
   'D-DIMER': 'D-DIMER', DDIMER: 'D-DIMER', 'D DIMER': 'D-DIMER',
   FDP: 'FDP',
-  FIBRINOGEN: 'FIBRINOGEN', FIB: 'FIBRINOGEN',
+  FIBRINOGEN: 'FIB', FIB: 'FIB',
   // Electrolytes
   NA: 'NA', SODIUM: 'NA',
   K: 'K', POTASSIUM: 'K',
@@ -61,7 +61,7 @@ export const TEST_ALIASES: Record<string, string> = {
   // BUN
   BUN: 'BUN', 'UREA NITROGEN': 'BUN', UREA: 'BUN',
   // Uric acid
-  UA: 'URIC ACID', URATE: 'URIC ACID', 'URIC ACID': 'URIC ACID',
+  UA: 'UA', URATE: 'UA', 'URIC ACID': 'UA',
   // CRP
   CRP: 'CRP', 'C REACTIVE PROTEIN': 'CRP', 'C-REACTIVE PROTEIN': 'CRP', 'HS-CRP': 'CRP',
   // Procalcitonin
@@ -75,6 +75,9 @@ export const TEST_ALIASES: Record<string, string> = {
   // Iron
   IRON: 'IRON', FE: 'IRON',
   TIBC: 'TIBC',
+  // Endocrine: short clinical aliases
+  PROLACTIN: 'PRL', PRL: 'PRL',
+  ESTRADIOL: 'E2', E2: 'E2',
   // Tumor markers
   PSA: 'PSA', TPSA: 'PSA', 'T-PSA': 'PSA', 'TOTAL PSA': 'PSA', 'PROSTATE SPECIFIC AG': 'PSA', 'PROSTATE-SPECIFIC AG': 'PSA', 'PROSTATE SPECIFIC ANTIGEN': 'PSA', 'PROSTATE-SPECIFIC ANTIGEN': 'PSA',
   FPSA: 'F-PSA', 'F-PSA': 'F-PSA', 'PSA-F': 'F-PSA', 'FREE PSA': 'F-PSA',
@@ -112,7 +115,7 @@ export const TEST_ALIASES: Record<string, string> = {
   RGT: 'GGT', 'R-GT': 'GGT',
   'INORGANIC P': 'IP', INORGANICP: 'IP', P: 'IP',
   ESTIMATEDGFR: 'EGFR', 'ESTIMATED GFR': 'EGFR',
-  'CREATININE(U)': 'CREATININE', CREATININEU: 'CREATININE',
+  'CREATININE(U)': 'CREA', CREATININEU: 'CREA',
   SGOTAST: 'AST', SGPTALT: 'ALT',
   TROPONINI: 'TROP', TROPONINT: 'TROP',
   'T-CHOLESTEROL': 'CHOL', TCHOLESTEROL: 'CHOL', 'TOTAL CHOL': 'CHOL',

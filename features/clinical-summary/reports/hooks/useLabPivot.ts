@@ -214,10 +214,11 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
       buckets[cat.id].push(obs)
     }
 
-    // For each category, build the pivot
+    // For each category, build the pivot. Don't early-return on empty obsList —
+    // categories with pinnedColumns should still surface their standard headers
+    // even when the patient has no data for any test in that category.
     for (const cat of LAB_CATEGORIES) {
       const obsList = buckets[cat.id]
-      if (obsList.length === 0) continue
 
       const dateSet = new Set<string>()
       const testMap = new Map<string, LabRow>()

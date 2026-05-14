@@ -27,7 +27,10 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
   const subgroupLabels = (t.reports as any).cumulativeSubgroups || {}
   const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
   const subgroupLabel = (sgId: string) => subgroupLabels[sgId] || sgId
-  if (pivot.rows.length === 0 || pivot.dates.length === 0) {
+  // When there are no columns at all (no pinned columns and no data) show the
+  // empty-state message. If there are columns but no data dates, fall through
+  // so the column headers still render with a "no data" body row.
+  if (pivot.rows.length === 0) {
     return (
       <div className="text-sm text-muted-foreground p-4 text-center">
         {t.reports.noData}
@@ -113,6 +116,16 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
           </tr>
         </thead>
         <tbody>
+          {pivot.dates.length === 0 && (
+            <tr>
+              <td
+                colSpan={flatTests.length + 1}
+                className="p-4 text-center text-sm text-muted-foreground"
+              >
+                {t.reports.noData}
+              </td>
+            </tr>
+          )}
           {pivot.dates.map((date, dateIdx) => (
             <tr key={date} className={dateIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
               <td className="sticky left-0 z-10 bg-inherit border-r p-2 font-medium whitespace-nowrap">
@@ -151,10 +164,13 @@ export function CumulativeLabReport({ observations, fullHeight = false }: Cumula
   const { t } = useLanguage()
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
 
+  // Show every category tab, even when the patient has no data — pinnedColumns
+  // ensures key analytes still appear as empty column headers so users can see
+  // what's expected to be there.
   const nonEmpty = useMemo(() => {
     return LAB_CATEGORIES
       .map((cat) => pivots[cat.id])
-      .filter((p) => p && p.rows.length > 0)
+      .filter((p) => !!p)
   }, [pivots])
 
   const [activeId, setActiveId] = useState<string>(() => nonEmpty[0]?.category.id || 'cbc')
@@ -179,7 +195,7 @@ export function CumulativeLabReport({ observations, fullHeight = false }: Cumula
                 value={p.category.id}
                 className="!flex-1 !min-w-fit text-xs h-7 px-3 whitespace-nowrap data-[state=active]:bg-background"
               >
-                {label} ({p.rows.length})
+                {label} ({p.dates.length})
               </TabsTrigger>
             )
           })}

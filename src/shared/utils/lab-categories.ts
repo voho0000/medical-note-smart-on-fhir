@@ -47,10 +47,11 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'diff',    members: ['SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'BAND', 'ANC'] },
       { id: 'indices', members: ['HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV'] },
     ],
+    pinnedColumns: ['WBC', 'RBC', 'HB', 'PLT', 'HCT', 'MCV'],
   },
   {
     id: 'coag',
-    preferredOrder: ['PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIBRINOGEN'],
+    preferredOrder: ['PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIB'],
     codes: ['PT', 'PROTHROMBIN TIME', 'APTT', 'INR', 'D-DIMER', 'DDIMER', 'D DIMER', 'FDP', 'FIBRINOGEN', 'FIB'],
     loincCodes: ['5902-2', '6300-8', '14979-9', '3173-2', '6301-6', '34714-6', '30240-9', '48067-3', '7799-0', '48065-7', '3255-7', '30903-2', '13990-7', '4530-2'],
     nameKeywords: ['PROTHROMBIN TIME', 'PARTIAL THROMBOPLASTIN', 'INR', 'D-DIMER', 'FIBRINOGEN', 'FIBRIN DEGRADATION'],
@@ -58,18 +59,19 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'chem',
-    preferredOrder: ['BUN', 'CREATININE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'URIC ACID', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CK', 'CKMB', 'TROP', 'CRP', 'FIB-4', 'IRON', 'TIBC'],
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CO2', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CK', 'CKMB', 'TROP', 'CRP', 'FIB-4', 'IRON', 'TIBC'],
     codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CO2', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'CK', 'CKMB', 'CKMB(POCT)', 'TROP', 'TROP(POCT)', 'IRON', 'TIBC', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE', 'LDH'],
     loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '2069-3', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '1988-5', '14647-2', '30522-7', '2157-6', '13969-1', '6598-7', '10839-9', '49563-0', '2498-4', '2500-7', '14935-1', '1759-0', '2532-0', '11051-0', '2243-4', '33959-8', '75241-0', '4537-7', '30341-2', '14338-8'],
     nameKeywords: ['SODIUM', 'POTASSIUM', 'CHLORIDE', 'BICARBONATE', 'CO2', 'UREA NITROGEN', 'CREATININE', 'GLOMERULAR FILTRATION', 'ALBUMIN', 'TOTAL PROTEIN', 'GLOBULIN', 'BILIRUBIN', 'ASPARTATE AMINOTRANSFERASE', 'ALANINE AMINOTRANSFERASE', 'ALKALINE PHOSPHATASE', 'GAMMA GLUTAMYL', 'GAMMA-GLUTAMYL', 'LACTATE DEHYDROGENASE', 'CALCIUM', 'PHOSPHATE', 'PHOSPHORUS', 'URATE', 'URIC ACID', 'C REACTIVE PROTEIN', 'C-REACTIVE PROTEIN', 'CREATINE KINASE', 'CK-MB', 'TROPONIN', 'IRON', 'TRANSFERRIN', 'FERRITIN', 'PROCALCITONIN', 'ERYTHROCYTE SEDIMENTATION RATE', 'LACTATE'],
     subgroups: [
-      { id: 'renal',       members: ['BUN', 'CREATININE', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'URIC ACID'] },
+      { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA'] },
       { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CO2', 'CA', 'IP'] },
       { id: 'liver',       members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB'] },
       { id: 'cardiac',     members: ['CK', 'CKMB', 'TROP'] },
       { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
       { id: 'iron',        members: ['IRON', 'TIBC'] },
     ],
+    pinnedColumns: ['BUN', 'CREA', 'NA', 'K', 'CL', 'AST', 'ALT', 'T.BILI'],
   },
   {
     id: 'endocrine',
@@ -152,6 +154,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     codes: ['CHOL', 'CHOL.', 'CHOLESTEROL', 'TG', 'TRIG', 'TRIGLYCERIDE', 'HDLC', 'HDL', 'HDL-C', 'HDLC.', 'LDLC', 'LDL', 'LDL-C', 'LDLC.', 'LDL(計算值)', 'RISKF', 'VLDL', 'VLDLC', 'VLDL-C', 'NON-HDLC', 'NON-HDL', 'NON-HDL-C', 'APO-A', 'APO-A1', 'APOA1', 'APO-B', 'APOB', 'LP(A)'],
     loincCodes: ['2093-3', '14647-2', '14646-4', '2571-8', '3043-7', '2085-9', '2086-7', '14646-4', '2089-1', '13457-7', '2090-9', '13457-7', '43396-1', '13458-5', '11054-4', '2089-1', '13457-7', '18261-8', '18262-6', '10835-7'],
     nameKeywords: ['CHOLESTEROL', 'TRIGLYCERIDE', 'HDL', 'LDL', 'VLDL', 'NON-HDL', 'LIPID', 'HIGH DENSITY LIPOPROTEIN', 'LOW DENSITY LIPOPROTEIN', 'APOLIPOPROTEIN', 'APO A', 'APO B', 'LIPOPROTEIN(A)'],
+    pinnedColumns: ['CHOL', 'TG', 'HDL', 'LDL'],
   },
   {
     id: 'glucose',
@@ -162,6 +165,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     codes: ['GLUCOSE', 'GLU', 'GLU-AC', 'GLU(AC)', 'GLUCOSE(AC)', 'GLUCOSE AC', 'SUGAR', 'FINGER SUGAR', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC', 'HBA1C', 'HBA1', 'A1C', 'HB-A1C', 'C-PEPTIDE'],
     loincCodes: ['2345-7', '2339-0', '14749-6', '15074-8', '41653-7', '4548-4', '17856-6', '4549-2', '1986-9'],
     nameKeywords: ['GLUCOSE', 'HEMOGLOBIN A1C', 'GLYCATED HEMOGLOBIN', 'GLYCATED HAEMOGLOBIN', 'GLYCOHEMOGLOBIN', 'HBA1C', 'C PEPTIDE', 'C-PEPTIDE'],
+    pinnedColumns: ['GLUCOSE-AC', 'GLUCOSE', 'HBA1C'],
   },
   {
     id: 'tumor',
@@ -185,6 +189,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'micro',     members: ['WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3'] },
       { id: 'ratio',     members: ['PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'] },
     ],
+    pinnedColumns: ['COLOR', 'PROT', 'GLUCOSE', 'KETONE', 'OCCULT'],
   },
 ]
 
