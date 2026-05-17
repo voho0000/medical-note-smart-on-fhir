@@ -20,6 +20,7 @@ function ObsRow({
   refText,
   onTrendClick,
   isLongText,
+  refRangeAbnormal,
 }: {
   name: string
   value: string
