@@ -54,7 +54,7 @@ const HARDCODED_REF_RANGES: Record<string, { low?: number; high?: number }> = {
   HBA1C:      {             high: 5.7 },   // %
 }
 
-function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string } {
+function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string; hasFhirRefRange: boolean } {
   let value = '—'
   let unit: string | undefined
   let numericValue: number | undefined
@@ -70,7 +70,11 @@ function formatValue(obs: any): { value: string; unit?: string; numericValue?: n
   const interp = obs.interpretation?.[0]?.coding?.[0]?.code || obs.interpretation?.coding?.[0]?.code
   let isAbnormal = !!interp && !['N', 'NORMAL'].includes(String(interp).toUpperCase())
 
-  // Layer A: use FHIR referenceRange when interpretation code is absent
+  // Layer A: use FHIR referenceRange when interpretation code is absent.
+  // Also tracks whether a usable numeric range was found — Layer B (hardcoded
+  // fallback) must NOT run when FHIR already provided bounds, so that
+  // institution-specific ranges (e.g. HbA1c [4.8-5.9] vs our 5.7) are respected.
+  let hasFhirRefRange = false
   if (!isAbnormal && numericValue !== undefined) {
     const rr = obs.referenceRange?.[0]
     if (rr) {
@@ -97,12 +101,15 @@ function formatValue(obs: any): { value: string; unit?: string; numericValue?: n
         }
       }
 
-      if (lo !== undefined && numericValue < lo) isAbnormal = true
-      if (hi !== undefined && numericValue > hi) isAbnormal = true
+      if (lo !== undefined || hi !== undefined) {
+        hasFhirRefRange = true
+        if (lo !== undefined && numericValue < lo) isAbnormal = true
+        if (hi !== undefined && numericValue > hi) isAbnormal = true
+      }
     }
   }
 
-  return { value, unit, numericValue, isAbnormal, interpretationCode: interp }
+  return { value, unit, numericValue, isAbnormal, interpretationCode: interp, hasFhirRefRange }
 }
 
 // NHI system URI used by the 健康存摺 bridge
@@ -233,8 +240,10 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
         const fv = formatValue(obs)
         let { value, unit, numericValue, isAbnormal, interpretationCode } = fv
 
-        // Layer B: hardcoded reference ranges when FHIR provides no referenceRange/interpretation
-        if (!isAbnormal && numericValue !== undefined) {
+        // Layer B: hardcoded reference ranges — only when FHIR provided no usable
+        // numeric range (hasFhirRefRange=false). Skipped when FHIR has bounds so
+        // institution-specific ranges are respected over our generic fallback.
+        if (!isAbnormal && !hasFhirRefRange && numericValue !== undefined) {
           const range = HARDCODED_REF_RANGES[testKey]
           if (range) {
             if (range.low !== undefined && numericValue < range.low) isAbnormal = true
