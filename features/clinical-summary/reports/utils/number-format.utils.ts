@@ -1,20 +1,31 @@
 /**
- * Format a number with smart decimal precision based on its magnitude
- * - Integers: no decimals
- * - >= 100: no decimals
- * - >= 1: 1 decimal
- * - >= 0.1: 2 decimals
- * - < 0.1: 3 decimals
+ * Format a number preserving the source's decimal precision,
+ * with a magnitude-based minimum floor (only pads up, never truncates).
+ *
+ * Minimum decimals by magnitude:
+ *   >= 100 → 0  |  >= 1 → 1  |  >= 0.1 → 2  |  < 0.1 → 3
+ *
+ * Examples:
+ *   1.490  → stored as 1.49 by JSON → "1.49"  (not "1.5")
+ *   1.5    → "1.5"
+ *   23     → "23"
+ *   0.05   → "0.05"
+ *   0.0012 → "0.0012"
  */
 export function formatNumberSmart(value: number): string {
   if (value === 0) return '0'
   if (value % 1 === 0) return value.toString()
-  
+
+  const str = value.toString()
+  const srcDecimals = str.includes('.') ? str.split('.')[1].length : 0
+
   const absValue = Math.abs(value)
-  if (absValue >= 100) return value.toFixed(0)
-  if (absValue >= 1) return value.toFixed(1)
-  if (absValue >= 0.1) return value.toFixed(2)
-  return value.toFixed(3)
+  const minDecimals = absValue >= 100 ? 0 : absValue >= 1 ? 1 : absValue >= 0.1 ? 2 : 3
+
+  // Source has equal or more precision than our floor → use it as-is (no rounding)
+  if (srcDecimals >= minDecimals) return str
+  // Source has fewer decimals than floor → pad up to minimum
+  return value.toFixed(minDecimals)
 }
 
 /**
