@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
-import { getInterpretationTag } from '../utils/interpretation-helpers'
+import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -28,8 +28,9 @@ function ObsRow({
   refText: string
   onTrendClick?: () => void
   isLongText?: boolean
+  refRangeAbnormal?: boolean
 }) {
-  const isAbnormal = !!interp && interp.label !== 'Normal'
+  const isAbnormal = (!!interp && interp.label !== 'Normal') || !!refRangeAbnormal
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
@@ -124,6 +125,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
           refText={ref}
           onTrendClick={!hasComponents ? () => setDialogOpen(true) : undefined}
           isLongText={isLongText}
+          refRangeAbnormal={checkReferenceRangeAbnormal(observation)}
         />
 
         {/* Component sub-rows */}
@@ -147,6 +149,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
                   originalValue={cOriginal}
                   interp={cInterp}
                   refText={cRef}
+                  refRangeAbnormal={checkReferenceRangeAbnormal(component)}
                 />
               )
             })}

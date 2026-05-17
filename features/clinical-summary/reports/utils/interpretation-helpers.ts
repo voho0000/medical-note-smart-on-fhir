@@ -1,6 +1,56 @@
 // Interpretation Helper Functions
 import type { CodeableConcept } from '../types'
 
+/**
+ * Check if a numeric observation is outside its FHIR referenceRange.
+ * Mirrors the Layer A / A.5 logic in useLabPivot so the regular report view
+ * highlights abnormal values even when the bridge omits interpretation codes.
+ *
+ * Supports:
+ *   - Structured referenceRange.low/high
+ *   - Plain text "lo-hi" / "lo~hi" (e.g. "4.8-5.9")
+ *   - VGH bracket text "[lo][hi]" / "[lo][]" / "[][hi]"
+ */
+export function checkReferenceRangeAbnormal(obs: any): boolean {
+  const numVal = obs?.valueQuantity?.value
+  if (numVal === undefined || numVal === null) return false
+  const rr = obs?.referenceRange?.[0]
+  if (!rr) return false
+
+  let lo: number | undefined = rr.low?.value
+  let hi: number | undefined = rr.high?.value
+
+  // Parse text fallback when structured low/high are absent
+  if (lo === undefined && hi === undefined && rr.text) {
+    const t = (rr.text as string).trim()
+    // VGH bracket: "[4.8][5.9]", "[lo][]", "[][hi]"
+    const bracketM = t.match(/^\[([^\]]*)\]\[([^\]]*)\]$/)
+    if (bracketM) {
+      const [, loStr, hiStr] = bracketM
+      if (loStr) { const n = parseFloat(loStr); if (!isNaN(n)) lo = n }
+      if (hiStr) { const n = parseFloat(hiStr); if (!isNaN(n)) hi = n }
+    } else {
+      // Plain range: "4.8-5.9" / "4.8~5.9"
+      const rangeM = t.match(/^([\d.]+)\s*[-~–]\s*([\d.]+)$/)
+      if (rangeM) {
+        lo = parseFloat(rangeM[1])
+        hi = parseFloat(rangeM[2])
+      } else {
+        // Upper-only: "< 5.9" / "<= 5.9"
+        const hiM = t.match(/^<[=]?\s*([\d.]+)$/)
+        if (hiM) hi = parseFloat(hiM[1])
+        // Lower-only: "> 4.8" / ">= 4.8"
+        const loM = t.match(/^>[=]?\s*([\d.]+)$/)
+        if (loM) lo = parseFloat(loM[1])
+      }
+    }
+  }
+
+  if (lo !== undefined && numVal < lo) return true
+  if (hi !== undefined && numVal > hi) return true
+  return false
+}
+
 export interface InterpretationTag {
   label: string
   style: string

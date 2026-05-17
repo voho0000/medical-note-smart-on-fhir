@@ -7,7 +7,7 @@ import { TrendingUp, Building2, AlertCircle } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Row, Observation } from '../types'
 import { getConceptText, getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
-import { getInterpretationTag } from '../utils/interpretation-helpers'
+import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -40,14 +40,14 @@ function countAbnormal(obs: Observation[]): number {
   let count = 0
   for (const o of obs) {
     const tag = getInterpretationTag(o.interpretation)
-    if (tag && tag.label !== 'Normal') {
+    if ((tag && tag.label !== 'Normal') || checkReferenceRangeAbnormal(o)) {
       count++
       continue
     }
     if (Array.isArray(o.component)) {
       for (const c of o.component) {
         const ctag = getInterpretationTag(c.interpretation)
-        if (ctag && ctag.label !== 'Normal') {
+        if ((ctag && ctag.label !== 'Normal') || checkReferenceRangeAbnormal(c)) {
           count++
           break
         }
@@ -118,7 +118,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
   if (isSingleValue) {
     const obs = displayObs[0]
     const interp = getInterpretationTag(obs.interpretation)
-    const isAbnormal = !!interp && interp.label !== 'Normal'
+    const isAbnormal = (!!interp && interp.label !== 'Normal') || checkReferenceRangeAbnormal(obs)
     const refText = getReferenceRangeText(obs.referenceRange)
     const isLongText = !obs.valueQuantity && (obs.valueString?.length ?? 0) > 80
 
