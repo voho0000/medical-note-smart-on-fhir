@@ -128,10 +128,15 @@ const KEEP_SEPARATE_BY_NHI = new Set<string>([])
 function canonicalTestKey(obs: any): string {
   const raw = getTestDisplayName(obs)
   if (!raw) return 'UNKNOWN'
+  // Check raw value first (handles pure CJK names like "鈣" whose Latin content
+  // normalizeTestName strips to "", leaving the alias unreachable otherwise).
+  if (TEST_ALIASES[raw]) return TEST_ALIASES[raw]
+  const rawUpper = raw.toUpperCase()
+  if (TEST_ALIASES[rawUpper]) return TEST_ALIASES[rawUpper]
   const { stripped, collapsed } = normalizeTestName(raw)
   if (TEST_ALIASES[stripped]) return TEST_ALIASES[stripped]
   if (TEST_ALIASES[collapsed]) return TEST_ALIASES[collapsed]
-  return stripped || collapsed || raw.toUpperCase()
+  return stripped || collapsed || rawUpper
 }
 
 // Returns { mapKey, testKey, displayName } for one observation.

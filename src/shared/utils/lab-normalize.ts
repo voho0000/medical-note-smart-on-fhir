@@ -37,7 +37,7 @@ export const TEST_ALIASES: Record<string, string> = {
   NA: 'NA', SODIUM: 'NA',
   K: 'K', POTASSIUM: 'K',
   CL: 'CL', CHLORIDE: 'CL',
-  CA: 'CA', CALCIUM: 'CA', CACAL: 'CA',
+  CA: 'CA', CALCIUM: 'CA', CACAL: 'CA', '鈣': 'CA',
   IP: 'IP', PHOSPHATE: 'IP', PHOSPHORUS: 'IP',
   // Glucose
   GLU: 'GLUCOSE', GLUCOSE: 'GLUCOSE',
