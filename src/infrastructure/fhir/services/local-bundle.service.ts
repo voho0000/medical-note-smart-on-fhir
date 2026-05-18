@@ -95,8 +95,42 @@ export const LocalBundleService = {
       }
     }
 
+    // Build Medication resource map for resolving medicationReference in
+    // MedicationStatement (used by IPS / other document-type bundles).
+    const medicationResources = byType('Medication')
+    const medicationMap = new Map(medicationResources.map((m: any) => [m.id, m]))
+
+    // Normalize MedicationStatements to a MedicationRequest-compatible shape so
+    // the rest of the pipeline (FhirMapper, display components) can handle them
+    // without needing to know which resource type they came from.
+    const medicationStatements = byType('MedicationStatement').map((ms: any) => {
+      // Resolve medicationReference → medicationCodeableConcept
+      let resolved = ms
+      if (!ms.medicationCodeableConcept && ms.medicationReference) {
+        const ref: string = ms.medicationReference.reference ?? ''
+        const refId = ref.startsWith('urn:uuid:')
+          ? ref.replace('urn:uuid:', '')
+          : ref.split('/').pop() ?? ''
+        const medResource = refId ? medicationMap.get(refId) : null
+        if (medResource?.code) {
+          resolved = { ...ms, medicationCodeableConcept: medResource.code }
+        }
+      }
+      // Normalize field names that differ between MedicationRequest and MedicationStatement
+      return {
+        ...resolved,
+        authoredOn: resolved.authoredOn
+          ?? resolved.effectivePeriod?.start
+          ?? resolved.effectiveDateTime,
+        dosageInstruction: resolved.dosageInstruction ?? resolved.dosage,
+      }
+    })
+
     // Pre-process resources: attach encounter refs where missing
-    const meds   = attachEncounterRefs(byType('MedicationRequest'), encounterDateMap)
+    const meds   = attachEncounterRefs(
+      [...byType('MedicationRequest'), ...medicationStatements],
+      encounterDateMap,
+    )
     const obs    = attachEncounterRefs(byType('Observation'), encounterDateMap)
     const reports = byType('DiagnosticReport')
     const procs  = attachEncounterRefs(byType('Procedure'), encounterDateMap)
