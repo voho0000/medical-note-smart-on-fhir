@@ -21,8 +21,8 @@ export function VitalsGrid({ vitals, isLoading, error }: VitalsGridProps) {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <VitalItem label={t.vitals.height} value={vitals.height} />
         <VitalItem label={t.vitals.weight} value={vitals.weight} />
         <VitalItem label={t.vitals.bmi} value={vitals.bmi} />
@@ -33,7 +33,7 @@ export function VitalsGrid({ vitals, isLoading, error }: VitalsGridProps) {
         <VitalItem label={t.vitals.spo2} value={vitals.spo2} />
       </div>
       {vitals.time && (
-        <div className="text-xs text-muted-foreground">Last updated: {vitals.time}</div>
+        <div className="text-[11px] text-muted-foreground">Last updated: {vitals.time}</div>
       )}
     </div>
   )

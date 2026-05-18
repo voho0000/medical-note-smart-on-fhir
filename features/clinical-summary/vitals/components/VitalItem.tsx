@@ -1,4 +1,6 @@
-// Vital Item Component
+// Vital Item Component — compact inline label:value to keep the vitals
+// card short so the cards below it (problem list, etc.) are visible without
+// scrolling.
 interface VitalItemProps {
   label: string
   value: string
@@ -6,9 +8,9 @@ interface VitalItemProps {
 
 export function VitalItem({ label, value }: VitalItemProps) {
   return (
-    <div className="rounded-md border p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-base font-medium">{value}</div>
+    <div className="flex items-baseline justify-between gap-2 rounded-md border px-2 py-1">
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+      <span className="text-sm font-medium tabular-nums truncate">{value}</span>
     </div>
   )
 }
