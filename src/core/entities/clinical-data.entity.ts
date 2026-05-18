@@ -10,9 +10,18 @@ export interface ConditionEntity {
       system?: string
     }>
   }
+  category?: Array<{
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }>
   clinicalStatus?: string
   verificationStatus?: string
   recordedDate?: string
+  onsetDateTime?: string
   encounter?: {
     reference?: string
   }

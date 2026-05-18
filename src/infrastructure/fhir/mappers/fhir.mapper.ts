@@ -73,9 +73,11 @@ export class FhirMapper implements IDataMapper {
     return {
       id: fhirResource.id || '',
       code: fhirResource.code,
+      category: fhirResource.category,
       clinicalStatus: fhirResource.clinicalStatus?.coding?.[0]?.code,
       verificationStatus: fhirResource.verificationStatus?.coding?.[0]?.code,
       recordedDate: fhirResource.recordedDate || fhirResource.dateRecorded,
+      onsetDateTime: fhirResource.onsetDateTime,
       encounter: fhirResource.encounter,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
