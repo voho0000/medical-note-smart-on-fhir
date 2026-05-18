@@ -77,6 +77,11 @@ export const en = {
     noData: 'No conditions recorded.',
   },
 
+  problemList: {
+    title: 'Problem List',
+    noData: 'No problem list items.',
+  },
+
   medications: {
     title: "Patient's Medications",
     active: 'Active',

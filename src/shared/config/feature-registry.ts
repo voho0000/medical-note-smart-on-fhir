@@ -6,6 +6,7 @@ import { VitalsCard } from '@/features/clinical-summary/vitals/VitalsCard'
 import { MedListCard } from '@/features/clinical-summary/medications/MedListCard'
 import { AllergiesCard } from '@/features/clinical-summary/allergies/AllergiesCard'
 import { DiagnosesCard } from '@/features/clinical-summary/diagnosis/DiagnosisCard'
+import { ProblemListCard } from '@/features/clinical-summary/problem-list/ProblemListCard'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { VisitHistoryCard } from '@/features/clinical-summary/visit-history'
 
@@ -69,6 +70,14 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
     tab: 'patient',
     order: 2,
     enabled: false,
+  },
+  {
+    id: 'problem-list',
+    name: 'Problem List',
+    component: ProblemListCard,
+    tab: 'patient',
+    order: 99,  // last card in patient tab
+    enabled: true,
   },
   // Reports Tab Features
   {

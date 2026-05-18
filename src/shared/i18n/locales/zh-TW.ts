@@ -79,6 +79,11 @@ export const zhTW = {
     noData: '無診斷紀錄。',
   },
 
+  problemList: {
+    title: '問題清單',
+    noData: '無問題清單資料。',
+  },
+
   medications: {
     title: '病患用藥',
     active: '使用中',
