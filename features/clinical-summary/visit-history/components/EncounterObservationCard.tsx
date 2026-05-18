@@ -9,6 +9,7 @@ type EncounterObservationComponent = {
   interpretationLabel?: string
   interpretationStyle?: string
   referenceText?: string
+  refRangeAbnormal?: boolean
 }
 
 export type EncounterObservation = {
@@ -22,6 +23,7 @@ export type EncounterObservation = {
   status?: string
   source: "diagnosticReport" | "observation"
   components: EncounterObservationComponent[]
+  refRangeAbnormal?: boolean
 }
 
 function isAbnormalStyle(style?: string) {
@@ -34,14 +36,16 @@ function ObsRow({
   interpretationLabel,
   interpretationStyle,
   referenceText,
+  refRangeAbnormal,
 }: {
   title: string
   value: string
   interpretationLabel?: string
   interpretationStyle?: string
   referenceText?: string
+  refRangeAbnormal?: boolean
 }) {
-  const abnormal = isAbnormalStyle(interpretationStyle)
+  const abnormal = isAbnormalStyle(interpretationStyle) || !!refRangeAbnormal
   const isLong = !interpretationLabel && value.length > 60
 
   return (
@@ -82,6 +86,7 @@ export function EncounterObservationCard({ observation }: { observation: Encount
         interpretationLabel={observation.interpretationLabel}
         interpretationStyle={observation.interpretationStyle}
         referenceText={observation.referenceText}
+        refRangeAbnormal={observation.refRangeAbnormal}
       />
       {observation.components.length > 0 && (
         <div className="ml-4 border-l pl-3 space-y-0">
@@ -93,6 +98,7 @@ export function EncounterObservationCard({ observation }: { observation: Encount
               interpretationLabel={c.interpretationLabel}
               interpretationStyle={c.interpretationStyle}
               referenceText={c.referenceText}
+              refRangeAbnormal={c.refRangeAbnormal}
             />
           ))}
         </div>

@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationName, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
+import { checkReferenceRangeAbnormal } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
 import type { EncounterMedication, EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
@@ -37,6 +38,7 @@ const toEncounterObservation = (observation: any, source: "diagnosticReport" | "
           interpretationLabel: componentInterpretation?.label,
           interpretationStyle: componentInterpretation?.style,
           referenceText: refRangeText(component?.referenceRange),
+          refRangeAbnormal: checkReferenceRangeAbnormal(component),
         }
       })
     : []
@@ -50,6 +52,7 @@ const toEncounterObservation = (observation: any, source: "diagnosticReport" | "
     interpretationLabel: interpretation?.label,
     interpretationStyle: interpretation?.style,
     referenceText,
+    refRangeAbnormal: checkReferenceRangeAbnormal(observation),
     effectiveDateTime: observation?.effectiveDateTime,
     status: observation?.status,
     source,
