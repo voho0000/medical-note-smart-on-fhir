@@ -13,12 +13,15 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
 
+export type PanelAudience = 'medical' | 'patient'
+
 export interface ClinicalInsightPanel {
   id: string
   title: string
   prompt: string
   autoGenerate: boolean
   order: number
+  audience: PanelAudience
   createdAt?: Date
   updatedAt?: Date
 }
@@ -29,6 +32,7 @@ interface FirestoreClinicalInsightPanel {
   prompt: string
   autoGenerate: boolean
   order: number
+  audience?: PanelAudience
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -52,6 +56,7 @@ export async function getUserClinicalInsightPanels(userId: string): Promise<Clin
         prompt: data.prompt,
         autoGenerate: data.autoGenerate || false,
         order: data.order || 0,
+        audience: data.audience ?? 'medical',
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }
@@ -81,6 +86,7 @@ export async function saveClinicalInsightPanel(
       prompt: panel.prompt,
       autoGenerate: panel.autoGenerate,
       order: panel.order,
+      audience: panel.audience ?? 'medical',
       createdAt: panel.createdAt ? Timestamp.fromDate(panel.createdAt) : now,
       updatedAt: now,
     })
@@ -132,6 +138,7 @@ export function subscribeToClinicalInsightPanels(
         prompt: data.prompt,
         autoGenerate: data.autoGenerate || false,
         order: data.order || 0,
+        audience: data.audience ?? 'medical',
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }

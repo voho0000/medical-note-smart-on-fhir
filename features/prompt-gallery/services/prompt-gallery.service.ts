@@ -28,6 +28,10 @@ const COLLECTION_NAME = 'sharedPrompts'
  * Convert Firestore document to SharedPrompt
  */
 function convertToSharedPrompt(id: string, data: any): SharedPrompt {
+  // Treat missing/empty audience as 'medical' for backward compatibility with prompts shared before audience field existed.
+  const audience = Array.isArray(data.audience) && data.audience.length > 0
+    ? data.audience
+    : ['medical']
   return {
     id,
     title: data.title,
@@ -36,6 +40,7 @@ function convertToSharedPrompt(id: string, data: any): SharedPrompt {
     types: data.types || [],
     category: data.category,
     specialty: data.specialty || [],
+    audience,
     tags: data.tags || [],
     createdAt: data.createdAt?.toDate() || new Date(),
     updatedAt: data.updatedAt?.toDate() || new Date(),
@@ -111,6 +116,11 @@ export async function getSharedPrompts(
       prompts = prompts.filter((p) => p.specialty.includes(filter.specialty!))
     }
 
+    // Filter by audience on client-side (Firestore allows only one array-contains per query)
+    if (filter?.audience) {
+      prompts = prompts.filter((p) => p.audience.includes(filter.audience!))
+    }
+
     return prompts
   } catch (error) {
     console.error('Error fetching shared prompts:', error)
@@ -156,6 +166,7 @@ export async function createSharedPrompt(
       types: prompt.types,
       category: prompt.category,
       specialty: prompt.specialty,
+      audience: prompt.audience && prompt.audience.length > 0 ? prompt.audience : ['medical'],
       tags: prompt.tags,
       createdAt: now,
       updatedAt: now,
@@ -297,6 +308,11 @@ export async function getMySharedPrompts(
     // Filter by specialty on client-side if types filter is also present
     if (filter?.specialty && filter?.type) {
       prompts = prompts.filter((p) => p.specialty.includes(filter.specialty!))
+    }
+
+    // Filter by audience on client-side
+    if (filter?.audience) {
+      prompts = prompts.filter((p) => p.audience.includes(filter.audience!))
     }
 
     return prompts

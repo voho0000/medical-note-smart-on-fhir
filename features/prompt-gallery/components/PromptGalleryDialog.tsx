@@ -32,6 +32,7 @@ import { SharePromptDialog } from './SharePromptDialog'
 import { usePromptGallery } from '../hooks/usePromptGallery'
 import type { SharedPrompt, PromptType } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 
 interface PromptGalleryDialogProps {
@@ -48,6 +49,7 @@ export function PromptGalleryDialog({
   onSelectPrompt,
 }: PromptGalleryDialogProps) {
   const { t } = useLanguage()
+  const { audience } = useAudience()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'all' | 'my'>('all')
   const [previewPrompt, setPreviewPrompt] = useState<SharedPrompt | null>(null)
@@ -58,12 +60,13 @@ export function PromptGalleryDialog({
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest')
   const itemsPerPage = 8
 
-  // Initialize filter based on mode
+  // Initialize filter based on mode + current audience
   const initialFilter = useMemo(() => {
-    if (mode === 'chat') return { type: 'chat' as PromptType }
-    if (mode === 'insight') return { type: 'insight' as PromptType }
-    return {}
-  }, [mode])
+    const base: { type?: PromptType; audience: typeof audience } = { audience }
+    if (mode === 'chat') return { ...base, type: 'chat' as PromptType }
+    if (mode === 'insight') return { ...base, type: 'insight' as PromptType }
+    return base
+  }, [mode, audience])
 
   // Hook for "All Templates"
   const allPromptsHook = usePromptGallery({ initialFilter })
@@ -92,6 +95,20 @@ export function PromptGalleryDialog({
       fetchPrompts()
     }
   }, [open, activeTab])
+
+  // Sync filter.audience when the global audience switches.
+  // For patient audience, also clear category/specialty filters (they don't apply to citizen-facing prompts).
+  useEffect(() => {
+    const patch: Partial<typeof filter> = {}
+    if (filter.audience !== audience) patch.audience = audience
+    if (audience === 'patient') {
+      if (filter.category) patch.category = undefined
+      if (filter.specialty) patch.specialty = undefined
+    }
+    if (Object.keys(patch).length > 0) {
+      updateFilter(patch)
+    }
+  }, [audience, filter.audience, filter.category, filter.specialty, updateFilter])
 
   // Reset to "All" tab and page 1 when switching tabs
   const handleTabChange = (value: string) => {

@@ -224,7 +224,10 @@ export const zhTW = {
     chatError: '對話錯誤：',
     showHeader: '顯示標題',
     hideHeader: '隱藏標題',
-    systemPrompt: '您是一位協助臨床醫師撰寫病歷的醫療助理。\n請簡潔、基於證據，並在適當時指出不確定性。\n當對話中提供臨床資料時，請直接引用。',
+    systemPrompt: {
+      medical: '您是一位協助臨床醫師撰寫病歷的醫療助理。\n請簡潔、基於證據，並在適當時指出不確定性。\n當對話中提供臨床資料時，請直接引用。',
+      patient: '您是一位協助民眾理解個人健康資料（例如健康存摺 / FHIR 匯入資料）的健康助理。\n請使用淺顯易懂的白話文，必要時用括號補上醫療術語的解釋。\n不要做出診斷、不要建議用藥、也不要取代專業醫療意見——務必提醒使用者：所有臨床決定都應諮詢醫師或藥師。\n當對話中提供臨床資料時，請直接引用並向使用者解釋每一項數據的意義。\n若使用者描述疑似緊急症狀，請建議他盡快就醫。',
+    },
     expandedMode: '對話已展開。按 ESC 或點擊最小化返回。',
     loading: '載入中...',
     loadingClinicalData: '載入臨床資料中...',
@@ -828,5 +831,20 @@ export const zhTW = {
     stepsHint: '選填，幫助我們重現問題',
     successMessage: '問題回報已成功送出！感謝您的回饋。',
     errorMessage: '發送失敗，請稍後再試。',
+  },
+
+  audience: {
+    medical: '醫療人員',
+    patient: '民眾',
+    switcherLabel: '使用身份',
+    onboarding: {
+      title: '請問您的身份是？',
+      description: '選擇您的身份，我們會調整預設 prompt 與語氣。之後可以隨時從頁首切換。',
+      medicalCardTitle: '我是醫療人員',
+      medicalCardDescription: '提供精簡、實證導向的提示，協助病歷撰寫、摘要與臨床流程。',
+      patientCardTitle: '我是民眾',
+      patientCardDescription: '使用白話文提示，協助您理解自己的健康資料（例如健康存摺）。',
+    },
+    settingsNotice: '目前顯示「{audience}」的 chat templates。可以從頁首切換身份以查看另一組。',
   },
 } satisfies Translation

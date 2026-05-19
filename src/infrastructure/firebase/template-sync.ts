@@ -13,11 +13,14 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
 
+export type TemplateAudience = 'medical' | 'patient'
+
 export interface ChatTemplate {
   id: string
   label: string
   content: string
   order: number
+  audience: TemplateAudience
   createdAt?: Date
   updatedAt?: Date
 }
@@ -27,6 +30,7 @@ interface FirestoreChatTemplate {
   label: string
   content: string
   order: number
+  audience?: TemplateAudience
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -49,6 +53,7 @@ export async function getUserChatTemplates(userId: string): Promise<ChatTemplate
         label: data.label,
         content: data.content,
         order: data.order || 0,
+        audience: data.audience ?? 'medical',
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }
@@ -77,6 +82,7 @@ export async function saveChatTemplate(
       label: template.label,
       content: template.content,
       order: template.order,
+      audience: template.audience ?? 'medical',
       createdAt: template.createdAt ? Timestamp.fromDate(template.createdAt) : now,
       updatedAt: now,
     })
@@ -128,6 +134,7 @@ export function subscribeToChatTemplates(
         label: data.label,
         content: data.content,
         order: data.order || 0,
+        audience: data.audience ?? 'medical',
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }

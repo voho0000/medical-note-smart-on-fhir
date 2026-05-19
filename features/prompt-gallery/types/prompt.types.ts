@@ -5,6 +5,8 @@
 
 export type PromptType = 'chat' | 'insight'
 
+export type PromptAudience = 'medical' | 'patient'
+
 export type PromptCategory = 
   | 'soap'           // SOAP notes
   | 'admission'      // Admission notes
@@ -50,6 +52,7 @@ export interface SharedPrompt {
   types: PromptType[]  // Changed from single type to array
   category: PromptCategory
   specialty: PromptSpecialty[]
+  audience: PromptAudience[]  // Audiences this prompt is suitable for. Empty array treated as ['medical'] for backward compatibility.
   tags: string[]
   
   // Metadata
@@ -67,6 +70,7 @@ export interface PromptGalleryFilter {
   type?: PromptType
   category?: PromptCategory
   specialty?: PromptSpecialty
+  audience?: PromptAudience
   searchQuery?: string
   tags?: string[]
 }

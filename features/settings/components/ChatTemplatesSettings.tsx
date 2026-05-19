@@ -1,7 +1,7 @@
 // Chat Templates Settings
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -16,8 +16,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info, Library, Lock } from "lucide-react"
+import { Info, Library, Lock, Stethoscope, User } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
@@ -28,14 +29,28 @@ import { useTemplateSelector } from "@/features/medical-chat/hooks/useTemplateSe
 
 export function ChatTemplatesSettings() {
   const { t } = useLanguage()
+  const { audience } = useAudience()
   const { user } = useAuth()
   const { templates, addTemplate, updateTemplate, removeTemplate, resetTemplates, saveTemplates, maxTemplates, isSaving, moveTemplate } = useChatTemplates()
   const { selectedTemplateId, setAsDefault } = useTemplateSelector()
+
+  const audienceLabel = audience === 'medical' ? t.audience.medical : t.audience.patient
+  const AudienceIcon = audience === 'medical' ? Stethoscope : User
 
   const canAddTemplate = templates.length < maxTemplates
   const canRemoveTemplate = templates.length > 1
 
   const [activeTab, setActiveTab] = useState(templates[0]?.id || "")
+
+  useEffect(() => {
+    if (templates.length === 0) {
+      setActiveTab("")
+      return
+    }
+    if (!templates.some((tpl) => tpl.id === activeTab)) {
+      setActiveTab(templates[0].id)
+    }
+  }, [templates, activeTab])
   const [showPromptGallery, setShowPromptGallery] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
@@ -124,6 +139,10 @@ export function ChatTemplatesSettings() {
       <p className="text-xs text-muted-foreground">
         {t.settings.chatTemplatesDesc}
       </p>
+      <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+        <AudienceIcon className="h-3.5 w-3.5 text-primary" />
+        <span>{t.audience.settingsNotice.replace('{audience}', audienceLabel)}</span>
+      </div>
 
       {templates.length > 0 ? (
         <div className="space-y-4">

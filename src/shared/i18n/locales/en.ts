@@ -222,7 +222,10 @@ export const en = {
     chatError: 'Chat error:',
     showHeader: 'Header',
     hideHeader: 'Hide',
-    systemPrompt: 'You are a helpful medical assistant helping clinicians compose medical notes.\nBe concise, evidence-based, and note uncertainties when appropriate.\nWhen clinical context is provided in the conversation, reference it directly.',
+    systemPrompt: {
+      medical: 'You are a helpful medical assistant helping clinicians compose medical notes.\nBe concise, evidence-based, and note uncertainties when appropriate.\nWhen clinical context is provided in the conversation, reference it directly.',
+      patient: 'You are a friendly health assistant helping a member of the public understand their personal health records (such as the Taiwan Health Passport / FHIR data they imported).\nUse plain, everyday language and explain medical terms in parentheses when you must use them.\nDo NOT make a diagnosis, do NOT prescribe medication, and do NOT replace professional medical advice — always remind the user to consult their doctor or pharmacist for clinical decisions.\nWhen clinical context is provided in the conversation, reference it directly and explain what each item means for the user.\nIf the user shows signs of urgent symptoms, advise them to seek medical care promptly.',
+    },
     expandedMode: 'Chat is expanded. Press ESC or click minimize to return.',
     loading: 'Loading...',
     loadingClinicalData: 'Loading clinical data...',
@@ -826,6 +829,21 @@ export const en = {
     stepsHint: 'Optional, helps us reproduce the issue',
     successMessage: 'Issue report submitted successfully! Thank you for your feedback.',
     errorMessage: 'Submission failed, please try again later.',
+  },
+
+  audience: {
+    medical: 'Medical professional',
+    patient: 'Patient / Citizen',
+    switcherLabel: 'Audience',
+    onboarding: {
+      title: 'Who are you?',
+      description: 'Choose your role so we can tailor the default prompts and language to you. You can switch any time from the header.',
+      medicalCardTitle: 'I am a medical professional',
+      medicalCardDescription: 'Concise, evidence-based prompts for charting, summarization, and clinical workflow.',
+      patientCardTitle: 'I am a patient / citizen',
+      patientCardDescription: 'Plain-language prompts to help you understand your own health records (e.g. Health Passport).',
+    },
+    settingsNotice: 'Showing chat templates for "{audience}". Switch audience from the header to see the other set.',
   },
 }
 

@@ -45,6 +45,7 @@ import { Loader2, X, AlertCircle, CheckCircle2, Info } from 'lucide-react'
 import type { PromptType, PromptCategory, PromptSpecialty } from '../types/prompt.types'
 import { createSharedPrompt } from '../services/prompt-gallery.service'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 
 interface SharePromptDialogProps {
@@ -65,6 +66,7 @@ export function SharePromptDialog({
   onSuccess,
 }: SharePromptDialogProps) {
   const { t } = useLanguage()
+  const { audience } = useAudience()
   const { user } = useAuth()
   
   const [title, setTitle] = useState('')
@@ -95,9 +97,9 @@ export function SharePromptDialog({
   const types: PromptType[] = ['chat', 'insight']
   
   const specialties: PromptSpecialty[] = [
-    'general', 'internal', 'surgery', 'emergency', 
+    'general', 'internal', 'surgery', 'emergency',
     'pediatrics', 'obstetrics', 'psychiatry', 'neurology',
-    'rehabilitation', 'anesthesiology', 'ophthalmology', 
+    'rehabilitation', 'anesthesiology', 'ophthalmology',
     'dermatology', 'urology', 'orthopedics', 'ent',
     'radiology', 'radiation_oncology', 'pathology',
     'nuclear_medicine', 'plastic_surgery', 'family_medicine', 'other'
@@ -147,7 +149,8 @@ export function SharePromptDialog({
       return
     }
 
-    if (selectedSpecialties.length === 0) {
+    // Specialty is a medical concept and is hidden in patient mode; only enforce when sharing as a medical-audience prompt.
+    if (audience === 'medical' && selectedSpecialties.length === 0) {
       setError(t.promptGallery.shareError + ': ' + t.promptGallery.errorSpecialtyRequired)
       return
     }
@@ -173,6 +176,7 @@ export function SharePromptDialog({
         types: selectedTypes,
         category,
         specialty: selectedSpecialties,
+        audience: [audience],
         tags,
         authorId: user?.uid,
         authorName: user?.displayName || user?.email || undefined,
@@ -277,24 +281,27 @@ export function SharePromptDialog({
             </div>
           </div>
 
-          {/* Category */}
-          <div className="space-y-2">
-            <Label>{t.promptGallery.categoryLabel} *</Label>
-            <Select value={category} onValueChange={(value) => setCategory(value as PromptCategory)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {getCategoryLabel(cat)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Category — medical-only concept; hidden for citizen-facing prompts */}
+          {audience === 'medical' && (
+            <div className="space-y-2">
+              <Label>{t.promptGallery.categoryLabel} *</Label>
+              <Select value={category} onValueChange={(value) => setCategory(value as PromptCategory)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {getCategoryLabel(cat)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-          {/* Specialties */}
+          {/* Specialties — medical-only concept; hidden for citizen-facing prompts */}
+          {audience === 'medical' && (
           <div className="space-y-2">
             <Label>{t.promptGallery.specialtyLabel} *</Label>
             <DropdownMenu>
@@ -342,6 +349,7 @@ export function SharePromptDialog({
               </div>
             )}
           </div>
+          )}
 
           {/* Anonymous Toggle */}
           <div className="flex items-center justify-between space-x-2 rounded-lg border p-3">

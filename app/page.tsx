@@ -4,6 +4,8 @@
 import { AppProviders } from "@/src/application/providers/app-providers"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
+import { AudienceSwitcher } from "@/src/shared/components/AudienceSwitcher"
+import { AudienceOnboardingDialog } from "@/src/shared/components/AudienceOnboardingDialog"
 import { ThemeToggle } from "@/src/shared/components/ThemeToggle"
 import { ConnectionInfo } from "@/src/shared/components/ConnectionInfo"
 import { FeedbackButton } from "@/features/feedback"
@@ -43,6 +45,7 @@ function PageContent() {
             <FeedbackButton />
             <ConnectionInfo />
             <ThemeToggle />
+            <AudienceSwitcher />
             <LanguageSwitcher />
             <HeaderAuthButton />
           </div>
@@ -108,6 +111,8 @@ function PageContent() {
           <RightPanelFeature />
         </section>
       </main>
+
+      <AudienceOnboardingDialog />
     </div>
   )
 }

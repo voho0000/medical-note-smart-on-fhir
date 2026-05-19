@@ -1,7 +1,7 @@
 // Refactored Clinical Insights Settings
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -16,8 +16,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info, Library, Share2, Lock } from "lucide-react"
+import { Info, Library, Share2, Lock, Stethoscope, User } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { InsightTabEditor } from './InsightTabEditor'
@@ -27,24 +28,38 @@ import type { SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
 
 export function ClinicalInsightsSettings() {
   const { t } = useLanguage()
+  const { audience } = useAudience()
   const { user } = useAuth()
-  const { 
-    panels, 
+  const {
+    panels,
     updatePanel,
-    updatePanelAndSave, 
-    addPanel, 
-    removePanel, 
-    resetPanels, 
+    updatePanelAndSave,
+    addPanel,
+    removePanel,
+    resetPanels,
     savePanels,
-    maxPanels, 
+    maxPanels,
     reorderPanels,
     isSaving
   } = useClinicalInsightsConfig()
 
+  const audienceLabel = audience === 'medical' ? t.audience.medical : t.audience.patient
+  const AudienceIcon = audience === 'medical' ? Stethoscope : User
+
   const canAddPanel = panels.length < maxPanels
   const canRemovePanel = panels.length > 1
-  
+
   const [activeTab, setActiveTab] = useState(panels[0]?.id || "")
+
+  useEffect(() => {
+    if (panels.length === 0) {
+      setActiveTab("")
+      return
+    }
+    if (!panels.some((p) => p.id === activeTab)) {
+      setActiveTab(panels[0].id)
+    }
+  }, [panels, activeTab])
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [showGalleryDialog, setShowGalleryDialog] = useState(false)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
@@ -137,6 +152,10 @@ export function ClinicalInsightsSettings() {
       <p className="text-xs text-muted-foreground">
         {t.settings.clinicalInsightsSettingsDesc}
       </p>
+      <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+        <AudienceIcon className="h-3.5 w-3.5 text-primary" />
+        <span>{t.audience.settingsNotice.replace('{audience}', audienceLabel)}</span>
+      </div>
 
       <div className="space-y-5">
 

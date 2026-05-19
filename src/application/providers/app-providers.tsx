@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { ThemeProvider } from './theme.provider'
 import { LanguageProvider } from './language.provider'
+import { AudienceProvider } from './audience.provider'
 import { QueryProvider } from './query-provider'
 import { AuthProvider } from './auth.provider'
 
@@ -41,9 +42,11 @@ export function AppProviders({ children }: AppProvidersProps) {
     <QueryProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
+          <AudienceProvider>
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </AudienceProvider>
         </LanguageProvider>
       </ThemeProvider>
     </QueryProvider>

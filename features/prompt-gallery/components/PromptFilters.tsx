@@ -16,6 +16,7 @@ import {
 import { Search, X } from 'lucide-react'
 import type { PromptType, PromptCategory, PromptSpecialty } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAudience } from '@/src/application/providers/audience.provider'
 
 interface PromptFiltersProps {
   searchQuery: string
@@ -39,6 +40,9 @@ export function PromptFilters({
   onSpecialtyChange,
 }: PromptFiltersProps) {
   const { t } = useLanguage()
+  const { audience } = useAudience()
+  // Medical categories and specialties don't apply to patient-facing prompts.
+  const showMedicalFilters = audience === 'medical'
 
   const types: (PromptType | 'all')[] = ['all', 'chat', 'insight']
   const categories: (PromptCategory | 'all')[] = [
@@ -118,41 +122,46 @@ export function PromptFilters({
           </SelectContent>
         </Select>
 
-        <Select
-          value={selectedCategory || 'all'}
-          onValueChange={(value) =>
-            onCategoryChange(value === 'all' ? undefined : (value as PromptCategory))
-          }
-        >
-          <SelectTrigger className="h-9 w-[140px]">
-            <SelectValue placeholder={t.promptGallery.filterByCategory} />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((category) => (
-              <SelectItem key={category} value={category}>
-                {getCategoryLabel(category)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {showMedicalFilters && (
+          <>
+            <Select
+              value={selectedCategory || 'all'}
+              onValueChange={(value) =>
+                onCategoryChange(value === 'all' ? undefined : (value as PromptCategory))
+              }
+            >
+              <SelectTrigger className="h-9 w-[140px]">
+                <SelectValue placeholder={t.promptGallery.filterByCategory} />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {getCategoryLabel(category)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select
-          value={selectedSpecialty || 'all'}
-          onValueChange={(value) =>
-            onSpecialtyChange(value === 'all' ? undefined : (value as PromptSpecialty))
-          }
-        >
-          <SelectTrigger className="h-9 w-[140px]">
-            <SelectValue placeholder={t.promptGallery.filterBySpecialty} />
-          </SelectTrigger>
-          <SelectContent>
-            {specialties.map((specialty) => (
-              <SelectItem key={specialty} value={specialty}>
-                {getSpecialtyLabel(specialty)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select
+              value={selectedSpecialty || 'all'}
+              onValueChange={(value) =>
+                onSpecialtyChange(value === 'all' ? undefined : (value as PromptSpecialty))
+              }
+            >
+              <SelectTrigger className="h-9 w-[140px]">
+                <SelectValue placeholder={t.promptGallery.filterBySpecialty} />
+              </SelectTrigger>
+              <SelectContent>
+                {specialties.map((specialty) => (
+                  <SelectItem key={specialty} value={specialty}>
+                    {getSpecialtyLabel(specialty)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
       </div>
     </div>
   )
