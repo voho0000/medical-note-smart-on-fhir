@@ -8,9 +8,9 @@ interface VitalItemProps {
 
 export function VitalItem({ label, value }: VitalItemProps) {
   return (
-    <div className="flex items-baseline justify-between gap-2 rounded-md border px-2 py-1">
-      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className="text-sm font-medium tabular-nums truncate">{value}</span>
+    <div className="rounded-md border px-2 py-0.5 leading-tight">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="text-[13px] font-semibold tabular-nums whitespace-nowrap">{value}</div>
     </div>
   )
 }
