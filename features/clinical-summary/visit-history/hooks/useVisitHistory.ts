@@ -8,6 +8,7 @@ export interface VisitRecord {
   type: VisitType
   date: string
   location?: string
+  institution?: string  // hospital / facility name used for filtering
   reason?: string
   diagnosis?: string
   status: string
@@ -61,11 +62,17 @@ export function useVisitHistory(encounters: any[]) {
           type = 'virtual'
         }
         
-        let location = encounter.location?.[0]?.location?.display || 
-                     (encounter.serviceProvider?.display && 
-                      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(encounter.serviceProvider.display)
-                      ? encounter.serviceProvider.display 
-                      : '')
+        const isUuid = (s: string) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
+        const providerDisplay = encounter.serviceProvider?.display
+        const locationDisplay = encounter.location?.[0]?.location?.display
+        // Institution: prefer the service provider (hospital). Falls back to
+        // location if the provider is missing or a raw UUID.
+        const institution = (providerDisplay && !isUuid(providerDisplay))
+          ? providerDisplay
+          : (locationDisplay && !isUuid(locationDisplay) ? locationDisplay : '')
+        let location = locationDisplay ||
+                     (providerDisplay && !isUuid(providerDisplay) ? providerDisplay : '')
         
         const reason = encounter.reasonCode?.[0]?.text || 
                       encounter.reasonReference?.[0]?.display ||
@@ -90,6 +97,7 @@ export function useVisitHistory(encounters: any[]) {
           type,
           date: encounter.period?.start || '',
           location,
+          institution: institution || undefined,
           reason,
           diagnosis,
           status: encounter.status,

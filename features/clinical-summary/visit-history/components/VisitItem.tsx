@@ -15,6 +15,7 @@ type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' |
 interface VisitItemProps {
   visit: VisitRecord
   details?: EncounterDetails
+  abnormalCount?: number
   icdDict?: Map<string, string>
   isExpanded: boolean
   onToggle: () => void
@@ -33,7 +34,7 @@ const getTypeBadge = (type: VisitType, labels: any) => {
   return <Badge variant={variant}>{label}</Badge>
 }
 
-export function VisitItem({ visit, details, icdDict, isExpanded, onToggle }: VisitItemProps) {
+export function VisitItem({ visit, details, abnormalCount = 0, icdDict, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
   const reasonCodes = resolveIcdCodes(visit.reason, icdDict)
   const hasIcdCodes = reasonCodes.length > 0 && /^[A-Z]\d/.test(reasonCodes[0].code)
@@ -123,6 +124,11 @@ export function VisitItem({ visit, details, icdDict, isExpanded, onToggle }: Vis
             {details.tests.length > 0 && (
               <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
                 {t.visitHistory.tests} {details.tests.length}
+              </span>
+            )}
+            {abnormalCount > 0 && (
+              <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
               </span>
             )}
             {details.medications.length > 0 && (

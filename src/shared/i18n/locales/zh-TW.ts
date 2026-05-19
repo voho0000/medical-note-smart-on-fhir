@@ -336,6 +336,22 @@ export const zhTW = {
     performer: '執行醫師',
     outcome: '結果：',
     reports: '報告：',
+    // Filter / sort UI
+    searchPlaceholder: '搜尋機構、科別、診斷、檢驗、藥物、日期...',
+    institutionAll: '所有機構',
+    institutionLabel: '機構',
+    hasTests: '含檢驗',
+    hasMedications: '含處方',
+    hasProcedures: '含處置',
+    abnormal: '異常',
+    sortLabel: '排序',
+    sortDateDesc: '日期（新→舊）',
+    sortDateAsc: '日期（舊→新）',
+    sortAbnormal: '異常數',
+    noMatch: '無符合此條件的就診紀錄',
+    clearFilters: '清除所有篩選',
+    resultCount: '符合',
+    totalCount: '共',
   },
 
   settings: {

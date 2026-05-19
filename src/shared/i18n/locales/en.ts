@@ -334,6 +334,22 @@ export const en = {
     performer: 'Performed by',
     outcome: 'Outcome:',
     reports: 'Reports:',
+    // Filter / sort UI
+    searchPlaceholder: 'Search institution, diagnosis, lab, medication, date...',
+    institutionAll: 'All institutions',
+    institutionLabel: 'Institution',
+    hasTests: 'With tests',
+    hasMedications: 'With meds',
+    hasProcedures: 'With procedures',
+    abnormal: 'Abnormal',
+    sortLabel: 'Sort',
+    sortDateDesc: 'Date (newest first)',
+    sortDateAsc: 'Date (oldest first)',
+    sortAbnormal: 'Most abnormal',
+    noMatch: 'No visits match the current filters',
+    clearFilters: 'Clear all filters',
+    resultCount: 'Match',
+    totalCount: 'Total',
   },
 
   settings: {
