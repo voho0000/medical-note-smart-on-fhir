@@ -125,7 +125,131 @@ export const TEST_ALIASES: Record<string, string> = {
   'LDL-CHOLESTEROL': 'LDL', LDLCHOLESTEROL: 'LDL',
   'LDL-C(DIRECT)': 'LDL', LDLCDIRECT: 'LDL',
   'FREE-T4': 'FREE T4', FREET4: 'FREE T4', FT4: 'FREE T4',
+  'T4 FREE': 'FREE T4', T4FREE: 'FREE T4', 'T4-FREE': 'FREE T4',
   'FREE-T3': 'FREE T3', FREET3: 'FREE T3', FT3: 'FREE T3',
+  'T3 FREE': 'FREE T3', T3FREE: 'FREE T3', 'T3-FREE': 'FREE T3',
+}
+
+/**
+ * LOINC → canonical analyte key map.
+ *
+ * Every entry here is sourced from NHI-FHIR-Bridge's verified NHI_TO_LOINC
+ * table (packages/mapper/src/loinc-tables.ts, post v0.6.7 audit). Each LOINC
+ * was confirmed against loinc.org during the 2026-05-19 bridge audit
+ * (docs/LOINC_AUDIT_2026_05_19.md). Comments cite the originating NHI 醫令碼
+ * so it's traceable.
+ *
+ * Rules for adding new entries here:
+ *   1. Cross-reference NHI-FHIR-Bridge `NHI_TO_LOINC` first.
+ *   2. If not in the bridge, fetch loinc.org/<code>/ and confirm:
+ *        - Long Common Name matches the analyte intent
+ *        - Specimen and Property (mass/molar concentration) make sense
+ *   3. NEVER guess from memory or LOINC code proximity (see audit
+ *      "Pattern observation" — wrong LOINCs in this repo have historically
+ *      come from copy-paste errors and fat-finger code numbers).
+ */
+export const LOINC_TO_CANONICAL: Record<string, string> = {
+  // ── Thyroid ───────────────────────────────────────────────
+  // 3024-7 = Thyroxine (T4) free [Mass/volume] in Serum or Plasma (ng/dL)
+  // 14920-3 = Thyroxine (T4) free [Moles/volume] in Serum or Plasma (pmol/L)
+  // Both are Free T4 (different unit systems). Bridge audit §F.
+  '3024-7':  'FREE T4',
+  '14920-3': 'FREE T4',
+  '3016-3':  'TSH',           // NHI 09112C — Thyrotropin S/P
+
+  // ── Liver / bilirubin / protein ───────────────────────────
+  '1742-6': 'ALT',            // NHI 09026C — Alanine aminotransferase Act S/P
+  '1920-8': 'AST',            // NHI 09025C — Aspartate aminotransferase Act S/P
+  '6768-6': 'ALK-P',          // NHI 09027C — Alkaline phosphatase Act S/P
+  '2324-2': 'GGT',            // NHI 09031C — Gamma glutamyl transferase Act S/P
+  '2532-0': 'LDH',            // NHI 09033C — LDH Activity S/P
+  '1975-2': 'T.BILI',         // NHI 09029C — Bilirubin total Mass/vol S/P
+  '1968-7': 'D.BILI',         // NHI 09030C — Bilirubin direct Mass/vol S/P
+  '1751-7': 'ALB',            // NHI 09038C / 12112B — Albumin Mass/vol S/P
+
+  // ── Renal ─────────────────────────────────────────────────
+  '2160-0': 'CREA',           // NHI 09015C — Creatinine Mass/vol S/P
+  '3094-0': 'BUN',            // NHI 09002C — Urea nitrogen Mass/vol S/P
+  '3084-1': 'UA',             // NHI 09013C — Urate Mass/vol S/P
+
+  // ── Electrolytes / minerals ───────────────────────────────
+  '2951-2':  'NA',            // NHI 09021C — Sodium Moles/vol S/P
+  '2823-3':  'K',             // NHI 09022C — Potassium Moles/vol S/P
+  '17861-6': 'CA',            // NHI 09011C — Calcium Mass/vol S/P
+  '2777-1':  'IP',            // NHI 09012C — Phosphate Mass/vol S/P
+
+  // ── Inflammation / cardiac ────────────────────────────────
+  '1988-5':  'CRP',           // NHI 12015C — C reactive protein Mass/vol S/P
+  '33959-8': 'PCT',           // NHI 12192C — Procalcitonin Mass/vol S/P
+  '10839-9': 'TROP',          // NHI 09099C — Troponin I cardiac S/P
+
+  // ── CBC ───────────────────────────────────────────────────
+  '6690-2': 'WBC',            // NHI 08002C — Leukocytes #/vol Blood Auto
+  '718-7':  'HB',             // NHI 08003C — Hemoglobin Mass/vol Blood
+  '777-3':  'PLT',            // NHI 08006C — Platelets #/vol Blood Auto
+  '4544-3': 'HCT',            // NHI 08004C — Hematocrit volume fraction Blood
+  '789-8':  'RBC',            // bridge LOINC_MAP — Erythrocytes #/vol Blood Auto
+  '785-6':  'MCH',            // bridge LOINC_MAP — RBC mean corpuscular Hgb
+  '711-2':  'EOS',            // NHI 08010C — Eosinophils #/vol Blood Auto
+                              //   (earlier 706-2 entry was unverified — removed)
+
+  // ── Lipid ─────────────────────────────────────────────────
+  '2093-3':  'CHOL',          // NHI 09001C — Cholesterol Mass/vol S/P
+  '2571-8':  'TG',            // NHI 09004C — Triglyceride Mass/vol S/P
+  '2085-9':  'HDL',           // NHI 09043C — HDL Cholesterol Mass/vol S/P
+  '13457-7': 'LDL',           // NHI 09044C — LDL Cholesterol (calculated) Mass/vol S/P
+
+  // ── Glucose / HbA1c ───────────────────────────────────────
+  '1558-6': 'GLUCOSE-AC',     // NHI 09005C — Fasting glucose Mass/vol S/P
+  '2345-7': 'GLUCOSE',        // NHI 09140C — Glucose Mass/vol S/P
+  '4548-4': 'HBA1C',          // NHI 09006C — Hemoglobin A1c / Hgb.total Blood
+
+  // ── Coag ──────────────────────────────────────────────────
+  '6301-6':  'INR',           // NHI 08026C — PT/INR Platelet poor plasma
+  '14979-9': 'APTT',          // NHI 08036C — APTT Platelet poor plasma
+  '30240-6': 'D-DIMER',       // NHI 08079B — D-dimer Plt poor plasma
+
+  // ── Hormones (sex/adrenal) ────────────────────────────────
+  '2986-8':  'TESTOSTERONE',  // NHI 09121C — Testosterone Mass/vol S/P
+  '2991-8':  'F-TESTOSTERONE',// NHI 27021B — Free Testosterone S/P
+  '83098-4': 'FSH',           // NHI 09125C — Follitropin Immunoassay S/P (corrected post-audit)
+  '83096-8': 'E2',            // NHI 09127C — Estradiol Immunoassay S/P (corrected post-audit)
+  '2143-6':  'CORTISOL',      // NHI 09113C — Cortisol Mass/vol S/P
+
+  // ── Tumor markers / ferritin ──────────────────────────────
+  '1834-1':  'AFP',           // NHI 12007C / 27049C — AFP Mass/vol S/P
+  '2039-6':  'CEA',           // NHI 12021C — CEA Mass/vol S/P
+  '24108-3': 'CA-199',        // NHI 12079C — CA 19-9 Mass/vol S/P
+                              //   (earlier label "CA-125" was WRONG — verified
+                              //   24108-3 is CA 19-9 per bridge audit)
+  '2857-1':  'PSA',           // NHI 27052C — PSA Mass/vol S/P (older LOINC)
+  '83112-3': 'PSA',           // NHI 12081C — PSA EIA/LIA Mass/vol S/P (audit-verified)
+  '10886-0': 'F-PSA',         // NHI 27083B — Free PSA Mass/vol S/P (RIA)
+                              //   (earlier label "PSA" was WRONG — this is Free PSA)
+  '83113-1': 'F-PSA',         // NHI 12198C — Free PSA Mass/vol S/P (audit-verified)
+  '2276-4':  'FERRITIN',      // NHI 12116C — Ferritin Mass/vol S/P
+
+  // ── Hepatitis ─────────────────────────────────────────────
+  '5195-3':  'HBSAG',         // NHI 14030C / 14031C — HBsAg Presence S/P
+  '5196-1':  'HBSAG',         // NHI 14032C — HBsAg Mass/vol S/P
+  '5197-9':  'HBSAG',         // NHI 27033C — HBsAg RIA S/P
+  '13955-0': 'ANTI-HCV',      // NHI 14051C — HCV Ab S/P
+}
+
+/**
+ * Try to resolve a canonical analyte key from an Observation's coding list.
+ * Iterates ALL coding entries (NHI / local codes often sit in coding[0],
+ * LOINC may be in [1] or [2]) and returns the first LOINC hit, or null.
+ */
+export function canonicalKeyFromLoinc(obs: any): string | null {
+  const codings = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const c of codings) {
+    const code = c?.code
+    if (typeof code === 'string' && LOINC_TO_CANONICAL[code]) {
+      return LOINC_TO_CANONICAL[code]
+    }
+  }
+  return null
 }
 
 // Normalize a raw test display name: strips parens, CJK, prefixes, then

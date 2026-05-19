@@ -2,7 +2,7 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
-import { TEST_ALIASES, normalizeTestName, classifyGlucose, GLUCOSE_SUBTYPE_LABEL } from '@/src/shared/utils/lab-normalize'
+import { TEST_ALIASES, normalizeTestName, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc } from '@/src/shared/utils/lab-normalize'
 
 export interface LabCell {
   value: string
@@ -126,10 +126,18 @@ const KEEP_SEPARATE_BY_NHI = new Set<string>([])
 // Returns the canonical analyte name (alias-resolved display key).
 // Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
 function canonicalTestKey(obs: any): string {
+  // 1. LOINC is the authoritative analyte identifier. Trust whatever the
+  //    bridge attaches — if it's wrong, the fix belongs at the bridge layer,
+  //    not in app-side display-string heuristics.
+  const fromLoinc = canonicalKeyFromLoinc(obs)
+  if (fromLoinc) return fromLoinc
+
+  // 2. Fall back to display-name alias when no recognized LOINC is present
+  //    (some institutions / orphan obs ship without coding entries).
   const raw = getTestDisplayName(obs)
   if (!raw) return 'UNKNOWN'
-  // Check raw value first (handles pure CJK names like "鈣" whose Latin content
-  // normalizeTestName strips to "", leaving the alias unreachable otherwise).
+  // Check raw + rawUpper first so pure-CJK names like "鈣" (whose Latin
+  // content normalizeTestName strips to "") still hit the alias map.
   if (TEST_ALIASES[raw]) return TEST_ALIASES[raw]
   const rawUpper = raw.toUpperCase()
   if (TEST_ALIASES[rawUpper]) return TEST_ALIASES[rawUpper]
