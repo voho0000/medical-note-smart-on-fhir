@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TrendingUp, Building2, AlertCircle } from 'lucide-react'
+import { TrendingUp, Building2, AlertCircle, Copy, Check } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Row, Observation } from '../types'
 import { getConceptText, getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
@@ -61,6 +61,17 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
   const { t } = useLanguage()
   const [trendDialogOpen, setTrendDialogOpen] = useState(false)
   const [textExpanded, setTextExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (err) {
+      console.warn('[ReportRow] Clipboard copy failed', err)
+    }
+  }
 
   const displayObs = row.group === "procedures" ? row.obs.slice(1) : row.obs
   const firstObs = row.obs[0]
@@ -137,19 +148,30 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
       </div>
     )
 
-    // Long text (ECG conclusion, CT description): truncate with expand toggle
+    // Long text (ECG conclusion, CT description): collapsed shows truncated preview,
+    // header row toggles open/close (mirrors the multi-item accordion below).
+    // Body text stays selectable; a Copy button shows when expanded.
     if (isLongText) {
+      const fullText = compactBlankLines(obs.valueString || '')
       return (
         <>
-          <div
-            className="rounded-lg border bg-muted/40 px-3 py-2 cursor-pointer select-none"
-            onClick={(e) => {
-              // Don't toggle if clicking the trend button
-              if ((e.target as HTMLElement).closest('[aria-label="查看趨勢"]')) return
-              setTextExpanded(!textExpanded)
-            }}
-          >
-            <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="rounded-lg border bg-muted/40 px-3 py-2">
+            <div
+              className="flex items-center justify-between gap-2 mb-1 cursor-pointer select-none"
+              role="button"
+              tabIndex={0}
+              aria-expanded={textExpanded}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('[aria-label="查看趨勢"]')) return
+                setTextExpanded(!textExpanded)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setTextExpanded(!textExpanded)
+                }
+              }}
+            >
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -169,14 +191,39 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
             <p
               className={cn(
                 'text-xs text-foreground/80 leading-relaxed',
-                textExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1'
+                textExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1 cursor-pointer'
               )}
+              onClick={() => {
+                if (!textExpanded) setTextExpanded(true)
+              }}
             >
-              {textExpanded ? compactBlankLines(obs.valueString || '') : obs.valueString}
+              {textExpanded ? fullText : obs.valueString}
             </p>
-            <span className="text-xs text-primary mt-0.5 inline-block">
-              {textExpanded ? '收起' : '查看完整報告'}
-            </span>
+            {textExpanded && (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleCopy(fullText)
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                  aria-label="複製報告全文"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-3 w-3" />
+                      已複製
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" />
+                      複製全文
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
           <ObservationTrendDialog
             observation={firstObs}

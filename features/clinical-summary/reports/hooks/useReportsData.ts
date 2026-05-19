@@ -24,6 +24,15 @@ function deriveGroupTitle(text: string): string {
   return text || 'Unnamed Report'
 }
 
+// Lab DRs carry performer on the linked Observations (bridge convention);
+// imaging DRs typically have no linked Observations and put performer on the
+// DiagnosticReport itself. Fall through both before giving up.
+function getDrInstitution(dr: any): string | undefined {
+  return dr?._observations?.[0]?.performer?.[0]?.display
+    || dr?.performer?.[0]?.display
+    || undefined
+}
+
 export function useReportsData(diagnosticReports: any[]) {
   return useMemo(() => {
     const rows: Row[] = []
@@ -39,7 +48,7 @@ export function useReportsData(diagnosticReports: any[]) {
       if (!dr) return
       const text = (getCodeableConceptText(dr.code) || '').trim()
       const date = ((dr.effectiveDateTime || dr.issued || '') as string).slice(0, 10)
-      const inst = (((dr as any)._observations?.[0]?.performer?.[0]?.display) || '').trim()
+      const inst = (getDrInstitution(dr) || '').trim()
       const key = `${text}|${date}|${inst}`
       if (!groups.has(key)) {
         groups.set(key, [])
@@ -69,7 +78,7 @@ export function useReportsData(diagnosticReports: any[]) {
       const head = groups.get(key)![0]
       const t = (getCodeableConceptText(head.code) || '').trim()
       const d = ((head.effectiveDateTime || head.issued || '') as string).slice(0, 10)
-      const i = (((head as any)._observations?.[0]?.performer?.[0]?.display) || '').trim()
+      const i = (getDrInstitution(head) || '').trim()
       groupMeta.set(key, { text: t, date: d, inst: i, norm: normText(t) })
     }
     const toDelete = new Set<string>()
@@ -223,7 +232,7 @@ export function useReportsData(diagnosticReports: any[]) {
       const category = Array.isArray(head.category)
         ? head.category.map((c: any) => getCodeableConceptText(c)).filter(Boolean).join(', ')
         : getCodeableConceptText(head.category)
-      const institution = (head as any)._observations?.[0]?.performer?.[0]?.display
+      const institution = getDrInstitution(head)
       const rawDate = head.issued || head.effectiveDateTime
 
       rows.push({

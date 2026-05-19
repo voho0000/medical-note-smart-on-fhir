@@ -147,6 +147,7 @@ export class FhirMapper implements IDataMapper {
       note: fhirResource.note,
       presentedForm: fhirResource.presentedForm,
       encounter: fhirResource.encounter,
+      performer: fhirResource.performer,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
