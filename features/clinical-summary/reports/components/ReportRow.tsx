@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TrendingUp, Building2, AlertCircle, Copy, Check } from 'lucide-react'
+import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Row, Observation } from '../types'
 import { getConceptText, getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
@@ -157,7 +157,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
         <>
           <div className="rounded-lg border bg-muted/40 px-3 py-2">
             <div
-              className="flex items-center justify-between gap-2 mb-1 cursor-pointer select-none"
+              className="flex items-center justify-between gap-2 mb-1 rounded-md cursor-pointer select-none transition-all outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
               role="button"
               tabIndex={0}
               aria-expanded={textExpanded}
@@ -186,6 +186,12 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
                 {row.isPossibleDuplicate && (
                   <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
                 )}
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 shrink-0 text-muted-foreground pointer-events-none transition-transform duration-200',
+                    textExpanded && 'rotate-180'
+                  )}
+                />
               </div>
             </div>
             <p
