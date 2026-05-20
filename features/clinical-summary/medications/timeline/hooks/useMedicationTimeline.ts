@@ -12,6 +12,7 @@
 // group them by canonical drug key.
 import { useMemo } from 'react'
 import { isChronicPrescription, pickLocalizedText, pickByLocale } from '../../utils/fhir-helpers'
+import { isVaccine } from '../../utils/vaccine-detection'
 
 export type TimeRange = '3m' | '6m' | '1y' | '3y' | 'all'
 
@@ -104,6 +105,10 @@ export function useMedicationTimeline(
       acuteCount: 0,
     }
     if (!Array.isArray(medications) || medications.length === 0) return empty
+
+    // Drop vaccines — they're point events (no supply duration to draw as a
+    // Gantt bar) and have their own 疫苗 sub-tab.
+    medications = medications.filter((m) => !isVaccine(m))
 
     // ── Step 1: drug-level chronic aggregation (mirror useMedicationRows) ──
     const chronicDrugs = new Set<string>()

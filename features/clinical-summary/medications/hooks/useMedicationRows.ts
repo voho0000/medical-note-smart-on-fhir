@@ -9,6 +9,7 @@ import {
   pickLocalizedText,
   pickByLocale,
 } from '../utils/fhir-helpers'
+import { isVaccine } from '../utils/vaccine-detection'
 import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpers'
 import { computeDurationDays } from '../utils/duration-helpers'
 
@@ -19,6 +20,11 @@ export function useMedicationRows(
 ) {
   return useMemo<MedicationRow[]>(() => {
     if (!Array.isArray(medications)) return []
+
+    // Vaccines live in the dedicated 疫苗 sub-tab; exclude them from the
+    // medication list so "Currently in use" doesn't mis-classify a one-off
+    // tetanus shot as an active medication with "supply expired" status.
+    medications = medications.filter((m) => !isVaccine(m))
 
     const inactiveStatuses = new Set(["stopped", "completed"])
 
