@@ -102,6 +102,7 @@ export const zhTW = {
     viewList: '清單',
     viewTimeline: '時間軸',
     tabMedications: '用藥',
+    tabAllergies: '過敏',
     tabVaccines: '疫苗',
     vaccineHeader: '疫苗接種',
     vaccineNoData: '無疫苗接種紀錄。',

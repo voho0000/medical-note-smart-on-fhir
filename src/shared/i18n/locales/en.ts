@@ -100,6 +100,7 @@ export const en = {
     viewList: 'List',
     viewTimeline: 'Timeline',
     tabMedications: 'Medications',
+    tabAllergies: 'Allergies',
     tabVaccines: 'Vaccines',
     vaccineHeader: 'Immunizations',
     vaccineNoData: 'No vaccination records.',

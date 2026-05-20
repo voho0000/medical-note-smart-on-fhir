@@ -89,13 +89,16 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
     enabled: true,
   },
   // Medications Tab Features
+  // AllergiesCard is now embedded as the "過敏" sub-tab inside MedListCard
+  // (medications / allergies / vaccines top tabs). Disabled here so it
+  // doesn't double-render. Re-enable only if reverting the consolidation.
   {
     id: 'allergies',
     name: 'Allergies & Intolerances',
     component: AllergiesCard,
     tab: 'meds',
     order: 0,
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'medications',
