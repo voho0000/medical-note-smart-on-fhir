@@ -26,6 +26,8 @@ export function isWithinTimeRange(dateString: string | undefined, range: string)
     case '3m': return diffInDays <= 90
     case '6m': return diffInDays <= 180
     case '1y': return diffInDays <= 365
+    case '3y': return diffInDays <= 365 * 3
+    case '5y': return diffInDays <= 365 * 5
     default: return true
   }
 }

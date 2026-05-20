@@ -8,8 +8,8 @@ export const allergiesCategory: DataCategory<AllergyIntolerance> = {
   labelKey: 'dataSelection.allergies',
   description: 'Known allergies and intolerances',
   descriptionKey: 'dataSelection.allergiesDesc',
-  group: 'clinical',
-  order: 30,
+  group: 'medication',
+  order: 31,
   
   extractData: (clinicalData) => clinicalData?.allergies || [],
   

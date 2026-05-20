@@ -12,6 +12,8 @@ export type {
   AllergyIntolerance
 } from '@/src/shared/types/fhir.types'
 
+import type { ImmunizationEntity } from '@/src/core/entities/clinical-data.entity'
+
 // Domain-specific type for clinical data collection
 export type ClinicalData = {
   conditions?: Array<import('@/src/shared/types/fhir.types').Condition>
@@ -21,4 +23,5 @@ export type ClinicalData = {
   observations?: Array<import('@/src/shared/types/fhir.types').Observation>
   vitalSigns?: Array<import('@/src/shared/types/fhir.types').Observation>
   procedures?: Array<import('@/src/shared/types/fhir.types').Procedure>
+  immunizations?: Array<ImmunizationEntity>
 }

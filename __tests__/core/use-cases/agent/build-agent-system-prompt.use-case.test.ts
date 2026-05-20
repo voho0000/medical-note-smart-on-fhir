@@ -15,6 +15,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
     availableToolsPrefix: 'Tools:',
     availableToolsSuffix: 'End tools',
     toolDescriptions: {
+      queryPatientInfo: 'Query patient info',
       queryConditions: 'Query conditions',
       queryMedications: 'Query medications',
       queryAllergies: 'Query allergies',
@@ -22,9 +23,12 @@ describe('BuildAgentSystemPromptUseCase', () => {
       queryObservations: 'Query observations',
       queryProcedures: 'Query procedures',
       queryEncounters: 'Query encounters',
+      queryImmunizations: 'Query immunizations',
       searchMedicalLiterature: 'Search literature'
     },
     importantNote: 'Important',
+    icdCodeCaveat: 'ICD caveat',
+    literatureKeywords: 'Literature keywords',
     usageGuidelines: 'Guidelines',
     prioritizeClinicalData: 'Prioritize data',
     useToolsWhenNeeded: 'Use tools',

@@ -1,5 +1,37 @@
 import type { ClinicalContextSection, DataSelection, DataFilters, ClinicalContextOptions, TimeRange } from '@/src/core/entities/clinical-context.entity'
 
+const makeSelection = (value: boolean): DataSelection => ({
+  patientInfo: value,
+  vitalSigns: value,
+  problemList: value,
+  encounters: value,
+  conditions: value,
+  labReports: value,
+  imagingReports: value,
+  procedures: value,
+  observations: value,
+  medications: value,
+  allergies: value,
+  immunizations: value,
+})
+
+const makeFilters = (range: TimeRange = 'all'): DataFilters => ({
+  conditionStatus: 'active',
+  problemListStatus: 'active',
+  medicationStatus: 'active',
+  medicationChronic: 'all',
+  medicationTimeRange: range,
+  labReportVersion: 'latest',
+  labReportTimeRange: range,
+  imagingReportVersion: 'latest',
+  imagingReportTimeRange: range,
+  vitalSignsVersion: 'latest',
+  vitalSignsTimeRange: range,
+  procedureVersion: 'latest',
+  procedureTimeRange: range,
+  immunizationTimeRange: range,
+})
+
 describe('clinical-context.entity', () => {
   describe('ClinicalContextSection', () => {
     it('should have title and items', () => {
@@ -14,31 +46,15 @@ describe('clinical-context.entity', () => {
 
   describe('DataSelection', () => {
     it('should have all data categories', () => {
-      const selection: DataSelection = {
-        patientInfo: true,
-        conditions: true,
-        medications: true,
-        allergies: true,
-        diagnosticReports: true,
-        labReports: true,
-        imagingReports: true,
-        procedures: true,
-        observations: true
-      }
-      expect(Object.keys(selection)).toHaveLength(9)
+      const selection = makeSelection(true)
+      expect(Object.keys(selection)).toHaveLength(12)
     })
 
     it('should allow selective data inclusion', () => {
       const selection: DataSelection = {
+        ...makeSelection(false),
         patientInfo: true,
         conditions: true,
-        medications: false,
-        allergies: false,
-        diagnosticReports: false,
-        labReports: false,
-        imagingReports: false,
-        procedures: false,
-        observations: false
       }
       expect(selection.patientInfo).toBe(true)
       expect(selection.medications).toBe(false)
@@ -47,42 +63,18 @@ describe('clinical-context.entity', () => {
 
   describe('DataFilters', () => {
     it('should have all filter options', () => {
-      const filters: DataFilters = {
-        conditionStatus: 'active',
-        medicationStatus: 'active',
-        reportInclusion: 'latest',
-        reportTimeRange: 'all',
-        labReportVersion: 'latest',
-        labReportTimeRange: 'all',
-        imagingReportVersion: 'latest',
-        imagingReportTimeRange: 'all',
-        vitalSignsVersion: 'latest',
-        vitalSignsTimeRange: 'all',
-        procedureVersion: 'latest',
-        procedureTimeRange: 'all'
-      }
+      const filters = makeFilters()
       expect(filters.conditionStatus).toBe('active')
-      expect(filters.reportInclusion).toBe('latest')
+      expect(filters.medicationChronic).toBe('all')
+      expect(filters.immunizationTimeRange).toBe('all')
     })
 
     it('should support different time ranges', () => {
-      const timeRanges: TimeRange[] = ['24h', '3d', '1w', '1m', '3m', '6m', '1y', 'all']
+      const timeRanges: TimeRange[] = ['24h', '3d', '1w', '1m', '3m', '6m', '1y', '3y', '5y', 'all']
       timeRanges.forEach(range => {
-        const filters: DataFilters = {
-          conditionStatus: 'active',
-          medicationStatus: 'active',
-          reportInclusion: 'latest',
-          reportTimeRange: range,
-          labReportVersion: 'latest',
-          labReportTimeRange: range,
-          imagingReportVersion: 'latest',
-          imagingReportTimeRange: range,
-          vitalSignsVersion: 'latest',
-          vitalSignsTimeRange: range,
-          procedureVersion: 'latest',
-          procedureTimeRange: range
-        }
-        expect(filters.reportTimeRange).toBe(range)
+        const filters = makeFilters(range)
+        expect(filters.labReportTimeRange).toBe(range)
+        expect(filters.immunizationTimeRange).toBe(range)
       })
     })
   })
@@ -90,31 +82,8 @@ describe('clinical-context.entity', () => {
   describe('ClinicalContextOptions', () => {
     it('should combine selection and filters', () => {
       const options: ClinicalContextOptions = {
-        selection: {
-          patientInfo: true,
-          conditions: true,
-          medications: true,
-          allergies: true,
-          diagnosticReports: true,
-          labReports: true,
-          imagingReports: true,
-          procedures: true,
-          observations: true
-        },
-        filters: {
-          conditionStatus: 'active',
-          medicationStatus: 'active',
-          reportInclusion: 'latest',
-          reportTimeRange: '1m',
-          labReportVersion: 'latest',
-          labReportTimeRange: '1m',
-          imagingReportVersion: 'latest',
-          imagingReportTimeRange: '1m',
-          vitalSignsVersion: 'latest',
-          vitalSignsTimeRange: '1m',
-          procedureVersion: 'latest',
-          procedureTimeRange: '1m'
-        }
+        selection: makeSelection(true),
+        filters: makeFilters('1m')
       }
       expect(options.selection).toBeDefined()
       expect(options.filters).toBeDefined()
@@ -122,31 +91,8 @@ describe('clinical-context.entity', () => {
 
     it('should support supplementary notes', () => {
       const options: ClinicalContextOptions = {
-        selection: {
-          patientInfo: true,
-          conditions: true,
-          medications: true,
-          allergies: true,
-          diagnosticReports: true,
-          labReports: true,
-          imagingReports: true,
-          procedures: true,
-          observations: true
-        },
-        filters: {
-          conditionStatus: 'active',
-          medicationStatus: 'active',
-          reportInclusion: 'latest',
-          reportTimeRange: 'all',
-          labReportVersion: 'latest',
-          labReportTimeRange: 'all',
-          imagingReportVersion: 'latest',
-          imagingReportTimeRange: 'all',
-          vitalSignsVersion: 'latest',
-          vitalSignsTimeRange: 'all',
-          procedureVersion: 'latest',
-          procedureTimeRange: 'all'
-        },
+        selection: makeSelection(true),
+        filters: makeFilters('all'),
         supplementaryNotes: 'Additional clinical notes'
       }
       expect(options.supplementaryNotes).toBe('Additional clinical notes')

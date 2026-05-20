@@ -3,42 +3,20 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import type { FHIRClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { QueryFhirDataUseCase } from '@/src/core/use-cases/agent/query-fhir-data.use-case'
+import {
+  conditionsSchema,
+  medicationsSchema,
+  allergiesSchema,
+  observationsSchema,
+  proceduresSchema,
+  encountersSchema,
+  diagnosticReportsSchema,
+  immunizationsSchema,
+  patientInfoSchema,
+} from './fhir-tool-schemas'
+import { isWithinDateRange, isChronicByCourseOfTherapy } from './_filter-helpers'
 
 const queryFhirDataUseCase = new QueryFhirDataUseCase()
-
-const conditionsSchema = z.object({
-  category: z.string().optional().describe('Filter by category (e.g., "problem-list-item", "encounter-diagnosis")'),
-  clinicalStatus: z.string().optional().describe('Filter by clinical status (e.g., "active", "resolved")'),
-})
-
-const medicationsSchema = z.object({
-  status: z.string().optional().describe('Filter by status (e.g., "active", "completed")'),
-})
-
-const allergiesSchema = z.object({
-  type: z.string().optional().describe('Filter by type (e.g., "allergy", "intolerance")'),
-})
-
-const observationsSchema = z.object({
-  category: z.string().optional().describe('Filter by category (e.g., "laboratory", "vital-signs")'),
-  code: z.string().optional().describe('Filter by LOINC code or observation type'),
-  dateFrom: z.string().optional().describe('Filter observations from this date (YYYY-MM-DD format, e.g., "2021-01-01")'),
-  dateTo: z.string().optional().describe('Filter observations until this date (YYYY-MM-DD format, e.g., "2021-12-31")'),
-})
-
-const proceduresSchema = z.object({
-  status: z.string().optional().describe('Filter by status (e.g., "completed", "in-progress")'),
-})
-
-const encountersSchema = z.object({
-  class: z.string().optional().describe('Filter by encounter class (e.g., "inpatient", "outpatient", "emergency")'),
-})
-
-const diagnosticReportsSchema = z.object({
-  category: z.string().optional().describe('Filter by category (e.g., "LAB", "RAD")'),
-  dateFrom: z.string().optional().describe('Filter reports from this date (YYYY-MM-DD format)'),
-  dateTo: z.string().optional().describe('Filter reports until this date (YYYY-MM-DD format)'),
-})
 
 export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
   return {
@@ -78,28 +56,89 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
     }),
 
     queryMedications: tool({
-      description: 'Query patient medications from FHIR server. Use this to get information about current or past medications.',
+      description: 'Query patient medications from FHIR server. Use this to get current or past medications. Supports `chronic` to filter to 慢箋 (continuous courseOfTherapyType) and date range.',
       inputSchema: medicationsSchema,
-      execute: async ({ status }: z.infer<typeof medicationsSchema>) => {
+      execute: async ({ status, chronic, dateFrom, dateTo }: z.infer<typeof medicationsSchema>) => {
         const parameters: Record<string, string> = {}
         if (status) parameters.status = status
-        
+
         const result = await queryFhirDataUseCase.execute(
           { resourceType: 'MedicationRequest', patientId, parameters },
           fhirClient
         )
-        
+
+        let entries = result.data?.entry || []
+
+        if (chronic === true) {
+          entries = entries.filter((e: any) => isChronicByCourseOfTherapy(e.resource?.courseOfTherapyType))
+        } else if (chronic === false) {
+          entries = entries.filter((e: any) => !isChronicByCourseOfTherapy(e.resource?.courseOfTherapyType))
+        }
+
+        if (dateFrom || dateTo) {
+          entries = entries.filter((e: any) => isWithinDateRange(e.resource?.authoredOn, dateFrom, dateTo))
+        }
+
         return {
           success: result.success,
           summary: result.summary,
-          count: result.data?.entry?.length || 0,
-          data: result.data?.entry?.map((e: any) => ({
-            medication: e.resource?.medicationCodeableConcept?.text || 
+          count: entries.length,
+          data: entries.map((e: any) => ({
+            medication: e.resource?.medicationCodeableConcept?.text ||
                        e.resource?.medicationCodeableConcept?.coding?.[0]?.display,
             status: e.resource?.status,
             authoredOn: e.resource?.authoredOn,
             dosageInstruction: e.resource?.dosageInstruction?.[0]?.text,
-          })) || []
+            chronic: isChronicByCourseOfTherapy(e.resource?.courseOfTherapyType),
+          }))
+        }
+      },
+    }),
+
+    queryImmunizations: tool({
+      description: 'Query patient immunization (vaccination) records from FHIR server. Use this for preventive vaccines (e.g. COVID-19, influenza, pneumococcal). Supports date range filtering.',
+      inputSchema: immunizationsSchema,
+      execute: async ({ dateFrom, dateTo }: z.infer<typeof immunizationsSchema>) => {
+        try {
+          const result = await queryFhirDataUseCase.execute(
+            { resourceType: 'Immunization', patientId, parameters: {} },
+            fhirClient
+          )
+
+          let entries = result.data?.entry || []
+          if (dateFrom || dateTo) {
+            entries = entries.filter((e: any) => {
+              const date = e.resource?.occurrenceDateTime
+              if (!date) return false
+              if (dateFrom && date < dateFrom) return false
+              if (dateTo && date > dateTo + 'T23:59:59') return false
+              return true
+            })
+          }
+
+          return {
+            success: result.success,
+            summary: result.summary,
+            count: entries.length,
+            dateRange: { from: dateFrom, to: dateTo },
+            data: entries.map((e: any) => ({
+              vaccine: e.resource?.vaccineCode?.text ||
+                       e.resource?.vaccineCode?.coding?.[0]?.display,
+              code: e.resource?.vaccineCode?.coding?.[0]?.code,
+              status: e.resource?.status,
+              occurrenceDateTime: e.resource?.occurrenceDateTime,
+              performer: e.resource?.performer?.[0]?.actor?.display,
+              lotNumber: e.resource?.lotNumber,
+              manufacturer: e.resource?.manufacturer?.display,
+            }))
+          }
+        } catch (error) {
+          return {
+            success: false,
+            summary: `Error querying immunizations: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            count: 0,
+            data: []
+          }
         }
       },
     }),
@@ -239,7 +278,7 @@ export function createFhirTools(fhirClient: FHIRClient, patientId: string) {
 
     queryPatientInfo: tool({
       description: 'Query patient demographic information (ID, gender, birth date for age calculation). Note: Patient name is NOT available due to privacy protection - only anonymized data is accessible.',
-      inputSchema: z.object({}),
+      inputSchema: patientInfoSchema,
       execute: async () => {
         try {
           // Use the patientId passed to createFhirTools instead of SMART context

@@ -1,15 +1,16 @@
 // Query FHIR Data Use Case
 import type { FHIRClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
 
-export type FhirResourceType = 
-  | 'Condition' 
-  | 'MedicationRequest' 
-  | 'AllergyIntolerance' 
-  | 'Observation' 
-  | 'DiagnosticReport' 
-  | 'Procedure' 
+export type FhirResourceType =
+  | 'Condition'
+  | 'MedicationRequest'
+  | 'AllergyIntolerance'
+  | 'Observation'
+  | 'DiagnosticReport'
+  | 'Procedure'
   | 'Encounter'
   | 'Patient'
+  | 'Immunization'
 
 export interface QueryFhirDataInput {
   resourceType: FhirResourceType
@@ -83,7 +84,8 @@ export class QueryFhirDataUseCase {
       'DiagnosticReport': { '_count': '50', '_sort': '-date' },
       'Procedure': { '_count': '100', '_sort': '-date' },
       'Encounter': { '_count': '100', '_sort': '-date' },
-      'Patient': {}
+      'Patient': {},
+      'Immunization': { '_count': '100', '_sort': '-date' }
     }
     
     return defaults[resourceType] || {}

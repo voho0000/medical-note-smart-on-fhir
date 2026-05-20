@@ -66,27 +66,42 @@ describe('GenerateClinicalContextUseCase', () => {
         performedDateTime: '2024-01-10'
       }
     ],
-    encounters: []
+    encounters: [],
+    documentReferences: [],
+    compositions: [],
+    immunizations: []
   }
 
   const defaultOptions: ClinicalContextOptions = {
     selection: {
       patientInfo: true,
+      vitalSigns: true,
+      problemList: false,
+      encounters: false,
       conditions: true,
+      labReports: true,
+      imagingReports: false,
+      procedures: true,
+      observations: false,
       medications: true,
       allergies: true,
-      observations: true,
-      diagnosticReports: true,
-      procedures: true
+      immunizations: false,
     },
     filters: {
-      medicationStatus: 'all',
       conditionStatus: 'all',
-      reportInclusion: 'all',
-      reportTimeRange: 'all',
+      problemListStatus: 'all',
+      medicationStatus: 'all',
+      medicationChronic: 'all',
+      medicationTimeRange: 'all',
       labReportVersion: 'all',
+      labReportTimeRange: 'all',
+      imagingReportVersion: 'all',
+      imagingReportTimeRange: 'all',
       vitalSignsVersion: 'all',
-      vitalSignsTimeRange: 'all'
+      vitalSignsTimeRange: 'all',
+      procedureVersion: 'all',
+      procedureTimeRange: 'all',
+      immunizationTimeRange: 'all',
     }
   }
 
@@ -189,7 +204,10 @@ describe('GenerateClinicalContextUseCase', () => {
         vitalSigns: [],
         diagnosticReports: [],
         procedures: [],
-        encounters: []
+        encounters: [],
+        documentReferences: [],
+        compositions: [],
+        immunizations: []
       }
 
       const result = useCase.execute(mockPatient, emptyData, defaultOptions)
@@ -201,13 +219,12 @@ describe('GenerateClinicalContextUseCase', () => {
     it('should respect selection options', () => {
       const selectiveOptions: ClinicalContextOptions = {
         selection: {
-          patientInfo: true,
-          conditions: true,
+          ...defaultOptions.selection,
           medications: false,
           allergies: false,
-          observations: false,
-          diagnosticReports: false,
-          procedures: false
+          vitalSigns: false,
+          labReports: false,
+          procedures: false,
         },
         filters: defaultOptions.filters
       }

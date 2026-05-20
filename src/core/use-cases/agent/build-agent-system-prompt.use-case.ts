@@ -7,6 +7,8 @@ export interface BuildAgentSystemPromptInput {
   baseSystemPrompt: string
   clinicalContext: string
   patientId?: string
+  /** 'local' = querying an in-memory uploaded FHIR bundle; 'live' (default) = SMART server */
+  mode?: 'live' | 'local'
   hasPerplexityKey: boolean
   translations: {
     deepModeIntro: string
@@ -27,9 +29,11 @@ export interface BuildAgentSystemPromptInput {
       queryObservations: string
       queryProcedures: string
       queryEncounters: string
+      queryImmunizations: string
       searchMedicalLiterature: string
     }
     importantNote: string
+    icdCodeCaveat: string
     usageGuidelines: string
     prioritizeClinicalData: string
     useToolsWhenNeeded: string
@@ -46,17 +50,24 @@ export interface BuildAgentSystemPromptInput {
 
 export class BuildAgentSystemPromptUseCase {
   execute(input: BuildAgentSystemPromptInput): string {
-    const { baseSystemPrompt, clinicalContext, patientId, hasPerplexityKey, translations: t } = input
+    const { baseSystemPrompt, clinicalContext, patientId, mode = 'live', hasPerplexityKey, translations: t } = input
 
     const hasClinicalData = clinicalContext.trim().length > 0
     const hasPatientId = !!patientId
+    const isLocalMode = mode === 'local'
 
-    // Build patient context section
+    // Build patient context section. In local-bundle mode the patient ID is
+    // implicit (single patient per bundle), so the warning about needing one
+    // is misleading — swap it for a local-mode notice.
     const patientSection = hasPatientId
       ? `**${t.currentPatient}**
 - ${t.patientId.replace('{id}', patientId)}
 - ${t.hasPermission}`
-      : `**${t.currentPatient}**
+      : isLocalMode
+        ? `**${t.currentPatient}**
+- Reading from locally-imported FHIR bundle — patient ID is implicit.
+- FHIR query tools operate on the in-memory bundle, not a live server.`
+        : `**${t.currentPatient}**
 - No patient context available
 - FHIR query tools will not work without patient ID`
 
@@ -78,9 +89,10 @@ ${clinicalContext}
 5. queryDiagnosticReports - ${t.toolDescriptions.queryDiagnosticReports}
 6. queryObservations - ${t.toolDescriptions.queryObservations}
 7. queryProcedures - ${t.toolDescriptions.queryProcedures}
-8. queryEncounters - ${t.toolDescriptions.queryEncounters}${
+8. queryEncounters - ${t.toolDescriptions.queryEncounters}
+9. queryImmunizations - ${t.toolDescriptions.queryImmunizations}${
       hasPerplexityKey ? `
-9. searchMedicalLiterature - ${t.toolDescriptions.searchMedicalLiterature}` : ''
+10. searchMedicalLiterature - ${t.toolDescriptions.searchMedicalLiterature}` : ''
     }`
 
     // Build usage guidelines
@@ -104,6 +116,8 @@ ${hasClinicalData ? t.availableToolsPrefix : ''}${t.availableToolsSuffix}
 ${toolsList}
 
 ${t.importantNote}
+
+${t.icdCodeCaveat}
 
 **${t.usageGuidelines}**
 ${usageGuidelines}

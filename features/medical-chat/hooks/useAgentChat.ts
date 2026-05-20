@@ -10,7 +10,9 @@ import { getUserErrorMessage } from "@/src/core/errors"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
+import { useLocalFhirTools } from "@/src/application/hooks/ai/use-local-fhir-tools.hook"
 import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-tools.hook"
+import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-client.service"
 import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
@@ -31,7 +33,12 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const abortControllerRef = useRef<AbortController | null>(null)
   const hasReceivedChunkRef = useRef(false)
 
-  const fhirTools = useFhirTools(patient?.id)
+  // In local-bundle mode the live FHIR tools can't reach a SMART server, so
+  // we pick the local in-memory equivalent (same names + schemas) instead.
+  const liveFhirTools = useFhirTools(patient?.id)
+  const localFhirTools = useLocalFhirTools()
+  const isLocalMode = shouldUseLocalBundle()
+  const fhirTools = isLocalMode ? localFhirTools : liveFhirTools
   const literatureTools = useLiteratureTools(perplexityKey)
 
   const tools = useMemo(() => {
@@ -113,6 +120,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           baseSystemPrompt: systemPrompt,
           clinicalContext: '', // Empty - let user control via toggle
           patientId: patient?.id,
+          mode: isLocalMode ? 'local' : 'live',
           hasPerplexityKey: hasLiteratureSearch,
           translations: t.agent.systemPrompt,
         })

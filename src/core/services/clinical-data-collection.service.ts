@@ -37,7 +37,8 @@ export class ClinicalDataCollectionService {
       procedures: data.procedures || [],
       encounters: data.encounters || [],
       documentReferences: data.documentReferences || [],
-      compositions: data.compositions || []
+      compositions: data.compositions || [],
+      immunizations: data.immunizations || []
     }
   }
 
@@ -56,7 +57,8 @@ export class ClinicalDataCollectionService {
       procedures: [],
       encounters: [],
       documentReferences: [],
-      compositions: []
+      compositions: [],
+      immunizations: []
     }
   }
 

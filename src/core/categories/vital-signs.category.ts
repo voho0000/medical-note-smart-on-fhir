@@ -21,13 +21,13 @@ const getVitalSignType = (obs: Observation): string => {
 }
 
 export const vitalSignsCategory: DataCategory<Observation> = {
-  id: 'observations',
+  id: 'vitalSigns',
   label: 'Vital Signs',
-  labelKey: 'dataSelection.observations',
+  labelKey: 'dataSelection.vitalSigns',
   description: 'Vital signs and measurements',
-  descriptionKey: 'dataSelection.observationsDesc',
-  group: 'clinical',
-  order: 70,
+  descriptionKey: 'dataSelection.vitalSignsDesc',
+  group: 'patient',
+  order: 2,
   
   filters: [
     {

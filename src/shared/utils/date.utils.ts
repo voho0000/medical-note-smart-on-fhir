@@ -53,7 +53,7 @@ export function calculateAge(birthDate?: string | null): string {
   return age >= 0 ? `${age}` : "Unknown"
 }
 
-export type TimeRange = "all" | "24h" | "3d" | "1w" | "1m" | "3m" | "6m" | "1y"
+export type TimeRange = "all" | "24h" | "3d" | "1w" | "1m" | "3m" | "6m" | "1y" | "3y" | "5y"
 
 export function isWithinTimeRange(dateString: string | undefined, range: TimeRange): boolean {
   if (!dateString) return false
@@ -86,6 +86,12 @@ export function isWithinTimeRange(dateString: string | undefined, range: TimeRan
       break
     case "1y":
       startDate.setFullYear(now.getFullYear() - 1)
+      break
+    case "3y":
+      startDate.setFullYear(now.getFullYear() - 3)
+      break
+    case "5y":
+      startDate.setFullYear(now.getFullYear() - 5)
       break
     default:
       return true

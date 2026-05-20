@@ -7,44 +7,36 @@ import {
 describe('data-selection.constants', () => {
   describe('DEFAULT_DATA_SELECTION', () => {
     it('should have all data categories defined', () => {
-      expect(DEFAULT_DATA_SELECTION.patientInfo).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.conditions).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.medications).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.allergies).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.diagnosticReports).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.labReports).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.imagingReports).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.procedures).toBe(true)
-      expect(DEFAULT_DATA_SELECTION.observations).toBe(true)
+      expect(DEFAULT_DATA_SELECTION.patientInfo).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.vitalSigns).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.problemList).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.encounters).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.conditions).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.labReports).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.imagingReports).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.procedures).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.observations).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.medications).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.allergies).toBeDefined()
+      expect(DEFAULT_DATA_SELECTION.immunizations).toBeDefined()
     })
 
-    it('should have all categories enabled by default', () => {
-      const values = Object.values(DEFAULT_DATA_SELECTION)
-      expect(values.every(v => v === true)).toBe(true)
+    it('should default conditions OFF (covered by encounters)', () => {
+      expect(DEFAULT_DATA_SELECTION.conditions).toBe(false)
+    })
+
+    it('should default orphan observations OFF', () => {
+      expect(DEFAULT_DATA_SELECTION.observations).toBe(false)
     })
   })
 
   describe('DEFAULT_DATA_FILTERS', () => {
     it('should have all filter options defined', () => {
-      expect(DEFAULT_DATA_FILTERS.conditionStatus).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.medicationStatus).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.reportInclusion).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.reportTimeRange).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.labReportVersion).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.imagingReportTimeRange).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.vitalSignsVersion).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.vitalSignsTimeRange).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.procedureVersion).toBeDefined()
-      expect(DEFAULT_DATA_FILTERS.procedureTimeRange).toBeDefined()
-    })
-
-    it('should have correct default filter values', () => {
       expect(DEFAULT_DATA_FILTERS.conditionStatus).toBe('active')
+      expect(DEFAULT_DATA_FILTERS.problemListStatus).toBe('active')
       expect(DEFAULT_DATA_FILTERS.medicationStatus).toBe('active')
-      expect(DEFAULT_DATA_FILTERS.reportInclusion).toBe('latest')
-      expect(DEFAULT_DATA_FILTERS.reportTimeRange).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.medicationChronic).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('all')
       expect(DEFAULT_DATA_FILTERS.labReportVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBe('all')
       expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('latest')
@@ -53,6 +45,7 @@ describe('data-selection.constants', () => {
       expect(DEFAULT_DATA_FILTERS.vitalSignsTimeRange).toBe('all')
       expect(DEFAULT_DATA_FILTERS.procedureVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.procedureTimeRange).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.immunizationTimeRange).toBe('all')
     })
   })
 

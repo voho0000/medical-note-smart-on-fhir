@@ -9,7 +9,10 @@
 import { useMemo } from "react"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
-import { buildIcdDictionary, lookupIcd, parseIcdCodes } from "@/src/shared/utils/icd-lookup"
+import { buildIcdDictionary, extractEncounterIcds } from "@/src/shared/utils/icd-lookup"
+import { useAudience } from "@/src/application/providers/audience.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { pickLocalizedText } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 
 const MAX_VISITS = 10
 const RECENT_DAYS = 365
@@ -37,8 +40,13 @@ function dateOnly(d: string | undefined): string | undefined {
   return d ? d.slice(0, 10) : undefined
 }
 
-function summarizeMedLine(m: any): string {
-  const name = m.medicationCodeableConcept?.text
+function summarizeMedLine(
+  m: any,
+  audience: 'medical' | 'patient',
+  locale: string,
+): string {
+  const name = pickLocalizedText(m.medicationCodeableConcept, audience, locale)
+    || m.medicationCodeableConcept?.text
     || m.medicationCodeableConcept?.coding?.[0]?.display
     || 'Unknown'
   const dosage = m.dosageInstruction?.[0]
@@ -53,8 +61,15 @@ function summarizeMedLine(m: any): string {
   return `${name}${dosing ? ` (${dosing})` : ''}${dur}`
 }
 
-function summarizeObsLine(o: any): string {
-  const title = o.code?.text || o.code?.coding?.[0]?.display || 'Observation'
+function summarizeObsLine(
+  o: any,
+  audience: 'medical' | 'patient',
+  locale: string,
+): string {
+  const title = pickLocalizedText(o.code, audience, locale)
+    || o.code?.text
+    || o.code?.coding?.[0]?.display
+    || 'Observation'
   let value = '—'
   if (o.valueQuantity?.value !== undefined) {
     value = `${o.valueQuantity.value}${o.valueQuantity.unit ? ' ' + o.valueQuantity.unit : ''}`
@@ -62,7 +77,7 @@ function summarizeObsLine(o: any): string {
     value = o.valueString
   } else if (Array.isArray(o.component) && o.component.length > 0) {
     value = o.component.map((c: any) => {
-      const t = c.code?.text || c.code?.coding?.[0]?.display || 'comp'
+      const t = pickLocalizedText(c.code, audience, locale) || c.code?.text || c.code?.coding?.[0]?.display || 'comp'
       const v = c.valueQuantity ? `${c.valueQuantity.value} ${c.valueQuantity.unit || ''}`.trim() : (c.valueString || '—')
       return `${t} ${v}`
     }).join(', ')
@@ -71,27 +86,24 @@ function summarizeObsLine(o: any): string {
   return `${title}: ${value}${interp ? ` [${interp}]` : ''}`
 }
 
-function summarizeProcLine(p: any): string {
-  const title = p.code?.text || p.code?.coding?.[0]?.display || 'Procedure'
+function summarizeProcLine(
+  p: any,
+  audience: 'medical' | 'patient',
+  locale: string,
+): string {
+  const title = pickLocalizedText(p.code, audience, locale)
+    || p.code?.text
+    || p.code?.coding?.[0]?.display
+    || 'Procedure'
   return title
 }
 
-function diagnosesFromEncounter(enc: any, dict: Map<string, string>): string[] {
-  const out: string[] = []
-  // VGH style: encounter.reasonCode[0].text = "C50.912,N95.1,N73.9"
-  const reasonText = enc.reasonCode?.[0]?.text
-  if (reasonText) {
-    const codes = parseIcdCodes(reasonText)
-    if (codes.length > 0) {
-      for (const code of codes) {
-        const desc = lookupIcd(code, dict)
-        out.push(desc ? `${code} - ${desc}` : code)
-      }
-    } else {
-      out.push(reasonText)
-    }
-  }
-  return out
+function diagnosesFromEncounter(enc: any, dict: Map<string, string>, locale: string): string[] {
+  // Handles both new (one entry per diagnosis with English coding[].display)
+  // and old (comma-separated codes in reasonCode[0].text) bridge formats.
+  return extractEncounterIcds(enc, dict, locale).map((rc) =>
+    rc.description ? `${rc.code} - ${rc.description}` : rc.code
+  )
 }
 
 interface ActiveMed {
@@ -100,7 +112,11 @@ interface ActiveMed {
   daysRemaining: number
 }
 
-function getCurrentlyActiveMeds(meds: any[]): ActiveMed[] {
+function getCurrentlyActiveMeds(
+  meds: any[],
+  audience: 'medical' | 'patient',
+  locale: string,
+): ActiveMed[] {
   const out: ActiveMed[] = []
   for (const m of meds) {
     const status = String(m.status || '').toLowerCase()
@@ -114,7 +130,8 @@ function getCurrentlyActiveMeds(meds: any[]): ActiveMed[] {
     end.setDate(end.getDate() + days)
     const daysRemaining = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     if (daysRemaining < 0) continue
-    const name = m.medicationCodeableConcept?.text
+    const name = pickLocalizedText(m.medicationCodeableConcept, audience, locale)
+      || m.medicationCodeableConcept?.text
       || m.medicationCodeableConcept?.coding?.[0]?.display
       || 'Unknown'
     out.push({ name, endDate: end.toISOString().slice(0, 10), daysRemaining })
@@ -126,6 +143,8 @@ export function useEncountersContext(
   includeEncounters: boolean,
   clinicalData: ClinicalData | null
 ): ClinicalContextSection | null {
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
   return useMemo(() => {
     if (!includeEncounters || !clinicalData) return null
     const encounters: any[] = (clinicalData as any).encounters ?? []
@@ -137,7 +156,10 @@ export function useEncountersContext(
     const diagnosticReports: any[] = (clinicalData.diagnosticReports as any[]) ?? []
     const procedures: any[] = (clinicalData.procedures as any[]) ?? []
 
-    const icdDict = buildIcdDictionary(conditions)
+    // ICD descriptions follow UI language only (medical professionals
+    // reading in zh-TW UI still get 中文 ICD descriptions because they're
+    // descriptive labels, not pharmacology identifiers).
+    const icdDict = buildIcdDictionary(conditions, locale)
 
     // Build encounter → resources map
     const encMap = new Map<string, {
@@ -148,7 +170,7 @@ export function useEncountersContext(
     }>()
 
     for (const enc of encounters) {
-      encMap.set(enc.id, { diagnoses: diagnosesFromEncounter(enc, icdDict), meds: [], tests: [], procs: [] })
+      encMap.set(enc.id, { diagnoses: diagnosesFromEncounter(enc, icdDict, locale), meds: [], tests: [], procs: [] })
     }
 
     const push = (encId: string | undefined, key: 'meds' | 'tests' | 'procs', item: any) => {
@@ -188,7 +210,7 @@ export function useEncountersContext(
     const items: string[] = []
 
     // Top-level summary: currently active medications across all visits
-    const activeMeds = getCurrentlyActiveMeds(medications)
+    const activeMeds = getCurrentlyActiveMeds(medications, audience, locale)
     if (activeMeds.length > 0) {
       items.push(`Currently active medications (${activeMeds.length}):`)
       activeMeds.slice(0, 15).forEach((m) => {
@@ -202,6 +224,7 @@ export function useEncountersContext(
 
     // Per-visit details
     items.push(`Recent visits (showing ${visitsToShow.length} of ${sorted.length}):`)
+    items.push("Note: ICD codes listed under each visit come from billing/dispensing records and may not represent confirmed diagnoses. See 'Patient's Conditions' for clinically confirmed diagnoses.")
     items.push('')
 
     for (const enc of visitsToShow) {
@@ -217,19 +240,19 @@ export function useEncountersContext(
 
       const entry = encMap.get(enc.id)
       if (entry?.diagnoses.length) {
-        items.push(`    Diagnoses: ${entry.diagnoses.join('; ')}`)
+        items.push(`    ICD codes on visit record (billing, not confirmed diagnoses): ${entry.diagnoses.join('; ')}`)
       }
       if (entry?.meds.length) {
         items.push(`    Medications:`)
-        entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m)}`))
+        entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m, audience, locale)}`))
       }
       if (entry?.tests.length) {
         items.push(`    Tests:`)
-        entry.tests.forEach((o) => items.push(`      • ${summarizeObsLine(o)}`))
+        entry.tests.forEach((o) => items.push(`      • ${summarizeObsLine(o, audience, locale)}`))
       }
       if (entry?.procs.length) {
         items.push(`    Procedures:`)
-        entry.procs.forEach((p) => items.push(`      • ${summarizeProcLine(p)}`))
+        entry.procs.forEach((p) => items.push(`      • ${summarizeProcLine(p, audience, locale)}`))
       }
       items.push('')
     }
@@ -239,5 +262,5 @@ export function useEncountersContext(
     }
 
     return { title: 'Visits & Treatment History', items }
-  }, [includeEncounters, clinicalData])
+  }, [includeEncounters, clinicalData, audience, locale])
 }

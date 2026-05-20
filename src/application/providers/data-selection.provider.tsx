@@ -30,24 +30,46 @@ const DataSelectionContext = createContext<DataSelectionContextValue | null>(nul
 
 const storage = new StorageService('localStorage')
 
+// Bump this whenever DataSelection / DataFilters shape changes in a way that
+// makes a pre-existing localStorage entry meaningless. On mismatch we reset
+// the entry to defaults rather than merging — keeps the UI consistent with
+// the new category set.
+const SELECTION_SCHEMA_KEYS: Array<keyof DataSelection> = [
+  'patientInfo', 'vitalSigns', 'problemList',
+  'encounters', 'conditions',
+  'labReports', 'imagingReports', 'procedures', 'observations',
+  'medications', 'allergies', 'immunizations',
+]
+
+const FILTER_SCHEMA_KEYS: Array<keyof DataFilters> = [
+  'conditionStatus', 'problemListStatus',
+  'medicationStatus', 'medicationChronic', 'medicationTimeRange',
+  'labReportVersion', 'labReportTimeRange',
+  'imagingReportVersion', 'imagingReportTimeRange',
+  'vitalSignsVersion', 'vitalSignsTimeRange',
+  'procedureVersion', 'procedureTimeRange',
+  'immunizationTimeRange',
+]
+
+function hasAllKeys<T>(saved: any, keys: Array<keyof T>): boolean {
+  if (!saved || typeof saved !== 'object') return false
+  return keys.every((k) => Object.prototype.hasOwnProperty.call(saved, k))
+}
+
 function getInitialSelection(): DataSelection {
   const saved = storage.get<Partial<DataSelection>>(STORAGE_KEYS.DATA_SELECTION)
-  if (!saved) return DEFAULT_DATA_SELECTION
-
-  return {
-    ...DEFAULT_DATA_SELECTION,
-    ...saved
+  if (!hasAllKeys<DataSelection>(saved, SELECTION_SCHEMA_KEYS)) {
+    return DEFAULT_DATA_SELECTION
   }
+  return { ...DEFAULT_DATA_SELECTION, ...(saved as Partial<DataSelection>) }
 }
 
 function getInitialFilters(): DataFilters {
   const saved = storage.get<Partial<DataFilters>>(STORAGE_KEYS.DATA_FILTERS)
-  if (!saved) return DEFAULT_DATA_FILTERS
-
-  return {
-    ...DEFAULT_DATA_FILTERS,
-    ...saved
+  if (!hasAllKeys<DataFilters>(saved, FILTER_SCHEMA_KEYS)) {
+    return DEFAULT_DATA_FILTERS
   }
+  return { ...DEFAULT_DATA_FILTERS, ...(saved as Partial<DataFilters>) }
 }
 
 export function DataSelectionProvider({ children }: { children: ReactNode }) {

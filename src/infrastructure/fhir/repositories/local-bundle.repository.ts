@@ -21,7 +21,7 @@ export class LocalBundleRepository implements IClinicalDataRepository {
     this.collection = data?.collection ?? {
       conditions: [], medications: [], allergies: [], observations: [],
       vitalSigns: [], diagnosticReports: [], procedures: [], encounters: [],
-      documentReferences: [], compositions: [],
+      documentReferences: [], compositions: [], immunizations: [],
     }
   }
 

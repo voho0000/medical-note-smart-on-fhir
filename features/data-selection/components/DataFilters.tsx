@@ -38,7 +38,8 @@ export function ConditionFilter({ filters, onFilterChange }: CategoryFilterProps
 
 export function MedicationFilter({ filters, onFilterChange }: CategoryFilterProps) {
   const { t } = useLanguage()
-  
+  const dt = t.dataSelection as any
+
   return (
     <div className="mt-2 pl-6 space-y-2">
       <div className="flex items-center space-x-2 text-sm">
@@ -53,6 +54,94 @@ export function MedicationFilter({ filters, onFilterChange }: CategoryFilterProp
           <SelectContent>
             <SelectItem value="active">{t.dataSelection.activeOnly}</SelectItem>
             <SelectItem value="all">{t.dataSelection.allMedications}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center space-x-2 text-sm">
+        <span className="text-muted-foreground">{dt.medicationChronic ?? 'Chronic / Acute:'}</span>
+        <Select
+          value={(filters.medicationChronic as string) || 'all'}
+          onValueChange={(value) => onFilterChange('medicationChronic', value)}
+        >
+          <SelectTrigger className="h-8 w-40">
+            <SelectValue placeholder="Select" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{dt.medicationChronicAll ?? 'All'}</SelectItem>
+            <SelectItem value="chronic">{dt.medicationChronicOnly ?? 'Chronic (慢箋) Only'}</SelectItem>
+            <SelectItem value="acute">{dt.medicationAcuteOnly ?? 'Acute Only'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center space-x-2 text-sm">
+        <span className="text-muted-foreground">{t.timeRanges.timeRange}</span>
+        <Select
+          value={(filters.medicationTimeRange as string) || 'all'}
+          onValueChange={(value) => onFilterChange('medicationTimeRange', value)}
+        >
+          <SelectTrigger className="h-8 w-36">
+            <SelectValue placeholder="Select time range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1m">{t.timeRanges['1m']}</SelectItem>
+            <SelectItem value="3m">{t.timeRanges['3m']}</SelectItem>
+            <SelectItem value="6m">{t.timeRanges['6m']}</SelectItem>
+            <SelectItem value="1y">{t.timeRanges['1y']}</SelectItem>
+            <SelectItem value="all">{t.timeRanges.all}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
+export function ProblemListFilter({ filters, onFilterChange }: CategoryFilterProps) {
+  const { t } = useLanguage()
+  const dt = t.dataSelection as any
+
+  return (
+    <div className="mt-2 pl-6 space-y-2">
+      <div className="flex items-center space-x-2 text-sm">
+        <span className="text-muted-foreground">{dt.problemListStatus ?? 'Status:'}</span>
+        <Select
+          value={(filters.problemListStatus as string) || 'active'}
+          onValueChange={(value) => onFilterChange('problemListStatus', value)}
+        >
+          <SelectTrigger className="h-8 w-36">
+            <SelectValue placeholder="Select" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{t.dataSelection.activeOnly}</SelectItem>
+            <SelectItem value="all">{dt.problemListAll ?? 'All Problems'}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
+export function ImmunizationFilter({ filters, onFilterChange }: CategoryFilterProps) {
+  const { t } = useLanguage()
+  const tr = t.timeRanges as any
+
+  return (
+    <div className="mt-2 pl-6 space-y-2">
+      <div className="flex items-center space-x-2 text-sm">
+        <span className="text-muted-foreground">{t.timeRanges.timeRange}</span>
+        <Select
+          value={(filters.immunizationTimeRange as string) || 'all'}
+          onValueChange={(value) => onFilterChange('immunizationTimeRange', value)}
+        >
+          <SelectTrigger className="h-8 w-36">
+            <SelectValue placeholder="Select time range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1y">{t.timeRanges['1y']}</SelectItem>
+            <SelectItem value="3y">{tr['3y'] ?? 'Last 3 years'}</SelectItem>
+            <SelectItem value="5y">{tr['5y'] ?? 'Last 5 years'}</SelectItem>
+            <SelectItem value="all">{t.timeRanges.all}</SelectItem>
           </SelectContent>
         </Select>
       </div>

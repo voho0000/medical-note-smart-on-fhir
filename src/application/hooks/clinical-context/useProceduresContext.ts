@@ -3,14 +3,25 @@ import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
 import type { ClinicalData } from "./types"
+import { useAudience } from "@/src/application/providers/audience.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { pickLocalizedText } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 
 export function useProceduresContext(
   includeProcedures: boolean,
   clinicalData: ClinicalData | null,
   filters?: DataFilters
 ): ClinicalContextSection | null {
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
   return useMemo(() => {
     if (!includeProcedures || !clinicalData?.procedures?.length) return null
+
+    const procedureName = (procedure: any): string =>
+      pickLocalizedText(procedure.code, audience, locale)
+      || procedure.code?.text
+      || procedure.code?.coding?.[0]?.display
+      || "Procedure"
 
     // Filter by time range
     let procedures = clinicalData.procedures.filter((procedure) => {
@@ -26,11 +37,11 @@ export function useProceduresContext(
     if (filters?.procedureVersion === 'latest') {
       const byName = new Map<string, typeof procedures[0]>()
       procedures.forEach(procedure => {
-        const name = procedure.code?.text || procedure.code?.coding?.[0]?.display || "Procedure"
+        const name = procedureName(procedure)
         const existing = byName.get(name)
         const performed = procedure.performedDateTime || procedure.performedPeriod?.end || procedure.performedPeriod?.start
         const existingPerformed = existing?.performedDateTime || existing?.performedPeriod?.end || existing?.performedPeriod?.start
-        
+
         if (!existing || (performed && existingPerformed && performed > existingPerformed)) {
           byName.set(name, procedure)
         }
@@ -40,7 +51,7 @@ export function useProceduresContext(
 
     // Format items
     const items = procedures.map((procedure) => {
-      const name = procedure.code?.text || procedure.code?.coding?.[0]?.display || "Procedure"
+      const name = procedureName(procedure)
       const performed = procedure.performedDateTime || procedure.performedPeriod?.end || procedure.performedPeriod?.start
       const datePart = performed ? ` (${new Date(performed).toLocaleDateString()})` : ""
       const status = procedure.status ? ` – ${procedure.status}` : ""
@@ -50,5 +61,5 @@ export function useProceduresContext(
     if (items.length === 0) return null
 
     return { title: "Procedures", items }
-  }, [includeProcedures, clinicalData, filters])
+  }, [includeProcedures, clinicalData, filters, audience, locale])
 }

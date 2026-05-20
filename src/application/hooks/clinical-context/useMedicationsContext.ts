@@ -6,6 +6,9 @@ import { useMemo } from "react"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
+import { useAudience } from "@/src/application/providers/audience.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { pickLocalizedText } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
 
@@ -18,6 +21,26 @@ interface MedSummary {
   endDate?: string
   daysRemaining?: number
   isInactive: boolean
+  isChronic: boolean
+}
+
+function isChronicMedication(med: any): boolean {
+  const coding = med?.courseOfTherapyType?.coding
+  if (!Array.isArray(coding)) return false
+  return coding.some((c: any) => c?.code === 'continuous')
+}
+
+function isWithinTimeRangeDays(date: string | undefined, range: string): boolean {
+  if (range === 'all' || !date) return true
+  const ms = Date.parse(date)
+  if (Number.isNaN(ms)) return false
+  const days =
+    range === '1m' ? 30 :
+    range === '3m' ? 90 :
+    range === '6m' ? 180 :
+    range === '1y' ? 365 :
+    Infinity
+  return Date.now() - ms <= days * 86400000
 }
 
 function toDays(duration: any): number | undefined {
@@ -34,8 +57,13 @@ function toDays(duration: any): number | undefined {
   return Math.round(value * factor)
 }
 
-function summarize(med: any): MedSummary {
-  const name = med.medicationCodeableConcept?.text
+function summarize(
+  med: any,
+  audience: 'medical' | 'patient',
+  locale: string,
+): MedSummary {
+  const name = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+    || med.medicationCodeableConcept?.text
     || med.medicationCodeableConcept?.coding?.[0]?.display
     || med.medicationReference?.display
     || 'Unknown medication'
@@ -76,11 +104,12 @@ function summarize(med: any): MedSummary {
     endDate,
     daysRemaining,
     isInactive,
+    isChronic: isChronicMedication(med),
   }
 }
 
 function formatLine(m: MedSummary, mode: 'active' | 'recent'): string {
-  const parts: string[] = [m.name]
+  const parts: string[] = [m.isChronic ? `${m.name} [慢箋]` : m.name]
   const dosing = [m.dose, m.frequency, m.route].filter(Boolean).join(', ')
   if (dosing) parts.push(`(${dosing})`)
   if (mode === 'active') {
@@ -101,10 +130,28 @@ export function useMedicationsContext(
   clinicalData: ClinicalData | null,
   filters?: DataFilters
 ): ClinicalContextSection | null {
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
   return useMemo(() => {
     if (!includeMedications || !clinicalData?.medications?.length) return null
 
-    const summaries = clinicalData.medications.map((m: any) => summarize(m))
+    let meds = clinicalData.medications
+
+    // Apply chronic / acute filter
+    const chronic = (filters?.medicationChronic as string) || 'all'
+    if (chronic === 'chronic') {
+      meds = meds.filter((m: any) => isChronicMedication(m))
+    } else if (chronic === 'acute') {
+      meds = meds.filter((m: any) => !isChronicMedication(m))
+    }
+
+    // Apply time-range filter on authoredOn
+    const timeRange = (filters?.medicationTimeRange as string) || 'all'
+    if (timeRange !== 'all') {
+      meds = meds.filter((m: any) => isWithinTimeRangeDays(m.authoredOn, timeRange))
+    }
+
+    const summaries = meds.map((m: any) => summarize(m, audience, locale))
 
     const now = Date.now()
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -148,5 +195,5 @@ export function useMedicationsContext(
 
     if (items.length === 0) return null
     return { title: "Patient's Medications", items }
-  }, [includeMedications, clinicalData, filters])
+  }, [includeMedications, clinicalData, filters, audience, locale])
 }

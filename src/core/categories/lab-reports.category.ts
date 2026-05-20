@@ -38,7 +38,7 @@ export const labReportsCategory: DataCategory<LabData> = {
   labelKey: 'dataSelection.labReports',
   description: 'Laboratory test results and panels',
   descriptionKey: 'dataSelection.labReportsDesc',
-  group: 'diagnostics',
+  group: 'reports',
   order: 40,
   
   filters: [

@@ -4,18 +4,20 @@ import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/cl
 import { mapAndFilter } from "./formatters"
 import type { ClinicalData } from "./types"
 import { lookupIcd, buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { pickByLocale } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 
-function formatConditionName(condition: any, dict: Map<string, string>): string {
-  const text = condition.code?.text
+function formatConditionName(condition: any, dict: Map<string, string>, locale: string): string {
   const coding = condition.code?.coding ?? []
   const icdCoding = coding.find((c: any) => c.system?.toLowerCase().includes('icd')) || coding[0]
   const code = icdCoding?.code
   const display = icdCoding?.display
   const lookup = code ? lookupIcd(code, dict) : undefined
 
-  // Prefer text first, then coding display, then ICD lookup
-  const baseName = text || display || lookup || code || 'Unknown diagnosis'
-  // If we have an ICD code, prepend it
+  // ICD descriptions follow UI language only (not audience). pickByLocale
+  // gives Chinese text in zh-TW UI and English display in en UI.
+  const localized = pickByLocale(condition.code, locale)
+  const baseName = localized || lookup || display || code || 'Unknown diagnosis'
   if (code && code !== baseName) {
     return `${code} - ${baseName}`
   }
@@ -27,11 +29,12 @@ export function useConditionsContext(
   clinicalData: ClinicalData | null,
   filters?: DataFilters
 ): ClinicalContextSection | null {
+  const { locale } = useLanguage()
   return useMemo(() => {
     if (!includeConditions || !clinicalData?.conditions?.length) return null
 
-    // Build ICD dictionary from current conditions for cross-referencing
-    const icdDict = buildIcdDictionary(clinicalData.conditions as any[])
+    // ICD descriptions follow UI language only (not audience).
+    const icdDict = buildIcdDictionary(clinicalData.conditions as any[], locale)
 
     // Filter conditions by status if filter is set to 'active'
     let conditions = clinicalData.conditions
@@ -91,7 +94,7 @@ export function useConditionsContext(
     if (activeConditions.length > 0) {
       items.push('Active Conditions:')
       activeConditions.forEach((condition: any) => {
-        const name = formatConditionName(condition, icdDict)
+        const name = formatConditionName(condition, icdDict, locale)
         const date = condition.recordedDate ? ` (recorded: ${new Date(condition.recordedDate).toLocaleDateString()})` : ''
         items.push(`  • ${name}${date}`)
       })
@@ -102,7 +105,7 @@ export function useConditionsContext(
       if (items.length > 0) items.push('') // Add blank line separator
       items.push('Resolved Conditions:')
       resolvedConditions.forEach((condition: any) => {
-        const name = formatConditionName(condition, icdDict)
+        const name = formatConditionName(condition, icdDict, locale)
         const date = condition.recordedDate ? ` (${new Date(condition.recordedDate).toLocaleDateString()})` : ''
         const status = condition.clinicalStatus?.coding?.[0]?.code ||
                       condition.clinicalStatus?.text ||
@@ -115,5 +118,5 @@ export function useConditionsContext(
     if (items.length === 0) return null
 
     return { title: "Patient's Conditions", items }
-  }, [includeConditions, clinicalData, filters])
+  }, [includeConditions, clinicalData, filters, locale])
 }

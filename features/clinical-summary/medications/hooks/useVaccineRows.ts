@@ -16,6 +16,10 @@ export interface VaccineDoseEvent {
   lotNumber?: string
   manufacturer?: string
   source?: string  // 來源 (e.g. 疾病管制署)
+  // Legacy fields kept for UI compatibility (Immunization resources don't carry these,
+  // but the rendering layer reads them defensively for historical bundles).
+  icdCode?: string
+  icdText?: string
 }
 
 export interface VaccineRow {

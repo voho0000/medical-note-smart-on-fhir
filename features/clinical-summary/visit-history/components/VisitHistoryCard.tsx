@@ -46,15 +46,15 @@ export function VisitHistoryCard() {
   const [sortMode, setSortMode] = useState<SortMode>('date-desc')
 
   // ── Data derivation ────────────────────────────────────────────────────
-  const visitHistory = useVisitHistory(encounters)
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
     clinicalNotes, conditions, locale, audience,
   )
-  const visitStats = useVisitStats(encounterDetails)
   // ICD dict prefers Chinese when UI is zh-TW; English coding[].display when UI is en.
   const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
+  const visitHistory = useVisitHistory(encounters, icdDict)
+  const visitStats = useVisitStats(encounterDetails)
 
   // Unique institutions for the dropdown
   const institutions = useMemo(() => {
@@ -358,7 +358,6 @@ export function VisitHistoryCard() {
                   visit={visit}
                   details={encounterDetails.get(visit.id)}
                   abnormalCount={visitStats.get(visit.id)?.abnormalCount ?? 0}
-                  icdDict={icdDict}
                   isExpanded={expandedVisitId === visit.id}
                   onToggle={() => setExpandedVisitId((prev) => (prev === visit.id ? null : visit.id))}
                 />

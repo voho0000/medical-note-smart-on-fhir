@@ -165,3 +165,72 @@ export function resolveIcdCodes(
     description: lookupIcd(code, dict),
   }))
 }
+
+/**
+ * Extract every ICD diagnosis from an Encounter, supporting both
+ * NHI-FHIR-Bridge formats:
+ *
+ *   - NEW (v0.7.x+, ~2026-05): each diagnosis is its own `reasonCode[i]`
+ *     entry with `coding[].code`, English `coding[].display`, and a
+ *     "CODE 中文" `text`. Primary diagnosis is `reasonCode[0]`, secondary
+ *     diagnoses follow.
+ *
+ *   - OLD: a single `reasonCode[0].text` holds comma-separated codes like
+ *     "C50.912,N95.1,N73.9", no per-code display.
+ *
+ * `locale` controls which language wins when both are present:
+ *   'en'    → English coding[].display preferred
+ *   others  → 中文 text preferred (with the leading "CODE " prefix stripped)
+ *
+ * Falls back to the dict / built-in lookup when neither is usable.
+ */
+export function extractEncounterIcds(
+  encounter: any,
+  dict?: Map<string, string>,
+  locale: string = 'zh-TW'
+): IcdCode[] {
+  const reasonCodes: any[] = Array.isArray(encounter?.reasonCode) ? encounter.reasonCode : []
+  if (reasonCodes.length === 0) return []
+
+  const out: IcdCode[] = []
+  const seen = new Set<string>()
+  const push = (code: string, description?: string) => {
+    if (!code || seen.has(code)) return
+    seen.add(code)
+    out.push({ code, description })
+  }
+
+  const preferEnglish = locale === 'en'
+
+  for (const rc of reasonCodes) {
+    const coding = Array.isArray(rc?.coding) ? rc.coding : []
+    const primaryCoding = coding.find((c: any) => c?.code) || coding[0]
+    const code = primaryCoding?.code
+    const display = typeof primaryCoding?.display === 'string' ? primaryCoding.display.trim() : ''
+    const rawText = typeof rc?.text === 'string' ? rc.text.trim() : ''
+
+    if (code) {
+      // NEW format: per-reasonCode entry. Strip the leading "CODE " from text
+      // so we get just the Chinese description.
+      const textNoPrefix = rawText.replace(new RegExp('^' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '').trim()
+      const picked = preferEnglish
+        ? (display || textNoPrefix || lookupIcd(code, dict))
+        : (textNoPrefix || display || lookupIcd(code, dict))
+      push(code, picked || undefined)
+      continue
+    }
+
+    // OLD format fallback: comma-separated codes inside reasonCode[*].text.
+    if (rawText) {
+      const codes = parseIcdCodes(rawText)
+      if (codes.length > 0) {
+        for (const c of codes) push(c, lookupIcd(c, dict))
+      } else {
+        // No parsable codes — keep the raw text as-is.
+        push(rawText, undefined)
+      }
+    }
+  }
+
+  return out
+}

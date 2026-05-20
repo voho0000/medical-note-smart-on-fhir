@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { DataCategoryItem } from "./DataCategoryItem"
@@ -9,7 +9,6 @@ import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { FilterValue } from "@/src/core/interfaces/data-category.interface"
 
-// Separated interfaces following Interface Segregation Principle
 interface CategoryListProps {
   dataCategories: DataItem[]
 }
@@ -30,12 +29,19 @@ interface BulkSelectionProps {
   someSelected: boolean
 }
 
-// Combined interface for the component
-interface DataSelectionTabProps 
-  extends CategoryListProps, 
-          SelectionProps, 
-          FilteringProps, 
+interface DataSelectionTabProps
+  extends CategoryListProps,
+          SelectionProps,
+          FilteringProps,
           BulkSelectionProps {}
+
+// Display order for the 4 left-panel-aligned groups.
+const GROUPS: Array<{ id: string; labelKey: string; fallback: string }> = [
+  { id: 'patient',    labelKey: 'patient',     fallback: 'Patient' },
+  { id: 'visit',      labelKey: 'visits',      fallback: 'Visits' },
+  { id: 'reports',    labelKey: 'reports',     fallback: 'Reports' },
+  { id: 'medication', labelKey: 'medications', fallback: 'Medications' },
+]
 
 export function DataSelectionTab(props: DataSelectionTabProps) {
   const {
@@ -46,7 +52,6 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
     onToggleAll,
     onFilterChange,
     allSelected,
-    someSelected,
   } = props
   const { t } = useLanguage()
   const [mounted, setMounted] = useState(false)
@@ -55,9 +60,27 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
     setMounted(true)
   }, [])
 
+  const groupedCategories = useMemo(() => {
+    const map = new Map<string, DataItem[]>()
+    GROUPS.forEach((g) => map.set(g.id, []))
+    const unknown: DataItem[] = []
+    dataCategories.forEach((item) => {
+      const groupId = item.category || 'unknown'
+      const bucket = map.get(groupId)
+      if (bucket) {
+        bucket.push(item)
+      } else {
+        unknown.push(item)
+      }
+    })
+    return { map, unknown }
+  }, [dataCategories])
+
   if (!mounted) {
     return null
   }
+
+  const groupTitles = (t.dataSelection as any).groups ?? {}
 
   return (
     <div className="space-y-6">
@@ -69,8 +92,8 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => onToggleAll(!allSelected)}
           >
@@ -79,32 +102,68 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
         </div>
       </div>
 
-      <div className="space-y-3">
-        {dataCategories.map((item) => {
-          // Get the category from registry
-          const category = dataCategoryRegistry.get(item.id)
-          const FilterComponent = category?.FilterComponent
-          
-          // Type adapter: convert DataFilters to Record<string, FilterValue>
-          const adaptedFilters = filters as unknown as Record<string, FilterValue>
-          const adaptedOnFilterChange = (key: string, value: FilterValue) => {
-            onFilterChange(key as keyof DataFilters, value)
-          }
-          
+      <div className="space-y-6">
+        {GROUPS.map((group) => {
+          const items = groupedCategories.map.get(group.id) || []
+          if (items.length === 0) return null
+          const title = groupTitles[group.labelKey] ?? group.fallback
           return (
-            <DataCategoryItem
-              key={item.id}
-              item={item}
-              isSelected={!!selectedData[item.id]}
-              onToggle={onToggle}
-              FilterComponent={FilterComponent}
-              filterProps={{
-                filters: adaptedFilters,
-                onFilterChange: adaptedOnFilterChange
-              }}
-            />
+            <div key={group.id} className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                {title}
+              </h3>
+              <div className="space-y-3">
+                {items.map((item) => {
+                  const category = dataCategoryRegistry.get(item.id)
+                  const FilterComponent = category?.FilterComponent
+                  const adaptedFilters = filters as unknown as Record<string, FilterValue>
+                  const adaptedOnFilterChange = (key: string, value: FilterValue) => {
+                    onFilterChange(key as keyof DataFilters, value)
+                  }
+                  return (
+                    <DataCategoryItem
+                      key={item.id}
+                      item={item}
+                      isSelected={!!selectedData[item.id]}
+                      onToggle={onToggle}
+                      FilterComponent={FilterComponent}
+                      filterProps={{
+                        filters: adaptedFilters,
+                        onFilterChange: adaptedOnFilterChange
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
           )
         })}
+
+        {groupedCategories.unknown.length > 0 && (
+          <div className="space-y-3">
+            {groupedCategories.unknown.map((item) => {
+              const category = dataCategoryRegistry.get(item.id)
+              const FilterComponent = category?.FilterComponent
+              const adaptedFilters = filters as unknown as Record<string, FilterValue>
+              const adaptedOnFilterChange = (key: string, value: FilterValue) => {
+                onFilterChange(key as keyof DataFilters, value)
+              }
+              return (
+                <DataCategoryItem
+                  key={item.id}
+                  item={item}
+                  isSelected={!!selectedData[item.id]}
+                  onToggle={onToggle}
+                  FilterComponent={FilterComponent}
+                  filterProps={{
+                    filters: adaptedFilters,
+                    onFilterChange: adaptedOnFilterChange
+                  }}
+                />
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

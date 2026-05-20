@@ -27,7 +27,7 @@ export const proceduresCategory: DataCategory<Procedure> = {
   labelKey: 'dataSelection.procedures',
   description: 'Medical procedures and interventions',
   descriptionKey: 'dataSelection.proceduresDesc',
-  group: 'procedures',
+  group: 'reports',
   order: 60,
   
   filters: [

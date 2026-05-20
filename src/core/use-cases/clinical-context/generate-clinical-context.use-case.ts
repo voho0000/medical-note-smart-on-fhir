@@ -102,11 +102,11 @@ export class GenerateClinicalContextUseCase {
       }
     }
 
-    // Diagnostic Reports
-    if (selection.diagnosticReports && clinicalData.diagnosticReports.length > 0) {
+    // Diagnostic Reports (driven by labReports toggle in the new schema)
+    if (selection.labReports && clinicalData.diagnosticReports.length > 0) {
       const filtered = this.filterByTimeRange(
         clinicalData.diagnosticReports,
-        filters.reportTimeRange,
+        filters.labReportTimeRange,
         r => r.effectiveDateTime
       )
 
@@ -140,8 +140,8 @@ export class GenerateClinicalContextUseCase {
       }
     }
 
-    // Vital Signs & Observations
-    if (selection.observations) {
+    // Vital Signs
+    if (selection.vitalSigns) {
       const vitalItems = this.formatVitalSigns(
         clinicalData.vitalSigns,
         filters.vitalSignsTimeRange

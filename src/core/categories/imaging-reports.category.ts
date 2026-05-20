@@ -21,7 +21,7 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
   labelKey: 'dataSelection.imagingReports',
   description: 'Radiology and imaging study reports',
   descriptionKey: 'dataSelection.imagingReportsDesc',
-  group: 'diagnostics',
+  group: 'reports',
   order: 50,
   
   filters: [

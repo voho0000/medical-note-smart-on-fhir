@@ -23,7 +23,7 @@ export const conditionsCategory: DataCategory<Condition> = {
   labelKey: 'dataSelection.conditions',
   description: 'Current and historical diagnoses',
   descriptionKey: 'dataSelection.conditionsDesc',
-  group: 'clinical',
+  group: 'visit',
   order: 10,
   
   filters: [

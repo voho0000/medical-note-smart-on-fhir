@@ -10,22 +10,13 @@
 
 import { useState, useEffect } from 'react'
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
-import { fhirClient, LocalBundleModeError, shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { fhirClient, LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-client.service'
 
 export function useFhirTools(patientId: string | undefined) {
   const [tools, setTools] = useState<ReturnType<typeof createFhirTools> | null>(null)
 
   useEffect(() => {
     if (!patientId) {
-      setTools(null)
-      return
-    }
-
-    // Local-bundle mode (and no SMART context): AI FHIR tools require a live
-    // SMART client, which doesn't exist when reading from a locally-imported
-    // bundle. Skip init — the AI agent simply won't have FHIR query tools in
-    // this mode.
-    if (shouldUseLocalBundle()) {
       setTools(null)
       return
     }

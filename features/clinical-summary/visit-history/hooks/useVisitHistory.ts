@@ -1,5 +1,7 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText } from "../utils/formatters"
+import { extractEncounterIcds, type IcdCode } from "@/src/shared/utils/icd-lookup"
+import { useLanguage } from "@/src/application/providers/language.provider"
 
 type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
@@ -10,13 +12,16 @@ export interface VisitRecord {
   location?: string
   institution?: string  // hospital / facility name used for filtering
   reason?: string
+  /** All ICD diagnoses on the visit, in order: primary first, then secondaries. */
+  icdCodes: IcdCode[]
   diagnosis?: string
   status: string
   department?: string
   physician?: string
 }
 
-export function useVisitHistory(encounters: any[]) {
+export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>) {
+  const { locale } = useLanguage()
   return useMemo<VisitRecord[]>(() => {
     if (!Array.isArray(encounters)) return []
     
@@ -83,10 +88,14 @@ export function useVisitHistory(encounters: any[]) {
         let location = locationDisplay ||
                      (providerDisplay && !isUuid(providerDisplay) ? providerDisplay : '')
         
-        const reason = encounter.reasonCode?.[0]?.text || 
-                      encounter.reasonReference?.[0]?.display ||
-                      encounter.type?.[0]?.text
-        
+        // Extract every ICD diagnosis on the visit (primary + secondaries).
+        // Falls back to reasonReference / type[].text only when no ICD codes
+        // are present.
+        const icdCodes = extractEncounterIcds(encounter, icdDict, locale)
+        const reason = icdCodes.length > 0
+          ? icdCodes.map((c) => c.description ? `${c.code} - ${c.description}` : c.code).join(', ')
+          : (encounter.reasonReference?.[0]?.display || encounter.type?.[0]?.text)
+
         const diagnosis = encounter.diagnosis?.find((d: any) => d.rank === 1)?.condition?.display ||
                          encounter.diagnosis?.[0]?.condition?.display
 
@@ -108,6 +117,7 @@ export function useVisitHistory(encounters: any[]) {
           location,
           institution: institution || undefined,
           reason,
+          icdCodes,
           diagnosis,
           status: encounter.status,
           department: department || undefined,
@@ -115,5 +125,5 @@ export function useVisitHistory(encounters: any[]) {
         }
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [encounters])
+  }, [encounters, icdDict, locale])
 }

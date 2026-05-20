@@ -12,6 +12,7 @@ export const AGENT_TOOL_NAMES = [
   'queryDiagnosticReports',
   'queryProcedures',
   'queryEncounters',
+  'queryImmunizations',
   'searchMedicalLiterature',
 ] as const
 

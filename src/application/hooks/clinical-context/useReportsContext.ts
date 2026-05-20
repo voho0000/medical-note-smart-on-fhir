@@ -18,7 +18,7 @@ export function useReportsContext(
     }
 
     const filteredReports = clinicalData.diagnosticReports.filter((report) =>
-      isWithinTimeRange(report.effectiveDateTime, filters?.reportTimeRange ?? "1m")
+      isWithinTimeRange(report.effectiveDateTime, filters?.labReportTimeRange ?? "1m")
     )
 
     if (filteredReports.length === 0) {

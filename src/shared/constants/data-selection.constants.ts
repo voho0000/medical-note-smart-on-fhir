@@ -1,29 +1,36 @@
 // Data Selection Constants
-// These are kept for backward compatibility
-// New code should use dataCategoryRegistry.getDefaultSelection() and getDefaultFilters()
+// Default selection / filters for the right-side Data Selection panel.
 
 import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-context.entity'
 
-// Legacy default selection - includes both old and new category IDs
 export const DEFAULT_DATA_SELECTION: DataSelection = {
+  // Patient group
   patientInfo: true,
-  encounters: true,        // New: encounter-centric view (preferred for AI context)
-  conditions: false,       // Off by default — covered by encounters section
-  medications: false,      // Off by default — covered by encounters section
-  allergies: true,
-  diagnosticReports: false,
+  vitalSigns: true,
+  problemList: true,
+
+  // Visit group
+  encounters: true,
+  conditions: false,        // Off — encounter view already covers per-visit diagnoses
+
+  // Reports group
   labReports: true,
   imagingReports: true,
-  procedures: false,       // Off by default — covered by encounters section
-  observations: true
+  procedures: true,
+  observations: false,      // Orphan observations — off by default (low signal)
+
+  // Medication group
+  medications: true,
+  allergies: true,
+  immunizations: true,
 }
 
-// Legacy default filters - includes both old and new filter keys
 export const DEFAULT_DATA_FILTERS: DataFilters = {
   conditionStatus: 'active',
+  problemListStatus: 'active',
   medicationStatus: 'active',
-  reportInclusion: 'latest',
-  reportTimeRange: 'all',
+  medicationChronic: 'all',
+  medicationTimeRange: 'all',
   labReportVersion: 'latest',
   labReportTimeRange: 'all',
   imagingReportVersion: 'latest',
@@ -31,7 +38,8 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   vitalSignsVersion: 'latest',
   vitalSignsTimeRange: 'all',
   procedureVersion: 'latest',
-  procedureTimeRange: 'all'
+  procedureTimeRange: 'all',
+  immunizationTimeRange: 'all',
 }
 
 export const STORAGE_KEYS = {

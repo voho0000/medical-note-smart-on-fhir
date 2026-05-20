@@ -3,37 +3,51 @@
 
 import { registerDataCategory } from '../registry/data-category.registry'
 import { patientInfoCategory } from './patient-info.category'
+import { vitalSignsCategory } from './vital-signs.category'
+import { problemListCategory } from './problem-list.category'
 import { encountersCategory } from './encounters.category'
 import { conditionsCategory } from './conditions.category'
-import { medicationsCategory } from './medications.category'
-import { allergiesCategory } from './allergies.category'
 import { labReportsCategory } from './lab-reports.category'
 import { imagingReportsCategory } from './imaging-reports.category'
 import { proceduresCategory } from './procedures.category'
-import { vitalSignsCategory } from './vital-signs.category'
+import { observationsCategory } from './observations.category'
+import { medicationsCategory } from './medications.category'
+import { allergiesCategory } from './allergies.category'
+import { immunizationsCategory } from './immunizations.category'
 
-// Register all categories
 export function initializeCategories(): void {
+  // Patient group
   registerDataCategory(patientInfoCategory)
+  registerDataCategory(vitalSignsCategory)
+  registerDataCategory(problemListCategory)
+
+  // Visit group
   registerDataCategory(encountersCategory)
   registerDataCategory(conditionsCategory)
-  registerDataCategory(medicationsCategory)
-  registerDataCategory(allergiesCategory)
+
+  // Reports group
   registerDataCategory(labReportsCategory)
   registerDataCategory(imagingReportsCategory)
   registerDataCategory(proceduresCategory)
-  registerDataCategory(vitalSignsCategory)
+  registerDataCategory(observationsCategory)
+
+  // Medication group
+  registerDataCategory(medicationsCategory)
+  registerDataCategory(allergiesCategory)
+  registerDataCategory(immunizationsCategory)
 }
 
-// Export individual categories for direct access if needed
 export {
   patientInfoCategory,
+  vitalSignsCategory,
+  problemListCategory,
   encountersCategory,
   conditionsCategory,
-  medicationsCategory,
-  allergiesCategory,
   labReportsCategory,
   imagingReportsCategory,
   proceduresCategory,
-  vitalSignsCategory
+  observationsCategory,
+  medicationsCategory,
+  allergiesCategory,
+  immunizationsCategory
 }

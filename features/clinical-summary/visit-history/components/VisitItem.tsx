@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { EncounterObservationCard } from "./EncounterObservationCard"
 import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
@@ -8,7 +9,6 @@ import type { VisitRecord } from "../hooks/useVisitHistory"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
-import { resolveIcdCodes } from "@/src/shared/utils/icd-lookup"
 
 type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
@@ -16,7 +16,6 @@ interface VisitItemProps {
   visit: VisitRecord
   details?: EncounterDetails
   abnormalCount?: number
-  icdDict?: Map<string, string>
   isExpanded: boolean
   onToggle: () => void
 }
@@ -35,10 +34,12 @@ const getTypeBadge = (type: VisitType, labels: any) => {
   return <Badge variant={variant}>{label}</Badge>
 }
 
-export function VisitItem({ visit, details, abnormalCount = 0, icdDict, isExpanded, onToggle }: VisitItemProps) {
+export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
-  const reasonCodes = resolveIcdCodes(visit.reason, icdDict)
+  const reasonCodes = visit.icdCodes
   const hasIcdCodes = reasonCodes.length > 0 && /^[A-Z]\d/.test(reasonCodes[0].code)
+  const hasSecondaryIcds = hasIcdCodes && reasonCodes.length > 1
+  const [icdExpanded, setIcdExpanded] = useState(false)
   const hasDetails = !!(details && (
     details.diagnoses.length > 0 ||
     details.medications.length > 0 ||
@@ -83,26 +84,54 @@ export function VisitItem({ visit, details, abnormalCount = 0, icdDict, isExpand
           <div className="mt-2 space-y-1 text-sm">
             {visit.reason && (
               <div>
-                <span className="font-medium text-muted-foreground">{t.visitHistory.reason}: </span>
+                <span
+                  className="font-medium text-muted-foreground"
+                  title={(t.visitHistory as any).icdCodesTooltip}
+                >
+                  {(t.visitHistory as any).recordedIcdCodes ?? t.visitHistory.reason}:{' '}
+                </span>
                 {hasIcdCodes ? (
                   <span className="inline-flex flex-wrap gap-1 align-middle">
-                    {reasonCodes.map((rc, i) => (
+                    {/* Default: primary only. Click "+N" to reveal secondaries inline. */}
+                    {(icdExpanded ? reasonCodes : reasonCodes.slice(0, 1)).map((rc, i) => (
                       <span
                         key={`${rc.code}-${i}`}
-                        title={rc.description || rc.code}
-                        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-800"
+                        title={(t.visitHistory as any).icdCodesTooltip}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 select-text cursor-text"
                       >
                         <span className="font-mono font-medium">{rc.code}</span>
                         {rc.description && (
-                          <span className="text-blue-700/80 max-w-[200px] truncate">
+                          <span className="text-amber-700/80 max-w-[200px] truncate">
                             {rc.description}
                           </span>
                         )}
                       </span>
                     ))}
+                    {hasSecondaryIcds && (
+                      <button
+                        type="button"
+                        title={(t.visitHistory as any).icdCodesTooltip}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIcdExpanded((v) => !v)
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50/60 px-1.5 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100 transition-colors"
+                      >
+                        {icdExpanded ? '−' : `+${reasonCodes.length - 1}`}
+                      </button>
+                    )}
                   </span>
                 ) : (
-                  <span>{visit.reason}</span>
+                  <span
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="select-text cursor-text"
+                  >
+                    {visit.reason}
+                  </span>
                 )}
               </div>
             )}

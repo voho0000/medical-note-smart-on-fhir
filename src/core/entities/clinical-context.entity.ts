@@ -2,7 +2,7 @@
 
 import type { FilterValue } from '@/src/core/interfaces/data-category.interface'
 
-export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | 'all'
+export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | '3y' | '5y' | 'all'
 
 export interface ClinicalContextSection {
   title: string
@@ -13,24 +13,40 @@ export interface ClinicalContextSection {
 export type { FilterValue }
 
 export interface DataSelection {
+  // Patient group
   patientInfo: boolean
-  /** Encounter-centric view: each visit grouped with its diagnoses/meds/tests */
+  vitalSigns: boolean
+  problemList: boolean
+
+  // Visit group
   encounters: boolean
   conditions: boolean
-  medications: boolean
-  allergies: boolean
-  diagnosticReports: boolean  // Legacy - kept for backward compatibility
+
+  // Reports group
   labReports: boolean
   imagingReports: boolean
   procedures: boolean
-  observations: boolean
+  observations: boolean // orphan observations (not vitals, not lab, not imaging)
+
+  // Medication group
+  medications: boolean
+  allergies: boolean
+  immunizations: boolean
 }
 
 export interface DataFilters {
+  // Conditions
   conditionStatus: 'active' | 'all'
+
+  // Problem list
+  problemListStatus: 'active' | 'all'
+
+  // Medications
   medicationStatus: 'active' | 'all'
-  reportInclusion: 'latest' | 'all'
-  reportTimeRange: TimeRange
+  medicationChronic: 'all' | 'chronic' | 'acute'
+  medicationTimeRange: TimeRange
+
+  // Reports / observations
   labReportVersion: 'latest' | 'all'
   labReportTimeRange: TimeRange
   imagingReportVersion: 'latest' | 'all'
@@ -39,6 +55,9 @@ export interface DataFilters {
   vitalSignsTimeRange: TimeRange
   procedureVersion: 'latest' | 'all'
   procedureTimeRange: TimeRange
+
+  // Immunizations
+  immunizationTimeRange: TimeRange
 }
 
 export interface ClinicalContextOptions {
