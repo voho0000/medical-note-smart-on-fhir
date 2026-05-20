@@ -79,6 +79,40 @@ export interface MedicationEntity {
       system?: string
     }>
   }
+  /**
+   * FHIR R4 MedicationRequest.category — drug class / therapeutic group.
+   * Bridge v0.6.10+ sends Chinese in `text` (e.g. "降血壓藥") and English
+   * in `coding[].display` (e.g. "HYPOTENSIVE AGENTS").
+   */
+  category?: Array<{
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }>
+  /**
+   * FHIR R4 MedicationRequest.requester — prescribing clinic / dispensing
+   * pharmacy. The bridge writes the institution short name into
+   * `requester.display` (e.g. "益安大藥局").
+   */
+  requester?: {
+    display?: string
+    reference?: string
+  }
+  /**
+   * FHIR R4 MedicationRequest.reasonCode — billing ICD-10 attached to the
+   * prescription. NOT a confirmed clinical diagnosis (see billingIcdTooltip).
+   */
+  reasonCode?: Array<{
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

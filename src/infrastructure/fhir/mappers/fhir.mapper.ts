@@ -95,6 +95,9 @@ export class FhirMapper implements IDataMapper {
       encounter: fhirResource.encounter,
       dispenseRequest: fhirResource.dispenseRequest,
       courseOfTherapyType: fhirResource.courseOfTherapyType,
+      category: fhirResource.category,
+      requester: fhirResource.requester,
+      reasonCode: fhirResource.reasonCode,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
