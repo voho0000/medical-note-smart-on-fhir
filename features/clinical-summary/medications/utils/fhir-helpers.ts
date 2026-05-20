@@ -7,11 +7,13 @@ export {
 /**
  * Audience-aware text resolution for a FHIR CodeableConcept.
  *
+ * Used for clinician-vs-patient terminology choices like drug names and
+ * ICD descriptions, where medical professionals prefer the canonical
+ * English even when the UI language is Chinese (pharmacology habit).
+ *
  * Bridge contract (NHI-FHIR-Bridge v0.6.10+):
- *   - `text`         carries the localized (zh-TW) display string
- *   - `coding[].display`  carries the canonical English label
- * Older bundles may have English in `text` and nothing else — the fallback
- * chain below stays safe in both cases.
+ *   - `text`              localized (zh-TW) display string
+ *   - `coding[].display`  canonical English label
  *
  *   audience = 'patient' → prefer 中文 (`text`), fall back to English coding
  *   audience = 'medical' → prefer English coding[].display, fall back to text
@@ -30,6 +32,31 @@ export function pickLocalizedText(
     return text || codedStr || ''
   }
   return codedStr || text || ''
+}
+
+/**
+ * Locale-aware text resolution for a FHIR CodeableConcept.
+ *
+ * Used for descriptive labels where the choice should follow the UI
+ * language, not the audience — e.g. drug categories ("降血壓藥" /
+ * "HYPOTENSIVE AGENTS"). Medical professionals reading a Chinese-language
+ * UI still want "降血壓藥" because it's a descriptor, not a technical
+ * pharmacology identifier.
+ *
+ *   locale === 'en' → prefer English coding[].display, fall back to text
+ *   locale otherwise (zh-TW / default) → prefer 中文 text, fall back to coding
+ *
+ * Returns '' when nothing usable is present.
+ */
+export function pickByLocale(concept: any, locale: string): string {
+  if (!concept) return ''
+  const text = typeof concept.text === 'string' ? concept.text.trim() : ''
+  const coded = concept.coding?.[0]?.display
+  const codedStr = typeof coded === 'string' ? coded.trim() : ''
+  if (locale === 'en') {
+    return codedStr || text || ''
+  }
+  return text || codedStr || ''
 }
 
 /**

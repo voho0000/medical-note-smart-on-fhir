@@ -11,7 +11,7 @@
 // a bar for each refill (start = authoredOn, end = start + supplyDays) and
 // group them by canonical drug key.
 import { useMemo } from 'react'
-import { isChronicPrescription, pickLocalizedText } from '../../utils/fhir-helpers'
+import { isChronicPrescription, pickLocalizedText, pickByLocale } from '../../utils/fhir-helpers'
 
 export type TimeRange = '3m' | '6m' | '1y' | '3y' | 'all'
 
@@ -91,6 +91,7 @@ export function useMedicationTimeline(
   audience: 'medical' | 'patient',
   range: TimeRange,
   fallbackCategoryLabel: string,
+  locale: string = 'zh-TW',
 ): TimelineData {
   return useMemo(() => {
     const empty: TimelineData = {
@@ -142,8 +143,10 @@ export function useMedicationTimeline(
       const isChronic = chronicDrugs.has(drugKey)
       const drugName = pickLocalizedText(med.medicationCodeableConcept, audience) || drugKey
       const categoryKey = categoryKeyOf(med)
+      // Category labels follow UI locale (not audience) — see
+      // medications/utils/fhir-helpers.ts `pickByLocale` rationale.
       const categoryLabel =
-        pickLocalizedText(med.category?.[0], audience) || fallbackCategoryLabel
+        pickByLocale(med.category?.[0], locale) || fallbackCategoryLabel
 
       const icdCoding = med.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code as string | undefined
@@ -246,5 +249,5 @@ export function useMedicationTimeline(
       chronicCount: drugs.filter(d => d.isChronic).length,
       acuteCount: drugs.filter(d => !d.isChronic).length,
     }
-  }, [medications, audience, range, fallbackCategoryLabel])
+  }, [medications, audience, range, fallbackCategoryLabel, locale])
 }

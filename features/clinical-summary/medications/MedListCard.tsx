@@ -14,11 +14,11 @@ import { MedicationTimeline } from './timeline/MedicationTimeline'
 type View = 'list' | 'timeline'
 
 export function MedListCard() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const mt = (t.medications as any)
   const { medications, isLoading, error } = useMedications()
-  const rows = useMedicationRows(medications, audience)
+  const rows = useMedicationRows(medications, audience, locale)
   const [view, setView] = useState<View>('list')
 
   const listLabel = mt.viewList ?? '清單'

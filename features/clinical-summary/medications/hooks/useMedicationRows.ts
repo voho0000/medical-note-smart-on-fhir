@@ -7,6 +7,7 @@ import {
   extractFrequencyFromText,
   isChronicPrescription,
   pickLocalizedText,
+  pickByLocale,
 } from '../utils/fhir-helpers'
 import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpers'
 import { computeDurationDays } from '../utils/duration-helpers'
@@ -14,6 +15,7 @@ import { computeDurationDays } from '../utils/duration-helpers'
 export function useMedicationRows(
   medications: any[],
   audience: 'medical' | 'patient' = 'medical',
+  locale: string = 'zh-TW',
 ) {
   return useMemo<MedicationRow[]>(() => {
     if (!Array.isArray(medications)) return []
@@ -141,7 +143,10 @@ export function useMedicationRows(
       const pharmacy = med?.requester?.display?.trim() || undefined
       // Drug category (e.g. "降血壓藥" / "HYPOTENSIVE AGENTS"). Bridge
       // v0.6.10+ sends both Chinese (text) and English (coding[].display).
-      const categoryRaw = pickLocalizedText(med?.category?.[0], audience)
+      // Follow UI locale, NOT audience — medical professionals on a zh-TW
+      // UI still expect 降血壓藥 because category is a descriptor (not a
+      // technical pharmacology name like the drug itself).
+      const categoryRaw = pickByLocale(med?.category?.[0], locale)
       const category = categoryRaw
         ? categoryRaw.replace(/\s+/g, ' ').trim() || undefined
         : undefined
@@ -189,8 +194,8 @@ export function useMedicationRows(
         return (b._startSortValue ?? 0) - (a._startSortValue ?? 0)
       })
       .map(({ _startSortValue, ...row }: any) => row)
-    // `audience` controls drug-name and ICD localisation; must be in deps so
-    // switching the audience switcher invalidates the memo immediately
-    // instead of requiring a page reload.
-  }, [medications, audience])
+    // `audience` controls drug-name and ICD localisation; `locale` drives
+    // category labels. Both must be in deps so flipping either updates the
+    // list immediately instead of requiring a page reload.
+  }, [medications, audience, locale])
 }

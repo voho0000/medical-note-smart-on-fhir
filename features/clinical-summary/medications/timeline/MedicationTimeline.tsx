@@ -24,7 +24,7 @@ interface MedicationTimelineProps {
 }
 
 export function MedicationTimeline({ medications }: MedicationTimelineProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const mt = (t.medications as any)
   const fallbackCategoryLabel = mt.timelineOtherCategory ?? '其他'
@@ -50,7 +50,7 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
     return () => ro.disconnect()
   }, [])
 
-  const data = useMedicationTimeline(medications, audience, range, fallbackCategoryLabel)
+  const data = useMedicationTimeline(medications, audience, range, fallbackCategoryLabel, locale)
 
   return (
     <div className="space-y-2">
