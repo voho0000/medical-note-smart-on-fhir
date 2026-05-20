@@ -152,11 +152,11 @@ export function useMedicationRows(
         : undefined
       const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code || undefined
-      // Bridge v0.6.10+: `.text` carries Chinese, `coding[0].display`
-      // carries English. Pick by audience; both branches strip the
-      // duplicated leading ICD code (bridge often writes
-      // "N400 良性攝護腺增生..." into text).
-      const rawIcdText = pickLocalizedText(med?.reasonCode?.[0], audience, locale)
+      // ICD descriptions follow UI locale, NOT audience: medical users on a
+      // zh-TW UI still want 中文 ("良性攝護腺增生") because the description
+      // is a clinical concept, not a technical pharmacology identifier.
+      // The leading code prefix ("N400 ...") is stripped below.
+      const rawIcdText = pickByLocale(med?.reasonCode?.[0], locale)
       const icdText = rawIcdText
         ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
         : undefined

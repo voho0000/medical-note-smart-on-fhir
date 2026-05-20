@@ -150,7 +150,9 @@ export function useMedicationTimeline(
 
       const icdCoding = med.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code as string | undefined
-      const rawIcdText = pickLocalizedText(med.reasonCode?.[0], audience, locale)
+      // ICD description follows UI locale, not audience (see useMedicationRows
+      // for rationale). The duplicated leading code prefix is stripped below.
+      const rawIcdText = pickByLocale(med.reasonCode?.[0], locale)
       const icdText = rawIcdText
         ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
         : undefined
