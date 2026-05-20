@@ -63,14 +63,6 @@ export function MedListCard() {
   const isLoading = medsLoading || allergiesLoading
   const error = medsError || allergiesError
 
-  // Card title swaps with the active tab so the header is always meaningful.
-  const cardTitle =
-    tab === 'allergies'
-      ? t.allergies.title
-      : tab === 'vaccines'
-        ? (mt.vaccineHeader ?? '疫苗接種')
-        : t.medications.title
-
   const tabConfigs: Array<{ value: DataTab; label: string; count: number }> = [
     { value: 'medications', label: tabMedicationsLabel, count: rows.length },
     { value: 'allergies',   label: tabAllergiesLabel,   count: activeAllergies.length },
@@ -79,7 +71,9 @@ export function MedListCard() {
 
   return (
     <FeatureCard
-      title={cardTitle}
+      // No title — the top tab bar (用藥 / 過敏 / 疫苗) already labels the
+      // active concern; a separate redundant header would only burn space.
+      title=""
       featureId="medications"
       isLoading={isLoading}
       error={error}

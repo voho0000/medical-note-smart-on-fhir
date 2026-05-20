@@ -8,7 +8,9 @@ import { FEATURE_CARD_THEMES, UI_COLORS } from '@/src/shared/config/ui-theme.con
 import type { LucideIcon } from 'lucide-react'
 
 interface FeatureCardProps {
-  title: string
+  /** Card header text. Pass empty string / undefined to render without a
+   *  header — the content area then sits flush with the top border. */
+  title?: string
   featureId?: string // Used to look up theme from FEATURE_CARD_THEMES
   icon?: LucideIcon // Optional custom icon override
   colorKey?: keyof typeof UI_COLORS // Optional custom color override
@@ -19,8 +21,8 @@ interface FeatureCardProps {
   children: ReactNode
 }
 
-export function FeatureCard({ 
-  title, 
+export function FeatureCard({
+  title,
   featureId,
   icon: customIcon,
   colorKey: customColorKey,
@@ -28,25 +30,28 @@ export function FeatureCard({
   error = null,
   isEmpty = false,
   emptyMessage = "No data available",
-  children 
+  children
 }: FeatureCardProps) {
   // Get theme from registry or use defaults
   const theme = featureId ? FEATURE_CARD_THEMES[featureId] : null
   const Icon = customIcon || theme?.icon
   const colorKey = customColorKey || theme?.colorKey || 'clinical'
   const borderColor = UI_COLORS[colorKey].light.border
+  const hasTitle = !!title
 
   return (
     <Card className={`border-l-4 ${borderColor}`}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+      {hasTitle && (
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+            {title}
+          </CardTitle>
+        </CardHeader>
+      )}
+      <CardContent className={hasTitle ? undefined : 'pt-6'}>
         {isLoading && <LoadingSkeleton />}
-        {!isLoading && error && <ErrorMessage error={error} context={title.toLowerCase()} />}
+        {!isLoading && error && <ErrorMessage error={error} context={(title ?? featureId ?? '').toLowerCase()} />}
         {!isLoading && !error && isEmpty && <EmptyState message={emptyMessage} />}
         {!isLoading && !error && !isEmpty && children}
       </CardContent>
