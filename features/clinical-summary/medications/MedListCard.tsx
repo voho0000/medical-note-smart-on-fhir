@@ -3,6 +3,7 @@
 
 import { useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { FeatureCard } from "@/src/shared/components"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useMedications } from './hooks/useMedications'
@@ -14,9 +15,10 @@ type View = 'list' | 'timeline'
 
 export function MedListCard() {
   const { t } = useLanguage()
+  const { audience } = useAudience()
   const mt = (t.medications as any)
   const { medications, isLoading, error } = useMedications()
-  const rows = useMedicationRows(medications)
+  const rows = useMedicationRows(medications, audience)
   const [view, setView] = useState<View>('list')
 
   const listLabel = mt.viewList ?? '清單'

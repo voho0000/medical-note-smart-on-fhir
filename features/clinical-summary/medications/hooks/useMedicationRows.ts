@@ -1,11 +1,20 @@
 // Custom Hook: Medication Rows Processing
 import { useMemo } from 'react'
 import type { Medication, MedicationRow } from '../types'
-import { getCodeableConceptText, formatDate, extractFrequencyFromText, isChronicPrescription } from '../utils/fhir-helpers'
+import {
+  getCodeableConceptText,
+  formatDate,
+  extractFrequencyFromText,
+  isChronicPrescription,
+  pickLocalizedText,
+} from '../utils/fhir-helpers'
 import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpers'
 import { computeDurationDays } from '../utils/duration-helpers'
 
-export function useMedicationRows(medications: any[]) {
+export function useMedicationRows(
+  medications: any[],
+  audience: 'medical' | 'patient' = 'medical',
+) {
   return useMemo<MedicationRow[]>(() => {
     if (!Array.isArray(medications)) return []
 
@@ -56,20 +65,26 @@ export function useMedicationRows(medications: any[]) {
     const enriched = medications.map((med: any) => {
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
 
-      let medicationName = 'Unknown Medication'
+      // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
+      // localized (zh-TW) name in `.text` and the English name in
+      // `.coding[].display`; medical users get English (pharmacology
+      // familiarity), patient users get Chinese. Older bundles with only
+      // English `.text` fall through gracefully.
+      let medicationName: string
       if (med.medicationCodeableConcept) {
-        medicationName = getCodeableConceptText(med.medicationCodeableConcept)
+        medicationName = pickLocalizedText(med.medicationCodeableConcept, audience)
       } else if (med.medicationReference?.display) {
         medicationName = med.medicationReference.display
-      } else if (med.code?.text) {
-        medicationName = med.code.text
+      } else if (med.code) {
+        medicationName = pickLocalizedText(med.code, audience)
       } else if (med.medication?.text) {
         medicationName = med.medication.text
-      } else if (med.resource?.code?.text) {
-        medicationName = med.resource.code.text
-      } else if (med.code?.coding?.[0]?.display) {
-        medicationName = med.code.coding[0].display
+      } else if (med.resource?.code) {
+        medicationName = pickLocalizedText(med.resource.code, audience)
+      } else {
+        medicationName = ''
       }
+      if (!medicationName) medicationName = 'Unknown Medication'
 
       const status = med.status?.toLowerCase() || "unknown"
       const statusInactive = inactiveStatuses.has(status)
@@ -126,9 +141,11 @@ export function useMedicationRows(medications: any[]) {
       const pharmacy = med?.requester?.display?.trim() || undefined
       const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code || undefined
-      // text often duplicates the code prefix (e.g. "N400 N400/..."); fall
-      // back to the coding display when text is missing or noisy.
-      const rawIcdText = med?.reasonCode?.[0]?.text || icdCoding?.display || ''
+      // Bridge v0.6.10+: `.text` carries Chinese, `coding[0].display`
+      // carries English. Pick by audience; both branches strip the
+      // duplicated leading ICD code (bridge often writes
+      // "N400 良性攝護腺增生..." into text).
+      const rawIcdText = pickLocalizedText(med?.reasonCode?.[0], audience)
       const icdText = rawIcdText
         ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
         : undefined
