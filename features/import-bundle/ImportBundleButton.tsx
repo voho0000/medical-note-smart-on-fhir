@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Upload, Trash2, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -12,9 +12,19 @@ export function ImportBundleButton() {
   const queryClient = useQueryClient()
   const { t } = useLanguage()
   const i18n = t.importBundle
-  const [active, setActive] = useState(() => LocalBundleService.hasData())
+  // Start `active` as false on both SSR and the first client render so the
+  // initial DOM matches. The real value (read from localStorage) is synced in
+  // the effect below — that triggers a normal re-render *after* hydration,
+  // which React permits. Initialising directly from LocalBundleService.hasData()
+  // would diverge between server (false) and client (true), tripping a
+  // hydration mismatch and causing React to throw away the entire tree.
+  const [active, setActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setActive(LocalBundleService.hasData())
+  }, [])
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
