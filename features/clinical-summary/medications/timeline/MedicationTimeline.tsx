@@ -14,9 +14,14 @@ import { TimelineSvg } from './components/TimelineSvg'
 
 const RANGES: TimeRange[] = ['3m', '6m', '1y', '3y', 'all']
 
-const DEFAULT_RANGE: Record<'medical' | 'patient', TimeRange> = {
-  medical: '3y',
-  patient: '6m',
+// User preference: open at 3-months for everyone. After the user picks a
+// different range we persist it to localStorage so it sticks across tab
+// switches / page reloads within the same browser.
+const DEFAULT_RANGE: TimeRange = '3m'
+const RANGE_STORAGE_KEY = 'medication-timeline-range'
+
+function isValidRange(v: unknown): v is TimeRange {
+  return v === '3m' || v === '6m' || v === '1y' || v === '3y' || v === 'all'
 }
 
 interface MedicationTimelineProps {
@@ -35,7 +40,20 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
     '3y': mt.timelineRange3y ?? '3年',
     all: mt.timelineRangeAll ?? '全部',
   }
-  const [range, setRange] = useState<TimeRange>(DEFAULT_RANGE[audience])
+  // Start with DEFAULT_RANGE on every render so SSR and the first client
+  // render match (avoids the hydration mismatch we hit earlier with bundle
+  // status). The persisted choice is loaded in useEffect below.
+  const [range, setRangeState] = useState<TimeRange>(DEFAULT_RANGE)
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(RANGE_STORAGE_KEY)
+      if (isValidRange(stored)) setRangeState(stored)
+    } catch { /* storage unavailable — silently keep default */ }
+  }, [])
+  const setRange = (next: TimeRange) => {
+    setRangeState(next)
+    try { window.localStorage.setItem(RANGE_STORAGE_KEY, next) } catch {}
+  }
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
 
