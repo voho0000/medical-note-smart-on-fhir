@@ -182,5 +182,8 @@ export function useMedicationRows(
         return (b._startSortValue ?? 0) - (a._startSortValue ?? 0)
       })
       .map(({ _startSortValue, ...row }: any) => row)
-  }, [medications])
+    // `audience` controls drug-name and ICD localisation; must be in deps so
+    // switching the audience switcher invalidates the memo immediately
+    // instead of requiring a page reload.
+  }, [medications, audience])
 }
