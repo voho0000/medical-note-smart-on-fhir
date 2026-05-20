@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationName, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
 import { checkReferenceRangeAbnormal } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
+import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
 import type { EncounterMedication, EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
@@ -93,6 +94,7 @@ export function useEncounterDetails(
           status: med?.status,
           detail: med?.dosageInstruction?.[0]?.text,
           when: formatDateTime(med?.authoredOn, locale),
+          isChronic: isChronicPrescription(med),
         })
       })
     }

@@ -39,4 +39,7 @@ export interface MedicationRow {
   daysRemaining?: number
   /** True if status is stopped/completed OR computed endDate has passed */
   isInactive: boolean
+  /** True when FHIR courseOfTherapyType marks the order as 'continuous'
+   *  (NHI 慢性處方箋, refillable chronic prescription). */
+  isChronic: boolean
 }

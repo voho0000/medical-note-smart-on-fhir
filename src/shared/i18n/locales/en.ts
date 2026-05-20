@@ -88,6 +88,8 @@ export const en = {
     all: 'All',
     status: 'Status',
     noData: 'No medications recorded.',
+    chronic: 'Chronic Rx',
+    chronicTooltip: 'Continuous long term therapy (chronic refillable prescription)',
   },
 
   allergies: {

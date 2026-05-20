@@ -90,6 +90,8 @@ export const zhTW = {
     all: '全部',
     status: '狀態',
     noData: '無用藥紀錄。',
+    chronic: '慢箋',
+    chronicTooltip: '慢性處方箋（Continuous long term therapy）',
   },
 
   allergies: {

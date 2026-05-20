@@ -1,5 +1,7 @@
 // Medication Item Component
 import { Badge } from "@/components/ui/badge"
+import { RotateCw } from "lucide-react"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import type { MedicationRow } from '../types'
 
 interface MedicationItemProps {
@@ -20,13 +22,26 @@ function getStatusBadge(medication: MedicationRow) {
 }
 
 export function MedicationItem({ medication }: MedicationItemProps) {
+  const { t } = useLanguage()
   const badge = getStatusBadge(medication)
+  const mt = (t.medications as any)
 
   return (
     <div className="rounded-md border p-3">
-      <div className="flex items-center justify-between">
-        <div className="font-medium">{medication.title}</div>
-        <Badge variant={badge.variant} className="ml-2 capitalize">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <span className="font-medium">{medication.title}</span>
+          {medication.isChronic && (
+            <span
+              title={mt.chronicTooltip ?? 'Continuous long term therapy'}
+              className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700"
+            >
+              <RotateCw className="h-3 w-3" />
+              {mt.chronic ?? '慢箋'}
+            </span>
+          )}
+        </div>
+        <Badge variant={badge.variant} className="ml-2 capitalize shrink-0">
           {badge.label}
         </Badge>
       </div>

@@ -1,7 +1,7 @@
 // Custom Hook: Medication Rows Processing
 import { useMemo } from 'react'
 import type { Medication, MedicationRow } from '../types'
-import { getCodeableConceptText, formatDate, extractFrequencyFromText } from '../utils/fhir-helpers'
+import { getCodeableConceptText, formatDate, extractFrequencyFromText, isChronicPrescription } from '../utils/fhir-helpers'
 import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpers'
 import { computeDurationDays } from '../utils/duration-helpers'
 
@@ -72,6 +72,7 @@ export function useMedicationRows(medications: any[]) {
 
       // Inactive = explicitly stopped/completed OR computed endDate has passed
       const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
+      const isChronic = isChronicPrescription(med)
 
       return {
         id: med.id || Math.random().toString(36),
@@ -87,6 +88,7 @@ export function useMedicationRows(medications: any[]) {
         endDate: endDate ? formatDate(endDate) : undefined,
         daysRemaining,
         isInactive,
+        isChronic,
         _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
       }
     })
