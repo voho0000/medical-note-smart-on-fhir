@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { fhirClient, LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-client.service'
-import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { fhirClient, LocalBundleModeError, shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
 
@@ -19,9 +18,9 @@ export function useFhirContext(): FhirContext {
   useEffect(() => {
     let mounted = true
 
-    // Bundle-import mode: there is no remote FHIR server, so just clear the
-    // server-URL state and skip the SMART client init entirely.
-    if (LocalBundleService.hasData()) {
+    // Local-bundle mode (and not in a SMART launch): no remote FHIR server,
+    // so just clear the server-URL state and skip SMART client init.
+    if (shouldUseLocalBundle()) {
       setFhirServerUrl(null)
       setIsLoadingServer(false)
       return () => { mounted = false }

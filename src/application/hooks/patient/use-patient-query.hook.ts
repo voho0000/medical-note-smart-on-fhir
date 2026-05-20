@@ -14,13 +14,17 @@ import { useQuery } from '@tanstack/react-query'
 import { GetPatientUseCase } from '@/src/core/use-cases/patient/get-patient.use-case'
 import { FhirPatientRepository } from '@/src/infrastructure/fhir/repositories/patient.repository'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 
 export function usePatientQuery() {
   return useQuery({
     queryKey: ['patient'],
     queryFn: async (): Promise<PatientEntity | null> => {
-      if (LocalBundleService.hasData()) {
+      // SMART > local bundle: an active SMART/OAuth launch always wins over
+      // any leftover imported bundle. Only fall back to the bundle when
+      // there's no SMART context present.
+      if (shouldUseLocalBundle()) {
         return LocalBundleService.parseStored()?.patient ?? null
       }
       const repository = new FhirPatientRepository()

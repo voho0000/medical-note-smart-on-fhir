@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FetchClinicalDataUseCase } from '@/src/core/use-cases/clinical-data/fetch-clinical-data.use-case'
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { LocalBundleRepository } from '@/src/infrastructure/fhir/repositories/local-bundle.repository'
-import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import { usePatientQuery } from '../patient/use-patient-query.hook'
 
@@ -28,7 +28,9 @@ export function useClinicalDataQuery() {
         throw new Error('Patient ID is required')
       }
 
-      const repository = LocalBundleService.hasData()
+      // SMART > local bundle: an active SMART context always wins, even when
+      // a previously imported bundle is still sitting in localStorage.
+      const repository = shouldUseLocalBundle()
         ? new LocalBundleRepository()
         : new FhirClinicalDataRepository()
       const useCase = new FetchClinicalDataUseCase(repository)

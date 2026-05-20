@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Upload, Trash2, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { LocalBundleService } from "@/src/infrastructure/fhir/services/local-bundle.service"
+import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-client.service"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 export function ImportBundleButton() {
@@ -12,18 +13,22 @@ export function ImportBundleButton() {
   const queryClient = useQueryClient()
   const { t } = useLanguage()
   const i18n = t.importBundle
-  // Start `active` as false on both SSR and the first client render so the
-  // initial DOM matches. The real value (read from localStorage) is synced in
-  // the effect below — that triggers a normal re-render *after* hydration,
-  // which React permits. Initialising directly from LocalBundleService.hasData()
-  // would diverge between server (false) and client (true), tripping a
-  // hydration mismatch and causing React to throw away the entire tree.
-  const [active, setActive] = useState(false)
+  // We track two distinct facts so the UI accurately reflects current mode:
+  //   - `hasBundle`: a bundle exists in localStorage (controls the Trash button —
+  //     user can always clear it).
+  //   - `bundleIsActive`: the bundle is the data source RIGHT NOW (controls the
+  //     "Local data" badge so we don't mislead the user when SMART has taken
+  //     precedence over a leftover bundle).
+  // Both start false on SSR + first client render so the initial DOM matches;
+  // the real values are synced in the effect below (post-hydration).
+  const [hasBundle, setHasBundle] = useState(false)
+  const [bundleIsActive, setBundleIsActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setActive(LocalBundleService.hasData())
+    setHasBundle(LocalBundleService.hasData())
+    setBundleIsActive(shouldUseLocalBundle())
   }, [])
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,7 +47,8 @@ export function ImportBundleButton() {
         throw new Error('Bundle must contain at least one Patient resource')
       }
       LocalBundleService.save(bundle)
-      setActive(true)
+      setHasBundle(true)
+      setBundleIsActive(shouldUseLocalBundle())
       await queryClient.invalidateQueries()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to parse bundle')
@@ -54,7 +60,8 @@ export function ImportBundleButton() {
 
   const handleClear = async () => {
     LocalBundleService.clear()
-    setActive(false)
+    setHasBundle(false)
+    setBundleIsActive(false)
     setError(null)
     await queryClient.invalidateQueries()
   }
@@ -62,7 +69,11 @@ export function ImportBundleButton() {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
-        {active && (
+        {/* "Local data" badge only when the bundle is genuinely the data
+            source — SMART context, if active, suppresses the badge so users
+            aren't misled. The bundle's presence is still indicated by the
+            Trash button below. */}
+        {bundleIsActive && (
           <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
             <Database className="h-3 w-3" />
             {i18n.localData}
@@ -79,7 +90,7 @@ export function ImportBundleButton() {
           <Upload className="h-3.5 w-3.5" />
           {loading ? i18n.importing : i18n.button}
         </Button>
-        {active && (
+        {hasBundle && (
           <Button
             variant="ghost"
             size="icon"

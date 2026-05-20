@@ -17,6 +17,51 @@ export class LocalBundleModeError extends Error {
   }
 }
 
+// SMART launch / callback URL params (fhirclient consumes these on entry).
+// `state` + `code` are present on the OAuth callback URL.
+// `launch` + `iss` are present on the initial launch URL from the EHR.
+const SMART_URL_PARAMS = ['state', 'code', 'launch', 'iss']
+
+/**
+ * Returns true when the app appears to be running inside a SMART OAuth
+ * context — either a fresh launch / callback (params in the URL) or an
+ * already-established session (token state cached in sessionStorage by
+ * fhirclient).
+ *
+ * When this returns true, SMART takes precedence over any locally-imported
+ * bundle. Reasoning: an EHR-initiated launch (or an ongoing SMART session)
+ * is an *explicit* clinical context, while a leftover local bundle is just
+ * residue from earlier testing. The clinical context should always win.
+ *
+ * SSR-safe: returns false when window is not defined.
+ */
+export function hasSmartContext(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const params = new URLSearchParams(window.location.search)
+    if (SMART_URL_PARAMS.some(k => params.has(k))) return true
+  } catch {
+    // Malformed URL — fall through to sessionStorage check.
+  }
+  try {
+    // fhirclient writes a pointer named SMART_KEY to sessionStorage when an
+    // OAuth flow completes; its presence indicates an active SMART session.
+    if (window.sessionStorage.getItem('SMART_KEY')) return true
+  } catch {
+    // sessionStorage may be unavailable in some embed contexts — ignore.
+  }
+  return false
+}
+
+/**
+ * Convenience helper: should we use the locally-imported bundle as the data
+ * source for this request? True only when there's NO SMART context AND a
+ * local bundle exists.
+ */
+export function shouldUseLocalBundle(): boolean {
+  return !hasSmartContext() && LocalBundleService.hasData()
+}
+
 export class FhirClientService {
   private static instance: FhirClientService
   private client: FHIRClient | null = null
@@ -35,12 +80,10 @@ export class FhirClientService {
       return this.client
     }
 
-    // Bundle-import mode: no SMART OAuth state exists in the URL, so don't
-    // even try to call FHIR.oauth2.ready() — it would throw "No 'state'
-    // parameter found" and the catch below would mask the cause behind a
-    // generic "Failed to initialize FHIR client" message. Throw a typed
-    // error so callers can recognise and silently skip.
-    if (LocalBundleService.hasData()) {
+    // Local-bundle mode: SMART takes precedence whenever there's any sign of
+    // an OAuth flow (URL params or sessionStorage state). Fall back to the
+    // local bundle only when no SMART context is present.
+    if (shouldUseLocalBundle()) {
       throw new LocalBundleModeError()
     }
 
