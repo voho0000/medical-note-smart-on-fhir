@@ -1,83 +1,82 @@
-// Hook: derive vaccine rows from raw MedicationRequest[].
-//
-// Vaccines arrive as MedicationRequests (bridge maps NHI vaccine 領藥
-// → MedicationRequest). isVaccine() picks them out by category keyword
-// or product-name signature. This hook groups same-vaccine repeat doses
-// (flu yearly, COVID series, HPV 3-dose) and surfaces dose history.
+// Vaccine rows derived from FHIR R4 Immunization resources (NHI 疾病管制署
+// 預防接種紀錄). Bridge v0.7.x+ ships these alongside MedicationRequest so
+// therapeutic vaccine prescriptions (e.g. post-injury tetanus shot at a
+// surgery clinic) stay in the medication list, while genuine preventive
+// vaccinations (flu, pneumococcal, COVID, etc.) surface here.
 import { useMemo } from 'react'
-import {
-  isChronicPrescription,
-  pickLocalizedText,
-  pickByLocale,
-} from '../utils/fhir-helpers'
 import { formatDate } from '@/src/shared/utils/fhir-helpers'
-import { isVaccine } from '../utils/vaccine-detection'
+import { pickByLocale, pickLocalizedText } from '../utils/fhir-helpers'
+import type { ImmunizationEntity } from '@/src/core/entities/clinical-data.entity'
 
 export interface VaccineDoseEvent {
   id: string
-  date?: string             // ISO original
-  dateLabel?: string        // formatted for display
-  provider?: string         // requester.display
-  icdCode?: string
-  icdText?: string
+  date?: string
+  dateLabel?: string
+  provider?: string
+  lotNumber?: string
+  manufacturer?: string
+  source?: string  // 來源 (e.g. 疾病管制署)
 }
 
 export interface VaccineRow {
   id: string
-  name: string              // vaccine product name (audience+locale-aware)
-  category?: string         // 健保署 藥理分類 (locale-aware)
-  doses: VaccineDoseEvent[] // sorted newest-first
-  /** Latest dose's date for sorting + summary */
+  name: string
+  category?: string  // optional; Immunization rarely carries one
+  doses: VaccineDoseEvent[]  // sorted newest-first
   lastDoseDateIso?: string
   lastDoseDateLabel?: string
   lastProvider?: string
 }
 
-function vaccineKeyOf(med: any): string {
+function vaccineKeyOf(imm: any): string {
+  // Prefer code (canonical) → text (display) → name fallback
   return (
-    med?.medicationCodeableConcept?.coding?.[0]?.code ||
-    med?.medicationCodeableConcept?.text ||
-    med?.medicationReference?.display ||
+    imm?.vaccineCode?.coding?.[0]?.code ||
+    imm?.vaccineCode?.text ||
+    imm?.vaccineCode?.coding?.[0]?.display ||
     ''
   )
 }
 
+function noteToSource(note: any[] | undefined): string | undefined {
+  if (!Array.isArray(note)) return undefined
+  for (const n of note) {
+    const txt: string | undefined = n?.text
+    if (!txt) continue
+    // Match "來源: 疾病管制署" or "Source: CDC"
+    const m = txt.match(/(?:來源|Source)\s*[:：]?\s*(.+)/i)
+    if (m) return m[1].trim()
+  }
+  return undefined
+}
+
 export function useVaccineRows(
-  medications: any[],
+  immunizations: ImmunizationEntity[],
   audience: 'medical' | 'patient' = 'medical',
   locale: string = 'zh-TW',
 ): VaccineRow[] {
   return useMemo<VaccineRow[]>(() => {
-    if (!Array.isArray(medications)) return []
+    if (!Array.isArray(immunizations)) return []
 
-    // Group vaccine MRs by product key.
     const byKey = new Map<string, VaccineRow>()
 
-    for (const med of medications) {
-      if (!med) continue
-      if (!isVaccine(med)) continue
-      if (isChronicPrescription(med)) continue // chronic refill that happens to be vaccine — unusual; still skip
-
-      const key = vaccineKeyOf(med)
+    for (const imm of immunizations) {
+      if (!imm) continue
+      const key = vaccineKeyOf(imm)
       if (!key) continue
 
-      const dateIso: string | undefined = med.authoredOn || med.effectiveDateTime
+      const dateIso = imm.occurrenceDateTime
       const dateLabel = formatDate(dateIso) || undefined
-
-      // ICD reason — follows locale (same rule as billing-ICD in med list).
-      const rawIcd = pickByLocale(med.reasonCode?.[0], locale)
-      const icdCode: string | undefined = med.reasonCode?.[0]?.coding?.[0]?.code
-      const icdText = rawIcd
-        ? rawIcd.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
-        : undefined
+      const provider = imm.performer?.[0]?.actor?.display?.trim() || undefined
 
       const dose: VaccineDoseEvent = {
-        id: med.id || `${key}-${dateIso ?? Math.random().toString(36).slice(2)}`,
+        id: imm.id || `${key}-${dateIso ?? Math.random().toString(36).slice(2)}`,
         date: dateIso,
         dateLabel,
-        provider: med.requester?.display?.trim() || undefined,
-        icdCode,
-        icdText,
+        provider,
+        lotNumber: imm.lotNumber,
+        manufacturer: imm.manufacturer?.display,
+        source: noteToSource(imm.note),
       }
 
       const existing = byKey.get(key)
@@ -87,19 +86,20 @@ export function useVaccineRows(
         byKey.set(key, {
           id: key,
           name:
-            pickLocalizedText(med.medicationCodeableConcept, audience, locale) ||
-            med.medicationCodeableConcept?.text ||
+            pickLocalizedText(imm.vaccineCode, audience, locale) ||
+            imm.vaccineCode?.text ||
             'Unknown Vaccine',
-          category: pickByLocale(med.category?.[0], locale) || undefined,
+          // Immunization doesn't usually carry a CodeableConcept "category" the way
+          // MedicationRequest does. If a future bridge release adds one, surface it.
+          category: pickByLocale((imm as any).category?.[0], locale) || undefined,
           doses: [dose],
           lastDoseDateIso: dateIso,
           lastDoseDateLabel: dateLabel,
-          lastProvider: dose.provider,
+          lastProvider: provider,
         })
       }
     }
 
-    // Sort doses newest-first within each row and update last-dose fields.
     for (const row of byKey.values()) {
       row.doses.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       const latest = row.doses[0]
@@ -108,9 +108,8 @@ export function useVaccineRows(
       row.lastProvider = latest?.provider
     }
 
-    // Sort rows by most-recent dose first.
     return [...byKey.values()].sort(
       (a, b) => (b.lastDoseDateIso || '').localeCompare(a.lastDoseDateIso || ''),
     )
-  }, [medications, audience, locale])
+  }, [immunizations, audience, locale])
 }

@@ -53,7 +53,8 @@ export function VisitHistoryCard() {
     clinicalNotes, conditions, locale, audience,
   )
   const visitStats = useVisitStats(encounterDetails)
-  const icdDict = useMemo(() => buildIcdDictionary(conditions), [conditions])
+  // ICD dict prefers Chinese when UI is zh-TW; English coding[].display when UI is en.
+  const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
 
   // Unique institutions for the dropdown
   const institutions = useMemo(() => {

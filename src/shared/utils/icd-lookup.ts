@@ -22,20 +22,33 @@ export function parseIcdCodes(text: string | undefined | null): string[] {
 /**
  * Build a lookup dictionary from FHIR Condition resources.
  * Maps both full code (C50.912) and prefix (C50) → display text.
+ *
+ * Bridge contract: Condition.code typically has both
+ *   - coding[].display  (English from the ICD code system)
+ *   - text              (中文 description)
+ *
+ * `locale` decides which one wins when both are present:
+ *   'en' → English coding[].display first
+ *   else → 中文 text first
+ *
+ * Non-UI callers (AI context, clinical-insights) keep the prior English-
+ * first behaviour by leaving the locale unspecified.
  */
-export function buildIcdDictionary(conditions: any[]): Map<string, string> {
+export function buildIcdDictionary(
+  conditions: any[],
+  locale: string = 'en',
+): Map<string, string> {
   const dict = new Map<string, string>()
   if (!Array.isArray(conditions)) return dict
-
+  const preferText = locale !== 'en'
   for (const c of conditions) {
     const codings = c?.code?.coding ?? []
     const text = c?.code?.text
     for (const coding of codings) {
       const code = coding?.code
-      const display = coding?.display || text
-      if (code && display) {
-        dict.set(code, display)
-      }
+      const display = coding?.display
+      const picked = preferText ? (text || display) : (display || text)
+      if (code && picked) dict.set(code, picked)
     }
   }
   return dict

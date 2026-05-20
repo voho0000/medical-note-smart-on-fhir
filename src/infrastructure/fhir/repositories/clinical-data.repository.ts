@@ -28,7 +28,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       procedures,
       encounters,
       documentReferences,
-      compositions
+      compositions,
+      immunizations
     ] = await Promise.all([
       this.fetchConditions(patientId),
       this.fetchMedications(patientId),
@@ -39,7 +40,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       this.fetchProcedures(patientId),
       this.fetchEncounters(patientId),
       this.fetchDocumentReferences(patientId),
-      this.fetchCompositions(patientId)
+      this.fetchCompositions(patientId),
+      this.fetchImmunizations(patientId)
     ])
 
     // Re-attach observations to DiagnosticReports that _include didn't populate.
@@ -74,7 +76,20 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       procedures,
       encounters,
       documentReferences,
-      compositions
+      compositions,
+      immunizations
+    }
+  }
+
+  async fetchImmunizations(patientId: string): Promise<import('@/src/core/entities/clinical-data.entity').ImmunizationEntity[]> {
+    try {
+      const response = await fhirClient.request(
+        `Immunization?patient=${patientId}&_sort=-date&_count=200`
+      )
+      return response.entry?.map((e: any) => FhirMapper.toImmunization(e.resource)) || []
+    } catch (error) {
+      console.warn('Failed to fetch immunizations:', error)
+      return []
     }
   }
 

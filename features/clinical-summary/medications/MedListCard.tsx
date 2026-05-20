@@ -25,6 +25,7 @@ import { useMedicationRows } from './hooks/useMedicationRows'
 import { useVaccineRows } from './hooks/useVaccineRows'
 import { useAllergies } from '../allergies/hooks/useAllergies'
 import { useActiveAllergies } from '../allergies/hooks/useActiveAllergies'
+import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { MedicationList } from './components/MedicationList'
 import { VaccineList } from './components/VaccineList'
 import { MedicationTimeline } from './timeline/MedicationTimeline'
@@ -40,8 +41,11 @@ export function MedListCard() {
 
   const { medications, isLoading: medsLoading, error: medsError } = useMedications()
   const { allergies, isLoading: allergiesLoading, error: allergiesError } = useAllergies()
+  // FHIR R4 Immunization resources — distinct from MedicationRequests that
+  // happen to be vaccine products. Bridge ships these from 疾病管制署.
+  const { immunizations } = useClinicalData()
   const rows = useMedicationRows(medications, audience, locale)
-  const vaccines = useVaccineRows(medications, audience, locale)
+  const vaccines = useVaccineRows(immunizations, audience, locale)
   const activeAllergies = useActiveAllergies(allergies)
 
   const [tab, setTab] = useState<DataTab>('medications')

@@ -178,6 +178,7 @@ export const LocalBundleService = {
     const allerg = byType('AllergyIntolerance')
     const docRefs = byType('DocumentReference')
     const comps  = byType('Composition')
+    const imms   = byType('Immunization')
 
     // Build observation map for DiagnosticReport expansion
     const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
@@ -206,6 +207,7 @@ export const LocalBundleService = {
       encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
       documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
       compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
+      immunizations:    imms.map((r: any) => FhirMapper.toImmunization(r)),
     }
 
     return { patient, collection }

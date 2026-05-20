@@ -61,6 +61,7 @@ export function useClinicalData() {
     encounters: data?.encounters ?? [],
     documentReferences: data?.documentReferences ?? [],
     compositions: data?.compositions ?? [],
+    immunizations: data?.immunizations ?? [],
     isLoading,
     error: error as Error | null,
     refetch: async () => {

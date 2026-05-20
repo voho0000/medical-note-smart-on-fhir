@@ -12,7 +12,6 @@
 // group them by canonical drug key.
 import { useMemo } from 'react'
 import { isChronicPrescription, pickLocalizedText, pickByLocale } from '../../utils/fhir-helpers'
-import { isVaccine } from '../../utils/vaccine-detection'
 
 export type TimeRange = '3m' | '6m' | '1y' | '3y' | 'all'
 
@@ -106,9 +105,11 @@ export function useMedicationTimeline(
     }
     if (!Array.isArray(medications) || medications.length === 0) return empty
 
-    // Drop vaccines — they're point events (no supply duration to draw as a
-    // Gantt bar) and have their own 疫苗 sub-tab.
-    medications = medications.filter((m) => !isVaccine(m))
+    // Vaccine-categorized MedicationRequests stay in the timeline: a
+    // therapeutic vaccine prescription has a real supply duration and is
+    // a legitimate medication. Preventive-care vaccinations now flow
+    // through FHIR Immunization (see useVaccineRows) and never appear in
+    // the MedicationRequest stream.
 
     // ── Step 1: drug-level chronic aggregation (mirror useMedicationRows) ──
     const chronicDrugs = new Set<string>()

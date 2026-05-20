@@ -10,7 +10,8 @@ import type {
   ProcedureEntity,
   EncounterEntity,
   DocumentReferenceEntity,
-  CompositionEntity
+  CompositionEntity,
+  ImmunizationEntity
 } from '@/src/core/entities/clinical-data.entity'
 import type { IDataMapper } from '@/src/core/interfaces/data-mapper.interface'
 import { dataMapperRegistry } from '@/src/core/interfaces/data-mapper.interface'
@@ -253,6 +254,21 @@ export class FhirMapper implements IDataMapper {
       section: fhirResource.section,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
+    }
+  }
+
+  static toImmunization(fhirResource: any): ImmunizationEntity {
+    return {
+      id: fhirResource.id || '',
+      status: fhirResource.status,
+      vaccineCode: fhirResource.vaccineCode,
+      occurrenceDateTime: fhirResource.occurrenceDateTime,
+      performer: fhirResource.performer,
+      note: fhirResource.note,
+      manufacturer: fhirResource.manufacturer,
+      lotNumber: fhirResource.lotNumber,
+      sourceSystem: FHIR_SOURCE_SYSTEM,
+      sourceId: fhirResource.id,
     }
   }
 }

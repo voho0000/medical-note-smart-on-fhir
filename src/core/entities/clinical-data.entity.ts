@@ -431,6 +431,40 @@ export interface CompositionEntity {
   sourceId?: string
 }
 
+/**
+ * FHIR R4 Immunization — vaccination records.
+ *
+ * Bridge v0.7.x+ ships these alongside MedicationRequest so therapeutic
+ * vaccine prescriptions (e.g. tetanus shot for a wound, billed via NHI)
+ * stay in the medication list, while genuine preventive-care vaccinations
+ * from 疾病管制署 (CDC) surface here.
+ */
+export interface ImmunizationEntity {
+  id: string
+  status?: string
+  vaccineCode?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }
+  occurrenceDateTime?: string
+  performer?: Array<{
+    actor?: {
+      display?: string
+      reference?: string
+    }
+  }>
+  note?: Array<{ text?: string }>
+  manufacturer?: { display?: string }
+  lotNumber?: string
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
+}
+
 export interface ClinicalDataCollection {
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
@@ -442,4 +476,5 @@ export interface ClinicalDataCollection {
   encounters: EncounterEntity[]
   documentReferences: DocumentReferenceEntity[]
   compositions: CompositionEntity[]
+  immunizations: ImmunizationEntity[]
 }
