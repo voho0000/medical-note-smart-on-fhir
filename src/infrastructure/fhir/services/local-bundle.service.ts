@@ -5,6 +5,7 @@
 
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
+import { synthesizePharmacyEncounters } from '../utils/synthesize-pharmacy-encounters'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 
@@ -20,15 +21,16 @@ function toDateStr(dateStr?: string): string | null {
   return dateStr.slice(0, 10)
 }
 
-// Attach encounter references to resources that are missing them, based on same-day date.
-// For MedicationRequest/Procedure/Condition we use the order/recorded date (same as encounter day).
-// For DiagnosticReport/Observation we use effectiveDateTime (only matches if done same day).
-function attachEncounterRefs(resources: any[], encounterDateMap: Map<string, string>): any[] {
+// Attach encounter references for non-medication resources by same-day match.
+// Used by Observation / Procedure / Condition / DiagnosticReport — these
+// don't carry a "requester / provider" field, so date alone is the best we
+// have. Multi-encounter same-day collisions take the first match (existing
+// VGH behaviour).
+function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<string, string>): any[] {
   return resources.map((r) => {
     if (r.encounter?.reference) return r // already has a reference
 
     const dateFields: string[] = [
-      r.authoredOn,           // MedicationRequest
       r.performedDateTime,    // Procedure
       r.performedPeriod?.start,
       r.recordedDate,         // Condition
@@ -44,6 +46,27 @@ function attachEncounterRefs(resources: any[], encounterDateMap: Map<string, str
     }
 
     return r
+  })
+}
+
+// Attach encounter references for MedicationRequests. REQUIRES provider
+// match in addition to same-day match — otherwise pharmacy-only refills get
+// silently merged into an unrelated same-day clinic visit (e.g. an ENT
+// outpatient encounter ends up "containing" the patient's BPH chronic
+// refills). Unmatched meds remain orphans here; synthesizePharmacyEncounters()
+// downstream gives each orphan group its own synthetic 藥局 Encounter.
+function attachEncounterRefsForMeds(
+  meds: any[],
+  encounterByDateProvider: Map<string, string>,
+): any[] {
+  return meds.map((m) => {
+    if (m.encounter?.reference) return m
+    const date = toDateStr(m.authoredOn || m.effectiveDateTime)
+    const requester = m.requester?.display?.trim() || ''
+    if (!date || !requester) return m
+    const id = encounterByDateProvider.get(`${date}|${requester}`)
+    if (!id) return m
+    return { ...m, encounter: { reference: `Encounter/${id}` } }
   })
 }
 
@@ -88,10 +111,18 @@ export const LocalBundleService = {
     // VGH data has one encounter per day per department; use first match if multiple same-day.
     const encounters = byType('Encounter')
     const encounterDateMap = new Map<string, string>()
+    // Also build (date, provider) → encounterId so medication attachment can
+    // disambiguate when multiple same-day encounters exist across providers
+    // (e.g. ENT clinic + pharmacy refill on the same day).
+    const encounterByDateProvider = new Map<string, string>()
     for (const enc of encounters) {
       const d = toDateStr(enc.period?.start)
       if (d && !encounterDateMap.has(d)) {
         encounterDateMap.set(d, enc.id)
+      }
+      const provider = enc.serviceProvider?.display?.trim() || ''
+      if (d && provider && !encounterByDateProvider.has(`${d}|${provider}`)) {
+        encounterByDateProvider.set(`${d}|${provider}`, enc.id)
       }
     }
 
@@ -126,15 +157,23 @@ export const LocalBundleService = {
       }
     })
 
-    // Pre-process resources: attach encounter refs where missing
-    const meds   = attachEncounterRefs(
+    // Pre-process resources: attach encounter refs where missing.
+    // Medications use provider-aware matching (date + requester); everything
+    // else falls back to date-only matching as before.
+    const medsAttached = attachEncounterRefsForMeds(
       [...byType('MedicationRequest'), ...medicationStatements],
-      encounterDateMap,
+      encounterByDateProvider,
     )
-    const obs    = attachEncounterRefs(byType('Observation'), encounterDateMap)
+    // For any meds still without an encounter ref, synthesise a "藥局"
+    // Encounter per (date, requester) group so pharmacy refills surface as
+    // their own visit in the visit-history view.
+    const { encounters: encountersWithSynthetic, medications: meds } =
+      synthesizePharmacyEncounters({ encounters, medications: medsAttached })
+
+    const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap)
     const reports = byType('DiagnosticReport')
-    const procs  = attachEncounterRefs(byType('Procedure'), encounterDateMap)
-    const conds  = attachEncounterRefs(byType('Condition'), encounterDateMap)
+    const procs  = attachEncounterRefsByDate(byType('Procedure'), encounterDateMap)
+    const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap)
     const allerg = byType('AllergyIntolerance')
     const docRefs = byType('DocumentReference')
     const comps  = byType('Composition')
@@ -144,7 +183,7 @@ export const LocalBundleService = {
     const obsMap = new Map(allObs.map((o: any) => [o.id, o]))
 
     // Attach encounter refs to DiagnosticReports using same-day strategy
-    const processedReports = attachEncounterRefs(reports, encounterDateMap).map((r: any) =>
+    const processedReports = attachEncounterRefsByDate(reports, encounterDateMap).map((r: any) =>
       FhirMapper.toDiagnosticReport(r, allObs)
     )
 
@@ -163,7 +202,7 @@ export const LocalBundleService = {
       vitalSigns,
       diagnosticReports: processedReports,
       procedures:       procs.map((r: any) => FhirMapper.toProcedure(r)),
-      encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
+      encounters:       encountersWithSynthetic.map((r: any) => FhirMapper.toEncounter(r)),
       documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
       compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
     }

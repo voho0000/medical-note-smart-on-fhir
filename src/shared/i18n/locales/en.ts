@@ -321,6 +321,7 @@ export const en = {
       emergency: 'Emergency',
       home: 'Home Care',
       virtual: 'Virtual Visit',
+      pharmacy: 'Pharmacy',
       other: 'Visit',
     },
     filterAll: 'All',

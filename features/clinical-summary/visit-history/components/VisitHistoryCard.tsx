@@ -14,11 +14,11 @@ import { useClinicalNotes } from "../hooks/useClinicalNotes"
 import { useVisitStats } from "../hooks/useVisitStats"
 import { VisitItem } from "./VisitItem"
 
-type VisitTypeFilter = 'all' | 'outpatient' | 'inpatient' | 'emergency'
+type VisitTypeFilter = 'all' | 'outpatient' | 'inpatient' | 'emergency' | 'pharmacy'
 type SortMode = 'date-desc' | 'date-asc' | 'abnormal'
 type ContentFlag = 'tests' | 'medications' | 'procedures'
 
-const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'inpatient', 'emergency']
+const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'inpatient', 'emergency', 'pharmacy']
 
 export function VisitHistoryCard() {
   const { t, locale } = useLanguage()
@@ -64,11 +64,12 @@ export function VisitHistoryCard() {
   // filters narrow the result list but the per-type chip count remains stable
   // for orientation).
   const counts = useMemo(() => {
-    const c = { all: visitHistory.length, outpatient: 0, inpatient: 0, emergency: 0 }
+    const c = { all: visitHistory.length, outpatient: 0, inpatient: 0, emergency: 0, pharmacy: 0 }
     for (const v of visitHistory) {
       if (v.type === 'outpatient') c.outpatient++
       else if (v.type === 'inpatient') c.inpatient++
       else if (v.type === 'emergency') c.emergency++
+      else if (v.type === 'pharmacy') c.pharmacy++
     }
     return c
   }, [visitHistory])

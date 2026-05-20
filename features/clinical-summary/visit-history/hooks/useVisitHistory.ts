@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText } from "../utils/formatters"
 
-type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'other'
+type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
 export interface VisitRecord {
   id: string
@@ -49,6 +49,15 @@ export function useVisitHistory(encounters: any[]) {
                  reasonText.includes('admission') || reasonText.includes('hospital') ||
                  serviceTypeText.includes('住院') || typeText.includes('住院')) {
           type = 'inpatient'
+        }
+        // Pharmacy refill — synthesised by synthesizePharmacyEncounters when
+        // a MedicationRequest has no clinic encounter (e.g. NHI 慢箋 refills
+        // dispensed at a pharmacy). Detected by the 藥局 marker in type.text;
+        // must precede the generic 'AMB'→outpatient rule below since the
+        // synthetic encounter uses class.code='AMB' for FHIR compliance.
+        else if (typeText.includes('藥局') || serviceTypeText.includes('藥局') ||
+                 classCode === 'pharm' || classCode === 'pharmacy') {
+          type = 'pharmacy'
         }
         else if (['amb', 'ambulatory', 'outpatient', 'op'].includes(classCode) ||
             reasonText.includes('prenatal') || reasonText.includes('check up') || reasonText.includes('postnatal') ||

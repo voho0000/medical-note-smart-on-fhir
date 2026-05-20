@@ -10,7 +10,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 import { resolveIcdCodes } from "@/src/shared/utils/icd-lookup"
 
-type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'other'
+type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
 interface VisitItemProps {
   visit: VisitRecord
@@ -28,6 +28,7 @@ const getTypeBadge = (type: VisitType, labels: any) => {
     emergency: { label: labels.emergency, variant: 'destructive' as const },
     home: { label: labels.home, variant: 'outline' as const },
     virtual: { label: labels.virtual, variant: 'outline' as const },
+    pharmacy: { label: labels.pharmacy || '藥局', variant: 'outline' as const },
     other: { label: labels.other, variant: 'outline' as const }
   }
   const { label, variant } = typeMap[type] || typeMap.other

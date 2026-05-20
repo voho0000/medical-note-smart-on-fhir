@@ -323,6 +323,7 @@ export const zhTW = {
       emergency: '急診',
       home: '居家照護',
       virtual: '遠距就醫',
+      pharmacy: '藥局',
       other: '就診',
     },
     filterAll: '全部',
