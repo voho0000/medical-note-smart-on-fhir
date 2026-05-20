@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { fhirClient } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { fhirClient, LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
 
@@ -18,17 +19,29 @@ export function useFhirContext(): FhirContext {
   useEffect(() => {
     let mounted = true
 
+    // Bundle-import mode: there is no remote FHIR server, so just clear the
+    // server-URL state and skip the SMART client init entirely.
+    if (LocalBundleService.hasData()) {
+      setFhirServerUrl(null)
+      setIsLoadingServer(false)
+      return () => { mounted = false }
+    }
+
     const loadServerUrl = async () => {
       try {
         const client = await fhirClient.getClient()
         const serverUrl = client.state?.serverUrl || null
-        
+
         if (mounted) {
           setFhirServerUrl(serverUrl)
           setIsLoadingServer(false)
         }
       } catch (error) {
-        console.error('[FHIR Context] Failed to load server URL:', error)
+        // Bundle mode races (bundle appeared after the hasData() check) —
+        // silently treat as no-server. Real errors still surface.
+        if (!(error instanceof LocalBundleModeError)) {
+          console.error('[FHIR Context] Failed to load server URL:', error)
+        }
         if (mounted) {
           setFhirServerUrl(null)
           setIsLoadingServer(false)
