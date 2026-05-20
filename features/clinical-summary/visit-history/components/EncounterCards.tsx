@@ -1,7 +1,6 @@
 "use client"
 
 import { cn } from "@/src/shared/utils/cn.utils"
-import { RotateCw } from "lucide-react"
 import { formatDateTime } from "../utils/formatters"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { EncounterDiagnosis } from "../hooks/useEncounterDetails"
@@ -38,9 +37,8 @@ export function MedicationRow({ medication }: { medication: EncounterMedication 
             {medication.isChronic && (
               <span
                 title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-                className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700"
+                className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700"
               >
-                <RotateCw className="h-3 w-3" />
                 {mt.chronic ?? '慢箋'}
               </span>
             )}

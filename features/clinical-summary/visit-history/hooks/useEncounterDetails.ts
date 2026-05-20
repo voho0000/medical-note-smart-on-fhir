@@ -81,6 +81,24 @@ export function useEncounterDetails(
     }
 
     if (Array.isArray(medications)) {
+      // Drug-level chronic aggregation: the bridge tags each refill individually,
+      // and a chronic drug may have occasional acute refills. Treat a drug as
+      // chronic for this patient if ANY refill in the whole dataset was tagged.
+      // Mirrors the same aggregation used in features/clinical-summary/medications/
+      // hooks/useMedicationRows.ts so the badge appears consistently across views.
+      const chronicDrugKeys = new Set<string>()
+      for (const m of medications) {
+        if (!m) continue
+        if (!isChronicPrescription(m)) continue
+        const key =
+          m.medicationCodeableConcept?.coding?.[0]?.code ||
+          m.medicationCodeableConcept?.text ||
+          m.medicationReference?.display ||
+          m.code?.text ||
+          ''
+        if (key) chronicDrugKeys.add(key)
+      }
+
       medications.forEach((med: any) => {
         const encounterId = getReferenceId(med?.encounter)
         if (!encounterId) return
@@ -88,13 +106,21 @@ export function useEncounterDetails(
         const medId = med?.id || `${encounterId}-med-${entry.medications.length}`
         if (entry.medications.some((item) => item.id === medId)) return
 
+        const drugKey =
+          med?.medicationCodeableConcept?.coding?.[0]?.code ||
+          med?.medicationCodeableConcept?.text ||
+          med?.medicationReference?.display ||
+          med?.code?.text ||
+          ''
+        const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
+
         entry.medications.push({
           id: medId,
           name: getMedicationName(med),
           status: med?.status,
           detail: med?.dosageInstruction?.[0]?.text,
           when: formatDateTime(med?.authoredOn, locale),
-          isChronic: isChronicPrescription(med),
+          isChronic,
         })
       })
     }

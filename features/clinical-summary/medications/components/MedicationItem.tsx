@@ -1,6 +1,5 @@
 // Medication Item Component
 import { Badge } from "@/components/ui/badge"
-import { RotateCw } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { MedicationRow } from '../types'
 
@@ -34,9 +33,8 @@ export function MedicationItem({ medication }: MedicationItemProps) {
           {medication.isChronic && (
             <span
               title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-              className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700"
+              className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700"
             >
-              <RotateCw className="h-3 w-3" />
               {mt.chronic ?? '慢箋'}
             </span>
           )}
