@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { getReferenceId, getCodeText, getMedicationName, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
+import { getReferenceId, getCodeText, getMedicationName, getMedicationNameLocalized, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
 import { checkReferenceRangeAbnormal } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
@@ -68,7 +68,8 @@ export function useEncounterDetails(
   procedures: any[],
   clinicalNotes: ClinicalNote[],
   conditions: any[],
-  locale: string = "en-US"
+  locale: string = "en-US",
+  audience: 'medical' | 'patient' = 'medical',
 ) {
   return useMemo(() => {
     const map = new Map<string, EncounterDetails>()
@@ -116,7 +117,7 @@ export function useEncounterDetails(
 
         entry.medications.push({
           id: medId,
-          name: getMedicationName(med),
+          name: getMedicationNameLocalized(med, audience),
           status: med?.status,
           detail: med?.dosageInstruction?.[0]?.text,
           when: formatDateTime(med?.authoredOn, locale),
@@ -218,5 +219,5 @@ export function useEncounterDetails(
     }
 
     return map
-  }, [medications, diagnosticReports, observations, procedures, clinicalNotes, conditions, locale])
+  }, [medications, diagnosticReports, observations, procedures, clinicalNotes, conditions, locale, audience])
 }

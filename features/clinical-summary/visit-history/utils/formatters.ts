@@ -92,6 +92,36 @@ export const getMedicationName = (med: any) => {
   )
 }
 
+/**
+ * Audience-aware variant of getMedicationName.
+ *   medical  → prefer coding[].display (English pharmacology names)
+ *   patient  → prefer text (zh-TW, bridge v0.6.10+)
+ * Falls back through medicationReference / code / medication / resource.code
+ * just like the legacy helper.
+ */
+export const getMedicationNameLocalized = (
+  med: any,
+  audience: 'medical' | 'patient',
+) => {
+  const pick = (concept: any): string => {
+    if (!concept) return ''
+    const text = typeof concept.text === 'string' ? concept.text.trim() : ''
+    const coded = concept.coding?.[0]?.display
+    const codedStr = typeof coded === 'string' ? coded.trim() : ''
+    return audience === 'patient'
+      ? text || codedStr || ''
+      : codedStr || text || ''
+  }
+  return (
+    pick(med?.medicationCodeableConcept) ||
+    med?.medicationReference?.display ||
+    pick(med?.code) ||
+    pick(med?.medication) ||
+    pick(med?.resource?.code) ||
+    'Unnamed medication'
+  )
+}
+
 export const formatDateTime = (dateString?: string, locale: string = "en-US") => {
   if (!dateString) return undefined
   try {

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { Search, Building2, AlertCircle, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
@@ -22,6 +23,7 @@ const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'inpatient', 'emer
 
 export function VisitHistoryCard() {
   const { t, locale } = useLanguage()
+  const { audience } = useAudience()
   const {
     encounters = [],
     medications = [],
@@ -48,7 +50,7 @@ export function VisitHistoryCard() {
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
-    clinicalNotes, conditions, locale,
+    clinicalNotes, conditions, locale, audience,
   )
   const visitStats = useVisitStats(encounterDetails)
   const icdDict = useMemo(() => buildIcdDictionary(conditions), [conditions])
