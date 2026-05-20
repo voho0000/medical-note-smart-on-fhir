@@ -66,6 +66,19 @@ export interface MedicationEntity {
     reference?: string
   }
   dispenseRequest?: any
+  /**
+   * FHIR R4 MedicationRequest.courseOfTherapyType — distinguishes acute vs
+   * continuous (chronic refill) therapy. NHI-FHIR-Bridge v0.6.10+ populates
+   * this with coding[].code === 'continuous' for 慢性處方箋. Absent for acute.
+   */
+  courseOfTherapyType?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

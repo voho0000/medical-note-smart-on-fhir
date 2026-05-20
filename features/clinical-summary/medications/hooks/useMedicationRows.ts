@@ -11,6 +11,26 @@ export function useMedicationRows(medications: any[]) {
 
     const inactiveStatuses = new Set(["stopped", "completed"])
 
+    // The bridge emits one MedicationRequest per refill. The chronic
+    // (courseOfTherapyType.continuous) flag is set per refill, so a single
+    // drug may appear as a mix of "chronic" and "acute" refills depending on
+    // which NHI billing code each pharmacy used that month. Aggregate to the
+    // drug level — if ANY refill of this medication was chronic, treat every
+    // row of that drug as chronic. This matches the bridge's recommended
+    // detection logic ("若想顯示哪些是慢性用藥…group by 藥品名").
+    const chronicDrugKeys = new Set<string>()
+    for (const m of medications) {
+      if (!m) continue
+      if (!isChronicPrescription(m)) continue
+      const key =
+        m.medicationCodeableConcept?.coding?.[0]?.code ||
+        m.medicationCodeableConcept?.text ||
+        m.medicationReference?.display ||
+        m.code?.text ||
+        ''
+      if (key) chronicDrugKeys.add(key)
+    }
+
     const enriched = medications.map((med: any) => {
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
 
@@ -72,7 +92,14 @@ export function useMedicationRows(medications: any[]) {
 
       // Inactive = explicitly stopped/completed OR computed endDate has passed
       const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
-      const isChronic = isChronicPrescription(med)
+      // Drug-level chronic: true if any refill of this drug was chronic
+      const drugKey =
+        med.medicationCodeableConcept?.coding?.[0]?.code ||
+        med.medicationCodeableConcept?.text ||
+        med.medicationReference?.display ||
+        med.code?.text ||
+        ''
+      const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
 
       return {
         id: med.id || Math.random().toString(36),
