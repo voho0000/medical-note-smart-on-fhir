@@ -5,6 +5,34 @@ export {
 } from '@/src/shared/utils/fhir-helpers'
 
 /**
+ * Audience-aware text resolution for a FHIR CodeableConcept.
+ *
+ * Bridge contract (NHI-FHIR-Bridge v0.6.10+):
+ *   - `text`         carries the localized (zh-TW) display string
+ *   - `coding[].display`  carries the canonical English label
+ * Older bundles may have English in `text` and nothing else — the fallback
+ * chain below stays safe in both cases.
+ *
+ *   audience = 'patient' → prefer 中文 (`text`), fall back to English coding
+ *   audience = 'medical' → prefer English coding[].display, fall back to text
+ *
+ * Returns '' when nothing usable is present.
+ */
+export function pickLocalizedText(
+  concept: any,
+  audience: 'medical' | 'patient',
+): string {
+  if (!concept) return ''
+  const text = typeof concept.text === 'string' ? concept.text.trim() : ''
+  const coded = concept.coding?.[0]?.display
+  const codedStr = typeof coded === 'string' ? coded.trim() : ''
+  if (audience === 'patient') {
+    return text || codedStr || ''
+  }
+  return codedStr || text || ''
+}
+
+/**
  * Returns true when the MedicationRequest's FHIR `courseOfTherapyType` marks
  * this order as a continuous / long-term therapy — i.e. the bridge classified
  * it as a NHI 慢性處方箋 (refillable chronic prescription).
