@@ -101,6 +101,14 @@ export function MedicationItem({ medication }: MedicationItemProps) {
           >
             {medication.title}
           </span>
+          {medication.category && (
+            <span
+              title={medication.category}
+              className="inline-flex shrink-0 max-w-[10rem] items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[10px] font-medium text-slate-700 truncate"
+            >
+              {medication.category}
+            </span>
+          )}
           {medication.isChronic && (
             <span
               title={mt.chronicTooltip ?? 'Continuous long term therapy'}

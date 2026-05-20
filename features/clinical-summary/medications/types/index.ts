@@ -42,6 +42,10 @@ export interface MedicationRow {
   /** True when FHIR courseOfTherapyType marks the order as 'continuous'
    *  (NHI 慢性處方箋, refillable chronic prescription). */
   isChronic: boolean
+  /** Audience-aware drug-category label (e.g. "降血壓藥" or "HYPOTENSIVE AGENTS").
+   *  Sourced from FHIR MedicationRequest.category[0]. Empty when no category
+   *  is attached (older bundles or uncategorised one-off meds). */
+  category?: string
   // ── Refill-history aggregate (derived across all MedicationRequests for
   //    this drug). Lets a single row surface compliance / adherence info
   //    without forcing the user to expand the per-drug accordion in the

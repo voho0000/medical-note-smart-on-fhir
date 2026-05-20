@@ -139,6 +139,12 @@ export function useMedicationRows(
 
       // Per-refill metadata that downstream UI surfaces inline.
       const pharmacy = med?.requester?.display?.trim() || undefined
+      // Drug category (e.g. "降血壓藥" / "HYPOTENSIVE AGENTS"). Bridge
+      // v0.6.10+ sends both Chinese (text) and English (coding[].display).
+      const categoryRaw = pickLocalizedText(med?.category?.[0], audience)
+      const category = categoryRaw
+        ? categoryRaw.replace(/\s+/g, ' ').trim() || undefined
+        : undefined
       const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code || undefined
       // Bridge v0.6.10+: `.text` carries Chinese, `coding[0].display`
@@ -165,6 +171,7 @@ export function useMedicationRows(
         daysRemaining,
         isInactive,
         isChronic,
+        category,
         pharmacy,
         icdCode,
         icdText,
