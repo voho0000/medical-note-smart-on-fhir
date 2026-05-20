@@ -5,7 +5,6 @@
 
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
-import { synthesizePharmacyEncounters } from '../utils/synthesize-pharmacy-encounters'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 
@@ -159,16 +158,18 @@ export const LocalBundleService = {
 
     // Pre-process resources: attach encounter refs where missing.
     // Medications use provider-aware matching (date + requester); everything
-    // else falls back to date-only matching as before.
-    const medsAttached = attachEncounterRefsForMeds(
+    // else falls back to date-only matching as before. Orphan pharmacy
+    // MedicationRequests that don't match any clinic encounter are LEFT
+    // ORPHAN on purpose — per the bridge team's design (bridge bug report
+    // 2026-05-20), 健保存摺 itself only surfaces pharmacy events as visits
+    // in the IC-card section (≤6 most-recent rows, where bridge v0.7.1+
+    // tags them with type.text='藥局'). The older "申報資料" channel never
+    // shows pharmacy events as visits at all, so synthesising fake Encounter
+    // resources for them would diverge from NHI's data model.
+    const meds = attachEncounterRefsForMeds(
       [...byType('MedicationRequest'), ...medicationStatements],
       encounterByDateProvider,
     )
-    // For any meds still without an encounter ref, synthesise a "藥局"
-    // Encounter per (date, requester) group so pharmacy refills surface as
-    // their own visit in the visit-history view.
-    const { encounters: encountersWithSynthetic, medications: meds } =
-      synthesizePharmacyEncounters({ encounters, medications: medsAttached })
 
     const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap)
     const reports = byType('DiagnosticReport')
@@ -202,7 +203,7 @@ export const LocalBundleService = {
       vitalSigns,
       diagnosticReports: processedReports,
       procedures:       procs.map((r: any) => FhirMapper.toProcedure(r)),
-      encounters:       encountersWithSynthetic.map((r: any) => FhirMapper.toEncounter(r)),
+      encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
       documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
       compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
     }

@@ -14,7 +14,6 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient } from '../client/fhir-client.service'
 import { FhirMapper } from '../mappers/fhir.mapper'
-import { synthesizePharmacyEncounters } from '../utils/synthesize-pharmacy-encounters'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
@@ -58,26 +57,22 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       return matched.length > 0 ? { ...dr, _observations: matched } : dr
     })
 
-    // Synthesise "藥局" Encounters for pharmacy-only MedicationRequests that
-    // came back from the bridge without an encounter reference. Without this,
-    // pharmacy refills either silently vanish from visit history or — if a
-    // same-day clinic encounter exists — get attributed to the wrong provider.
-    // Mirrors the synthesis applied by LocalBundleService.parse() so SMART and
-    // bundle-import paths render the same way.
-    const synthesised = synthesizePharmacyEncounters({
-      encounters: encounters as any[],
-      medications: medications as any[],
-    })
+    // Pharmacy-only MedicationRequests without an encounter reference are
+    // intentionally LEFT ORPHAN — they still surface in the medication list,
+    // but don't fabricate visits in the visit-history view. This mirrors the
+    // NHI 健保存摺 data model: pharmacy events only appear as visits in the
+    // IC-card section (where bridge v0.7.1+ tags them with type.text='藥局'),
+    // never under the 申報資料 channel. See bridge bug report 2026-05-20.
 
     return {
       conditions,
-      medications: synthesised.medications as MedicationEntity[],
+      medications,
       allergies,
       observations,
       vitalSigns,
       diagnosticReports: enrichedDiagnosticReports,
       procedures,
-      encounters: synthesised.encounters as EncounterEntity[],
+      encounters,
       documentReferences,
       compositions
     }
