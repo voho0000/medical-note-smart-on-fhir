@@ -117,7 +117,7 @@ export function useEncounterDetails(
 
         entry.medications.push({
           id: medId,
-          name: getMedicationNameLocalized(med, audience),
+          name: getMedicationNameLocalized(med, audience, locale),
           status: med?.status,
           detail: med?.dosageInstruction?.[0]?.text,
           when: formatDateTime(med?.authoredOn, locale),

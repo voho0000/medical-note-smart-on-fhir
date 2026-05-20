@@ -74,15 +74,15 @@ export function useMedicationRows(
       // English `.text` fall through gracefully.
       let medicationName: string
       if (med.medicationCodeableConcept) {
-        medicationName = pickLocalizedText(med.medicationCodeableConcept, audience)
+        medicationName = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
       } else if (med.medicationReference?.display) {
         medicationName = med.medicationReference.display
       } else if (med.code) {
-        medicationName = pickLocalizedText(med.code, audience)
+        medicationName = pickLocalizedText(med.code, audience, locale)
       } else if (med.medication?.text) {
         medicationName = med.medication.text
       } else if (med.resource?.code) {
-        medicationName = pickLocalizedText(med.resource.code, audience)
+        medicationName = pickLocalizedText(med.resource.code, audience, locale)
       } else {
         medicationName = ''
       }
@@ -156,7 +156,7 @@ export function useMedicationRows(
       // carries English. Pick by audience; both branches strip the
       // duplicated leading ICD code (bridge often writes
       // "N400 良性攝護腺增生..." into text).
-      const rawIcdText = pickLocalizedText(med?.reasonCode?.[0], audience)
+      const rawIcdText = pickLocalizedText(med?.reasonCode?.[0], audience, locale)
       const icdText = rawIcdText
         ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
         : undefined

@@ -5,29 +5,39 @@ export {
 } from '@/src/shared/utils/fhir-helpers'
 
 /**
- * Audience-aware text resolution for a FHIR CodeableConcept.
+ * Locale + audience-aware text resolution for a FHIR CodeableConcept.
  *
  * Used for clinician-vs-patient terminology choices like drug names and
- * ICD descriptions, where medical professionals prefer the canonical
- * English even when the UI language is Chinese (pharmacology habit).
+ * billing-ICD descriptions.
  *
  * Bridge contract (NHI-FHIR-Bridge v0.6.10+):
  *   - `text`              localized (zh-TW) display string
  *   - `coding[].display`  canonical English label
  *
- *   audience = 'patient' → prefer 中文 (`text`), fall back to English coding
- *   audience = 'medical' → prefer English coding[].display, fall back to text
+ * Resolution rules:
+ *   locale === 'en'                  → always English (coding[].display)
+ *   locale === 'zh-TW' & medical    → English (coding) — pharmacology habit
+ *   locale === 'zh-TW' & patient    → 中文 (text) — friendlier for laypeople
+ *
+ * In other words: switching the UI language to English forces English
+ * everywhere; only the Chinese UI lets audience decide.
  *
  * Returns '' when nothing usable is present.
  */
 export function pickLocalizedText(
   concept: any,
   audience: 'medical' | 'patient',
+  locale: string = 'zh-TW',
 ): string {
   if (!concept) return ''
   const text = typeof concept.text === 'string' ? concept.text.trim() : ''
   const coded = concept.coding?.[0]?.display
   const codedStr = typeof coded === 'string' ? coded.trim() : ''
+  // English UI: force English regardless of audience.
+  if (locale === 'en') {
+    return codedStr || text || ''
+  }
+  // Non-English UI: audience selects technical (English) vs friendly (中文).
   if (audience === 'patient') {
     return text || codedStr || ''
   }
