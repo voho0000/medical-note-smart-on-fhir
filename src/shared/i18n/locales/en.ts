@@ -90,6 +90,11 @@ export const en = {
     noData: 'No medications recorded.',
     chronic: 'Chronic Rx',
     chronicTooltip: 'Continuous long term therapy (chronic refillable prescription)',
+    pharmacyLabel: 'Dispensed at',
+    indicationLabel: 'For',
+    refillsLabel: 'Refills',
+    refillsSince: 'since',
+    refillTimes: 'times',
   },
 
   allergies: {

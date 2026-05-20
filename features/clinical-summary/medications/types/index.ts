@@ -42,4 +42,18 @@ export interface MedicationRow {
   /** True when FHIR courseOfTherapyType marks the order as 'continuous'
    *  (NHI 慢性處方箋, refillable chronic prescription). */
   isChronic: boolean
+  // ── Refill-history aggregate (derived across all MedicationRequests for
+  //    this drug). Lets a single row surface compliance / adherence info
+  //    without forcing the user to expand the per-drug accordion in the
+  //    "Medication History" section.
+  /** This refill's prescriber / dispensing pharmacy (requester.display). */
+  pharmacy?: string
+  /** ICD-10 code from this refill's reasonCode[0].coding[0].code. */
+  icdCode?: string
+  /** Human-readable ICD-10 description (text or display). */
+  icdText?: string
+  /** Total number of refills of this drug across the loaded dataset. */
+  refillCount: number
+  /** First (earliest) refill date for this drug, formatted. */
+  firstRefillDate?: string
 }

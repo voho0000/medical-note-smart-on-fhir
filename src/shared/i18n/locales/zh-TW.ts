@@ -92,6 +92,11 @@ export const zhTW = {
     noData: '無用藥紀錄。',
     chronic: '慢箋',
     chronicTooltip: '慢性處方箋（Continuous long term therapy）',
+    pharmacyLabel: '領藥處',
+    indicationLabel: '適應症',
+    refillsLabel: '領藥次數',
+    refillsSince: '起累計',
+    refillTimes: '次',
   },
 
   allergies: {

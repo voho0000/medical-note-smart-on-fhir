@@ -1,6 +1,7 @@
 // Medication Item Component
 import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import type { MedicationRow } from '../types'
 
 interface MedicationItemProps {
@@ -22,8 +23,15 @@ function getStatusBadge(medication: MedicationRow) {
 
 export function MedicationItem({ medication }: MedicationItemProps) {
   const { t } = useLanguage()
+  const { audience } = useAudience()
   const badge = getStatusBadge(medication)
   const mt = (t.medications as any)
+
+  const isMedical = audience === 'medical'
+  // Refill-history summary inline. Pharmacy + count are useful for both
+  // audiences; ICD reason is shown only to medical professionals (a patient
+  // looking at "N40.0" gets nothing from the code).
+  const showRefillRow = !!(medication.pharmacy || medication.refillCount > 1)
 
   return (
     <div className="rounded-md border p-3">
@@ -60,6 +68,41 @@ export function MedicationItem({ medication }: MedicationItemProps) {
             <div>{medication.isInactive ? 'Ended' : 'Until'}: {medication.endDate}</div>
           )}
           {medication.durationDays && <div>Prescription length: {medication.durationDays} days</div>}
+        </div>
+      )}
+
+      {showRefillRow && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t pt-1.5 text-xs text-muted-foreground">
+          {medication.pharmacy && (
+            <span>
+              <span className="font-medium text-foreground/70">
+                {mt.pharmacyLabel ?? 'Dispensed at'}:
+              </span>{' '}
+              {medication.pharmacy}
+            </span>
+          )}
+          {isMedical && medication.icdCode && (
+            <span>
+              <span className="font-medium text-foreground/70">
+                {mt.indicationLabel ?? 'For'}:
+              </span>{' '}
+              <span className="font-mono">{medication.icdCode}</span>
+              {medication.icdText && <span className="ml-1">{medication.icdText}</span>}
+            </span>
+          )}
+          {medication.refillCount > 1 && (
+            <span>
+              <span className="font-medium text-foreground/70">
+                {mt.refillsLabel ?? 'Refills'}:
+              </span>{' '}
+              {medication.refillCount} {mt.refillTimes ?? 'times'}
+              {medication.firstRefillDate && (
+                <span className="ml-1">
+                  ({mt.refillsSince ?? 'since'} {medication.firstRefillDate})
+                </span>
+              )}
+            </span>
+          )}
         </div>
       )}
     </div>

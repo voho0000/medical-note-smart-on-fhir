@@ -11,6 +11,13 @@ export function useMedicationRows(medications: any[]) {
 
     const inactiveStatuses = new Set(["stopped", "completed"])
 
+    const drugKeyOf = (m: any): string =>
+      m?.medicationCodeableConcept?.coding?.[0]?.code ||
+      m?.medicationCodeableConcept?.text ||
+      m?.medicationReference?.display ||
+      m?.code?.text ||
+      ''
+
     // The bridge emits one MedicationRequest per refill. The chronic
     // (courseOfTherapyType.continuous) flag is set per refill, so a single
     // drug may appear as a mix of "chronic" and "acute" refills depending on
@@ -22,13 +29,28 @@ export function useMedicationRows(medications: any[]) {
     for (const m of medications) {
       if (!m) continue
       if (!isChronicPrescription(m)) continue
-      const key =
-        m.medicationCodeableConcept?.coding?.[0]?.code ||
-        m.medicationCodeableConcept?.text ||
-        m.medicationReference?.display ||
-        m.code?.text ||
-        ''
+      const key = drugKeyOf(m)
       if (key) chronicDrugKeys.add(key)
+    }
+
+    // Refill-history aggregates (per drug). Used to surface "Refills: 11 次
+    // since 2023-12" on each row without forcing the user to expand the
+    // per-drug accordion in the Medication History section.
+    const refillsByDrug = new Map<string, { count: number; firstDate?: string }>()
+    for (const m of medications) {
+      if (!m) continue
+      const key = drugKeyOf(m)
+      if (!key) continue
+      const date = m.authoredOn || m.effectiveDateTime
+      const entry = refillsByDrug.get(key)
+      if (!entry) {
+        refillsByDrug.set(key, { count: 1, firstDate: date })
+      } else {
+        entry.count++
+        if (date && (!entry.firstDate || date < entry.firstDate)) {
+          entry.firstDate = date
+        }
+      }
     }
 
     const enriched = medications.map((med: any) => {
@@ -93,13 +115,23 @@ export function useMedicationRows(medications: any[]) {
       // Inactive = explicitly stopped/completed OR computed endDate has passed
       const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
       // Drug-level chronic: true if any refill of this drug was chronic
-      const drugKey =
-        med.medicationCodeableConcept?.coding?.[0]?.code ||
-        med.medicationCodeableConcept?.text ||
-        med.medicationReference?.display ||
-        med.code?.text ||
-        ''
+      const drugKey = drugKeyOf(med)
       const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
+
+      const refillAgg = drugKey ? refillsByDrug.get(drugKey) : undefined
+      const refillCount = refillAgg?.count ?? 1
+      const firstRefillDate = refillAgg?.firstDate ? formatDate(refillAgg.firstDate) : undefined
+
+      // Per-refill metadata that downstream UI surfaces inline.
+      const pharmacy = med?.requester?.display?.trim() || undefined
+      const icdCoding = med?.reasonCode?.[0]?.coding?.[0]
+      const icdCode = icdCoding?.code || undefined
+      // text often duplicates the code prefix (e.g. "N400 N400/..."); fall
+      // back to the coding display when text is missing or noisy.
+      const rawIcdText = med?.reasonCode?.[0]?.text || icdCoding?.display || ''
+      const icdText = rawIcdText
+        ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
+        : undefined
 
       return {
         id: med.id || Math.random().toString(36),
@@ -116,6 +148,11 @@ export function useMedicationRows(medications: any[]) {
         daysRemaining,
         isInactive,
         isChronic,
+        pharmacy,
+        icdCode,
+        icdText,
+        refillCount,
+        firstRefillDate,
         _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
       }
     })
