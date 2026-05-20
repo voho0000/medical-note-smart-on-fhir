@@ -41,11 +41,11 @@ export function MedicationList({ medications, isLoading, error }: MedicationList
     <div className="space-y-4">
       {/* Currently in use Medications */}
       {activeMedications.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <h3 className="text-sm font-semibold text-foreground">
             Currently in use ({activeMedications.length})
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {activeMedications.map((medication) => (
               <MedicationItem key={medication.id} medication={medication} />
             ))}
