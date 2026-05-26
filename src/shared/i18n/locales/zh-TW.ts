@@ -691,6 +691,7 @@ export const zhTW = {
     fhirServer: 'FHIR 伺服器',
     patientId: '患者 ID',
     patientName: '患者姓名',
+    localBundle: '本地匯入 FHIR Bundle',
   },
 
   auth: (() => {

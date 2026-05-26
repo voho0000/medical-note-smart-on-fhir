@@ -689,6 +689,7 @@ export const en = {
     fhirServer: 'FHIR Server',
     patientId: 'Patient ID',
     patientName: 'Patient Name',
+    localBundle: 'Locally-imported FHIR Bundle',
   },
 
   auth: (() => {

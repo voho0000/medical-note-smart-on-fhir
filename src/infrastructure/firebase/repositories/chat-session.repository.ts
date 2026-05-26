@@ -23,6 +23,21 @@ import type {
   UpdateChatSessionDto 
 } from '@/src/core/entities/chat-session.entity'
 
+// Sentinel used in place of a real FHIR server URL when the user is in
+// local-bundle mode (see use-fhir-context.hook.ts).
+const LOCAL_BUNDLE_KEY = 'local-bundle'
+// Older builds wrote local-mode sessions under the auto-save fallback string.
+// Keep reading them here so existing chat history doesn't vanish post-rename.
+const LEGACY_LOCAL_KEYS = ['no-fhir-server']
+
+/** Return the set of fhirServerUrl values that should be queried together. */
+function resolveFhirServerKeys(fhirServerUrl: string): string[] {
+  if (fhirServerUrl === LOCAL_BUNDLE_KEY) {
+    return [fhirServerUrl, ...LEGACY_LOCAL_KEYS]
+  }
+  return [fhirServerUrl]
+}
+
 export class FirestoreChatSessionRepository implements IChatSessionRepository {
   private readonly COLLECTION_NAME = 'chats'
 
@@ -188,17 +203,18 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
   }
 
   async listByPatient(
-    userId: string, 
-    patientId: string, 
+    userId: string,
+    patientId: string,
     fhirServerUrl: string
   ): Promise<ChatSessionMetadata[]> {
     if (!db) throw new Error('Firestore not initialized')
 
     const chatsRef = collection(db, 'users', userId, this.COLLECTION_NAME)
+    const keys = resolveFhirServerKeys(fhirServerUrl)
     const q = query(
       chatsRef,
       where('patientId', '==', patientId),
-      where('fhirServerUrl', '==', fhirServerUrl),
+      where('fhirServerUrl', 'in', keys),
       orderBy('updatedAt', 'desc')
     )
 
@@ -236,10 +252,11 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
     if (!db) throw new Error('Firestore not initialized')
 
     const chatsRef = collection(db, 'users', userId, this.COLLECTION_NAME)
+    const keys = resolveFhirServerKeys(fhirServerUrl)
     const q = query(
       chatsRef,
       where('patientId', '==', patientId),
-      where('fhirServerUrl', '==', fhirServerUrl),
+      where('fhirServerUrl', 'in', keys),
       orderBy('updatedAt', 'desc')
     )
 
