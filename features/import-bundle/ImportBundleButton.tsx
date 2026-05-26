@@ -1,69 +1,27 @@
 "use client"
 
-import { useRef, useState, useEffect } from "react"
-import { useQueryClient } from "@tanstack/react-query"
-import { Upload, Trash2, Database } from "lucide-react"
+import { useRef } from "react"
+import { Download, Trash2, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { LocalBundleService } from "@/src/infrastructure/fhir/services/local-bundle.service"
-import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-client.service"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useImportBundle } from "./hooks/useImportBundle"
 
 export function ImportBundleButton() {
   const fileRef = useRef<HTMLInputElement>(null)
-  const queryClient = useQueryClient()
   const { t } = useLanguage()
   const i18n = t.importBundle
-  // We track two distinct facts so the UI accurately reflects current mode:
-  //   - `hasBundle`: a bundle exists in localStorage (controls the Trash button —
-  //     user can always clear it).
-  //   - `bundleIsActive`: the bundle is the data source RIGHT NOW (controls the
-  //     "Local data" badge so we don't mislead the user when SMART has taken
-  //     precedence over a leftover bundle).
-  // Both start false on SSR + first client render so the initial DOM matches;
-  // the real values are synced in the effect below (post-hydration).
-  const [hasBundle, setHasBundle] = useState(false)
-  const [bundleIsActive, setBundleIsActive] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    setHasBundle(LocalBundleService.hasData())
-    setBundleIsActive(shouldUseLocalBundle())
-  }, [])
+  const { importFile, clear, loading, error, hasBundle, bundleIsActive } = useImportBundle()
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setLoading(true)
-    setError(null)
     try {
-      const text = await file.text()
-      const bundle = JSON.parse(text)
-      if (bundle.resourceType !== 'Bundle') {
-        throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
-      }
-      const parsed = LocalBundleService.parse(bundle)
-      if (!parsed) {
-        throw new Error('Bundle must contain at least one Patient resource')
-      }
-      LocalBundleService.save(bundle)
-      setHasBundle(true)
-      setBundleIsActive(shouldUseLocalBundle())
-      await queryClient.invalidateQueries()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse bundle')
+      await importFile(file)
+    } catch {
+      // error is captured in the hook's state; no extra handling needed.
     } finally {
-      setLoading(false)
       if (fileRef.current) fileRef.current.value = ''
     }
-  }
-
-  const handleClear = async () => {
-    LocalBundleService.clear()
-    setHasBundle(false)
-    setBundleIsActive(false)
-    setError(null)
-    await queryClient.invalidateQueries()
   }
 
   return (
@@ -87,7 +45,7 @@ export function ImportBundleButton() {
           disabled={loading}
           title={i18n.importTitle}
         >
-          <Upload className="h-3.5 w-3.5" />
+          <Download className="h-3.5 w-3.5" />
           {loading ? i18n.importing : i18n.button}
         </Button>
         {hasBundle && (
@@ -95,7 +53,7 @@ export function ImportBundleButton() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 sm:h-9 sm:w-9 text-destructive hover:text-destructive"
-            onClick={handleClear}
+            onClick={clear}
             title={i18n.clearTitle}
           >
             <Trash2 className="h-3.5 w-3.5" />
