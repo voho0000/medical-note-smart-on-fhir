@@ -238,7 +238,7 @@ export const en = {
     manageModels: 'Models',
     settings: 'Settings',
     characters: 'characters',
-    cloudAiNotice: 'AI runs in the cloud · messages go to OpenAI / Gemini, not to the developer',
+    cloudAiNotice: 'AI runs in the cloud · messages go to OpenAI / Gemini · chat history syncs via our cloud when you sign in',
     cloudAiNoticeLink: 'Privacy',
     latestVoiceInput: 'Latest voice input:',
     microphoneHint: 'Tap the microphone to dictate, then refine or send your message.',
