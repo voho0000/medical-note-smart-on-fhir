@@ -44,11 +44,24 @@ export function hasSmartContext(): boolean {
     // Malformed URL — fall through to sessionStorage check.
   }
   try {
-    // fhirclient writes a pointer named SMART_KEY to sessionStorage when an
-    // OAuth flow completes; its presence indicates an active SMART session.
-    if (window.sessionStorage.getItem('SMART_KEY')) return true
+    // fhirclient stores SMART_KEY as a JSON-stringified pointer to another
+    // sessionStorage entry containing the actual token state. The pointer
+    // alone is set very early in the OAuth flow and persists across same-tab
+    // navigations even after the user is no longer logged in (or never
+    // completed the flow). We must also confirm the pointed-to state
+    // contains a real `tokenResponse.access_token` before treating the
+    // session as live — otherwise stale pointers send us into
+    // `oauth2.ready()` which throws "No 'state' parameter found."
+    const rawPointer = window.sessionStorage.getItem('SMART_KEY')
+    if (!rawPointer) return false
+    const stateKey = rawPointer.replace(/^"|"$/g, '')
+    if (!stateKey) return false
+    const stateJson = window.sessionStorage.getItem(stateKey)
+    if (!stateJson) return false
+    const parsed = JSON.parse(stateJson)
+    return !!parsed?.tokenResponse?.access_token
   } catch {
-    // sessionStorage may be unavailable in some embed contexts — ignore.
+    // sessionStorage unavailable or state JSON malformed — treat as no context.
   }
   return false
 }
