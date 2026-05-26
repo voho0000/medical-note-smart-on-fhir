@@ -161,7 +161,7 @@ export function ChatInputArea({
             LLM. No consent gate — just visible transparency. */}
         <span className="inline-flex items-center gap-1">
           <Zap className="h-3 w-3" />
-          {(t.chat as any).cloudAiNotice ?? 'AI 為雲端服務 · 訊息會送到 OpenAI / Gemini · 登入時對話會同步到我們的雲端'}
+          {(t.chat as any).cloudAiNotice ?? 'AI 為雲端服務（OpenAI / Gemini）· 請勿輸入高度敏感個資'}
           {' · '}
           <Link
             href="/privacy"

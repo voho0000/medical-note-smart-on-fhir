@@ -240,7 +240,7 @@ export const zhTW = {
     manageModels: '管理模型',
     settings: '設定',
     characters: '字元',
-    cloudAiNotice: 'AI 為雲端服務 · 訊息會送到 OpenAI / Gemini · 登入時對話會同步到我們的雲端',
+    cloudAiNotice: 'AI 為雲端服務（OpenAI / Gemini）· 請勿輸入高度敏感個資',
     cloudAiNoticeLink: '隱私說明',
     latestVoiceInput: '最新語音輸入：',
     microphoneHint: '點擊麥克風進行語音輸入，然後編輯或發送您的訊息。',
