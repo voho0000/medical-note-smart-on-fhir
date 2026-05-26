@@ -318,26 +318,31 @@ export default function MedicalChat() {
         <div className="relative flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-1">
             <ChatHistoryDrawer />
-            <button
-              onClick={handleToggleTemporaryMode}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
-                isTemporaryMode
-                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-950/50 dark:text-purple-300'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              }`}
-              title={
-                isTemporaryMode
-                  ? ((t.chat as any).temporaryModeExit ?? '結束無痕對話')
-                  : ((t.chat as any).temporaryModeEnter ?? '開啟無痕對話')
-              }
-            >
-              <MessageSquareDashed className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">
-                {isTemporaryMode
-                  ? ((t.chat as any).temporaryModeActive ?? '無痕中')
-                  : ((t.chat as any).temporaryModeLabel ?? '無痕')}
-              </span>
-            </button>
+            {/* Temporary-mode toggle only matters when the user is signed in.
+                Without auth, useAutoSaveChat is already a no-op, so showing
+                an extra "won't be saved" toggle would only confuse. */}
+            {user && (
+              <button
+                onClick={handleToggleTemporaryMode}
+                className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
+                  isTemporaryMode
+                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-950/50 dark:text-purple-300'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+                title={
+                  isTemporaryMode
+                    ? ((t.chat as any).temporaryModeExit ?? '結束無痕對話')
+                    : ((t.chat as any).temporaryModeEnter ?? '開啟無痕對話')
+                }
+              >
+                <MessageSquareDashed className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">
+                  {isTemporaryMode
+                    ? ((t.chat as any).temporaryModeActive ?? '無痕中')
+                    : ((t.chat as any).temporaryModeLabel ?? '無痕')}
+                </span>
+              </button>
+            )}
           </div>
           <button
             onClick={() => setShowHeader(!showHeader)}
@@ -430,7 +435,7 @@ export default function MedicalChat() {
               </div>
             </div>
           )}
-          {isTemporaryMode && (
+          {isTemporaryMode && user && (
             <div className="flex items-center justify-between gap-2 rounded-md border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-xs text-purple-700 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-300">
               <span className="inline-flex items-center gap-1.5">
                 <MessageSquareDashed className="h-3.5 w-3.5" />
