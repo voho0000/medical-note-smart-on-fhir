@@ -2,11 +2,17 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertCircle, Maximize2 } from "lucide-react"
+import { AlertCircle, Maximize2, MessageSquareDashed, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useModel, useAiConfigStore } from "@/src/application/stores/ai-config.store"
-import { useChatStore } from "@/src/application/stores/chat.store"
+import {
+  useChatStore,
+  useIsTemporaryMode,
+  useSetIsTemporaryMode,
+  useSetChatMessages,
+} from "@/src/application/stores/chat.store"
+import { useSetCurrentSessionId } from "@/src/application/stores/chat-history.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { ChatMessageList } from "./ChatMessageList"
@@ -104,6 +110,31 @@ export default function MedicalChat() {
 
   // AI smart title generation (after first response)
   useSmartTitleGeneration()
+
+  // Temporary / incognito chat mode (ChatGPT-style)
+  const isTemporaryMode = useIsTemporaryMode()
+  const setIsTemporaryMode = useSetIsTemporaryMode()
+  const setMessagesGlobal = useSetChatMessages()
+  const setCurrentSessionId = useSetCurrentSessionId()
+
+  const handleToggleTemporaryMode = useCallback(async () => {
+    if (!isTemporaryMode) {
+      // Entering: save the current chat (if any) before clearing.
+      try {
+        await forceSave()
+      } catch {
+        // Best-effort save; even if it fails we still enter temp mode.
+      }
+      setMessagesGlobal([])
+      setCurrentSessionId(null)
+      setIsTemporaryMode(true)
+    } else {
+      // Exiting: discard the in-memory temporary conversation.
+      setMessagesGlobal([])
+      setCurrentSessionId(null)
+      setIsTemporaryMode(false)
+    }
+  }, [isTemporaryMode, forceSave, setMessagesGlobal, setCurrentSessionId, setIsTemporaryMode])
 
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
@@ -285,7 +316,29 @@ export default function MedicalChat() {
     <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : CARD_BORDER_CLASSES.chat} !gap-0 !py-0`}>
       {!isExpanded && (
         <div className="relative flex items-center justify-between px-2 py-1">
-          <ChatHistoryDrawer />
+          <div className="flex items-center gap-1">
+            <ChatHistoryDrawer />
+            <button
+              onClick={handleToggleTemporaryMode}
+              className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
+                isTemporaryMode
+                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-950/50 dark:text-purple-300'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+              title={
+                isTemporaryMode
+                  ? ((t.chat as any).temporaryModeExit ?? '結束無痕對話')
+                  : ((t.chat as any).temporaryModeEnter ?? '開啟無痕對話')
+              }
+            >
+              <MessageSquareDashed className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">
+                {isTemporaryMode
+                  ? ((t.chat as any).temporaryModeActive ?? '無痕中')
+                  : ((t.chat as any).temporaryModeLabel ?? '無痕')}
+              </span>
+            </button>
+          </div>
           <button
             onClick={() => setShowHeader(!showHeader)}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors absolute left-1/2 -translate-x-1/2"
@@ -375,6 +428,22 @@ export default function MedicalChat() {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+          {isTemporaryMode && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-purple-200 bg-purple-50/70 px-3 py-1.5 text-xs text-purple-700 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-300">
+              <span className="inline-flex items-center gap-1.5">
+                <MessageSquareDashed className="h-3.5 w-3.5" />
+                {(t.chat as any).temporaryModeBanner ?? '無痕對話 · 此對話不會被儲存'}
+              </span>
+              <button
+                onClick={handleToggleTemporaryMode}
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-purple-100 dark:hover:bg-purple-900"
+                title={(t.chat as any).temporaryModeExit ?? '結束無痕對話'}
+              >
+                <X className="h-3 w-3" />
+                {(t.chat as any).temporaryModeExitShort ?? '結束'}
+              </button>
             </div>
           )}
           <ChatInputArea

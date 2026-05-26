@@ -35,10 +35,19 @@ export interface AgentState {
 interface ChatState {
   messages: ChatMessage[]
   autoIncludeContext: boolean
+  /**
+   * Temporary / "incognito" chat mode (ChatGPT-style). When true, the
+   * conversation is never persisted to Firestore — toggling it on starts a
+   * fresh chat; toggling it off discards the in-memory contents.
+   * Intentionally NOT persisted: a fresh tab / refresh always starts in
+   * normal mode (matches Chrome's incognito ephemeral semantics).
+   */
+  isTemporaryMode: boolean
   setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
   addMessage: (message: ChatMessage) => void
   clearMessages: () => void
   setAutoIncludeContext: (value: boolean) => void
+  setIsTemporaryMode: (value: boolean) => void
 }
 
 export const useChatStore = create<ChatState>()(
@@ -46,7 +55,8 @@ export const useChatStore = create<ChatState>()(
     (set) => ({
       messages: [],
       autoIncludeContext: true, // Default to true (auto-include)
-      
+      isTemporaryMode: false,
+
       setMessages: (messages) => {
         set((state) => ({
           messages: typeof messages === 'function' ? messages(state.messages) : messages
@@ -66,6 +76,10 @@ export const useChatStore = create<ChatState>()(
       setAutoIncludeContext: (value) => {
         set({ autoIncludeContext: value })
       },
+
+      setIsTemporaryMode: (value) => {
+        set({ isTemporaryMode: value })
+      },
     }),
     {
       name: 'chat-settings',
@@ -81,6 +95,8 @@ const selectAddMessage = (state: ChatState) => state.addMessage
 const selectClearMessages = (state: ChatState) => state.clearMessages
 const selectAutoIncludeContext = (state: ChatState) => state.autoIncludeContext
 const selectSetAutoIncludeContext = (state: ChatState) => state.setAutoIncludeContext
+const selectIsTemporaryMode = (state: ChatState) => state.isTemporaryMode
+const selectSetIsTemporaryMode = (state: ChatState) => state.setIsTemporaryMode
 
 export const useChatMessages = () => useChatStore(selectMessages)
 export const useSetChatMessages = () => useChatStore(selectSetMessages)
@@ -88,3 +104,5 @@ export const useAddChatMessage = () => useChatStore(selectAddMessage)
 export const useClearChatMessages = () => useChatStore(selectClearMessages)
 export const useAutoIncludeContext = () => useChatStore(selectAutoIncludeContext)
 export const useSetAutoIncludeContext = () => useChatStore(selectSetAutoIncludeContext)
+export const useIsTemporaryMode = () => useChatStore(selectIsTemporaryMode)
+export const useSetIsTemporaryMode = () => useChatStore(selectSetIsTemporaryMode)

@@ -66,11 +66,16 @@ export function useAutoSaveChat({
 
   const saveSession = useCallback(async (force: boolean = false) => {
     // Get fresh messages from store to avoid closure issues
-    const { messages: currentMessages } = useChatStore.getState()
+    const { messages: currentMessages, isTemporaryMode } = useChatStore.getState()
     const { currentSessionId } = useChatHistoryStore.getState()
-    
+
     // Only require user to be logged in
     if (!user?.uid) {
+      return
+    }
+
+    // Temporary / incognito chat — never persist to Firestore.
+    if (isTemporaryMode) {
       return
     }
 

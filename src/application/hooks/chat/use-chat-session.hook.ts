@@ -5,6 +5,9 @@ import { useChatHistoryStore } from '@/src/application/stores/chat-history.store
 import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
 import { LoadChatSessionUseCase } from '@/src/core/use-cases/chat/load-chat-session.use-case'
 import { logger } from '@/src/shared/services/logger.service'
+// Note: we mutate isTemporaryMode via useChatStore.getState() instead of a
+// subscribing selector — loadSession is an imperative action, no need to
+// re-render this hook when temp mode flips.
 
 const repository = new FirestoreChatSessionRepository()
 const loadChatSessionUseCase = new LoadChatSessionUseCase(repository)
@@ -23,11 +26,14 @@ export function useChatSession() {
 
     try {
       const session = await loadChatSessionUseCase.execute(sessionId, user.uid)
-      
+
       if (session) {
+        // Loading a saved session implies the user wants persistent chat —
+        // auto-exit temporary mode so further edits get saved.
+        useChatStore.getState().setIsTemporaryMode(false)
         setMessages(session.messages)
         setCurrentSessionId(session.id)
-        
+
         return session
       } else {
         chatSessionLogger.warn('Session not found', { sessionId })
