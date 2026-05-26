@@ -110,6 +110,17 @@ export class FhirClientService {
       throw new LocalBundleModeError()
     }
 
+    // Defense in depth: never call oauth2.ready() unless we're confident
+    // a SMART session is actually live. Calling it without a `state` URL
+    // param OR a valid cached token throws "No 'state' parameter found"
+    // and noisily logs it to the console. By bailing here we let upstream
+    // callers (queryFns, useFhirContext) handle the "no data source" state
+    // gracefully — same error type as local-bundle mode so existing catch
+    // handlers cover it.
+    if (!hasSmartContext()) {
+      throw new LocalBundleModeError()
+    }
+
     try {
       const FHIR = (await import('fhirclient')).default
       this.client = await FHIR.oauth2.ready()

@@ -30,36 +30,37 @@ export function useFhirContext(): FhirContext {
   useEffect(() => {
     let mounted = true
 
-    // Local-bundle mode (and not in a SMART launch): no remote FHIR server,
-    // but chat history needs a stable scoping key — use the sentinel so
-    // save + load both target the same partition in Firestore.
-    if (shouldUseLocalBundle()) {
-      setFhirServerUrl(LOCAL_BUNDLE_FHIR_URL)
-      setIsLoadingServer(false)
-      return () => { mounted = false }
-    }
+    const resolve = async () => {
+      // Local-bundle mode (and not in a SMART launch): no remote FHIR server,
+      // but chat history needs a stable scoping key — use the sentinel so
+      // save + load both target the same partition in Firestore.
+      if (shouldUseLocalBundle()) {
+        if (mounted) {
+          setFhirServerUrl(LOCAL_BUNDLE_FHIR_URL)
+          setIsLoadingServer(false)
+        }
+        return
+      }
 
-    // No data source at all (first visit / cleared bundle). Skip SMART
-    // client init so we don't spam the console with "Failed to initialize"
-    // — the UI will render the onboarding screen instead.
-    if (!hasSmartContext()) {
-      setFhirServerUrl(null)
-      setIsLoadingServer(false)
-      return () => { mounted = false }
-    }
+      // No data source at all (first visit / cleared bundle). Skip SMART
+      // client init so we don't spam the console with "Failed to initialize"
+      // — the UI will render the onboarding screen instead.
+      if (!hasSmartContext()) {
+        if (mounted) {
+          setFhirServerUrl(null)
+          setIsLoadingServer(false)
+        }
+        return
+      }
 
-    const loadServerUrl = async () => {
       try {
         const client = await fhirClient.getClient()
         const serverUrl = client.state?.serverUrl || null
-
         if (mounted) {
           setFhirServerUrl(serverUrl)
           setIsLoadingServer(false)
         }
       } catch (error) {
-        // Bundle mode races (bundle appeared after the hasData() check) —
-        // silently treat as no-server. Real errors still surface.
         if (!(error instanceof LocalBundleModeError)) {
           console.error('[FHIR Context] Failed to load server URL:', error)
         }
@@ -70,10 +71,23 @@ export function useFhirContext(): FhirContext {
       }
     }
 
-    loadServerUrl()
+    resolve()
+
+    // Re-resolve whenever the bundle is imported / cleared so the URL state
+    // stays in sync with the actual data source (otherwise local-bundle
+    // sentinel sticks around after the user clears, and the chat-history
+    // drawer keeps querying Firestore under that stale key).
+    const handleBundleChange = () => {
+      // Wipe any cached SMART client so a transition from local→none doesn't
+      // serve stale state. Safe no-op when client was never set.
+      fhirClient.clearClient()
+      resolve()
+    }
+    window.addEventListener('mediprisma:local-bundle-changed', handleBundleChange)
 
     return () => {
       mounted = false
+      window.removeEventListener('mediprisma:local-bundle-changed', handleBundleChange)
     }
   }, [])
 
