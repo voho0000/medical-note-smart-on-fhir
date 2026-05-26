@@ -50,10 +50,21 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
 
   return (
     <div className="rounded-lg border transition-colors">
-      <button
-        type="button"
+      {/* role="button" instead of <button> so we can nest the +N ICD-expand
+          <button> inside without producing invalid HTML (button-in-button
+          triggers React hydration error). Keyboard accessibility preserved
+          via tabIndex + Enter/Space handler. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
-        className="w-full rounded-lg p-3 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
+        className="w-full rounded-lg p-3 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40 cursor-pointer"
       >
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2 flex-wrap">
@@ -184,7 +195,7 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
           </span>
           <span>{hasDetails ? (isExpanded ? "▲" : "▼") : "-"}</span>
         </div>
-      </button>
+      </div>
 
       {isExpanded && (
         <div className="border-t bg-muted/30 px-3 py-3 text-sm">
