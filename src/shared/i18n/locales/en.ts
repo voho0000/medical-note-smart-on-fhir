@@ -238,6 +238,8 @@ export const en = {
     manageModels: 'Models',
     settings: 'Settings',
     characters: 'characters',
+    cloudAiNotice: 'AI runs in the cloud · messages go to OpenAI / Gemini, not to the developer',
+    cloudAiNoticeLink: 'Privacy',
     latestVoiceInput: 'Latest voice input:',
     microphoneHint: 'Tap the microphone to dictate, then refine or send your message.',
     emptyState: 'Ask follow-up questions or draft sections of the medical note. You can insert clinical context or dictate notes with the microphone.',

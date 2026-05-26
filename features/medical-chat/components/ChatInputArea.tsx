@@ -1,7 +1,8 @@
 // Chat Input Area Component
 "use client"
 
-import { Square } from "lucide-react"
+import { Square, Zap } from "lucide-react"
+import Link from "next/link"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { VoiceRecorder } from "./VoiceRecorder"
 import { ImageUploadButton } from "./ImageUploadButton"
@@ -154,14 +155,30 @@ export function ChatInputArea({
           </button>
         )}
       </div>
-      {(input.input.length > 0 || hasImages) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground/70">
+        {/* Cloud-AI disclosure: passive notice so users can see, at a glance,
+            that their messages + selected clinical data are sent to a cloud
+            LLM. No consent gate — just visible transparency. */}
+        <span className="inline-flex items-center gap-1">
+          <Zap className="h-3 w-3" />
+          {(t.chat as any).cloudAiNotice ?? 'AI 為雲端服務 · 訊息會送到 OpenAI / Gemini，不傳給開發者'}
+          {' · '}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground"
+          >
+            {(t.chat as any).cloudAiNoticeLink ?? '隱私說明'}
+          </Link>
+        </span>
+        {(input.input.length > 0 || hasImages) && (
           <span>
             {input.input.length} {t.chat.characters}
             {hasImages && ` • ${images!.images.length} image${images!.images.length > 1 ? 's' : ''}`}
           </span>
-        </div>
-      )}
+        )}
+      </div>
     </>
   )
 }
