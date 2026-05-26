@@ -695,15 +695,15 @@ export const en = {
 
   welcome: {
     title: 'Welcome to MediPrisma',
-    description: 'Get started by importing a FHIR Bundle, or launch this app from your EHR via SMART-on-FHIR.',
-    importCta: 'Import a FHIR Bundle below to begin',
-    dragHint: 'or drag-and-drop a .json file anywhere on this screen',
-    dropHere: 'Drop FHIR Bundle to import',
-    localTitle: 'Local FHIR Bundle',
-    localDesc: 'Import a JSON bundle exported from 健保存摺 or another FHIR source — data stays in your browser.',
-    smartTitle: 'SMART-on-FHIR Launch',
-    smartDesc: 'If you opened this app from a hospital EHR, the patient data loads automatically — no upload needed.',
-    privacyNote: 'Imported bundles are kept only in your browser\'s localStorage and never sent to our servers.',
+    description: 'Import your health data to get started, or launch from a hospital system via SMART-on-FHIR.',
+    importCta: 'Tap the button below to import your data',
+    dragHint: 'or drag a .json file onto this screen',
+    dropHere: 'Release to import',
+    localTitle: 'Import from your device',
+    localDesc: 'Download your health data (.json file) from 健保存摺 or another source — once imported, it stays on this device only.',
+    smartTitle: 'Hospital launch (SMART-on-FHIR)',
+    smartDesc: 'If you opened this app from a hospital\'s electronic health record via SMART-on-FHIR, patient data loads automatically — no manual import needed.',
+    privacyNote: 'Your health data stays on this device — we never receive a copy.',
   },
 
   auth: (() => {

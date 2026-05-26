@@ -697,15 +697,15 @@ export const zhTW = {
 
   welcome: {
     title: '歡迎使用 MediPrisma',
-    description: '匯入 FHIR Bundle 開始體驗，或從醫院 EHR 透過 SMART-on-FHIR 啟動本應用。',
-    importCta: '匯入下方 FHIR Bundle 開始',
-    dragHint: '或直接將 .json 檔案拖曳到本畫面任一處',
-    dropHere: '放開以匯入 FHIR Bundle',
-    localTitle: '本地 FHIR Bundle',
-    localDesc: '從健保存摺或其他 FHIR 來源匯出 JSON 後匯入，資料完全保存在你的瀏覽器內。',
-    smartTitle: 'SMART-on-FHIR 啟動',
-    smartDesc: '若你從醫院 EHR 系統啟動本應用，會自動載入病人資料，無需手動匯入。',
-    privacyNote: '匯入的 Bundle 只存在你的瀏覽器 localStorage，不會傳到我們的伺服器。',
+    description: '匯入您的健康資料開始使用，或從醫院系統透過 SMART-on-FHIR 自動載入。',
+    importCta: '點下方按鈕匯入資料開始',
+    dragHint: '或將 .json 檔案拖曳到這個畫面',
+    dropHere: '放開以匯入資料',
+    localTitle: '從本地匯入',
+    localDesc: '從健保存摺或其他來源下載健康資料（.json 檔），匯入後資料只留在這台電腦。',
+    smartTitle: '從醫院系統登入 (SMART-on-FHIR)',
+    smartDesc: '如果您是從醫院的電子病歷系統透過 SMART-on-FHIR 開啟本應用，會自動載入病人資料，不需手動匯入。',
+    privacyNote: '您的健康資料只會留在這台電腦的瀏覽器，不會傳到我們的伺服器或雲端。',
   },
 
   auth: (() => {
