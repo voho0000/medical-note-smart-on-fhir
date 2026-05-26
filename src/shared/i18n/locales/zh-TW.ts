@@ -675,6 +675,7 @@ export const zhTW = {
 
   chatHistory: {
     title: '對話紀錄',
+    signInToSave: '登入保留對話',
     description: '查看您的歷史對話',
     conversationsFor: '對話紀錄：',
     newChat: '新對話',

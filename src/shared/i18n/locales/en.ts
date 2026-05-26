@@ -673,6 +673,7 @@ export const en = {
 
   chatHistory: {
     title: "Chat History",
+    signInToSave: "Sign in to save chats",
     description: 'View your previous conversations',
     conversationsFor: 'Conversations for',
     newChat: "New Chat",

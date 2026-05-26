@@ -317,10 +317,13 @@ export default function MedicalChat() {
       {!isExpanded && (
         <div className="relative flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-1">
+            {/* Keep the history drawer visible even when signed out — its
+                internal empty-state shows a "sign in to save chats" CTA,
+                which is how users discover the feature exists. The temp-
+                mode toggle, on the other hand, is a "don't save" switch
+                that makes no sense when we weren't saving in the first
+                place, so hide it for signed-out users. */}
             <ChatHistoryDrawer />
-            {/* Temporary-mode toggle only matters when the user is signed in.
-                Without auth, useAutoSaveChat is already a no-op, so showing
-                an extra "won't be saved" toggle would only confuse. */}
             {user && (
               <button
                 onClick={handleToggleTemporaryMode}

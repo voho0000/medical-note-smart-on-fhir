@@ -1,7 +1,7 @@
 // Chat History Drawer Component - Refactored
 'use client'
 
-import { History, MessageSquare } from 'lucide-react'
+import { History, MessageSquare, LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -58,9 +58,24 @@ export function ChatHistoryDrawer() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
+        {/* Trigger label flips to a sign-in CTA when signed out — keeps
+            discoverability ("oh, I could save these") without hiding the
+            entry point entirely. Clicking still opens the drawer, which
+            shows the full LoginPrompt explaining what sign-in unlocks. */}
         <Button variant="outline" size="sm" className="gap-2">
-          <History className="h-4 w-4" />
-          <span className="hidden sm:inline">{t.chatHistory?.title || 'History'}</span>
+          {user ? (
+            <>
+              <History className="h-4 w-4" />
+              <span className="hidden sm:inline">{t.chatHistory?.title || 'History'}</span>
+            </>
+          ) : (
+            <>
+              <LogIn className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                {(t.chatHistory as any)?.signInToSave || 'Sign in to save chats'}
+              </span>
+            </>
+          )}
         </Button>
       </SheetTrigger>
       
