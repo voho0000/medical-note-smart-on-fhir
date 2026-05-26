@@ -1,50 +1,28 @@
 /**
  * Application Hook: FHIR Tools
- * 
- * Facade hook that provides FHIR tools for AI agent interactions.
- * Isolates features from infrastructure layer details.
- * 
- * Architecture: Application Layer
- * - Features should use this hook instead of directly importing infrastructure
+ *
+ * Provides FHIR query tools for the AI agent. The tools read from the same
+ * in-memory ClinicalDataCollection that the left-panel UI consumes (React
+ * Query in SMART mode, LocalBundleService in local-bundle mode), so:
+ *   1. Single implementation backs both modes (no live/local duplication).
+ *   2. Agent sees exactly what the clinician sees on screen.
+ *   3. Live mode tool calls hit the 5-min React Query cache instead of
+ *      round-tripping the SMART server on every invocation.
  */
 
-import { useState, useEffect } from 'react'
-import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
-import { fhirClient, LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { useCallback, useMemo } from 'react'
+import { createFhirTools, type AgentDataSource } from '@/src/infrastructure/ai/tools/fhir-tools'
+import { usePatientQuery } from '../patient/use-patient-query.hook'
+import { useClinicalDataQuery } from '../clinical-data/use-clinical-data-query.hook'
 
-export function useFhirTools(patientId: string | undefined) {
-  const [tools, setTools] = useState<ReturnType<typeof createFhirTools> | null>(null)
+export function useFhirTools() {
+  const { data: patient } = usePatientQuery()
+  const { data: collection } = useClinicalDataQuery()
 
-  useEffect(() => {
-    if (!patientId) {
-      setTools(null)
-      return
-    }
+  const getData = useCallback(
+    (): AgentDataSource => ({ patient: patient ?? null, collection: collection ?? null }),
+    [patient, collection]
+  )
 
-    let mounted = true
-
-    const initTools = async () => {
-      try {
-        const client = await fhirClient.getClient()
-        if (mounted) {
-          setTools(createFhirTools(client, patientId))
-        }
-      } catch (error) {
-        if (!(error instanceof LocalBundleModeError)) {
-          console.error('Failed to initialize FHIR tools:', error)
-        }
-        if (mounted) {
-          setTools(null)
-        }
-      }
-    }
-
-    initTools()
-
-    return () => {
-      mounted = false
-    }
-  }, [patientId])
-
-  return tools
+  return useMemo(() => createFhirTools(getData), [getData])
 }

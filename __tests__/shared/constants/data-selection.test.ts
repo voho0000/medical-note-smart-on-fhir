@@ -25,8 +25,8 @@ describe('data-selection.constants', () => {
       expect(DEFAULT_DATA_SELECTION.conditions).toBe(false)
     })
 
-    it('should default orphan observations OFF', () => {
-      expect(DEFAULT_DATA_SELECTION.observations).toBe(false)
+    it('should default orphan observations ON', () => {
+      expect(DEFAULT_DATA_SELECTION.observations).toBe(true)
     })
   })
 
@@ -38,9 +38,9 @@ describe('data-selection.constants', () => {
       expect(DEFAULT_DATA_FILTERS.medicationChronic).toBe('all')
       expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('all')
       expect(DEFAULT_DATA_FILTERS.labReportVersion).toBe('latest')
-      expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBe('6m')
       expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('latest')
-      expect(DEFAULT_DATA_FILTERS.imagingReportTimeRange).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.imagingReportTimeRange).toBe('1y')
       expect(DEFAULT_DATA_FILTERS.vitalSignsVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.vitalSignsTimeRange).toBe('all')
       expect(DEFAULT_DATA_FILTERS.procedureVersion).toBe('latest')

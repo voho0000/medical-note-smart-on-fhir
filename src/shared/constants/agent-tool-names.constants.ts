@@ -4,15 +4,28 @@
  */
 
 export const AGENT_TOOL_NAMES = [
+  // Patient / overview
   'queryPatientInfo',
+  'getDataOverview',
+  // Visits
+  'queryEncounters',
+  'getRecentVisits',
+  'getEncounterDetails',
+  'listEncounterDepartments',
+  // Diagnoses
   'queryConditions',
-  'queryMedications',
-  'queryAllergies',
+  // Reports
   'queryObservations',
   'queryDiagnosticReports',
+  'searchObservationByName',
+  'listAvailableObservationCodes',
   'queryProcedures',
-  'queryEncounters',
+  // Medications & allergies
+  'queryMedications',
+  'getActiveMedicationList',
+  'queryAllergies',
   'queryImmunizations',
+  // Literature
   'searchMedicalLiterature',
 ] as const
 

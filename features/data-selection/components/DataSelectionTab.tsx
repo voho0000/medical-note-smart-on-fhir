@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { DataCategoryItem } from "./DataCategoryItem"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
@@ -54,6 +55,7 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
     allSelected,
   } = props
   const { t } = useLanguage()
+  const { resetToDefaults, setEditedClinicalContext } = useDataSelection()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -98,6 +100,18 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
             onClick={() => onToggleAll(!allSelected)}
           >
             {mounted && allSelected ? t.dataSelection.deselectAll : t.dataSelection.selectAll}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              resetToDefaults()
+              // Also clear the cached Preview edit so the fresh defaults
+              // actually surface in the textarea.
+              setEditedClinicalContext(null)
+            }}
+          >
+            {t.dataSelection.resetToDefault}
           </Button>
         </div>
       </div>

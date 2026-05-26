@@ -47,7 +47,7 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
         { value: '1y', label: 'Last Year' },
         { value: 'all', label: 'All Time' }
       ],
-      defaultValue: 'all'
+      defaultValue: '1y'
     }
   ],
   

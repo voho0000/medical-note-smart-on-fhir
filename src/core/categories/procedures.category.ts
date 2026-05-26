@@ -46,11 +46,12 @@ export const proceduresCategory: DataCategory<Procedure> = {
       type: 'select',
       label: 'Time Range',
       options: [
-        { value: '1w', label: 'Last Week' },
         { value: '1m', label: 'Last Month' },
         { value: '3m', label: 'Last 3 Months' },
         { value: '6m', label: 'Last 6 Months' },
         { value: '1y', label: 'Last Year' },
+        { value: '3y', label: 'Last 3 Years' },
+        { value: '5y', label: 'Last 5 Years' },
         { value: 'all', label: 'All Time' }
       ],
       defaultValue: 'all'

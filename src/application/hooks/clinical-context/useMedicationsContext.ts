@@ -22,6 +22,8 @@ interface MedSummary {
   daysRemaining?: number
   isInactive: boolean
   isChronic: boolean
+  /** Number of refill cycles collapsed into this row (>=1, only set when >1) */
+  refillCount?: number
 }
 
 function isChronicMedication(med: any): boolean {
@@ -119,10 +121,47 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent'): string {
       parts.push(`— since ${m.startedOn}`)
     }
   } else {
-    if (m.endDate) parts.push(`— ended ${m.endDate}`)
+    if (m.endDate) parts.push(`— last ended ${m.endDate}`)
     else if (m.startedOn) parts.push(`— ${m.startedOn}`)
   }
+  if (m.refillCount && m.refillCount > 1) {
+    parts.push(`(${m.refillCount} refills)`)
+  }
   return parts.join(' ')
+}
+
+/**
+ * Collapse refill cycles of the same drug into one row. NHI 慢箋 medications
+ * generate a new MedicationRequest every ~28 days, so a single chronic drug
+ * can appear 5-6× in the same 90-day window — looks like the patient is
+ * "starting and stopping" when they're actually on a stable regimen.
+ *
+ * Dedup key: drug name. Keep the latest endDate / daysRemaining; track total
+ * refill count to surface as `(N refills)` in the prompt.
+ */
+function dedupByDrug(meds: MedSummary[]): MedSummary[] {
+  const byName = new Map<string, MedSummary>()
+  for (const m of meds) {
+    const existing = byName.get(m.name)
+    if (!existing) {
+      byName.set(m.name, { ...m, refillCount: 1 })
+      continue
+    }
+    existing.refillCount = (existing.refillCount ?? 1) + 1
+    // Prefer the row with the most recent endDate.
+    if (m.endDate && (!existing.endDate || m.endDate > existing.endDate)) {
+      existing.endDate = m.endDate
+      existing.daysRemaining = m.daysRemaining
+      existing.dose = m.dose ?? existing.dose
+      existing.frequency = m.frequency ?? existing.frequency
+      existing.route = m.route ?? existing.route
+    }
+    // Keep earliest startedOn so "since" stays meaningful.
+    if (m.startedOn && (!existing.startedOn || m.startedOn < existing.startedOn)) {
+      existing.startedOn = m.startedOn
+    }
+  }
+  return Array.from(byName.values())
 }
 
 export function useMedicationsContext(
@@ -155,22 +194,29 @@ export function useMedicationsContext(
 
     const now = Date.now()
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
-    const active: MedSummary[] = []
-    const recent: MedSummary[] = []
-    const past: MedSummary[] = []
+    const activeRaw: MedSummary[] = []
+    const recentRaw: MedSummary[] = []
+    const pastRaw: MedSummary[] = []
 
     for (const s of summaries) {
       if (!s.isInactive) {
-        active.push(s)
+        activeRaw.push(s)
       } else if (s.endDate && new Date(s.endDate).getTime() >= recentThreshold) {
-        recent.push(s)
+        recentRaw.push(s)
       } else {
-        past.push(s)
+        pastRaw.push(s)
       }
     }
 
+    // Collapse refill cycles of the same drug — NHI 慢箋 produces a new
+    // MedicationRequest every ~28 days; without dedup a single chronic drug
+    // shows up 5-6× and the AI misreads it as frequent regimen changes.
+    const active = dedupByDrug(activeRaw)
+    const recent = dedupByDrug(recentRaw)
+    const pastUnique = dedupByDrug(pastRaw)
+
     if (filters?.medicationStatus === 'active') {
-      past.length = 0
+      pastUnique.length = 0
     }
 
     const items: string[] = []
@@ -188,9 +234,9 @@ export function useMedicationsContext(
       recent.forEach((m) => items.push(`  • ${formatLine(m, 'recent')}`))
     }
 
-    if (past.length > 0) {
+    if (pastUnique.length > 0) {
       if (items.length > 0) items.push('')
-      items.push(`Past medications: ${past.length} items older than ${RECENTLY_ENDED_WINDOW_DAYS} days (omitted for brevity)`)
+      items.push(`Past medications: ${pastUnique.length} drug(s) older than ${RECENTLY_ENDED_WINDOW_DAYS} days (omitted for brevity)`)
     }
 
     if (items.length === 0) return null

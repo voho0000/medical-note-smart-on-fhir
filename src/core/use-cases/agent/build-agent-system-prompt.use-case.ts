@@ -22,18 +22,26 @@ export interface BuildAgentSystemPromptInput {
     availableToolsSuffix: string
     toolDescriptions: {
       queryPatientInfo: string
-      queryConditions: string
-      queryMedications: string
-      queryAllergies: string
-      queryDiagnosticReports: string
-      queryObservations: string
-      queryProcedures: string
+      getDataOverview: string
       queryEncounters: string
+      getRecentVisits: string
+      getEncounterDetails: string
+      listEncounterDepartments: string
+      queryConditions: string
+      queryObservations: string
+      queryDiagnosticReports: string
+      searchObservationByName: string
+      listAvailableObservationCodes: string
+      queryProcedures: string
+      queryMedications: string
+      getActiveMedicationList: string
+      queryAllergies: string
       queryImmunizations: string
       searchMedicalLiterature: string
     }
     importantNote: string
     icdCodeCaveat: string
+    anonymizationNote: string
     usageGuidelines: string
     prioritizeClinicalData: string
     useToolsWhenNeeded: string
@@ -81,18 +89,37 @@ ${clinicalContext}
 ---`
       : ''
 
-    // Build tools list
-    const toolsList = `1. queryPatientInfo - ${t.toolDescriptions.queryPatientInfo}
-2. queryConditions - ${t.toolDescriptions.queryConditions}
-3. queryMedications - ${t.toolDescriptions.queryMedications}
-4. queryAllergies - ${t.toolDescriptions.queryAllergies}
-5. queryDiagnosticReports - ${t.toolDescriptions.queryDiagnosticReports}
-6. queryObservations - ${t.toolDescriptions.queryObservations}
-7. queryProcedures - ${t.toolDescriptions.queryProcedures}
-8. queryEncounters - ${t.toolDescriptions.queryEncounters}
-9. queryImmunizations - ${t.toolDescriptions.queryImmunizations}${
+    // Build tools list — grouped by clinical concern, matching the left-panel
+    // tabs so the LLM picks the right tool for each kind of question.
+    const toolsList = `**Patient & Overview**
+- queryPatientInfo — ${t.toolDescriptions.queryPatientInfo}
+- getDataOverview — ${t.toolDescriptions.getDataOverview}
+
+**Visits**
+- queryEncounters — ${t.toolDescriptions.queryEncounters}
+- getRecentVisits — ${t.toolDescriptions.getRecentVisits}
+- getEncounterDetails — ${t.toolDescriptions.getEncounterDetails}
+- listEncounterDepartments — ${t.toolDescriptions.listEncounterDepartments}
+
+**Diagnoses & Conditions**
+- queryConditions — ${t.toolDescriptions.queryConditions}
+
+**Reports / Labs / Imaging / Procedures**
+- queryDiagnosticReports — ${t.toolDescriptions.queryDiagnosticReports}
+- queryObservations — ${t.toolDescriptions.queryObservations}
+- searchObservationByName — ${t.toolDescriptions.searchObservationByName}
+- listAvailableObservationCodes — ${t.toolDescriptions.listAvailableObservationCodes}
+- queryProcedures — ${t.toolDescriptions.queryProcedures}
+
+**Medications & Allergies**
+- queryMedications — ${t.toolDescriptions.queryMedications}
+- getActiveMedicationList — ${t.toolDescriptions.getActiveMedicationList}
+- queryAllergies — ${t.toolDescriptions.queryAllergies}
+- queryImmunizations — ${t.toolDescriptions.queryImmunizations}${
       hasPerplexityKey ? `
-10. searchMedicalLiterature - ${t.toolDescriptions.searchMedicalLiterature}` : ''
+
+**Literature**
+- searchMedicalLiterature — ${t.toolDescriptions.searchMedicalLiterature}` : ''
     }`
 
     // Build usage guidelines
@@ -116,6 +143,8 @@ ${hasClinicalData ? t.availableToolsPrefix : ''}${t.availableToolsSuffix}
 ${toolsList}
 
 ${t.importantNote}
+
+${t.anonymizationNote}
 
 ${t.icdCodeCaveat}
 

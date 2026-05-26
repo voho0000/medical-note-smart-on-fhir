@@ -17,7 +17,7 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
   labReports: true,
   imagingReports: true,
   procedures: true,
-  observations: false,      // Orphan observations — off by default (low signal)
+  observations: true,       // Orphan observations — useful catch-all for non-lab/imaging readings
 
   // Medication group
   medications: true,
@@ -30,11 +30,18 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   problemListStatus: 'active',
   medicationStatus: 'active',
   medicationChronic: 'all',
+  // Med refill cycles span many months; keep all so chronic context is preserved.
+  // The hook dedups by drug name so this no longer bloats output.
   medicationTimeRange: 'all',
+  // Lab + imaging are voluminous — time-bound the default. User can extend.
   labReportVersion: 'latest',
-  labReportTimeRange: 'all',
+  labReportTimeRange: '6m',
   imagingReportVersion: 'latest',
-  imagingReportTimeRange: 'all',
+  imagingReportTimeRange: '1y',
+  // Vitals / procedures / immunizations: `latest`-version filter already dedups
+  // by name (one BP entry, one of each procedure, one per vaccine), so volume
+  // isn't a concern. Keep `all` so historical data for elderly / stable
+  // patients (only 2018 vitals, 2007 vaccine history) still surfaces.
   vitalSignsVersion: 'latest',
   vitalSignsTimeRange: 'all',
   procedureVersion: 'latest',
