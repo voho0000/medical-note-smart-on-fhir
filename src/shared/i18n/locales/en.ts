@@ -600,7 +600,8 @@ export const en = {
     foundRecords: 'Found {count} records',
     noDataFound: 'No data found. {summary}',
     queriedFhirData: 'I have queried the FHIR data. Here are the results:',
-    answerQuestion: 'Based on the above query results, please answer my original question: "{question}"\n\n**IMPORTANT**: If the query results contain citation numbers (e.g., [1][2][3]), please **preserve these citation numbers** in your response so readers can trace the information sources. Place citation numbers at the end of relevant statements or paragraphs.\n\nIf the query results show no data, please clearly inform the user that no relevant data was found for the specified time range or conditions.',
+    answerQuestion: 'Based on the above query results, please answer my original question: "{question}"\n\nIf the query results show no data, please clearly inform the user that no relevant data was found for the specified time range or conditions. Do NOT invent citation markers like [1][2] for FHIR/clinical results — those tool results do not carry numbered references.',
+    answerQuestionCitationsHint: '\n\n**Citations**: The tool results above include numbered references (e.g. [1][2][3]) from the searchMedicalLiterature tool. Preserve these citation numbers in your response so readers can trace back to the literature sources. Place citation numbers at the end of the relevant statements.',
     synthesizeResults: 'IMPORTANT: You MUST now provide a comprehensive answer based on ALL the tool results above. Do NOT call any more tools. Just synthesize and present the information.',
     systemPrompt: {
       deepModeIntro: 'IMPORTANT: You are now in Deep Mode (AI Agent Mode) with the following capabilities:',
@@ -690,6 +691,17 @@ export const en = {
     patientId: 'Patient ID',
     patientName: 'Patient Name',
     localBundle: 'Locally-imported FHIR Bundle',
+  },
+
+  welcome: {
+    title: 'Welcome to MediPrisma',
+    description: 'Get started by importing a FHIR Bundle, or launch this app from your EHR via SMART-on-FHIR.',
+    importCta: 'Import a FHIR Bundle below to begin',
+    localTitle: 'Local FHIR Bundle',
+    localDesc: 'Upload a JSON bundle exported from 健保存摺 or another FHIR source — data stays in your browser.',
+    smartTitle: 'SMART-on-FHIR Launch',
+    smartDesc: 'If you opened this app from a hospital EHR, the patient data loads automatically — no upload needed.',
+    privacyNote: 'Imported bundles are kept only in your browser\'s localStorage and never sent to our servers.',
   },
 
   auth: (() => {

@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { GetPatientUseCase } from '@/src/core/use-cases/patient/get-patient.use-case'
 import { FhirPatientRepository } from '@/src/infrastructure/fhir/repositories/patient.repository'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
-import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { shouldUseLocalBundle, hasSmartContext } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 
 export function usePatientQuery() {
@@ -26,6 +26,12 @@ export function usePatientQuery() {
       // there's no SMART context present.
       if (shouldUseLocalBundle()) {
         return LocalBundleService.parseStored()?.patient ?? null
+      }
+      // No data source at all — return null silently. The UI uses this
+      // (combined with no error) to render the welcome / onboarding screen
+      // instead of "Failed to initialize FHIR client" noise.
+      if (!hasSmartContext()) {
+        return null
       }
       const repository = new FhirPatientRepository()
       const useCase = new GetPatientUseCase(repository)

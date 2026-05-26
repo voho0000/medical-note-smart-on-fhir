@@ -12,23 +12,31 @@ import { FeedbackButton } from "@/features/feedback"
 import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
+import { WelcomeOnboarding } from "@/src/shared/components/WelcomeOnboarding"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 
 function PageContent() {
   const { t } = useLanguage()
-  
+
   // Resizable layout logic (extracted to custom hook)
   const { leftWidth, isDragging, containerRef, handleMouseDown } = useResizableLayout({
     initialWidth: 50,
     minWidth: 30,
     maxWidth: 70
   })
-  
+
   // Responsive view logic (extracted to custom hook)
   const { mobileView, setMobileView, isLargeScreen } = useResponsiveView<'left' | 'right'>('left', 1024)
+
+  // Onboarding detection: when neither SMART nor a local bundle is available,
+  // the data hooks return `patient: null` with no error. Show a welcome
+  // screen instead of empty / failing panels.
+  const { patient, loading: patientLoading, error: patientError } = usePatient()
+  const showOnboarding = !patientLoading && !patient && !patientError
   
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
@@ -57,6 +65,13 @@ function PageContent() {
         <EmailVerificationBanner />
       </div>
       
+      {/* Onboarding state: replace panels with welcome screen */}
+      {showOnboarding ? (
+        <main className="flex flex-1 overflow-auto">
+          <WelcomeOnboarding />
+        </main>
+      ) : (
+      <>
       {/* Mobile Tab Switcher - Only visible on small screens */}
       <div className="lg:hidden flex border-b bg-white/80 backdrop-blur-md">
         <button
@@ -80,7 +95,7 @@ function PageContent() {
           {t.header.features || '功能'}
         </button>
       </div>
-      
+
       <main className="flex flex-1 flex-col lg:flex-row gap-3 sm:gap-6 overflow-hidden p-3 sm:p-6" ref={containerRef}>
         {/* Left Panel - Clinical Summary */}
         <section 
@@ -102,7 +117,7 @@ function PageContent() {
         </div>
         
         {/* Right Panel - Tabs (Medical Note / Data Selection) */}
-        <section 
+        <section
           className={`w-full lg:w-auto min-h-0 overflow-y-auto flex-1 lg:flex-initial ${
             mobileView === 'right' ? 'block' : 'hidden lg:block'
           }`}
@@ -111,6 +126,8 @@ function PageContent() {
           <RightPanelFeature />
         </section>
       </main>
+      </>
+      )}
 
       <AudienceOnboardingDialog />
     </div>

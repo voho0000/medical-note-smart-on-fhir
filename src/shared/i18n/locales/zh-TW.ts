@@ -602,7 +602,8 @@ export const zhTW = {
     foundRecords: '找到 {count} 筆資料',
     noDataFound: '沒有找到資料。{summary}',
     queriedFhirData: '我已經查詢了 FHIR 資料，以下是結果：',
-    answerQuestion: '請根據上述查詢結果，回答我的原始問題：「{question}」\n\n**重要**：如果查詢結果中包含引用編號（如 [1][2][3]），請在你的回答中**保留這些引用編號**，讓讀者可以追溯資訊來源。將引用編號放在相關論述的句尾或段落中。\n\n如果查詢結果顯示沒有資料，請明確告知用戶在該時間範圍或條件下沒有找到相關資料。',
+    answerQuestion: '請根據上述查詢結果，回答我的原始問題：「{question}」\n\n如果查詢結果顯示沒有資料，請明確告知用戶在該時間範圍或條件下沒有找到相關資料。**請不要**為 FHIR / 臨床資料的查詢結果自行加上 [1][2] 這類引用編號 — 這些工具回傳的資料沒有編號參考。',
+    answerQuestionCitationsHint: '\n\n**引用編號**：上述工具結果包含來自 searchMedicalLiterature 的編號參考（如 [1][2][3]）。請在你的回答中**保留這些引用編號**，讓讀者可以追溯到文獻來源。將引用編號放在相關論述的句尾。',
     synthesizeResults: '重要：你現在必須根據上述所有工具查詢結果提供完整的回答。不要再調用任何工具。請直接整合並呈現資訊。',
     systemPrompt: {
       deepModeIntro: '重要：你現在處於深入模式（AI Agent 模式），擁有以下能力：',
@@ -692,6 +693,17 @@ export const zhTW = {
     patientId: '患者 ID',
     patientName: '患者姓名',
     localBundle: '本地匯入 FHIR Bundle',
+  },
+
+  welcome: {
+    title: '歡迎使用 MediPrisma',
+    description: '上傳 FHIR Bundle 開始體驗，或從醫院 EHR 透過 SMART-on-FHIR 啟動本應用。',
+    importCta: '匯入下方 FHIR Bundle 開始',
+    localTitle: '本地 FHIR Bundle',
+    localDesc: '從健保存摺或其他 FHIR 來源匯出 JSON 後上傳，資料完全保存在你的瀏覽器內。',
+    smartTitle: 'SMART-on-FHIR 啟動',
+    smartDesc: '若你從醫院 EHR 系統啟動本應用，會自動載入病人資料，無需手動上傳。',
+    privacyNote: '匯入的 Bundle 只存在你的瀏覽器 localStorage，不會傳到我們的伺服器。',
   },
 
   auth: (() => {

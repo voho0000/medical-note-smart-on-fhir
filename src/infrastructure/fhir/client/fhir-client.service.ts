@@ -62,6 +62,16 @@ export function shouldUseLocalBundle(): boolean {
   return !hasSmartContext() && LocalBundleService.hasData()
 }
 
+/**
+ * True when any data source is available — either a SMART launch context or
+ * a locally-imported bundle. When false, the UI should show an onboarding
+ * screen instead of attempting FHIR queries that will fail with confusing
+ * "Failed to initialize FHIR client" errors.
+ */
+export function hasAnyDataSource(): boolean {
+  return hasSmartContext() || LocalBundleService.hasData()
+}
+
 export class FhirClientService {
   private static instance: FhirClientService
   private client: FHIRClient | null = null

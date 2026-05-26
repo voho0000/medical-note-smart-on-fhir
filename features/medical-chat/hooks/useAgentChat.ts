@@ -245,13 +245,19 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             })
           
           const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
+          // Only inject the citation-preservation hint when literature search
+          // actually produced numbered references. Without this gate the LLM
+          // hallucinates [1][2] tags for plain FHIR results.
+          const answerQuestionText = literatureCitations.length > 0
+            ? t.agent.answerQuestion + ((t.agent as any).answerQuestionCitationsHint ?? '')
+            : t.agent.answerQuestion
           const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
             apiMessages,
             toolResultsSummary,
             originalQuestion,
             {
               queriedFhirData: t.agent.queriedFhirData,
-              answerQuestion: t.agent.answerQuestion,
+              answerQuestion: answerQuestionText,
             }
           )
           

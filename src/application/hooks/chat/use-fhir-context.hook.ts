@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { fhirClient, LocalBundleModeError, shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { fhirClient, LocalBundleModeError, shouldUseLocalBundle, hasSmartContext } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
 
@@ -35,6 +35,15 @@ export function useFhirContext(): FhirContext {
     // save + load both target the same partition in Firestore.
     if (shouldUseLocalBundle()) {
       setFhirServerUrl(LOCAL_BUNDLE_FHIR_URL)
+      setIsLoadingServer(false)
+      return () => { mounted = false }
+    }
+
+    // No data source at all (first visit / cleared bundle). Skip SMART
+    // client init so we don't spam the console with "Failed to initialize"
+    // — the UI will render the onboarding screen instead.
+    if (!hasSmartContext()) {
+      setFhirServerUrl(null)
       setIsLoadingServer(false)
       return () => { mounted = false }
     }
