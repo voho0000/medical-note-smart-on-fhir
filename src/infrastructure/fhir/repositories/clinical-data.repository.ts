@@ -12,9 +12,21 @@ import type {
   CompositionEntity,
   ClinicalDataCollection
 } from '@/src/core/entities/clinical-data.entity'
-import { fhirClient } from '../client/fhir-client.service'
+import { fhirClient, LocalBundleModeError } from '../client/fhir-client.service'
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
+
+// Skip console noise for the "no SMART client" sentinel — that's a planned
+// fallback (user is in local-bundle mode or the data source went away
+// mid-fetch), not a real failure.
+function logFhirError(label: string, error: unknown) {
+  if (error instanceof LocalBundleModeError) return
+  console.error(label, error)
+}
+function warnFhirError(label: string, error: unknown) {
+  if (error instanceof LocalBundleModeError) return
+  console.warn(label, error)
+}
 
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
   async fetchAllClinicalData(patientId: string): Promise<ClinicalDataCollection> {
@@ -88,7 +100,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toImmunization(e.resource)) || []
     } catch (error) {
-      console.warn('Failed to fetch immunizations:', error)
+      warnFhirError('Failed to fetch immunizations:', error)
       return []
     }
   }
@@ -100,12 +112,12 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
     } catch (error) {
-      console.warn('Failed to sort conditions, trying without sort:', error)
+      warnFhirError('Failed to sort conditions, trying without sort:', error)
       try {
         const response = await fhirClient.request(`Condition?patient=${patientId}&_count=100`)
         return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
       } catch (fallbackError) {
-        console.error('Failed to fetch conditions:', fallbackError)
+        logFhirError('Failed to fetch conditions:', fallbackError)
         return []
       }
     }
@@ -118,7 +130,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toMedication(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch medications:', error)
+      logFhirError('Failed to fetch medications:', error)
       return []
     }
   }
@@ -130,7 +142,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toAllergy(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch allergies:', error)
+      logFhirError('Failed to fetch allergies:', error)
       return []
     }
   }
@@ -144,7 +156,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
       return response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch observations:', error)
+      logFhirError('Failed to fetch observations:', error)
       return []
     }
   }
@@ -156,7 +168,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch vital signs:', error)
+      logFhirError('Failed to fetch vital signs:', error)
       return []
     }
   }
@@ -180,7 +192,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         FhirMapper.toDiagnosticReport(report, observations)
       )
     } catch (error) {
-      console.error('Failed to fetch diagnostic reports:', error)
+      logFhirError('Failed to fetch diagnostic reports:', error)
       return []
     }
   }
@@ -192,7 +204,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toProcedure(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch procedures:', error)
+      logFhirError('Failed to fetch procedures:', error)
       return []
     }
   }
@@ -204,7 +216,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toEncounter(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch encounters:', error)
+      logFhirError('Failed to fetch encounters:', error)
       return []
     }
   }
@@ -216,7 +228,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toDocumentReference(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch document references:', error)
+      logFhirError('Failed to fetch document references:', error)
       return []
     }
   }
@@ -228,7 +240,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       )
       return response.entry?.map((e: any) => FhirMapper.toComposition(e.resource)) || []
     } catch (error) {
-      console.error('Failed to fetch compositions:', error)
+      logFhirError('Failed to fetch compositions:', error)
       return []
     }
   }

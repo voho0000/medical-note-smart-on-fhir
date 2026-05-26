@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FetchClinicalDataUseCase } from '@/src/core/use-cases/clinical-data/fetch-clinical-data.use-case'
 import { FhirClinicalDataRepository } from '@/src/infrastructure/fhir/repositories/clinical-data.repository'
 import { LocalBundleRepository } from '@/src/infrastructure/fhir/repositories/local-bundle.repository'
-import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { shouldUseLocalBundle, LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import { usePatientQuery } from '../patient/use-patient-query.hook'
 
@@ -34,7 +34,21 @@ export function useClinicalDataQuery() {
         ? new LocalBundleRepository()
         : new FhirClinicalDataRepository()
       const useCase = new FetchClinicalDataUseCase(repository)
-      return await useCase.execute(patient.id)
+      try {
+        return await useCase.execute(patient.id)
+      } catch (error) {
+        // SMART client became unavailable mid-fetch (race against clear/import).
+        // Return an empty collection so panels render the empty state instead
+        // of surfacing this as an error.
+        if (error instanceof LocalBundleModeError) {
+          return {
+            conditions: [], medications: [], allergies: [], observations: [],
+            vitalSigns: [], diagnosticReports: [], procedures: [], encounters: [],
+            documentReferences: [], compositions: [], immunizations: [],
+          }
+        }
+        throw error
+      }
     },
     enabled: !!patient?.id && !patientLoading,
     staleTime: 5 * 60 * 1000,

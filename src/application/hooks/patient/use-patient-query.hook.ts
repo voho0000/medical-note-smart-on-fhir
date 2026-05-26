@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { GetPatientUseCase } from '@/src/core/use-cases/patient/get-patient.use-case'
 import { FhirPatientRepository } from '@/src/infrastructure/fhir/repositories/patient.repository'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
-import { shouldUseLocalBundle, hasSmartContext } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { shouldUseLocalBundle, hasSmartContext, LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 
 export function usePatientQuery() {
@@ -33,9 +33,17 @@ export function usePatientQuery() {
       if (!hasSmartContext()) {
         return null
       }
-      const repository = new FhirPatientRepository()
-      const useCase = new GetPatientUseCase(repository)
-      return await useCase.execute()
+      try {
+        const repository = new FhirPatientRepository()
+        const useCase = new GetPatientUseCase(repository)
+        return await useCase.execute()
+      } catch (error) {
+        // Race / stale state: hasSmartContext said yes but getClient bailed
+        // (e.g. session expired between checks). Fall back to onboarding
+        // instead of surfacing this as a query error.
+        if (error instanceof LocalBundleModeError) return null
+        throw error
+      }
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,

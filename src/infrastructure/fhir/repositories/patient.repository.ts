@@ -1,7 +1,7 @@
 // FHIR Patient Repository Implementation
 import type { IPatientRepository } from '@/src/core/interfaces/repositories/patient.repository.interface'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
-import { fhirClient } from '../client/fhir-client.service'
+import { fhirClient, LocalBundleModeError } from '../client/fhir-client.service'
 import { PatientMapper } from '../mappers/patient.mapper'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
 
@@ -11,7 +11,11 @@ export class FhirPatientRepository implements IPatientRepository {
       const response = await fhirClient.request(FHIR_RESOURCES.PATIENT)
       return PatientMapper.fromBundle(response)
     } catch (error) {
-      console.error('[Patient Repository] Failed to fetch current patient:', error)
+      // LocalBundleModeError is the "no SMART client" sentinel — expected
+      // when callers race against a mode change; not a real failure.
+      if (!(error instanceof LocalBundleModeError)) {
+        console.error('[Patient Repository] Failed to fetch current patient:', error)
+      }
       throw error
     }
   }
@@ -21,7 +25,9 @@ export class FhirPatientRepository implements IPatientRepository {
       const response = await fhirClient.request(`Patient/${patientId}`)
       return PatientMapper.toDomain(response)
     } catch (error) {
-      console.error(`[Patient Repository] Failed to fetch patient ${patientId}:`, error)
+      if (!(error instanceof LocalBundleModeError)) {
+        console.error(`[Patient Repository] Failed to fetch patient ${patientId}:`, error)
+      }
       throw error
     }
   }
