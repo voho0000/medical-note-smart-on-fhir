@@ -6,7 +6,20 @@ import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useImportBundle } from "./hooks/useImportBundle"
 
-export function ImportBundleButton() {
+interface ImportBundleButtonProps {
+  /**
+   * When true, hide the text label on mobile (<640px) — only the
+   * download icon shows. Used in the header where space is tight and
+   * the button sits among other already-iconified controls.
+   *
+   * When false (default), the label is always visible — used in the
+   * welcome onboarding screen where this is the primary CTA and
+   * "匯入資料" needs to be unambiguous.
+   */
+  iconOnlyOnMobile?: boolean
+}
+
+export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleButtonProps = {}) {
   const fileRef = useRef<HTMLInputElement>(null)
   const { t } = useLanguage()
   const i18n = t.importBundle
@@ -40,18 +53,20 @@ export function ImportBundleButton() {
         <Button
           variant="outline"
           size="sm"
-          // Icon-only on mobile to match the other header buttons; label
-          // returns at sm: where there's room. `aria-label` ensures
-          // screen readers still get the action name when the visible
-          // text is hidden.
-          className="h-8 sm:h-9 gap-1.5 px-2 sm:px-3 text-xs sm:text-sm"
+          className={`h-8 sm:h-9 gap-1.5 text-xs sm:text-sm ${
+            iconOnlyOnMobile ? 'px-2 sm:px-3' : 'px-3'
+          }`}
           onClick={() => fileRef.current?.click()}
           disabled={loading}
           title={i18n.importTitle}
           aria-label={i18n.button}
         >
           <Download className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">
+          {/* In iconOnlyOnMobile mode the label hides below sm: — the
+              header uses this. Without the flag the label always shows,
+              which the welcome-screen CTA needs because it's the main
+              call-to-action and shouldn't be ambiguous. */}
+          <span className={iconOnlyOnMobile ? 'hidden sm:inline' : ''}>
             {loading ? i18n.importing : i18n.button}
           </span>
         </Button>

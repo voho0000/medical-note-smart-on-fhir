@@ -52,7 +52,11 @@ function PageContent() {
               language collapse into the same menu only on mobile so the
               bar never wraps on narrow screens. */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <ImportBundleButton />
+            {/* iconOnlyOnMobile: header is space-constrained, so the
+                "匯入資料" label collapses on phones. The Welcome screen
+                mounts the same component without this flag so its big
+                CTA always reads as a labeled button. */}
+            <ImportBundleButton iconOnlyOnMobile />
             <div className="hidden sm:flex items-center gap-2 sm:gap-3">
               <AudienceSwitcher />
               <LanguageSwitcher />
