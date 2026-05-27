@@ -55,21 +55,24 @@ export function InsightPanel({
     setActiveTab('settings', 'insights')
   }
 
-  // Response content for expanded overlay
+  // Response content for expanded overlay — mirrors InsightResponseDisplay:
+  // AI text is read-only so clinicians can't accidentally rewrite the AI's
+  // words mid-review. Loading uses a textarea for clean streaming auto-
+  // scroll, then we swap to markdown for the finished response.
   const responseContent = (
     <>
-      {isEditingResponse || isLoading ? (
+      {isLoading ? (
         <Textarea
           value={response}
           onChange={(event) => onResponseChange(event.target.value)}
           placeholder={t.clinicalInsights.responsePlaceholder}
           className="flex-1 resize-none text-sm overflow-y-auto"
-          disabled={isLoading}
+          readOnly
+          disabled
         />
       ) : (
-        <div 
-          className="flex-1 overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm cursor-text"
-          onClick={() => setIsEditingResponse(true)}
+        <div
+          className="flex-1 overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm cursor-default select-text"
         >
           {response ? (
             <MarkdownRenderer content={response} />

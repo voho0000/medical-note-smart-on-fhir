@@ -63,19 +63,26 @@ export function InsightResponseDisplay({
 
   return (
     <div className="relative">
-      {isEditing || isLoading ? (
+      {/* AI response is read-only by design — letting clinicians edit the
+          AI's words risks attribution drift ("did the AI say this or did
+          I?"). Loading state still uses a textarea so the streaming text
+          can auto-scroll cleanly; once streaming completes we switch to
+          a markdown renderer that doesn't accept input. `isEditing` /
+          `onStartEditing` are kept on the prop API for backward compat
+          but no longer reachable from the UI. */}
+      {isLoading ? (
         <Textarea
           ref={textareaRef}
           value={response}
           onChange={(event) => onResponseChange(event.target.value)}
           placeholder={t.clinicalInsights.responsePlaceholder}
           className="min-h-[220px] max-h-[400px] resize-none text-sm overflow-y-auto"
-          disabled={isLoading}
+          readOnly
+          disabled
         />
       ) : (
-        <div 
-          className="min-h-[220px] max-h-[400px] overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm cursor-text"
-          onClick={onStartEditing}
+        <div
+          className="min-h-[220px] max-h-[400px] overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm cursor-default select-text"
         >
           {response ? (
             <MarkdownRenderer content={response} />
