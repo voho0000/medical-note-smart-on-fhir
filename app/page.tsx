@@ -8,6 +8,7 @@ import { AudienceSwitcher } from "@/src/shared/components/AudienceSwitcher"
 import { AudienceOnboardingDialog } from "@/src/shared/components/AudienceOnboardingDialog"
 import { ThemeToggle } from "@/src/shared/components/ThemeToggle"
 import { ConnectionInfo } from "@/src/shared/components/ConnectionInfo"
+import { VersionLink } from "@/src/shared/components/VersionLink"
 import { FeedbackButton } from "@/features/feedback"
 import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
@@ -56,6 +57,7 @@ function PageContent() {
             <AudienceSwitcher />
             <LanguageSwitcher />
             <HeaderAuthButton />
+            <VersionLink />
           </div>
         </div>
       </header>

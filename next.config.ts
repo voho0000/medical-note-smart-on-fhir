@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "path";
+import pkg from "./package.json";
 
 const isGhPages = process.env.GITHUB_PAGES === "true";
 
@@ -37,6 +38,11 @@ const nextConfig: NextConfig = {
   // 暴露 basePath 給客戶端
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
+    // Pull version from package.json at build time so the header's "v0.1.0 ↗"
+    // link always matches the deployed code. `npm version <bump>` is the
+    // single point of truth: it edits package.json AND creates the git tag,
+    // so the link `…/releases/tag/v{version}` resolves cleanly on GitHub.
+    NEXT_PUBLIC_APP_VERSION: pkg.version,
   },
   // Security headers (CSP disabled for local development).
   //
