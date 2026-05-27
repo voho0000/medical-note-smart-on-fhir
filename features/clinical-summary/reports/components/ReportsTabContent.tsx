@@ -26,11 +26,16 @@ interface ReportsTabContentProps {
    *  hides inactive via CSS). Driven by parent's "visited tabs" set so
    *  unvisited tabs don't mount upfront. */
   forceMount?: true
+  /** Row ids whose accordion should start open — used by the parent to
+   *  auto-expand rows whose search match came from an inner observation
+   *  (e.g. "RBC" inside "全套血液檢查Ⅰ"), so the user can see the matched
+   *  item without an extra click. */
+  defaultOpenIds?: string[]
 }
 
-// Stable empty array so React.memo on ReportRow doesn't see a new
-// reference every render — keeps tab switches cheap.
-const DEFAULT_OPEN_IDS: string[] = []
+// Stable fallback so referential equality holds when no expand list is
+// provided — keeps React.memo on ReportRow skipping.
+const EMPTY_OPEN_IDS: string[] = []
 
 // Initial guess for each row's height before the virtualizer measures it.
 // Most rows are single-line compact cards (~64px); a generous estimate
@@ -38,7 +43,8 @@ const DEFAULT_OPEN_IDS: string[] = []
 // any drift as soon as rows are in the DOM.
 const ESTIMATED_ROW_HEIGHT = 72
 
-function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount }: ReportsTabContentProps) {
+function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, defaultOpenIds }: ReportsTabContentProps) {
+  const openIds = defaultOpenIds ?? EMPTY_OPEN_IDS
   // Callback-ref-into-state pattern: when the scroll div attaches, React
   // calls setScrollEl with the element. That triggers a re-render whose
   // useVirtualizer call reads the now-non-null element and measures
@@ -117,7 +123,7 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount }: 
                     paddingBottom: '8px', // matches the old space-y-2 gap
                   }}
                 >
-                  <ReportRow row={row} defaultOpen={DEFAULT_OPEN_IDS} />
+                  <ReportRow row={row} defaultOpen={openIds} />
                 </div>
               )
             })}

@@ -18,6 +18,11 @@ import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
 
+// Stable empty array so React.memo / virtualizer keep skipping when no
+// search match needs expansion. Recreating [] every render would break
+// referential equality on the prop.
+const EMPTY_EXPANDED_IDS: string[] = []
+
 export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
@@ -143,13 +148,52 @@ export function ReportsCard() {
         dateStrs.push(`${y}/${String(m).padStart(2,'0')}/${String(day).padStart(2,'0')}`) // 2026/01/22
         dateStrs.push(`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`) // 2026-01-22
       }
+      // Also look inside accordion children — a multi-item report like
+      // "全套血液檢查Ⅰ（八項）" has its individual analytes (RBC, WBC, etc.)
+      // in row.obs, and composite tests like BP carry components on each
+      // observation. Without checking these, searching for "RBC" misses
+      // the row it lives in.
+      const innerMatch = row.obs.some((o: any) => {
+        const codeText = (o?.code?.text || o?.code?.coding?.[0]?.display || '').toLowerCase()
+        if (codeText.includes(q)) return true
+        return Array.isArray(o?.component) && o.component.some((c: any) => {
+          const cText = (c?.code?.text || c?.code?.coding?.[0]?.display || '').toLowerCase()
+          return cText.includes(q)
+        })
+      })
       return (
         row.title.toLowerCase().includes(q) ||
         row.meta.toLowerCase().includes(q) ||
-        dateStrs.some(s => s.toLowerCase().includes(q))
+        dateStrs.some(s => s.toLowerCase().includes(q)) ||
+        innerMatch
       )
     })
   }, [rows, searchQuery])
+
+  // Ids of rows whose match came from inner observations — we auto-expand
+  // their accordions so the user can see what was matched without an extra
+  // click. Rows that matched on their own title don't need expansion.
+  const expandedRowIds = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return EMPTY_EXPANDED_IDS
+    const ids: string[] = []
+    for (const row of filteredRows) {
+      // Skip if the row itself already matches on title — no need to expand.
+      if (row.title.toLowerCase().includes(q)) continue
+      const innerHit = row.obs.some((o: any) => {
+        const codeText = (o?.code?.text || o?.code?.coding?.[0]?.display || '').toLowerCase()
+        if (codeText.includes(q)) return true
+        return Array.isArray(o?.component) && o.component.some((c: any) => {
+          const cText = (c?.code?.text || c?.code?.coding?.[0]?.display || '').toLowerCase()
+          return cText.includes(q)
+        })
+      })
+      if (innerHit) ids.push(row.id)
+    }
+    // Preserve referential equality across renders when nothing changes so
+    // React.memo on ReportRow keeps skipping.
+    return ids.length === 0 ? EMPTY_EXPANDED_IDS : ids
+  }, [filteredRows, searchQuery])
 
   const groupedRows = useGroupedRows(filteredRows)
 
@@ -319,6 +363,7 @@ export function ReportsCard() {
             rows={tab.rows}
             fullHeight={expanded}
             forceMount={keepMounted}
+            defaultOpenIds={expandedRowIds}
           />
         )
       })}
