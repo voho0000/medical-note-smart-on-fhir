@@ -54,7 +54,10 @@ const HARDCODED_REF_RANGES: Record<string, { low?: number; high?: number }> = {
   HBA1C:      {             high: 5.7 },   // %
 }
 
-function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string; hasFhirRefRange: boolean } {
+// Exported for unit-test access; the cumulative-report cell colouring
+// depends on its isAbnormal output, so we lock it down separately from
+// the React hook.
+export function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string; hasFhirRefRange: boolean } {
   let value = '—'
   let unit: string | undefined
   let numericValue: number | undefined
@@ -68,7 +71,18 @@ function formatValue(obs: any): { value: string; unit?: string; numericValue?: n
     value = obs.valueCodeableConcept.text
   }
   const interp = obs.interpretation?.[0]?.coding?.[0]?.code || obs.interpretation?.coding?.[0]?.code
-  let isAbnormal = !!interp && !['N', 'NORMAL'].includes(String(interp).toUpperCase())
+  // HL7 v3 ObservationInterpretation codes that mean "this result is fine,
+  // don't flag it red." Includes:
+  //   N / NORMAL        — numeric within reference range
+  //   NEG / NEGATIVE    — qualitative serology result (no infection / no
+  //                       analyte detected); for HBsAg / Anti-HCV / etc.
+  //                       this is the *desired* outcome, not abnormal
+  //   NR / NONREACTIVE  — same as NEG; some labs use NR for ELISA-style
+  //                       immunoassays where "negative" technically means
+  //                       "non-reactive" below the cutoff
+  // Anything else (H / L / A / POS / etc.) is treated as abnormal.
+  const NORMAL_INTERP_CODES = new Set(['N', 'NORMAL', 'NEG', 'NEGATIVE', 'NR', 'NONREACTIVE'])
+  let isAbnormal = !!interp && !NORMAL_INTERP_CODES.has(String(interp).toUpperCase())
 
   // Layer A: use FHIR referenceRange when interpretation code is absent.
   // Also tracks whether a usable numeric range was found — Layer B (hardcoded
