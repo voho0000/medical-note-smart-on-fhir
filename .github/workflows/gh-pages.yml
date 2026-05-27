@@ -1,7 +1,12 @@
 name: Deploy to GitHub Pages
+# Triggered only after CI succeeds — no separate `push` trigger, so a
+# failing test/typecheck/build blocks deploy. The `workflow_dispatch`
+# trigger stays for manual re-deploy if needed.
 on:
-  push:
-    branches: [ master ]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
   workflow_dispatch: {}
 
 permissions:
@@ -16,6 +21,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # workflow_run fires on BOTH success and failure of the upstream CI
+    # workflow. Skip the deploy unless CI actually passed — otherwise a
+    # failed CI run would still trigger an empty deploy.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

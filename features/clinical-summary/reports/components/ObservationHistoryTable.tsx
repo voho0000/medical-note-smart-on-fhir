@@ -14,8 +14,10 @@ type DerivedStatus = 'high' | 'low' | 'normal' | null
  * `interpretation` code (common with NHI 健保存摺 / bridge-imported data),
  * so the trend table still highlights out-of-range values in red instead
  * of leaving every row uncolored.
+ *
+ * Exported for unit-test access; not used outside this module.
  */
-function deriveStatusFromRange(
+export function deriveStatusFromRange(
   value: number | string | undefined,
   referenceRange?: { low?: number; high?: number; text?: string }
 ): DerivedStatus {
