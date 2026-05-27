@@ -6,10 +6,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import { AudienceSwitcher } from "@/src/shared/components/AudienceSwitcher"
 import { AudienceOnboardingDialog } from "@/src/shared/components/AudienceOnboardingDialog"
-import { ThemeToggle } from "@/src/shared/components/ThemeToggle"
-import { ConnectionInfo } from "@/src/shared/components/ConnectionInfo"
-import { VersionLink } from "@/src/shared/components/VersionLink"
-import { FeedbackButton } from "@/features/feedback"
+import { HeaderOverflowMenu } from "@/src/shared/components/HeaderOverflowMenu"
 import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
@@ -49,15 +46,19 @@ function PageContent() {
             </div>
             <h1 className="text-base sm:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>
+          {/* Header right cluster — kept lean (v0.4.0).
+              Less-used controls (theme, version, feedback, connection
+              info) live inside HeaderOverflowMenu (kebab); audience +
+              language collapse into the same menu only on mobile so the
+              bar never wraps on narrow screens. */}
           <div className="flex items-center gap-2 sm:gap-3">
             <ImportBundleButton />
-            <FeedbackButton />
-            <ConnectionInfo />
-            <ThemeToggle />
-            <AudienceSwitcher />
-            <LanguageSwitcher />
+            <div className="hidden sm:flex items-center gap-2 sm:gap-3">
+              <AudienceSwitcher />
+              <LanguageSwitcher />
+            </div>
             <HeaderAuthButton />
-            <VersionLink />
+            <HeaderOverflowMenu />
           </div>
         </div>
       </header>

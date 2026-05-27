@@ -2,7 +2,6 @@
 "use client"
 
 import { Square, Zap } from "lucide-react"
-import Link from "next/link"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { VoiceRecorder } from "./VoiceRecorder"
 import { ImageUploadButton } from "./ImageUploadButton"
@@ -163,14 +162,17 @@ export function ChatInputArea({
           <Zap className="h-3 w-3" />
           {(t.chat as any).cloudAiNotice ?? 'AI 為雲端服務（OpenAI / Gemini）· 請勿輸入高度敏感個資'}
           {' · '}
-          <Link
-            href="/privacy"
+          {/* Privacy policy lives on GitHub — single source of truth with
+              the markdown rendered there. The in-app /privacy route still
+              works for now but we don't link to it any more. */}
+          <a
+            href="https://github.com/voho0000/medical-note-smart-on-fhir/blob/master/PRIVACY_POLICY.md"
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:text-foreground"
           >
             {(t.chat as any).cloudAiNoticeLink ?? '隱私說明'}
-          </Link>
+          </a>
         </span>
         {(input.input.length > 0 || hasImages) && (
           <span>

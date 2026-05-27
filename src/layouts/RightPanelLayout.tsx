@@ -8,7 +8,10 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
 import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
-import { RightPanelProvider, useRightPanel } from '@/src/application/providers/right-panel.provider'
+// RightPanelProvider moved to AppProviders (app-level) in v0.4.0 so the
+// header's overflow menu can navigate to right-panel tabs (e.g. open
+// Settings → 顯示). Only useRightPanel is imported here now.
+import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 
 // ============================================================================
 // FEATURE COMPONENTS - Import your feature components here
@@ -59,14 +62,13 @@ function RightPanelProviders({ children }: { children: ReactNode }) {
 // MAIN EXPORT - Right Panel Feature
 // ============================================================================
 function RightPanelContent() {
-  const features = getEnabledRightPanelFeatures()
-  const defaultTab = features[0]?.id || 'medical-chat'
-  
+  // RightPanelProvider lives in AppProviders now; here we only mount the
+  // right-panel-specific providers (data selection, ASR, etc.). The
+  // provider's defaultTab is fixed at 'medical-chat' app-wide, matching
+  // what features[0]?.id resolved to previously.
   return (
     <RightPanelProviders>
-      <RightPanelProvider defaultTab={defaultTab}>
-        <RightPanelContentInner />
-      </RightPanelProvider>
+      <RightPanelContentInner />
     </RightPanelProviders>
   )
 }

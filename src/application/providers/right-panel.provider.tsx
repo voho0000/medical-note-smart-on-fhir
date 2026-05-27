@@ -10,7 +10,12 @@ interface RightPanelContextType {
 
 const RightPanelContext = createContext<RightPanelContextType | undefined>(undefined)
 
-export function RightPanelProvider({ children, defaultTab }: { children: ReactNode; defaultTab: string }) {
+// `defaultTab` is optional now — promoted to app-level provider in v0.4.0
+// so the header can navigate to Settings sub-tabs. AppProviders doesn't
+// know the feature registry; fall back to 'medical-chat' (the first
+// feature) when no explicit default is passed. RightPanelLayout can
+// still override if its registry-derived default ever differs.
+export function RightPanelProvider({ children, defaultTab = 'medical-chat' }: { children: ReactNode; defaultTab?: string }) {
   const [activeTab, setActiveTabState] = useState(defaultTab)
   const [settingsTab, setSettingsTab] = useState('ai')
 

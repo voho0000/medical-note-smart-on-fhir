@@ -1,46 +1,18 @@
-// Compact version-link for the header. Shows "v0.1.0 ↗" and opens the
-// matching GitHub release page in a new tab.
+// Compact version-link. Shows "v0.1.0 ↗" and opens the matching GitHub
+// release page in a new tab.
 //
-// Version source: fetched at runtime from `${basePath}/version.json`, which
-// is regenerated from package.json by `scripts/write-version.mjs` whenever
-// `npm version` runs (wired via the "version" npm-script hook). Runtime
-// fetch — instead of build-time env inlining — means the chip auto-updates
-// during `next dev` without needing to restart the dev server: Next.js
-// serves `public/` files fresh on every request.
+// As of v0.4.0 the header no longer mounts this — DisplaySettings inside
+// Settings → 顯示 owns the version display. Kept as a small reusable
+// component for any other place that wants the "compact chip" form.
 'use client'
 
-import { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
+import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
-const VERSION_JSON_PATH = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/version.json`
-
-interface VersionPayload {
-  version: string
-}
 
 export function VersionLink() {
-  const [version, setVersion] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    // `cache: 'no-store'` — version.json is tiny and we want bumps to show
-    // up immediately on hard refresh; without this the browser's HTTP cache
-    // could serve a stale copy for the lifetime of the cache header.
-    fetch(VERSION_JSON_PATH, { cache: 'no-store' })
-      .then((r) => (r.ok ? (r.json() as Promise<VersionPayload>) : null))
-      .then((payload) => {
-        if (!cancelled && payload?.version) setVersion(payload.version)
-      })
-      .catch(() => {
-        // Silent fail — better to hide the chip than show a broken state.
-        // Could happen offline, behind a proxy, or before version.json exists.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
+  const version = useAppVersion()
   if (!version) return null
 
   // Link to the specific release tag. If the release isn't published yet
