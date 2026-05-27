@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText } from "../utils/formatters"
 import { extractEncounterIcds, type IcdCode } from "@/src/shared/utils/icd-lookup"
+import { getEncounterChannelText, getEncounterKindText } from "@/src/shared/utils/encounter-type.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
@@ -40,9 +41,15 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           encounter.serviceType?.coding?.[0]?.display ||
           encounter.serviceType?.text || ''
         ).toLowerCase()
+        // Prefer the v0.9.2 kind-by-system lookup over array index — bridge
+        // v0.9.1 and earlier always put kind in type[0], but FHIR R4 doesn't
+        // guarantee that order, so we look it up by coding.system when
+        // available and fall back to position only for legacy bundles.
         const typeText = (
+          getEncounterKindText(encounter) ||
           encounter.type?.[0]?.coding?.[0]?.display ||
-          encounter.type?.[0]?.text || ''
+          encounter.type?.[0]?.text ||
+          ''
         ).toLowerCase()
 
         if (['emer', 'emergency', 'ed'].includes(classCode) ||
@@ -99,17 +106,25 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         const diagnosis = encounter.diagnosis?.find((d: any) => d.rank === 1)?.condition?.display ||
                          encounter.diagnosis?.[0]?.condition?.display
 
-        let department = encounter.type?.[0]?.coding?.[0]?.display ||
+        // Bridge v0.9.2 splits Encounter.type into two self-describing
+        // CodeableConcepts (kind + channel) — see bridge integration
+        // doc 2026-05-27. We look up the channel by coding.system rather
+        // than relying on array order, since FHIR doesn't guarantee one.
+        // When the channel entry is missing (pre-v0.9.2 bundles), fall
+        // back to the legacy single-entry text and strip out kind words
+        // so the subtitle adds info instead of duplicating the type tag.
+        const v092Channel = getEncounterChannelText(encounter)
+        let department = v092Channel ||
+                        encounter.type?.[0]?.coding?.[0]?.display ||
                         encounter.type?.[0]?.text ||
                         encounter.serviceType?.coding?.[0]?.display ||
                         ''
-        // Strip the visit-type words that are already conveyed by the
-        // type badge above — the subtitle should add information (data
-        // source like "IC卡資料", department name, etc.), not repeat
-        // what the colored tag already shows. "藥局" was previously left
-        // in, causing pharmacy refill cards to display "藥局" both as
-        // the tag and the subtitle.
-        department = department.replace(/門診|住院|急診|藥局/g, '').trim()
+        if (!v092Channel) {
+          // Only strip kind words when we're in the legacy fallback path —
+          // v0.9.2 channel text ("IC卡資料"/"申報資料") never contains kind
+          // words, so stripping would be a no-op there.
+          department = department.replace(/門診|住院|急診|藥局/g, '').trim()
+        }
 
         const participant = encounter.participant?.find((p: any) =>
           p?.individual?.display || p?.actor?.display

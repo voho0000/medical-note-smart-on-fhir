@@ -80,11 +80,20 @@ function refToId(ref: string | undefined): string | undefined {
 }
 
 function encounterDeptText(enc: any): string {
-  return (
-    pickName(enc.type?.[0]) ||
-    pickName(enc.serviceType) ||
-    ''
-  )
+  // Bridge v0.9.2 splits Encounter.type into kind + channel entries (see
+  // bridge integration doc 2026-05-27). For AI tool filtering we want a
+  // single searchable string that includes BOTH dimensions, so the LLM
+  // can match "IC卡資料" or "藥局" or "門診" against the same field.
+  // Joining all type[].text/.display covers both v0.9.2 (multi-entry) and
+  // v0.9.1 (single-entry) bundles without any version branching.
+  if (Array.isArray(enc.type) && enc.type.length > 0) {
+    const joined = enc.type
+      .map((entry: any) => entry?.text || entry?.coding?.[0]?.display)
+      .filter(Boolean)
+      .join(' ')
+    if (joined) return joined
+  }
+  return pickName(enc.serviceType) || ''
 }
 
 function encounterInstitution(enc: any): string {
