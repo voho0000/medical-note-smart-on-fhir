@@ -231,9 +231,20 @@ export function categorizeObservation(obs: any): LabCategory | null {
   const fullText = [textNorm, ...displayNorms].filter(Boolean).join(' ')
 
   // ── Early special cases ──────────────────────────────────────────────────
-  // 0. Specimen quality indicators (hemolysis, lipemia, icterus) are not
-  //    clinical lab results — exclude regardless of whatever LOINC the bridge assigns.
+  // 0a. Specimen quality indicators (hemolysis, lipemia, icterus) are not
+  //     clinical lab results — exclude regardless of whatever LOINC the bridge assigns.
   if (/溶血|hemoly|lipemia|脂血|icterus|icteric|黃疸指數/i.test(fullText)) return null
+
+  // 0b. Laboratory QC / control plasma readings — bridge sometimes emits
+  //     "正常血漿PT平均值" (normal-plasma PT mean) as a patient Observation.
+  //     This is the lab's calibration baseline used to derive INR
+  //     (INR = patient PT / NPM ^ ISI). It varies batch-to-batch with
+  //     reagent lot and isn't a patient measurement, so it must not
+  //     occupy a column in the cumulative report. Skip on the same
+  //     defence-in-depth line as the hemolysis rule above; ideal fix is
+  //     bridge-side (don't emit as patient Observation at all), but
+  //     this guards us until that lands.
+  if (/正常血漿|Nor\.?\s*plasma|normal\s*plasma\s*mean|NPM\b|control\s*plasma/i.test(fullText)) return null
 
   // 1. FHIR specimen-based routing
   // EHR-FHIR-Bridge now infers specimen from order name (尿/糞/CSF/胸水...).
