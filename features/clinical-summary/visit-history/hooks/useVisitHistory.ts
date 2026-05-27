@@ -103,7 +103,13 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
                         encounter.type?.[0]?.text ||
                         encounter.serviceType?.coding?.[0]?.display ||
                         ''
-        department = department.replace(/門診|住院|急診/g, '').trim()
+        // Strip the visit-type words that are already conveyed by the
+        // type badge above — the subtitle should add information (data
+        // source like "IC卡資料", department name, etc.), not repeat
+        // what the colored tag already shows. "藥局" was previously left
+        // in, causing pharmacy refill cards to display "藥局" both as
+        // the tag and the subtitle.
+        department = department.replace(/門診|住院|急診|藥局/g, '').trim()
 
         const participant = encounter.participant?.find((p: any) =>
           p?.individual?.display || p?.actor?.display
