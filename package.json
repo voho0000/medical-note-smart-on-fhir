@@ -11,7 +11,8 @@
     "deploy": "npm run build:gh && gh-pages -d out -b gh-pages",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "version": "node scripts/write-version.mjs && git add public/version.json"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.2",
