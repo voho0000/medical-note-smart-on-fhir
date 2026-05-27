@@ -717,7 +717,7 @@ export const en = {
   welcome: {
     title: 'Welcome to MediPrisma',
     description: 'Import your health data to get started, or launch from a hospital system via SMART-on-FHIR.',
-    importCta: 'Tap the button below to import your data',
+    importCta: 'Tap the button to import your data',
     dragHint: 'or drag a .json file onto this screen',
     dropHere: 'Release to import',
     localTitle: 'Import from your device',

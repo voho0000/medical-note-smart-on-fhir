@@ -21,6 +21,23 @@ export function WelcomeOnboarding() {
   const [isDragging, setIsDragging] = useState(false)
   const dragCounter = useRef(0)
 
+  // Separate file input dedicated to the "從本地匯入" info card below;
+  // ImportBundleButton (the upper CTA) owns its own input. Both end up
+  // calling the same useImportBundle.importFile, so behaviour is
+  // identical regardless of which entry point the user clicks.
+  const localCardFileRef = useRef<HTMLInputElement>(null)
+  const handleLocalCardFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      await importFile(file)
+    } catch {
+      // error surfaces via the hook's `error` state
+    } finally {
+      if (localCardFileRef.current) localCardFileRef.current.value = ''
+    }
+  }, [importFile])
+
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -121,7 +138,16 @@ export function WelcomeOnboarding() {
         )}
 
         <div className="grid gap-4 text-left sm:grid-cols-2">
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+          {/* Local-import card — clickable, opens file picker. Treated as
+              a second CTA (the primary one is the button above), so
+              hover/focus styles + cursor-pointer telegraph that clicking
+              does something. */}
+          <button
+            type="button"
+            onClick={() => localCardFileRef.current?.click()}
+            disabled={loading}
+            className="text-left rounded-xl border border-border/60 bg-card/50 p-4 cursor-pointer transition-colors hover:border-blue-300 hover:bg-blue-50/50 dark:hover:border-blue-700 dark:hover:bg-blue-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <div className="mb-2 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
                 <Download className="h-4 w-4" />
@@ -131,9 +157,14 @@ export function WelcomeOnboarding() {
             <p className="text-xs leading-relaxed text-muted-foreground">
               {w.localDesc ?? 'Import a JSON bundle — data stays in your browser.'}
             </p>
-          </div>
+          </button>
 
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+          {/* SMART-on-FHIR card — purely informational. There's no client-
+              side action a welcome-screen user can take here; they need
+              to launch from the hospital EHR. Styled as a static info
+              block (no hover, no cursor-pointer) so it doesn't lie about
+              being interactive. */}
+          <div className="rounded-xl border border-dashed border-border/50 bg-muted/30 p-4">
             <div className="mb-2 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-950 dark:text-purple-400">
                 <Hospital className="h-4 w-4" />
@@ -145,6 +176,14 @@ export function WelcomeOnboarding() {
             </p>
           </div>
         </div>
+
+        <input
+          ref={localCardFileRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={handleLocalCardFile}
+        />
 
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Shield className="h-3.5 w-3.5" />

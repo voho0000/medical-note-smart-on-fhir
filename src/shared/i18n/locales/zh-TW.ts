@@ -719,7 +719,7 @@ export const zhTW = {
   welcome: {
     title: '歡迎使用 MediPrisma',
     description: '匯入您的健康資料開始使用，或從醫院系統透過 SMART-on-FHIR 自動載入。',
-    importCta: '點下方按鈕匯入資料開始',
+    importCta: '點按鈕匯入資料開始',
     dragHint: '或將 .json 檔案拖曳到這個畫面',
     dropHere: '放開以匯入資料',
     localTitle: '從本地匯入',
