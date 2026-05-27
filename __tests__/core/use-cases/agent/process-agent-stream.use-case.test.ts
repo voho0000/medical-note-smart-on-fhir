@@ -58,28 +58,31 @@ describe('ProcessAgentStreamUseCase', () => {
       expect(sourcesCount).toBe(1)
     })
 
-    it('should handle Chinese sources header', () => {
+    it('strips an existing Chinese 參考來源 block and replaces with English Sources', () => {
+      // Policy: regardless of which language the AI emitted the source
+      // header in, the canonical SMART app rendering uses English
+      // "**Sources:**". Strip the old header (zh or en) and re-emit our
+      // own when citations are present.
       const input: ProcessCitationsInput = {
         content: 'Content [1]\n\n**參考來源**\nAlready here',
-        citations: ['https://example.com']
+        citations: ['https://example.com'],
       }
-
       const result = useCase.processCitations(input)
-
-      const sourcesCount = (result.processedContent.match(/\*\*Sources:\*\*/g) || []).length
-      expect(sourcesCount).toBe(0)
+      expect(result.processedContent).not.toContain('參考來源')
+      expect(result.processedContent).toContain('**Sources:**')
     })
 
-    it('should handle empty citations', () => {
+    it('does NOT append Sources section when citations array is empty', () => {
+      // Previously the use-case always added "**Sources:**" even with
+      // zero citations, leaving a dangling section header. Behaviour
+      // updated: skip the section entirely when there's nothing to cite.
       const input: ProcessCitationsInput = {
         content: 'Content without citations',
-        citations: []
+        citations: [],
       }
-
       const result = useCase.processCitations(input)
-
       expect(result.processedContent).toContain('Content without citations')
-      expect(result.processedContent).toContain('**Sources:**')
+      expect(result.processedContent).not.toContain('**Sources:**')
     })
 
     it('should handle content without citation numbers', () => {

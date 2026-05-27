@@ -43,19 +43,12 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Unit tests
-        # `--testPathIgnorePatterns` skips 4 known-stale suites that pre-date
-        # this CI setup — model-ID and quota-config tests reference IDs that
-        # have since changed in the source. They aren't session regressions
-        # and they aren't blocking real bugs; cleaning them up is its own
-        # TODO. Remove the patterns below once those suites are fixed so
-        # CI catches future drift in those files too.
-        run: |
-          npm test -- --ci --passWithNoTests \
-            --testPathIgnorePatterns="worktrees" \
-            --testPathIgnorePatterns="ai-models.test.ts" \
-            --testPathIgnorePatterns="quota.config.test.ts" \
-            --testPathIgnorePatterns="openai.service.test.ts" \
-            --testPathIgnorePatterns="process-agent-stream.use-case.test.ts"
+        # `--testPathIgnorePatterns="worktrees"` keeps jest from picking up
+        # the copies of these tests living under `.claude/worktrees/<branch>/`
+        # when developers have Claude Code worktrees checked out locally.
+        # All other suites are gated by CI — any new test failure blocks
+        # the deploy job below.
+        run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees"
 
       - name: Build (smoke test)
         # Same env as the deploy build — catches any GH-Pages-specific
