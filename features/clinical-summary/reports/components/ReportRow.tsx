@@ -1,5 +1,5 @@
 // Report Row Component
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -57,9 +57,17 @@ function countAbnormal(obs: Observation[]): number {
   return count
 }
 
-export function ReportRow({ row, defaultOpen }: ReportRowProps) {
+function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
   const { t } = useLanguage()
   const [trendDialogOpen, setTrendDialogOpen] = useState(false)
+  // Separate "mounted" flag so the dialog (and its expensive history hooks)
+  // only enter the React tree after the user actually opens it the first
+  // time. We keep it mounted afterwards so re-opening is instant.
+  const [trendDialogMounted, setTrendDialogMounted] = useState(false)
+  const openTrendDialog = () => {
+    setTrendDialogMounted(true)
+    setTrendDialogOpen(true)
+  }
   const [textExpanded, setTextExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -84,7 +92,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
     <div
       onClick={(e) => {
         if (stopProp) e.stopPropagation()
-        setTrendDialogOpen(true)
+        openTrendDialog()
       }}
       className="text-muted-foreground hover:text-primary transition-colors cursor-pointer"
       role="button"
@@ -94,7 +102,7 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           if (stopProp) e.stopPropagation()
-          setTrendDialogOpen(true)
+          openTrendDialog()
         }
       }}
     >
@@ -231,12 +239,14 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
               </div>
             )}
           </div>
-          <ObservationTrendDialog
-            observation={firstObs}
-            reportTitle={row.title}
-            open={trendDialogOpen}
-            onOpenChange={setTrendDialogOpen}
-          />
+          {trendDialogMounted && (
+            <ObservationTrendDialog
+              observation={firstObs}
+              reportTitle={row.title}
+              open={trendDialogOpen}
+              onOpenChange={setTrendDialogOpen}
+            />
+          )}
         </>
       )
     }
@@ -292,12 +302,14 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
             <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
           )}
         </div>
-        <ObservationTrendDialog
-          observation={firstObs}
-          reportTitle={row.title}
-          open={trendDialogOpen}
-          onOpenChange={setTrendDialogOpen}
-        />
+        {trendDialogMounted && (
+          <ObservationTrendDialog
+            observation={firstObs}
+            reportTitle={row.title}
+            open={trendDialogOpen}
+            onOpenChange={setTrendDialogOpen}
+          />
+        )}
       </>
     )
   }
@@ -352,12 +364,30 @@ export function ReportRow({ row, defaultOpen }: ReportRowProps) {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-      <ObservationTrendDialog
-        observation={firstObs}
-        reportTitle={row.title}
-        open={trendDialogOpen}
-        onOpenChange={setTrendDialogOpen}
-      />
+      {/* Lazy-mount the trend dialog only after the user actually clicks
+          the trend button. The dialog runs four history hooks
+          (useObservationHistory + 3 variants), each of which iterates the
+          full observations array. With 500+ rows in the "全部" tab, eagerly
+          mounting the dialog inside every row meant 2000+ full-array
+          scans on every render — the real reason switching to "全部" felt
+          slow, not the row count itself. Once opened we keep it mounted
+          so re-opening is instant. */}
+      {trendDialogMounted && (
+        <ObservationTrendDialog
+          observation={firstObs}
+          reportTitle={row.title}
+          open={trendDialogOpen}
+          onOpenChange={setTrendDialogOpen}
+        />
+      )}
     </>
   )
 }
+
+// Memoized — `row` is stable across re-renders because the parent
+// (ReportsCard) memoizes the rows array via useMemo, so referential
+// equality skips re-render when only the active tab changes. This is
+// the key win for tab-switch latency when "全部" has 500+ rows. The
+// inactive tabs are kept mounted via forceMount, so without memo every
+// tab switch would re-render every row.
+export const ReportRow = memo(ReportRowImpl)

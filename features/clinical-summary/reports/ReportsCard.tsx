@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Menu, Maximize2, Minimize2, Search, X } from "lucide-react"
+import { Menu, Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { useReportsData } from './hooks/useReportsData'
@@ -22,7 +22,29 @@ export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
-  const handleTabChange = (val: string) => { setActiveTab(val); setSearchQuery("") }
+  // Tabs the user has visited at least once in this session. We forceMount
+  // only these so the *first* paint of ReportsCard (e.g. when the user
+  // switches from "病患資訊" to "報告") doesn't have to mount 500+ rows of
+  // every sub-tab at once — only the default tab gets work upfront. Once
+  // a sub-tab is visited, it stays mounted so subsequent tab switches are
+  // instant (the original perf goal).
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['cumulative']))
+  // Two-phase switch keeps the spinner-on-target-tab feedback for the
+  // rare case a tab is heavy to mount on its first visit. Phase 1 (urgent)
+  // sets pendingTab so the spinner appears immediately on the clicked tab.
+  // Phase 2 (next frame) actually swaps activeTab. With virtualization,
+  // the second phase is essentially free — only a viewport's worth of
+  // rows is ever mounted, no matter how big the tab is.
+  const [pendingTab, setPendingTab] = useState<string | null>(null)
+  const handleTabChange = (val: string) => {
+    setSearchQuery("")
+    setPendingTab(val)
+    requestAnimationFrame(() => {
+      setActiveTab(val)
+      setVisitedTabs(prev => prev.has(val) ? prev : new Set(prev).add(val))
+      setPendingTab(null)
+    })
+  }
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -208,15 +230,23 @@ export function ReportsCard() {
     <Tabs value={activeTab} onValueChange={handleTabChange} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
       {/* Desktop tabs */}
       <TabsList className={`hidden md:!flex !justify-start shrink-0 mb-6 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
-        {tabConfigs.map((tab) => (
-          <TabsTrigger
-            key={tab.value}
-            value={tab.value}
-            className={`!flex-1 !min-w-fit px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
-          >
-            {tab.label}
-          </TabsTrigger>
-        ))}
+        {tabConfigs.map((tab) => {
+          // Spinner appears on the tab the user is currently switching to,
+          // for the duration of useTransition's pending window. Tells the
+          // user "your click registered, content is being prepared" instead
+          // of leaving the UI looking frozen.
+          const showSpinner = pendingTab === tab.value
+          return (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className={`!flex-1 !min-w-fit px-3 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
+            >
+              {showSpinner && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              {tab.label}
+            </TabsTrigger>
+          )
+        })}
       </TabsList>
 
       {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
@@ -224,8 +254,9 @@ export function ReportsCard() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="w-full justify-between">
-              <span className="truncate">
-                {tabConfigs.find(t => t.value === activeTab)?.label || tabConfigs[0]?.label}
+              <span className="truncate inline-flex items-center gap-1">
+                {pendingTab && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
+                {tabConfigs.find(t => t.value === (pendingTab ?? activeTab))?.label || tabConfigs[0]?.label}
               </span>
               <Menu className="ml-2 h-4 w-4 shrink-0" />
             </Button>
@@ -267,19 +298,30 @@ export function ReportsCard() {
         </div>
       )}
 
-      {tabConfigs.map((tab) =>
-        tab.isCumulative ? (
+      {tabConfigs.map((tab) => {
+        // Only forceMount tabs the user has actually visited. Unvisited tabs
+        // fall back to Radix's default "render only when active", which means
+        // their 500+ rows aren't paid for on the initial mount of ReportsCard.
+        const keepMounted = visitedTabs.has(tab.value) || undefined
+        return tab.isCumulative ? (
           <TabsContent
             key={tab.value}
             value={tab.value}
+            forceMount={keepMounted}
             className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
           >
             <CumulativeLabReport observations={observations} fullHeight={expanded} />
           </TabsContent>
         ) : (
-          <ReportsTabContent key={tab.value} value={tab.value} rows={tab.rows} fullHeight={expanded} />
+          <ReportsTabContent
+            key={tab.value}
+            value={tab.value}
+            rows={tab.rows}
+            fullHeight={expanded}
+            forceMount={keepMounted}
+          />
         )
-      )}
+      })}
     </Tabs>
   )
 
