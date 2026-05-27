@@ -123,19 +123,12 @@ const NHI_LAB_SYSTEM = 'urn:oid:nhi.lab.code'
 // because some hospitals bill finger sugar under fasting NHI codes.
 const KEEP_SEPARATE_BY_NHI = new Set<string>([])
 
-// Returns the canonical analyte name (alias-resolved display key).
-// Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
-function canonicalTestKey(obs: any): string {
-  // 1. LOINC is the authoritative analyte identifier. Trust whatever the
-  //    bridge attaches — if it's wrong, the fix belongs at the bridge layer,
-  //    not in app-side display-string heuristics.
-  const fromLoinc = canonicalKeyFromLoinc(obs)
-  if (fromLoinc) return fromLoinc
-
-  // 2. Fall back to display-name alias when no recognized LOINC is present
-  //    (some institutions / orphan obs ship without coding entries).
+// Resolve the canonical analyte key from the display text alone. Returns
+// null when the text doesn't match any known alias (caller should then fall
+// back to LOINC).
+function canonicalTestKeyFromDisplay(obs: any): string | null {
   const raw = getTestDisplayName(obs)
-  if (!raw) return 'UNKNOWN'
+  if (!raw) return null
   // Check raw + rawUpper first so pure-CJK names like "鈣" (whose Latin
   // content normalizeTestName strips to "") still hit the alias map.
   if (TEST_ALIASES[raw]) return TEST_ALIASES[raw]
@@ -144,7 +137,35 @@ function canonicalTestKey(obs: any): string {
   const { stripped, collapsed } = normalizeTestName(raw)
   if (TEST_ALIASES[stripped]) return TEST_ALIASES[stripped]
   if (TEST_ALIASES[collapsed]) return TEST_ALIASES[collapsed]
-  return stripped || collapsed || rawUpper
+  return null
+}
+
+// Returns the canonical analyte name (alias-resolved display key).
+// Used for subgroup lookup, HARDCODED_REF_RANGES, and pinned-column matching.
+function canonicalTestKey(obs: any): string {
+  const fromLoinc = canonicalKeyFromLoinc(obs)
+  const fromDisplay = canonicalTestKeyFromDisplay(obs)
+
+  // Defence against systemic bridge LOINC mislabelling — observed in real
+  // NHI 健保存摺 bundles: CBC analytes (MCV, MCHC, RDW, Basophils...) get
+  // tagged with another analyte's LOINC (e.g. MCV → 789-8 "Erythrocytes"
+  // = RBC). The NHI code + Chinese display text are usually correct, so
+  // when BOTH the LOINC mapping AND the display alias resolve to known
+  // (but different) analytes, trust the display text. This only fires for
+  // genuine conflicts: if the display text isn't a recognised alias we
+  // still defer to LOINC, since vendor display strings can be anything.
+  if (fromLoinc && fromDisplay && fromLoinc !== fromDisplay) {
+    return fromDisplay
+  }
+
+  if (fromLoinc) return fromLoinc
+  if (fromDisplay) return fromDisplay
+
+  // No LOINC, no recognised alias — fall back to the normalised raw text.
+  const raw = getTestDisplayName(obs)
+  if (!raw) return 'UNKNOWN'
+  const { stripped, collapsed } = normalizeTestName(raw)
+  return stripped || collapsed || raw.toUpperCase()
 }
 
 // Returns { mapKey, testKey, displayName } for one observation.
