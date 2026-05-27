@@ -38,8 +38,20 @@ export const LAB_CATEGORIES: LabCategory[] = [
   {
     id: 'cbc',
     preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC'],
-    codes: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC'],
-    loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4'],
+    // `codes` covers VGH short-form (WBC/RBC/…) AND long-form display
+    // names (BASOPHIL/EOSINOPHIL/…) that bridge v0.9.9+ emits for the
+    // differential cells. Long-form catches cases where the LOINC isn't
+    // in `loincCodes` so categorisation doesn't depend solely on LOINC
+    // accuracy.
+    codes: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'SEGMENT', 'NEU', 'NEU.', 'NEUTROPHIL', 'LYM', 'LYM.', 'LYMPHOCYTE', 'MONO', 'MONO.', 'MONOCYTE', 'EOS', 'EOS.', 'EOSINOPHIL', 'BASO', 'BASO.', 'BASOPHIL', 'ANC'],
+    // Differential percent LOINCs added 2026-05-27: bridge v0.9.9 emits
+    //   713-8  for Eosinophils/100 leukocytes
+    //   5905-5 for Monocytes/100 leukocytes
+    // and the (semantically wrong) panel LOINC 57021-8 for Segment.
+    // Without these in the allowlist, those obs were silently dropped
+    // from the cbc category — clinicians saw 累積報告 missing 3 of 5
+    // differential cells.
+    loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4', '713-8', '5905-5', '57021-8'],
     subgroups: [
       { id: 'counts',  members: ['WBC', 'RBC', 'HB', 'PLT', 'MPV'] },
       { id: 'diff',    members: ['SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'BAND', 'ANC'] },
