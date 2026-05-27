@@ -40,13 +40,20 @@ export function ImportBundleButton() {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 sm:h-9 gap-1.5 px-3 text-xs sm:text-sm"
+          // Icon-only on mobile to match the other header buttons; label
+          // returns at sm: where there's room. `aria-label` ensures
+          // screen readers still get the action name when the visible
+          // text is hidden.
+          className="h-8 sm:h-9 gap-1.5 px-2 sm:px-3 text-xs sm:text-sm"
           onClick={() => fileRef.current?.click()}
           disabled={loading}
           title={i18n.importTitle}
+          aria-label={i18n.button}
         >
           <Download className="h-3.5 w-3.5" />
-          {loading ? i18n.importing : i18n.button}
+          <span className="hidden sm:inline">
+            {loading ? i18n.importing : i18n.button}
+          </span>
         </Button>
         {hasBundle && (
           <Button
