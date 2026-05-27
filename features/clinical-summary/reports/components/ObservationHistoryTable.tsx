@@ -6,6 +6,27 @@ interface ObservationHistoryTableProps {
   data: ObservationHistoryItem[]
 }
 
+type DerivedStatus = 'high' | 'low' | 'normal' | null
+
+/**
+ * Derive a high/low/normal flag purely from value + referenceRange.
+ * Used as a fallback when the FHIR Observation didn't include an
+ * `interpretation` code (common with NHI 健保存摺 / bridge-imported data),
+ * so the trend table still highlights out-of-range values in red instead
+ * of leaving every row uncolored.
+ */
+function deriveStatusFromRange(
+  value: number | string | undefined,
+  referenceRange?: { low?: number; high?: number; text?: string }
+): DerivedStatus {
+  if (typeof value !== 'number' || !referenceRange) return null
+  const { low, high } = referenceRange
+  if (typeof high === 'number' && value > high) return 'high'
+  if (typeof low === 'number' && value < low) return 'low'
+  if (typeof low === 'number' || typeof high === 'number') return 'normal'
+  return null
+}
+
 export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) {
   if (data.length === 0) {
     return (
@@ -15,36 +36,47 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
     )
   }
 
-  const getInterpretationStyle = (interpretation?: string) => {
-    if (!interpretation) return ''
-    
-    const lower = interpretation.toLowerCase()
-    if (lower.includes('high') || lower.includes('h')) {
-      return 'text-red-600 font-medium'
+  /**
+   * Compute effective status: prefer the FHIR-supplied interpretation, fall
+   * back to comparing the numeric value against the referenceRange. Keeps
+   * the rest of the styling code unified — every callsite gets one of
+   * 'high' | 'low' | 'abnormal' | 'normal' | null.
+   */
+  const getEffectiveStatus = (item: ObservationHistoryItem): 'high' | 'low' | 'abnormal' | 'normal' | null => {
+    const interp = item.interpretation?.toLowerCase()
+    if (interp) {
+      // Match against single-letter codes too — but require exact match so
+      // "high" doesn't also trigger the "low" branch via its "h"-fragment.
+      if (interp === 'h' || interp.includes('high')) return 'high'
+      if (interp === 'l' || interp.includes('low')) return 'low'
+      if (interp.includes('abnormal')) return 'abnormal'
+      if (interp.includes('normal')) return 'normal'
     }
-    if (lower.includes('low') || lower.includes('l')) {
-      return 'text-orange-600 font-medium'
-    }
-    if (lower.includes('abnormal')) {
-      return 'text-yellow-600 font-medium'
-    }
-    return 'text-green-600'
+    return deriveStatusFromRange(item.value, item.referenceRange)
   }
 
-  const getStatusBadge = (interpretation?: string) => {
-    if (!interpretation) return null
-    
-    const lower = interpretation.toLowerCase()
-    if (lower.includes('high') || lower.includes('h')) {
+  // Styling mirrors the regular report list (ObservationBlock / ReportRow):
+  // only out-of-range values are highlighted; "normal" is rendered with the
+  // default foreground colour and no badge, so the trend dialog doesn't
+  // introduce styling that's absent from the rest of the app.
+  const getValueStyle = (status: ReturnType<typeof getEffectiveStatus>) => {
+    if (status === 'high') return 'text-red-600 font-medium'
+    if (status === 'low') return 'text-orange-600 font-medium'
+    if (status === 'abnormal') return 'text-yellow-600 font-medium'
+    return ''
+  }
+
+  const getStatusBadge = (status: ReturnType<typeof getEffectiveStatus>) => {
+    if (status === 'high') {
       return <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">偏高</span>
     }
-    if (lower.includes('low') || lower.includes('l')) {
+    if (status === 'low') {
       return <span className="inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700">偏低</span>
     }
-    if (lower.includes('abnormal')) {
+    if (status === 'abnormal') {
       return <span className="inline-flex items-center rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-yellow-700">異常</span>
     }
-    return <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">正常</span>
+    return null
   }
 
   return (
@@ -61,8 +93,10 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
             </tr>
           </thead>
           <tbody className="divide-y">
-            {data.map((item, index) => (
-              <tr 
+            {data.map((item, index) => {
+              const status = getEffectiveStatus(item)
+              return (
+              <tr
                 key={item.id || index}
                 className="hover:bg-muted/20 transition-colors"
               >
@@ -75,16 +109,16 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
                 </td>
                 <td className={cn(
                   "px-4 py-3 font-medium cursor-help",
-                  getInterpretationStyle(item.interpretation)
+                  getValueStyle(status)
                 )}
                 title={typeof item.value === 'number' ? `原始值: ${item.value} ${item.unit || ''}` : undefined}
                 >
-                  {typeof item.value === 'number' 
-                    ? `${formatNumberSmart(item.value)} ${item.unit || ''}` 
+                  {typeof item.value === 'number'
+                    ? `${formatNumberSmart(item.value)} ${item.unit || ''}`
                     : item.value}
                 </td>
                 <td className="px-4 py-3">
-                  {getStatusBadge(item.interpretation)}
+                  {getStatusBadge(status)}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground text-xs">
                   {item.referenceRange ? (
@@ -105,7 +139,8 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
                   {item.reportName || '—'}
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
