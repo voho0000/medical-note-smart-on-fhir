@@ -61,10 +61,19 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'coag',
-    preferredOrder: ['PT', 'APTT', 'INR', 'D-DIMER', 'FDP', 'FIB'],
-    codes: ['PT', 'PROTHROMBIN TIME', 'APTT', 'INR', 'D-DIMER', 'DDIMER', 'D DIMER', 'FDP', 'FIBRINOGEN', 'FIB'],
-    loincCodes: ['5902-2', '6300-8', '14979-9', '3173-2', '6301-6', '34714-6', '30240-9', '48067-3', '7799-0', '48065-7', '3255-7', '30903-2', '13990-7', '4530-2'],
-    pinnedColumns: ['PT', 'APTT', 'INR', 'D-DIMER'],
+    // Column order follows clinical reading habit:
+    //   PT + INR are the same test in two forms (INR = (PT/control)^ISI),
+    //   so they sit side-by-side. APTT then APTT-ratio next to each other
+    //   for the same reason (ratio = APTT/control mean). D-DIMER stands
+    //   alone. FDP/FIB tail-in if reported. APTT-RATIO is not pinned —
+    //   hospitals that only report seconds shouldn't see an empty stub.
+    preferredOrder: ['PT', 'INR', 'APTT', 'APTT-RATIO', 'D-DIMER', 'FDP', 'FIB'],
+    codes: ['PT', 'PROTHROMBIN TIME', 'APTT', 'APTT-RATIO', 'INR', 'D-DIMER', 'DDIMER', 'D DIMER', 'FDP', 'FIBRINOGEN', 'FIB'],
+    // 63561-5 = aPTT --actual/normal (ratio variant of 14979-9). NOT added
+    // to LOINC_TO_CANONICAL because we resolve APTT/APTT-RATIO via display
+    // text — keeps bridge LOINC mis-tags visible.
+    loincCodes: ['5902-2', '6300-8', '14979-9', '63561-5', '3173-2', '6301-6', '34714-6', '30240-9', '48067-3', '7799-0', '48065-7', '3255-7', '30903-2', '13990-7', '4530-2'],
+    pinnedColumns: ['PT', 'INR', 'APTT', 'D-DIMER'],
   },
   {
     id: 'chem',
@@ -233,18 +242,10 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // ── Early special cases ──────────────────────────────────────────────────
   // 0a. Specimen quality indicators (hemolysis, lipemia, icterus) are not
   //     clinical lab results — exclude regardless of whatever LOINC the bridge assigns.
+  //     Bridge v0.11.9 still emits 溶血/脂血 as 0-value obs borrowing analyte
+  //     LOINCs (see Bug 1 in v0.11.9 bridge report); this filter is our defence
+  //     until that lands bridge-side.
   if (/溶血|hemoly|lipemia|脂血|icterus|icteric|黃疸指數/i.test(fullText)) return null
-
-  // 0b. Laboratory QC / control plasma readings — bridge sometimes emits
-  //     "正常血漿PT平均值" (normal-plasma PT mean) as a patient Observation.
-  //     This is the lab's calibration baseline used to derive INR
-  //     (INR = patient PT / NPM ^ ISI). It varies batch-to-batch with
-  //     reagent lot and isn't a patient measurement, so it must not
-  //     occupy a column in the cumulative report. Skip on the same
-  //     defence-in-depth line as the hemolysis rule above; ideal fix is
-  //     bridge-side (don't emit as patient Observation at all), but
-  //     this guards us until that lands.
-  if (/正常血漿|Nor\.?\s*plasma|normal\s*plasma\s*mean|NPM\b|control\s*plasma/i.test(fullText)) return null
 
   // 1. FHIR specimen-based routing
   // EHR-FHIR-Bridge now infers specimen from order name (尿/糞/CSF/胸水...).

@@ -2,7 +2,7 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
-import { TEST_ALIASES, normalizeTestName, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc } from '@/src/shared/utils/lab-normalize'
+import { TEST_ALIASES, CANONICAL_KEYS, CANONICAL_DISPLAY, normalizeTestName, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc } from '@/src/shared/utils/lab-normalize'
 
 export interface LabCell {
   value: string
@@ -214,17 +214,21 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
 
   // Column header preference:
   //   1. displayOverride (e.g. glucose subtypes) wins.
-  //   2. If the display name maps to a known canonical (alias OR self-key,
-  //      including verbose NHI forms like "Hct(血球容積比)"), use the clean
-  //      canonical testKey for a compact, consistent header.
-  //   3. Otherwise fall back to the bridge's NHI display or stripped raw label
-  //      so unknown tests keep whatever the source institution sent.
+  //   2. If testKey is itself a canonical short code (any value the alias
+  //      maps or LOINC map can emit), use it directly — possibly via the
+  //      CANONICAL_DISPLAY override (e.g. APTT-RATIO → "APTT-ratio"). This
+  //      is preferred over the bridge's NHI display because NHI often
+  //      sends the PANEL name (e.g. "白血球分類計數" for a "嗜中性白血球"
+  //      obs), which would produce confusing column headers in the
+  //      cumulative report.
+  //   3. Otherwise fall back to the bridge's NHI display or stripped raw
+  //      label so unknown tests keep whatever the source institution sent.
   const nhiDisplay = nhiCoding?.display as string | undefined
   const rawDisplay = raw.replace(/\s*[\(\[].*$/, '').replace(/^Serum\s+/i, '').trim() || raw
   const candidateDisplay = nhiDisplay || rawDisplay
-  const { stripped: candidateStripped, collapsed: candidateCollapsed } = normalizeTestName(candidateDisplay)
-  const isKnown = !!(TEST_ALIASES[candidateStripped] || TEST_ALIASES[candidateCollapsed])
-  const displayName = displayOverride || (isKnown ? testKey : candidateDisplay)
+  const isCanonical = CANONICAL_KEYS.has(testKey)
+  const canonicalDisplay = CANONICAL_DISPLAY[testKey] || testKey
+  const displayName = displayOverride || (isCanonical ? canonicalDisplay : candidateDisplay)
 
   return { mapKey, testKey, displayName }
 }

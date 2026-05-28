@@ -4,23 +4,18 @@ import type { DiagnosticReport, Observation, Row } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
 
-// VGH bridge sends every AST DiagnosticReport with the same generic
-// code.text/display ("ORDINARY CULTURE-A testcode") — the actual antibiotic
-// lives in coding[0].code (AST_Flomoxef etc.). Treat that specific string as
-// a known placeholder so we (a) clean it up in group titles and (b) derive a
-// per-DR label from the order code for the merged accordion children.
-const KNOWN_PLACEHOLDER_TITLES = new Set(['ORDINARY CULTURE-A testcode'])
-
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
-  if (text && !KNOWN_PLACEHOLDER_TITLES.has(text) && text !== '—') return text
+  if (text && text !== '—') return text
+  // Fallback for DRs with no human-readable code.text — surface the raw
+  // coding entry instead of "Unnamed Report" so downstream renderers
+  // still get an identifying label.
   const orderCode = (dr.code as any)?.coding?.[0]?.code as string | undefined
   if (orderCode) return orderCode.replace(/_/g, ' ')
   return text || 'Unnamed Report'
 }
 
 function deriveGroupTitle(text: string): string {
-  if (text === 'ORDINARY CULTURE-A testcode') return 'ORDINARY CULTURE-A'
   return text || 'Unnamed Report'
 }
 
@@ -56,56 +51,6 @@ export function useReportsData(diagnosticReports: any[]) {
       }
       groups.get(key)!.push(dr)
     })
-
-    // Second pass: merge conclusion-only groups (inst='') into same-text/date groups
-    // that have a real institution. This collapses bridge-emitted twin DRs (one with
-    // result refs, one with only conclusion text) into a single accordion row.
-    //
-    // The bridge emits result-bearing DRs with trailing commas and no spaces between
-    // test names (e.g. "FSH,E2,") while conclusion-only DRs use cleaned-up names
-    // (e.g. "FSH, E2" or "FSH, E2 (Hormonal Panel)"). We normalize both sides before
-    // comparing so they collapse correctly.
-    const normText = (t: string) =>
-      t.replace(/\s*\([^)]*\)/g, '')  // strip parenthetical labels
-       .replace(/^\*+/, '')            // strip leading stat-marker asterisks
-       .replace(/,\s*/g, ',')          // collapse "A, B" → "A,B"
-       .replace(/,+$/, '')             // strip trailing comma
-       .trim()
-       .toLowerCase()
-
-    const groupMeta = new Map<string, { text: string; date: string; inst: string; norm: string }>()
-    for (const key of groupOrder) {
-      const head = groups.get(key)![0]
-      const t = (getCodeableConceptText(head.code) || '').trim()
-      const d = ((head.effectiveDateTime || head.issued || '') as string).slice(0, 10)
-      const i = (getDrInstitution(head) || '').trim()
-      groupMeta.set(key, { text: t, date: d, inst: i, norm: normText(t) })
-    }
-    const toDelete = new Set<string>()
-    // DRs that came from a conclusion-only group merged into a result-bearing
-    // group. Their conclusion text is just a restating of the structured
-    // observation values (e.g. "RESULT: 13.62 U/mL"), so we drop it from the
-    // accordion summary to avoid showing the same data twice.
-    const mergedConclusionDrs = new WeakSet<DiagnosticReport>()
-    for (const key of groupOrder) {
-      const { date, inst, norm } = groupMeta.get(key)!
-      if (inst !== '') continue
-      const targetKey = groupOrder.find(k => {
-        const m = groupMeta.get(k)!
-        return m.norm === norm && m.date === date && m.inst !== ''
-      })
-      if (targetKey) {
-        const conclusionDrs = groups.get(key)!
-        conclusionDrs.forEach(dr => mergedConclusionDrs.add(dr))
-        groups.get(targetKey)!.push(...conclusionDrs)
-        toDelete.add(key)
-      }
-    }
-    if (toDelete.size > 0) {
-      const kept = groupOrder.filter(k => !toDelete.has(k))
-      groupOrder.length = 0
-      kept.forEach(k => groupOrder.push(k))
-    }
 
     // Pre-pass: collect obs IDs claimed by multi-obs groups so that single-obs
     // DRs whose observation already appears inside a panel can be suppressed.
@@ -179,10 +124,7 @@ export function useReportsData(diagnosticReports: any[]) {
         const notes = Array.isArray(dr.note)
           ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
           : []
-        // Skip conclusion text from merged conclusion-only DRs — the result-
-        // bearing DRs in the same group already render the value as a
-        // structured observation.
-        if (conclusionText && !mergedConclusionDrs.has(dr)) summaryParts.push(`Conclusion: ${conclusionText}`)
+        if (conclusionText) summaryParts.push(`Conclusion: ${conclusionText}`)
         if (conclusionCodes && conclusionCodes !== '—') summaryParts.push(`Conclusion Codes: ${conclusionCodes}`)
         if (notes.length > 0) summaryParts.push(notes.join('\n'))
 

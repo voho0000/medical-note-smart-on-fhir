@@ -29,6 +29,14 @@ export const TEST_ALIASES: Record<string, string> = {
   // Coagulation
   PT: 'PT', 'PROTHROMBIN TIME': 'PT',
   APTT: 'APTT', 'PARTIAL THROMBOPLASTIN TIME': 'APTT', 'ACTIVATED PARTIAL THROMBOPLASTIN TIME': 'APTT',
+  // APTT ratio (LOINC 63561-5, "aPTT --actual/normal", value=APTT/control_mean).
+  // Clinical convention treats APTT in seconds as the primary result; this
+  // ratio is a secondary, derived metric. The two share NHI 醫令碼 08036C and
+  // bridge sends them in the same DR, so without this split alias they
+  // collapse to the same `APTT` row and last-write-wins clobbers the seconds
+  // value (whichever obs comes last in the bundle wins the cell). Rawupper
+  // match catches "APTT (ratio)" BEFORE normalizeTestName strips the parens.
+  'APTT (RATIO)': 'APTT-RATIO', 'APTT-RATIO': 'APTT-RATIO',
   INR: 'INR',
   'D-DIMER': 'D-DIMER', DDIMER: 'D-DIMER', 'D DIMER': 'D-DIMER',
   FDP: 'FDP',
@@ -128,6 +136,33 @@ export const TEST_ALIASES: Record<string, string> = {
   'T4 FREE': 'FREE T4', T4FREE: 'FREE T4', 'T4-FREE': 'FREE T4',
   'FREE-T3': 'FREE T3', FREET3: 'FREE T3', FT3: 'FREE T3',
   'T3 FREE': 'FREE T3', T3FREE: 'FREE T3', 'T3-FREE': 'FREE T3',
+
+  // ── Chinese-only display names (no English prefix) ─────────────────────
+  // Bridge passes through whatever the source EHR sent as code.text. Some
+  // hospitals send pure Chinese names for CBC differential cells (e.g.
+  // "嗜中性白血球" instead of "Neutrophil"). normalizeTestName() strips CJK
+  // characters that follow a Latin prefix but leaves pure-CJK strings as-is,
+  // so we need explicit raw-form aliases here. Without these the same
+  // analyte from two hospitals (one English, one Chinese) appears as two
+  // separate columns in the cumulative report next to the pinnedColumn stub.
+  //
+  // We deliberately match by display-text (not LOINC) so that bridge mis-
+  // labels — e.g. a band-form row tagged with the neutrophil LOINC — keep
+  // their distinct Chinese label and remain visible as bridge bugs.
+  // CBC differential
+  '嗜中性白血球': 'NEU', '帶狀嗜中性白血球': 'BAND',
+  '淋巴球': 'LYM', '單核球': 'MONO',
+  '嗜伊紅性白血球': 'EOS', '嗜酸性白血球': 'EOS',
+  '嗜鹼性白血球': 'BASO',
+  '後骨髓球': 'META-MYELOCYTE', 'META-MYELOCYTE': 'META-MYELOCYTE',
+  // CBC counts / indices
+  '白血球計數': 'WBC', '紅血球計數': 'RBC', '血色素檢查': 'HB',
+  '血球比容值測定': 'HCT', '血小板計數': 'PLT',
+  '紅血球平均容積': 'MCV', '紅血球色素': 'MCH', '紅血球色素濃度': 'MCHC',
+  '紅血球分佈變異數': 'RDW',
+  // Common chem Chinese variants
+  '全膽紅素': 'T.BILI', '膽紅素總量': 'T.BILI',
+  '肌酐': 'CREA', '肌酸酐': 'CREA', '肌酸酐、血': 'CREA',
 }
 
 /**
@@ -236,6 +271,24 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   '13955-0': 'ANTI-HCV',      // NHI 14051C — HCV Ab S/P
 }
 
+// Set of every canonical analyte key the pivot is willing to render as a
+// column header directly (without falling back to the obs's raw NHI display).
+// Built from every alias-target the canonicalisation paths can produce.
+//
+// Why we need this: when bridge attaches an NHI panel name as the LOINC
+// coding's `display` (e.g. "白血球分類計數" for a "嗜中性白血球" obs), the
+// nhiDisplay field of the obs is the PANEL name, not the analyte name.
+// useLabPivot.buildTestEntry historically preferred nhiDisplay over the
+// canonical testKey when picking the column header, which produced
+// Chinese panel-name headers like "白血球分類計數" instead of "NEU".
+// Checking against this set lets buildTestEntry detect "testKey is itself
+// a canonical short code" and use it directly.
+export const CANONICAL_KEYS: Set<string> = new Set([
+  ...Object.values(TEST_ALIASES),
+  ...Object.values(LOINC_TO_CANONICAL),
+  'GLUCOSE-AC', 'GLUCOSE-FS', 'GLUCOSE', // glucose subtype keys
+])
+
 /**
  * Try to resolve a canonical analyte key from an Observation's coding list.
  * Iterates ALL coding entries (NHI / local codes often sit in coding[0],
@@ -266,14 +319,33 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
   return { stripped, collapsed }
 }
 
+// Pretty display overrides for canonical keys whose default uppercase form
+// is visually loud. Add sparingly; most canonical keys (WBC, NEU, APTT, …)
+// display fine as-is. Currently only used for the seconds/ratio split where
+// "APTT-RATIO" reads better lowercased.
+//
+// CANONICAL_KEYS is defined further down — after LOINC_TO_CANONICAL — so it
+// can spread that map's values too.
+export const CANONICAL_DISPLAY: Record<string, string> = {
+  'APTT-RATIO': 'APTT-ratio',
+}
+
 // Returns the canonical analyte key for a raw display-name string.
 // "S.G.O.T (AST)" → "AST", "SGOT (AST)" → "AST", "ALT/GPT" → "ALT", etc.
+//
+// Tries the raw input first so pure-CJK names like "嗜中性白血球" — which
+// normalizeTestName would strip to "" — still hit the Chinese-name aliases
+// before falling through to the normalized form. Mirrors canonicalTestKey
+// in useLabPivot so both pathways agree.
 export function canonicalTestKeyFromString(raw: string): string {
   if (!raw) return 'UNKNOWN'
+  if (TEST_ALIASES[raw]) return TEST_ALIASES[raw]
+  const rawUpper = raw.toUpperCase()
+  if (TEST_ALIASES[rawUpper]) return TEST_ALIASES[rawUpper]
   const { stripped, collapsed } = normalizeTestName(raw)
   if (TEST_ALIASES[stripped]) return TEST_ALIASES[stripped]
   if (TEST_ALIASES[collapsed]) return TEST_ALIASES[collapsed]
-  return stripped || collapsed || raw.toUpperCase()
+  return stripped || collapsed || rawUpper
 }
 
 // ── Glucose subclassification ───────────────────────────────────────────────

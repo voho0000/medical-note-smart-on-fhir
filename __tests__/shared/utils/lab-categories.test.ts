@@ -98,18 +98,6 @@ describe('categorizeObservation — early routing rules', () => {
     expect(categorizeObservation(obs)).toBeNull()
   })
 
-  it('rejects laboratory QC control plasma readings (NPM)', () => {
-    // Bridge v0.11.0 split "Nor.plasma mean" / "正常血漿PT平均值" out from
-    // the APTT/PT analyte columns (good) but still emits it as a patient
-    // Observation — so without this filter it occupies its own column in
-    // the cumulative report. NPM is the calibration baseline for INR
-    // (INR = PT / NPM ^ ISI), not a patient measurement, and varies
-    // batch-to-batch with reagent lot. See Part 7 bridge report Bug P2.
-    expect(categorizeObservation(makeObs('正常血漿PT平均值', '5902-2', 11.1, 'sec'))).toBeNull()
-    expect(categorizeObservation(makeObs('Nor.plasma mean', '14979-9', 29, 'sec'))).toBeNull()
-    expect(categorizeObservation(makeObs('Normal Plasma Mean', '5902-2', 11.0, 'sec'))).toBeNull()
-  })
-
   it('routes urine glucose to urine category (not glucose)', () => {
     const obs = {
       code: { text: 'Glucose', coding: [{ system: 'http://loinc.org', code: '5792-7' }] },
