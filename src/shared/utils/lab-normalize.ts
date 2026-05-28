@@ -270,6 +270,57 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   '5196-1':  'HBSAG',         // NHI 14032C — HBsAg Mass/vol S/P
   '5197-9':  'HBSAG',         // NHI 27033C — HBsAg RIA S/P
   '13955-0': 'ANTI-HCV',      // NHI 14051C — HCV Ab S/P
+
+  // ──────────────────────────────────────────────────────────
+  // Added 2026-05-29 — coverage expansion based on v0.12.1
+  // multi-bundle audit. All verified at loinc.org (see memory
+  // feedback_loinc_verification.md). The systemic root cause for
+  // recurring "Chinese label leaks into UI" complaints was an
+  // under-covered LOINC map — bridge attaches the correct LOINC
+  // for these analytes but app fell through to display-text
+  // because the LOINC wasn't recognised.
+  // ──────────────────────────────────────────────────────────
+
+  // ── CBC indices (RBC erythrocyte indices) ─────────────────
+  // Bridge uses these LOINCs correctly across all observed bundles.
+  // Adding here so 紅血球色素濃度 / 紅血球平均容積 etc. canonicalise
+  // via LOINC rather than relying on Chinese text aliases alone.
+  '786-4':  'MCHC',           // MCHC [Entitic Mass/vol] in RBC Auto count
+  '787-2':  'MCV',            // MCV [Entitic mean vol] in RBC Auto count
+  '788-0':  'RDW',            // Erythrocyte [DistWidth] in Blood Auto (%)
+
+  // ── Chem (additional) ─────────────────────────────────────
+  '2028-9':  'CO2',           // NHI 09023C — Carbon dioxide Moles/vol S/P
+                              //   (TCO2; usually reported in metabolic panel)
+  '33914-3': 'EGFR(M)',       // NHI 09015C variant — GFR by MDRD formula
+                              //   (loinc.org marks discouraged in favour of
+                              //   77147-7, but bridge still emits this code;
+                              //   matches existing chem.preferredOrder slot
+                              //   'EGFR(M)' for MDRD)
+  '19123-9': 'MG',            // NHI 09046B — Magnesium Mass/vol S/P
+  '3040-3':  'LIPASE',        // NHI 09053C — Lipase Enz act/vol S/P
+  '14118-4': 'LACTATE',       // NHI 09059B — Lactate Mass/vol S/P
+                              //   (chem.codes already lists 'LACTATE'; this
+                              //   adds the LOINC route so Chinese 乳酸
+                              //   and English Lactate (B) both canonicalise.)
+
+  // ── Immunoglobulins ──────────────────────────────────────
+  '2465-3': 'IGG',            // IgG Mass/vol S/P
+  '2458-8': 'IGA',            // IgA Mass/vol S/P
+  '2472-9': 'IGM',            // IgM Mass/vol S/P
+
+  // ── Autoimmunity ─────────────────────────────────────────
+  '5048-4': 'ANA',            // Nuclear Ab Titer by Immunofluorescence
+
+  // ── Vitamins / hematopoiesis cofactors ────────────────────
+  '2284-8': 'FOLATE',         // Folate Mass/vol S/P
+  '2132-9': 'B12',            // Cobalamin (Vit B12) Mass/vol S/P
+
+  // ── Cardiac / heart failure markers ──────────────────────
+  '33762-6': 'NT-PROBNP',     // NT-proBNP Mass/vol S/P
+
+  // ── CBC (additional) ─────────────────────────────────────
+  '14196-0': 'RETIC',         // Reticulocytes #/vol in Blood
 }
 
 // Set of every canonical analyte key the pivot is willing to render as a
@@ -329,6 +380,14 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
 // can spread that map's values too.
 export const CANONICAL_DISPLAY: Record<string, string> = {
   'APTT-RATIO': 'APTT-ratio',
+  // Mixed-case clinical conventions — these analytes are universally
+  // written in mixed case in clinical reading, so the all-uppercase
+  // canonical key would look like a typo to clinicians.
+  'IGG': 'IgG',
+  'IGA': 'IgA',
+  'IGM': 'IgM',
+  'NT-PROBNP': 'NT-proBNP',
+  'HBA1C': 'HbA1c',
 }
 
 /**

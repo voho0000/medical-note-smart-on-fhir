@@ -170,6 +170,68 @@ describe('getAnalyteLabel', () => {
     })
   })
 
+  // ── v0.3.9 coverage expansion ──────────────────────────────
+  // User asked to stop playing whack-a-mole on per-name Chinese
+  // aliases — bridge already attaches LOINC, so add LOINC mappings
+  // and the display label resolves regardless of Chinese variant.
+  describe('expanded LOINC coverage (2026-05-29 audit)', () => {
+    it.each([
+      // CBC indices
+      ['MCHC', '786-4', 'MCHC'],
+      ['紅血球色素濃度', '786-4', 'MCHC'],
+      ['MCV', '787-2', 'MCV'],
+      ['紅血球平均容積', '787-2', 'MCV'],
+      ['RDW', '788-0', 'RDW'],
+      ['紅血球分佈變異數', '788-0', 'RDW'],
+      // Chem additional
+      ['CO2', '2028-9', 'CO2'],
+      ['二氧化碳', '2028-9', 'CO2'],
+      ['eGFR', '33914-3', 'EGFR(M)'],
+      ['Estimated GFR', '33914-3', 'EGFR(M)'],
+      ['Mg', '19123-9', 'MG'],
+      ['鎂', '19123-9', 'MG'],
+      ['Lipase', '3040-3', 'LIPASE'],
+      ['解脂脢', '3040-3', 'LIPASE'],
+      // Immunoglobulins — display override gives mixed case
+      ['IgG', '2465-3', 'IgG'],
+      ['免疫球蛋白G—免疫比濁法', '2465-3', 'IgG'],
+      ['IgA', '2458-8', 'IgA'],
+      ['免疫球蛋白A', '2458-8', 'IgA'],
+      ['IgM', '2472-9', 'IgM'],
+      ['免疫球蛋白M—免疫比濁法', '2472-9', 'IgM'],
+      // Autoimmunity
+      ['ANA', '5048-4', 'ANA'],
+      ['抗核抗體(間接免疫螢光法)', '5048-4', 'ANA'],
+      ['抗細胞核抗體', '5048-4', 'ANA'],
+      // Vitamins
+      ['Folate', '2284-8', 'FOLATE'],
+      ['葉酸', '2284-8', 'FOLATE'],
+      ['Vit B12', '2132-9', 'B12'],
+      ['維生素B12', '2132-9', 'B12'],
+      // Cardiac
+      ['NT-ProBNP', '33762-6', 'NT-proBNP'],
+      // CBC additional
+      ['Reticulocyte', '14196-0', 'RETIC'],
+      ['網狀紅血球計數', '14196-0', 'RETIC'],
+    ])('text=%s LOINC=%s → %s', (text, loinc, expected) => {
+      expect(getAnalyteLabel(obs(text, loinc))).toBe(expected)
+    })
+  })
+
+  describe('CANONICAL_DISPLAY prettifies mixed-case clinical names', () => {
+    it('keeps all-caps for analytes universally written that way', () => {
+      expect(getAnalyteLabel(obs('鈉', '2951-2'))).toBe('NA')
+      expect(getAnalyteLabel(obs('血中尿素氮', '3094-0'))).toBe('BUN')
+    })
+    it('uses mixed case for IgG / IgA / IgM / NT-proBNP / HbA1c', () => {
+      expect(getAnalyteLabel(obs('IgG', '2465-3'))).toBe('IgG')
+      expect(getAnalyteLabel(obs('IgA', '2458-8'))).toBe('IgA')
+      expect(getAnalyteLabel(obs('IgM', '2472-9'))).toBe('IgM')
+      expect(getAnalyteLabel(obs('NT-ProBNP', '33762-6'))).toBe('NT-proBNP')
+      expect(getAnalyteLabel(obs('HbA1c', '4548-4'))).toBe('HbA1c')
+    })
+  })
+
   describe('text-alias analytes (no LOINC mapping yet) show canonical key', () => {
     it.each([
       // Chinese-name alias (Lactate LOINC 14118-4 not in LOINC_TO_CANONICAL —
