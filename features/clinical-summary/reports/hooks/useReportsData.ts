@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import type { DiagnosticReport, Observation, Row } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
+import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -138,6 +139,12 @@ export function useReportsData(diagnosticReports: any[]) {
 
       if (allObs.length === 0 && summaryParts.length === 0 && attachments.length === 0) continue
 
+      // NOTE: Do NOT add UI dedup here even when bridge double-emits the same
+      // measurement (e.g. 長庚嘉義 emitting both '鈉' + 'Na' for one source
+      // row — see bridge report 2026-05-29). Masking it on the app side
+      // would hide the bridge bug from the user and from future audits.
+      // See memory/feedback_no_masking_bridge_bugs.md for the standing rule.
+
       const summaryComponents: any[] = []
       if (attachments.length > 0) {
         summaryComponents.push({
@@ -162,10 +169,13 @@ export function useReportsData(diagnosticReports: any[]) {
 
       // For a single-obs DR with no summary text, the observation's own code is
       // more reliable than the DR title — bridge data sometimes assigns wrong DR
-      // codes (e.g. "Uric Acid" title for a urine pH observation). Prefer the
-      // obs code text when the DR title and obs title disagree.
+      // codes (e.g. "Uric Acid" title for a urine pH observation). Use
+      // getAnalyteLabel so recognised analytes show the canonical English short
+      // code (Na / K / BUN / …) matching the cumulative-report header instead
+      // of whichever Chinese / English variant the source hospital sent.
+      // Multi-obs DRs keep their panel title (groupText) which is correct as-is.
       const singleObsTitle = (allObs.length === 1 && summaryParts.length === 0)
-        ? (getCodeableConceptText((allObs[0] as any).code) || '').trim()
+        ? getAnalyteLabel(allObs[0] as any).trim()
         : null
       const displayTitle = (singleObsTitle && singleObsTitle !== groupText)
         ? singleObsTitle

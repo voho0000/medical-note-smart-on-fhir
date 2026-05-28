@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
+import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
@@ -85,7 +86,12 @@ function ObsRow({
 
 export function ObservationBlock({ observation }: ObservationBlockProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
-  const title = getCodeableConceptText(observation.code)
+  // Show the canonical English short code (Na / K / BUN …) for recognised
+  // lab analytes — matches the cumulative-report column header and the
+  // convention Taiwan clinicians read by. Falls back to the bridge-provided
+  // text for non-canonical rows (cultures, antibiotic susceptibilities,
+  // free-text reports), so we don't override genuinely-Chinese-named items.
+  const title = getAnalyteLabel(observation)
   const interp = getInterpretationTag(observation.interpretation)
   const ref = getReferenceRangeText(observation.referenceRange)
   const hasComponents = Array.isArray(observation.component) && observation.component.length > 0
@@ -133,7 +139,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
         {hasComponents && (
           <div className="ml-4 border-l pl-3 mt-0.5 space-y-0">
             {observation.component!.map((component, idx) => {
-              const cName = getCodeableConceptText(component.code)
+              const cName = getAnalyteLabel(component)
               const cValue = component.valueQuantity
                 ? getValueWithUnit(component.valueQuantity)
                 : component.valueString || '—'

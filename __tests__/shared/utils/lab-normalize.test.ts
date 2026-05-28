@@ -13,7 +13,7 @@
 // We intentionally use display-text aliases (not LOINC mappings) so that
 // bridge mis-tags — e.g. a band-form row tagged with LOINC 770-8 — stay
 // in their own column and remain visible as bridge bugs.
-import { canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
+import { canonicalTestKeyFromString, getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
 
 describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
   describe('CBC differential cells', () => {
@@ -55,6 +55,7 @@ describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
       ['肌酐', 'CREA'],
       ['肌酸酐', 'CREA'],
       ['肌酸酐、血', 'CREA'],
+      ['乳酸', 'LACTATE'],
     ])('%s → %s', (input, expected) => {
       expect(canonicalTestKeyFromString(input)).toBe(expected)
     })
@@ -132,5 +133,82 @@ describe('CANONICAL_DISPLAY — pretty column headers', () => {
 
   it('APTT-RATIO displays as "APTT-ratio"', () => {
     expect(CANONICAL_DISPLAY['APTT-RATIO']).toBe('APTT-ratio')
+  })
+})
+
+// ── getAnalyteLabel — display-label resolution for per-visit accordion ──
+// User complaint (2026-05-29): "為什麼累積報告生化會出現乳酸不是應該要是
+// lactate嗎"; follow-up: "Na 你現在都顯示鈉". Cumulative-report column
+// headers were already canonicalised via buildTestEntry, but the per-visit
+// ObservationBlock accordion and single-obs DR titles still rendered
+// obs.code.text directly — so bridge-emitted Chinese names (鈉 / 鉀 / 乳酸)
+// leaked through to the UI. getAnalyteLabel centralises the resolution
+// so every code path agrees with the cumulative-report header.
+describe('getAnalyteLabel', () => {
+  function obs(text: string, loinc?: string) {
+    return {
+      code: {
+        text,
+        coding: loinc ? [{ system: 'http://loinc.org', code: loinc }] : [],
+      },
+    }
+  }
+
+  describe('LOINC-canonical analytes show English short code', () => {
+    it.each([
+      // Bridge sends Chinese text + correct LOINC — most common case
+      ['鈉', '2951-2', 'NA'],
+      ['鉀', '2823-3', 'K'],
+      ['鈣', '17861-6', 'CA'],
+      ['磷', '2777-1', 'IP'],
+      ['白蛋白', '1751-7', 'ALB'],
+      ['血中尿素氮', '3094-0', 'BUN'],
+      ['肌酐(血液)', '2160-0', 'CREA'],
+      ['尿酸', '3084-1', 'UA'],
+    ])('text=%s LOINC=%s → %s', (text, loinc, expected) => {
+      expect(getAnalyteLabel(obs(text, loinc))).toBe(expected)
+    })
+  })
+
+  describe('text-alias analytes (no LOINC mapping yet) show canonical key', () => {
+    it.each([
+      // Chinese-name alias (Lactate LOINC 14118-4 not in LOINC_TO_CANONICAL —
+      // text alias '乳酸' → LACTATE fills the gap)
+      ['乳酸', '14118-4', 'LACTATE'],
+      // CBC differentials via Chinese text aliases (no LOINC needed in map)
+      ['嗜中性白血球', undefined, 'NEU'],
+      ['淋巴球', undefined, 'LYM'],
+      ['Segment', undefined, 'NEU'],
+    ])('text=%s LOINC=%s → %s', (text, loinc, expected) => {
+      expect(getAnalyteLabel(obs(text, loinc))).toBe(expected)
+    })
+  })
+
+  describe('non-canonical rows fall back to raw text (no over-translation)', () => {
+    it.each([
+      // Microbiology / antibiotic susceptibility — keep bridge label verbatim
+      ['抗酸菌培養', '13026C', '抗酸菌培養'],
+      ['ORDINARY CULTURE-A testcode', undefined, 'ORDINARY CULTURE-A testcode'],
+      // Unknown analyte with no LOINC and no alias — keep raw
+      ['免疫電泳分析', undefined, '免疫電泳分析'],
+    ])('text=%s → %s (unchanged)', (text, loinc, expected) => {
+      expect(getAnalyteLabel(obs(text, loinc))).toBe(expected)
+    })
+  })
+
+  it('returns "—" for undefined / missing code', () => {
+    expect(getAnalyteLabel(undefined)).toBe('—')
+    expect(getAnalyteLabel({})).toBe('—')
+  })
+
+  it('safety: bridge mis-tag (band row with NEU LOINC) keeps BAND label', () => {
+    // v0.11.9 Bug 6 scenario — bridge sometimes tags a band-form row with
+    // the neutrophil LOINC (770-8). Our strategy is to keep these visible
+    // by NOT adding 770-8 to LOINC_TO_CANONICAL — so the helper falls
+    // through to the display-text alias '帶狀嗜中性白血球' → BAND. Mis-tag
+    // stays visible as its own row instead of silently merging into NEU.
+    expect(getAnalyteLabel(obs('帶狀嗜中性白血球', '770-8'))).toBe('BAND')
+    // Without the mis-tag (no LOINC at all), same outcome via text alias.
+    expect(getAnalyteLabel(obs('帶狀嗜中性白血球'))).toBe('BAND')
   })
 })

@@ -163,6 +163,7 @@ export const TEST_ALIASES: Record<string, string> = {
   // Common chem Chinese variants
   '全膽紅素': 'T.BILI', '膽紅素總量': 'T.BILI',
   '肌酐': 'CREA', '肌酸酐': 'CREA', '肌酸酐、血': 'CREA',
+  '乳酸': 'LACTATE',
 }
 
 /**
@@ -328,6 +329,44 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
 // can spread that map's values too.
 export const CANONICAL_DISPLAY: Record<string, string> = {
   'APTT-RATIO': 'APTT-ratio',
+}
+
+/**
+ * Returns the canonical short-code label for an Observation (or panel
+ * component) when the analyte is recognized — e.g. obs with `code.text='鈉'`
+ * and LOINC 2951-2 → 'NA'; obs with `code.text='乳酸'` and LOINC 14118-4
+ * → 'LACTATE'. Falls back to the bridge-provided `code.text` (or coding
+ * display) when the analyte isn't in CANONICAL_KEYS — microbiology cultures,
+ * antibiotic susceptibilities, and other non-standard rows stay as-is.
+ *
+ * Use this anywhere the UI renders a single-analyte label so clinicians
+ * see the short English code they're used to (Na / K / BUN / WBC) instead
+ * of whichever Chinese / English / parenthetical variant the source
+ * hospital happened to send. The cumulative-report column header
+ * (`buildTestEntry` in useLabPivot) uses the same resolution path so all
+ * views stay in sync.
+ */
+export function getAnalyteLabel(obsOrComponent: { code?: any } | null | undefined): string {
+  const code = obsOrComponent?.code
+  if (!code) return '—'
+  // 1. Prefer LOINC-derived canonical when available.
+  const fromLoinc = canonicalKeyFromLoinc(obsOrComponent as any)
+  if (fromLoinc && CANONICAL_KEYS.has(fromLoinc)) {
+    return CANONICAL_DISPLAY[fromLoinc] || fromLoinc
+  }
+  // 2. Try text-based alias resolution (handles obs without LOINC, or with
+  //    LOINCs not yet in LOINC_TO_CANONICAL — e.g. bridge-emitted Chinese
+  //    display where the alias map has the Chinese form).
+  const raw = (code.text || code.coding?.[0]?.display || '') as string
+  if (raw) {
+    const fromText = canonicalTestKeyFromString(raw)
+    if (CANONICAL_KEYS.has(fromText)) {
+      return CANONICAL_DISPLAY[fromText] || fromText
+    }
+  }
+  // 3. Fall back to whatever the bridge sent — non-lab obs (cultures, panels,
+  //    free-text reports) keep their source label.
+  return raw || (code.coding?.[0]?.code as string) || '—'
 }
 
 // Returns the canonical analyte key for a raw display-name string.
