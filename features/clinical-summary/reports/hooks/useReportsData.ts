@@ -53,40 +53,18 @@ export function useReportsData(diagnosticReports: any[]) {
       groups.get(key)!.push(dr)
     })
 
-    // Pre-pass: collect obs IDs claimed by multi-obs groups so that single-obs
-    // DRs whose observation already appears inside a panel can be suppressed.
-    // This prevents a rogue single-obs DR (e.g. "Uric Acid" referencing a urine
-    // pH observation that is also listed inside a "尿生化検查" 7-obs panel) from
-    // creating a duplicate standalone row.
-    const obsInMultiGroup = new Set<string>()
-    for (const key of groupOrder) {
-      const grp = groups.get(key)!
-      const totalObs = grp.reduce((n, dr) => {
-        const o: any[] = Array.isArray((dr as any)._observations) ? (dr as any)._observations : []
-        return n + o.length
-      }, 0)
-      if (totalObs > 1) {
-        for (const dr of grp) {
-          const o: any[] = Array.isArray((dr as any)._observations) ? (dr as any)._observations : []
-          o.forEach((obs: any) => { if (obs?.id) obsInMultiGroup.add(obs.id) })
-        }
-      }
-    }
+    // (Previously: obsInMultiGroup suppression removed 2026-05-29.) Bridge
+    // sometimes references the same Observation in BOTH a multi-obs panel
+    // (e.g. "尿生化檢查" with 7 obs) AND a standalone single-obs DR — this
+    // is a bridge bug (duplicate cross-reference). We previously suppressed
+    // the standalone duplicate; that masked the bug. Now we let both
+    // appear so the user sees the bridge-side double-reference and can
+    // file/track a fix. See memory/feedback_no_masking_bridge_bugs.md.
 
     for (const key of groupOrder) {
       const grp = groups.get(key)!
       const head = grp[0]
       const isMulti = grp.length > 1
-
-      // Skip single-obs DR rows whose observation is already shown inside a panel
-      const groupObsIds = grp.flatMap(dr => {
-        const o: any[] = Array.isArray((dr as any)._observations) ? (dr as any)._observations : []
-        return o.map((obs: any) => obs?.id).filter(Boolean) as string[]
-      })
-      if (groupObsIds.length === 1 && obsInMultiGroup.has(groupObsIds[0])) {
-        groupObsIds.forEach(id => seen.add(id))
-        continue
-      }
 
       const groupText = (getCodeableConceptText(head.code) || '').trim()
       const summaryParts: string[] = []
@@ -167,18 +145,27 @@ export function useReportsData(diagnosticReports: any[]) {
         obsWithSummary.unshift(summaryObservation)
       }
 
-      // For a single-obs DR with no summary text, the observation's own code is
-      // more reliable than the DR title — bridge data sometimes assigns wrong DR
-      // codes (e.g. "Uric Acid" title for a urine pH observation). Use
-      // getAnalyteLabel so recognised analytes show the canonical English short
-      // code (Na / K / BUN / …) matching the cumulative-report header instead
-      // of whichever Chinese / English variant the source hospital sent.
-      // Multi-obs DRs keep their panel title (groupText) which is correct as-is.
-      const singleObsTitle = (allObs.length === 1 && summaryParts.length === 0)
-        ? getAnalyteLabel(allObs[0] as any).trim()
+      // Canonical DR title selection:
+      //   1. Single-obs DR — use the obs's canonical analyte label. Bridge
+      //      occasionally assigns wrong DR codes (e.g. "Uric Acid" title for
+      //      a urine pH observation), and the obs's own code is more reliable.
+      //   2. Multi-obs DR where ALL observations canonicalise to the same
+      //      analyte — use that canonical label. This catches bridge's
+      //      double-emission cases (long庚嘉義 sending 鈉 + Na for one source
+      //      Na row, see bridge report 2026-05-29) without masking the bug
+      //      itself: the duplicate observation rows and "N 項" counter still
+      //      render below, so clinicians still see the bridge issue.
+      //   3. Multi-analyte panel — keep bridge's panel name (e.g. "CBC",
+      //      "白血球分類計數") because the analytes inside vary.
+      const obsForTitle = summaryParts.length === 0 ? allObs : []
+      const canonicalSet = new Set(
+        obsForTitle.map((o) => getAnalyteLabel(o as any).trim()).filter(Boolean)
+      )
+      const sharedCanonicalTitle = canonicalSet.size === 1
+        ? [...canonicalSet][0]
         : null
-      const displayTitle = (singleObsTitle && singleObsTitle !== groupText)
-        ? singleObsTitle
+      const displayTitle = (sharedCanonicalTitle && sharedCanonicalTitle !== groupText)
+        ? sharedCanonicalTitle
         : groupText
 
       const category = Array.isArray(head.category)

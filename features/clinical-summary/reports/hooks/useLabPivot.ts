@@ -183,18 +183,18 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
   let displayOverride: string | undefined
 
   if (categoryId === 'glucose') {
-    // Safety net for HbA1c mislabeled as glucose: unit "%" or "mmol/mol"
-    // (the two standard HbA1c units) reclassifies the row as HBA1C.
-    const unit = String(obs?.valueQuantity?.unit ?? '').trim().toLowerCase()
-    const isHbA1cUnit = unit === '%' || unit === 'percent' || unit === 'mmol/mol'
-
-    if (isHbA1cUnit) {
-      testKey = 'HBA1C'
-      displayOverride = 'HbA1c'
-    } else if (!KNOWN_GLUCOSE_KEYS.has(testKey)) {
+    // (Previously: unit-based HbA1c reclassification removed 2026-05-29.)
+    // Bridge sometimes mis-categorises HbA1c rows into the glucose family.
+    // We used to silently reroute by sniffing the unit (% / mmol/mol);
+    // that hid the bridge categorisation bug. Now we let the row stay
+    // where bridge put it — clinicians will see "5.7%" next to glucose
+    // values and recognise the mis-categorisation. See memory/
+    // feedback_no_masking_bridge_bugs.md.
+    if (!KNOWN_GLUCOSE_KEYS.has(testKey)) {
       // Unknown glucose-category name (typos, unfamiliar variants) → fallback
       // to GLUCOSE; subclassification below will route to finger / fasting /
-      // generic based on display + LOINC.
+      // generic based on display + LOINC. This is UI taxonomy, not bridge
+      // data alteration, so it stays.
       testKey = 'GLUCOSE'
     }
   }

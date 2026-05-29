@@ -89,13 +89,18 @@ describe('cbc.pinnedColumns', () => {
 })
 
 describe('categorizeObservation — early routing rules', () => {
-  it('rejects 溶血 (hemolysis sample-quality flag) regardless of LOINC', () => {
-    // Bug 6 in bridge report Part 1: bridge sometimes emits 溶血 as a
-    // 0-value Observation under a real analyte LOINC. App side must
-    // refuse to categorise these so they don't show up as "Cholesterol
-    // = 0" in the report.
-    const obs = makeObs('溶血', '2093-3', 0)
-    expect(categorizeObservation(obs)).toBeNull()
+  it('does NOT filter 溶血 / 脂血 quality-flag rows — bridge bug stays visible', () => {
+    // Per memory/feedback_no_masking_bridge_bugs.md (2026-05-29 revision),
+    // we no longer reject specimen-quality flags. Bridge still emits these
+    // as 0-value obs borrowing analyte LOINCs (BUN/Chol); the user wants
+    // the 0-value cells in the cumulative report so they (a) see the
+    // bridge bug, (b) can file/track a bridge fix, and (c) so other
+    // SMART apps consuming the same bridge bundle aren't misled by our
+    // app-side silent cleanup.
+    const hemolysis = makeObs('溶血', '2093-3', 0)
+    expect(categorizeObservation(hemolysis)?.id).toBe('lipid')  // 2093-3 = Cholesterol
+    const lipemia = makeObs('脂血', '3094-0', 0)
+    expect(categorizeObservation(lipemia)?.id).toBe('chem')  // 3094-0 = BUN
   })
 
   it('routes urine glucose to urine category (not glucose)', () => {

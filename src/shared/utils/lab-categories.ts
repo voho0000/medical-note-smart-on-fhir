@@ -240,12 +240,12 @@ export function categorizeObservation(obs: any): LabCategory | null {
   const fullText = [textNorm, ...displayNorms].filter(Boolean).join(' ')
 
   // ── Early special cases ──────────────────────────────────────────────────
-  // 0a. Specimen quality indicators (hemolysis, lipemia, icterus) are not
-  //     clinical lab results — exclude regardless of whatever LOINC the bridge assigns.
-  //     Bridge v0.11.9 still emits 溶血/脂血 as 0-value obs borrowing analyte
-  //     LOINCs (see Bug 1 in v0.11.9 bridge report); this filter is our defence
-  //     until that lands bridge-side.
-  if (/溶血|hemoly|lipemia|脂血|icterus|icteric|黃疸指數/i.test(fullText)) return null
+  // (Previously: 溶血/脂血/icterus filter removed 2026-05-29.) Bridge still
+  // emits these specimen-quality flags as 0-value obs borrowing real analyte
+  // LOINCs (BUN 3094-0, Cholesterol 2093-3 etc.) in v0.12.1. We intentionally
+  // do NOT filter them so the bridge bug stays visible in the UI — the
+  // cumulative report will show 0-value BUN/Cholesterol cells until bridge
+  // fixes its end. See memory/feedback_no_masking_bridge_bugs.md.
 
   // 1. FHIR specimen-based routing
   // EHR-FHIR-Bridge now infers specimen from order name (尿/糞/CSF/胸水...).
