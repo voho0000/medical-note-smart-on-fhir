@@ -191,7 +191,13 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // "Sugar". Urine dipstick sugar is detected via the qualitative-value
     // heuristic (Negative/+/++/etc.) earlier in categorizeObservation.
     codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR', 'MALB', 'MALB(U)'],
-    loincCodes: ['5778-6', '5803-2', '5774-5', '5767-9', '5797-6', '5804-0', '5802-4', '5794-3', '5811-5', '5799-2', '20454-5', '5821-4', '5808-1'],
+    // 2026-05-29 additions (verified at loinc.org): 5792-7 Urine glucose,
+    // 5818-0 Urobilinogen urine, 5770-3 Bilirubin urine, 14957-5 Microalbumin
+    // urine, 14959-1 Microalbumin/Creatinine ratio. These were previously
+    // routed to urine only via the qualitative-result heuristic; now that
+    // LOINC check runs before text-based passes, they need to be in this
+    // allowlist directly.
+    loincCodes: ['5778-6', '5803-2', '5774-5', '5767-9', '5797-6', '5804-0', '5802-4', '5794-3', '5811-5', '5799-2', '20454-5', '5821-4', '5808-1', '5792-7', '5818-0', '5770-3', '14957-5', '14959-1', '2161-8'],
     subgroups: [
       { id: 'physical',  members: ['COLOR', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'PH'] },
       { id: 'chemical',  members: ['SUGAR', 'GLUCOSE', 'PROT', 'PROTEIN', 'KETON', 'KETONE', 'T.BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'BLOOD'] },
@@ -247,41 +253,51 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // cumulative report will show 0-value BUN/Cholesterol cells until bridge
   // fixes its end. See memory/feedback_no_masking_bridge_bugs.md.
 
-  // 1. FHIR specimen-based routing
-  // EHR-FHIR-Bridge now infers specimen from order name (尿/糞/CSF/胸水...).
-  // Use it as the most authoritative source.
+  // Pass ordering — refactored 2026-05-29 (v0.13.0 audit):
+  //   1. Specimen-based routing      (authoritative boundary between blood/urine/other)
+  //   2. LOINC against cat.loincCodes (authoritative analyte identifier)
+  //   3. Exact short-code match against cat.codes (VGH/local short codes)
+  //   4. Stripped-display match  (handles "Serum TSH(ECLIA)" → "TSH")
+  //   5. Text-based urine fallback (only when 1–4 missed)
+  //   6. Qualitative-result fallback (only when 1–5 missed)
+  //
+  // Previous version ran text-based routing BEFORE LOINC, which caused the
+  // Chinese single-char `尿` substring to incorrectly capture blood analytes
+  // 尿酸 (UA) and 尿素氮 (BUN) before LOINC had a chance to route them to
+  // chem. Bridge v0.13.0 correctly sets specimen=Blood for those rows, so
+  // even with specimen ordering alone the UA bug would be fixable — but the
+  // wider issue (LOINC is the authoritative identifier, deserves priority)
+  // is what this reordering addresses. Also removes the now-redundant
+  // HbA1c text override: LOINC 4548-4 in glucose.loincCodes catches it,
+  // and the text 'HbA1c' / 'HB-A1C' / 'GLYCATED' all match glucose.codes
+  // entries via Pass 3/4 below.
+
+  // ── Pass 1: specimen-based routing ─────────────────────────────────────
   const specimenText = String(obs.specimen?.display || obs.category?.[1]?.text || '')
+  const specimenSaysBlood = !!specimenText &&
+    /blood|serum|plasma|whole\s*blood|venous|capillary|血/i.test(specimenText)
   if (specimenText) {
     if (/urine|urinaly|尿/i.test(specimenText)) {
       return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
     }
     // Non-blood/serum/plasma specimens (stool, sputum, CSF, pleural fluid,
-    // ascites, smear, synovial fluid, amniotic, bone marrow…) — these aren't
-    // covered by our 5 cumulative-report categories. Skip rather than
-    // miscategorize them as blood chem/glucose/tumor.
-    if (!/blood|serum|plasma|whole\s*blood|venous|capillary|血/i.test(specimenText)) {
+    // ascites, smear, synovial fluid, amniotic, bone marrow…) aren't covered
+    // by our 5 cumulative-report categories. Skip rather than miscategorize.
+    if (!specimenSaysBlood) {
       return null
     }
   }
 
-  // 2. Text mentions urine (LOINC long names like "Glucose [Presence] in Urine")
-  if (/\bURINE\b|尿/.test(fullText)) {
-    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+  // ── Pass 2: LOINC against cat.loincCodes (authoritative) ───────────────
+  for (const cat of LAB_CATEGORIES) {
+    if (!cat.loincCodes) continue
+    const loincSet = new Set(cat.loincCodes.map(normalize))
+    for (const cand of codeNorms) {
+      if (loincSet.has(cand)) return cat
+    }
   }
 
-  // 3. Qualitative dipstick values → urinalysis (handles "Bilirubin: negative",
-  //    "Glucose 4+ (2000)", "Protein: trace", etc.)
-  if (isQualitativeResult(obs)) {
-    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
-  }
-
-  // 4. HbA1c always wins over CBC (text contains "Hb" but is glucose)
-  //    Use lenient pattern: A1C with optional separator, HBA1C, Hb-A1c, etc.
-  if (/A1C|HBA1C|HB\s*A1C|HB-A1C|GLYCATED|GLYCOHEMOGLOBIN|GLYCO\s*HAEMOGLOBIN/i.test(fullText)) {
-    return LAB_CATEGORIES.find((c) => c.id === 'glucose') || null
-  }
-
-  // Pass 1: exact short-code match against `codes` (VGH style)
+  // ── Pass 3: exact short-code match against cat.codes ───────────────────
   for (const cat of LAB_CATEGORIES) {
     const codeSet = new Set(cat.codes.map(normalize))
     for (const candidate of exactCandidates) {
@@ -289,9 +305,9 @@ export function categorizeObservation(obs: any): LabCategory | null {
     }
   }
 
-  // Pass 1.5: stripped display-name match — handles verbose names like
-  // "Serum TSH(ECLIA ...)" where stripping the prefix/parenthetical yields
-  // a short code ("TSH") that IS in codes[].
+  // ── Pass 4: stripped display-name match ────────────────────────────────
+  // Handles verbose names like "Serum TSH(ECLIA ...)" where stripping the
+  // prefix/parenthetical yields a short code ("TSH") that IS in codes[].
   const strippedDisplays = [textNorm, ...displayNorms]
     .map(n =>
       n.replace(/\s*[\(\[（［].*$/, '')  // strip parenthetical and everything after
@@ -307,13 +323,19 @@ export function categorizeObservation(obs: any): LabCategory | null {
     }
   }
 
-  // Pass 2: exact LOINC match against any coding entry
-  for (const cat of LAB_CATEGORIES) {
-    if (!cat.loincCodes) continue
-    const loincSet = new Set(cat.loincCodes.map(normalize))
-    for (const cand of codeNorms) {
-      if (loincSet.has(cand)) return cat
-    }
+  // ── Pass 5: text-based urine fallback (only when nothing above matched) ─
+  // Skip when bridge declared specimen=Blood — see big comment above for
+  // the 尿酸 / 尿素氮 substring trap this guard avoids.
+  if (!specimenSaysBlood && /\bURINE\b|尿/.test(fullText)) {
+    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
+  }
+
+  // ── Pass 6: qualitative-result fallback ────────────────────────────────
+  // Dipstick-style results ("4+", "Negative", "trace") are typical of
+  // urinalysis. Skip when specimen=Blood so qualitative blood results
+  // (ABO typing, antibody screens) don't get mis-routed.
+  if (!specimenSaysBlood && isQualitativeResult(obs)) {
+    return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   }
 
   // Pure allowlist: anything not matched by exact code or LOINC is excluded.

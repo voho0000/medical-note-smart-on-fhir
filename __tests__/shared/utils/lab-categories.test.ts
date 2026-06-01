@@ -103,6 +103,36 @@ describe('categorizeObservation — early routing rules', () => {
     expect(categorizeObservation(lipemia)?.id).toBe('chem')  // 3094-0 = BUN
   })
 
+  it('routes blood UA / BUN to chem even when text starts with 尿 (specimen=Blood)', () => {
+    // v0.13.0 bridge fix correctly sets specimen=Blood for NHI 09013C
+    // (尿酸 = serum uric acid) and 09002C (血中尿素氮 = BUN). App's
+    // text-based Pass 2 used to greedy-match the single CJK char 尿 in
+    // 尿酸 / 尿素氮 and silently re-route those rows to urine, hiding
+    // them from the chem cumulative report. Pass 2 is now skipped when
+    // specimen explicitly says Blood/Serum/Plasma.
+    const ua = {
+      code: { text: '尿酸', coding: [{ system: 'http://loinc.org', code: '3084-1' }] },
+      valueQuantity: { value: 4.7, unit: 'mg/dL' },
+      specimen: { display: 'Blood' },
+    }
+    expect(categorizeObservation(ua)?.id).toBe('chem')
+
+    const bun = {
+      code: { text: '血中尿素氮', coding: [{ system: 'http://loinc.org', code: '3094-0' }] },
+      valueQuantity: { value: 27.3, unit: 'mg/dL' },
+      specimen: { display: 'Blood' },
+    }
+    expect(categorizeObservation(bun)?.id).toBe('chem')
+
+    // Sanity: when specimen IS urine, urine routing still applies.
+    const urineProtein = {
+      code: { text: '尿蛋白', coding: [{ system: 'http://loinc.org', code: '20454-5' }] },
+      valueString: '+',
+      specimen: { display: 'Urine' },
+    }
+    expect(categorizeObservation(urineProtein)?.id).toBe('urine')
+  })
+
   it('routes urine glucose to urine category (not glucose)', () => {
     const obs = {
       code: { text: 'Glucose', coding: [{ system: 'http://loinc.org', code: '5792-7' }] },
