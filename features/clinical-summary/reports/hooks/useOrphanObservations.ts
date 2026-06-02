@@ -3,9 +3,13 @@ import { useMemo } from 'react'
 import type { Observation, Row } from '../types'
 import { getCodeableConceptText, formatDate } from '../utils/fhir-helpers'
 import { inferGroupFromObservation } from '../utils/grouping-helpers'
-import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { useAudience } from '@/src/application/providers/audience.provider'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 export function useOrphanObservations(observations: any[], seenIds: Set<string>) {
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
   return useMemo(() => {
     if (!Array.isArray(observations)) return []
 
@@ -43,10 +47,11 @@ export function useOrphanObservations(observations: any[], seenIds: Set<string>)
       const institution = (first as any).performer?.[0]?.display
       return {
         id: `orphan:${k}`,
-        // Use the canonical analyte label so orphan rows show the same English
-        // short code (Na / K / BUN / LACTATE …) as DR-attached lab rows.
-        // Falls back to raw text for non-analyte orphans (e.g. cultures).
-        title: getAnalyteLabel(first),
+        // Audience-aware analyte label so orphan rows match DR-attached
+        // rows. Medical → canonical short code (Na / K / BUN / …); patient
+        // → long-form translation in the active UI language. Non-canonical
+        // orphans (cultures, free-text obs) keep their bridge-sent label.
+        title: getAnalyteDisplayForObs(first, audience, locale),
         meta: `Observation Group`,
         obs: lst,
         group: inferGroupFromObservation(first),
@@ -54,5 +59,5 @@ export function useOrphanObservations(observations: any[], seenIds: Set<string>)
         effectiveDate: first.effectiveDateTime,
       }
     })
-  }, [observations, seenIds])
+  }, [observations, seenIds, audience, locale])
 }

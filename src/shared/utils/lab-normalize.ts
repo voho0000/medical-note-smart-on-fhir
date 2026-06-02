@@ -553,3 +553,326 @@ export function classifyGlucose(obs: any): GlucoseSubtype {
   // 3. Default: generic
   return 'generic'
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Audience-aware display labels
+// ───────────────────────────────────────────────────────────────────────────
+// Keep display label resolution separate from canonical resolution. The
+// canonical key (returned by getAnalyteLabel) drives sort / categorise /
+// search / AI prompt context — must stay stable English short codes. The
+// label SHOWN to the user can vary by audience (medical vs patient) and
+// language. See memory/feedback_display_vs_canonical_separation.md.
+//
+// Coverage gap policy: missing entries fall back to canonical English (e.g.
+// 'CA-72_4' not in CANONICAL_TO_LAY_ZH renders as 'CA-72_4' even in patient
+// mode). Surfacing the gap is preferable to silently dropping the row.
+
+/** Canonical analyte key → 醫院慣用中文全名 (patient audience, zh-TW UI). */
+export const CANONICAL_TO_LAY_ZH: Record<string, string> = {
+  // ── CBC counts / indices ──────────────────────────────────
+  'WBC': '白血球計數',
+  'RBC': '紅血球計數',
+  'HB': '血色素',
+  'HCT': '血球比容值',
+  'PLT': '血小板計數',
+  'MPV': '血小板平均體積',
+  'MCV': '紅血球平均體積',
+  'MCH': '紅血球平均血色素',
+  'MCHC': '紅血球平均血色素濃度',
+  'RDW': '紅血球分佈寬度',
+  'RETIC': '網狀紅血球',
+  // ── CBC differential ──────────────────────────────────────
+  'NEU': '嗜中性白血球',
+  'BAND': '帶狀嗜中性白血球',
+  'LYM': '淋巴球',
+  'MONO': '單核球',
+  'EOS': '嗜伊紅性白血球',
+  'BASO': '嗜鹼性白血球',
+  'ANC': '絕對嗜中性球計數',
+  // ── Coagulation ───────────────────────────────────────────
+  'PT': '凝血酶原時間',
+  'INR': '國際標準化比值',
+  'APTT': '部分凝血活酶時間',
+  'APTT-RATIO': '部分凝血活酶時間比值',
+  'D-DIMER': 'D-二聚體',
+  'FDP': '纖維蛋白降解產物',
+  'FIB': '纖維蛋白原',
+  // ── Renal ─────────────────────────────────────────────────
+  'BUN': '尿素氮',
+  'CREA': '肌酸酐',
+  'UA': '尿酸',
+  'EGFR': '腎絲球過濾率',
+  'EGFR(EPI)': '腎絲球過濾率 (CKD-EPI)',
+  'EGFR(M)': '腎絲球過濾率 (MDRD)',
+  // ── Electrolytes / minerals ───────────────────────────────
+  'NA': '鈉', 'K': '鉀', 'CL': '氯', 'CA': '鈣', 'IP': '磷', 'MG': '鎂',
+  'CO2': '二氧化碳總量',
+  // ── Liver ─────────────────────────────────────────────────
+  'AST': '麩草轉胺脢',
+  'ALT': '麩丙轉胺脢',
+  'T.BILI': '總膽紅素',
+  'D.BILI': '直接膽紅素',
+  'ALK-P': '鹼性磷酸酶',
+  'GGT': '麩胺醯轉肽酶',
+  'LDH': '乳酸去氫酶',
+  'TP': '總蛋白',
+  'ALB': '白蛋白',
+  'LIPASE': '脂解酶',
+  // ── Inflammation ──────────────────────────────────────────
+  'CRP': 'C 反應蛋白',
+  'PCT': '前降鈣素',
+  'ESR': '紅血球沉降率',
+  'LACTATE': '乳酸',
+  'FIB-4': '肝纖維化指數 (FIB-4)',
+  // ── Cardiac ───────────────────────────────────────────────
+  'TROP': '心肌旋轉素',
+  'CK': '肌酸激酶',
+  'CKMB': '肌酸激酶 MB',
+  'NT-PROBNP': 'N 端腦鈉肽前體',
+  // ── Glucose / HbA1c ───────────────────────────────────────
+  'GLUCOSE': '血糖',
+  'GLUCOSE-AC': '空腹血糖',
+  'GLUCOSE-FS': '指尖血糖',
+  'HBA1C': '糖化血色素',
+  'C-PEPTIDE': 'C 胜肽',
+  'INSULIN': '胰島素',
+  // ── Lipid ─────────────────────────────────────────────────
+  'CHOL': '總膽固醇',
+  'TG': '三酸甘油酯',
+  'HDL': '高密度脂蛋白膽固醇',
+  'LDL': '低密度脂蛋白膽固醇',
+  // ── Thyroid / endocrine ───────────────────────────────────
+  'TSH': '甲狀腺刺激素',
+  'FREE T4': '游離甲狀腺素 T4',
+  'FREE T3': '游離甲狀腺素 T3',
+  'T4': '甲狀腺素 T4',
+  'T3': '甲狀腺素 T3',
+  'CORTISOL': '皮質醇',
+  'PRL': '泌乳激素',
+  'E2': '雌二醇',
+  'LH': '黃體生成素',
+  'FSH': '濾泡刺激素',
+  'TESTOSTERONE': '睪固酮',
+  'F-TESTOSTERONE': '游離睪固酮',
+  'PROGESTERONE': '黃體素',
+  // ── Iron / hematinics ─────────────────────────────────────
+  'IRON': '血清鐵',
+  'TIBC': '總鐵結合能力',
+  'FERRITIN': '鐵蛋白',
+  'FOLATE': '葉酸',
+  'B12': '維生素 B12',
+  // ── Immunoglobulins / autoimmune ──────────────────────────
+  'IGG': '免疫球蛋白 G',
+  'IGA': '免疫球蛋白 A',
+  'IGM': '免疫球蛋白 M',
+  'ANA': '抗核抗體',
+  // ── Tumor markers ─────────────────────────────────────────
+  'AFP': '甲型胎兒蛋白',
+  'CEA': '癌胚抗原',
+  'PSA': '攝護腺特異抗原',
+  'F-PSA': '游離攝護腺特異抗原',
+  'CA-125': '醣蛋白 125 (CA-125)',
+  'CA-153': '醣蛋白 153 (CA-153)',
+  'CA-199': '醣蛋白 199 (CA-199)',
+  'HCG': '人類絨毛膜促性腺激素',
+  // ── Hepatitis ─────────────────────────────────────────────
+  'HBSAG': 'B 型肝炎表面抗原',
+  'ANTI-HBS': 'B 型肝炎表面抗體',
+  'ANTI-HBC': 'B 型肝炎核心抗體',
+  'HBEAG': 'B 型肝炎 e 抗原',
+  'ANTI-HBE': 'B 型肝炎 e 抗體',
+  'HBCAG': 'B 型肝炎核心抗原',
+  'ANTI-HCV': 'C 型肝炎抗體',
+  // ── Urinalysis ────────────────────────────────────────────
+  'COLOR': '顏色',
+  'PH': '酸鹼值',
+  'GRAVIT': '比重',
+  'TURBIDITY': '濁度',
+  'PROT': '尿蛋白',
+  'KETONE': '酮體',
+  'BILI': '膽紅素',
+  'UROBI': '尿膽素原',
+  'NITRITE': '亞硝酸鹽',
+  'LE': '白血球酯酶',
+  'OCCULT': '尿潛血',
+  'MALB': '微量白蛋白',
+  'ACR': '白蛋白/肌酸酐比值',
+}
+
+/** Canonical analyte key → long-form English (patient audience, en UI). */
+export const CANONICAL_TO_LAY_EN: Record<string, string> = {
+  // ── CBC counts / indices ──────────────────────────────────
+  'WBC': 'White blood cell count',
+  'RBC': 'Red blood cell count',
+  'HB': 'Hemoglobin',
+  'HCT': 'Hematocrit',
+  'PLT': 'Platelet count',
+  'MPV': 'Mean platelet volume',
+  'MCV': 'Mean corpuscular volume',
+  'MCH': 'Mean corpuscular hemoglobin',
+  'MCHC': 'Mean corpuscular hemoglobin concentration',
+  'RDW': 'Red cell distribution width',
+  'RETIC': 'Reticulocyte count',
+  // ── CBC differential ──────────────────────────────────────
+  'NEU': 'Neutrophils',
+  'BAND': 'Band cells',
+  'LYM': 'Lymphocytes',
+  'MONO': 'Monocytes',
+  'EOS': 'Eosinophils',
+  'BASO': 'Basophils',
+  'ANC': 'Absolute neutrophil count',
+  // ── Coagulation ───────────────────────────────────────────
+  'PT': 'Prothrombin time',
+  'INR': 'International normalized ratio',
+  'APTT': 'Activated partial thromboplastin time',
+  'APTT-RATIO': 'APTT ratio',
+  'D-DIMER': 'D-dimer',
+  'FDP': 'Fibrin degradation products',
+  'FIB': 'Fibrinogen',
+  // ── Renal ─────────────────────────────────────────────────
+  'BUN': 'Blood urea nitrogen',
+  'CREA': 'Creatinine',
+  'UA': 'Uric acid',
+  'EGFR': 'Estimated GFR',
+  'EGFR(EPI)': 'Estimated GFR (CKD-EPI)',
+  'EGFR(M)': 'Estimated GFR (MDRD)',
+  // ── Electrolytes / minerals ───────────────────────────────
+  'NA': 'Sodium', 'K': 'Potassium', 'CL': 'Chloride',
+  'CA': 'Calcium', 'IP': 'Phosphate', 'MG': 'Magnesium',
+  'CO2': 'Total CO2',
+  // ── Liver ─────────────────────────────────────────────────
+  'AST': 'Aspartate aminotransferase',
+  'ALT': 'Alanine aminotransferase',
+  'T.BILI': 'Total bilirubin',
+  'D.BILI': 'Direct bilirubin',
+  'ALK-P': 'Alkaline phosphatase',
+  'GGT': 'Gamma-glutamyl transferase',
+  'LDH': 'Lactate dehydrogenase',
+  'TP': 'Total protein',
+  'ALB': 'Albumin',
+  'LIPASE': 'Lipase',
+  // ── Inflammation ──────────────────────────────────────────
+  'CRP': 'C-reactive protein',
+  'PCT': 'Procalcitonin',
+  'ESR': 'Erythrocyte sedimentation rate',
+  'LACTATE': 'Lactate',
+  'FIB-4': 'FIB-4 fibrosis index',
+  // ── Cardiac ───────────────────────────────────────────────
+  'TROP': 'Troponin',
+  'CK': 'Creatine kinase',
+  'CKMB': 'Creatine kinase MB',
+  'NT-PROBNP': 'NT-proBNP',
+  // ── Glucose / HbA1c ───────────────────────────────────────
+  'GLUCOSE': 'Glucose',
+  'GLUCOSE-AC': 'Fasting glucose',
+  'GLUCOSE-FS': 'Finger-stick glucose',
+  'HBA1C': 'Glycated hemoglobin (HbA1c)',
+  'C-PEPTIDE': 'C-peptide',
+  'INSULIN': 'Insulin',
+  // ── Lipid ─────────────────────────────────────────────────
+  'CHOL': 'Total cholesterol',
+  'TG': 'Triglycerides',
+  'HDL': 'HDL cholesterol',
+  'LDL': 'LDL cholesterol',
+  // ── Thyroid / endocrine ───────────────────────────────────
+  'TSH': 'Thyroid-stimulating hormone',
+  'FREE T4': 'Free T4',
+  'FREE T3': 'Free T3',
+  'T4': 'Thyroxine (T4)',
+  'T3': 'Triiodothyronine (T3)',
+  'CORTISOL': 'Cortisol',
+  'PRL': 'Prolactin',
+  'E2': 'Estradiol',
+  'LH': 'Luteinizing hormone',
+  'FSH': 'Follicle-stimulating hormone',
+  'TESTOSTERONE': 'Testosterone',
+  'F-TESTOSTERONE': 'Free testosterone',
+  'PROGESTERONE': 'Progesterone',
+  // ── Iron / hematinics ─────────────────────────────────────
+  'IRON': 'Serum iron',
+  'TIBC': 'Total iron-binding capacity',
+  'FERRITIN': 'Ferritin',
+  'FOLATE': 'Folate',
+  'B12': 'Vitamin B12',
+  // ── Immunoglobulins / autoimmune ──────────────────────────
+  'IGG': 'Immunoglobulin G',
+  'IGA': 'Immunoglobulin A',
+  'IGM': 'Immunoglobulin M',
+  'ANA': 'Antinuclear antibody',
+  // ── Tumor markers ─────────────────────────────────────────
+  'AFP': 'Alpha-fetoprotein',
+  'CEA': 'Carcinoembryonic antigen',
+  'PSA': 'Prostate-specific antigen',
+  'F-PSA': 'Free PSA',
+  'CA-125': 'CA-125',
+  'CA-153': 'CA 15-3',
+  'CA-199': 'CA 19-9',
+  'HCG': 'Human chorionic gonadotropin',
+  // ── Hepatitis ─────────────────────────────────────────────
+  'HBSAG': 'Hepatitis B surface antigen',
+  'ANTI-HBS': 'Hepatitis B surface antibody',
+  'ANTI-HBC': 'Hepatitis B core antibody',
+  'HBEAG': 'Hepatitis B e antigen',
+  'ANTI-HBE': 'Hepatitis B e antibody',
+  'HBCAG': 'Hepatitis B core antigen',
+  'ANTI-HCV': 'Hepatitis C antibody',
+  // ── Urinalysis ────────────────────────────────────────────
+  'COLOR': 'Color',
+  'PH': 'pH',
+  'GRAVIT': 'Specific gravity',
+  'TURBIDITY': 'Turbidity',
+  'PROT': 'Protein',
+  'KETONE': 'Ketones',
+  'BILI': 'Bilirubin',
+  'UROBI': 'Urobilinogen',
+  'NITRITE': 'Nitrite',
+  'LE': 'Leukocyte esterase',
+  'OCCULT': 'Occult blood',
+  'MALB': 'Microalbumin',
+  'ACR': 'Albumin/creatinine ratio',
+}
+
+export type AudienceMode = 'medical' | 'patient'
+export type DisplayLang = 'zh-TW' | 'en'
+
+/**
+ * Resolve the display label for a canonical analyte key based on audience
+ * and UI language. Medical audience always sees the canonical short code
+ * (with CANONICAL_DISPLAY mixed-case overrides like APTT-ratio / HbA1c).
+ * Patient audience sees the long-form translation if available, falling
+ * back to canonical when the analyte isn't yet in the lay-display map.
+ *
+ * Pure function — no React context, so it can be called from any layer
+ * (render, hook, test).
+ */
+export function getAnalyteDisplayLabel(
+  canonical: string,
+  audience: AudienceMode,
+  language: DisplayLang,
+): string {
+  const mixedCase = CANONICAL_DISPLAY[canonical] || canonical
+  if (audience === 'medical') return mixedCase
+  const map = language === 'zh-TW' ? CANONICAL_TO_LAY_ZH : CANONICAL_TO_LAY_EN
+  return map[canonical] || mixedCase
+}
+
+/**
+ * Convenience wrapper: resolves canonical via getAnalyteLabel(obs) and
+ * then applies audience/language display logic. Returns the bridge-sent
+ * raw text for non-canonical rows (microbiology cultures, antibiotic
+ * susceptibilities, free-text reports) so unfamiliar rows keep their
+ * source label rather than being mis-translated.
+ *
+ * Render sites should call THIS instead of getAnalyteLabel directly.
+ * Sort / categorise / search / AI-prompt sites should keep using
+ * getAnalyteLabel so canonical keys stay stable.
+ */
+export function getAnalyteDisplayForObs(
+  obsOrComponent: { code?: any } | null | undefined,
+  audience: AudienceMode,
+  language: DisplayLang,
+): string {
+  const canonical = getAnalyteLabel(obsOrComponent)
+  if (!CANONICAL_KEYS.has(canonical)) return canonical
+  return getAnalyteDisplayLabel(canonical, audience, language)
+}

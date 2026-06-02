@@ -3,12 +3,14 @@ import { useMemo } from 'react'
 import type { DiagnosticReport, Observation, Row } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
-import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteLabel, getAnalyteDisplayLabel, CANONICAL_KEYS } from '@/src/shared/utils/lab-normalize'
 import {
   LAB_CATEGORIES,
   compareTestsByPreferred,
   type LabCategory,
 } from '@/src/shared/utils/lab-categories'
+import { useAudience } from '@/src/application/providers/audience.provider'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 // canonical analyte key (normalized) → owning LabCategory, derived from each
 // category's preferredOrder. Used to pick a dominant category for panel sort
@@ -52,6 +54,8 @@ function getDrInstitution(dr: any): string | undefined {
 }
 
 export function useReportsData(diagnosticReports: any[]) {
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
   return useMemo(() => {
     const rows: Row[] = []
     const seen = new Set() as Set<string>
@@ -218,12 +222,18 @@ export function useReportsData(diagnosticReports: any[]) {
       //   3. Multi-analyte panel — keep bridge's panel name (e.g. "CBC",
       //      "白血球分類計數") because the analytes inside vary.
       const obsForTitle = summaryParts.length === 0 ? allObs : []
+      // Dedup on canonical key so audience switching doesn't change which
+      // groups collapse to a shared-analyte title. Only the rendered string
+      // varies by audience — sort and grouping logic stay canonical.
       const canonicalSet = new Set(
         obsForTitle.map((o) => getAnalyteLabel(o as any).trim()).filter(Boolean)
       )
-      const sharedCanonicalTitle = canonicalSet.size === 1
+      const sharedCanonical = canonicalSet.size === 1
         ? [...canonicalSet][0]
         : null
+      const sharedCanonicalTitle = sharedCanonical && CANONICAL_KEYS.has(sharedCanonical)
+        ? getAnalyteDisplayLabel(sharedCanonical, audience, locale)
+        : sharedCanonical
       const displayTitle = (sharedCanonicalTitle && sharedCanonicalTitle !== groupText)
         ? sharedCanonicalTitle
         : groupText
@@ -246,5 +256,5 @@ export function useReportsData(diagnosticReports: any[]) {
     }
 
     return { reportRows: rows, seenIds: seen }
-  }, [diagnosticReports])
+  }, [diagnosticReports, audience, locale])
 }

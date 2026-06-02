@@ -8,8 +8,10 @@
 import { useMemo, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
 import { LAB_CATEGORIES, type LabSubgroup } from "@/src/shared/utils/lab-categories"
+import { getAnalyteDisplayLabel } from "@/src/shared/utils/lab-normalize"
 
 interface CumulativeLabReportProps {
   observations: any[]
@@ -22,11 +24,20 @@ function formatDateLabel(d: string): string {
 }
 
 function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHeight?: boolean }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const { audience } = useAudience()
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
   const subgroupLabels = (t.reports as any).cumulativeSubgroups || {}
   const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
   const subgroupLabel = (sgId: string) => subgroupLabels[sgId] || sgId
+  // Column header label: medical audience keeps useLabPivot's displayName
+  // (preserves glucose-subtype labels like "Glu-AC" / "Finger Sugar" that
+  // the pivot derives from GLUCOSE_SUBTYPE_LABEL). Patient audience swaps
+  // in the long-form translation via getAnalyteDisplayLabel keyed on the
+  // canonical testKey. Sort order is unaffected — testKey-driven sorting
+  // upstream uses canonical keys.
+  const columnLabel = (testKey: string, displayName: string) =>
+    audience === 'medical' ? displayName : getAnalyteDisplayLabel(testKey, audience, locale)
   // When there are no columns at all (no pinned columns and no data) show the
   // empty-state message. If there are columns but no data dates, fall through
   // so the column headers still render with a "no data" body row.
@@ -107,7 +118,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                 key={test.mapKey}
                 className="bg-muted/80 backdrop-blur border-b border-l p-2 text-center font-medium whitespace-nowrap min-w-[64px]"
               >
-                <div>{test.displayName}</div>
+                <div>{columnLabel(test.testKey, test.displayName)}</div>
                 {test.unit && (
                   <div className="text-[10px] font-normal text-muted-foreground">{test.unit}</div>
                 )}

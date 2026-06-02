@@ -3,7 +3,9 @@ import { useState } from 'react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
-import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { useAudience } from '@/src/application/providers/audience.provider'
+import { useLanguage } from '@/src/application/providers/language.provider'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
@@ -86,12 +88,16 @@ function ObsRow({
 
 export function ObservationBlock({ observation }: ObservationBlockProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
-  // Show the canonical English short code (Na / K / BUN …) for recognised
-  // lab analytes — matches the cumulative-report column header and the
-  // convention Taiwan clinicians read by. Falls back to the bridge-provided
-  // text for non-canonical rows (cultures, antibiotic susceptibilities,
-  // free-text reports), so we don't override genuinely-Chinese-named items.
-  const title = getAnalyteLabel(observation)
+  // Display label is audience-aware: medical → canonical short code
+  // (Na / K / BUN …); patient → long-form name in the active UI language
+  // (中文：「鈉 / 鉀 / 尿素氮」; en: "Sodium / Potassium / BUN"). Sort and
+  // categorisation upstream still use the canonical key, so switching
+  // audience changes the label without re-ordering rows.
+  // Non-canonical rows (cultures, antibiotic susceptibilities, free-text
+  // reports) keep their bridge-sent text unchanged.
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
+  const title = getAnalyteDisplayForObs(observation, audience, locale)
   const interp = getInterpretationTag(observation.interpretation)
   const ref = getReferenceRangeText(observation.referenceRange)
   const hasComponents = Array.isArray(observation.component) && observation.component.length > 0
@@ -139,7 +145,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
         {hasComponents && (
           <div className="ml-4 border-l pl-3 mt-0.5 space-y-0">
             {observation.component!.map((component, idx) => {
-              const cName = getAnalyteLabel(component)
+              const cName = getAnalyteDisplayForObs(component, audience, locale)
               const cValue = component.valueQuantity
                 ? getValueWithUnit(component.valueQuantity)
                 : component.valueString || '—'

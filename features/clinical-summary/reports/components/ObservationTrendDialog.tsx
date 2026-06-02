@@ -9,6 +9,9 @@ import { ObservationHistoryTable } from './ObservationHistoryTable'
 import { CompositeHistoryTable } from './CompositeHistoryTable'
 import { ReportHistoryList } from './ReportHistoryList'
 import type { Observation } from '../types'
+import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { useAudience } from '@/src/application/providers/audience.provider'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 interface ObservationTrendDialogProps {
   observation: Observation | null
@@ -20,7 +23,15 @@ interface ObservationTrendDialogProps {
 }
 
 export function ObservationTrendDialog({ observation, reportTitle, open, onOpenChange }: ObservationTrendDialogProps) {
+  const { audience } = useAudience()
+  const { locale } = useLanguage()
+  // History queries match against canonical via canonicalTestKeyFromString
+  // internally — pass the raw bridge text here so cross-institution name
+  // variants still collapse correctly. The dialog *title* below is audience-
+  // aware (canonical short code for medical, long-form translation for
+  // patient) so search and display can disagree without breaking either.
   const observationCode = observation?.code?.text || observation?.code?.coding?.[0]?.display
+  const dialogTitle = observation ? getAnalyteDisplayForObs(observation, audience, locale) : ''
   const isReportSummary = observation?.code?.text === 'Report Summary' && !!reportTitle
 
   // Text-based DiagnosticReport history (imaging, ECG, pathology) — chronological
@@ -79,7 +90,7 @@ export function ObservationTrendDialog({ observation, reportTitle, open, onOpenC
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
-            {observationCode || '檢驗項目'}
+            {dialogTitle || observationCode || '檢驗項目'}
           </DialogTitle>
           <div className="space-y-1 text-sm text-muted-foreground">
             {unit && <div>單位: {unit}</div>}
