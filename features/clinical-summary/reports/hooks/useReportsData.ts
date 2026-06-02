@@ -4,6 +4,11 @@ import type { DiagnosticReport, Observation, Row } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
 import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import {
+  LAB_CATEGORIES,
+  categorizeObservation,
+  compareTestsByPreferred,
+} from '@/src/shared/utils/lab-categories'
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -122,6 +127,29 @@ export function useReportsData(diagnosticReports: any[]) {
       // row — see bridge report 2026-05-29). Masking it on the app side
       // would hide the bridge bug from the user and from future audits.
       // See memory/feedback_no_masking_bridge_bugs.md for the standing rule.
+
+      // Sort obs by the dominant category's preferredOrder so panel rows
+      // render in clinical reading order (e.g. urinalysis panel: physical →
+      // chemistry → microscopy → ratio; CBC: counts → differential →
+      // indices) instead of whatever arbitrary order bridge emits.
+      // Single-obs DRs short-circuit (nothing to sort). Mixed-category DRs
+      // (rare) fall back to alphabetical ordering inside compareTestsByPreferred.
+      if (allObs.length > 1) {
+        const catCounts: Record<string, number> = {}
+        for (const o of allObs) {
+          const c = categorizeObservation(o)
+          if (c) catCounts[c.id] = (catCounts[c.id] || 0) + 1
+        }
+        const dominantId = Object.entries(catCounts)
+          .sort((a, b) => b[1] - a[1])[0]?.[0]
+        const dominantCat = dominantId
+          ? LAB_CATEGORIES.find((c) => c.id === dominantId)
+          : null
+        if (dominantCat) {
+          const cmp = compareTestsByPreferred(dominantCat)
+          allObs.sort((a, b) => cmp(getAnalyteLabel(a as any), getAnalyteLabel(b as any)))
+        }
+      }
 
       const summaryComponents: any[] = []
       if (attachments.length > 0) {
