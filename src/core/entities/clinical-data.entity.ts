@@ -234,6 +234,14 @@ export interface ObservationEntity {
     reference?: string
   }
   performer?: Array<{ display?: string; reference?: string }>
+  // Specimen routing signal (set by NHI-FHIR-Bridge based on the NHI 醫令碼).
+  // categorizeObservation uses this as the authoritative blood vs urine
+  // boundary; missing this field caused blood-typing / antibody / antigen
+  // tests to mis-route to urinalysis via Pass 6 qualitative fallback.
+  specimen?: {
+    display?: string
+    reference?: string
+  }
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

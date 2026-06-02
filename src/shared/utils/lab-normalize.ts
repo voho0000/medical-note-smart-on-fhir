@@ -164,6 +164,58 @@ export const TEST_ALIASES: Record<string, string> = {
   '全膽紅素': 'T.BILI', '膽紅素總量': 'T.BILI',
   '肌酐': 'CREA', '肌酸酐': 'CREA', '肌酸酐、血': 'CREA',
   '乳酸': 'LACTATE',
+
+  // ── Urinalysis text variants ─────────────────────────────────────────
+  // Bridge sends multiple text variants for the same urinalysis LOINC
+  // (e.g. 5811-5 specific gravity → both "SP.Gravity" and "比重"). These
+  // aliases collapse them onto the canonical urinalysis short code used
+  // in `urine.preferredOrder` / `urine.codes`. We deliberately do NOT add
+  // the underlying LOINCs (5778-6, 5811-5, 5794-3, 5799-2, 14957-5, 2161-8)
+  // to LOINC_TO_CANONICAL — keeping the canonical resolution text-based
+  // means bridge mis-tags (e.g. 5778-6 Color used for RBC/WBC/PH) stay
+  // visible as their own columns instead of silently merging.
+  // Color / 顏色
+  '顏色': 'COLOR',
+  // pH / 酸鹼值
+  '酸鹼值': 'PH',
+  // Specific gravity / 比重
+  '比重': 'GRAVIT', 'SP.Gravity': 'GRAVIT', 'SP.GRAVITY': 'GRAVIT',
+  'Specific Gravity': 'GRAVIT', 'SPECIFIC GRAVITY': 'GRAVIT',
+  // Turbidity / Appearance / 濁度
+  '濁度': 'TURBIDITY', 'Turbidity': 'TURBIDITY',
+  // Occult blood (urine) / 尿潛血 / Blood — bridge uses bare "Blood" for the
+  // urine dipstick occult-blood reading; in urinalysis context that's OCCULT.
+  '尿潛血': 'OCCULT', 'OCCULTBLOOD': 'OCCULT', 'Blood': 'OCCULT', 'BLOOD': 'OCCULT',
+  // Leukocyte esterase / 白血球酯脢 / WBC esterase
+  '白血球酯脢': 'LE', 'WBC esterase': 'LE', 'WBC ESTERASE': 'LE', 'WBCESTERASE': 'LE',
+  // Urine creatinine / 肌酐、尿 / Urine Creatinine — canonicalise to CREA so
+  // they merge with the bare-text 'Creatinine' obs that already alias to CREA
+  // via the chem CREATININE entry. Urine-tab CREA column is separate from
+  // chem-tab CREA column (each LabCategory has its own testMap).
+  '肌酐、尿': 'CREA', 'Urine Creatinine': 'CREA', 'URINE CREATININE': 'CREA', 'URINECREATININE': 'CREA',
+  // Microalbumin / Micro Albumin / MALB(U)
+  'Micro Albumin:': 'MALB', 'MICRO ALBUMIN:': 'MALB', 'Micro Albumin': 'MALB', 'MICRO ALBUMIN': 'MALB',
+  'MALB(U)(半定量)': 'MALB', 'MALB(U)': 'MALB',
+  // Urine protein / 尿蛋白
+  'Urine Protein': 'PROT', 'URINE PROTEIN': 'PROT', 'URINEPROTEIN': 'PROT', '尿蛋白': 'PROT',
+  // Bilirubin urine — '膽紅素' / 'Bilirubin' all collapse onto BILI (the
+  // urine pinned-column canonical). Serum bilirubin in chem uses its
+  // own LOINC route (1975-2 → T.BILI) so it's unaffected by these aliases.
+  '膽紅素': 'BILI', 'Bilirubin': 'BILI', 'BILIRUBIN': 'BILI',
+  // Urobilinogen / 尿膽素原 — canonicalise to UROBI (matches urine.preferredOrder)
+  '尿膽素原': 'UROBI', '尿膽素元': 'UROBI',
+  'Urobilinogen': 'UROBI', 'UROBILINOGEN': 'UROBI',
+  // Appearance — bridge uses "Appearance" / "Turbidity" / "濁度" for the same
+  // visual-clarity reading (LOINC 5767-9). All collapse to TURBIDITY.
+  'Appearance': 'TURBIDITY', 'APPEARANCE': 'TURBIDITY',
+  // ACR vs UACR — same albumin/creatinine ratio test.
+  'UACR': 'ACR',
+  // Glucose urine
+  '尿糖': 'GLUCOSE',
+  // Nitrite / 亞硝酸鹽
+  '亞硝酸鹽': 'NITRITE',
+  // Ketone / 酮體
+  '酮體': 'KETONE',
 }
 
 /**

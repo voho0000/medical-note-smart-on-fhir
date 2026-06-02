@@ -129,6 +129,15 @@ export class FhirMapper implements IDataMapper {
       effectiveDateTime: fhirResource.effectiveDateTime,
       status: fhirResource.status,
       category: fhirResource.category,
+      // Specimen is the authoritative blood/urine signal — bridge sets
+      // specimen.display='Blood' for serum analytes and ='Urine' for
+      // urinalysis. Without preserving this, categorizeObservation's
+      // Pass 1 specimen routing AND its specimenSaysBlood guard (for
+      // Pass 5 text-urine / Pass 6 qualitative fallbacks) both fail open,
+      // causing blood-typing/antibody/antigen tests like ABO, ANA,
+      // Influenza-Ag, SARS-CoV-2-Ag, 隱球菌抗原 with qualitative values
+      // (`+`, `Negative`) to mis-route to the urinalysis tab.
+      specimen: fhirResource.specimen,
       encounter: fhirResource.encounter,
       performer: fhirResource.performer,
       referenceRange: fhirResource.referenceRange,

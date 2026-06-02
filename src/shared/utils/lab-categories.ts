@@ -186,11 +186,47 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'urine',
-    preferredOrder: ['COLOR', 'PH', 'SUGAR', 'TRANS', 'BILI', 'PROT', 'KETON', 'KETONE', 'UROBI', 'GRAVIT', 'NITRIT', 'NITRITE', 'OCCULT', 'WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'],
+    // Column order — clinical urinalysis report convention, left to right:
+    //   1. Physical inspection  (COLOR → APPEARANCE/TURBIDITY → GRAVIT → PH)
+    //   2. Chemistry dipstick   (PROT → GLUCOSE → KETONE → BILI → UROBI →
+    //                            NITRITE → LE → OCCULT) — metabolic markers
+    //                            first, infection markers after
+    //   3. Microscopy           (WBC → RBC → EPITH CELL → CASTS → CRYSTALS)
+    //   4. Quantitative ratios  (MALB → CREA → ACR; PROT(SPOT) → CR(SPOT) →
+    //                            PROT/CR RATIO; CALB(SPOT) → ALB/CR RATIO)
+    // Within each section: clinically-frequent items first, rarer at tail.
+    // Each canonical key listed here is normalize()d at sort time, so case +
+    // punctuation variants (e.g. 'GRAVIT' vs 'GRAVITY' vs 'SP.GRAVITY') don't
+    // need explicit duplicate entries when they collapse to the same key.
+    preferredOrder: [
+      // ── Physical ────────────────────────────────────────────
+      'COLOR', 'APPEARANCE', 'TURBIDITY', 'TRANS', 'TRANSPARENT',
+      'GRAVIT', 'GRAVITY', 'SP.GRAVITY',
+      'PH',
+      // ── Chemistry (dipstick) ────────────────────────────────
+      'PROT', 'PROTEIN',
+      'GLUCOSE', 'SUGAR',
+      'KETONE', 'KETON',
+      'BILI', 'BILIRUBIN',
+      'UROBI', 'UROBILINOGEN',
+      'NITRITE', 'NITRIT',
+      'LE',
+      'OCCULT', 'OCCULT BLOOD', 'BLOOD',
+      // ── Microscopic ─────────────────────────────────────────
+      'WBC', 'WBCPUS', 'WBC/HPF',
+      'RBC', 'RBC/HPF',
+      'EPITH', 'EPITH CELL', 'EPITHELIAL CELL',
+      'CAST1', 'CAST2', 'CAST3', 'CASTS',
+      'CRYS1', 'CRYS2', 'CRYS3', 'CRYSTAL', 'BACTERIA',
+      // ── Quantitative / ratio ────────────────────────────────
+      'MALB', 'MALB(U)',
+      'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'CREA',
+      'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR',
+    ],
     // Note: SUGAR is NOT in urine codes — some clinics report blood glucose as
     // "Sugar". Urine dipstick sugar is detected via the qualitative-value
     // heuristic (Negative/+/++/etc.) earlier in categorizeObservation.
-    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR', 'MALB', 'MALB(U)'],
+    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR', 'MALB', 'MALB(U)', 'LE'],
     // 2026-05-29 additions (verified at loinc.org): 5792-7 Urine glucose,
     // 5818-0 Urobilinogen urine, 5770-3 Bilirubin urine, 14957-5 Microalbumin
     // urine, 14959-1 Microalbumin/Creatinine ratio. These were previously
@@ -199,10 +235,10 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // allowlist directly.
     loincCodes: ['5778-6', '5803-2', '5774-5', '5767-9', '5797-6', '5804-0', '5802-4', '5794-3', '5811-5', '5799-2', '20454-5', '5821-4', '5808-1', '5792-7', '5818-0', '5770-3', '14957-5', '14959-1', '2161-8'],
     subgroups: [
-      { id: 'physical',  members: ['COLOR', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'PH'] },
-      { id: 'chemical',  members: ['SUGAR', 'GLUCOSE', 'PROT', 'PROTEIN', 'KETON', 'KETONE', 'T.BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'BLOOD'] },
-      { id: 'micro',     members: ['WBC', 'RBC', 'WBCPUS', 'EPITH', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3'] },
-      { id: 'ratio',     members: ['PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO'] },
+      { id: 'physical',  members: ['COLOR', 'APPEARANCE', 'TURBIDITY', 'TRANS', 'TRANSPARENT', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PH'] },
+      { id: 'chemical',  members: ['PROT', 'PROTEIN', 'GLUCOSE', 'SUGAR', 'KETONE', 'KETON', 'BILI', 'BILIRUBIN', 'UROBI', 'UROBILINOGEN', 'NITRITE', 'NITRIT', 'LE', 'OCCULT', 'BLOOD'] },
+      { id: 'micro',     members: ['WBC', 'WBCPUS', 'RBC', 'EPITH', 'EPITH CELL', 'CAST1', 'CAST2', 'CAST3', 'CASTS', 'CRYS1', 'CRYS2', 'CRYS3', 'CRYSTAL', 'BACTERIA'] },
+      { id: 'ratio',     members: ['MALB', 'MALB(U)', 'CREA', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR'] },
     ],
     pinnedColumns: ['COLOR', 'PH', 'GRAVIT', 'PROT', 'GLUCOSE', 'KETONE', 'BILI', 'UROBI', 'NITRITE', 'OCCULT'],
   },
