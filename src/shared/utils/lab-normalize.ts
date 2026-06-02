@@ -60,8 +60,12 @@ export const TEST_ALIASES: Record<string, string> = {
   GGT: 'GGT', 'G-GT': 'GGT', 'GAMMA GT': 'GGT', 'GAMMA-GT': 'GGT',
   'ALK-P': 'ALK-P', ALKP: 'ALK-P', 'ALKALINE PHOSPHATASE': 'ALK-P',
   LDH: 'LDH', 'LACTATE DEHYDROGENASE': 'LDH',
-  // Bilirubin
-  'T.BILI': 'T.BILI', 'T.BILI.': 'T.BILI', TBILI: 'T.BILI', BILIT: 'T.BILI', 'TOTAL BILIRUBIN': 'T.BILI', BILIRUBIN: 'T.BILI',
+  // Bilirubin (serum) — bare 'BILIRUBIN' is deliberately NOT mapped here.
+  // The urine-section block below also has 'BILIRUBIN': 'BILI', and a flat
+  // Record can only hold one (latter wins at runtime — tsc TS1117 errors
+  // if both are present). Serum bilirubin text-fallback relies on LOINC
+  // 1975-2 (in LOINC_TO_CANONICAL → T.BILI) and the explicit variants below.
+  'T.BILI': 'T.BILI', 'T.BILI.': 'T.BILI', TBILI: 'T.BILI', BILIT: 'T.BILI', 'TOTAL BILIRUBIN': 'T.BILI',
   'D.BILI': 'D.BILI', DBILI: 'D.BILI', 'DIRECT BILIRUBIN': 'D.BILI',
   // Protein
   TP: 'TP', 'TOTAL PROTEIN': 'TP',
