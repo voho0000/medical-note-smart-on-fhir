@@ -37,7 +37,15 @@ export interface LabCategory {
 export const LAB_CATEGORIES: LabCategory[] = [
   {
     id: 'cbc',
-    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'ANC'],
+    // Differential order — clinical reading convention puts mature
+    // neutrophils first (NEU, the bridge canonical that SEG / SEG. /
+    // Segmented / 嗜中性白血球 all collapse to via TEST_ALIASES), then
+    // immature band-form (BAND), then the other lineages in decreasing
+    // frequency: LYM → MONO → EOS → BASO. ANC tails as a derived value.
+    // Only canonical keys go here — variants like SEG / NEU. / LYM. are
+    // dead entries because getAnalyteLabel always returns the canonical
+    // (see memory/feedback_canonical_only_in_preferredorder.md).
+    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'PLT', 'MPV', 'NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC'],
     // `codes` covers VGH short-form (WBC/RBC/…) AND long-form display
     // names (BASOPHIL/EOSINOPHIL/…) that bridge v0.9.9+ emits for the
     // differential cells. Long-form catches cases where the LOINC isn't
@@ -54,8 +62,8 @@ export const LAB_CATEGORIES: LabCategory[] = [
     loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4', '713-8', '5905-5', '57021-8'],
     subgroups: [
       { id: 'counts',  members: ['WBC', 'RBC', 'HB', 'PLT', 'MPV'] },
-      { id: 'diff',    members: ['SEG', 'NEU', 'NEU.', 'LYM', 'LYM.', 'MONO', 'MONO.', 'EOS', 'EOS.', 'BASO', 'BASO.', 'BAND', 'ANC'] },
-      { id: 'indices', members: ['HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV'] },
+      { id: 'diff',    members: ['NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC'] },
+      { id: 'indices', members: ['HCT', 'MCV', 'MCH', 'MCHC', 'RDW'] },
     ],
     pinnedColumns: ['WBC', 'RBC', 'HB', 'PLT', 'HCT', 'MCV', 'NEU', 'LYM', 'MONO', 'EOS', 'BASO'],
   },
@@ -77,28 +85,40 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'chem',
-    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CRP', 'FIB-4'],
-    codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE'],
-    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '1988-5', '30522-7', '1759-0', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8'],
+    // Inflammation tail (CRP → PCT → ESR → LACTATE → FIB-4) follows
+    // clinical reading habit: acute-phase reactants first (CRP/PCT used
+    // together for bacterial vs viral discrimination), then ESR for
+    // sub-acute / autoimmune, then LACTATE for sepsis/shock context.
+    // FIB-4 (calculated liver fibrosis index) tails because it's derived.
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4'],
+    codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE'],
+    // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
+    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '1988-5', '30522-7', '1759-0', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8'],
     subgroups: [
       { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA'] },
-      { id: 'electrolyte', members: ['NA', 'K', 'CA', 'IP'] },
+      { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CA', 'IP'] },
       { id: 'liver',       members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB'] },
       { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
     ],
+    // CL deliberately not pinned — most ambulatory chem panels don't include
+    // chloride, so pinning would create persistent empty columns. When a
+    // hospital does report it, the data-presence rule will surface the column.
     pinnedColumns: ['BUN', 'CREA', 'EGFR', 'UA', 'NA', 'K', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'ALB'],
   },
   {
     id: 'endocrine',
     preferredOrder: [
       // Thyroid
-      'TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'FT4', 'FT3', 'RT3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN',
+      'TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'RT3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN',
       // Parathyroid / Bone
       'PTH', 'VITAMIN D', '25-OH VITAMIN D', 'CALCITONIN',
       // Adrenal
       'CORTISOL', 'ACTH', 'ALDOSTERONE', 'RENIN', 'DHEA-S',
-      // Sex hormones
-      'LH', 'FSH', 'E2', 'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'PROLACTIN', 'AMH', 'SHBG',
+      // Sex hormones — PRL is the canonical that PROLACTIN aliases to in
+      // TEST_ALIASES; using 'PROLACTIN' here would never match a sorted
+      // label (getAnalyteLabel always returns PRL), per
+      // memory/feedback_canonical_only_in_preferredorder.md.
+      'LH', 'FSH', 'E2', 'PROGESTERONE', 'TESTOSTERONE', 'PRL', 'AMH', 'SHBG',
       // Diabetes
       'INSULIN', 'C-PEPTIDE',
       // Growth
@@ -141,10 +161,10 @@ export const LAB_CATEGORIES: LabCategory[] = [
       '2484-4', '2963-7',
     ],
     subgroups: [
-      { id: 'thyroid',  members: ['TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'FT4', 'FT3', 'RT3', 'REVERSE T3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN', 'TRAB', 'TBII'] },
+      { id: 'thyroid',  members: ['TSH', 'FREE T4', 'FREE T3', 'T4', 'T3', 'RT3', 'ANTI-TPO', 'ANTI-TG', 'THYROGLOBULIN', 'TRAB', 'TBII'] },
       { id: 'parathy',  members: ['PTH', 'I-PTH', 'INTACT PTH', 'VITAMIN D', '25-OH-D', '25(OH)D', '25-OH VITAMIN D', 'CALCITONIN'] },
       { id: 'adrenal',  members: ['CORTISOL', 'ACTH', 'ALDOSTERONE', 'RENIN', 'PRA', 'DHEA', 'DHEA-S', 'DHEAS'] },
-      { id: 'sexhorm',  members: ['LH', 'FSH', 'E2', 'ESTRADIOL', 'PROGESTERONE', 'TESTOSTERONE', 'FREE TESTOSTERONE', 'PROLACTIN', 'PRL', 'AMH', 'SHBG'] },
+      { id: 'sexhorm',  members: ['LH', 'FSH', 'E2', 'PROGESTERONE', 'TESTOSTERONE', 'FREE TESTOSTERONE', 'PRL', 'AMH', 'SHBG'] },
       { id: 'pancreas', members: ['INSULIN', 'C-PEPTIDE'] },
       { id: 'pituitary',members: ['GH', 'IGF-1', 'IGF1'] },
     ],
@@ -171,15 +191,22 @@ export const LAB_CATEGORIES: LabCategory[] = [
     id: 'hep',
     // Routine B 肝 screen = HBsAg + Anti-HBs + Anti-HBc (distinguishes vaccine
     // vs natural immunity). HBeAg/Anti-HBe only ordered for known HBsAg(+)
-    // carriers; HBcAg not routinely tested in serum. Anti-HCV for C 肝.
-    preferredOrder: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HCV', 'HBCAG', 'HBEAG', 'ANTI-HBE'],
+    // carriers; HBcAg not routinely tested in serum. Anti-HCV for C 肝 — tails
+    // at the end so the full B 肝 panel reads contiguously before the
+    // clinician's eye jumps to a different virus.
+    preferredOrder: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'HBEAG', 'ANTI-HBE', 'HBCAG', 'ANTI-HCV'],
     codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HBS', 'HBCAG', 'HBC AG', 'HBC-AG', 'ANTI-HBC', 'HBEAG', 'HBE AG', 'HBE-AG', 'ANTI-HBE', 'ANTI-HCV'],
     loincCodes: ['5195-3', '5193-8', '13954-3', '13955-0', '13499-9', '22322-2', '16934-2'],
     pinnedColumns: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HCV'],
   },
   {
     id: 'tumor',
-    preferredOrder: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'FPSA/PSA', 'FPSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'PIVKA-II', 'PIVKA'],
+    // F-PSA is the canonical that FPSA / PSA-F / FREE PSA all alias to in
+    // TEST_ALIASES — using 'FPSA' here would never match a sorted label
+    // (see memory/feedback_canonical_only_in_preferredorder.md). CA-125 /
+    // CA-153 / CA-199 are likewise canonical for the various hyphen / space
+    // variants their aliases collapse to.
+    preferredOrder: ['AFP', 'CEA', 'CA-125', 'CA-153', 'CA-199', 'PSA', 'FPSA/PSA', 'F-PSA', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'PIVKA-II', 'PIVKA'],
     codes: ['AFP', 'CEA', 'CA-125', 'CA125', 'CA-153', 'CA153', 'CA-199', 'CA199', 'CA19-9', 'PSA', 'TPSA', 'T-PSA', 'PSA(T)', 'PSA-T', 'FPSA/PSA', 'FPSA', 'F-PSA', 'PSA-F', 'FERRITIN', 'B2M', 'SCC', 'HCG', 'B-HCG', 'BETA-HCG', 'FB_HCG', 'HTG', 'CALCITONIN', 'CA72_4', 'CA72-4', 'CYF21_1', 'CYFRA21-1', 'NSE', 'TPA', 'PIVKA-II', 'PIVKA'],
     loincCodes: ['1834-1', '2039-6', '10334-1', '24108-3', '2857-1', '10886-0', '24467-3', '47238-1', '83112-3', '19201-2', '53764-7', '15067-2', '15083-9', '47239-9'],
     pinnedColumns: ['AFP', 'CEA', 'CA-199', 'CA-125', 'CA-153', 'PSA', 'FERRITIN'],

@@ -6,9 +6,26 @@ import { inferGroupFromCategory } from '../utils/grouping-helpers'
 import { getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
 import {
   LAB_CATEGORIES,
-  categorizeObservation,
   compareTestsByPreferred,
+  type LabCategory,
 } from '@/src/shared/utils/lab-categories'
+
+// canonical analyte key (normalized) → owning LabCategory, derived from each
+// category's preferredOrder. Used to pick a dominant category for panel sort
+// using the SAME canonical resolution as the rendered row labels — so when
+// bridge sends Chinese text without LOINC ("白血球計數" → WBC via TEST_ALIASES),
+// the sort still kicks in even though categorizeObservation can't match those
+// Chinese strings against its English-only codes[] / LOINC allowlist.
+const CANONICAL_TO_CATEGORY: Map<string, LabCategory> = (() => {
+  const m = new Map<string, LabCategory>()
+  for (const cat of LAB_CATEGORIES) {
+    for (const k of cat.preferredOrder || []) {
+      const norm = k.trim().toUpperCase()
+      if (!m.has(norm)) m.set(norm, cat)
+    }
+  }
+  return m
+})()
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -134,20 +151,35 @@ export function useReportsData(diagnosticReports: any[]) {
       // indices) instead of whatever arbitrary order bridge emits.
       // Single-obs DRs short-circuit (nothing to sort). Mixed-category DRs
       // (rare) fall back to alphabetical ordering inside compareTestsByPreferred.
+      //
+      // We resolve each obs's canonical analyte key via getAnalyteLabel (the
+      // same path the row label uses) and look the category up from
+      // CANONICAL_TO_CATEGORY. categorizeObservation is intentionally NOT used
+      // here — its allowlist is English short codes + LOINC only, so bridges
+      // that send Chinese display text with NHI codes ("白血球計數" / NHI
+      // 08002C, no LOINC) would categorise as null and skip the sort even
+      // though the rows still render as canonical WBC/RBC/… via the Chinese
+      // aliases in TEST_ALIASES.
+      const labels: string[] = allObs.length > 1 ? allObs.map(o => getAnalyteLabel(o as any)) : []
       if (allObs.length > 1) {
         const catCounts: Record<string, number> = {}
-        for (const o of allObs) {
-          const c = categorizeObservation(o)
-          if (c) catCounts[c.id] = (catCounts[c.id] || 0) + 1
+        const catMap: Record<string, LabCategory> = {}
+        for (const label of labels) {
+          const cat = CANONICAL_TO_CATEGORY.get(label.trim().toUpperCase())
+          if (cat) {
+            catCounts[cat.id] = (catCounts[cat.id] || 0) + 1
+            catMap[cat.id] = cat
+          }
         }
         const dominantId = Object.entries(catCounts)
           .sort((a, b) => b[1] - a[1])[0]?.[0]
-        const dominantCat = dominantId
-          ? LAB_CATEGORIES.find((c) => c.id === dominantId)
-          : null
+        const dominantCat = dominantId ? catMap[dominantId] : null
         if (dominantCat) {
           const cmp = compareTestsByPreferred(dominantCat)
-          allObs.sort((a, b) => cmp(getAnalyteLabel(a as any), getAnalyteLabel(b as any)))
+          const indexed = allObs.map((o, i) => ({ o, label: labels[i] }))
+          indexed.sort((a, b) => cmp(a.label, b.label))
+          allObs.length = 0
+          for (const { o } of indexed) allObs.push(o)
         }
       }
 

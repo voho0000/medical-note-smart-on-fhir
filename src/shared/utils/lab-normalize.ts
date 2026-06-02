@@ -263,6 +263,7 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   // ── Electrolytes / minerals ───────────────────────────────
   '2951-2':  'NA',            // NHI 09021C — Sodium Moles/vol S/P
   '2823-3':  'K',             // NHI 09022C — Potassium Moles/vol S/P
+  '2075-0':  'CL',            // Chloride Moles/vol S/P — verified loinc.org 2026-06-02
   '17861-6': 'CA',            // NHI 09011C — Calcium Mass/vol S/P
   '2777-1':  'IP',            // NHI 09012C — Phosphate Mass/vol S/P
 
