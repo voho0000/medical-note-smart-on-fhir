@@ -10,6 +10,7 @@ import { getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
+import { FormattedReportText } from './FormattedReportText'
 
 interface ReportRowProps {
   row: Row
@@ -114,7 +115,13 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
     const interp = getInterpretationTag(obs.interpretation)
     const isAbnormal = (!!interp && interp.label !== 'Normal') || checkReferenceRangeAbnormal(obs)
     const refText = getReferenceRangeText(obs.referenceRange)
-    const isLongText = !obs.valueQuantity && (obs.valueString?.length ?? 0) > 80
+    // Synthetic narrative obs from text-based DiagnosticReports (imaging / ECG /
+    // pathology) carry code.text === 'Report Summary'. These are ALWAYS routed to
+    // the expandable long-text branch regardless of length — a short ECG
+    // conclusion ("Sinus rhythm") must still be fully readable + expandable, not
+    // truncated to one line behind a hover tooltip like a short lab string value.
+    const isReportSummary = obs.code?.text === 'Report Summary'
+    const isLongText = !obs.valueQuantity && ((obs.valueString?.length ?? 0) > 80 || isReportSummary)
 
     const dateLabel = formatDisplayDate(row.effectiveDate, row.showTime)
     const metaWithDate = row.meta + (dateLabel ? ` • ${dateLabel}` : '')
@@ -185,17 +192,16 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                 />
               </div>
             </div>
-            <p
-              className={cn(
-                'text-xs text-foreground/80 leading-relaxed',
-                textExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1 cursor-pointer'
-              )}
-              onClick={() => {
-                if (!textExpanded) setTextExpanded(true)
-              }}
-            >
-              {textExpanded ? fullText : obs.valueString}
-            </p>
+            {textExpanded ? (
+              <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
+            ) : (
+              <p
+                className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80"
+                onClick={() => setTextExpanded(true)}
+              >
+                {obs.valueString}
+              </p>
+            )}
             {textExpanded && (
               <div className="mt-1">
                 <button
@@ -226,6 +232,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
             <ObservationTrendDialog
               observation={firstObs}
               reportTitle={row.title}
+              reportLookupTitle={row.rawTitle}
               open={trendDialogOpen}
               onOpenChange={setTrendDialogOpen}
             />
@@ -331,6 +338,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
           <ObservationTrendDialog
             observation={firstObs}
             reportTitle={row.title}
+            reportLookupTitle={row.rawTitle}
             open={trendDialogOpen}
             onOpenChange={setTrendDialogOpen}
           />
@@ -415,6 +423,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
         <ObservationTrendDialog
           observation={firstObs}
           reportTitle={row.title}
+          reportLookupTitle={row.rawTitle}
           open={trendDialogOpen}
           onOpenChange={setTrendDialogOpen}
         />

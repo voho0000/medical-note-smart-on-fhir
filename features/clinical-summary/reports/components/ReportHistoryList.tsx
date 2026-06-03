@@ -1,5 +1,6 @@
 import { Building2 } from 'lucide-react'
 import type { ReportHistoryItem } from '../hooks/useObservationHistory'
+import { FormattedReportText } from './FormattedReportText'
 
 interface ReportHistoryListProps {
   data: ReportHistoryItem[]
@@ -37,14 +38,16 @@ export function ReportHistoryList({ data }: ReportHistoryListProps) {
             )}
           </div>
           {item.conclusion && (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
-              {item.conclusion}
-            </p>
+            <FormattedReportText
+              text={item.conclusion}
+              className="text-sm leading-relaxed text-foreground/90"
+            />
           )}
           {item.notes.length > 0 && (
-            <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-              {item.notes.join('\n\n')}
-            </div>
+            <FormattedReportText
+              text={item.notes.join('\n\n')}
+              className="mt-2 text-sm leading-relaxed text-muted-foreground"
+            />
           )}
         </div>
       ))}

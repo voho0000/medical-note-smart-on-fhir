@@ -15,14 +15,19 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 
 interface ObservationTrendDialogProps {
   observation: Observation | null
-  /** Report title (DR code text) — supplied when invoked from a text-based
-   *  DiagnosticReport row whose firstObs is a synthetic "Report Summary". */
+  /** Display title shown in the dialog header — supplied when invoked from a
+   *  text-based DiagnosticReport row whose firstObs is a synthetic "Report
+   *  Summary". May be audience/language-enhanced (e.g. "心電圖 (ECG)"). */
   reportTitle?: string
+  /** Raw bridge title (DiagnosticReport.code.text) used as the history lookup
+   *  key. useReportHistory matches this EXACTLY against DR.code.text, so it must
+   *  be the un-enhanced value — falls back to reportTitle when not supplied. */
+  reportLookupTitle?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function ObservationTrendDialog({ observation, reportTitle, open, onOpenChange }: ObservationTrendDialogProps) {
+export function ObservationTrendDialog({ observation, reportTitle, reportLookupTitle, open, onOpenChange }: ObservationTrendDialogProps) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
   // History queries match against canonical via canonicalTestKeyFromString
@@ -35,8 +40,10 @@ export function ObservationTrendDialog({ observation, reportTitle, open, onOpenC
   const isReportSummary = observation?.code?.text === 'Report Summary' && !!reportTitle
 
   // Text-based DiagnosticReport history (imaging, ECG, pathology) — chronological
-  // list of conclusion text instead of numeric trend.
-  const reportHistory = useReportHistory(isReportSummary ? reportTitle : undefined)
+  // list of conclusion text instead of numeric trend. Look up by the RAW bridge
+  // title (reportLookupTitle): the display `reportTitle` may carry an appended
+  // abbreviation ("心電圖 (ECG)") that no longer matches DiagnosticReport.code.text.
+  const reportHistory = useReportHistory(isReportSummary ? (reportLookupTitle || reportTitle) : undefined)
 
   // Check if observation has components (like Blood Pressure with SBP/DBP)
   const hasComponents = observation?.component && observation.component.length > 0

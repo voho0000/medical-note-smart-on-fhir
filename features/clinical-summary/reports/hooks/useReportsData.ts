@@ -287,6 +287,12 @@ export function useReportsData(diagnosticReports: any[]) {
       rows.push({
         id: head.id || Math.random().toString(36),
         title: deriveGroupTitle(displayTitle),
+        // Raw bridge title (pre-display-enhancement) for history lookups —
+        // useReportHistory matches this exactly against DiagnosticReport.code.text,
+        // which `title` (e.g. "心電圖 (ECG)") no longer equals once an abbreviation
+        // or translation is appended. Falls back to displayTitle when groupText is
+        // empty so the lookup key is never blank.
+        rawTitle: groupText || deriveGroupTitle(displayTitle),
         meta: `${category || 'Laboratory'} • ${head.status || '—'}`,
         obs: obsWithSummary,
         group: inferGroupFromCategory(head.category),

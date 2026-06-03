@@ -16,6 +16,12 @@ export type ReportGroup = "lab" | "imaging" | "procedures" | "vitals" | "other"
 export type Row = {
   id: string
   title: string
+  /** Raw bridge report title (DiagnosticReport.code.text), BEFORE any
+   *  audience/language display enhancement. `title` is the rendered string and
+   *  may carry an appended abbreviation/translation (e.g. "心電圖 (ECG)");
+   *  history lookups (useReportHistory) must key off this raw value so the
+   *  exact match against DiagnosticReport.code.text still succeeds. */
+  rawTitle?: string
   meta: string
   obs: Observation[]
   group: ReportGroup
