@@ -1,6 +1,6 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
-import type { DiagnosticReport, Observation, Row } from '../types'
+import type { DiagnosticReport, Observation, Row, ReportImage } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
 import { getAnalyteLabel, getAnalyteCanonicalKey, getAnalyteDisplayLabel, CANONICAL_DISPLAY } from '@/src/shared/utils/lab-normalize'
@@ -79,6 +79,7 @@ export function useReportsData(diagnosticReports: any[]) {
       const groupText = (getCodeableConceptText(head.code) || '').trim()
       const summaryParts: string[] = []
       const attachments: string[] = []
+      const images: ReportImage[] = []
       const allObs: Observation[] = []
 
       for (const dr of grp) {
@@ -124,13 +125,37 @@ export function useReportsData(diagnosticReports: any[]) {
 
         if (Array.isArray(dr.presentedForm)) {
           for (const form of dr.presentedForm) {
+            // Image (bridge v0.14.0+): hand it to the lazy viewer instead of
+            // listing it as a text attachment. Decoding/rendering happens on
+            // demand in the dialog. Two sources:
+            //  - `_imageRef`: bytes live off-heap in IndexedDB (local-bundle
+            //    import path); the viewer fetches the Blob by this key.
+            //  - `data`: raw base64 inline (SMART live path).
+            if (form?._imageRef) {
+              images.push({
+                ref: form._imageRef,
+                contentType: form.contentType || 'image/jpeg',
+                title: form.title,
+                size: form.size,
+              })
+              continue
+            }
+            if (form?.data && (form.contentType || '').startsWith('image/')) {
+              images.push({
+                data: form.data,
+                contentType: form.contentType || 'image/jpeg',
+                title: form.title,
+                size: form.size,
+              })
+              continue
+            }
             const t = form?.title || form?.contentType
             if (t) attachments.push(t)
           }
         }
       }
 
-      if (allObs.length === 0 && summaryParts.length === 0 && attachments.length === 0) continue
+      if (allObs.length === 0 && summaryParts.length === 0 && attachments.length === 0 && images.length === 0) continue
 
       // NOTE: Do NOT add UI dedup here even when bridge double-emits the same
       // measurement (e.g. 長庚嘉義 emitting both '鈉' + 'Na' for one source
@@ -192,12 +217,20 @@ export function useReportsData(diagnosticReports: any[]) {
       }
 
       const obsWithSummary: Observation[] = [...allObs]
-      if (summaryParts.length > 0 || attachments.length > 0) {
+      // Create a synthetic "Report Summary" obs when the DR contributes
+      // report-level content with no linked observations: conclusion text,
+      // non-image attachments, OR inline images. The image-only case (X-ray /
+      // ECG with empty conclusion) still needs a row to host the title + image
+      // indicator, so we create the summary obs with empty valueString — the
+      // image button on the header carries the affordance, ReportRow renders no
+      // empty expandable when there's no text.
+      if (summaryParts.length > 0 || attachments.length > 0 || images.length > 0) {
+        const summaryValue = summaryParts.join('\n\n')
         const summaryObservation: Observation = {
           resourceType: 'Observation',
           id: head.id ? `dr-summary-${head.id}` : `dr-summary-${Math.random().toString(36).slice(2, 10)}`,
           code: { text: 'Report Summary' },
-          valueString: summaryParts.join('\n\n') || 'Supporting documents available',
+          valueString: summaryValue || (attachments.length > 0 ? 'Supporting documents available' : ''),
           effectiveDateTime: head.effectiveDateTime || head.issued,
           status: head.status,
           component: summaryComponents,
@@ -303,6 +336,7 @@ export function useReportsData(diagnosticReports: any[]) {
         group: inferGroupFromCategory(head.category),
         institution,
         effectiveDate: rawDate,
+        images: images.length > 0 ? images : undefined,
       })
     }
 

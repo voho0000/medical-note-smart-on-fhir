@@ -1,14 +1,209 @@
 // LocalBundleService
-// Stores a FHIR Bundle in localStorage and parses it into domain entities.
+// Stores a FHIR Bundle and parses it into domain entities.
 // When a bundle is present, query hooks use it instead of the live FHIR server.
 // Encounter grouping: resources without encounter reference are matched by same-day date.
+//
+// Storage layout (changed in v0.5.x for imaging support):
+//   - The full bundle JSON lives in IndexedDB (large quota — bundles with
+//     inlined base64 imaging can be 16MB+, well over localStorage's ~5MB cap
+//     which throws QuotaExceededError on setItem).
+//   - A tiny presence marker stays in localStorage so `hasData()` can remain
+//     synchronous (it gates the whole data-source decision during render and
+//     must not become a promise).
+//   - The bundle is also cached in a module-level variable for the session so
+//     repeated reads don't hit IndexedDB.
+//   - Bundles written by older builds (full JSON under the same localStorage
+//     key) are migrated to IndexedDB transparently on first read.
 
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 
+// localStorage key. Holds the small marker `'1'` in the current scheme, but may
+// still hold a full bundle JSON written by an older build (migrated on read).
 const STORAGE_KEY = 'fhir_bundle_override'
+const MARKER = '1'
+
+// IndexedDB coordinates for the bundle payload.
+const DB_NAME = 'mediprisma'
+const DB_VERSION = 2
+const STORE = 'bundles'
+const BUNDLE_KEY = 'current'
+// Separate store for inline imaging. At import we move each base64 image out of
+// the bundle into a Blob here (off-heap, disk-backed) and leave only a reference
+// (`_imageRef`) behind. This keeps hundreds of MB of imaging off the JS heap —
+// the bundle/entities stay small and the bytes are fetched on demand (when the
+// user opens the viewer). See ReportImageDialog.
+const IMG_STORE = 'images'
+
+// Session cache: avoids re-reading IndexedDB on every query. Module-level so it
+// is shared across all hook instances in the same tab.
+let memBundle: object | null = null
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE)
+      if (!db.objectStoreNames.contains(IMG_STORE)) db.createObjectStore(IMG_STORE)
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+/** Decode raw base64 → binary Blob. Tolerates a stray `data:<mime>;base64,`
+ *  prefix even though the bridge omits it. The intermediate Uint8Array is
+ *  per-image and short-lived; the resulting Blob is off-heap (disk-backed). */
+function base64ToBlob(base64: string, contentType: string): Blob {
+  const raw = base64.includes(',') ? base64.slice(base64.indexOf(',') + 1) : base64
+  const binary = atob(raw)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: contentType || 'image/jpeg' })
+}
+
+async function idbPut(value: unknown): Promise<void> {
+  const db = await openDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite')
+      tx.objectStore(STORE).put(value, BUNDLE_KEY)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+async function idbGet<T = unknown>(): Promise<T | null> {
+  const db = await openDb()
+  try {
+    return await new Promise<T | null>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly')
+      const req = tx.objectStore(STORE).get(BUNDLE_KEY)
+      req.onsuccess = () => resolve((req.result as T) ?? null)
+      req.onerror = () => reject(req.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+async function idbDelete(): Promise<void> {
+  const db = await openDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite')
+      tx.objectStore(STORE).delete(BUNDLE_KEY)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+// --- Image Blob store ---------------------------------------------------------
+
+async function idbClearImages(): Promise<void> {
+  const db = await openDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IMG_STORE, 'readwrite')
+      tx.objectStore(IMG_STORE).clear()
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+// Persist all extracted image Blobs in a single transaction (one DB open for
+// the whole import, not one per image).
+async function idbPutImages(items: Array<{ id: string; blob: Blob }>): Promise<void> {
+  if (!items.length) return
+  const db = await openDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IMG_STORE, 'readwrite')
+      const store = tx.objectStore(IMG_STORE)
+      for (const { id, blob } of items) store.put(blob, id)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+async function idbGetImage(id: string): Promise<Blob | null> {
+  const db = await openDb()
+  try {
+    return await new Promise<Blob | null>((resolve, reject) => {
+      const tx = db.transaction(IMG_STORE, 'readonly')
+      const req = tx.objectStore(IMG_STORE).get(id)
+      req.onsuccess = () => resolve((req.result as Blob) ?? null)
+      req.onerror = () => reject(req.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+// Pure (no IndexedDB): walk a bundle's DiagnosticReports and move every inline
+// base64 image out of `presentedForm[].data`, leaving a `_imageRef` pointer
+// behind. Mutates `bundle` in place so the retained copy (memBundle + the JSON
+// persisted to IndexedDB) carries references, not megabytes of base64. Returns
+// the decoded Blobs (keyed by the assigned ref) for the caller to persist.
+// Non-image attachments and reports without images are untouched. If a base64
+// payload fails to decode it is LEFT INLINE (the viewer falls back to decoding
+// `data` directly) rather than dropped — we never silently lose data.
+export function prepareImagesForStorage(bundle: any): Array<{ id: string; blob: Blob }> {
+  const entries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
+  const toStore: Array<{ id: string; blob: Blob }> = []
+  let counter = 0
+
+  for (const e of entries) {
+    const res = e?.resource
+    if (res?.resourceType !== 'DiagnosticReport' || !Array.isArray(res.presentedForm)) continue
+    for (const form of res.presentedForm) {
+      const data = form?.data
+      const ct: string = form?.contentType || ''
+      if (typeof data !== 'string' || data.length === 0 || !ct.startsWith('image/')) continue
+      let blob: Blob
+      try {
+        blob = base64ToBlob(data, ct)
+      } catch {
+        continue // malformed base64 — leave inline for the viewer to attempt
+      }
+      const id = `img_${counter++}`
+      toStore.push({ id, blob })
+      delete form.data
+      form._imageRef = id
+      if (form.size == null) form.size = blob.size
+    }
+  }
+  return toStore
+}
+
+// Strip images out of the bundle (in place) and persist them to the IndexedDB
+// image store. Always clears the previous import's images first (even when this
+// import has none) so stale Blobs don't accumulate.
+async function extractAndStoreImages(bundle: any): Promise<void> {
+  if (typeof indexedDB === 'undefined') return
+  const toStore = prepareImagesForStorage(bundle)
+  await idbClearImages()
+  await idbPutImages(toStore)
+}
 
 export interface LocalBundleData {
   patient: PatientEntity
@@ -70,28 +265,103 @@ function attachEncounterRefsForMeds(
 }
 
 export const LocalBundleService = {
+  // Synchronous presence check. Reads the in-memory cache first (set the moment
+  // a bundle is imported this session) then the localStorage marker. Stays sync
+  // because `shouldUseLocalBundle()` / `hasAnyDataSource()` call it during render.
   hasData(): boolean {
     if (typeof window === 'undefined') return false
+    if (memBundle !== null) return true
     return !!localStorage.getItem(STORAGE_KEY)
   },
 
-  save(bundle: object): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bundle))
-  },
-
-  clear(): void {
-    localStorage.removeItem(STORAGE_KEY)
-  },
-
-  load(): object | null {
-    if (typeof window === 'undefined') return null
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
+  // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
+  // Blob store (off-heap) — `extractAndStoreImages` mutates `bundle` in place so
+  // the retained copies (memBundle + the JSON in IndexedDB) stay small. Only a
+  // tiny marker goes to localStorage. After save resolves, `memBundle` holds the
+  // stripped bundle, so no image base64 lingers in the JS heap.
+  async save(bundle: object): Promise<void> {
+    if (typeof window !== 'undefined') {
+      try {
+        await extractAndStoreImages(bundle)
+      } catch {
+        // IndexedDB image store unavailable — keep images inline; the bundle is
+        // still usable and the viewer falls back to decoding `data` directly.
+      }
+    }
+    memBundle = bundle
+    if (typeof window === 'undefined') return
     try {
-      return JSON.parse(raw)
+      localStorage.setItem(STORAGE_KEY, MARKER)
+    } catch {
+      // Marker is a single byte; a quota failure here is unexpected but not fatal
+      // — the in-memory cache and IndexedDB still carry the bundle this session.
+    }
+    await idbPut(bundle)
+  },
+
+  async clear(): Promise<void> {
+    memBundle = null
+    if (typeof window === 'undefined') return
+    localStorage.removeItem(STORAGE_KEY)
+    try {
+      await idbDelete()
+    } catch {
+      // Best-effort: the marker is already gone, so hasData() is false regardless.
+    }
+    try {
+      await idbClearImages()
+    } catch {
+      // Best-effort image cleanup.
+    }
+  },
+
+  // Fetch a stored image Blob by its `_imageRef`. Used by the lazy viewer so the
+  // bytes are only pulled into memory while the dialog is open.
+  async getImage(ref: string): Promise<Blob | null> {
+    if (typeof window === 'undefined') return null
+    try {
+      return await idbGetImage(ref)
     } catch {
       return null
     }
+  },
+
+  async load(): Promise<object | null> {
+    if (memBundle) return memBundle
+    if (typeof window === 'undefined') return null
+
+    // Primary path: IndexedDB.
+    try {
+      const fromIdb = await idbGet<object>()
+      if (fromIdb) {
+        memBundle = fromIdb
+        return fromIdb
+      }
+    } catch {
+      // IndexedDB unavailable (private mode, etc.) — fall through to migration.
+    }
+
+    // Migration path: older builds stored the full bundle JSON under STORAGE_KEY.
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw && raw !== MARKER) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (parsed && (parsed.resourceType === 'Bundle' || Array.isArray(parsed.entry))) {
+          memBundle = parsed
+          // Move it to IndexedDB and shrink the marker so we don't re-migrate.
+          try {
+            await idbPut(parsed)
+            localStorage.setItem(STORAGE_KEY, MARKER)
+          } catch {
+            // Migration write failed — keep serving from the in-memory copy.
+          }
+          return parsed
+        }
+      } catch {
+        // Corrupt JSON — treat as no data.
+      }
+    }
+    return null
   },
 
   parse(bundle: any): LocalBundleData | null {
@@ -219,8 +489,8 @@ export const LocalBundleService = {
     return { patient, collection }
   },
 
-  parseStored(): LocalBundleData | null {
-    const bundle = this.load()
+  async parseStored(): Promise<LocalBundleData | null> {
+    const bundle = await this.load()
     if (!bundle) return null
     return this.parse(bundle)
   },

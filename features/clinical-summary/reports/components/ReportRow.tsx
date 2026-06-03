@@ -3,13 +3,14 @@ import { useState, memo } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown } from 'lucide-react'
+import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown, ImageIcon } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Row, Observation } from '../types'
 import { getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
+import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 
 interface ReportRowProps {
@@ -67,6 +68,16 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
     setTrendDialogMounted(true)
     setTrendDialogOpen(true)
   }
+  // Image lightbox — same lazy-mount discipline as the trend dialog: only enter
+  // the tree (and decode the multi-MB base64) after the user clicks the
+  // indicator. Kept mounted afterwards; the dialog itself revokes its Blob URLs
+  // whenever it closes, so memory is released without unmounting.
+  const [imageDialogOpen, setImageDialogOpen] = useState(false)
+  const [imageDialogMounted, setImageDialogMounted] = useState(false)
+  const openImageDialog = () => {
+    setImageDialogMounted(true)
+    setImageDialogOpen(true)
+  }
   const [textExpanded, setTextExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -82,6 +93,48 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
 
   const displayObs = row.group === "procedures" ? row.obs.slice(1) : row.obs
   const firstObs = row.obs[0]
+
+  const images = row.images
+  const hasImages = !!images && images.length > 0
+
+  // Inline-image indicator. Clicking opens the lazy lightbox. `stopProp` is set
+  // when the button lives inside an AccordionTrigger so the click doesn't also
+  // toggle the accordion (mirrors TrendButton).
+  const ImageButton = ({ stopProp }: { stopProp?: boolean }) => (
+    <div
+      onClick={(e) => {
+        if (stopProp) e.stopPropagation()
+        openImageDialog()
+      }}
+      className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors cursor-pointer shrink-0"
+      role="button"
+      tabIndex={0}
+      aria-label="查看影像"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          if (stopProp) e.stopPropagation()
+          openImageDialog()
+        }
+      }}
+    >
+      <ImageIcon className="h-4 w-4" />
+      {images!.length > 1 && <span className="text-xs tabular-nums">{images!.length}</span>}
+    </div>
+  )
+
+  // Computed element (not an inner component) so the same reference is dropped
+  // into whichever return branch renders — a `() => <Dialog/>` inner component
+  // would get a fresh identity each render and remount the dialog (re-decoding
+  // images, losing open state). Mirrors how the trend dialog is inlined.
+  const imageLightbox = imageDialogMounted && hasImages ? (
+    <ReportImageDialog
+      images={images!}
+      title={row.title}
+      open={imageDialogOpen}
+      onOpenChange={setImageDialogOpen}
+    />
+  ) : null
 
   const isSingleValue =
     displayObs.length === 1 &&
@@ -151,19 +204,30 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
     // Body text stays selectable; a Copy button shows when expanded.
     if (isLongText) {
       const fullText = compactBlankLines(obs.valueString || '')
+      // Image-only imaging reports (X-ray / ECG with empty conclusion) reach
+      // this branch via the synthetic "Report Summary" obs but carry no text —
+      // render just the header (title + image indicator), with no toggle,
+      // chevron, or empty expandable.
+      const hasText = fullText.length > 0
       return (
         <>
           <div className="rounded-lg border bg-muted/40 px-3 py-2">
             <div
-              className="flex items-center justify-between gap-2 mb-1 rounded-md cursor-pointer select-none transition-all outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              role="button"
-              tabIndex={0}
-              aria-expanded={textExpanded}
+              className={cn(
+                'flex items-center justify-between gap-2 mb-1 rounded-md transition-all outline-none',
+                hasText && 'cursor-pointer select-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50'
+              )}
+              role={hasText ? 'button' : undefined}
+              tabIndex={hasText ? 0 : undefined}
+              aria-expanded={hasText ? textExpanded : undefined}
               onClick={(e) => {
+                if (!hasText) return
                 if ((e.target as HTMLElement).closest('[aria-label="查看趨勢"]')) return
+                if ((e.target as HTMLElement).closest('[aria-label="查看影像"]')) return
                 setTextExpanded(!textExpanded)
               }}
               onKeyDown={(e) => {
+                if (!hasText) return
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
                   setTextExpanded(!textExpanded)
@@ -178,31 +242,36 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                   <TooltipContent>{row.title}</TooltipContent>
                 </Tooltip>
                 <TrendButton />
+                {hasImages && <ImageButton />}
               </div>
               <div className="flex items-center gap-2">
                 <HeaderRight />
                 {row.isPossibleDuplicate && (
                   <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
                 )}
-                <ChevronDown
-                  className={cn(
-                    'h-4 w-4 shrink-0 text-muted-foreground pointer-events-none transition-transform duration-200',
-                    textExpanded && 'rotate-180'
-                  )}
-                />
+                {hasText && (
+                  <ChevronDown
+                    className={cn(
+                      'h-4 w-4 shrink-0 text-muted-foreground pointer-events-none transition-transform duration-200',
+                      textExpanded && 'rotate-180'
+                    )}
+                  />
+                )}
               </div>
             </div>
-            {textExpanded ? (
-              <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
-            ) : (
-              <p
-                className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80"
-                onClick={() => setTextExpanded(true)}
-              >
-                {obs.valueString}
-              </p>
+            {hasText && (
+              textExpanded ? (
+                <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />
+              ) : (
+                <p
+                  className="line-clamp-1 cursor-pointer text-xs leading-relaxed text-foreground/80"
+                  onClick={() => setTextExpanded(true)}
+                >
+                  {obs.valueString}
+                </p>
+              )
             )}
-            {textExpanded && (
+            {hasText && textExpanded && (
               <div className="mt-1">
                 <button
                   type="button"
@@ -228,6 +297,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
               </div>
             )}
           </div>
+          {imageLightbox}
           {trendDialogMounted && (
             <ObservationTrendDialog
               observation={firstObs}
@@ -275,6 +345,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
               <TooltipContent>{row.title}</TooltipContent>
             </Tooltip>
             <TrendButton />
+            {hasImages && <ImageButton />}
           </div>
           {obs.valueQuantity ? (
             <span
@@ -334,6 +405,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
             <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
           )}
         </div>
+        {imageLightbox}
         {trendDialogMounted && (
           <ObservationTrendDialog
             observation={firstObs}
@@ -376,6 +448,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                       {abnormalCount} 異常
                     </span>
                   )}
+                  {hasImages && <ImageButton stopProp />}
                 </div>
                 {/* Right cluster mirrors the single-value rows: count +
                     institution inline + date-only badge. Category/status
@@ -411,6 +484,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      {imageLightbox}
       {/* Lazy-mount the trend dialog only after the user actually clicks
           the trend button. The dialog runs four history hooks
           (useObservationHistory + 3 variants), each of which iterates the

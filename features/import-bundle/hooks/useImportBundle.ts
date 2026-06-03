@@ -67,7 +67,7 @@ export function useImportBundle(): UseImportBundleReturn {
       if (!parsed) {
         throw new Error('Bundle must contain at least one Patient resource')
       }
-      LocalBundleService.save(bundle)
+      await LocalBundleService.save(bundle)
       setHasBundle(true)
       setBundleIsActive(shouldUseLocalBundle())
       notifyBundleChanged()
@@ -82,7 +82,7 @@ export function useImportBundle(): UseImportBundleReturn {
   }, [queryClient])
 
   const clear = useCallback(async () => {
-    LocalBundleService.clear()
+    await LocalBundleService.clear()
     setHasBundle(false)
     setBundleIsActive(false)
     setError(null)

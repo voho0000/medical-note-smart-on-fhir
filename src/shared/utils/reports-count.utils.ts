@@ -125,7 +125,11 @@ export function calculateReportsRowCounts(
   const validReports = filteredReports.filter((dr: any) => {
     if (!dr) return false
     const obs = Array.isArray(dr._observations) ? dr._observations.filter((o: any) => !!o) : []
-    return obs.length > 0 || dr.conclusion || (Array.isArray(dr.note) && dr.note.length > 0)
+    // A pure-image report (X-ray / ECG from 健保存摺) has no observations, no
+    // conclusion and no note — only an inline presentedForm. Without this it
+    // would be silently dropped from the count and the list.
+    const hasAttachment = Array.isArray(dr.presentedForm) && dr.presentedForm.length > 0
+    return obs.length > 0 || dr.conclusion || (Array.isArray(dr.note) && dr.note.length > 0) || hasAttachment
   })
   const reportRowCount = validReports.length
 

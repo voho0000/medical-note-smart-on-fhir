@@ -267,7 +267,13 @@ export interface DiagnosticReportEntity {
   category?: any
   conclusionCode?: any
   note?: Array<{ text?: string }>
-  presentedForm?: Array<{ title?: string; contentType?: string }>
+  // Bridge v0.14.0+ inlines imaging (健保存摺 X-ray / ECG …) as base64 in
+  // `data` (JPEG, ~2-3 MB each). `data` carries NO `data:<mime>;base64,` prefix.
+  // Never eager-decode (a multi-image bundle can exceed 100 MB); UI decodes to a
+  // Blob URL only on demand. On the local-bundle import path the base64 is moved
+  // to an off-heap IndexedDB Blob and `data` is replaced by `_imageRef` (the Blob
+  // key) — see LocalBundleService.extractAndStoreImages.
+  presentedForm?: Array<{ title?: string; contentType?: string; data?: string; size?: number; _imageRef?: string }>
   encounter?: {
     reference?: string
   }

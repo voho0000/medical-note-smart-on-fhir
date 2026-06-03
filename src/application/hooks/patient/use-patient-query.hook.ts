@@ -25,7 +25,7 @@ export function usePatientQuery() {
       // any leftover imported bundle. Only fall back to the bundle when
       // there's no SMART context present.
       if (shouldUseLocalBundle()) {
-        return LocalBundleService.parseStored()?.patient ?? null
+        return (await LocalBundleService.parseStored())?.patient ?? null
       }
       // No data source at all — return null silently. The UI uses this
       // (combined with no error) to render the welcome / onboarding screen

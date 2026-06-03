@@ -95,7 +95,12 @@ export interface DiagnosticReport {
   presentedForm?: Array<{
     contentType?: string
     title?: string
+    // base64 (no `data:<mime>;base64,` prefix) — bridge v0.14.0+ inline imaging
     data?: string
+    size?: number
+    // Local-bundle import path: base64 moved to an off-heap IndexedDB Blob,
+    // `data` replaced by this Blob key (LocalBundleService.extractAndStoreImages).
+    _imageRef?: string
   }>
   _observations?: Observation[]
 }

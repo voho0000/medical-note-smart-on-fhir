@@ -16,14 +16,21 @@ import { LocalBundleService } from '../services/local-bundle.service'
 export class LocalBundleRepository implements IClinicalDataRepository {
   private collection: ClinicalDataCollection
 
-  constructor() {
-    const data = LocalBundleService.parseStored()
-    this.collection = data?.collection ?? {
+  private constructor(collection: ClinicalDataCollection) {
+    this.collection = collection
+  }
+
+  // Async factory: reading the bundle now hits IndexedDB (see LocalBundleService),
+  // so construction can't happen synchronously in a plain constructor anymore.
+  static async create(): Promise<LocalBundleRepository> {
+    const data = await LocalBundleService.parseStored()
+    const collection = data?.collection ?? {
       conditions: [], medications: [], allergies: [], observations: [],
       vitalSigns: [], diagnosticReports: [], procedures: [], encounters: [],
       documentReferences: [], compositions: [], immunizations: [],
       consents: [], devices: [], carePlans: [],
     }
+    return new LocalBundleRepository(collection)
   }
 
   async fetchAllClinicalData(_patientId: string): Promise<ClinicalDataCollection> {

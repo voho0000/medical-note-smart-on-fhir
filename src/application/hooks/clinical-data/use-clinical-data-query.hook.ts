@@ -31,7 +31,7 @@ export function useClinicalDataQuery() {
       // SMART > local bundle: an active SMART context always wins, even when
       // a previously imported bundle is still sitting in localStorage.
       const repository = shouldUseLocalBundle()
-        ? new LocalBundleRepository()
+        ? await LocalBundleRepository.create()
         : new FhirClinicalDataRepository()
       const useCase = new FetchClinicalDataUseCase(repository)
       try {

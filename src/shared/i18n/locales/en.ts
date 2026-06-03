@@ -182,6 +182,11 @@ export const en = {
     noData: 'No reports found within the selected time range.',
     status: 'Status',
     category: 'Category',
+    image: {
+      view: 'View image',
+      images: 'images',
+      loading: 'Loading image…',
+    },
     tabs: {
       cumulative: 'Cumulative',
       all: 'All',

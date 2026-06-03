@@ -184,6 +184,11 @@ export const zhTW = {
     noData: '在選定的時間範圍內未找到報告。',
     status: '狀態',
     category: '類別',
+    image: {
+      view: '查看影像',
+      images: '張影像',
+      loading: '影像載入中…',
+    },
     tabs: {
       cumulative: '累積報告',
       all: '全部',
