@@ -113,7 +113,12 @@ export function useReportsData(diagnosticReports: any[]) {
         const notes = Array.isArray(dr.note)
           ? dr.note.map((n: any) => n?.text).filter(Boolean) as string[]
           : []
-        if (conclusionText) summaryParts.push(`Conclusion: ${conclusionText}`)
+        // Push the report's conclusion verbatim — do NOT prepend a synthetic
+        // "Conclusion:" label. The bridge text already carries its own heading
+        // ("心電圖:", "Radiography ... Show:") and an app-added prefix showed up
+        // as a redundant first line on every report. A report that genuinely
+        // begins with "Conclusion:" keeps it, since we use the raw text.
+        if (conclusionText) summaryParts.push(conclusionText)
         if (conclusionCodes && conclusionCodes !== '—') summaryParts.push(`Conclusion Codes: ${conclusionCodes}`)
         if (notes.length > 0) summaryParts.push(notes.join('\n'))
 

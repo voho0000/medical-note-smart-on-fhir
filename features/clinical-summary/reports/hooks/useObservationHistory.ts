@@ -314,7 +314,13 @@ export function useReportHistory(reportCode?: string) {
 
     const items: ReportHistoryItem[] = []
     diagnosticReports.forEach((dr: any) => {
-      const drText = (dr.code?.text || dr.code?.coding?.[0]?.display || '').trim().toLowerCase()
+      // Derive the match key with the SAME fallback chain getCodeableConceptText
+      // uses to build `rawTitle` upstream (text → coding[0].display →
+      // coding[0].code). If these diverge, a report carrying only an NHI order
+      // code (no human-readable text/display) gets a rawTitle of that code while
+      // the lookup key resolves to '' — so the dialog would show "無歷史資料"
+      // even though the report exists. Keep both paths identical.
+      const drText = (dr.code?.text || dr.code?.coding?.[0]?.display || dr.code?.coding?.[0]?.code || '').trim().toLowerCase()
       if (!drText || drText !== target) return
 
       const conclusion = dr.conclusion?.trim()
