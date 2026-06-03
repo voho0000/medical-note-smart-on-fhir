@@ -888,20 +888,42 @@ export function getAnalyteDisplayLabel(
   audience: AudienceMode,
   language: DisplayLang,
 ): string {
+  const { name, abbr } = getAnalyteDisplayParts(canonical, audience, language)
+  return abbr ? `${name} (${abbr})` : name
+}
+
+/**
+ * Split an analyte's audience/language-aware display into a primary NAME and an
+ * optional parenthetical ABBREVIATION, so render sites can lay the two out on
+ * separate lines (e.g. cumulative-report column headers) instead of one wide
+ * string. Joining the parts as `${name} (${abbr})` reproduces
+ * getAnalyteDisplayLabel() exactly:
+ *   - medical            → { name: <short code>,  abbr: null }
+ *   - patient zh-TW      → { name: <中文>,        abbr: <short code> }
+ *                          (only when a lay name exists and doesn't already
+ *                           bake in a parenthetical code)
+ *   - patient en         → { name: <long form>,   abbr: null }
+ *   - no lay translation → { name: <short code>,  abbr: null }
+ */
+export function getAnalyteDisplayParts(
+  canonical: string,
+  audience: AudienceMode,
+  language: DisplayLang,
+): { name: string; abbr: string | null } {
   const mixedCase = CANONICAL_DISPLAY[canonical] || canonical
-  if (audience === 'medical') return mixedCase
+  if (audience === 'medical') return { name: mixedCase, abbr: null }
   const map = language === 'zh-TW' ? CANONICAL_TO_LAY_ZH : CANONICAL_TO_LAY_EN
   const lay = map[canonical]
   // No lay translation yet → fall back to the canonical short code as-is.
-  if (!lay) return mixedCase
-  // Patient zh-TW: append the English short code so the all-Chinese name
-  // stays recognisable, e.g. 麩丙轉胺脢 (ALT). Skip when the lay name already
-  // bakes in a parenthetical code (CA-125 / EGFR(EPI) / FIB-4 …) to avoid
-  // double parens, and skip when the abbreviation is already present.
+  if (!lay) return { name: mixedCase, abbr: null }
+  // Patient zh-TW: surface the English short code separately so the all-Chinese
+  // name stays recognisable, e.g. 麩丙轉胺脢 + (ALT). Skip when the lay name
+  // already bakes in a parenthetical code (CA-125 / EGFR(EPI) / FIB-4 …) to
+  // avoid double parens, and skip when the abbreviation is already present.
   if (language === 'zh-TW' && !lay.includes('(') && !lay.includes(mixedCase)) {
-    return `${lay} (${mixedCase})`
+    return { name: lay, abbr: mixedCase }
   }
-  return lay
+  return { name: lay, abbr: null }
 }
 
 /**

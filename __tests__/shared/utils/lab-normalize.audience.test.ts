@@ -9,6 +9,7 @@
 
 import {
   getAnalyteDisplayLabel,
+  getAnalyteDisplayParts,
   getAnalyteDisplayForObs,
   getAnalyteCanonicalKey,
   CANONICAL_TO_LAY_ZH,
@@ -111,6 +112,48 @@ describe('getAnalyteDisplayLabel', () => {
     it.each(requiredCoverage)('%s is in CANONICAL_TO_LAY_EN', (k) => {
       expect(CANONICAL_TO_LAY_EN).toHaveProperty([k])
     })
+  })
+})
+
+describe('getAnalyteDisplayParts', () => {
+  // Splits the display into a primary NAME + optional parenthetical ABBR so
+  // cumulative-report headers can render them on two lines. Joining the parts
+  // as `${name} (${abbr})` must reproduce getAnalyteDisplayLabel exactly.
+  it('medical: name = short code, no abbr', () => {
+    expect(getAnalyteDisplayParts('HB', 'medical', 'zh-TW')).toEqual({ name: 'HB', abbr: null })
+    expect(getAnalyteDisplayParts('HBA1C', 'medical', 'zh-TW')).toEqual({ name: 'HbA1c', abbr: null })
+  })
+
+  it('patient zh-TW: Chinese name + English short code as abbr', () => {
+    expect(getAnalyteDisplayParts('WBC', 'patient', 'zh-TW')).toEqual({ name: '白血球計數', abbr: 'WBC' })
+    expect(getAnalyteDisplayParts('HB', 'patient', 'zh-TW')).toEqual({ name: '血色素', abbr: 'HB' })
+    expect(getAnalyteDisplayParts('HBA1C', 'patient', 'zh-TW')).toEqual({ name: '糖化血色素', abbr: 'HbA1c' })
+  })
+
+  it('patient zh-TW: no separate abbr when lay name already bakes in a paren', () => {
+    expect(getAnalyteDisplayParts('FIB-4', 'patient', 'zh-TW')).toEqual({ name: '肝纖維化指數 (FIB-4)', abbr: null })
+  })
+
+  it('patient en: long form name, no abbr (matches current single-line behaviour)', () => {
+    expect(getAnalyteDisplayParts('WBC', 'patient', 'en')).toEqual({ name: 'White blood cell count', abbr: null })
+  })
+
+  it('no lay translation: falls back to short code, no abbr', () => {
+    expect(getAnalyteDisplayParts('FAKE-ANALYTE', 'patient', 'zh-TW')).toEqual({ name: 'FAKE-ANALYTE', abbr: null })
+  })
+
+  it('join(parts) === getAnalyteDisplayLabel for every audience/language', () => {
+    const keys = ['WBC', 'HB', 'HBA1C', 'ALT', 'FIB-4', 'WBC', 'FAKE-ANALYTE']
+    const combos: Array<['medical' | 'patient', 'zh-TW' | 'en']> = [
+      ['medical', 'zh-TW'], ['medical', 'en'], ['patient', 'zh-TW'], ['patient', 'en'],
+    ]
+    for (const k of keys) {
+      for (const [aud, lang] of combos) {
+        const { name, abbr } = getAnalyteDisplayParts(k, aud, lang)
+        const joined = abbr ? `${name} (${abbr})` : name
+        expect(joined).toBe(getAnalyteDisplayLabel(k, aud, lang))
+      }
+    }
   })
 })
 

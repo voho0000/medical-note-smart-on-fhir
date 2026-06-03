@@ -11,7 +11,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
 import { LAB_CATEGORIES, type LabSubgroup } from "@/src/shared/utils/lab-categories"
-import { getAnalyteDisplayLabel } from "@/src/shared/utils/lab-normalize"
+import { getAnalyteDisplayParts } from "@/src/shared/utils/lab-normalize"
 
 interface CumulativeLabReportProps {
   observations: any[]
@@ -30,14 +30,17 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
   const subgroupLabels = (t.reports as any).cumulativeSubgroups || {}
   const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
   const subgroupLabel = (sgId: string) => subgroupLabels[sgId] || sgId
-  // Column header label: medical audience keeps useLabPivot's displayName
-  // (preserves glucose-subtype labels like "Glu-AC" / "Finger Sugar" that
-  // the pivot derives from GLUCOSE_SUBTYPE_LABEL). Patient audience swaps
-  // in the long-form translation via getAnalyteDisplayLabel keyed on the
-  // canonical testKey. Sort order is unaffected — testKey-driven sorting
-  // upstream uses canonical keys.
-  const columnLabel = (testKey: string, displayName: string) =>
-    audience === 'medical' ? displayName : getAnalyteDisplayLabel(testKey, audience, locale)
+  // Column header parts: medical audience keeps useLabPivot's displayName
+  // (preserves glucose-subtype labels like "Glu-AC" / "Finger Sugar" that the
+  // pivot derives from GLUCOSE_SUBTYPE_LABEL). Patient audience splits the
+  // long-form translation into a primary NAME plus a parenthetical English
+  // abbreviation, so the header can render them on two lines (name above,
+  // "(WBC) unit" below) instead of one wide string. Sort order is unaffected —
+  // testKey-driven sorting upstream uses canonical keys.
+  const columnParts = (testKey: string, displayName: string): { name: string; abbr: string | null } =>
+    audience === 'medical'
+      ? { name: displayName, abbr: null }
+      : getAnalyteDisplayParts(testKey, audience, locale)
   // When there are no columns at all (no pinned columns and no data) show the
   // empty-state message. If there are columns but no data dates, fall through
   // so the column headers still render with a "no data" body row.
@@ -113,17 +116,27 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                 {categoryLabel}
               </th>
             )}
-            {flatTests.map((test) => (
-              <th
-                key={test.mapKey}
-                className="bg-muted/80 backdrop-blur border-b border-l p-2 text-center font-medium whitespace-nowrap min-w-[64px]"
-              >
-                <div>{columnLabel(test.testKey, test.displayName)}</div>
-                {test.unit && (
-                  <div className="text-[10px] font-normal text-muted-foreground">{test.unit}</div>
-                )}
-              </th>
-            ))}
+            {flatTests.map((test) => {
+              const { name, abbr } = columnParts(test.testKey, test.displayName)
+              return (
+                <th
+                  key={test.mapKey}
+                  className="bg-muted/80 backdrop-blur border-b border-l p-2 text-center font-medium align-bottom min-w-[64px]"
+                >
+                  <div className="mx-auto max-w-[6rem] leading-tight break-words">{name}</div>
+                  {(abbr || test.unit) && (
+                    <div className="text-[10px] font-normal text-muted-foreground leading-tight whitespace-nowrap">
+                      {/* Second line: English short code + unit. No parens — the
+                          code is already on its own line. A middot separates the
+                          code from the unit (matches the app's "·" convention)
+                          when both are present; medical audience shows the unit
+                          alone (abbr is null). */}
+                      {abbr ?? ''}{abbr && test.unit ? ' · ' : ''}{test.unit ?? ''}
+                    </div>
+                  )}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>
