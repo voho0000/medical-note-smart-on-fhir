@@ -11,6 +11,7 @@
 "use client"
 
 import { useMemo } from 'react'
+import { Building2 } from 'lucide-react'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
@@ -79,9 +80,18 @@ export function CarePlansCard() {
       const start = cp.period?.start ? formatDate(cp.period.start) : ''
       const end = cp.period?.end ? formatDate(cp.period.end) : ''
       const range = start || end ? `${start}${start || end ? ' – ' : ''}${end}` : ''
+      const title = getCarePlanTitle(cp)
+      const description = cp.description?.trim() || ''
       return {
         id: cp.id || `careplan-${cp.created ?? Math.random()}`,
-        title: getCarePlanTitle(cp),
+        title,
+        // Free-text programme description (verbatim). Suppressed when it's
+        // already serving as the title — getCarePlanTitle falls back to the
+        // description when there's no title/category, so showing both would
+        // print the same sentence twice.
+        description: description && description !== title ? description : '',
+        // 收案醫療機構 — CarePlan.author.display (e.g. "中國北港醫").
+        institution: cp.author?.display?.trim() || '',
         status: cp.status,
         statusText: statusLabel(cp.status),
         range,
@@ -114,6 +124,15 @@ export function CarePlansCard() {
               </span>
             </div>
             {it.range && <div className="mt-0.5 text-xs text-muted-foreground">{it.range}</div>}
+            {it.institution && (
+              <div className="mt-1 flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
+                <Building2 className="h-3 w-3 shrink-0" />
+                <span>{it.institution}</span>
+              </div>
+            )}
+            {it.description && (
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{it.description}</p>
+            )}
             {it.activities.length > 0 && (
               <ul className="mt-1.5 space-y-0.5 border-l-2 border-border/50 pl-3">
                 {it.activities.map((a, i) => (
