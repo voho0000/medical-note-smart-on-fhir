@@ -36,6 +36,8 @@ const getTypeBadge = (type: VisitType, labels: any) => {
 
 export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
+  const categoryLabel = (id: string): string =>
+    (t.reports.cumulativeCategories as Record<string, string>)[id] || id
   const reasonCodes = visit.icdCodes
   const hasIcdCodes = reasonCodes.length > 0 && /^[A-Z]\d/.test(reasonCodes[0].code)
   const hasSecondaryIcds = hasIcdCodes && reasonCodes.length > 1
@@ -212,12 +214,23 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
                 </div>
               ) : null}
 
-              {details?.tests.length ? (
+              {details?.testGroups.length ? (
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.tests}</div>
-                  <div className="rounded-lg border bg-muted/40 divide-y overflow-hidden">
-                    {details.tests.map((test) => (
-                      <EncounterObservationCard key={test.id} observation={test} />
+                  <div className="space-y-3">
+                    {details.testGroups.map((group, gi) => (
+                      <div key={group.categoryId ?? `other-${gi}`} className="space-y-1">
+                        {group.categoryId && (
+                          <div className="px-0.5 text-[11px] font-medium text-muted-foreground/80">
+                            {categoryLabel(group.categoryId)}
+                          </div>
+                        )}
+                        <div className="rounded-lg border bg-muted/40 divide-y overflow-hidden">
+                          {group.tests.map((test) => (
+                            <EncounterObservationCard key={test.id} observation={test} />
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

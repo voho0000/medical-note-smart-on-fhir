@@ -24,6 +24,11 @@ export type EncounterObservation = {
   source: "diagnosticReport" | "observation"
   components: EncounterObservationComponent[]
   refRangeAbnormal?: boolean
+  /** Lab-category id (cbc / chem / urine / …) for clinical grouping; absent for
+   *  observations that don't map to a known category. */
+  categoryId?: string
+  /** Canonical analyte key (WBC / NA / …) used as the within-category sort key. */
+  sortKey?: string
 }
 
 function isAbnormalStyle(style?: string) {

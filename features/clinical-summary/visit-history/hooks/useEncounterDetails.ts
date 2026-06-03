@@ -2,9 +2,27 @@ import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationName, getMedicationNameLocalized, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
 import { checkReferenceRangeAbnormal } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
+import { getAnalyteDisplayForObs, getAnalyteLabel, getAnalyteCanonicalKey, type DisplayLang } from "@/src/shared/utils/lab-normalize"
+import {
+  LAB_CATEGORIES,
+  CANONICAL_TO_CATEGORY,
+  categorizeObservation,
+  compareTestsByPreferred,
+} from "@/src/shared/utils/lab-categories"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
 import type { EncounterMedication, EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
+
+// Clinical reading order across categories (blood count → coag → biochem → …
+// → urine). Lab tests within a single visit arrive interleaved from multiple
+// DiagnosticReports / standalone Observations; grouping by category and
+// ordering by this rank stops 血液/生化 etc. from mixing together.
+const CATEGORY_RANK: Map<string, number> = new Map(
+  LAB_CATEGORIES.map((c, i) => [c.id, i]),
+)
+const CATEGORY_BY_ID: Map<string, (typeof LAB_CATEGORIES)[number]> = new Map(
+  LAB_CATEGORIES.map((c) => [c.id, c]),
+)
 
 export type EncounterDiagnosis = {
   id: string
@@ -15,16 +33,51 @@ export type EncounterDiagnosis = {
   recordedDate?: string
 }
 
+export type EncounterTestGroup = {
+  /** Lab-category id (cbc / chem / urine / …) or null for uncategorized tests.
+   *  Resolve the display label via t.reports.cumulativeCategories[categoryId]. */
+  categoryId: string | null
+  tests: EncounterObservation[]
+}
+
 export type EncounterDetails = {
   diagnoses: EncounterDiagnosis[]
   medications: EncounterMedication[]
   tests: EncounterObservation[]
+  /** tests grouped by lab category in clinical reading order; flat `tests`
+   *  is kept for stats/search. */
+  testGroups: EncounterTestGroup[]
   procedures: EncounterProcedure[]
   clinicalNotes: ClinicalNote[]
 }
 
-const toEncounterObservation = (observation: any, source: "diagnosticReport" | "observation"): EncounterObservation => {
-  const title = getCodeText(observation?.code) || "Observation"
+const toEncounterObservation = (
+  observation: any,
+  source: "diagnosticReport" | "observation",
+  audience: 'medical' | 'patient',
+  displayLang: DisplayLang,
+): EncounterObservation => {
+  // Audience-aware analyte label: medical → canonical short code (WBC / Na),
+  // patient → long-form translation in the active UI language. Non-canonical
+  // rows (cultures, panels, free-text) keep their bridge-sent label.
+  const title = getCodeText(observation?.code)
+    ? getAnalyteDisplayForObs(observation, audience, displayLang)
+    : "Observation"
+  // Canonical analyte key (audience-independent) drives both the category
+  // lookup and the within-category sort. categorizeObservation handles
+  // LOINC/short-code obs; CANONICAL_TO_CATEGORY catches Chinese-text bridge
+  // data (no LOINC) the same way useReportsData does for its panel sort.
+  // Use getAnalyteCanonicalKey (the raw UPPERCASE key) for the exact-match
+  // category lookup — getAnalyteLabel returns the mixed-case DISPLAY form
+  // ('HbA1c'), which would only match after a defensive .toUpperCase(). For
+  // non-canonical rows the key is null, so fall back to the medical label as
+  // the sort key (compareTestsByPreferred normalises both sides anyway).
+  const canonicalKey = getAnalyteCanonicalKey(observation)
+  const sortKey = canonicalKey ?? getAnalyteLabel(observation)
+  const category =
+    categorizeObservation(observation) ||
+    (canonicalKey ? CANONICAL_TO_CATEGORY.get(canonicalKey) : null) ||
+    null
   const interpretation = getInterpTag(observation?.interpretation)
   const referenceText = refRangeText(observation?.referenceRange)
   const components = Array.isArray(observation?.component)
@@ -32,7 +85,9 @@ const toEncounterObservation = (observation: any, source: "diagnosticReport" | "
         const componentInterpretation = getInterpTag(component?.interpretation)
         return {
           id: component?.id || `${observation?.id || "component"}-${index}`,
-          title: getCodeText(component?.code) || "Component",
+          title: getCodeText(component?.code)
+            ? getAnalyteDisplayForObs(component, audience, displayLang)
+            : "Component",
           value: component?.valueQuantity
             ? valueWithUnit(component.valueQuantity)
             : component?.valueString || "—",
@@ -58,7 +113,35 @@ const toEncounterObservation = (observation: any, source: "diagnosticReport" | "
     status: observation?.status,
     source,
     components,
+    categoryId: category?.id,
+    sortKey,
   }
+}
+
+// Cluster a visit's flat test list into category groups in clinical reading
+// order, sorting within each group by the category's preferredOrder.
+function buildTestGroups(tests: EncounterObservation[]): EncounterTestGroup[] {
+  if (tests.length === 0) return []
+  const sorted = [...tests].sort((a, b) => {
+    const ra = a.categoryId ? CATEGORY_RANK.get(a.categoryId) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER
+    const rb = b.categoryId ? CATEGORY_RANK.get(b.categoryId) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER
+    if (ra !== rb) return ra - rb
+    const cat = a.categoryId ? CATEGORY_BY_ID.get(a.categoryId) : undefined
+    if (cat) {
+      const cmp = compareTestsByPreferred(cat)(a.sortKey || a.title, b.sortKey || b.title)
+      if (cmp !== 0) return cmp
+    }
+    return (a.sortKey || a.title).localeCompare(b.sortKey || b.title)
+  })
+
+  const groups: EncounterTestGroup[] = []
+  for (const test of sorted) {
+    const id = test.categoryId ?? null
+    const last = groups[groups.length - 1]
+    if (last && last.categoryId === id) last.tests.push(test)
+    else groups.push({ categoryId: id, tests: [test] })
+  }
+  return groups
 }
 
 export function useEncounterDetails(
@@ -73,10 +156,13 @@ export function useEncounterDetails(
 ) {
   return useMemo(() => {
     const map = new Map<string, EncounterDetails>()
+    // getAnalyteDisplayForObs only branches on zh-TW vs en; collapse the
+    // incoming locale string to the DisplayLang the helper expects.
+    const displayLang: DisplayLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
 
     const ensureEntry = (encounterId: string) => {
       if (!map.has(encounterId)) {
-        map.set(encounterId, { diagnoses: [], medications: [], tests: [], procedures: [], clinicalNotes: [] })
+        map.set(encounterId, { diagnoses: [], medications: [], tests: [], testGroups: [], procedures: [], clinicalNotes: [] })
       }
       return map.get(encounterId)!
     }
@@ -136,7 +222,7 @@ export function useEncounterDetails(
           : []
 
         observations.forEach((obs: any) => {
-          const normalized = toEncounterObservation(obs, "diagnosticReport")
+          const normalized = toEncounterObservation(obs, "diagnosticReport", audience, displayLang)
           if (entry.tests.some((item) => item.id === normalized.id)) return
           entry.tests.push(normalized)
         })
@@ -148,7 +234,7 @@ export function useEncounterDetails(
         const encounterId = getReferenceId(obs?.encounter)
         if (!encounterId) return
         const entry = ensureEntry(encounterId)
-        const normalized = toEncounterObservation(obs, "observation")
+        const normalized = toEncounterObservation(obs, "observation", audience, displayLang)
         if (entry.tests.some((item) => item.id === normalized.id)) return
         entry.tests.push(normalized)
       })
@@ -217,6 +303,12 @@ export function useEncounterDetails(
         })
       })
     }
+
+    // Cluster each encounter's interleaved tests into clinically ordered
+    // category groups for rendering. Flat `tests` stays as-is for stats/search.
+    map.forEach((entry) => {
+      entry.testGroups = buildTestGroups(entry.tests)
+    })
 
     return map
   }, [medications, diagnosticReports, observations, procedures, clinicalNotes, conditions, locale, audience])

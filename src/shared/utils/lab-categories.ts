@@ -431,3 +431,21 @@ export function compareTestsByPreferred(category: LabCategory): (a: string, b: s
     return a.localeCompare(b)
   }
 }
+
+// canonical analyte key (normalized) → owning LabCategory, derived from each
+// category's preferredOrder. Lets a canonical short code (resolved via
+// getAnalyteLabel) be mapped to a category WITHOUT re-running the LOINC/code
+// allowlist in categorizeObservation — which matters for bridge data that
+// sends Chinese display text with no LOINC ("白血球計數" → WBC via
+// TEST_ALIASES): categorizeObservation can't match those English-only codes,
+// but the canonical key still lands in the right category here.
+export const CANONICAL_TO_CATEGORY: Map<string, LabCategory> = (() => {
+  const m = new Map<string, LabCategory>()
+  for (const cat of LAB_CATEGORIES) {
+    for (const k of cat.preferredOrder || []) {
+      const norm = normalize(k)
+      if (!m.has(norm)) m.set(norm, cat)
+    }
+  }
+  return m
+})()

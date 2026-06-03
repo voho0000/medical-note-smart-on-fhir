@@ -461,6 +461,16 @@ export const CANONICAL_DISPLAY: Record<string, string> = {
  * hospital happened to send. The cumulative-report column header
  * (`buildTestEntry` in useLabPivot) uses the same resolution path so all
  * views stay in sync.
+ *
+ * ⚠️ THIS RETURNS THE *DISPLAY* STRING, NOT THE CANONICAL KEY. For analytes
+ * with a CANONICAL_DISPLAY override it returns the mixed-case form ('HbA1c',
+ * 'IgG', 'NT-proBNP', …), which is NOT a member of CANONICAL_KEYS ('HBA1C'
+ * is). It is equivalent to `getAnalyteDisplayForObs(obs, 'medical', …)`.
+ *   • Need a label to show a clinician? → this, or getAnalyteDisplayForObs.
+ *   • Need a key to index CANONICAL_KEYS / CANONICAL_TO_LAY_* / sort /
+ *     categorise / search? → `getAnalyteCanonicalKey(obs)` (returns the raw
+ *     uppercase key or null). NEVER do `CANONICAL_KEYS.has(getAnalyteLabel(obs))`
+ *     — it silently misses for the mixed-case analytes (the 2026-06-03 HbA1c bug).
  */
 export function getAnalyteLabel(obsOrComponent: { code?: any } | null | undefined): string {
   const code = obsOrComponent?.code
@@ -483,6 +493,34 @@ export function getAnalyteLabel(obsOrComponent: { code?: any } | null | undefine
   // 3. Fall back to whatever the bridge sent — non-lab obs (cultures, panels,
   //    free-text reports) keep their source label.
   return raw || (code.coding?.[0]?.code as string) || '—'
+}
+
+/**
+ * Like getAnalyteLabel, but returns the raw canonical KEY (the uppercase map
+ * key, e.g. 'HBA1C' / 'IGG' / 'NA') rather than the mixed-case DISPLAY form
+ * ('HbA1c' / 'IgG'). Returns null when the obs doesn't resolve to a known
+ * canonical analyte (cultures, antibiotic susceptibilities, free-text panels).
+ *
+ * Use this whenever the key must be fed back into a canonical-keyed map
+ * (CANONICAL_TO_LAY_ZH / getAnalyteDisplayLabel / category lookup). Calling
+ * getAnalyteLabel and then `CANONICAL_KEYS.has(...)` silently fails for any
+ * analyte with a CANONICAL_DISPLAY override — getAnalyteLabel would return
+ * 'HbA1c', which is NOT a member of CANONICAL_KEYS ('HBA1C' is) — so the
+ * audience lay-name path never fires. This helper closes that gap.
+ */
+export function getAnalyteCanonicalKey(
+  obsOrComponent: { code?: any } | null | undefined
+): string | null {
+  const code = obsOrComponent?.code
+  if (!code) return null
+  const fromLoinc = canonicalKeyFromLoinc(obsOrComponent as any)
+  if (fromLoinc && CANONICAL_KEYS.has(fromLoinc)) return fromLoinc
+  const raw = (code.text || code.coding?.[0]?.display || '') as string
+  if (raw) {
+    const fromText = canonicalTestKeyFromString(raw)
+    if (CANONICAL_KEYS.has(fromText)) return fromText
+  }
+  return null
 }
 
 // Returns the canonical analyte key for a raw display-name string.
@@ -853,7 +891,17 @@ export function getAnalyteDisplayLabel(
   const mixedCase = CANONICAL_DISPLAY[canonical] || canonical
   if (audience === 'medical') return mixedCase
   const map = language === 'zh-TW' ? CANONICAL_TO_LAY_ZH : CANONICAL_TO_LAY_EN
-  return map[canonical] || mixedCase
+  const lay = map[canonical]
+  // No lay translation yet → fall back to the canonical short code as-is.
+  if (!lay) return mixedCase
+  // Patient zh-TW: append the English short code so the all-Chinese name
+  // stays recognisable, e.g. 麩丙轉胺脢 (ALT). Skip when the lay name already
+  // bakes in a parenthetical code (CA-125 / EGFR(EPI) / FIB-4 …) to avoid
+  // double parens, and skip when the abbreviation is already present.
+  if (language === 'zh-TW' && !lay.includes('(') && !lay.includes(mixedCase)) {
+    return `${lay} (${mixedCase})`
+  }
+  return lay
 }
 
 /**
@@ -872,7 +920,14 @@ export function getAnalyteDisplayForObs(
   audience: AudienceMode,
   language: DisplayLang,
 ): string {
-  const canonical = getAnalyteLabel(obsOrComponent)
-  if (!CANONICAL_KEYS.has(canonical)) return canonical
-  return getAnalyteDisplayLabel(canonical, audience, language)
+  // Resolve the raw canonical KEY ('HBA1C') rather than getAnalyteLabel's
+  // mixed-case DISPLAY form ('HbA1c'). Using getAnalyteLabel here and then
+  // CANONICAL_KEYS.has(...) silently fails for any analyte with a
+  // CANONICAL_DISPLAY override — 'HbA1c' is not a member of CANONICAL_KEYS —
+  // so the audience/language lay-name path would never fire and the patient
+  // would see the raw short code. Non-canonical rows (cultures, antibiotic
+  // susceptibilities, free-text) resolve to null → keep the bridge-sent label.
+  const key = getAnalyteCanonicalKey(obsOrComponent)
+  if (!key) return getAnalyteLabel(obsOrComponent)
+  return getAnalyteDisplayLabel(key, audience, language)
 }

@@ -3,31 +3,15 @@ import { useMemo } from 'react'
 import type { DiagnosticReport, Observation, Row } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
-import { getAnalyteLabel, getAnalyteDisplayLabel, CANONICAL_KEYS } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteLabel, getAnalyteCanonicalKey, getAnalyteDisplayLabel, CANONICAL_DISPLAY } from '@/src/shared/utils/lab-normalize'
 import {
-  LAB_CATEGORIES,
   compareTestsByPreferred,
+  CANONICAL_TO_CATEGORY,
   type LabCategory,
 } from '@/src/shared/utils/lab-categories'
+import { getOrderNameDisplay, NHI_ORDER_CODE_TO_ZH, NHI_ORDER_CODE_TO_EN } from '@/src/shared/utils/nhi-order-names'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
-
-// canonical analyte key (normalized) → owning LabCategory, derived from each
-// category's preferredOrder. Used to pick a dominant category for panel sort
-// using the SAME canonical resolution as the rendered row labels — so when
-// bridge sends Chinese text without LOINC ("白血球計數" → WBC via TEST_ALIASES),
-// the sort still kicks in even though categorizeObservation can't match those
-// Chinese strings against its English-only codes[] / LOINC allowlist.
-const CANONICAL_TO_CATEGORY: Map<string, LabCategory> = (() => {
-  const m = new Map<string, LabCategory>()
-  for (const cat of LAB_CATEGORIES) {
-    for (const k of cat.preferredOrder || []) {
-      const norm = k.trim().toUpperCase()
-      if (!m.has(norm)) m.set(norm, cat)
-    }
-  }
-  return m
-})()
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -164,7 +148,14 @@ export function useReportsData(diagnosticReports: any[]) {
       // 08002C, no LOINC) would categorise as null and skip the sort even
       // though the rows still render as canonical WBC/RBC/… via the Chinese
       // aliases in TEST_ALIASES.
-      const labels: string[] = allObs.length > 1 ? allObs.map(o => getAnalyteLabel(o as any)) : []
+      // Use the raw UPPERCASE canonical key for the category/sort lookups
+      // below — getAnalyteLabel returns the mixed-case DISPLAY form ('HbA1c'),
+      // which only matched after the defensive .toUpperCase() on line 156.
+      // Non-canonical rows (cultures, free-text) resolve to null → keep the
+      // medical label so they still sort/compare sensibly.
+      const labels: string[] = allObs.length > 1
+        ? allObs.map(o => getAnalyteCanonicalKey(o as any) ?? getAnalyteLabel(o as any))
+        : []
       if (allObs.length > 1) {
         const catCounts: Record<string, number> = {}
         const catMap: Record<string, LabCategory> = {}
@@ -231,12 +222,61 @@ export function useReportsData(diagnosticReports: any[]) {
       const sharedCanonical = canonicalSet.size === 1
         ? [...canonicalSet][0]
         : null
-      const sharedCanonicalTitle = sharedCanonical && CANONICAL_KEYS.has(sharedCanonical)
-        ? getAnalyteDisplayLabel(sharedCanonical, audience, locale)
+      // getAnalyteLabel returns the mixed-case DISPLAY form (HbA1c, IgG, …) for
+      // analytes that carry a CANONICAL_DISPLAY override, and those strings are
+      // NOT members of CANONICAL_KEYS (which holds the uppercase keys HBA1C /
+      // IGG). Resolve the raw uppercase KEY separately so the audience/language
+      // lay-name path fires for them too (HbA1c → 糖化血色素 (HbA1c)). Returns
+      // null for non-canonical obs, which keep the getAnalyteLabel fallback.
+      const keySet = new Set(
+        obsForTitle
+          .map((o) => getAnalyteCanonicalKey(o as any))
+          .filter((k): k is string => Boolean(k))
+      )
+      const sharedKey = keySet.size === 1 ? [...keySet][0] : null
+      const sharedCanonicalTitle = sharedKey
+        ? getAnalyteDisplayLabel(sharedKey, audience, locale)
         : sharedCanonical
-      const displayTitle = (sharedCanonicalTitle && sharedCanonicalTitle !== groupText)
-        ? sharedCanonicalTitle
-        : groupText
+      // Multi-analyte panels / cultures / serology / imaging have no shared
+      // canonical analyte, so their title falls back to the bridge's Chinese
+      // NHI 醫令名 (groupText). For these, swap in a curated English name keyed
+      // by the stable order code when audience=medical or the UI is English.
+      // DISPLAY ONLY — grouping/dedup above still key off the Chinese groupText.
+      const orderCode = (head.code as any)?.coding?.[0]?.code as string | undefined
+      const panelTitle = getOrderNameDisplay(orderCode, groupText, audience, locale)
+      // Patient + zh-TW: the official 健保醫令中文名 (sourced from
+      // NHI_ORDER_CODE_TO_ZH) takes priority over our short lay name so each row
+      // matches the patient's 健康存摺 exactly (09025C → 血清麩胺酸苯醋酸轉氨基脢,
+      // not 麩草轉胺脢). For single-analyte orders we append the canonical English
+      // short code for quick recognition (… (AST)), unless the official name
+      // already carries a parenthetical qualifier (avoids double parens).
+      const officialZh = (audience === 'patient' && locale === 'zh-TW' && orderCode)
+        ? NHI_ORDER_CODE_TO_ZH[orderCode]
+        : undefined
+      let displayTitle: string
+      if (officialZh) {
+        // Prefer the analyte-level canonical short code (AST, NA, …). Serology /
+        // immunology orders (ANA, IgG, AMA …) often don't resolve to a canonical
+        // analyte because the bridge sends bare Chinese order text with no LOINC,
+        // so fall back to the abbreviation baked into the curated order-code
+        // English name, e.g. 12056B → "Anti-mitochondrial antibody (AMA)" → AMA.
+        let abbr = sharedKey
+          ? (CANONICAL_DISPLAY[sharedKey] || sharedKey)
+          : null
+        if (!abbr && orderCode) {
+          const en = NHI_ORDER_CODE_TO_EN[orderCode]
+          const m = en ? en.match(/\(([^()]+)\)\s*$/) : null
+          if (m) abbr = m[1]
+        }
+        const canAppend = !!abbr
+          && !officialZh.includes('(') && !officialZh.includes('（')
+          && !officialZh.includes(abbr)
+        displayTitle = canAppend ? `${officialZh} (${abbr})` : officialZh
+      } else {
+        displayTitle = (sharedCanonicalTitle && sharedCanonicalTitle !== groupText)
+          ? sharedCanonicalTitle
+          : panelTitle
+      }
 
       const category = Array.isArray(head.category)
         ? head.category.map((c: any) => getCodeableConceptText(c)).filter(Boolean).join(', ')

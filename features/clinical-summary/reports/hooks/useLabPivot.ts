@@ -2,7 +2,7 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
-import { TEST_ALIASES, CANONICAL_KEYS, CANONICAL_DISPLAY, normalizeTestName, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc } from '@/src/shared/utils/lab-normalize'
+import { CANONICAL_KEYS, CANONICAL_DISPLAY, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
 
 export interface LabCell {
   value: string
@@ -148,17 +148,13 @@ function canonicalTestKey(obs: any): string {
 
   // 2. Fall back to display-name alias when no recognized LOINC is present
   //    (some institutions / orphan obs ship without coding entries).
+  //    Delegate to canonicalTestKeyFromString — the single source of truth for
+  //    text→key alias resolution. (This block used to inline a verbatim copy
+  //    of that function's body; the duplication has been removed so the two
+  //    pathways can never drift.)
   const raw = getTestDisplayName(obs)
   if (!raw) return 'UNKNOWN'
-  // Check raw + rawUpper first so pure-CJK names like "鈣" (whose Latin
-  // content normalizeTestName strips to "") still hit the alias map.
-  if (TEST_ALIASES[raw]) return TEST_ALIASES[raw]
-  const rawUpper = raw.toUpperCase()
-  if (TEST_ALIASES[rawUpper]) return TEST_ALIASES[rawUpper]
-  const { stripped, collapsed } = normalizeTestName(raw)
-  if (TEST_ALIASES[stripped]) return TEST_ALIASES[stripped]
-  if (TEST_ALIASES[collapsed]) return TEST_ALIASES[collapsed]
-  return stripped || collapsed || rawUpper
+  return canonicalTestKeyFromString(raw)
 }
 
 // Returns { mapKey, testKey, displayName } for one observation.

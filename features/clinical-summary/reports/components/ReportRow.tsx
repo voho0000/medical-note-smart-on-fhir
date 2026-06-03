@@ -6,11 +6,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { Row, Observation } from '../types'
-import { getConceptText, getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
+import { getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
-import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface ReportRowProps {
   row: Row
@@ -58,7 +57,6 @@ function countAbnormal(obs: Observation[]): number {
 }
 
 function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
-  const { t } = useLanguage()
   const [trendDialogOpen, setTrendDialogOpen] = useState(false)
   // Separate "mounted" flag so the dialog (and its expensive history hooks)
   // only enter the React tree after the user actually opens it the first
@@ -110,29 +108,6 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
     </div>
   )
 
-  const MetaInfo = () => (
-    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-      {row.obs[0]?.status && (
-        <span>
-          <span className="font-medium text-foreground/80">{t.reports.status}:</span>{' '}
-          {row.obs[0]?.status}
-        </span>
-      )}
-      {row.obs[0]?.category && (
-        <span>
-          <span className="font-medium text-foreground/80">{t.reports.category}:</span>{' '}
-          {getConceptText(row.obs[0]?.category)}
-        </span>
-      )}
-      {row.institution && (
-        <span className="inline-flex items-center gap-1 text-blue-600/80 dark:text-blue-400/80">
-          <Building2 className="h-3 w-3" />
-          {row.institution}
-        </span>
-      )}
-    </div>
-  )
-
   // Single-value report: compact display
   if (isSingleValue) {
     const obs = displayObs[0]
@@ -144,15 +119,23 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
     const dateLabel = formatDisplayDate(row.effectiveDate, row.showTime)
     const metaWithDate = row.meta + (dateLabel ? ` • ${dateLabel}` : '')
 
+    // Date-only badge + institution inline, consistent with the single-value
+    // and accordion rows. Category/status (e.g. "Radiology • final") are noise
+    // in this dataset — they live on the badge's hover tooltip instead.
     const HeaderRight = () => (
       <div className="flex items-center gap-2 shrink-0">
         {row.institution && (
-          <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
-            <Building2 className="h-3 w-3" />
-            {row.institution}
+          <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
+            <Building2 className="h-3 w-3 shrink-0" />
+            <span className="truncate">{row.institution}</span>
           </span>
         )}
-        <Badge variant="outline" className="text-xs font-normal">{metaWithDate}</Badge>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+          </TooltipTrigger>
+          <TooltipContent>{metaWithDate}</TooltipContent>
+        </Tooltip>
       </div>
     )
 
@@ -256,25 +239,37 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
       ? getValueWithUnit(obs.valueQuantity)
       : obs.valueString || '—'
 
+    // For string results the bridge often emits a "reference range" that just
+    // repeats the result verbatim (e.g. value "Target Not Detected" with ref
+    // "[Target Not Detected]"). Hide that redundant copy — it only steals width
+    // from the report name. Numeric ranges (e.g. "[0.27–4.2]") are kept.
+    const normRef = refText.replace(/[[\]]/g, '').trim()
+    const showRef = !!refText && normRef !== (obs.valueString || '').trim()
+
+    // Single line by design: the row stays compact and overflow shows an
+    // ellipsis. The name has priority — it gets the flexible width — while the
+    // value and institution are capped/truncate first (full text on hover) and
+    // the date stays fully visible. Keeps a long report name like "Nucleic acid
+    // amplification (DNA), quantitative" readable instead of collapsing to "Nu…".
     return (
       <>
         <div
           className={cn(
-            'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border bg-muted/40 px-3 py-2',
+            'flex items-center gap-x-2 rounded-lg border bg-muted/40 px-3 py-2',
             isAbnormal && 'border-red-200 dark:border-red-800/50 bg-red-50/30 dark:bg-red-950/10'
           )}
         >
-          {/* Left: title + value + interp + ref */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-sm font-semibold text-foreground truncate">{row.title}</span>
-                </TooltipTrigger>
-                <TooltipContent>{row.title}</TooltipContent>
-              </Tooltip>
-              <TrendButton />
-            </div>
+          {/* Title — highest priority, takes the remaining width */}
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-sm font-semibold text-foreground truncate">{row.title}</span>
+              </TooltipTrigger>
+              <TooltipContent>{row.title}</TooltipContent>
+            </Tooltip>
+            <TrendButton />
+          </div>
+          {obs.valueQuantity ? (
             <span
               className={cn(
                 'text-sm font-bold tabular-nums shrink-0',
@@ -283,21 +278,51 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
             >
               {value}
             </span>
-            {interp && (
-              <span className={cn('inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium shrink-0', interp.style)}>
-                {interp.label}
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    'text-sm font-bold shrink max-w-[9rem] truncate',
+                    isAbnormal ? 'text-red-600 dark:text-red-400' : 'text-foreground'
+                  )}
+                >
+                  {value}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{value}</TooltipContent>
+            </Tooltip>
+          )}
+          {interp && (
+            <span className={cn('inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium shrink-0', interp.style)}>
+              {interp.label}
+            </span>
+          )}
+          {showRef && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-xs text-muted-foreground max-w-[6rem] truncate shrink">{refText}</span>
+              </TooltipTrigger>
+              <TooltipContent>{refText}</TooltipContent>
+            </Tooltip>
+          )}
+          {/* Institution + date — the compact badge shows only the date to give
+              the report name maximum width; category/status (row.meta) move to
+              the hover tooltip. Falls back to the full meta when there's no date. */}
+          <div className="flex items-center gap-2 shrink-0">
+            {row.institution && (
+              <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[5rem]">
+                <Building2 className="h-3 w-3 shrink-0" />
+                <span className="truncate">{row.institution}</span>
               </span>
             )}
-            {refText && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs text-muted-foreground max-w-[8rem] truncate">{refText}</span>
-                </TooltipTrigger>
-                <TooltipContent>{refText}</TooltipContent>
-              </Tooltip>
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+              </TooltipTrigger>
+              <TooltipContent>{metaWithDate}</TooltipContent>
+            </Tooltip>
           </div>
-          <HeaderRight />
           {row.isPossibleDuplicate && (
             <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
           )}
@@ -344,12 +369,26 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                {/* Right cluster mirrors the single-value rows: count +
+                    institution inline + date-only badge. Category/status
+                    (accordionMeta) live on the badge's hover tooltip — no
+                    separate meta line, so nothing is shown twice. */}
+                <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-muted-foreground">{displayObs.length} 項</span>
-                  <Badge variant="outline" className="text-xs font-normal">{accordionMeta}</Badge>
+                  {row.institution && (
+                    <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
+                      <Building2 className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{row.institution}</span>
+                    </span>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>{accordionMeta}</TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
-              <MetaInfo />
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4">
