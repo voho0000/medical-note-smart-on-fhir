@@ -83,6 +83,37 @@ export const en = {
     noData: 'No problem list items.',
   },
 
+  advanceDirectives: {
+    title: 'Advance Directives',
+    noData: 'No advance directives on record.',
+    deny: 'Declined',
+    permit: 'Agreed',
+    unknown: 'Recorded',
+  },
+
+  devices: {
+    title: 'Medical Devices',
+    noData: 'No devices recorded (not provided by source).',
+    manufacturer: 'Manufacturer',
+    model: 'Model',
+    serial: 'Serial No.',
+    udi: 'UDI',
+    statusActive: 'Active',
+    statusInactive: 'Inactive',
+  },
+
+  carePlans: {
+    title: 'Care Plans',
+    noData: 'No care plans recorded (not provided by source).',
+    activities: 'Activities',
+    statusActive: 'Active',
+    statusCompleted: 'Completed',
+    statusRevoked: 'Cancelled',
+    statusOnHold: 'On hold',
+    statusDraft: 'Draft',
+    statusUnknown: 'Unknown',
+  },
+
   medications: {
     title: "Patient's Medications",
     active: 'Active',

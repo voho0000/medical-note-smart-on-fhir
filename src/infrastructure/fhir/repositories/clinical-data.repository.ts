@@ -10,6 +10,9 @@ import type {
   EncounterEntity,
   DocumentReferenceEntity,
   CompositionEntity,
+  ConsentEntity,
+  DeviceEntity,
+  CarePlanEntity,
   ClinicalDataCollection
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient, LocalBundleModeError } from '../client/fhir-client.service'
@@ -41,7 +44,10 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       encounters,
       documentReferences,
       compositions,
-      immunizations
+      immunizations,
+      consents,
+      devices,
+      carePlans
     ] = await Promise.all([
       this.fetchConditions(patientId),
       this.fetchMedications(patientId),
@@ -53,7 +59,10 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       this.fetchEncounters(patientId),
       this.fetchDocumentReferences(patientId),
       this.fetchCompositions(patientId),
-      this.fetchImmunizations(patientId)
+      this.fetchImmunizations(patientId),
+      this.fetchConsents(patientId),
+      this.fetchDevices(patientId),
+      this.fetchCarePlans(patientId)
     ])
 
     // Re-attach observations to DiagnosticReports that _include didn't populate.
@@ -89,7 +98,46 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       encounters,
       documentReferences,
       compositions,
-      immunizations
+      immunizations,
+      consents,
+      devices,
+      carePlans
+    }
+  }
+
+  async fetchConsents(patientId: string): Promise<ConsentEntity[]> {
+    try {
+      const response = await fhirClient.request(
+        `Consent?patient=${patientId}&_count=100`
+      )
+      return response.entry?.map((e: any) => FhirMapper.toConsent(e.resource)) || []
+    } catch (error) {
+      warnFhirError('Failed to fetch consents:', error)
+      return []
+    }
+  }
+
+  async fetchDevices(patientId: string): Promise<DeviceEntity[]> {
+    try {
+      const response = await fhirClient.request(
+        `Device?patient=${patientId}&_count=100`
+      )
+      return response.entry?.map((e: any) => FhirMapper.toDevice(e.resource)) || []
+    } catch (error) {
+      warnFhirError('Failed to fetch devices:', error)
+      return []
+    }
+  }
+
+  async fetchCarePlans(patientId: string): Promise<CarePlanEntity[]> {
+    try {
+      const response = await fhirClient.request(
+        `CarePlan?patient=${patientId}&_sort=-date&_count=100`
+      )
+      return response.entry?.map((e: any) => FhirMapper.toCarePlan(e.resource)) || []
+    } catch (error) {
+      warnFhirError('Failed to fetch care plans:', error)
+      return []
     }
   }
 

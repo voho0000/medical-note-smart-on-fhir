@@ -22,6 +22,7 @@ export class LocalBundleRepository implements IClinicalDataRepository {
       conditions: [], medications: [], allergies: [], observations: [],
       vitalSigns: [], diagnosticReports: [], procedures: [], encounters: [],
       documentReferences: [], compositions: [], immunizations: [],
+      consents: [], devices: [], carePlans: [],
     }
   }
 

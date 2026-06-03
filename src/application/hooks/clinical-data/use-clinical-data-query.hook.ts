@@ -45,6 +45,7 @@ export function useClinicalDataQuery() {
             conditions: [], medications: [], allergies: [], observations: [],
             vitalSigns: [], diagnosticReports: [], procedures: [], encounters: [],
             documentReferences: [], compositions: [], immunizations: [],
+            consents: [], devices: [], carePlans: [],
           }
         }
         throw error
@@ -76,6 +77,9 @@ export function useClinicalData() {
     documentReferences: data?.documentReferences ?? [],
     compositions: data?.compositions ?? [],
     immunizations: data?.immunizations ?? [],
+    consents: data?.consents ?? [],
+    devices: data?.devices ?? [],
+    carePlans: data?.carePlans ?? [],
     isLoading,
     error: error as Error | null,
     refetch: async () => {

@@ -11,7 +11,10 @@ import type {
   EncounterEntity,
   DocumentReferenceEntity,
   CompositionEntity,
-  ImmunizationEntity
+  ImmunizationEntity,
+  ConsentEntity,
+  DeviceEntity,
+  CarePlanEntity
 } from '@/src/core/entities/clinical-data.entity'
 import type { IDataMapper } from '@/src/core/interfaces/data-mapper.interface'
 import { dataMapperRegistry } from '@/src/core/interfaces/data-mapper.interface'
@@ -276,6 +279,66 @@ export class FhirMapper implements IDataMapper {
       note: fhirResource.note,
       manufacturer: fhirResource.manufacturer,
       lotNumber: fhirResource.lotNumber,
+      sourceSystem: FHIR_SOURCE_SYSTEM,
+      sourceId: fhirResource.id,
+    }
+  }
+
+  static toConsent(fhirResource: any): ConsentEntity {
+    // FHIR R4 Consent. `provision` may be a single object (R4) — keep the
+    // first level only; nested sub-provisions aren't surfaced in the card.
+    return {
+      id: fhirResource.id || '',
+      status: fhirResource.status,
+      scope: fhirResource.scope,
+      category: fhirResource.category,
+      dateTime: fhirResource.dateTime,
+      provision: fhirResource.provision
+        ? {
+            type: fhirResource.provision.type,
+            period: fhirResource.provision.period,
+          }
+        : undefined,
+      sourceAttachment: fhirResource.sourceAttachment,
+      organization: fhirResource.organization,
+      sourceSystem: FHIR_SOURCE_SYSTEM,
+      sourceId: fhirResource.id,
+    }
+  }
+
+  static toDevice(fhirResource: any): DeviceEntity {
+    return {
+      id: fhirResource.id || '',
+      status: fhirResource.status,
+      type: fhirResource.type,
+      manufacturer: fhirResource.manufacturer,
+      modelNumber: fhirResource.modelNumber,
+      serialNumber: fhirResource.serialNumber,
+      udiCarrier: fhirResource.udiCarrier,
+      deviceName: fhirResource.deviceName,
+      manufactureDate: fhirResource.manufactureDate,
+      expirationDate: fhirResource.expirationDate,
+      owner: fhirResource.owner,
+      note: fhirResource.note,
+      sourceSystem: FHIR_SOURCE_SYSTEM,
+      sourceId: fhirResource.id,
+    }
+  }
+
+  static toCarePlan(fhirResource: any): CarePlanEntity {
+    return {
+      id: fhirResource.id || '',
+      status: fhirResource.status,
+      intent: fhirResource.intent,
+      category: fhirResource.category,
+      title: fhirResource.title,
+      description: fhirResource.description,
+      period: fhirResource.period,
+      created: fhirResource.created,
+      addresses: fhirResource.addresses,
+      activity: fhirResource.activity,
+      note: fhirResource.note,
+      author: fhirResource.author,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id,
     }

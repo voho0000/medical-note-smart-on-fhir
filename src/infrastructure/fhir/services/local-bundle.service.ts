@@ -179,6 +179,9 @@ export const LocalBundleService = {
     const docRefs = byType('DocumentReference')
     const comps  = byType('Composition')
     const imms   = byType('Immunization')
+    const consents = byType('Consent')
+    const devices  = byType('Device')
+    const carePlans = byType('CarePlan')
 
     // Build observation map for DiagnosticReport expansion
     const allObs = obs.map((r: any) => FhirMapper.toObservation(r))
@@ -208,6 +211,9 @@ export const LocalBundleService = {
       documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),
       compositions:     comps.map((r: any) => FhirMapper.toComposition(r)),
       immunizations:    imms.map((r: any) => FhirMapper.toImmunization(r)),
+      consents:         consents.map((r: any) => FhirMapper.toConsent(r)),
+      devices:          devices.map((r: any) => FhirMapper.toDevice(r)),
+      carePlans:        carePlans.map((r: any) => FhirMapper.toCarePlan(r)),
     }
 
     return { patient, collection }

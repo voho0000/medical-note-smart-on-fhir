@@ -18,6 +18,9 @@ import {
   ClipboardList,
   Library,
   User,
+  ScrollText,
+  Cpu,
+  ListChecks,
   type LucideIcon
 } from 'lucide-react'
 
@@ -189,6 +192,9 @@ export const FEATURE_CARD_THEMES: Record<string, { icon: LucideIcon; colorKey: k
   'medications': { icon: Pill, colorKey: 'clinical' },
   'reports': { icon: FileText, colorKey: 'clinical' },
   'visit-history': { icon: Calendar, colorKey: 'clinical' },
+  'advance-directives': { icon: ScrollText, colorKey: 'clinical' },
+  'devices': { icon: Cpu, colorKey: 'clinical' },
+  'care-plans': { icon: ListChecks, colorKey: 'clinical' },
 }
 
 // ============================================================================

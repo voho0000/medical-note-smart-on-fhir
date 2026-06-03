@@ -85,6 +85,37 @@ export const zhTW = {
     noData: '無問題清單資料。',
   },
 
+  advanceDirectives: {
+    title: '預立醫療決定',
+    noData: '無預立醫療決定註記。',
+    deny: '不施行',
+    permit: '同意',
+    unknown: '已註記',
+  },
+
+  devices: {
+    title: '醫療器材',
+    noData: '無器材紀錄（來源未提供）。',
+    manufacturer: '製造商',
+    model: '型號',
+    serial: '序號',
+    udi: 'UDI',
+    statusActive: '使用中',
+    statusInactive: '已停用',
+  },
+
+  carePlans: {
+    title: '照護計畫',
+    noData: '無照護計畫紀錄（來源未提供）。',
+    activities: '計畫項目',
+    statusActive: '進行中',
+    statusCompleted: '已完成',
+    statusRevoked: '已取消',
+    statusOnHold: '暫停',
+    statusDraft: '草稿',
+    statusUnknown: '未知',
+  },
+
   medications: {
     title: '病患用藥',
     active: '使用中',

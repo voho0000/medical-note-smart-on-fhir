@@ -40,16 +40,21 @@ export function FeatureCard({
   const hasTitle = !!title
 
   return (
-    <Card className={`border-l-4 ${borderColor}`}>
+    // Base Card is `flex flex-col gap-6 py-6` (shadcn). That 24px flex-gap +
+    // 24px vertical padding makes the title↔content spacing feel too airy for
+    // dense clinical cards, so tighten both here — this is the single shared
+    // wrapper every feature card renders through, so the change applies
+    // uniformly. twMerge lets gap-3/py-4 override the base gap-6/py-6.
+    <Card className={`border-l-4 ${borderColor} gap-2 py-4`}>
       {hasTitle && (
-        <CardHeader className="pb-3">
+        <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
             {title}
           </CardTitle>
         </CardHeader>
       )}
-      <CardContent className={hasTitle ? undefined : 'pt-6'}>
+      <CardContent>
         {isLoading && <LoadingSkeleton />}
         {!isLoading && error && <ErrorMessage error={error} context={(title ?? featureId ?? '').toLowerCase()} />}
         {!isLoading && !error && isEmpty && <EmptyState message={emptyMessage} />}

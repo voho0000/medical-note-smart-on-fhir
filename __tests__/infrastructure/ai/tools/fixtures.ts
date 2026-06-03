@@ -210,6 +210,9 @@ export const sampleCollection: ClinicalDataCollection = {
       performer: [{ actor: { display: 'CDC' } }],
     } as any,
   ],
+  consents: [],
+  devices: [],
+  carePlans: [],
 }
 
 export const sampleDataSource = (): AgentDataSource => ({

@@ -473,6 +473,167 @@ export interface ImmunizationEntity {
   sourceId?: string
 }
 
+/**
+ * FHIR R4 Consent — advance directives / 預立醫療決定.
+ *
+ * IPS "Advance Directives" section. 健保存摺 surfaces 安寧緩和醫療意願
+ * (palliative/DNR), 器官捐贈意願 (organ donation) and 病人自主權利法
+ * 預立醫療決定 (AD per Patient Right to Autonomy Act). Bridge work to emit
+ * these is in progress — these fields follow the standard R4 shape and will
+ * be locked against real bridge samples once they land.
+ */
+export interface ConsentEntity {
+  id: string
+  status?: string
+  scope?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }
+  category?: Array<{
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }>
+  dateTime?: string
+  /**
+   * Consent.provision — `type` is 'deny' | 'permit'. A deny provision
+   * (e.g. DNR / refuse CPR) is the clinically load-bearing case and is
+   * surfaced with an amber accent in the UI.
+   */
+  provision?: {
+    type?: string
+    period?: {
+      start?: string
+      end?: string
+    }
+  }
+  sourceAttachment?: {
+    contentType?: string
+    title?: string
+    url?: string
+  }
+  organization?: Array<{
+    display?: string
+    reference?: string
+  }>
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
+}
+
+/**
+ * FHIR R4 Device — implants / durable medical equipment.
+ *
+ * IPS "Medical Devices" section. 健保存摺 surfaces 植入物 (implants such as
+ * 心臟節律器, 人工關節, 支架). Implant date is typically carried on a related
+ * Procedure rather than the Device itself, so the card joins on date when
+ * available. Field shape follows standard R4 pending bridge samples.
+ */
+export interface DeviceEntity {
+  id: string
+  status?: string
+  type?: {
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }
+  manufacturer?: string
+  modelNumber?: string
+  serialNumber?: string
+  udiCarrier?: Array<{
+    deviceIdentifier?: string
+    carrierHRF?: string
+  }>
+  deviceName?: Array<{
+    name?: string
+    type?: string
+  }>
+  manufactureDate?: string
+  expirationDate?: string
+  owner?: {
+    display?: string
+    reference?: string
+  }
+  note?: Array<{ text?: string }>
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
+}
+
+/**
+ * FHIR R4 CarePlan — plan of care / 照護計畫.
+ *
+ * IPS "Plan of Care" section. 健保存摺 surfaces 個案管理照護計畫 such as
+ * 糖尿病共同照護, 居家醫療整合照護. Status drives the badge (進行中 / 已完成
+ * / 已取消). `activity` holds the discrete plan items; `addresses` links the
+ * conditions the plan targets. Field shape follows standard R4 pending bridge
+ * samples.
+ */
+export interface CarePlanEntity {
+  id: string
+  status?: string
+  intent?: string
+  category?: Array<{
+    text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
+  }>
+  title?: string
+  description?: string
+  period?: {
+    start?: string
+    end?: string
+  }
+  created?: string
+  addresses?: Array<{
+    display?: string
+    reference?: string
+  }>
+  activity?: Array<{
+    detail?: {
+      kind?: string
+      code?: {
+        text?: string
+        coding?: Array<{
+          code?: string
+          display?: string
+        }>
+      }
+      status?: string
+      description?: string
+      scheduledString?: string
+    }
+    outcomeCodeableConcept?: Array<{
+      text?: string
+      coding?: Array<{
+        code?: string
+        display?: string
+      }>
+    }>
+  }>
+  note?: Array<{ text?: string }>
+  author?: {
+    display?: string
+    reference?: string
+  }
+  // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
+}
+
 export interface ClinicalDataCollection {
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
@@ -485,4 +646,7 @@ export interface ClinicalDataCollection {
   documentReferences: DocumentReferenceEntity[]
   compositions: CompositionEntity[]
   immunizations: ImmunizationEntity[]
+  consents: ConsentEntity[]
+  devices: DeviceEntity[]
+  carePlans: CarePlanEntity[]
 }

@@ -69,7 +69,10 @@ describe('GenerateClinicalContextUseCase', () => {
     encounters: [],
     documentReferences: [],
     compositions: [],
-    immunizations: []
+    immunizations: [],
+    consents: [],
+    devices: [],
+    carePlans: []
   }
 
   const defaultOptions: ClinicalContextOptions = {
@@ -207,7 +210,10 @@ describe('GenerateClinicalContextUseCase', () => {
         encounters: [],
         documentReferences: [],
         compositions: [],
-        immunizations: []
+        immunizations: [],
+        consents: [],
+        devices: [],
+        carePlans: []
       }
 
       const result = useCase.execute(mockPatient, emptyData, defaultOptions)

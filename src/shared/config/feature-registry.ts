@@ -7,6 +7,9 @@ import { MedListCard } from '@/features/clinical-summary/medications/MedListCard
 import { AllergiesCard } from '@/features/clinical-summary/allergies/AllergiesCard'
 import { DiagnosesCard } from '@/features/clinical-summary/diagnosis/DiagnosisCard'
 import { ProblemListCard } from '@/features/clinical-summary/problem-list/ProblemListCard'
+import { AdvanceDirectivesCard } from '@/features/clinical-summary/advance-directives/AdvanceDirectivesCard'
+import { DevicesCard } from '@/features/clinical-summary/devices/DevicesCard'
+import { CarePlansCard } from '@/features/clinical-summary/care-plans/CarePlansCard'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { VisitHistoryCard } from '@/features/clinical-summary/visit-history'
 
@@ -46,7 +49,8 @@ export interface FeatureConfig {
 }
 
 export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
-  // Patient Tab Features
+  // Patient Tab Features — display order:
+  // 病患資訊 → 生命徵象 → 問題清單 → 預立醫療決定 → 醫療器材 → 照護計畫
   {
     id: 'patient-info',
     name: 'Patient Information',
@@ -64,20 +68,44 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
     enabled: true,
   },
   {
-    id: 'diagnosis',
-    name: 'Diagnosis / Problem List',
-    component: DiagnosesCard,
-    tab: 'patient',
-    order: 2,
-    enabled: false,
-  },
-  {
     id: 'problem-list',
     name: 'Problem List',
     component: ProblemListCard,
     tab: 'patient',
-    order: 99,  // last card in patient tab
+    order: 2,
     enabled: true,
+  },
+  {
+    id: 'advance-directives',
+    name: 'Advance Directives',
+    component: AdvanceDirectivesCard,
+    tab: 'patient',
+    order: 3,
+    enabled: true,
+  },
+  {
+    id: 'devices',
+    name: 'Medical Devices',
+    component: DevicesCard,
+    tab: 'patient',
+    order: 4,
+    enabled: true,
+  },
+  {
+    id: 'care-plans',
+    name: 'Care Plans',
+    component: CarePlansCard,
+    tab: 'patient',
+    order: 5,
+    enabled: true,
+  },
+  {
+    id: 'diagnosis',
+    name: 'Diagnosis / Problem List',
+    component: DiagnosesCard,
+    tab: 'patient',
+    order: 98,  // disabled; kept out of the way of the active ordering
+    enabled: false,
   },
   // Reports Tab Features
   {

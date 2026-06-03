@@ -5,7 +5,7 @@ import { Search, Building2, AlertCircle, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
@@ -202,11 +202,11 @@ export function VisitHistoryCard() {
   const vt = (t.visitHistory as any)
 
   // ── Render ────────────────────────────────────────────────────────────
+  // No CardHeader/title here — the 就診紀錄 tab label already identifies this
+  // card, so the heading would be redundant. gap-2 py-4 mirrors FeatureCard
+  // for consistent spacing (base Card is gap-6 py-6).
   return (
-    <Card className={CARD_BORDER_CLASSES.clinical}>
-      <CardHeader>
-        <CardTitle>{t.tabs.visits}</CardTitle>
-      </CardHeader>
+    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-4`}>
       <CardContent>
         {isLoading ? (
           <div className="text-sm text-muted-foreground">{t.common.loading}</div>
