@@ -141,3 +141,39 @@ describe('categorizeObservation — early routing rules', () => {
     expect(categorizeObservation(obs)?.id).toBe('urine')
   })
 })
+
+// ── TROP routing — added 2026-06-05 after a clinician reported it appearing
+// outside 生化 in 就診紀錄 even though 累積報告 expected it there. Bridge
+// emits cardiac Troponin I with LOINC 10839-9 and free text "Troponin I";
+// both the LOINC and the canonical short code should land in `chem`.
+describe('categorizeObservation — cardiac markers', () => {
+  it('Troponin I LOINC 10839-9 → chem', () => {
+    const obs = {
+      code: {
+        text: 'Troponin I',
+        coding: [{ system: 'http://loinc.org', code: '10839-9' }],
+      },
+      valueQuantity: { value: 0.02, unit: 'ng/mL' },
+      specimen: { display: 'Blood' },
+    }
+    expect(categorizeObservation(obs)?.id).toBe('chem')
+  })
+
+  it('short code TROP → chem', () => {
+    const obs = {
+      code: { text: 'TROP' },
+      valueQuantity: { value: 0.02, unit: 'ng/mL' },
+    }
+    expect(categorizeObservation(obs)?.id).toBe('chem')
+  })
+
+  it('"Troponin I" / "Troponin T" display names → chem', () => {
+    for (const display of ['Troponin I', 'Troponin T', 'TROPONIN']) {
+      const obs = {
+        code: { text: display },
+        valueQuantity: { value: 0.02, unit: 'ng/mL' },
+      }
+      expect(categorizeObservation(obs)?.id).toBe('chem')
+    }
+  })
+})

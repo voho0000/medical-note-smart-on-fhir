@@ -90,19 +90,29 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // together for bacterial vs viral discrimination), then ESR for
     // sub-acute / autoimmune, then LACTATE for sepsis/shock context.
     // FIB-4 (calculated liver fibrosis index) tails because it's derived.
-    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4'],
-    codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE'],
+    // TROP (cardiac troponin) is grouped here per Taiwan convention —
+    // 生化室 owns the assay even though clinically it's a cardiac marker.
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TROP', 'TP', 'ALB', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4'],
+    codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
-    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '1988-5', '30522-7', '1759-0', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8'],
+    // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
+    // ships this for NHI 09099C 心肌旋轉蛋白Ｉ. The high-sensitivity LOINCs
+    // (49563-0 hs-cTnI, 6598-7 cTnT, 67151-1 hs-cTnT) are intentionally
+    // omitted until we see a real bridge bundle using them, so the
+    // LOINC_TO_CANONICAL map stays in lock-step.
+    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '1988-5', '30522-7', '1759-0', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8'],
     subgroups: [
       { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA'] },
       { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CA', 'IP'] },
       { id: 'liver',       members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB'] },
+      { id: 'cardiac',     members: ['TROP'] },
       { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
     ],
     // CL deliberately not pinned — most ambulatory chem panels don't include
     // chloride, so pinning would create persistent empty columns. When a
     // hospital does report it, the data-presence rule will surface the column.
+    // TROP also intentionally NOT pinned — only ordered for acute MI workup,
+    // pinning would create a persistent empty column on routine outpatient labs.
     pinnedColumns: ['BUN', 'CREA', 'EGFR', 'UA', 'NA', 'K', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'ALB'],
   },
   {
