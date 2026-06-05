@@ -45,6 +45,7 @@ interface DocSummaryStrings {
   htmlBodyHeader: string
   htmlNoContent: string
   htmlExternalUrl: string
+  primaryDiagnosisTooltip: string
   docTypes: Record<string, string>
   sections: Record<string, string>
 }
@@ -64,6 +65,7 @@ const FALLBACK_STRINGS: DocSummaryStrings = {
   htmlBodyHeader: '展開文件內容',
   htmlNoContent: '本份文件無可顯示的內容。',
   htmlExternalUrl: '開啟外部文件',
+  primaryDiagnosisTooltip: '此 ICD-10 碼為醫療院所申報健保時提供的住院主診斷（健保署彙整後同步至健康存摺）。並非醫師直接撰寫的診斷敘述，詳細病情請展開文件內容。',
   docTypes: {},
   sections: {},
 }
@@ -200,7 +202,15 @@ function DocumentEntryCard({
             </span>
           )}
         </div>
-        {dateStr && (
+        {/* Document date — only render when there's no period to anchor the
+            timeline. For DocumentReference 出院病摘 the bridge sets `date` to
+            the day NHI indexed the document (typically discharge day +0/+1),
+            which is essentially redundant with period.end and confused users
+            into reading it as the discharge date. The recording timestamp is
+            also visible inside the HTML body, so we lose nothing by dropping
+            it here. For Composition (IPS) the date IS the only temporal
+            anchor, so it stays. */}
+        {dateStr && !entry.period && (
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
             {dateStr}
           </span>
@@ -209,10 +219,24 @@ function DocumentEntryCard({
 
       {/* Primary diagnosis — matches 健保存摺's 「疾病分類」line. Drawn from
           the linked Encounter.reasonCode[0]; for inpatient discharge summaries
-          the bridge writes the principal diagnosis there. */}
+          the bridge writes the principal diagnosis there.
+          The ICD code is shown for BOTH audiences (medical & 民眾): the tooltip
+          calls out that this is NHI's billing-side coding, not the clinician's
+          narrative diagnosis, so users don't mistake the short label for the
+          full clinical picture. */}
       {entry.primaryDiagnosis && (
-        <div className="mb-1 text-[13px] font-medium text-foreground/90" title={entry.primaryDiagnosis.code}>
-          {entry.primaryDiagnosis.text}
+        <div className="mb-1 flex items-baseline gap-1.5 text-[13px] font-medium text-foreground/90">
+          {entry.primaryDiagnosis.code && (
+            <span
+              className="font-mono text-[11px] text-muted-foreground cursor-help"
+              title={strings.primaryDiagnosisTooltip}
+            >
+              {entry.primaryDiagnosis.code}
+            </span>
+          )}
+          <span title={strings.primaryDiagnosisTooltip} className="cursor-help">
+            {entry.primaryDiagnosis.text}
+          </span>
         </div>
       )}
 
