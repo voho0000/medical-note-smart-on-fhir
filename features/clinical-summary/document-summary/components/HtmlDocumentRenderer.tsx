@@ -101,13 +101,30 @@ export function HtmlDocumentRenderer({
           ) : sanitised ? (
             // The `prose` typography preset gives the bridge's NHI-styled
             // HTML (table-of-contents layouts, signature blocks, printed-on
-            // metadata) sensible defaults. `[&_table]` overrides keep the
-            // dense diagnosis tables compact at sidebar widths.
-            <div
-              className="prose prose-sm dark:prose-invert max-w-none [&_table]:text-xs [&_th]:font-medium [&_table]:border-collapse [&_td]:border [&_td]:border-border/40 [&_td]:px-1.5 [&_td]:py-0.5 [&_th]:border [&_th]:border-border/40 [&_th]:px-1.5 [&_th]:py-0.5"
-              // eslint-disable-next-line react/no-danger -- sanitised via DOMPurify with the FHIR-Narrative whitelist
-              dangerouslySetInnerHTML={{ __html: sanitised }}
-            />
+            // metadata) sensible defaults. The overrides below address two
+            // bridge-side quirks:
+            //   1. NHI HTML is designed for printed pages with fixed table
+            //      widths, so long diagnosis strings ("Reflux esophagitis,
+            //      L.A. grade A, Erythematous gastritis [underlying disease]
+            //      . Pulmonary embolism hx?? Dabigatran 110mg bid …") sit
+            //      in one cell that refuses to wrap. `table-layout: fixed`
+            //      + `word-break: break-word` force the cells to honour the
+            //      container width.
+            //   2. The original <style> block ships textarea-based body
+            //      sections; DOMPurify strips both <style> and <textarea>,
+            //      leaving raw text that needs `whitespace-pre-wrap` to
+            //      preserve the doctor's line breaks.
+            // `overflow-x-auto` on the outer wrapper is the escape hatch
+            // for the rare table that genuinely needs more horizontal space
+            // (e.g. a 10-column lab matrix) — the user can scroll instead
+            // of losing data.
+            <div className="overflow-x-auto">
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none break-words [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_table]:table-fixed [&_td]:border [&_td]:border-border/40 [&_td]:px-1.5 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:border [&_th]:border-border/40 [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:font-medium [&_th]:break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words"
+                // eslint-disable-next-line react/no-danger -- sanitised via DOMPurify with the FHIR-Narrative whitelist
+                dangerouslySetInnerHTML={{ __html: sanitised }}
+              />
+            </div>
           ) : (
             <div className="text-xs italic text-muted-foreground">{labels.noContent}</div>
           )}
