@@ -12,6 +12,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import { Info } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
@@ -59,6 +60,8 @@ export function ReportImageDialog({ images, title, open, onOpenChange }: ReportI
     view: 'View image',
     images: 'Images',
     loading: 'Loading image…',
+    previewLimitNotice:
+      'NHI 健康存摺 carries at most 10 preview images per exam; the full DICOM files are not transmitted. For complete imaging studies, request the DICOM disc from the imaging hospital or download the DCM file via the NHI health record.',
   }
 
   // Resolve only while the dialog is open; revoke on close/unmount so the
@@ -105,6 +108,14 @@ export function ReportImageDialog({ images, title, open, onOpenChange }: ReportI
             )}
           </DialogTitle>
         </DialogHeader>
+        {/* Source caveat — 健保存摺 only carries up to 10 preview JPEGs per
+            exam (no DICOM). Make the limit explicit on every dialog open so
+            clinicians don't mistake the previews for the full imaging study
+            and miss key images that didn't make the 10-slot cap. */}
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>{tt.previewLimitNotice}</span>
+        </div>
         <div className="flex-1 overflow-y-auto space-y-4">
           {images.map((img, i) => (
             <figure key={i} className="space-y-1">

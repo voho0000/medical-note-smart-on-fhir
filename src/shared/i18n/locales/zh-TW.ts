@@ -253,6 +253,8 @@ export const zhTW = {
       view: '查看影像',
       images: '張影像',
       loading: '影像載入中…',
+      previewLimitNotice:
+        '健保存摺單一影像檢查最多預覽 10 張縮圖，並不會傳送完整 DICOM 檔。如需完整醫療影像，請至執行檢查的醫院申請光碟，或於健康存摺下載 DCM 檔案。',
     },
     tabs: {
       cumulative: '累積報告',

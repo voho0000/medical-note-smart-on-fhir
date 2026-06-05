@@ -250,6 +250,8 @@ export const en = {
       view: 'View image',
       images: 'images',
       loading: 'Loading image…',
+      previewLimitNotice:
+        'NHI 健康存摺 carries at most 10 preview thumbnails per imaging exam and does not transmit the full DICOM study. For complete medical imaging, request the DICOM disc from the imaging hospital or download the DCM file via the NHI health record.',
     },
     tabs: {
       cumulative: 'Cumulative',
