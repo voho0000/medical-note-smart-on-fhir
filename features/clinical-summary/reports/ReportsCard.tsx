@@ -29,7 +29,7 @@ export function ReportsCard() {
   const [activeTab, setActiveTab] = useState("cumulative")
   // Tabs the user has visited at least once in this session. We forceMount
   // only these so the *first* paint of ReportsCard (e.g. when the user
-  // switches from "病患資訊" to "報告") doesn't have to mount 500+ rows of
+  // switches from "病人資訊" to "報告") doesn't have to mount 500+ rows of
   // every sub-tab at once — only the default tab gets work upfront. Once
   // a sub-tab is visited, it stays mounted so subsequent tab switches are
   // instant (the original perf goal).

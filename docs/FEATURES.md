@@ -202,7 +202,7 @@ import {
 - `AllergiesCard` - 過敏史
 - `DiagnosesCard` - 診斷/病況
 - `MedListCard` - 用藥清單
-- `PatientInfoCard` - 病患基本資料
+- `PatientInfoCard` - 病人基本資料
 - `ReportsCard` - 診斷報告
 - `VisitHistoryCard` - 就診紀錄
 - `VitalsCard` - 生命徵象

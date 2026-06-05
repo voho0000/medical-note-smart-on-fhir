@@ -30,7 +30,7 @@ const samplePrompts = [
   {
     title: 'SOAP 筆記範本',
     description: '標準 SOAP 格式的病歷筆記',
-    prompt: `請根據病患資料撰寫 SOAP 筆記：
+    prompt: `請根據病人資料撰寫 SOAP 筆記：
 
 Subjective (主訴):
 - 
@@ -51,7 +51,7 @@ Plan (計畫):
   {
     title: '入院病歷',
     description: '完整的入院病歷撰寫範本',
-    prompt: `請根據病患資料撰寫入院病歷，包含：
+    prompt: `請根據病人資料撰寫入院病歷，包含：
 
 1. Chief Complaint (主訴)
 2. Present Illness (現在病史)
@@ -87,8 +87,8 @@ Plan (計畫):
   },
   {
     title: '病程摘要',
-    description: '總結病患的主要診斷和治療進展',
-    prompt: `請總結病患的臨床狀況：
+    description: '總結病人的主要診斷和治療進展',
+    prompt: `請總結病人的臨床狀況：
 
 1. 主要診斷
 2. 目前治療
@@ -102,7 +102,7 @@ Plan (計畫):
   },
   {
     title: '急診初步評估',
-    description: '急診病患的快速評估範本',
+    description: '急診病人的快速評估範本',
     prompt: `請進行急診初步評估：
 
 ABCDE 評估：

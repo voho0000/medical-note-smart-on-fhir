@@ -88,7 +88,7 @@ src/core/
 - `clinical-context/` - 臨床上下文
 - `clinical-data/` - 臨床資料處理
 - `clinical-insights/` - 臨床洞察生成
-- `patient/` - 病患資料
+- `patient/` - 病人資料
 - `transcription/` - 語音轉錄
 
 ### 4. Infrastructure Layer（基礎設施層）
@@ -151,7 +151,7 @@ export function MyFeatureCard() {
 ```
 
 **預設功能**（7 個）：
-- Patient Info - 病患基本資料
+- Patient Info - 病人基本資料
 - Vitals - 生命徵象
 - Diagnoses - 診斷
 - Reports - 診斷報告
@@ -236,7 +236,7 @@ export function AppProviders({ children }) {
 
 **主要 Providers**：
 - `AuthProvider` - Firebase 使用者認證
-- `FhirProvider` - FHIR 資料和病患上下文
+- `FhirProvider` - FHIR 資料和病人上下文
 - `LanguageProvider` - 多語言支援
 - `ThemeProvider` - 深色/亮色模式
 
@@ -363,7 +363,7 @@ Repository (Infrastructure)
 **使用 Context 的情境**：
 - 全域配置（語言、主題）
 - 使用者認證狀態
-- FHIR 上下文（病患資料）
+- FHIR 上下文（病人資料）
 
 **使用 Zustand 的情境**：
 - 複雜的狀態邏輯
@@ -532,16 +532,16 @@ Presentation Layer (UI Components)
 src/infrastructure/fhir/
 ├── mappers/
 │   ├── fhir.mapper.ts        # 主要 FHIR 資源映射
-│   └── patient.mapper.ts     # 病患資料映射
+│   └── patient.mapper.ts     # 病人資料映射
 └── repositories/
     ├── clinical-data.repository.ts  # 使用 mapper 轉換資料
-    └── patient.repository.ts        # 使用 mapper 轉換病患資料
+    └── patient.repository.ts        # 使用 mapper 轉換病人資料
 ```
 
 **Core Layer**：
 ```
 src/core/entities/
-├── patient.entity.ts         # 病患實體
+├── patient.entity.ts         # 病人實體
 ├── observation.entity.ts     # 檢驗檢查實體
 ├── medication.entity.ts      # 用藥實體
 ├── condition.entity.ts       # 診斷實體
