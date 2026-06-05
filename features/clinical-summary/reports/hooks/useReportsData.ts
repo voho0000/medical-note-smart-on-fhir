@@ -37,6 +37,16 @@ function getDrInstitution(dr: any): string | undefined {
     || undefined
 }
 
+// Single source of truth for a report's date: prefer effectiveDateTime (the
+// exam/collection date — 檢查日期) over issued (the report-release date —
+// 報告發布日), which can differ by days. Every date use below (grouping key,
+// synthetic summary obs, row display) routes through this so the preference
+// can't drift apart again — a past bug had the row header alone preferring
+// issued, so a report grouped under 6/2 was displayed as 6/5.
+function getDrDate(dr: any): string | undefined {
+  return dr?.effectiveDateTime || dr?.issued
+}
+
 export function useReportsData(diagnosticReports: any[]) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
@@ -53,7 +63,7 @@ export function useReportsData(diagnosticReports: any[]) {
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
       const text = (getCodeableConceptText(dr.code) || '').trim()
-      const date = ((dr.effectiveDateTime || dr.issued || '') as string).slice(0, 10)
+      const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
       const key = `${text}|${date}|${inst}`
       if (!groups.has(key)) {
@@ -75,6 +85,10 @@ export function useReportsData(diagnosticReports: any[]) {
       const grp = groups.get(key)!
       const head = grp[0]
       const isMulti = grp.length > 1
+      // Computed once for the whole group; reused by the synthetic summary obs
+      // and the row's display date below (both keyed off head, the group's
+      // first DR — all members share this date since it's part of the key).
+      const rawDate = getDrDate(head)
 
       const groupText = (getCodeableConceptText(head.code) || '').trim()
       const summaryParts: string[] = []
@@ -231,7 +245,7 @@ export function useReportsData(diagnosticReports: any[]) {
           id: head.id ? `dr-summary-${head.id}` : `dr-summary-${Math.random().toString(36).slice(2, 10)}`,
           code: { text: 'Report Summary' },
           valueString: summaryValue || (attachments.length > 0 ? 'Supporting documents available' : ''),
-          effectiveDateTime: head.effectiveDateTime || head.issued,
+          effectiveDateTime: rawDate,
           status: head.status,
           component: summaryComponents,
         }
@@ -320,7 +334,6 @@ export function useReportsData(diagnosticReports: any[]) {
         ? head.category.map((c: any) => getCodeableConceptText(c)).filter(Boolean).join(', ')
         : getCodeableConceptText(head.category)
       const institution = getDrInstitution(head)
-      const rawDate = head.issued || head.effectiveDateTime
 
       rows.push({
         id: head.id || Math.random().toString(36),

@@ -3,7 +3,7 @@ import type { DataCategory, ClinicalContextSection } from '../interfaces/data-ca
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory, inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
 import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
-import { isWithinTimeRange, getMostRecentDate } from '../utils/date-filter.utils'
+import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { LabReportFilter } from '@/features/data-selection/components/DataFilters'
 
@@ -20,7 +20,12 @@ const getLabDataDate = (item: LabData): string | undefined => {
   if (isObservation(item)) {
     return item.effectiveDateTime
   }
-  return getMostRecentDate(item.effectiveDateTime, item.issued)
+  // Prefer effectiveDateTime (exam date — 檢查日) over issued (report-release
+  // date). Must match the time-range filter below (effectiveDateTime || issued)
+  // and the reports display; getMostRecentDate would instead pick the LATER of
+  // the two (issued), making "latest version" dedup key off a different date
+  // than the range filter. See useReportsData rawDate.
+  return item.effectiveDateTime || item.issued
 }
 
 // Helper to get latest lab data by name

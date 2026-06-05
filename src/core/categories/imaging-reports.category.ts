@@ -2,7 +2,7 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
-import { isWithinTimeRange, getMostRecentDate } from '../utils/date-filter.utils'
+import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { ImagingReportFilter } from '@/features/data-selection/components/DataFilters'
 
@@ -11,7 +11,11 @@ const getLatestImagingReports = (reports: DiagnosticReport[]): DiagnosticReport[
   return getLatestByName(
     reports,
     (report) => getCodeableConceptText(report.code),
-    (report) => getMostRecentDate(report.effectiveDateTime, report.issued)
+    // Prefer effectiveDateTime (exam date — 檢查日) over issued, consistent with
+    // the time-range filter below and the reports display. getMostRecentDate
+    // would pick the LATER of the two (issued), keying "latest" dedup off a
+    // different date than the range filter.
+    (report) => report.effectiveDateTime || report.issued
   )
 }
 
