@@ -12,6 +12,31 @@ import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
+import { MultiRegionStudyCard } from './MultiRegionStudyCard'
+
+/** Small badge surfaced on a Row's header when bridge sent N duplicate
+ *  DRs that the SMART app merged via strict-prefix dedup. Without this
+ *  badge the merge would silently hide a bridge-side dedup miss (full-
+ *  width slash slip, dictation-system whitespace inconsistency, mid-
+ *  sentence upload truncation). Tooltip explains so the user can file
+ *  the bridge report. */
+function BridgeDupBadge({ count }: { count: number }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-800 cursor-help"
+          aria-label={`Bridge sent ${count + 1} duplicate copies; merged into one`}
+        >
+          ⚠ bridge dup ×{count}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-xs leading-relaxed">
+        健保署送出 {count + 1} 份內容相同（或截斷版）的副本，本 App 已自動保留最完整一份顯示。如需追蹤可回報 bridge 端 dedup 漏網。
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 interface ReportRowProps {
   row: Row
@@ -182,8 +207,11 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
     // Date-only badge + institution inline, consistent with the single-value
     // and accordion rows. Category/status (e.g. "Radiology • final") are noise
     // in this dataset — they live on the badge's hover tooltip instead.
+    // bridgeDupCount badge surfaces bridge-side dedup misses so the bug
+    // doesn't get silently hidden by our merge (no-mask-bridge-bugs rule).
     const HeaderRight = () => (
       <div className="flex items-center gap-2 shrink-0">
+        {row.bridgeDupCount && row.bridgeDupCount > 0 ? <BridgeDupBadge count={row.bridgeDupCount} /> : null}
         {row.institution && (
           <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
             <Building2 className="h-3 w-3 shrink-0" />
@@ -512,4 +540,18 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
 // the key win for tab-switch latency when "全部" has 500+ rows. The
 // inactive tabs are kept mounted via forceMount, so without memo every
 // tab switch would re-render every row.
-export const ReportRow = memo(ReportRowImpl)
+const SingleReportRow = memo(ReportRowImpl)
+
+// Public ReportRow — dispatches between the regular single-DR card
+// (SingleReportRow above, with all its hooks) and the multi-region study
+// card (MultiRegionStudyCard) for synthetic group rows. Kept as a thin
+// component so the hook order inside SingleReportRow stays unconditional,
+// honouring React's rules of hooks even when the same virtualizer slot
+// flips between a group and an ungrouped row across re-renders.
+export function ReportRow(props: ReportRowProps) {
+  const { row } = props
+  if (row.groupedRows && row.groupedRows.length > 1) {
+    return <MultiRegionStudyCard row={row} />
+  }
+  return <SingleReportRow {...props} />
+}

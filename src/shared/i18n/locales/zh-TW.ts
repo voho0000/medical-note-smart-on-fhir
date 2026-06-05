@@ -256,6 +256,19 @@ export const zhTW = {
       previewLimitNotice:
         '健保存摺單一影像檢查最多預覽 10 張縮圖，並不會傳送完整 DICOM 檔。如需完整醫療影像，請至執行檢查的醫院申請光碟，或於健康存摺下載 DCM 檔案。',
     },
+    multiRegion: {
+      title: '同日同碼影像研究',
+      ambiguityWarning:
+        '健保署對所有部位的電腦斷層都使用同一個健保碼（例如頭頸 CT 與胸部 CT 都申報為 33070B），同一天做了不同部位的 CT 會以多筆獨立紀錄送出。因為健保資料沒有部位欄位，App 無法自動判斷哪份報告對應哪組影像——請依影像內容自行判讀。',
+      narrativeSection: '份報告',
+      imageSection: '組影像',
+      reportLabel: '報告',
+      imageLabel: '影像',
+      noNarrative: '無附加文字報告',
+      viewImages: '查看影像',
+      imagesCount: '張',
+      firstFrame: '首幅',
+    },
     tabs: {
       cumulative: '累積報告',
       all: '全部',

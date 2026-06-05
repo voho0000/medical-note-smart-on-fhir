@@ -58,20 +58,176 @@ export function useReportsData(diagnosticReports: any[]) {
     // emitted multi-DR bundles (each antibiotic = one DR) collapse into one
     // accordion row. Unique-title DRs end up as single-member groups —
     // identical behaviour to per-DR processing.
+    //
+    // NARROW exception: multi-region CT only. NHI bills every body part
+    // imaged on the same CT machine under one health-record code
+    // (33xxx 電腦斷層造影 …) with NO body-part field, so a head+chest+abd
+    // CT shows up as several distinct DRs sharing the group key. The
+    // downstream MultiRegionStudyCard renders these as individually
+    // numbered ① ② ③ sub-cards with bridge's ambiguity warning, so the
+    // user can't mistake the cluster for a single report.
+    //
+    // We DO NOT generalise this to "any imaging modality" because other
+    // bridge channels (X-ray, US, ECG) often emit duplicate-content DRs
+    // for the same single exam; the panel merge above intentionally hides
+    // those duplicates (bridge bug surface vs. clinical noise tradeoff —
+    // see memory/feedback_no_masking_bridge_bugs.md). For CT, by contrast,
+    // multiple DRs per (code, date, hospital) are almost always genuinely
+    // separate studies; surfacing them as one merged row glues unrelated
+    // narratives into an unreadable blob.
+    const isCtCode = (code: any): boolean => {
+      const text = (code?.text || code?.coding?.[0]?.display || '').toLowerCase()
+      if (text.includes('電腦斷層') || text.includes('computed tomography')) return true
+      return /\bct\b/.test(text)
+    }
+    // Pull a DR's narrative text. Bridge stores imaging reports primarily
+    // on dr.conclusion (free text); some channels also use dr.note[].text
+    // or attach a synthetic valueString observation via _observations.
+    // Concatenate all available sources so the distinct-narrative check
+    // catches dups regardless of which field bridge populated this time.
+    const getDrNarrative = (dr: any): string => {
+      const parts: string[] = []
+      if (typeof dr?.conclusion === 'string' && dr.conclusion.trim()) {
+        parts.push(dr.conclusion)
+      }
+      if (Array.isArray(dr?.note)) {
+        for (const n of dr.note) {
+          if (typeof n?.text === 'string' && n.text.trim()) parts.push(n.text)
+        }
+      }
+      const obs = Array.isArray((dr as any)._observations) ? (dr as any)._observations : []
+      for (const o of obs) {
+        if (typeof o?.valueString === 'string' && o.valueString.trim().length > 30) {
+          parts.push(o.valueString)
+        }
+      }
+      return parts.join('\n').trim()
+    }
+    // Normalise narrative text for dup detection. Mirrors the bridge team's
+    // planned v0.17.2+ strategy (NFKC + strip whitespace + lowercase) so the
+    // app's dedup behaviour stays consistent with bridge's once their fix
+    // lands. NFKC folds full-width punctuation into half-width ("S／P" →
+    // "S/P"), and stripping whitespace catches the dictation system's
+    // erratic spacing ("aortaReticular" vs "aorta Reticular"). Lowercase
+    // catches the rare casing slip.
+    const normaliseNarrative = (s: string): string =>
+      (s || '')
+        .normalize('NFKC')
+        .toLowerCase()
+        .replace(/\s+/g, '')
+    // Strict-prefix dup test (bridge's "Option 1"): two narratives are
+    // considered duplicates only when one's normalised form is an EXACT
+    // PREFIX of the other's. Provably safe — if the shorter narrative is a
+    // prefix of the longer one, the longer one carries every clinical
+    // finding of the shorter PLUS more, so dropping the shorter loses no
+    // information. Two genuinely distinct reports (head vs chest CT) can't
+    // be a prefix of each other once their findings diverge, so this rule
+    // never merges different studies. The plain set-based equality check
+    // we used before couldn't tell a truncated upload (item 14 cut mid-
+    // sentence) apart from a fully-distinct study; this can.
+    const isPrefixOf = (a: string, b: string): boolean =>
+      a.length <= b.length && b.startsWith(a)
+    const hasDistinctNarratives = (grp: DiagnosticReport[]): boolean => {
+      const norms = grp
+        .map(getDrNarrative)
+        .filter((t): t is string => t.length > 0)
+        .map(normaliseNarrative)
+      if (norms.length < 2) return false
+      // Sort longest → shortest; every shorter narrative must be a prefix of
+      // the longest for the group to qualify as a single (deduped) report.
+      norms.sort((a, b) => b.length - a.length)
+      const longest = norms[0]
+      return norms.slice(1).some((n) => !isPrefixOf(n, longest))
+    }
     const groups = new Map<string, DiagnosticReport[]>()
     const groupOrder: string[] = []
+    const pushAsOwnGroup = (dr: DiagnosticReport) => {
+      // Suffix with DR id so each split group gets a distinct key — keeps
+      // the map insertion order stable and avoids accidental re-merging.
+      const text = (getCodeableConceptText(dr.code) || '').trim()
+      const date = (getDrDate(dr) || '').slice(0, 10)
+      const inst = (getDrInstitution(dr) || '').trim()
+      const key = `${text}|${date}|${inst}|${dr.id || Math.random().toString(36)}`
+      groups.set(key, [dr])
+      groupOrder.push(key)
+    }
+
+    // Pass 1: build the natural grouping (as before).
+    const naturalGroups = new Map<string, DiagnosticReport[]>()
+    const naturalOrder: string[] = []
     ;(diagnosticReports as DiagnosticReport[]).forEach((dr) => {
       if (!dr) return
       const text = (getCodeableConceptText(dr.code) || '').trim()
       const date = (getDrDate(dr) || '').slice(0, 10)
       const inst = (getDrInstitution(dr) || '').trim()
       const key = `${text}|${date}|${inst}`
-      if (!groups.has(key)) {
-        groups.set(key, [])
-        groupOrder.push(key)
+      if (!naturalGroups.has(key)) {
+        naturalGroups.set(key, [])
+        naturalOrder.push(key)
       }
-      groups.get(key)!.push(dr)
+      naturalGroups.get(key)!.push(dr)
     })
+
+    // Pre-merge narrative dedup (bridge "Option 1"): inside a single group,
+    // collapse DRs whose normalised narratives are strict-prefix duplicates
+    // (typically two channels of the same report — one truncated mid-
+    // sentence, one complete). Keep the LONGEST in each equivalence class
+    // so we never lose clinical text. Image-only DRs pass through. Returns
+    // both the deduped list and the count of dropped duplicates, which is
+    // attached to the resulting row so the UI can surface "bridge sent N
+    // duplicates" without silently hiding the bug (per the no-mask-bridge-
+    // bugs rule).
+    const dedupGroupByNarrative = (
+      grp: DiagnosticReport[],
+    ): { drs: DiagnosticReport[]; dupCount: number } => {
+      const withNarr: { dr: DiagnosticReport; norm: string }[] = []
+      const imageOnly: DiagnosticReport[] = []
+      for (const dr of grp) {
+        const text = getDrNarrative(dr)
+        if (!text) {
+          imageOnly.push(dr)
+          continue
+        }
+        withNarr.push({ dr, norm: normaliseNarrative(text) })
+      }
+      // Sort longest-first so the kept member is always the most complete
+      // narrative. A shorter member is dropped iff its normalised form is a
+      // prefix of one already kept.
+      withNarr.sort((a, b) => b.norm.length - a.norm.length)
+      const kept: { dr: DiagnosticReport; norm: string }[] = []
+      let dupCount = 0
+      for (const item of withNarr) {
+        if (kept.some((k) => isPrefixOf(item.norm, k.norm))) {
+          dupCount++
+        } else {
+          kept.push(item)
+        }
+      }
+      return { drs: [...kept.map((x) => x.dr), ...imageOnly], dupCount }
+    }
+    // dupCount per emitted group key so the row builder below can attach
+    // it to the resulting Row.
+    const dupCountByKey = new Map<string, number>()
+
+    // Pass 2: split CT multi-DR groups only when narratives are GENUINELY
+    // distinct (head vs chest, not "head vs head-with-extra-whitespace").
+    // When narratives are bridge duplicates, fall through to the regular
+    // merge path and let dedupGroupByNarrative collapse them so the user
+    // doesn't see the same Brain CT report twice in a fake "multi-region"
+    // group card.
+    for (const key of naturalOrder) {
+      const grp = naturalGroups.get(key)!
+      const shouldSplit =
+        grp.length > 1 && isCtCode(grp[0].code) && hasDistinctNarratives(grp)
+      if (shouldSplit) {
+        grp.forEach(pushAsOwnGroup)
+      } else {
+        const { drs: deduped, dupCount } = dedupGroupByNarrative(grp)
+        groups.set(key, deduped)
+        groupOrder.push(key)
+        if (dupCount > 0) dupCountByKey.set(key, dupCount)
+      }
+    }
 
     // (Previously: obsInMultiGroup suppression removed 2026-05-29.) Bridge
     // sometimes references the same Observation in BOTH a multi-obs panel
@@ -350,6 +506,10 @@ export function useReportsData(diagnosticReports: any[]) {
         institution,
         effectiveDate: rawDate,
         images: images.length > 0 ? images : undefined,
+        // Bridge sent extra DRs we collapsed via strict-prefix dedup —
+        // surface the count so the row can show a small badge. 0 → row
+        // omits the field entirely.
+        bridgeDupCount: dupCountByKey.get(key),
       })
     }
 

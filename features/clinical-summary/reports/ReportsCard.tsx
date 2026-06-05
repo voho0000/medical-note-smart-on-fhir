@@ -14,6 +14,7 @@ import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
 import { useProcedureRows } from './hooks/useProcedureRows'
 import { useGroupedRows } from './hooks/useGroupedRows'
+import { groupMultiRegionStudies } from './utils/multi-region-grouping'
 import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
@@ -197,6 +198,17 @@ export function ReportsCard() {
 
   const groupedRows = useGroupedRows(filteredRows)
 
+  // Apply multi-region NHI study grouping to the imaging tab. Same-day
+  // same-code studies (typical CT/MRI multi-region exams that NHI bills
+  // under one code without a body-part field) collapse into a single
+  // synthetic group row that ReportRow dispatches to MultiRegionStudyCard.
+  // See features/.../utils/multi-region-grouping.ts and bridge v0.17.1's
+  // SMART-side guidance for the rationale.
+  const imagingRows = useMemo(
+    () => groupMultiRegionStudies(groupedRows.imaging),
+    [groupedRows.imaging],
+  )
+
   const tabConfigs = useMemo(() => {
     const { tabs: reportTabs } = t.reports
     const cumulativeLabel = (reportTabs as any).cumulative || 'Cumulative'
@@ -204,7 +216,10 @@ export function ReportsCard() {
       { value: "cumulative", label: cumulativeLabel, rows: [] as Row[], isCumulative: true },
       { value: "all", label: `${reportTabs.all} (${groupedRows.all.length})`, rows: groupedRows.all, isCumulative: false },
       { value: "lab", label: `${reportTabs.lab} (${groupedRows.lab.length})`, rows: groupedRows.lab, isCumulative: false },
-      { value: "imaging", label: `${reportTabs.imaging} (${groupedRows.imaging.length})`, rows: groupedRows.imaging, isCumulative: false },
+      // Tab badge count reflects the post-grouping list (a 6-row multi-region
+      // CT now reads as 1 row in the badge), so the number a user sees and
+      // the cards they can click on match.
+      { value: "imaging", label: `${reportTabs.imaging} (${imagingRows.length})`, rows: imagingRows, isCumulative: false },
       { value: "vitals", label: `${reportTabs.vitals} (${groupedRows.vitals.length})`, rows: groupedRows.vitals, isCumulative: false },
       { value: "procedures", label: `${reportTabs.procedures} (${groupedRows.procedures.length})`, rows: groupedRows.procedures, isCumulative: false },
     ]

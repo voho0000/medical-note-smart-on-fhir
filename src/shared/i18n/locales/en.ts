@@ -253,6 +253,19 @@ export const en = {
       previewLimitNotice:
         'NHI 健康存摺 carries at most 10 preview thumbnails per imaging exam and does not transmit the full DICOM study. For complete medical imaging, request the DICOM disc from the imaging hospital or download the DCM file via the NHI health record.',
     },
+    multiRegion: {
+      title: 'Same-day same-code imaging studies',
+      ambiguityWarning:
+        'NHI uses one health-record code for every CT body part (e.g. head CT and chest CT are both billed as 33070B), so multiple body parts imaged on the same day arrive as several distinct records. Because NHI provides no body-part field, the app cannot automatically tell which report belongs to which image set — please rely on the image content itself.',
+      narrativeSection: 'reports',
+      imageSection: 'image sets',
+      reportLabel: 'Report',
+      imageLabel: 'Image set',
+      noNarrative: 'No written report attached',
+      viewImages: 'View images',
+      imagesCount: 'images',
+      firstFrame: 'first frame',
+    },
     tabs: {
       cumulative: 'Cumulative',
       all: 'All',
