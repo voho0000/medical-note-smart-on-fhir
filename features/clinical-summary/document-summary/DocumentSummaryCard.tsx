@@ -28,6 +28,7 @@ import { FeatureCard } from '@/src/shared/components'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
 import { HtmlDocumentRenderer } from './components/HtmlDocumentRenderer'
+import { DocumentDetailDialog } from './components/DocumentDetailDialog'
 import type { DocumentEntry } from './types'
 
 interface DocSummaryStrings {
@@ -46,6 +47,7 @@ interface DocSummaryStrings {
   htmlNoContent: string
   htmlExternalUrl: string
   primaryDiagnosisTooltip: string
+  openInDialog: string
   docTypes: Record<string, string>
   sections: Record<string, string>
 }
@@ -66,6 +68,7 @@ const FALLBACK_STRINGS: DocSummaryStrings = {
   htmlNoContent: '本份文件無可顯示的內容。',
   htmlExternalUrl: '開啟外部文件',
   primaryDiagnosisTooltip: '此 ICD-10 碼為醫療院所申報健保時提供的住院主診斷（健保署彙整後同步至健康存摺）。並非醫師直接撰寫的診斷敘述，詳細病情請展開文件內容。',
+  openInDialog: '彈出全文檢視',
   docTypes: {},
   sections: {},
 }
@@ -179,7 +182,7 @@ function DocumentEntryCard({
 
   return (
     <li className="rounded-md border border-border/60 bg-muted/20 p-2.5">
-      {/* Header strip: type label · IPS / discharge badge · date */}
+      {/* Header strip: type label · IPS / discharge badge · date · maximize */}
       <div className="mb-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="truncate text-sm font-semibold">{entry.typeLabel}</span>
@@ -202,19 +205,29 @@ function DocumentEntryCard({
             </span>
           )}
         </div>
-        {/* Document date — only render when there's no period to anchor the
-            timeline. For DocumentReference 出院病摘 the bridge sets `date` to
-            the day NHI indexed the document (typically discharge day +0/+1),
-            which is essentially redundant with period.end and confused users
-            into reading it as the discharge date. The recording timestamp is
-            also visible inside the HTML body, so we lose nothing by dropping
-            it here. For Composition (IPS) the date IS the only temporal
-            anchor, so it stays. */}
-        {dateStr && !entry.period && (
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-            {dateStr}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Document date — only render when there's no period to anchor the
+              timeline. For DocumentReference 出院病摘 the bridge sets `date` to
+              the day NHI indexed the document (typically discharge day +0/+1),
+              which is essentially redundant with period.end and confused users
+              into reading it as the discharge date. The recording timestamp is
+              also visible inside the HTML body, so we lose nothing by dropping
+              it here. For Composition (IPS) the date IS the only temporal
+              anchor, so it stays. */}
+          {dateStr && !entry.period && (
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {dateStr}
+            </span>
+          )}
+          {/* Maximize button — opens the same content in a centred dialog
+              at ~90vw so the discharge-summary tables breathe. The inline
+              accordion below still works for quick previews. */}
+          <DocumentDetailDialog
+            entry={entry}
+            strings={strings}
+            resolveSectionLabel={resolveSectionLabel}
+          />
+        </div>
       </div>
 
       {/* Primary diagnosis — matches 健保存摺's 「疾病分類」line. Drawn from

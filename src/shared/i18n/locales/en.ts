@@ -177,6 +177,7 @@ export const en = {
     htmlNoContent: 'No displayable content in this document.',
     htmlExternalUrl: 'Open external document',
     primaryDiagnosisTooltip: 'ICD-10 principal discharge diagnosis coded by the medical institution for NHI billing (aggregated and synced to the NHI health record). Not a clinician\'s narrative diagnosis — see the document content for clinical details.',
+    openInDialog: 'Open full view',
     docTypes: {
       ipsPatientSummary: 'International Patient Summary (IPS)',
       dischargeSummary: 'Discharge summary',
