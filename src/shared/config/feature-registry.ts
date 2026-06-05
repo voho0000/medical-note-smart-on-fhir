@@ -10,6 +10,7 @@ import { ProblemListCard } from '@/features/clinical-summary/problem-list/Proble
 import { AdvanceDirectivesCard } from '@/features/clinical-summary/advance-directives/AdvanceDirectivesCard'
 import { DevicesCard } from '@/features/clinical-summary/devices/DevicesCard'
 import { CarePlansCard } from '@/features/clinical-summary/care-plans/CarePlansCard'
+import { DocumentSummaryCard } from '@/features/clinical-summary/document-summary'
 import { ReportsCard } from '@/features/clinical-summary/reports/ReportsCard'
 import { VisitHistoryCard } from '@/features/clinical-summary/visit-history'
 
@@ -27,10 +28,13 @@ export interface TabConfig {
 }
 
 export const LEFT_PANEL_TABS: TabConfig[] = [
-  { id: 'patient', labelKey: 'patient',     order: 0, enabled: true },
-  { id: 'visits',  labelKey: 'visits',      order: 1, enabled: true },
-  { id: 'reports', labelKey: 'reports',     order: 2, enabled: true },
-  { id: 'meds',    labelKey: 'medications', order: 3, enabled: true },
+  { id: 'patient',   labelKey: 'patient',     order: 0, enabled: true },
+  { id: 'visits',    labelKey: 'visits',      order: 1, enabled: true },
+  { id: 'reports',   labelKey: 'reports',     order: 2, enabled: true },
+  { id: 'meds',      labelKey: 'medications', order: 3, enabled: true },
+  // 文件分頁：放 IPS / 出院病摘等 Composition narrative。永遠顯示，無資料時
+  // 由 DocumentSummaryCard.isEmpty 顯示友善空狀態，告知使用者此功能存在。
+  { id: 'documents', labelKey: 'documents',   order: 4, enabled: true },
 ]
 
 // ============================================================================
@@ -50,7 +54,7 @@ export interface FeatureConfig {
 
 export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
   // Patient Tab Features — display order:
-  // 病患資訊 → 生命徵象 → 問題清單 → 預立醫療決定 → 醫療器材 → 照護計畫
+  // 病人資訊 → 生命徵象 → 問題清單 → 預立醫療決定 → 醫療器材 → 照護計畫
   {
     id: 'patient-info',
     name: 'Patient Information',
@@ -97,6 +101,20 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
     component: CarePlansCard,
     tab: 'patient',
     order: 5,
+    enabled: true,
+  },
+  // Document Summary — renders the human-readable narratives carried inside
+  // FHIR Composition resources (IPS imports today; 健保存摺 discharge
+  // summaries once the bridge ships them). Lives in its own 文件 tab so the
+  // long narrative content has dedicated reading space and doesn't crowd the
+  // dense patient tab. Tab is always visible; empty state explains the
+  // feature so bridge-only sessions still know it exists.
+  {
+    id: 'document-summary',
+    name: 'Document Summary',
+    component: DocumentSummaryCard,
+    tab: 'documents',
+    order: 0,
     enabled: true,
   },
   {

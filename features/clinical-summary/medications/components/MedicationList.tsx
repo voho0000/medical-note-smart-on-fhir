@@ -13,9 +13,23 @@ interface MedicationListProps {
   medications: MedicationRow[]
   isLoading: boolean
   error: Error | null
+  /** When true, MedicationItem renders a "目前服用" chip on rows that came
+   *  from a FHIR MedicationStatement (rather than a MedicationRequest).
+   *  Set by MedListCard only when the list is mixed-source; pure single-source
+   *  lists are signalled via a card-level banner instead. */
+  showSourceChip?: boolean
+  sourceChipStatementLabel?: string
+  sourceChipStatementTooltip?: string
 }
 
-export function MedicationList({ medications, isLoading, error }: MedicationListProps) {
+export function MedicationList({
+  medications,
+  isLoading,
+  error,
+  showSourceChip = false,
+  sourceChipStatementLabel,
+  sourceChipStatementTooltip,
+}: MedicationListProps) {
   const [showInactive, setShowInactive] = useState(false)
   const { activeMedications, inactiveMedicationGroups } = useGroupedMedications(medications)
 
@@ -47,7 +61,13 @@ export function MedicationList({ medications, isLoading, error }: MedicationList
           </h3>
           <div className="space-y-1">
             {activeMedications.map((medication) => (
-              <MedicationItem key={medication.id} medication={medication} />
+              <MedicationItem
+                key={medication.id}
+                medication={medication}
+                showSourceChip={showSourceChip}
+                sourceChipStatementLabel={sourceChipStatementLabel}
+                sourceChipStatementTooltip={sourceChipStatementTooltip}
+              />
             ))}
           </div>
         </div>
@@ -77,7 +97,12 @@ export function MedicationList({ medications, isLoading, error }: MedicationList
                 <div key={group.name} className="space-y-2">
                   {group.count === 1 ? (
                     // Single medication - show directly
-                    <MedicationItem medication={group.medications[0]} />
+                    <MedicationItem
+                      medication={group.medications[0]}
+                      showSourceChip={showSourceChip}
+                      sourceChipStatementLabel={sourceChipStatementLabel}
+                      sourceChipStatementTooltip={sourceChipStatementTooltip}
+                    />
                   ) : (
                     // Multiple medications with same name - use accordion
                     <Accordion type="single" collapsible className="w-full">

@@ -189,6 +189,7 @@ export function useMedicationRows(
         icdText,
         refillCount,
         firstRefillDate,
+        sourceResourceType: med._sourceResourceType,
         _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
       }
     })

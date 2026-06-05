@@ -102,6 +102,9 @@ export class FhirMapper implements IDataMapper {
       category: fhirResource.category,
       requester: fhirResource.requester,
       reasonCode: fhirResource.reasonCode,
+      // Passthrough of the source-resource marker stamped by LocalBundleService.parse
+      // (MedicationRequest vs MedicationStatement). Bridge data omits it.
+      _sourceResourceType: fhirResource._sourceResourceType,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }

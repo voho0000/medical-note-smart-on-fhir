@@ -60,4 +60,8 @@ export interface MedicationRow {
   refillCount: number
   /** First (earliest) refill date for this drug, formatted. */
   firstRefillDate?: string
+  /** Originating FHIR resource type. Bridge data is always undefined or
+   *  'MedicationRequest'; IPS data uses 'MedicationStatement'. Drives the
+   *  per-row source chip (only shown when the list is a mixed source). */
+  sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
 }

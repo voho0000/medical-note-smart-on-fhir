@@ -14,6 +14,7 @@
 "use client"
 
 import { useState } from "react"
+import { Info } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -22,6 +23,7 @@ import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useMedications } from './hooks/useMedications'
 import { useMedicationRows } from './hooks/useMedicationRows'
+import { useMedicationSourceMix } from './hooks/useMedicationSourceMix'
 import { useVaccineRows } from './hooks/useVaccineRows'
 import { useAllergies } from '../allergies/hooks/useAllergies'
 import { useActiveAllergies } from '../allergies/hooks/useActiveAllergies'
@@ -45,6 +47,7 @@ export function MedListCard() {
   // happen to be vaccine products. Bridge ships these from 疾病管制署.
   const { immunizations } = useClinicalData()
   const rows = useMedicationRows(medications, audience, locale)
+  const sourceMix = useMedicationSourceMix(rows)
   const vaccines = useVaccineRows(immunizations, audience, locale)
   const activeAllergies = useActiveAllergies(allergies)
 
@@ -56,6 +59,11 @@ export function MedListCard() {
   const tabVaccinesLabel = mt.tabVaccines ?? '疫苗'
   const listLabel = mt.viewList ?? '清單'
   const timelineLabel = mt.viewTimeline ?? '時間軸'
+  // IPS-source hint copy. Bridge data (the dominant source) never triggers
+  // this UI — the strings only render when an IPS bundle is loaded.
+  const sourceHintStatement: string = mt.sourceHintStatement
+    ?? '此清單來自匯入文件，標示為病人目前服用中的藥物'
+  const sourceChipStatement: string = mt.sourceChipStatement ?? '目前服用'
 
   // Card-level isEmpty: only suppress the whole card when ALL three concerns
   // are empty (otherwise we'd hide allergies just because there's no meds).
@@ -122,8 +130,24 @@ export function MedListCard() {
               </button>
             ))}
           </div>
+          {/* Card-level source hint: surfaces only when every row originated
+              from a MedicationStatement (typical IPS dataset). Mixed lists
+              fall through to the per-row chip rendered inside MedicationItem. */}
+          {sourceMix === 'statement-only' && (
+            <div className="flex items-start gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-[1px]" aria-hidden />
+              <span>{sourceHintStatement}</span>
+            </div>
+          )}
           {view === 'list' ? (
-            <MedicationList medications={rows} isLoading={false} error={null} />
+            <MedicationList
+              medications={rows}
+              isLoading={false}
+              error={null}
+              showSourceChip={sourceMix === 'mixed'}
+              sourceChipStatementLabel={sourceChipStatement}
+              sourceChipStatementTooltip={sourceHintStatement}
+            />
           ) : (
             <MedicationTimeline medications={medications} />
           )}

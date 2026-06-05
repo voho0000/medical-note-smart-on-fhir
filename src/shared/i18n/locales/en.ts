@@ -34,6 +34,7 @@ export const en = {
     reports: 'Reports',
     medications: 'Medications',
     visits: 'Visit History',
+    documents: 'Documents',
     clinicalNotes: 'Clinical Notes',
     noteChat: 'Note Chat',
     dataSelection: 'Data Selection',
@@ -149,6 +150,67 @@ export const en = {
     timelineToday: 'Today',
     timelineEmpty: 'No medications in this range',
     timelineOtherCategory: 'Other',
+    // IPS-source hints — only render when the dataset uses MedicationStatement
+    // (e.g. an imported IPS bundle). Bridge data never triggers these.
+    sourceHintStatement: 'List sourced from an imported document — flagged as the medications the patient is currently taking (MedicationStatement).',
+    sourceChipStatement: 'Currently taking',
+  },
+
+  // ── Document Summary (IPS / discharge summary Composition narratives) ───
+  // Renders only when the dataset includes a Composition with renderable
+  // narrative. Bridge data omits Compositions today, so the typical session
+  // never sees this card; it appears for IPS imports and (eventually)
+  // 健保存摺 discharge summaries.
+  documentSummary: {
+    title: 'Document Summary',
+    noData: 'No documents loaded yet. Imported IPS (International Patient Summary) or discharge summaries fetched from the NHI health record will appear here.',
+    documentDate: 'Document date',
+    author: 'Author',
+    custodian: 'Custodian',
+    noSections: 'This document does not include displayable narrative content.',
+    tooltip: 'Shows the original human-readable narrative carried inside imported documents (e.g. an IPS patient summary or discharge summary). The structured data referenced by these narratives is already shown in the cards above — this card preserves the source narrative for cross-reference and summary purposes.',
+    ipsBadge: 'IPS',
+    ipsBadgeTooltip: 'This document conforms to the IPS (International Patient Summary) implementation guide.',
+    dischargeBadge: 'Discharge',
+    dischargeBadgeTooltip: 'This is a Hospital Discharge Summary (LOINC 18842-5).',
+    htmlBodyHeader: 'Expand document content',
+    htmlNoContent: 'No displayable content in this document.',
+    htmlExternalUrl: 'Open external document',
+    docTypes: {
+      ipsPatientSummary: 'International Patient Summary (IPS)',
+      dischargeSummary: 'Discharge summary',
+      consultNote: 'Consult note',
+      progressNote: 'Progress note',
+      historyAndPhysical: 'History & physical',
+      episodeSummary: 'Episode summary',
+      procedureNote: 'Procedure note',
+      labReport: 'Laboratory report',
+      imagingReport: 'Imaging report',
+      referralNote: 'Referral note',
+    },
+    sections: {
+      problemList: 'Problem list',
+      medicationSummary: 'Medication summary',
+      allergiesAndIntolerances: 'Allergies and intolerances',
+      historyOfProcedures: 'History of procedures',
+      historyOfImmunizations: 'History of immunizations',
+      medicalDevices: 'Medical devices',
+      diagnosticResults: 'Diagnostic results',
+      planOfCare: 'Plan of care',
+      advanceDirectives: 'Advance directives',
+      vitalSigns: 'Vital signs',
+      pregnancyHistory: 'Pregnancy history',
+      socialHistory: 'Social history',
+      functionalStatus: 'Functional status',
+      familyHistory: 'Family history',
+      pastIllnessHistory: 'Past illness history',
+      hospitalCourse: 'Hospital course',
+      dischargeMedications: 'Discharge medications',
+      dischargeInstructions: 'Discharge instructions',
+      reasonForReferral: 'Reason for referral',
+      historyOfEncounters: 'History of encounters',
+      reasonForVisit: 'Reason for visit',
+    },
   },
 
   allergies: {

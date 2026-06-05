@@ -4,13 +4,14 @@
  * All colors support both light and dark modes
  */
 
-import { 
-  MessageSquare, 
-  Lightbulb, 
-  Settings, 
+import {
+  MessageSquare,
+  Lightbulb,
+  Settings,
   CheckSquare,
   Stethoscope,
   FileText,
+  Files,
   Pill,
   Calendar,
   Activity,
@@ -178,6 +179,13 @@ export const LEFT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
     icon: Calendar,
     colorKey: 'clinical',
   },
+  // 'documents' uses `Files` (stack icon) to differentiate from 'reports'
+  // (FileText, single-doc icon) at a glance even when the text wraps.
+  'documents': {
+    id: 'documents',
+    icon: Files,
+    colorKey: 'clinical',
+  },
 }
 
 // ============================================================================
@@ -195,6 +203,7 @@ export const FEATURE_CARD_THEMES: Record<string, { icon: LucideIcon; colorKey: k
   'advance-directives': { icon: ScrollText, colorKey: 'clinical' },
   'devices': { icon: Cpu, colorKey: 'clinical' },
   'care-plans': { icon: ListChecks, colorKey: 'clinical' },
+  'document-summary': { icon: FileText, colorKey: 'clinical' },
 }
 
 // ============================================================================

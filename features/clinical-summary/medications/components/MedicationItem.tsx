@@ -8,6 +8,12 @@ import type { MedicationRow } from '../types'
 
 interface MedicationItemProps {
   medication: MedicationRow
+  /** Renders a "目前服用" chip on rows whose sourceResourceType is
+   *  MedicationStatement. Driven from MedListCard's mixed-source detection
+   *  — for the bridge default (all MedicationRequest) it stays off. */
+  showSourceChip?: boolean
+  sourceChipStatementLabel?: string
+  sourceChipStatementTooltip?: string
 }
 
 function getStatusBadge(medication: MedicationRow) {
@@ -35,12 +41,19 @@ function Sep() {
   return <span className="text-muted-foreground/40 select-none" aria-hidden>·</span>
 }
 
-export function MedicationItem({ medication }: MedicationItemProps) {
+export function MedicationItem({
+  medication,
+  showSourceChip = false,
+  sourceChipStatementLabel,
+  sourceChipStatementTooltip,
+}: MedicationItemProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
   const badge = getStatusBadge(medication)
   const mt = (t.medications as any)
   const isMedical = audience === 'medical'
+  const showStatementChip =
+    showSourceChip && medication.sourceResourceType === 'MedicationStatement'
 
   // ── Line-2 inline parts (collapse empties) ────────────────────────────
   // Single-word dose/freq/route join into "5mg · PO · QD"; date range and
@@ -115,6 +128,14 @@ export function MedicationItem({ medication }: MedicationItemProps) {
               className="inline-flex shrink-0 items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[10px] font-medium text-violet-700"
             >
               {mt.chronic ?? '慢箋'}
+            </span>
+          )}
+          {showStatementChip && (
+            <span
+              title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
+              className="inline-flex shrink-0 items-center rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0 text-[10px] font-medium text-sky-700"
+            >
+              {sourceChipStatementLabel ?? '目前服用'}
             </span>
           )}
         </div>

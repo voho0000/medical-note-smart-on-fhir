@@ -55,16 +55,28 @@ export default function ClinicalSummaryFeature() {
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
       <Tabs defaultValue={defaultTab} className="flex h-full flex-col">
-        <TabsList className="w-full grid grid-cols-4 gap-1 h-12 bg-muted/50 p-1 border">
+        {/* Grid columns are driven by the registered tab count so adding /
+            removing tabs in feature-registry.ts doesn't need a layout edit.
+            Tailwind JIT can't generate dynamic `grid-cols-N` from a runtime
+            length, so the column template goes via inline style. The label
+            already uses `truncate` + a `title` tooltip, so narrower per-tab
+            widths still render the full label on hover. */}
+        <TabsList
+          className="w-full grid gap-1 h-12 bg-muted/50 p-1 border"
+          style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        >
           {tabs.map(tab => {
             const theme = getTabTheme(tab.id)
             const Icon = theme.icon
             const activeClasses = TAB_ACTIVE_CLASSES[theme.colorKey] || TAB_ACTIVE_CLASSES.clinical
             return (
-              <TabsTrigger 
+              <TabsTrigger
                 key={tab.id}
-                value={tab.id} 
-                className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
+                value={tab.id}
+                // px-1 keeps the icon+label centred at narrow widths (was
+                // overflowing the trigger with the default px-3 once we
+                // packed 5 tabs into the same width as 4).
+                className={`text-sm font-semibold min-w-0 px-1 flex items-center gap-1.5 ${activeClasses}`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate" title={getTabLabel(tab)}>{getTabLabel(tab)}</span>

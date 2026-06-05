@@ -402,7 +402,9 @@ export const LocalBundleService = {
 
     // Normalize MedicationStatements to a MedicationRequest-compatible shape so
     // the rest of the pipeline (FhirMapper, display components) can handle them
-    // without needing to know which resource type they came from.
+    // without needing to know which resource type they came from. The original
+    // resource type is preserved as `_sourceResourceType` so the medications
+    // panel can surface "目前服用中" when an IPS dataset is loaded.
     const medicationStatements = byType('MedicationStatement').map((ms: any) => {
       // Resolve medicationReference → medicationCodeableConcept
       let resolved = ms
@@ -419,12 +421,20 @@ export const LocalBundleService = {
       // Normalize field names that differ between MedicationRequest and MedicationStatement
       return {
         ...resolved,
+        _sourceResourceType: 'MedicationStatement' as const,
         authoredOn: resolved.authoredOn
           ?? resolved.effectivePeriod?.start
           ?? resolved.effectiveDateTime,
         dosageInstruction: resolved.dosageInstruction ?? resolved.dosage,
       }
     })
+
+    // Stamp MedicationRequest with its source type too so downstream code can
+    // tell a mixed-source list from a pure one.
+    const medicationRequests = byType('MedicationRequest').map((m: any) => ({
+      ...m,
+      _sourceResourceType: 'MedicationRequest' as const,
+    }))
 
     // Pre-process resources: attach encounter refs where missing.
     // Medications use provider-aware matching (date + requester); everything
@@ -437,7 +447,7 @@ export const LocalBundleService = {
     // shows pharmacy events as visits at all, so synthesising fake Encounter
     // resources for them would diverge from NHI's data model.
     const meds = attachEncounterRefsForMeds(
-      [...byType('MedicationRequest'), ...medicationStatements],
+      [...medicationRequests, ...medicationStatements],
       encounterByDateProvider,
     )
 

@@ -113,6 +113,13 @@ export interface MedicationEntity {
       system?: string
     }>
   }>
+  /**
+   * Originating FHIR resource type. 'MedicationRequest' = 醫師處方/健保開立紀錄
+   * (bridge default); 'MedicationStatement' = 病人目前服用中的藥物清單 (IPS
+   * default). Drives the source hint shown in MedListCard; not part of the
+   * raw FHIR shape, hence the underscore prefix.
+   */
+  _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

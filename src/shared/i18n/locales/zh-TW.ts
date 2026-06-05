@@ -32,10 +32,11 @@ export const zhTW = {
   },
 
   tabs: {
-    patient: '病患資訊',
+    patient: '病人資訊',
     reports: '報告',
     medications: '用藥',
     visits: '就診紀錄',
+    documents: '文件',
     clinicalNotes: '病歷紀錄',
     noteChat: '筆記對話',
     dataSelection: '資料選擇',
@@ -44,12 +45,12 @@ export const zhTW = {
   },
 
   patient: {
-    info: '病患資訊',
+    info: '病人資訊',
     name: '姓名',
     gender: '性別',
     age: '年齡',
     birthDate: '出生日期',
-    unknownPatient: '未知病患',
+    unknownPatient: '未知病人',
     male: '男性',
     female: '女性',
     other: '其他',
@@ -75,7 +76,7 @@ export const zhTW = {
   },
 
   conditions: {
-    title: '病患診斷',
+    title: '病人診斷',
     diagnosis: '診斷',
     noData: '無診斷紀錄。',
   },
@@ -117,7 +118,7 @@ export const zhTW = {
   },
 
   medications: {
-    title: '病患用藥',
+    title: '病人用藥',
     active: '使用中',
     all: '全部',
     status: '狀態',
@@ -151,10 +152,72 @@ export const zhTW = {
     timelineToday: '今日',
     timelineEmpty: '此時段內無用藥紀錄',
     timelineOtherCategory: '其他',
+    // IPS-source hints — only render when the dataset uses MedicationStatement
+    // (e.g. an imported IPS bundle). Bridge data never triggers these.
+    sourceHintStatement: '此清單來自匯入文件，標示為病人目前服用中的藥物（MedicationStatement）。',
+    sourceChipStatement: '目前服用',
+  },
+
+  // ── Document Summary（IPS／出院病摘等 Composition narrative） ────────────
+  // 此卡片只在資料含具備敘事內容的 Composition 時才顯示。健保存摺
+  // bridge 預設不送 Composition，所以多數 session 看不到這張卡，使用者
+  // 體驗不變；匯入 IPS 或日後 bridge 送出院病摘時才會出現。
+  documentSummary: {
+    title: '文件摘要',
+    noData: '目前尚無文件資料。匯入 IPS（國際病人摘要）或當健保存摺載入出院病摘後，文件內容將顯示於此。',
+    documentDate: '文件日期',
+    author: '作者',
+    custodian: '機構',
+    noSections: '本份文件未提供可顯示的敘事內容。',
+    tooltip: '此處顯示匯入文件原始的人類可讀敘事內容（如 IPS 國際病人摘要、出院病摘）。當中的結構化資料已分別呈現在上方各卡片，本卡片保留原始敘事供對照或摘要參考。',
+    ipsBadge: 'IPS',
+    ipsBadgeTooltip: '此份文件依 IPS（國際病人摘要 International Patient Summary）規範產出。',
+    dischargeBadge: '出院病摘',
+    dischargeBadgeTooltip: '此份為 LOINC 18842-5 出院病摘（Hospital Discharge Summary）。',
+    htmlBodyHeader: '展開文件內容',
+    htmlNoContent: '本份文件無可顯示的內容。',
+    htmlExternalUrl: '開啟外部文件',
+    // LOINC 文件型別 → 顯示名
+    docTypes: {
+      ipsPatientSummary: '國際病人摘要 (IPS)',
+      dischargeSummary: '出院病摘',
+      consultNote: '會診紀錄',
+      progressNote: '病程紀錄',
+      historyAndPhysical: '入院病歷 (H&P)',
+      episodeSummary: '住院摘要',
+      procedureNote: '處置紀錄',
+      labReport: '檢驗報告',
+      imagingReport: '影像報告',
+      referralNote: '轉診單',
+    },
+    // LOINC IPS section code → 顯示名
+    sections: {
+      problemList: '問題清單',
+      medicationSummary: '用藥摘要',
+      allergiesAndIntolerances: '過敏與不耐受',
+      historyOfProcedures: '處置紀錄',
+      historyOfImmunizations: '疫苗接種',
+      medicalDevices: '醫療器材',
+      diagnosticResults: '檢驗結果',
+      planOfCare: '照護計畫',
+      advanceDirectives: '預立醫療決定',
+      vitalSigns: '生命徵象',
+      pregnancyHistory: '妊娠史',
+      socialHistory: '社會史',
+      functionalStatus: '功能狀態',
+      familyHistory: '家族史',
+      pastIllnessHistory: '過去病史',
+      hospitalCourse: '住院經過',
+      dischargeMedications: '出院帶藥',
+      dischargeInstructions: '出院指示',
+      reasonForReferral: '轉診原因',
+      historyOfEncounters: '就診紀錄',
+      reasonForVisit: '就診原因',
+    },
   },
 
   allergies: {
-    title: '病患過敏史',
+    title: '病人過敏史',
     noData: '無過敏紀錄。',
     type: {
       allergy: '過敏',
@@ -335,11 +398,11 @@ export const zhTW = {
     dataCategoriesDescription: '選擇要包含在內容中的臨床資訊類型',
     selectAll: '全選',
     deselectAll: '取消全選',
-    patientInfo: '病患資訊',
+    patientInfo: '病人資訊',
     patientInfoDesc: '基本人口統計和聯絡資訊',
     encounters: '就診紀錄（按次彙整）',
     encountersDesc: '每次就診的診斷、用藥、檢驗一併呈現 — 建議使用',
-    conditions: '病患診斷',
+    conditions: '病人診斷',
     conditionsDesc: '使用中和歷史病況',
     medications: '用藥紀錄',
     medicationsDesc: '目前和過去的用藥',
@@ -378,7 +441,7 @@ export const zhTW = {
     allVersions: '所有版本',
     allReports: '所有報告',
     groups: {
-      patient: '病患',
+      patient: '病人',
       visits: '就診',
       reports: '報告',
       medications: '用藥',
@@ -572,7 +635,7 @@ export const zhTW = {
     apiKeyWarning: '請先在設定頁面中設定 API Key 或使用 Proxy 以啟用 AI 判讀功能',
     waitingForData: '等待臨床資料載入',
     waitingForDataTitle: '等待臨床資料載入中',
-    waitingForDataMessage: '請在左側面板選擇病患資料，資料載入後即可產生判讀',
+    waitingForDataMessage: '請在左側面板選擇病人資料，資料載入後即可產生判讀',
     manageTabs: '管理標籤',
     editMode: '編輯模式',
     moveLeft: '左移',
@@ -581,14 +644,14 @@ export const zhTW = {
     addTab: '新增標籤',
     reset: '重設',
     autoGenerate: '自動產生',
-    autoGenerateTooltip: '啟用時，進入臨床洞察頁面且病患資料已載入時，此判讀分頁會自動產生。停用則僅在需要時手動觸發產生。',
+    autoGenerateTooltip: '啟用時，進入臨床洞察頁面且病人資料已載入時，此判讀分頁會自動產生。停用則僅在需要時手動觸發產生。',
     languageWarning: '注意：修改過的標籤在切換語言時不會自動更新。重設為預設值以查看對應語言的標籤。',
     manageModels: '管理模型',
     manageSettings: '管理設定',
     temporaryEditHint: '這是臨時修改，不會被保存。',
     goToSettings: '前往 Settings 永久修改 →',
     fhirDataRequired: '臨床洞察需要 FHIR 資料',
-    fhirDataRequiredDesc: '此功能需要從 FHIR 伺服器載入病患的臨床資料才能運作。請確認 FHIR 伺服器連線正常。',
+    fhirDataRequiredDesc: '此功能需要從 FHIR 伺服器載入病人的臨床資料才能運作。請確認 FHIR 伺服器連線正常。',
   },
 
   recording: {
@@ -599,7 +662,7 @@ export const zhTW = {
   },
 
   errors: {
-    fetchPatient: '無法取得病患資料',
+    fetchPatient: '無法取得病人資料',
     fetchClinicalData: '無法取得臨床資料',
     transcription: '語音轉錄服務無法使用。請設定 API 金鑰或代理伺服器。',
     emptyAudio: '音訊檔案為空',
