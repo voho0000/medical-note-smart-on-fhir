@@ -21,6 +21,72 @@ import {
 import { sanitizeNarrative } from '../utils/sanitize-narrative'
 import { decodeBase64Utf8 } from '../utils/base64'
 
+/**
+ * Pure content renderer for an HTML attachment — decode + sanitise pipeline
+ * plus the `<div dangerouslySetInnerHTML>` mount, no wrapper chrome. Used
+ * directly by DocumentDetailDialog so the dialog reader doesn't carry a
+ * second "文件內容" accordion layer that already redundantly wraps the body
+ * the user is reading. The card's inline accordion version still wraps
+ * this body for the collapse-by-default behaviour.
+ */
+interface HtmlDocumentBodyProps {
+  attachment: {
+    contentType?: string
+    data?: string
+    url?: string
+    title?: string
+    size?: number
+  }
+  labels: {
+    noContent: string
+    externalUrl: string
+  }
+}
+
+export function HtmlDocumentBody({ attachment, labels }: HtmlDocumentBodyProps) {
+  const sanitised = useMemo(() => {
+    if (!attachment.data) return ''
+    const decoded = decodeBase64Utf8(attachment.data)
+    if (!decoded) return ''
+    return sanitizeNarrative(decoded)
+  }, [attachment.data])
+
+  const isExternal = !attachment.data && !!attachment.url
+
+  if (isExternal) {
+    return (
+      <a
+        href={attachment.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs text-primary underline"
+      >
+        {labels.externalUrl}
+      </a>
+    )
+  }
+  if (!sanitised) {
+    return <div className="text-xs italic text-muted-foreground">{labels.noContent}</div>
+  }
+  // `table-layout: fixed` + the colgroup injected by sanitizeNarrative is
+  // what actually forces tables to respect the container width. Without
+  // table-fixed the browser sizes <table> by its cells' natural content
+  // widths and silently ignores `max-width: 100%` when those widths sum
+  // to more than the parent. The colgroup pins col 1 at 80px (label) and
+  // lets the remaining columns share the rest. `break-words` + default
+  // CJK wrapping handle any cell content that's still too long for its
+  // column. `whitespace-pre-wrap` on <pre> preserves doctor-written line
+  // breaks for the body sections the bridge originally shipped inside
+  // <textarea> (stripped by DOMPurify, content kept).
+  return (
+    <div
+      className="prose prose-sm dark:prose-invert max-w-none break-words [&_table]:w-full [&_table]:table-fixed [&_table]:text-xs [&_table]:border-collapse [&_td]:border [&_td]:border-border/40 [&_td]:px-1.5 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:border [&_th]:border-border/40 [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:font-medium [&_th]:break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words"
+      // eslint-disable-next-line react/no-danger -- sanitised via DOMPurify with the FHIR-Narrative whitelist
+      dangerouslySetInnerHTML={{ __html: sanitised }}
+    />
+  )
+}
+
 interface HtmlDocumentRendererProps {
   attachment: {
     contentType?: string
@@ -54,16 +120,6 @@ export function HtmlDocumentRenderer({
   // ~tens of discharge summaries this turns a multi-MB eager parse into
   // sub-100KB per-open work.
   const [hasOpened, setHasOpened] = useState(defaultExpanded)
-
-  const sanitised = useMemo(() => {
-    if (!hasOpened) return ''
-    if (!attachment.data) return ''
-    const decoded = decodeBase64Utf8(attachment.data)
-    if (!decoded) return ''
-    return sanitizeNarrative(decoded)
-  }, [hasOpened, attachment.data])
-
-  const isExternal = !attachment.data && !!attachment.url
   const defaultValue = defaultExpanded ? 'body' : undefined
 
   return (
@@ -89,36 +145,11 @@ export function HtmlDocumentRenderer({
           </div>
         </AccordionTrigger>
         <AccordionContent className="px-3 pb-3">
-          {isExternal ? (
-            <a
-              href={attachment.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-primary underline"
-            >
-              {labels.externalUrl}
-            </a>
-          ) : sanitised ? (
-            // `table-layout: fixed` + the colgroup injected by
-            // sanitizeNarrative is what actually forces tables to respect
-            // the panel width. Without table-fixed the browser sizes <table>
-            // by its cells' natural content widths and silently ignores
-            // `max-width: 100%` when those widths sum to more than the
-            // parent — that's why the long discharge-summary title row
-            // pushed past the panel edge and triggered horizontal scroll.
-            // The colgroup pins col 1 at 80px (label) and lets the remaining
-            // columns share the rest. `break-words` + default CJK wrapping
-            // handle any cell content that's still too long for its column.
-            // `whitespace-pre-wrap` on <pre> preserves doctor-written line
-            // breaks for the body sections the bridge originally shipped
-            // inside <textarea> (stripped by DOMPurify, content kept).
-            <div
-              className="prose prose-sm dark:prose-invert max-w-none break-words [&_table]:w-full [&_table]:table-fixed [&_table]:text-xs [&_table]:border-collapse [&_td]:border [&_td]:border-border/40 [&_td]:px-1.5 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:border [&_th]:border-border/40 [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:font-medium [&_th]:break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words"
-              // eslint-disable-next-line react/no-danger -- sanitised via DOMPurify with the FHIR-Narrative whitelist
-              dangerouslySetInnerHTML={{ __html: sanitised }}
+          {hasOpened && (
+            <HtmlDocumentBody
+              attachment={attachment}
+              labels={{ noContent: labels.noContent, externalUrl: labels.externalUrl }}
             />
-          ) : (
-            <div className="text-xs italic text-muted-foreground">{labels.noContent}</div>
           )}
         </AccordionContent>
       </AccordionItem>

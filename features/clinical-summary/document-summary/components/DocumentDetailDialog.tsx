@@ -15,9 +15,8 @@
 import { useState } from "react"
 import { Building2, FileText, Maximize2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { CompositionRenderer } from "./CompositionRenderer"
-import { HtmlDocumentRenderer } from "./HtmlDocumentRenderer"
+import { HtmlDocumentBody } from "./HtmlDocumentRenderer"
 import type { DocumentEntry } from "../types"
 
 interface DocumentDetailDialogProps {
@@ -140,36 +139,43 @@ export function DocumentDetailDialog({
           )}
         </DialogHeader>
 
-        {/* Body — wrapped in ScrollArea so long discharge summaries scroll
-            vertically inside the dialog without growing past 90vh. Padding
-            keeps the doc's content away from the close button corner. */}
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="px-5 py-4">
-            {entry.sourceKind === 'composition' && entry.composition ? (
-              <CompositionRenderer
-                composition={entry.composition}
-                defaultExpandFirst={true}
-                resolveSectionLabel={resolveSectionLabel}
-                labels={{
-                  documentDate: strings.documentDate,
-                  author: strings.author,
-                  custodian: strings.custodian,
-                  noSections: strings.noSections,
-                }}
-              />
-            ) : entry.sourceKind === 'documentReference' && entry.attachment ? (
-              <HtmlDocumentRenderer
-                attachment={entry.attachment}
-                defaultExpanded={true}
-                labels={{
-                  bodyHeader: strings.htmlBodyHeader,
-                  noContent: strings.htmlNoContent,
-                  externalUrl: strings.htmlExternalUrl,
-                }}
-              />
-            ) : null}
-          </div>
-        </ScrollArea>
+        {/* Body — plain overflow-y-auto div (not Radix ScrollArea) because
+            ScrollArea's internal viewport uses `height: 100%`, which only
+            constrains when the parent has an EXPLICIT pixel height. In a
+            flex-1 column the parent has a flex-derived rendered height but
+            its `height` CSS property is still `auto`, so the viewport
+            inherits `auto` and grows to its content (the long discharge
+            summary), defeating the scroll. A plain `overflow-y-auto` div
+            relies on the flex algorithm directly — `flex: 1 1 0%` +
+            `min-h-0` gives it a definite computed cross-axis size that
+            `overflow` honours.
+            For DocumentReference we render the body DIRECTLY (no extra
+            "文件內容" accordion) — the dialog itself is the container,
+            wrapping the body in another collapsible adds visual noise the
+            user has to dismiss every time they open a document. */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+          {entry.sourceKind === 'composition' && entry.composition ? (
+            <CompositionRenderer
+              composition={entry.composition}
+              defaultExpandFirst={true}
+              resolveSectionLabel={resolveSectionLabel}
+              labels={{
+                documentDate: strings.documentDate,
+                author: strings.author,
+                custodian: strings.custodian,
+                noSections: strings.noSections,
+              }}
+            />
+          ) : entry.sourceKind === 'documentReference' && entry.attachment ? (
+            <HtmlDocumentBody
+              attachment={entry.attachment}
+              labels={{
+                noContent: strings.htmlNoContent,
+                externalUrl: strings.htmlExternalUrl,
+              }}
+            />
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
   )
