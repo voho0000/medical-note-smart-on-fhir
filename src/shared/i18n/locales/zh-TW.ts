@@ -174,7 +174,7 @@ export const zhTW = {
     ipsBadgeTooltip: '此份文件依 IPS（國際病人摘要 International Patient Summary）規範產出。',
     dischargeBadge: '出院病摘',
     dischargeBadgeTooltip: '此份為 LOINC 18842-5 出院病摘（Hospital Discharge Summary）。',
-    htmlBodyHeader: '展開文件內容',
+    htmlBodyHeader: '文件內容',
     htmlNoContent: '本份文件無可顯示的內容。',
     htmlExternalUrl: '開啟外部文件',
     primaryDiagnosisTooltip: '此 ICD-10 碼為醫療院所申報健保時提供的住院主診斷（健保署彙整後同步至健康存摺）。並非醫師直接撰寫的診斷敘述，詳細病情請展開文件內容。',

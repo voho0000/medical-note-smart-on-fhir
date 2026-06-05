@@ -11,7 +11,7 @@
 "use client"
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, FileText } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import {
   Accordion,
   AccordionContent,
@@ -77,12 +77,16 @@ export function HtmlDocumentRenderer({
       }}
     >
       <AccordionItem value="body" className="rounded-md border border-border/60 bg-background">
-        <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline [&>svg]:hidden">
+        {/* AccordionTrigger ships its own ChevronDown that auto-rotates via
+            `[&[data-state=open]>svg]:rotate-180` (see components/ui/accordion).
+            We use the default chevron so the open/closed state is visually
+            unambiguous — important because the title is a neutral noun
+            ("文件內容") rather than an action verb. */}
+        <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">
           <div className="flex flex-1 items-center gap-2 min-w-0">
             <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <span className="truncate font-medium">{labels.bodyHeader}</span>
           </div>
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </AccordionTrigger>
         <AccordionContent className="px-3 pb-3">
           {isExternal ? (

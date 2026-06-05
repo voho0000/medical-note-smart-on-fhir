@@ -8,7 +8,7 @@
 // dropped into a Visits-tab discharge-summary view alongside its Encounter.
 "use client"
 
-import { ChevronDown, FileText } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import type { CompositionEntity } from '@/src/core/entities/clinical-data.entity'
 import { sanitizeNarrative, hasNarrativeContent } from '../utils/sanitize-narrative'
@@ -123,12 +123,14 @@ export function CompositionRenderer({
                 value={`section-${idx}`}
                 className="rounded-md border border-border/60 bg-background"
               >
-                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline [&>svg]:hidden">
+                {/* Default AccordionTrigger ships its own chevron with the
+                    correct `[&[data-state=open]>svg]:rotate-180` rotation —
+                    use it as-is so the open/closed state is unambiguous. */}
+                <AccordionTrigger className="px-3 py-2 text-sm hover:no-underline">
                   <div className="flex flex-1 items-center gap-2 min-w-0">
                     <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                     <span className="truncate font-medium">{title}</span>
                   </div>
-                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </AccordionTrigger>
                 <AccordionContent className="px-3 pb-3">
                   {/* Sanitized FHIR Narrative XHTML. `prose` gives the embedded

@@ -173,7 +173,7 @@ export const en = {
     ipsBadgeTooltip: 'This document conforms to the IPS (International Patient Summary) implementation guide.',
     dischargeBadge: 'Discharge',
     dischargeBadgeTooltip: 'This is a Hospital Discharge Summary (LOINC 18842-5).',
-    htmlBodyHeader: 'Expand document content',
+    htmlBodyHeader: 'Document content',
     htmlNoContent: 'No displayable content in this document.',
     htmlExternalUrl: 'Open external document',
     primaryDiagnosisTooltip: 'ICD-10 principal discharge diagnosis coded by the medical institution for NHI billing (aggregated and synced to the NHI health record). Not a clinician\'s narrative diagnosis — see the document content for clinical details.',
