@@ -4,11 +4,24 @@ import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { EncounterObservationCard } from "./EncounterObservationCard"
 import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
+import { AnalyteTrendRow } from "./AnalyteTrendRow"
+import { MedTrendRow } from "./MedTrendRow"
+import { EncounterSection } from "./EncounterSection"
 // import { NoteItem } from "./NoteItem" // TODO: 暫時隱藏，等有真實資料時再啟用測試
 import type { VisitRecord } from "../hooks/useVisitHistory"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
+
+// Auto-collapse thresholds — counts above these flip the section to closed
+// by default. Tuned for the typical inpatient stay (50+ labs, 10+ meds)
+// while keeping short outpatient visits visible without an extra click.
+const COLLAPSE_THRESHOLDS = {
+  diagnoses: 6,
+  tests: 20,
+  medications: 10,
+  procedures: Infinity, // procedures are rarely numerous; always show.
+} as const
 
 type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
@@ -204,20 +217,33 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
           {hasDetails ? (
             <div className="space-y-4">
               {details?.diagnoses.length ? (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.diagnoses}</div>
-                  <div className="grid gap-2">
+                <EncounterSection
+                  title={t.visitHistory.diagnoses}
+                  count={details.diagnoses.length}
+                  collapseThreshold={COLLAPSE_THRESHOLDS.diagnoses}
+                >
+                  <div className="grid gap-2 mt-2">
                     {details.diagnoses.map((dx) => (
                       <DiagnosisTag key={dx.id} diagnosis={dx} />
                     ))}
                   </div>
-                </div>
+                </EncounterSection>
               ) : null}
 
               {details?.testGroups.length ? (
-                <div className="space-y-1.5">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.tests}</div>
-                  <div className="space-y-3">
+                <EncounterSection
+                  title={t.visitHistory.tests}
+                  count={details.tests.length}
+                  collapseThreshold={COLLAPSE_THRESHOLDS.tests}
+                  rightBadges={
+                    abnormalCount > 0 ? (
+                      <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[10px] font-medium text-red-700 normal-case">
+                        {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  <div className="space-y-3 mt-2">
                     {details.testGroups.map((group, gi) => (
                       <div key={group.categoryId ?? `other-${gi}`} className="space-y-1">
                         {group.categoryId && (
@@ -225,37 +251,66 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
                             {categoryLabel(group.categoryId)}
                           </div>
                         )}
-                        <div className="rounded-lg border bg-muted/40 divide-y overflow-hidden">
-                          {group.tests.map((test) => (
-                            <EncounterObservationCard key={test.id} observation={test} />
-                          ))}
-                        </div>
+                        {/* Multi-day visits: collapse same-analyte runs into
+                            AnalyteTrendRow so 4× HB rows don't look identical.
+                            Single-day visits keep the flat card layout. */}
+                        {details.isMultiDay && group.testSeries.length > 0 ? (
+                          <div className="rounded-lg border bg-muted/40 overflow-hidden">
+                            {group.testSeries.map((series) => (
+                              <AnalyteTrendRow key={series.id} series={series} />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border bg-muted/40 divide-y overflow-hidden">
+                            {group.tests.map((test) => (
+                              <EncounterObservationCard
+                                key={test.id}
+                                observation={test}
+                                showDate={details.isMultiDay}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
-                </div>
+                </EncounterSection>
               ) : null}
 
               {details?.medications.length ? (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.medications}</div>
-                  <div className="grid gap-2">
-                    {details.medications.map((med) => (
-                      <MedicationRow key={med.id} medication={med} />
-                    ))}
+                <EncounterSection
+                  title={t.visitHistory.medications}
+                  count={details.medications.length}
+                  collapseThreshold={COLLAPSE_THRESHOLDS.medications}
+                >
+                  <div className="grid gap-2 mt-2">
+                    {/* Multi-day: roll up same-drug refills into MedTrendRow.
+                        Single-day: keep flat MedicationRow. */}
+                    {details.isMultiDay && details.medSeries.length > 0 ? (
+                      details.medSeries.map((s) => (
+                        <MedTrendRow key={s.id} series={s} />
+                      ))
+                    ) : (
+                      details.medications.map((med) => (
+                        <MedicationRow key={med.id} medication={med} />
+                      ))
+                    )}
                   </div>
-                </div>
+                </EncounterSection>
               ) : null}
 
               {details?.procedures.length ? (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.visitHistory.procedures}</div>
-                  <div className="grid gap-2">
+                <EncounterSection
+                  title={t.visitHistory.procedures}
+                  count={details.procedures.length}
+                  collapseThreshold={COLLAPSE_THRESHOLDS.procedures}
+                >
+                  <div className="grid gap-2 mt-2">
                     {details.procedures.map((procedure) => (
                       <ProcedureRow key={procedure.id} procedure={procedure} />
                     ))}
                   </div>
-                </div>
+                </EncounterSection>
               ) : null}
 
               {/* TODO: 病歷記錄功能暫時隱藏，等 FHIR 服務器提供真實資料後再啟用測試

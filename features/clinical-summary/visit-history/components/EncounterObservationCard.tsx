@@ -31,6 +31,14 @@ export type EncounterObservation = {
   sortKey?: string
 }
 
+/** Trim full ISO date to MM-DD for compact in-row display alongside an
+ *  analyte name. The visit header already shows the year + period, so the
+ *  MM-DD prefix is enough context for the reader. */
+function shortDate(iso?: string): string {
+  if (!iso) return ''
+  return iso.slice(5, 10)
+}
+
 function isAbnormalStyle(style?: string) {
   return !!style && style.includes("red")
 }
@@ -42,6 +50,7 @@ function ObsRow({
   interpretationStyle,
   referenceText,
   refRangeAbnormal,
+  date,
 }: {
   title: string
   value: string
@@ -49,13 +58,23 @@ function ObsRow({
   interpretationStyle?: string
   referenceText?: string
   refRangeAbnormal?: boolean
+  /** When set, render the date (MM-DD) before the title — used by multi-day
+   *  visits so the reader can tell otherwise-identical rows apart. */
+  date?: string
 }) {
   const abnormal = isAbnormalStyle(interpretationStyle) || !!refRangeAbnormal
   const isLong = !interpretationLabel && value.length > 60
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
-      <span className="text-sm font-medium text-foreground shrink-0">{title}</span>
+      <div className="flex items-baseline gap-2 shrink-0">
+        {date && (
+          <span className="font-mono text-[11px] text-muted-foreground tabular-nums min-w-[2.5rem]">
+            {date}
+          </span>
+        )}
+        <span className="text-sm font-medium text-foreground">{title}</span>
+      </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         {isLong ? (
           <span className="text-xs text-foreground/80 max-w-xs truncate">{value}</span>
@@ -82,7 +101,16 @@ function ObsRow({
   )
 }
 
-export function EncounterObservationCard({ observation }: { observation: EncounterObservation }) {
+export function EncounterObservationCard({
+  observation,
+  showDate = false,
+}: {
+  observation: EncounterObservation
+  /** When true the observation date (MM-DD) is prepended to the title row.
+   *  Set by VisitItem for multi-day visits so single-value labs aren't
+   *  ambiguous about when they were drawn. */
+  showDate?: boolean
+}) {
   return (
     <div>
       <ObsRow
@@ -92,6 +120,7 @@ export function EncounterObservationCard({ observation }: { observation: Encount
         interpretationStyle={observation.interpretationStyle}
         referenceText={observation.referenceText}
         refRangeAbnormal={observation.refRangeAbnormal}
+        date={showDate ? shortDate(observation.effectiveDateTime) : undefined}
       />
       {observation.components.length > 0 && (
         <div className="ml-4 border-l pl-3 space-y-0">

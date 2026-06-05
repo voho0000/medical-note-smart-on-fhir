@@ -38,17 +38,64 @@ export type EncounterTestGroup = {
    *  Resolve the display label via t.reports.cumulativeCategories[categoryId]. */
   categoryId: string | null
   tests: EncounterObservation[]
+  /** When the visit is multi-day, tests within each category are also
+   *  re-grouped by analyte so callers can show "WBC ▼ 4 筆" trend rows
+   *  instead of 4 identical-looking standalone rows. Empty when not multi-day
+   *  or when no analyte has 2+ values in this category. */
+  testSeries: EncounterTestSeries[]
+}
+
+/**
+ * Multiple values of the same analyte across days within one encounter —
+ * the core view-model behind the multi-day discharge / inpatient list.
+ * The renderer collapses these into a single trend row; the consumer
+ * expands to see the per-day values.
+ */
+export type EncounterTestSeries = {
+  /** Stable id (canonical key when present, else display title). */
+  id: string
+  /** Audience-aware display title for the analyte (e.g. WBC / 白血球). */
+  title: string
+  /** Within-category sort key (canonical short code or fallback title). */
+  sortKey: string
+  /** Each measurement, sorted oldest-first by effectiveDateTime. */
+  values: EncounterObservation[]
+  /** Count of abnormal values (refRangeAbnormal or interpretation H/L/…). */
+  abnormalCount: number
+}
+
+/** Same idea for medications: when an inpatient stay carries several days of
+ *  one drug (typical for daily prophylaxis / chronic meds), the consumer can
+ *  collapse them into a single drug row with the date range, leaving the
+ *  per-refill detail behind a click. */
+export type EncounterMedSeries = {
+  id: string
+  name: string
+  isChronic: boolean
+  /** First → last refill date for the date-range header. */
+  firstDate?: string
+  lastDate?: string
+  /** Each refill, sorted oldest-first by authoredOn. */
+  refills: EncounterMedication[]
 }
 
 export type EncounterDetails = {
   diagnoses: EncounterDiagnosis[]
   medications: EncounterMedication[]
+  /** Per-drug grouping for multi-day visits. Empty when not multi-day or
+   *  when every drug has only one refill. */
+  medSeries: EncounterMedSeries[]
   tests: EncounterObservation[]
   /** tests grouped by lab category in clinical reading order; flat `tests`
-   *  is kept for stats/search. */
+   *  is kept for stats/search. Each group additionally carries `testSeries`
+   *  for the multi-day collapsed view. */
   testGroups: EncounterTestGroup[]
   procedures: EncounterProcedure[]
   clinicalNotes: ClinicalNote[]
+  /** True when this encounter's tests / meds span 2+ distinct calendar days
+   *  (typical inpatient stays / emergency observation). Drives the per-row
+   *  date column and the analyte-series collapse in VisitItem. */
+  isMultiDay: boolean
 }
 
 const toEncounterObservation = (
@@ -120,7 +167,13 @@ const toEncounterObservation = (
 
 // Cluster a visit's flat test list into category groups in clinical reading
 // order, sorting within each group by the category's preferredOrder.
-function buildTestGroups(tests: EncounterObservation[]): EncounterTestGroup[] {
+// When `multiDay` is true, the function additionally rolls up same-analyte
+// observations within each category into a series, so the renderer can
+// collapse "HB ×4" into a single trend row.
+function buildTestGroups(
+  tests: EncounterObservation[],
+  multiDay: boolean,
+): EncounterTestGroup[] {
   if (tests.length === 0) return []
   const sorted = [...tests].sort((a, b) => {
     const ra = a.categoryId ? CATEGORY_RANK.get(a.categoryId) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER
@@ -139,9 +192,102 @@ function buildTestGroups(tests: EncounterObservation[]): EncounterTestGroup[] {
     const id = test.categoryId ?? null
     const last = groups[groups.length - 1]
     if (last && last.categoryId === id) last.tests.push(test)
-    else groups.push({ categoryId: id, tests: [test] })
+    else groups.push({ categoryId: id, tests: [test], testSeries: [] })
+  }
+  if (multiDay) {
+    for (const group of groups) {
+      group.testSeries = buildTestSeries(group.tests)
+    }
   }
   return groups
+}
+
+/** Roll up a single category's tests into per-analyte series sorted oldest-
+ *  first by effectiveDateTime. Preserves the input order between analytes —
+ *  the caller already sorted by category preferredOrder. */
+function buildTestSeries(tests: EncounterObservation[]): EncounterTestSeries[] {
+  const seriesByKey = new Map<string, EncounterTestSeries>()
+  const keyOrder: string[] = []
+  for (const t of tests) {
+    // Group key: prefer canonical sortKey (WBC/NA), fall back to display title.
+    // Bridge sometimes ships the same analyte with slightly different display
+    // strings; the canonical key absorbs that.
+    const key = t.sortKey || t.title
+    let s = seriesByKey.get(key)
+    if (!s) {
+      s = { id: key, title: t.title, sortKey: t.sortKey || t.title, values: [], abnormalCount: 0 }
+      seriesByKey.set(key, s)
+      keyOrder.push(key)
+    }
+    s.values.push(t)
+    if (t.refRangeAbnormal || (t.interpretationLabel && t.interpretationLabel !== 'Normal')) {
+      s.abnormalCount++
+    }
+  }
+  // Sort each series' values by effectiveDateTime ascending; undated rows
+  // sink to the bottom so the timeline still reads left-to-right.
+  for (const s of seriesByKey.values()) {
+    s.values.sort((a, b) => {
+      const ad = a.effectiveDateTime ?? ''
+      const bd = b.effectiveDateTime ?? ''
+      if (ad && !bd) return -1
+      if (!ad && bd) return 1
+      return ad.localeCompare(bd)
+    })
+  }
+  return keyOrder.map((k) => seriesByKey.get(k)!)
+}
+
+/** Returns true when `tests` carries 2+ distinct calendar dates (YYYY-MM-DD).
+ *  Hour/minute differences within the same day do NOT count — a 08:00 and
+ *  14:00 draw on 2025-05-18 is one day. Tests with no effectiveDateTime are
+ *  ignored for this signal. */
+function detectMultiDay(tests: EncounterObservation[]): boolean {
+  const days = new Set<string>()
+  for (const t of tests) {
+    const d = t.effectiveDateTime?.slice(0, 10)
+    if (d) days.add(d)
+    if (days.size >= 2) return true
+  }
+  return false
+}
+
+/** Group medications by drug name. Only invoked when the visit is multi-day
+ *  AND the drug appears multiple times — single-refill drugs stay in the flat
+ *  `medications` list (the renderer falls back to those for the non-grouped
+ *  display path). */
+function buildMedSeries(medications: EncounterMedication[]): EncounterMedSeries[] {
+  const byName = new Map<string, EncounterMedication[]>()
+  const nameOrder: string[] = []
+  for (const m of medications) {
+    const key = m.name
+    if (!byName.has(key)) {
+      byName.set(key, [])
+      nameOrder.push(key)
+    }
+    byName.get(key)!.push(m)
+  }
+  // Helper: pull a sortable ISO-ish prefix out of "when" (which is a
+  // locale-formatted string like "2025/05/18 08:00"). Falls back to '' so
+  // undated refills sink to the end.
+  const sortKey = (m: EncounterMedication): string => {
+    if (!m.when) return ''
+    // Replace separators so a lexicographic compare works on YYYY?MM?DD prefix.
+    return m.when.replace(/[/.]/g, '-')
+  }
+  return nameOrder.map((name) => {
+    const refills = byName.get(name)!
+    refills.sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
+    const dated = refills.map(sortKey).filter(Boolean)
+    return {
+      id: name,
+      name,
+      isChronic: refills.some((r) => r.isChronic),
+      firstDate: dated[0]?.slice(0, 10),
+      lastDate: dated[dated.length - 1]?.slice(0, 10),
+      refills,
+    }
+  })
 }
 
 export function useEncounterDetails(
@@ -162,7 +308,12 @@ export function useEncounterDetails(
 
     const ensureEntry = (encounterId: string) => {
       if (!map.has(encounterId)) {
-        map.set(encounterId, { diagnoses: [], medications: [], tests: [], testGroups: [], procedures: [], clinicalNotes: [] })
+        map.set(encounterId, {
+          diagnoses: [], medications: [], medSeries: [],
+          tests: [], testGroups: [],
+          procedures: [], clinicalNotes: [],
+          isMultiDay: false,
+        })
       }
       return map.get(encounterId)!
     }
@@ -304,10 +455,14 @@ export function useEncounterDetails(
       })
     }
 
-    // Cluster each encounter's interleaved tests into clinically ordered
-    // category groups for rendering. Flat `tests` stays as-is for stats/search.
+    // Detect multi-day stays (≥2 distinct test dates), then build the
+    // collapsed-by-analyte test groups and the per-drug medication series.
+    // Single-day visits skip both rollups; the renderer just iterates the
+    // flat lists in that case (preserves existing outpatient UX).
     map.forEach((entry) => {
-      entry.testGroups = buildTestGroups(entry.tests)
+      entry.isMultiDay = detectMultiDay(entry.tests)
+      entry.testGroups = buildTestGroups(entry.tests, entry.isMultiDay)
+      entry.medSeries = entry.isMultiDay ? buildMedSeries(entry.medications) : []
     })
 
     return map
