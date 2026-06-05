@@ -15,6 +15,7 @@
 // so DocumentSummaryCard hides itself via FeatureCard's `isEmpty` path.
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { useLanguage } from '@/src/application/providers/language.provider'
 import type { DocumentEntry } from '../types'
 import { buildDocumentEntries } from '../utils/document-adapter'
 
@@ -27,11 +28,14 @@ export interface UseDocumentSummariesReturn {
 export function useDocumentSummaries(
   docTypeStrings: Record<string, string>,
 ): UseDocumentSummariesReturn {
-  const { compositions, documentReferences, isLoading, error } = useClinicalData()
+  const { compositions, documentReferences, encounters, isLoading, error } = useClinicalData()
+  // `locale` drives the primary-diagnosis text picked from the linked
+  // Encounter — zh-TW uses the Chinese `text` field, en uses coding[].display.
+  const { locale } = useLanguage()
 
   const entries = useMemo(
-    () => buildDocumentEntries(compositions, documentReferences, docTypeStrings),
-    [compositions, documentReferences, docTypeStrings],
+    () => buildDocumentEntries(compositions, documentReferences, docTypeStrings, encounters, locale),
+    [compositions, documentReferences, encounters, docTypeStrings, locale],
   )
 
   return { entries, isLoading, error }

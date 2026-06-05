@@ -129,6 +129,75 @@ describe('document-adapter', () => {
       const entry = documentReferenceToEntry(docRef, ZH_DOC_TYPES)
       expect(entry!.institution).toBeUndefined()
     })
+
+    it('pulls primary diagnosis from linked Encounter.reasonCode (zh-TW)', () => {
+      const docRef: any = {
+        id: 'd-dx',
+        date: '2025-05-23',
+        type: { coding: [{ code: '18842-5' }] },
+        context: { encounter: [{ reference: 'Encounter/enc-1' }] },
+        content: [{ attachment: { contentType: 'text/html', data: 'PA==' } }],
+      }
+      const enc: any = {
+        id: 'enc-1',
+        reasonCode: [
+          {
+            text: 'R042 咳血',
+            coding: [{ code: 'R042', display: 'Hemoptysis' }],
+          },
+        ],
+      }
+      const map = new Map([['enc-1', enc]])
+      const entry = documentReferenceToEntry(docRef, ZH_DOC_TYPES, map, 'zh-TW')
+      expect(entry!.primaryDiagnosis).toEqual({ text: '咳血', code: 'R042' })
+    })
+
+    it('pulls primary diagnosis in English when locale === "en"', () => {
+      const docRef: any = {
+        id: 'd-dx-en',
+        date: '2025-05-23',
+        type: { coding: [{ code: '18842-5' }] },
+        context: { encounter: [{ reference: 'Encounter/enc-1' }] },
+        content: [{ attachment: { contentType: 'text/html', data: 'PA==' } }],
+      }
+      const enc: any = {
+        id: 'enc-1',
+        reasonCode: [
+          {
+            text: 'R042 咳血',
+            coding: [{ code: 'R042', display: 'Hemoptysis' }],
+          },
+        ],
+      }
+      const map = new Map([['enc-1', enc]])
+      const entry = documentReferenceToEntry(docRef, ZH_DOC_TYPES, map, 'en')
+      expect(entry!.primaryDiagnosis).toEqual({ text: 'Hemoptysis', code: 'R042' })
+    })
+
+    it('handles urn:uuid encounter references', () => {
+      // Some bundles emit `Encounter/<id>`, others raw `<id>`; we strip the
+      // type prefix in either case before the map lookup.
+      const docRef: any = {
+        id: 'd-uuid',
+        type: { coding: [{ code: '18842-5' }] },
+        context: { encounter: [{ reference: 'Encounter/abc' }] },
+        content: [{ attachment: { contentType: 'text/html', data: 'PA==' } }],
+      }
+      const enc: any = { id: 'abc', reasonCode: [{ text: 'J189 肺炎' }] }
+      const map = new Map([['abc', enc]])
+      const entry = documentReferenceToEntry(docRef, ZH_DOC_TYPES, map, 'zh-TW')
+      expect(entry!.primaryDiagnosis?.text).toBe('肺炎')
+    })
+
+    it('returns undefined diagnosis when no Encounter is reachable', () => {
+      const docRef: any = {
+        id: 'd-no-enc',
+        type: { coding: [{ code: '18842-5' }] },
+        content: [{ attachment: { contentType: 'text/html', data: 'PA==' } }],
+      }
+      const entry = documentReferenceToEntry(docRef, ZH_DOC_TYPES, undefined, 'zh-TW')
+      expect(entry!.primaryDiagnosis).toBeUndefined()
+    })
   })
 
   describe('buildDocumentEntries', () => {

@@ -8,6 +8,7 @@
 import type {
   CompositionEntity,
   DocumentReferenceEntity,
+  EncounterEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import type { DocumentEntry } from '../types'
 import { hasNarrativeContent } from './sanitize-narrative'
@@ -18,6 +19,41 @@ import {
 } from './loinc-document-types'
 
 const DISCHARGE_SUMMARY_LOINC = '18842-5'
+
+/** Strip a leading ICD-10 code from a diagnosis text. Bridge populates the
+ *  text field as "<ICD> <description>" (e.g. "R042 咳血"); the 健保存摺 UI
+ *  shows just the description, and so do we. The regex matches the standard
+ *  ICD-10 letter+digits[.digits]? shape. */
+function stripIcdPrefix(s: string): string {
+  return s.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim()
+}
+
+/** Extract the primary diagnosis from an Encounter, localised. Prefers
+ *  reasonCode[0] (the bridge's primary diagnosis position), falling back
+ *  to reasonReference[0].display. Returns undefined when nothing usable. */
+function extractPrimaryDiagnosis(
+  encounter: EncounterEntity | undefined,
+  locale: string,
+): { text: string; code?: string } | undefined {
+  if (!encounter) return undefined
+  const rc = encounter.reasonCode?.[0]
+  if (rc) {
+    const coding = Array.isArray(rc.coding) ? rc.coding[0] : undefined
+    const code = coding?.code
+    // Locale-driven: zh-TW prefers `text` (Chinese), en prefers
+    // coding[].display (English). Either way the result is ICD-prefix-free.
+    const rawDisplay = typeof coding?.display === 'string' ? coding.display.trim() : ''
+    const rawText = typeof rc.text === 'string' ? rc.text.trim() : ''
+    const localised =
+      locale === 'en'
+        ? rawDisplay || stripIcdPrefix(rawText)
+        : stripIcdPrefix(rawText) || rawDisplay
+    if (localised) return { text: localised, code }
+  }
+  const rr = encounter.reasonReference?.[0]?.display?.trim()
+  if (rr) return { text: stripIcdPrefix(rr) }
+  return undefined
+}
 
 /**
  * Looks up the localised label for a LOINC document type code.
@@ -123,10 +159,15 @@ export function compositionToEntry(
  * Adapt a FHIR DocumentReference to a DocumentEntry. Returns null when no
  * usable inline attachment exists (PDF/image/url-only DocumentReferences are
  * intentionally skipped — see pickRenderableAttachment).
+ *
+ * Pass `encounterMap` + `locale` to surface the linked Encounter's primary
+ * diagnosis (健保存摺's 「疾病分類」line); both are optional.
  */
 export function documentReferenceToEntry(
   docRef: DocumentReferenceEntity,
   docTypeStrings: Record<string, string>,
+  encounterMap?: Map<string, EncounterEntity>,
+  locale: string = 'zh-TW',
 ): DocumentEntry | null {
   const att = pickRenderableAttachment(docRef)
   if (!att) return null
@@ -143,6 +184,9 @@ export function documentReferenceToEntry(
   const institution = extractInstitutionFromTitle(att.title)
   const period = docRef.context?.period
   const encounterRef = docRef.context?.encounter?.[0]?.reference
+  const encounterId = encounterRef ? encounterRef.replace(/^Encounter\//, '') : undefined
+  const encounter = encounterId ? encounterMap?.get(encounterId) : undefined
+  const primaryDiagnosis = extractPrimaryDiagnosis(encounter, locale)
 
   return {
     id: docRef.id || `documentReference-${docRef.date ?? Math.random()}`,
@@ -157,25 +201,38 @@ export function documentReferenceToEntry(
     subtitle: att.title?.trim(),
     attachment: att,
     encounterRef,
+    primaryDiagnosis,
   }
 }
 
 /**
  * Adapt both source arrays into a unified, deduplicated, newest-first list
  * suitable for direct iteration in DocumentSummaryCard.
+ *
+ * `encounters` (when provided) lets DocumentReference entries pull primary
+ * diagnosis from the linked visit — bridge populates Encounter.reasonCode[0]
+ * with the same diagnosis 健保存摺 surfaces on its 住院 list.
  */
 export function buildDocumentEntries(
   compositions: CompositionEntity[] | undefined,
   documentReferences: DocumentReferenceEntity[] | undefined,
   docTypeStrings: Record<string, string>,
+  encounters?: EncounterEntity[],
+  locale: string = 'zh-TW',
 ): DocumentEntry[] {
   const entries: DocumentEntry[] = []
+  // Build the encounter index once per call so 50+ document refs don't
+  // re-walk the encounter list each time.
+  const encounterMap = new Map<string, EncounterEntity>()
+  for (const enc of encounters ?? []) {
+    if (enc?.id) encounterMap.set(enc.id, enc)
+  }
   for (const c of compositions ?? []) {
     const e = compositionToEntry(c, docTypeStrings)
     if (e) entries.push(e)
   }
   for (const d of documentReferences ?? []) {
-    const e = documentReferenceToEntry(d, docTypeStrings)
+    const e = documentReferenceToEntry(d, docTypeStrings, encounterMap, locale)
     if (e) entries.push(e)
   }
   // Newest-first; entries without a date sink to the bottom.

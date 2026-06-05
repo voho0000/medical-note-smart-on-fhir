@@ -207,6 +207,15 @@ function DocumentEntryCard({
         )}
       </div>
 
+      {/* Primary diagnosis — matches 健保存摺's 「疾病分類」line. Drawn from
+          the linked Encounter.reasonCode[0]; for inpatient discharge summaries
+          the bridge writes the principal diagnosis there. */}
+      {entry.primaryDiagnosis && (
+        <div className="mb-1 text-[13px] font-medium text-foreground/90" title={entry.primaryDiagnosis.code}>
+          {entry.primaryDiagnosis.text}
+        </div>
+      )}
+
       {/* Secondary line: institution + period (e.g. "長庚嘉義 · 2025-05-18 ~ 2025-05-22") */}
       {(entry.institution || periodStr) && (
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">

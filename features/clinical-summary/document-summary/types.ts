@@ -38,6 +38,17 @@ export interface DocumentEntry {
   period?: { start?: string; end?: string }
   /** Free-form subtitle (e.g. the bridge-formatted attachment.title). */
   subtitle?: string
+  /** Primary diagnosis surfaced as a one-line context — resolved from the
+   *  linked Encounter's first reasonCode (or reasonReference) and stripped
+   *  of any leading ICD-10 code prefix so it renders cleanly. Equivalent
+   *  to the 「疾病分類」line on the 健保存摺 hospitalisation list.
+   *  Only populated when an Encounter is reachable from the document. */
+  primaryDiagnosis?: {
+    /** Localised display text (e.g. '咳血' for zh-TW, 'Hemoptysis' for en). */
+    text: string
+    /** ICD-10 code, when present — useful for tooltips / debugging. */
+    code?: string
+  }
 
   // ── Renderer payload — exactly one of these is populated. ─────────────
   /** Original Composition resource (when sourceKind === 'composition'). */

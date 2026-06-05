@@ -328,8 +328,16 @@ export interface EncounterEntity {
     start?: string
     end?: string
   }
+  // Bridge populates each entry with the diagnosis in BOTH `text` (zh-TW
+  // — usually "<ICD> 中文") and `coding[].display` (en); the documents card
+  // picks one based on UI locale to surface the primary diagnosis line.
   reasonCode?: Array<{
     text?: string
+    coding?: Array<{
+      code?: string
+      display?: string
+      system?: string
+    }>
   }>
   reasonReference?: Array<{ display?: string }>
   diagnosis?: Array<{
