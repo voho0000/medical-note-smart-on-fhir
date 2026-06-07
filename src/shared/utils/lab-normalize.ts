@@ -926,12 +926,82 @@ export function getAnalyteDisplayParts(
   return { name: lay, abbr: null }
 }
 
+// Detect any CJK Unified Ideograph (incl. Extension A) — used to skip
+// hospital-supplied lab item names that happen to be Chinese in the
+// English-mode fallback. Standalone helper rather than reusing
+// normalizeTestName's regex because we only need a yes/no test, not a strip.
+function containsCJK(s: string): boolean {
+  return /[一-鿿㐀-䶿]/.test(s)
+}
+
+// Pick the best display label from an Observation's code when canonical
+// resolution fails (analyte not in LOINC_TO_CANONICAL or TEST_ALIASES — e.g.
+// 12068C aTG / Thyroglobulin Ab, which has no LOINC in 健保存摺 and no entry
+// in our canonical maps).
+//
+// Bridge ≥ v0.17.4 emits the hospital's English short name as a `his-local-lab`
+// coding for no-LOINC labs (`assaY_ITEM_NAME`, e.g. "aTG, (Thyroglobulin Ab)").
+// Without this picker, the legacy `code.text || coding[0].display` fallback
+// always returned the NHI 中文 (the bridge writes it to code.text) — so English
+// mode showed 「甲狀腺球蛋白抗體」 instead of 「aTG, (Thyroglobulin Ab)」.
+//
+// Language-aware priority — NOT system-uniform — because his-local-lab is
+// usually-but-not-always English (legacy CMV serology entries are Chinese);
+// LOINC display is reliably English, NHI is reliably Chinese.
+function pickFallbackDisplayForObs(
+  obsOrComponent: { code?: any } | null | undefined,
+  language: DisplayLang,
+): string {
+  const code = obsOrComponent?.code
+  if (!code) return '—'
+  const codings: any[] = Array.isArray(code.coding) ? code.coding : []
+  const text = typeof code.text === 'string' ? code.text : ''
+
+  const displayWhereSystemIncludes = (fragment: string): string => {
+    for (const c of codings) {
+      const sys = typeof c?.system === 'string' ? c.system : ''
+      const disp = typeof c?.display === 'string' ? c.display : ''
+      if (sys.includes(fragment) && disp) return disp
+    }
+    return ''
+  }
+
+  if (language === 'en') {
+    // 1. LOINC display — always English when present.
+    const loinc = displayWhereSystemIncludes('loinc.org')
+    if (loinc && !containsCJK(loinc)) return loinc
+    // 2. his-local-lab display — hospital's assaY_ITEM_NAME; usually English
+    //    but not guaranteed (legacy CMV-serology entries are Chinese).
+    const local = displayWhereSystemIncludes('his-local-lab')
+    if (local && !containsCJK(local)) return local
+    // 3. Any non-CJK coding.display — defensive catch-all for codings the
+    //    bridge labels with a different system URL than we anticipated.
+    for (const c of codings) {
+      const disp = typeof c?.display === 'string' ? c.display : ''
+      if (disp && !containsCJK(disp)) return disp
+    }
+    // 4. Last resort: bridge's code.text (may be Chinese). Better to surface
+    //    the Chinese name than display empty/dash — clinician can still read it.
+    if (text) return text
+    return (codings[0]?.display as string) || (codings[0]?.code as string) || '—'
+  }
+
+  // zh-TW: prefer code.text (bridge writes the NHI 中文 here), then the
+  // NHI coding display, then any other coding.
+  if (text) return text
+  const nhi = displayWhereSystemIncludes('nhi-medical-order-code')
+  if (nhi) return nhi
+  return (codings[0]?.display as string) || (codings[0]?.code as string) || '—'
+}
+
 /**
- * Convenience wrapper: resolves canonical via getAnalyteLabel(obs) and
- * then applies audience/language display logic. Returns the bridge-sent
- * raw text for non-canonical rows (microbiology cultures, antibiotic
- * susceptibilities, free-text reports) so unfamiliar rows keep their
- * source label rather than being mis-translated.
+ * Convenience wrapper: resolves canonical via getAnalyteCanonicalKey(obs)
+ * and then applies audience/language display logic. For non-canonical rows
+ * (microbiology cultures, antibiotic susceptibilities, no-LOINC labs not in
+ * our canonical maps), falls back to a language-aware picker that prefers
+ * the non-CJK coding.display in English mode (LOINC display → his-local-lab
+ * assaY_ITEM_NAME → any non-CJK coding) before resorting to code.text, and
+ * sticks with code.text first in zh-TW mode. See pickFallbackDisplayForObs.
  *
  * Render sites should call THIS instead of getAnalyteLabel directly.
  * Sort / categorise / search / AI-prompt sites should keep using
@@ -948,8 +1018,9 @@ export function getAnalyteDisplayForObs(
   // CANONICAL_DISPLAY override — 'HbA1c' is not a member of CANONICAL_KEYS —
   // so the audience/language lay-name path would never fire and the patient
   // would see the raw short code. Non-canonical rows (cultures, antibiotic
-  // susceptibilities, free-text) resolve to null → keep the bridge-sent label.
+  // susceptibilities, free-text) resolve to null → pick a language-appropriate
+  // display from the coding list instead of blindly returning code.text.
   const key = getAnalyteCanonicalKey(obsOrComponent)
-  if (!key) return getAnalyteLabel(obsOrComponent)
+  if (!key) return pickFallbackDisplayForObs(obsOrComponent, language)
   return getAnalyteDisplayLabel(key, audience, language)
 }

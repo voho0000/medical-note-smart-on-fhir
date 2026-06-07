@@ -196,6 +196,95 @@ describe('getAnalyteDisplayForObs', () => {
     expect(getAnalyteDisplayForObs(culture, 'patient', 'en')).toBe('Aerobic culture, Sputum')
   })
 
+  describe('no-LOINC, non-canonical lab fallback (bridge v0.17.4 shape)', () => {
+    // Bridge v0.17.4 ships an extra his-local-lab coding (the hospital's
+    // assaY_ITEM_NAME, usually English) for labs that have no LOINC. Without
+    // a language-aware picker, the legacy `code.text || coding[0].display`
+    // fallback would return the NHI 中文 in code.text and English mode would
+    // still show Chinese. These tests lock the picker contract.
+    const aTG = {
+      code: {
+        text: '甲狀腺球蛋白抗體',
+        coding: [
+          {
+            system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code',
+            code: '12068C',
+            display: '甲狀腺球蛋白抗體',
+          },
+          {
+            system: 'https://nhi-fhir-bridge.local/CodeSystem/his-local-lab',
+            code: 'aTG, (Thyroglobulin Ab)',
+            display: 'aTG, (Thyroglobulin Ab)',
+          },
+        ],
+      },
+    }
+
+    it('English mode prefers the his-local-lab English display over NHI Chinese', () => {
+      // The actual bug from the 2026-06-08 bridge discussion: 12068C aTG
+      // showed 「甲狀腺球蛋白抗體」 in English mode because code.text won.
+      expect(getAnalyteDisplayForObs(aTG, 'medical', 'en')).toBe('aTG, (Thyroglobulin Ab)')
+      expect(getAnalyteDisplayForObs(aTG, 'patient', 'en')).toBe('aTG, (Thyroglobulin Ab)')
+    })
+
+    it('Chinese mode keeps the NHI 中文 from code.text', () => {
+      expect(getAnalyteDisplayForObs(aTG, 'medical', 'zh-TW')).toBe('甲狀腺球蛋白抗體')
+      expect(getAnalyteDisplayForObs(aTG, 'patient', 'zh-TW')).toBe('甲狀腺球蛋白抗體')
+    })
+
+    it('English mode prefers LOINC display when present, over his-local-lab', () => {
+      // Defensive: if the bridge ever attaches BOTH a LOINC coding (English
+      // long name) AND a his-local-lab coding, prefer the LOINC display
+      // because LOINC is the canonical English source.
+      const both = {
+        code: {
+          text: '某中文檢驗',
+          coding: [
+            { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code', display: '某中文檢驗' },
+            { system: 'http://loinc.org', code: '99999-9', display: 'Some LOINC display' },
+            { system: 'https://nhi-fhir-bridge.local/CodeSystem/his-local-lab', display: 'SomeLocal' },
+          ],
+        },
+      }
+      expect(getAnalyteDisplayForObs(both, 'medical', 'en')).toBe('Some LOINC display')
+    })
+
+    it('English mode keeps Chinese his-local-lab as last resort, never blanks the row', () => {
+      // Boundary the user explicitly called out: assaY_ITEM_NAME is hospital
+      // free text and a few legacy entries (e.g. some CMV serology) are
+      // themselves Chinese. CJK check skips them; we fall back to code.text
+      // — surfacing the bug-visible Chinese name rather than displaying '—'.
+      const chineseLocal = {
+        code: {
+          text: 'CMV 抗體',
+          coding: [
+            { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code', display: 'CMV 抗體' },
+            { system: 'https://nhi-fhir-bridge.local/CodeSystem/his-local-lab', display: '巨細胞病毒抗體' },
+          ],
+        },
+      }
+      // Both displays are CJK → no English option exists → fall back to
+      // code.text. The label IS Chinese in English mode, intentionally —
+      // we don't fabricate an English string we don't have.
+      expect(getAnalyteDisplayForObs(chineseLocal, 'patient', 'en')).toBe('CMV 抗體')
+    })
+
+    it('English mode falls back to any non-CJK coding.display when system is unknown', () => {
+      // Defensive against bridge URL drift: even if the system URL changes
+      // and `his-local-lab` no longer matches, we still pick a non-CJK
+      // display from the coding list before defaulting to code.text.
+      const unknownSystem = {
+        code: {
+          text: '某檢驗',
+          coding: [
+            { system: 'urn:oid:1.2.3.4', display: 'SomeEnglishName' },
+          ],
+        },
+      }
+      expect(getAnalyteDisplayForObs(unknownSystem, 'patient', 'en')).toBe('SomeEnglishName')
+    })
+  })
+
   it('handles null/empty obs gracefully', () => {
     expect(getAnalyteDisplayForObs(null, 'patient', 'zh-TW')).toBe('—')
     expect(getAnalyteDisplayForObs(undefined, 'patient', 'en')).toBe('—')
