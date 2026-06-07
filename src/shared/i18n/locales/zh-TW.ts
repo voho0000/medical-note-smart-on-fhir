@@ -287,6 +287,10 @@ export const zhTW = {
       hep: 'BC肝',
       tumor: '癌症',
       urine: '尿液',
+      // 「其他」歸納未進入上述五大類的特殊檢驗（例如罕用的免疫學、
+      // 微生物、自費項目）— 在就診紀錄詳情用，避免無分類檢驗緊接前
+      // 一個分類渲染、被誤讀成同類。
+      other: '其他',
     },
     cumulativeSubgroups: {
       counts: '計數',

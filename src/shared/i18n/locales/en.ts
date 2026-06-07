@@ -284,6 +284,10 @@ export const en = {
       hep: 'HBV/HCV',
       tumor: 'Tumor',
       urine: 'Urine',
+      // Catch-all for labs not in the five main panels — keeps
+      // uncategorised results from rendering under the previous group's
+      // header in the visit-history detail view.
+      other: 'Other',
     },
     cumulativeSubgroups: {
       counts: 'Counts',

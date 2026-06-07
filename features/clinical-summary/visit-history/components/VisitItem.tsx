@@ -246,11 +246,16 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
                   <div className="space-y-3 mt-2">
                     {details.testGroups.map((group, gi) => (
                       <div key={group.categoryId ?? `other-${gi}`} className="space-y-1">
-                        {group.categoryId && (
-                          <div className="px-0.5 text-[11px] font-medium text-muted-foreground/80">
-                            {categoryLabel(group.categoryId)}
-                          </div>
-                        )}
+                        {/* Render a label for EVERY group — categorised
+                            ones use the cumulativeCategories i18n entry;
+                            uncategorised ones fall back to "其他" so the
+                            tests don't visually attach to the previous
+                            group's header. */}
+                        <div className="px-0.5 text-[11px] font-medium text-muted-foreground/80">
+                          {group.categoryId
+                            ? categoryLabel(group.categoryId)
+                            : categoryLabel('other')}
+                        </div>
                         {/* Multi-day visits: collapse same-analyte runs into
                             AnalyteTrendRow so 4× HB rows don't look identical.
                             Single-day visits keep the flat card layout. */}
