@@ -1,7 +1,8 @@
 // Lab Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
-import { inferGroupFromCategory, inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
 import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
@@ -76,38 +77,16 @@ export const labReportsCategory: DataCategory<LabData> = {
   FilterComponent: LabReportFilter,
   
   extractData: (clinicalData) => {
-    const results: LabData[] = []
-    
-    // Include DiagnosticReports that are lab reports
+    // Lab DiagnosticReports + standalone lab observations. The standalone-obs
+    // dedup (skip any observation already attached to a report) lives in the
+    // shared SSOT selector — see src/core/utils/observation-selectors.ts — so
+    // the "is this a report member?" rule isn't re-derived per feature.
     const reports = clinicalData?.diagnosticReports || []
-    const labReports = reports.filter((report: DiagnosticReport) => 
+    const labReports = reports.filter((report: DiagnosticReport) =>
       inferGroupFromCategory(report.category) === 'lab'
     )
-    results.push(...labReports)
-    
-    // Include standalone lab observations (not in any DiagnosticReport)
-    const observations = clinicalData?.observations || []
-    const allReportObsIds = new Set<string>()
-    
-    // Collect all observation IDs that are already in reports
-    reports.forEach((report: DiagnosticReport) => {
-      report.result?.forEach((result: any) => {
-        const id = result.reference?.split('/').pop()
-        if (id) allReportObsIds.add(id)
-      })
-    })
-    
-    // Filter standalone lab observations
-    const standaloneLabObs = observations.filter((obs: Observation) => {
-      // Skip if already in a report
-      if (obs.id && allReportObsIds.has(obs.id)) return false
-      // Check if it's a lab observation
-      return inferGroupFromObservation(obs) === 'lab'
-    })
-    
-    results.push(...standaloneLabObs)
-    
-    return results
+    const standaloneLabObs = selectLabOrphanObservations(clinicalData)
+    return [...labReports, ...standaloneLabObs] as unknown as LabData[]
   },
   
   getCount: (data, filters, allClinicalData) => {

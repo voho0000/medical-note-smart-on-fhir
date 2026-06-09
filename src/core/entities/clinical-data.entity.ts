@@ -655,6 +655,26 @@ export interface CarePlanEntity {
   sourceId?: string
 }
 
+/**
+ * The full set of clinical resources loaded for one patient.
+ *
+ * OBSERVATION SUPERSET INVARIANT — read before adding any feature that lists
+ * observations:
+ *   `observations` is the COMPLETE set of every Observation for the patient.
+ *   `vitalSigns` and each DiagnosticReport's members (referenced via
+ *   `report.result[].reference` and/or re-attached as `report._observations`)
+ *   are NOT independent collections — they are SUBSETS of `observations`,
+ *   re-listed by the same resource id. This is standard FHIR behaviour
+ *   (`Observation?patient=X` must return report members and vitals too), so it
+ *   holds for both data sources (SMART repository and local-bundle import).
+ *
+ * Consequence: iterating `observations` directly will double-count anything
+ * already shown inside a report or in the vitals section. To list "standalone"
+ * observations, do NOT hand-roll the dedup — use the shared selectors in
+ * `src/core/utils/observation-selectors.ts`, which are the single source of
+ * truth for "is this a report member?" and "is this a vital?". Re-deriving
+ * those rules per-feature is exactly what produced duplicate / mislabeled rows.
+ */
 export interface ClinicalDataCollection {
   conditions: ConditionEntity[]
   medications: MedicationEntity[]

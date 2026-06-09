@@ -4,6 +4,7 @@ import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.type
 import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
+import { referenceId } from '../utils/observation-selectors'
 import { ImagingReportFilter } from '@/features/data-selection/components/DataFilters'
 
 // Helper to get latest imaging reports by name
@@ -114,7 +115,7 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
     filtered.forEach(report => {
       const reportObs: Observation[] = []
       report.result?.forEach(result => {
-        const id = result.reference?.split('/').pop()
+        const id = referenceId(result.reference)
         if (id) {
           const obs = observations.find((o: Observation) => o.id === id)
           if (obs) reportObs.push(obs)

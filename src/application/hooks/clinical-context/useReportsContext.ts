@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
 import { formatNumberSmart } from "@/features/clinical-summary/reports/utils/number-format.utils"
+import { collectReportMemberIds, referenceId } from "@/src/core/utils/observation-selectors"
 import type { ClinicalData, DiagnosticReport, Observation } from "./types"
 
 export function useReportsContext(
@@ -11,15 +12,18 @@ export function useReportsContext(
   filters?: DataFilters
 ): { section: ClinicalContextSection | null; observationIdsInReports: Set<string> } {
   return useMemo(() => {
-    const observationIdsInReports = new Set<string>()
-
     if (!includeReports || !clinicalData?.diagnosticReports?.length) {
-      return { section: null, observationIdsInReports }
+      return { section: null, observationIdsInReports: new Set<string>() }
     }
 
     const filteredReports = clinicalData.diagnosticReports.filter((report) =>
       isWithinTimeRange(report.effectiveDateTime, filters?.labReportTimeRange ?? "1m")
     )
+
+    // Report-member ids come from the shared SSOT (result[].reference ∪
+    // _observations[].id) so the caller's "exclude obs already in a report"
+    // dedup matches every other feature. See observation-selectors.ts.
+    const observationIdsInReports = collectReportMemberIds(filteredReports)
 
     if (filteredReports.length === 0) {
       return {
@@ -33,9 +37,8 @@ export function useReportsContext(
     filteredReports.forEach((report) => {
       const observations: Observation[] = []
       report.result?.forEach((result) => {
-        const id = result.reference?.split("/").pop()
+        const id = referenceId(result.reference)
         if (!id) return
-        observationIdsInReports.add(id)
         const obs = clinicalData.observations?.find((o) => o.id === id)
         if (obs) observations.push(obs)
       })

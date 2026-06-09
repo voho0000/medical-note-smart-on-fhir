@@ -4,16 +4,10 @@
 // catch-all so the category is OFF by default.
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Observation } from '@/src/shared/types/fhir.types'
-import { inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
+import { selectOtherObservations } from '../utils/observation-selectors'
 import { VitalSignsFilter } from '@/features/data-selection/components/DataFilters'
-
-function isOrphan(obs: Observation, vitalIds: Set<string | undefined>): boolean {
-  if (vitalIds.has(obs.id)) return false
-  const group = inferGroupFromObservation(obs)
-  return group !== 'lab' && group !== 'imaging'
-}
 
 export const observationsCategory: DataCategory<Observation> = {
   id: 'observations',
@@ -45,11 +39,10 @@ export const observationsCategory: DataCategory<Observation> = {
   FilterComponent: VitalSignsFilter,
 
   extractData: (clinicalData) => {
-    const observations: Observation[] = clinicalData?.observations || []
-    const vitalIds = new Set<string | undefined>(
-      (clinicalData?.vitalSigns || []).map((v: Observation) => v.id)
-    )
-    return observations.filter((obs) => isOrphan(obs, vitalIds))
+    // Leftover observations only: NOT lab (-> Lab Reports), NOT imaging
+    // (-> Imaging Reports), NOT vital (-> Vital Signs). The exclusion rules are
+    // the shared SSOT — see src/core/utils/observation-selectors.ts.
+    return selectOtherObservations(clinicalData) as unknown as Observation[]
   },
 
   getCount: (data, filters) => {
