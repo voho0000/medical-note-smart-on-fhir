@@ -17,6 +17,7 @@
 
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
+import { referenceId } from '@/src/core/utils/observation-selectors'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 
@@ -205,6 +206,99 @@ async function extractAndStoreImages(bundle: any): Promise<void> {
   await idbPutImages(toStore)
 }
 
+// --- Bundle identity canonicalisation -----------------------------------------
+
+interface RefTarget {
+  resourceType: string
+  id: string
+}
+
+/**
+ * Reduce a bundle entry's `fullUrl` to the bare id that internal references
+ * should resolve against. Kept symmetric with `referenceId` (which parses the
+ * reference side) so a stamped id and a rewritten reference always agree:
+ *   - urn:uuid:<id>                       -> <id>
+ *   - urn:oid:<id>                        -> <id>
+ *   - http://host/base/Type/<id>[/_hist]  -> <id>
+ *   - Type/<id>                           -> <id>
+ */
+export function idFromFullUrl(fullUrl?: string): string | undefined {
+  if (!fullUrl) return undefined
+  if (fullUrl.startsWith('urn:uuid:')) return fullUrl.slice('urn:uuid:'.length) || undefined
+  if (fullUrl.startsWith('urn:oid:')) return fullUrl.slice('urn:oid:'.length) || undefined
+  const noHistory = fullUrl.replace(/\/_history\/[^/]+$/, '')
+  return noHistory.split('/').pop() || undefined
+}
+
+/** Deep-copy a single FHIR resource (plain JSON — no functions/Dates). */
+function cloneResource<T>(resource: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(resource)
+  return JSON.parse(JSON.stringify(resource))
+}
+
+/** Rewrite every internal `reference` string in-place to `ResourceType/id`. */
+function rewriteReferences(node: unknown, targets: Map<string, RefTarget>): void {
+  if (Array.isArray(node)) {
+    for (const item of node) rewriteReferences(item, targets)
+    return
+  }
+  if (!node || typeof node !== 'object') return
+  const obj = node as Record<string, unknown>
+  if (typeof obj.reference === 'string') {
+    const target = targets.get(obj.reference)
+    if (target) obj.reference = `${target.resourceType}/${target.id}`
+  }
+  for (const key of Object.keys(obj)) {
+    if (key === 'reference') continue
+    rewriteReferences(obj[key], targets)
+  }
+}
+
+/**
+ * Canonicalise a bundle's resource identity at the ingestion boundary so the
+ * rest of the app never has to understand bundle-specific reference forms.
+ *
+ * Why this exists: IPS / TW-Core (and any transaction/collection/document)
+ * bundles identify resources by `entry.fullUrl` (e.g. `urn:uuid:…`), leave
+ * `resource.id` absent, and point every internal reference at those fullUrls.
+ * The app, by contrast, assumes each resource has an `id` and that references
+ * are the relative `ResourceType/id` form — both the `patient.id`-gated
+ * clinical-data query AND the ~11 `split('/').pop()` reference-resolution sites
+ * depend on it. Without normalisation such a bundle loads only the Patient
+ * demographics and silently drops everything else (the IPS "只讀得到年齡性別"
+ * bug), and reports never link to their member observations.
+ *
+ * Returns a NEW array of resource clones (the cached raw bundle is never
+ * mutated). Two passes:
+ *   1. Every resource gets a stable `id` — existing `id`, else derived from its
+ *      `fullUrl`, else a deterministic positional fallback (so the id is stable
+ *      across the repeated parse() calls React Query makes).
+ *   2. Every internal reference (one that resolves to a known fullUrl or the
+ *      equivalent `ResourceType/id`) is rewritten to the relative form.
+ * References to other servers / unknown targets are left untouched.
+ */
+export function canonicalizeBundleResources(bundle: any): any[] {
+  const rawEntries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
+  const entries = rawEntries.filter((e) => e?.resource)
+
+  // Pass 1 — assign ids; index every resolvable key to its canonical target.
+  const targets = new Map<string, RefTarget>()
+  const resources = entries.map((e, index) => {
+    const res = cloneResource(e.resource)
+    const resourceType: string = res.resourceType ?? 'Resource'
+    const id = String(res.id || idFromFullUrl(e.fullUrl) || `${resourceType}-${index}`)
+    res.id = id
+    const target: RefTarget = { resourceType, id }
+    if (e.fullUrl) targets.set(e.fullUrl, target)
+    targets.set(`${resourceType}/${id}`, target)
+    return res
+  })
+
+  // Pass 2 — rewrite internal references to the relative ResourceType/id form.
+  for (const res of resources) rewriteReferences(res, targets)
+  return resources
+}
+
 export interface LocalBundleData {
   patient: PatientEntity
   collection: ClinicalDataCollection
@@ -365,7 +459,12 @@ export const LocalBundleService = {
   },
 
   parse(bundle: any): LocalBundleData | null {
-    const entries: any[] = bundle?.entry?.map((e: any) => e.resource).filter(Boolean) ?? []
+    // Canonicalise identity FIRST: stamp ids onto id-less resources and rewrite
+    // urn:uuid / absolute references to the relative ResourceType/id form, so
+    // every downstream step (patient-id gate, report-member linking, the inline
+    // split('/').pop() resolvers) works regardless of the bundle's reference
+    // style. See canonicalizeBundleResources.
+    const entries: any[] = canonicalizeBundleResources(bundle)
     if (!entries.length) return null
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
@@ -395,10 +494,28 @@ export const LocalBundleService = {
       }
     }
 
-    // Build Medication resource map for resolving medicationReference in
-    // MedicationStatement (used by IPS / other document-type bundles).
+    // Build Medication resource map for resolving medicationReference. BOTH
+    // MedicationRequest and MedicationStatement can carry the drug as a
+    // `medicationReference` to a contained/standalone Medication instead of an
+    // inline `medicationCodeableConcept` — IPS / TW-Core bundles do exactly this
+    // (12 MedicationRequests → 4 shared Medication resources in the sample). The
+    // map is keyed by the (now-canonicalised) Medication id.
     const medicationResources = byType('Medication')
     const medicationMap = new Map(medicationResources.map((m: any) => [m.id, m]))
+
+    // Promote a referenced Medication.code into medicationCodeableConcept so the
+    // display helpers (which only look at medicationCodeableConcept) find a drug
+    // name. References are already relative post-canonicalisation; referenceId
+    // also tolerates urn-form as a second line of defence.
+    const resolveMedicationCode = <T extends {
+      medicationCodeableConcept?: unknown
+      medicationReference?: { reference?: string }
+    }>(m: T): T => {
+      if (m.medicationCodeableConcept || !m.medicationReference?.reference) return m
+      const refId = referenceId(m.medicationReference.reference)
+      const medResource = refId ? medicationMap.get(refId) : null
+      return medResource?.code ? { ...m, medicationCodeableConcept: medResource.code } : m
+    }
 
     // Normalize MedicationStatements to a MedicationRequest-compatible shape so
     // the rest of the pipeline (FhirMapper, display components) can handle them
@@ -406,18 +523,7 @@ export const LocalBundleService = {
     // resource type is preserved as `_sourceResourceType` so the medications
     // panel can surface "目前服用中" when an IPS dataset is loaded.
     const medicationStatements = byType('MedicationStatement').map((ms: any) => {
-      // Resolve medicationReference → medicationCodeableConcept
-      let resolved = ms
-      if (!ms.medicationCodeableConcept && ms.medicationReference) {
-        const ref: string = ms.medicationReference.reference ?? ''
-        const refId = ref.startsWith('urn:uuid:')
-          ? ref.replace('urn:uuid:', '')
-          : ref.split('/').pop() ?? ''
-        const medResource = refId ? medicationMap.get(refId) : null
-        if (medResource?.code) {
-          resolved = { ...ms, medicationCodeableConcept: medResource.code }
-        }
-      }
+      const resolved = resolveMedicationCode(ms)
       // Normalize field names that differ between MedicationRequest and MedicationStatement
       return {
         ...resolved,
@@ -430,9 +536,10 @@ export const LocalBundleService = {
     })
 
     // Stamp MedicationRequest with its source type too so downstream code can
-    // tell a mixed-source list from a pure one.
+    // tell a mixed-source list from a pure one. Resolve its medicationReference
+    // as well (IPS-style orders reference a Medication rather than inlining it).
     const medicationRequests = byType('MedicationRequest').map((m: any) => ({
-      ...m,
+      ...resolveMedicationCode(m),
       _sourceResourceType: 'MedicationRequest' as const,
     }))
 
