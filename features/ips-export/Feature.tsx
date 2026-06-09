@@ -1,0 +1,74 @@
+"use client"
+
+import { Card, CardContent } from '@/components/ui/card'
+import { FileOutput, Loader2 } from 'lucide-react'
+import { CARD_BORDER_CLASSES } from '@/src/shared/config/ui-theme.config'
+import { useLanguage } from '@/src/application/providers/language.provider'
+import { useIpsBundle } from './hooks/useIpsBundle'
+import { useIpsExport } from './hooks/useIpsExport'
+import { IpsExportActions } from './components/IpsExportActions'
+import { IpsBundlePreview } from './components/IpsBundlePreview'
+
+export default function IpsExportFeature() {
+  const { t } = useLanguage()
+  const x = t.ipsExport
+  const { bundle, validation, isLoading, error, hasPatient, resourceCount } = useIpsBundle()
+  const { download, copy, copied, copyError } = useIpsExport()
+
+  // Loading clinical data
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {x.loading}
+      </div>
+    )
+  }
+
+  // Clinical data failed to load
+  if (error) {
+    return (
+      <Card className={`border-destructive ${CARD_BORDER_CLASSES.clinical}`}>
+        <CardContent className="pt-6 text-sm">
+          <div className="mb-1 font-medium text-destructive">{x.errorTitle}</div>
+          <div className="text-muted-foreground">{error.message}</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // No patient / no data loaded yet
+  if (!hasPatient || !bundle) {
+    return (
+      <Card className={CARD_BORDER_CLASSES.clinical}>
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          <FileOutput className="mx-auto mb-2 h-6 w-6 opacity-60" />
+          {x.noData}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <FileOutput className="h-5 w-5 text-emerald-600" />
+          <h2 className="text-base font-semibold">{x.title}</h2>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{x.description}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{x.resourceCountLabel.replace('{count}', String(resourceCount))}</p>
+      </div>
+
+      <IpsExportActions
+        onDownload={() => download(bundle)}
+        onCopy={() => copy(bundle)}
+        copied={copied}
+        copyError={copyError}
+        disabled={!bundle}
+      />
+
+      <IpsBundlePreview bundle={bundle} validation={validation} />
+    </div>
+  )
+}

@@ -22,6 +22,7 @@ import {
   ScrollText,
   Cpu,
   ListChecks,
+  FileOutput,
   type LucideIcon
 } from 'lucide-react'
 
@@ -146,6 +147,11 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
     id: 'clinical-insights',
     icon: Lightbulb,
     colorKey: 'insight',
+  },
+  'ips-export': {
+    id: 'ips-export',
+    icon: FileOutput,
+    colorKey: 'clinical',
   },
   'settings': {
     id: 'settings',

@@ -1,0 +1,265 @@
+// IPS document Bundle builder (Phase 1 — pure assembly, no LLM).
+//
+// Assembles a FHIR R4 `Bundle.type = "document"` whose first entry is an IPS
+// Composition, followed by the Patient and every clinical resource referenced
+// by the section entries. No SNOMED CT codes are generated here.
+
+import type { PatientEntity } from '@/src/core/entities/patient.entity'
+import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
+import type {
+  FhirCodeableConcept,
+  FhirResource,
+  IpsBundle,
+  IpsBundleEntry,
+  IpsCompositionSection,
+  SectionMapResult,
+} from './ips-types'
+import {
+  ABSENT,
+  COMPOSITION_TYPE_LOINC,
+  IPS_AUTHOR_DISPLAY,
+  IPS_DOC_TITLE,
+  IPS_PROFILES,
+  IPS_SECTION,
+  SYSTEM,
+} from './ips-constants'
+import { makeEntry, orphanResultObservations, uuidv4 } from './ips-helpers'
+import {
+  buildPatient,
+  mapAdvanceDirectives,
+  mapAllergies,
+  mapCarePlans,
+  mapDevices,
+  mapImmunizations,
+  mapMedications,
+  mapProblemList,
+  mapProcedures,
+  mapResults,
+  mapVitalSigns,
+} from './ips-fhir-mappers'
+import {
+  emptyNarrative,
+  narrativeAdvanceDirectives,
+  narrativeAllergies,
+  narrativeCarePlans,
+  narrativeDevices,
+  narrativeImmunizations,
+  narrativeMedications,
+  narrativeProblemList,
+  narrativeProcedures,
+  narrativeResults,
+  narrativeVitalSigns,
+} from './ips-narrative-templates'
+
+export interface IpsSectionLabels {
+  problemList: string
+  allergies: string
+  medications: string
+  immunizations: string
+  procedures: string
+  results: string
+  vitalSigns: string
+  medicalDevices: string
+  planOfCare: string
+  advanceDirectives: string
+  /** Narrative shown for an empty required section. */
+  noInformation: string
+}
+
+/** Default English labels — used when no i18n labels are supplied (e.g. tests). */
+export const DEFAULT_SECTION_LABELS: IpsSectionLabels = {
+  problemList: 'Active Problems',
+  allergies: 'Allergies and Intolerances',
+  medications: 'Medication Summary',
+  immunizations: 'Immunizations',
+  procedures: 'History of Procedures',
+  results: 'Diagnostic Results',
+  vitalSigns: 'Vital Signs',
+  medicalDevices: 'Medical Devices',
+  planOfCare: 'Plan of Care',
+  advanceDirectives: 'Advance Directives',
+  noInformation: 'No information available.',
+}
+
+export interface BuildIpsOptions {
+  patient: PatientEntity | null
+  data: ClinicalDataCollection
+  labels?: Partial<IpsSectionLabels>
+  /** Override the document timestamp / Composition.date (defaults to now). */
+  now?: Date
+}
+
+function loincCode(code: string, display: string): FhirCodeableConcept {
+  return { coding: [{ system: SYSTEM.loinc, code, display }] }
+}
+
+interface AssembledSection {
+  section: IpsCompositionSection
+  resources: IpsBundleEntry[]
+}
+
+function assembleSection(
+  loinc: string,
+  title: string,
+  mapResult: SectionMapResult,
+  narrative: string,
+  options?: { emptyReason?: FhirCodeableConcept; emptyNarrativeText?: string },
+): AssembledSection {
+  const hasEntries = mapResult.entries.length > 0
+  const section: IpsCompositionSection = {
+    title,
+    code: loincCode(loinc, title),
+    text: {
+      status: 'generated',
+      div: hasEntries ? narrative : emptyNarrative(options?.emptyNarrativeText ?? 'No information available.'),
+    },
+    ...(hasEntries ? { entry: mapResult.entries.map((e) => ({ reference: e.fullUrl })) } : {}),
+    ...(!hasEntries && options?.emptyReason ? { emptyReason: options.emptyReason } : {}),
+  }
+  return {
+    section,
+    resources: [...mapResult.entries, ...mapResult.referencedOnly],
+  }
+}
+
+export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
+  const labels: IpsSectionLabels = { ...DEFAULT_SECTION_LABELS, ...(opts.labels ?? {}) }
+  const data = opts.data
+  const now = opts.now ?? new Date()
+  const timestamp = now.toISOString()
+
+  // Patient first (referenced by Composition.subject and every clinical resource).
+  const patientEntry = buildPatient(opts.patient)
+  const patientRef = patientEntry.reference
+
+  // Standalone lab observations for the Results section. Exclude any already
+  // nested under a DiagnosticReport (`_observations`) and any vital-sign
+  // observations, so a single analyte never appears as both a value row and a
+  // report's "N observation(s)" row. (Curation already does this; recomputing
+  // here keeps the builder correct when called directly, e.g. in tests.)
+  const resultObservations = orphanResultObservations(data.diagnosticReports, data.observations)
+
+  const sections: IpsCompositionSection[] = []
+  const resourceEntries: IpsBundleEntry[] = []
+
+  const pushSection = (a: AssembledSection) => {
+    sections.push(a.section)
+    resourceEntries.push(...a.resources)
+  }
+
+  // --- Required sections (always present) ---
+  pushSection(
+    assembleSection(
+      IPS_SECTION.problemList.loinc,
+      labels.problemList,
+      mapProblemList(data.conditions, patientRef),
+      narrativeProblemList(data.conditions),
+      { emptyReason: { coding: [ABSENT.noKnownProblems] }, emptyNarrativeText: labels.noInformation },
+    ),
+  )
+  pushSection(
+    assembleSection(
+      IPS_SECTION.allergies.loinc,
+      labels.allergies,
+      mapAllergies(data.allergies, patientRef),
+      narrativeAllergies(data.allergies),
+      { emptyReason: { coding: [ABSENT.noKnownAllergies] }, emptyNarrativeText: labels.noInformation },
+    ),
+  )
+  pushSection(
+    assembleSection(
+      IPS_SECTION.medications.loinc,
+      labels.medications,
+      mapMedications(data.medications, patientRef),
+      narrativeMedications(data.medications),
+      { emptyReason: { coding: [ABSENT.noKnownMedications] }, emptyNarrativeText: labels.noInformation },
+    ),
+  )
+
+  // --- Optional sections (included only when data is present) ---
+  const optional: Array<AssembledSection | null> = [
+    data.immunizations.length
+      ? assembleSection(
+          IPS_SECTION.immunizations.loinc,
+          labels.immunizations,
+          mapImmunizations(data.immunizations, patientRef),
+          narrativeImmunizations(data.immunizations),
+        )
+      : null,
+    data.procedures.length
+      ? assembleSection(
+          IPS_SECTION.procedures.loinc,
+          labels.procedures,
+          mapProcedures(data.procedures, patientRef),
+          narrativeProcedures(data.procedures),
+        )
+      : null,
+    data.diagnosticReports.length || resultObservations.length
+      ? assembleSection(
+          IPS_SECTION.results.loinc,
+          labels.results,
+          mapResults(data.diagnosticReports, resultObservations, patientRef),
+          narrativeResults(data.diagnosticReports, resultObservations),
+        )
+      : null,
+    data.vitalSigns.length
+      ? assembleSection(
+          IPS_SECTION.vitalSigns.loinc,
+          labels.vitalSigns,
+          mapVitalSigns(data.vitalSigns, patientRef),
+          narrativeVitalSigns(data.vitalSigns),
+        )
+      : null,
+    data.devices.length
+      ? assembleSection(
+          IPS_SECTION.medicalDevices.loinc,
+          labels.medicalDevices,
+          mapDevices(data.devices, patientRef),
+          narrativeDevices(data.devices),
+        )
+      : null,
+    data.carePlans.length
+      ? assembleSection(
+          IPS_SECTION.planOfCare.loinc,
+          labels.planOfCare,
+          mapCarePlans(data.carePlans, patientRef),
+          narrativeCarePlans(data.carePlans),
+        )
+      : null,
+    data.consents.length
+      ? assembleSection(
+          IPS_SECTION.advanceDirectives.loinc,
+          labels.advanceDirectives,
+          mapAdvanceDirectives(data.consents, patientRef),
+          narrativeAdvanceDirectives(data.consents),
+        )
+      : null,
+  ]
+  for (const s of optional) if (s) pushSection(s)
+
+  // --- Composition (first entry) ---
+  const composition: FhirResource = {
+    resourceType: 'Composition',
+    meta: { profile: [IPS_PROFILES.composition] },
+    status: 'final',
+    type: loincCode(COMPOSITION_TYPE_LOINC, 'Patient summary Document'),
+    subject: { reference: patientRef },
+    date: timestamp,
+    author: [{ display: IPS_AUTHOR_DISPLAY }],
+    title: IPS_DOC_TITLE,
+    section: sections,
+  }
+  const compositionEntry = makeEntry(composition).entry
+
+  const bundle: IpsBundle = {
+    resourceType: 'Bundle',
+    type: 'document',
+    identifier: {
+      system: 'urn:ietf:rfc:3986',
+      value: `urn:uuid:${uuidv4()}`,
+    },
+    timestamp,
+    entry: [compositionEntry, patientEntry.entry, ...resourceEntries],
+  }
+  return bundle
+}
