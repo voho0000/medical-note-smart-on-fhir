@@ -81,8 +81,12 @@ export function CompositionRenderer({
   // top-level `custodian` field which our entity doesn't expose. Authors are
   // a reasonable proxy for now; revisit if/when CompositionEntity adds it.
 
-  const defaultValue =
-    defaultExpandFirst && renderableSections.length > 0 ? `section-0` : undefined
+  // Multi-open accordion: opening one section doesn't collapse the others, so
+  // the reader can keep e.g. Problem List + Medications visible side-by-side
+  // while reviewing an IPS document. defaultValue therefore takes an array;
+  // defaultExpandFirst pre-opens just the first section.
+  const defaultValue: string[] =
+    defaultExpandFirst && renderableSections.length > 0 ? ['section-0'] : []
 
   return (
     <div className="space-y-2">
@@ -109,8 +113,7 @@ export function CompositionRenderer({
         <div className="text-xs italic text-muted-foreground">{labels.noSections}</div>
       ) : (
         <Accordion
-          type="single"
-          collapsible
+          type="multiple"
           defaultValue={defaultValue}
           className="space-y-1.5"
         >
