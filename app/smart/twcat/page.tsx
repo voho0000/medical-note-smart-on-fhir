@@ -15,6 +15,7 @@ import {
   installParticipantTokenFetch,
   synthesizeSmartSession,
   extractTenantId,
+  discoverEndpoints,
   type TwcatVendor,
   type FlowLogEntry,
 } from "@/src/infrastructure/fhir/profiles/twcat-profile"
@@ -391,12 +392,22 @@ export default function TwcatPickerPage() {
 
   /** Run the full client_credentials → read sequence through the API proxy. */
   const runQuickTest = async (vendor: TwcatVendor) => {
-    if (!vendor.tokenEndpoint) {
-      setError(`${vendor.name}: no tokenEndpoint configured.`)
-      return
-    }
     if (!vendor.clientId) {
       setError(`${vendor.name}: no client_id configured.`)
+      return
+    }
+    // Auto-discover tokenEndpoint from .well-known/smart-configuration if
+    // not pre-configured. Keeps the custom-vendor form simpler — users only
+    // need to know the iss; the form doesn't even need to ask for token URL.
+    let tokenEndpoint = vendor.tokenEndpoint
+    if (!tokenEndpoint) {
+      const disc = await discoverEndpoints(vendor.iss)
+      tokenEndpoint = disc?.tokenEndpoint
+    }
+    if (!tokenEndpoint) {
+      setError(
+        `${vendor.name}: no tokenEndpoint configured and discovery from ${vendor.iss}/.well-known/smart-configuration failed.`
+      )
       return
     }
     setError("")
@@ -421,12 +432,12 @@ export default function TwcatPickerPage() {
       if (pt) requestHeaders["X-Participant-Token"] = pt
       const requestRecord = {
         method: "POST",
-        url: vendor.tokenEndpoint,
+        url: tokenEndpoint,
         headers: requestHeaders,
         body: body.toString(),
       }
       try {
-        const res = await fetch(twcatProxyUrl(vendor.tokenEndpoint), {
+        const res = await fetch(twcatProxyUrl(tokenEndpoint), {
           method: "POST",
           headers: requestHeaders,
           body,
@@ -1023,7 +1034,12 @@ export default function TwcatPickerPage() {
               <div className="flex flex-wrap gap-2 items-center pt-1">
                 <button
                   onClick={() => runQuickTest(v)}
-                  disabled={!v.clientId || !v.tokenEndpoint || test?.running}
+                  disabled={!v.clientId || test?.running}
+                  title={
+                    !v.tokenEndpoint
+                      ? "tokenEndpoint not set — Quick Test will auto-discover from iss/.well-known/smart-configuration"
+                      : undefined
+                  }
                   className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm disabled:opacity-50"
                 >
                   {test?.running ? "Running…" : "▶ Run quick test"}
@@ -1113,12 +1129,36 @@ export default function TwcatPickerPage() {
             value={custom.iss}
             onChange={(e) => setCustom({ ...custom, iss: e.target.value })}
           />
-          <input
-            className="rounded border p-1.5 col-span-2 font-mono text-xs"
-            placeholder="tokenEndpoint (full URL)"
-            value={custom.tokenEndpoint || ""}
-            onChange={(e) => setCustom({ ...custom, tokenEndpoint: e.target.value })}
-          />
+          <div className="col-span-2 flex gap-1">
+            <input
+              className="flex-1 rounded border p-1.5 font-mono text-xs"
+              placeholder="tokenEndpoint (auto-discoverable from iss)"
+              value={custom.tokenEndpoint || ""}
+              onChange={(e) => setCustom({ ...custom, tokenEndpoint: e.target.value })}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!custom.iss) {
+                  setError("Need iss before discovery.")
+                  return
+                }
+                setError("")
+                const disc = await discoverEndpoints(custom.iss)
+                if (disc?.tokenEndpoint) {
+                  setCustom({ ...custom, tokenEndpoint: disc.tokenEndpoint })
+                } else {
+                  setError(
+                    `Discovery from ${custom.iss}/.well-known/smart-configuration failed.`
+                  )
+                }
+              }}
+              className="px-2 py-1 rounded border text-xs whitespace-nowrap"
+              title="GET ${iss}/.well-known/smart-configuration and pre-fill token_endpoint"
+            >
+              🔍 discover
+            </button>
+          </div>
           <input
             className="rounded border p-1.5 font-mono text-xs"
             placeholder="client_id"
@@ -1554,12 +1594,31 @@ function VendorEditForm({
             onChange={(e) => onChange("iss", e.target.value)}
           />
         </Labelled>
-        <Labelled label="tokenEndpoint (full URL)" className="col-span-2">
-          <input
-            className="rounded border p-1.5 font-mono"
-            value={draft.tokenEndpoint ?? ""}
-            onChange={(e) => onChange("tokenEndpoint", e.target.value)}
-          />
+        <Labelled
+          label="tokenEndpoint (auto-discoverable from iss)"
+          className="col-span-2"
+        >
+          <div className="flex gap-1">
+            <input
+              className="flex-1 rounded border p-1.5 font-mono"
+              value={draft.tokenEndpoint ?? ""}
+              onChange={(e) => onChange("tokenEndpoint", e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!draft.iss) return
+                const disc = await discoverEndpoints(draft.iss)
+                if (disc?.tokenEndpoint) {
+                  onChange("tokenEndpoint", disc.tokenEndpoint)
+                }
+              }}
+              className="px-2 py-1 rounded border text-xs whitespace-nowrap"
+              title="GET ${iss}/.well-known/smart-configuration and pre-fill"
+            >
+              🔍 discover
+            </button>
+          </div>
         </Labelled>
         <Labelled label="client_id">
           <input

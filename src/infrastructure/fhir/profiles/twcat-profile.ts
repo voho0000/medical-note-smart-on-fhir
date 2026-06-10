@@ -141,6 +141,42 @@ export function twcatProxyUrl(upstream: string): string {
 }
 
 /**
+ * Probe a FHIR base URL's SMART discovery doc and return the token endpoint
+ * (and a couple of related URLs the operator might also want pre-filled).
+ *
+ * Used by the custom-vendor and Edit forms so users don't have to manually
+ * dig token endpoints out of `.well-known/smart-configuration` — they paste
+ * iss, click "discover", we autofill. Returns `null` when discovery isn't
+ * available (vendor doesn't expose the doc, or it's gated and we lack
+ * credentials at form-fill time).
+ */
+export async function discoverEndpoints(iss: string): Promise<{
+  tokenEndpoint?: string
+  authorizationEndpoint?: string
+  scopesSupported?: string[]
+  capabilities?: string[]
+} | null> {
+  if (!iss || typeof window === 'undefined') return null
+  const base = iss.replace(/\/+$/, '')
+  const url = `${base}/.well-known/smart-configuration`
+  try {
+    const res = await fetch(twcatProxyUrl(url), {
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return {
+      tokenEndpoint: json.token_endpoint,
+      authorizationEndpoint: json.authorization_endpoint,
+      scopesSupported: json.scopes_supported,
+      capabilities: json.capabilities,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Inject a fully-formed SMART session into sessionStorage so the main app's
  * fhirclient.oauth2.ready() call accepts a bearer obtained outside the SMART
  * authorization_code flow (e.g. a Quick Test client_credentials token).
