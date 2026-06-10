@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react"
 import { useRouter } from "next/navigation"
 import {
   TWCAT_PRESET_VENDORS,
@@ -19,6 +19,7 @@ import {
   type TwcatVendor,
   type FlowLogEntry,
 } from "@/src/infrastructure/fhir/profiles/twcat-profile"
+import { ScenarioLoaderPanel } from "./_components/ScenarioLoaderPanel"
 
 type EditableVendor = TwcatVendor
 
@@ -107,6 +108,21 @@ type UploadStatus = {
   error?: string
 }
 
+// IPS Creator submission status — separate from UploadStatus because we POST
+// the whole document Bundle as one resource (HAPI's $document semantics), not
+// per-entry. The single share-able transaction is what the IPS Validator's
+// Creator tab wants pasted as "上傳紀錄 URL". Captured response status,
+// Location header (server-assigned Bundle/{id}), and OperationOutcome on
+// failure so the user can debug without leaving the page.
+type IpsPostStatus = {
+  running: boolean
+  status?: number
+  location?: string
+  outcome?: string
+  error?: string
+  postedAt?: number
+}
+
 // fhirclient writes its session state under sessionStorage[SMART_KEY] →
 // pointer to another key with the actual tokenResponse JSON. We only want
 // to display, not call fhirclient API just for inspection.
@@ -161,6 +177,15 @@ export default function TwcatPickerPage() {
   const [smartFetchResult, setSmartFetchResult] = useState<string>("")
   const [flowLog, setFlowLog] = useState<FlowLogEntry[]>([])
   const [uploadStatus, setUploadStatus] = useState<Record<string, UploadStatus>>({})
+  // IPS Creator submission state — per vendor. Independent of uploadStatus
+  // because that splits a Bundle into per-entry POSTs (HAPI-friendly but
+  // produces N separate Prism-captured connections, not one share-able
+  // document submission). For Level III Creator validation we need exactly
+  // one POST whose share link the validator can ingest.
+  const [ipsPostStatus, setIpsPostStatus] = useState<Record<string, IpsPostStatus>>({})
+  // Sticky textarea content per vendor so users don't lose paste while
+  // switching tabs / clicking other vendor cards.
+  const [ipsBundleText, setIpsBundleText] = useState<Record<string, string>>({})
   // Per-vendor edit form state. Map[vendorId] = working draft; key absent =
   // form closed. Both preset overrides and custom-vendor in-place edits go
   // through this. Saving applies the diff and closes the form.
@@ -816,6 +841,177 @@ export default function TwcatPickerPage() {
   }
 
   /**
+   * Submit a complete IPS document Bundle (Bundle.type=document) as ONE
+   * resource — POST to {iss}/Bundle. This is what the IPS Validator's
+   * Creator tab wants: one single Prism-captured transaction whose share
+   * link covers the full submission. Compare to `uploadBundle`, which
+   * splits a Bundle into per-entry POSTs (good for HAPI ingestion, bad for
+   * IPS validation because the validator sees N unrelated GETs/POSTs
+   * instead of one document submission).
+   *
+   * Requires `Bundle.type === "document"`. Validates that first to give a
+   * useful error instead of letting the server reject it.
+   */
+  const submitIpsDocument = async (vendor: TwcatVendor, jsonText: string) => {
+    setIpsPostStatus((prev) => ({ ...prev, [vendor.id]: { running: true } }))
+    setError("")
+
+    // Parse + validate the IPS document up-front so the user sees an
+    // explanatory error in-page instead of "400 Bad Request from server".
+    let bundle: { resourceType?: string; type?: string; entry?: unknown[] }
+    try {
+      bundle = JSON.parse(jsonText)
+    } catch (e) {
+      setIpsPostStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          error: `JSON parse error: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      }))
+      return
+    }
+    if (bundle?.resourceType !== "Bundle") {
+      setIpsPostStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          error: `Expected resourceType="Bundle", got "${bundle?.resourceType ?? "(none)"}"`,
+        },
+      }))
+      return
+    }
+    if (bundle?.type !== "document") {
+      setIpsPostStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          error: `Expected Bundle.type="document" (IPS), got "${bundle?.type ?? "(none)"}". For non-document bundles use 📤 Upload FHIR JSON above instead.`,
+        },
+      }))
+      return
+    }
+
+    // Fresh client_credentials bearer — same code path as uploadBundle.
+    let bearer: string | null = null
+    if (vendor.tokenEndpoint && vendor.clientId) {
+      try {
+        const body = new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: vendor.clientId,
+          ...(vendor.clientSecret ? { client_secret: vendor.clientSecret } : {}),
+        })
+        const res = await fetch(twcatProxyUrl(vendor.tokenEndpoint), {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+        })
+        if (res.ok) {
+          const j = await res.json()
+          bearer = j.access_token
+        }
+      } catch (e) {
+        console.warn("submitIpsDocument: token fetch failed", e)
+      }
+    }
+    if (!bearer) {
+      setIpsPostStatus((prev) => ({
+        ...prev,
+        [vendor.id]: { running: false, error: "Could not obtain bearer." },
+      }))
+      return
+    }
+
+    // Headers — same auth pattern as uploadBundle: Bearer + (optional)
+    // X-Participant-Token (Prism tracks attribution) + (optional)
+    // X-Partition-ID (HAPI multitenant routing if bearer carries tenant_id).
+    const ptHeader: Record<string, string> = {}
+    const pt = ParticipantTokenStore.get()
+    if (pt) ptHeader["X-Participant-Token"] = pt
+    const partitionTid = extractTenantId(`Bearer ${bearer}`)
+    const partitionHeader: Record<string, string> = partitionTid
+      ? { "X-Partition-ID": partitionTid }
+      : {}
+
+    const url = `${vendor.iss.replace(/\/+$/, "")}/Bundle`
+    try {
+      const res = await fetch(twcatProxyUrl(url), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          "Content-Type": "application/fhir+json",
+          Accept: "application/fhir+json",
+          ...ptHeader,
+          ...partitionHeader,
+        },
+        body: jsonText,
+      })
+      const location = res.headers.get("location") ?? undefined
+      let outcome: string | undefined
+      if (!res.ok) {
+        const body = await res.text()
+        try {
+          const j = JSON.parse(body) as {
+            issue?: Array<{
+              severity?: string
+              code?: string
+              diagnostics?: string
+              details?: { text?: string }
+              location?: string[]
+              expression?: string[]
+            }>
+          }
+          // HAPI returns rich OperationOutcome.issue[] with severity, code,
+          // diagnostics (the actual error text), and location (FHIRPath). We
+          // care about ALL issues, not just [0] — flatten so the user sees
+          // every reason in one block. Falling back to body.slice only when
+          // OperationOutcome shape doesn't match.
+          if (Array.isArray(j.issue) && j.issue.length) {
+            outcome = j.issue
+              .map((it, i) => {
+                const sev = it.severity ?? '?'
+                const code = it.code ?? '?'
+                const msg = it.diagnostics ?? it.details?.text ?? '(no message)'
+                const loc =
+                  it.expression?.length
+                    ? ` @ ${it.expression.join(', ')}`
+                    : it.location?.length
+                      ? ` @ ${it.location.join(', ')}`
+                      : ''
+                return `[${i + 1}] ${sev} (${code})${loc}\n    ${msg}`
+              })
+              .join('\n\n')
+          } else {
+            // Not an OperationOutcome — show generously so we can see what
+            // server actually returned (HTML error pages, etc).
+            outcome = body.slice(0, 4000)
+          }
+        } catch {
+          outcome = body.slice(0, 4000)
+        }
+      }
+      setIpsPostStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          status: res.status,
+          location,
+          outcome,
+          postedAt: Date.now(),
+        },
+      }))
+    } catch (e) {
+      setIpsPostStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          error: e instanceof Error ? e.message : String(e),
+        },
+      }))
+    }
+  }
+
+  /**
    * Open the inline edit form for `vendor`. Pre-fills with the currently
    * effective values (preset + override merged for presets, or the custom
    * vendor's own values).
@@ -1175,6 +1371,27 @@ export default function TwcatPickerPage() {
         })}
       </section>
 
+      <ScenarioLoaderPanel
+        onBundleReady={(json, vendorId) => {
+          setIpsBundleText((prev) => ({ ...prev, [vendorId]: json }))
+          // Smooth-scroll into view so the user sees the freshly populated
+          // textarea instead of wondering where their bundle went.
+          requestAnimationFrame(() => {
+            document
+              .querySelector('textarea[placeholder*="resourceType"]')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          })
+        }}
+      />
+
+      <IpsCreatorPanel
+        vendors={allVendors}
+        bundleText={ipsBundleText}
+        setBundleText={setIpsBundleText}
+        status={ipsPostStatus}
+        onSubmit={submitIpsDocument}
+      />
+
       <section className="rounded border p-4 space-y-3">
         <h2 className="font-semibold">Add a custom vendor</h2>
         <p className="text-xs text-muted-foreground">
@@ -1506,6 +1723,224 @@ function UploadResultPanel({ status }: { status: UploadStatus }) {
           <span className="text-red-600">
             {status.results.filter((r) => !(r.status >= 200 && r.status < 300)).length} failed
           </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * IPS Creator submission panel — paste an IPS document Bundle JSON,
+ * pick a target vendor (default 大會 conference HAPI), POST as ONE
+ * resource, then deep-link to Prism Traffic to grab the share URL.
+ *
+ * Why a separate panel from `UploadButton`:
+ *   - UploadButton splits Bundle.entry and POSTs each entry → N Prism
+ *     connections, useful for HAPI ingestion but the validator wants a
+ *     single document submission.
+ *   - This panel POSTs the whole Bundle to /Bundle as one resource →
+ *     ONE Prism connection → ONE share link the user pastes into the
+ *     validator's "上傳紀錄 URL" field.
+ *
+ * Why textarea instead of cross-tab state pull: main app's IPS export
+ * has no persistence layer (it's pure React state). Adding one would
+ * mean touching main app; per the connectathon-isolation policy, all
+ * conference-specific glue lives only here in /smart/twcat.
+ */
+function IpsCreatorPanel({
+  vendors,
+  bundleText,
+  setBundleText,
+  status,
+  onSubmit,
+}: {
+  vendors: TwcatVendor[]
+  bundleText: Record<string, string>
+  setBundleText: Dispatch<SetStateAction<Record<string, string>>>
+  status: Record<string, IpsPostStatus>
+  onSubmit: (vendor: TwcatVendor, jsonText: string) => void
+}) {
+  // Default to 大會 (conference) — Track #4 IPS Creator validation is
+  // expected to submit against the conference HAPI. If user has removed
+  // or renamed it, fall back to the first vendor.
+  const [vendorId, setVendorId] = useState<string>(() => {
+    return vendors.find((v) => v.id === "conference")?.id ?? vendors[0]?.id ?? ""
+  })
+  const vendor = vendors.find((v) => v.id === vendorId)
+  const text = bundleText[vendorId] ?? ""
+  const cur = vendor ? status[vendor.id] : undefined
+
+  // Cheap inline parse for the preview chip — same JSON.parse the submit
+  // handler does, just throws away parse errors here since the submit
+  // path is the canonical source of truth for error messages.
+  const summary = useMemo(() => {
+    if (!text.trim()) return null
+    try {
+      const j = JSON.parse(text)
+      if (j?.resourceType !== "Bundle") return { ok: false, msg: `resourceType=${j?.resourceType}` }
+      const isDoc = j?.type === "document"
+      const entryCount = Array.isArray(j.entry) ? j.entry.length : 0
+      const composition = isDoc && Array.isArray(j.entry) ? j.entry[0]?.resource : null
+      const compType = composition?.type?.coding?.[0]?.code
+      return {
+        ok: isDoc,
+        msg: `type=${j.type ?? "?"} · ${entryCount} entries${compType ? ` · Composition.type=${compType}` : ""}`,
+      }
+    } catch {
+      return { ok: false, msg: "JSON parse error" }
+    }
+  }, [text])
+
+  return (
+    <section className="rounded border border-emerald-200 bg-emerald-50/40 p-4 space-y-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+      <div>
+        <h2 className="font-semibold flex items-center gap-2">
+          🩺 Level III · IPS Creator 送驗
+        </h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          把主 app <code>IPS</code> tab 產出的 Bundle 貼進來 → POST 到 大會 FHIR
+          (Prism 自動 capture) → 開 <code>Prism Traffic</code> 抓 share link →
+          貼到 IPS Validator Creator。
+        </p>
+      </div>
+
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center text-sm">
+        <label className="text-muted-foreground">Target vendor</label>
+        <select
+          className="rounded border p-1.5 text-sm bg-background"
+          value={vendorId}
+          onChange={(e) => setVendorId(e.target.value)}
+        >
+          {vendors.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+              {v.id === "conference" ? " (大會 — 推薦)" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-muted-foreground">
+            IPS Bundle JSON (主 app → IPS tab → 複製 JSON)
+          </label>
+          {summary && (
+            <span
+              className={`text-[11px] font-mono ${
+                summary.ok ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
+              }`}
+            >
+              {summary.msg}
+            </span>
+          )}
+        </div>
+        <textarea
+          className="w-full min-h-[140px] rounded border p-2 font-mono text-[11px] leading-relaxed bg-background"
+          placeholder='{"resourceType":"Bundle","type":"document",…}'
+          value={text}
+          onChange={(e) => setBundleText((prev) => ({ ...prev, [vendorId]: e.target.value }))}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <button
+          onClick={() => vendor && onSubmit(vendor, text)}
+          disabled={!vendor || !text.trim() || cur?.running || summary?.ok === false}
+          className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm disabled:opacity-50"
+          title={
+            !vendor
+              ? "Pick a vendor first"
+              : summary?.ok === false
+                ? "Bundle must be type=document"
+                : "POST entire Bundle to {iss}/Bundle as one transaction"
+          }
+        >
+          {cur?.running ? "Posting…" : "📤 POST IPS document"}
+        </button>
+        {text && !cur?.running && (
+          <button
+            onClick={() => setBundleText((prev) => ({ ...prev, [vendorId]: "" }))}
+            className="text-xs underline text-muted-foreground hover:text-foreground"
+          >
+            clear
+          </button>
+        )}
+      </div>
+
+      {cur && !cur.running && <IpsCreatorResultPanel status={cur} />}
+    </section>
+  )
+}
+
+function IpsCreatorResultPanel({ status }: { status: IpsPostStatus }) {
+  const ok = status.status !== undefined && status.status >= 200 && status.status < 300
+  // Whether the request reached the FHIR server at all — true even for 4xx
+  // responses (server saw it and rejected). False only when we never got an
+  // HTTP status (network failure, parse error pre-flight). For Prism
+  // attribution purposes only the round-trip mattered, not the status code.
+  const reachedServer = status.status !== undefined
+  return (
+    <div className="rounded bg-background border p-3 space-y-2 text-xs font-mono">
+      {status.error && <div className="text-destructive">⚠ {status.error}</div>}
+      {status.status !== undefined && (
+        <div className="flex items-baseline gap-2">
+          <span className={ok ? "text-emerald-700" : "text-red-600"}>
+            HTTP {status.status} {ok ? "✓" : "✗"}
+          </span>
+          {status.location && (
+            <span className="text-muted-foreground truncate" title={status.location}>
+              Location: {status.location}
+            </span>
+          )}
+        </div>
+      )}
+      {status.outcome && !ok && (
+        <div className="text-red-700 whitespace-pre-wrap break-words max-h-60 overflow-auto">
+          {status.outcome}
+        </div>
+      )}
+      {reachedServer && (
+        <div className="pt-2 space-y-2 border-t">
+          {ok ? (
+            <p className="text-foreground font-sans">
+              ✅ Bundle 已送出。到 Prism Traffic 找剛剛這筆 POST（最上面，方法是
+              <code className="px-1 bg-muted rounded">POST</code> 到
+              <code className="px-1 bg-muted rounded">/Bundle</code>），點「Copy share link」。
+            </p>
+          ) : (
+            <p className="text-foreground font-sans">
+              ⚠ Server 回 {status.status}，但請求已送達伺服器 — Prism 應已 capture
+              到（即使是失敗的 transaction 也會錄）。可到 Traffic 找這筆檢視原始
+              request / response 來 debug。
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="https://twcat-gazelle.dicom.org.tw/prism/traffic"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded bg-blue-600 text-white text-xs no-underline"
+            >
+              📊 Open Prism Traffic →
+            </a>
+            {ok && (
+              <a
+                href="https://twcat-gazelle.dicom.org.tw/ips-validator/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded border text-xs no-underline"
+              >
+                🧪 Open IPS Validator →
+              </a>
+            )}
+          </div>
+          {ok && (
+            <p className="text-muted-foreground font-sans text-[11px]">
+              Validator 需要兩個 URL：(1) 大會題目 session URL (FHIRfox)，(2)
+              上述 Prism share link。
+            </p>
+          )}
         </div>
       )}
     </div>
