@@ -1,10 +1,11 @@
 "use client"
 
 import { useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, XCircle } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, ChevronDown, ChevronRight, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { IpsSectionPreview } from './IpsSectionPreview'
+import { SYSTEM } from '../utils/ips-constants'
 import type { IpsBundle, IpsCompositionSection } from '../utils/ips-types'
 import type { ValidationResult } from '../utils/ips-lite-validator'
 
@@ -22,6 +23,19 @@ export function IpsBundlePreview({ bundle, validation }: IpsBundlePreviewProps) 
   const composition = bundle.entry?.[0]?.resource
   const sections = ((composition?.section as IpsCompositionSection[] | undefined) ?? [])
   const json = useMemo(() => JSON.stringify(bundle, null, 2), [bundle])
+
+  // Count Problem List conditions that carry a verified SNOMED CT coding
+  // (Phase 2.1 dual-coding) so the user can see how much of the problem list was
+  // upgraded from raw ICD-10 to IPS-canonical SNOMED.
+  const snomedCodedCount = useMemo(() => {
+    let n = 0
+    for (const e of bundle.entry ?? []) {
+      const r = e.resource as { resourceType?: string; code?: { coding?: Array<{ system?: string }> } }
+      if (r?.resourceType !== 'Condition') continue
+      if ((r.code?.coding ?? []).some((cd) => cd?.system === SYSTEM.snomed)) n++
+    }
+    return n
+  }, [bundle])
 
   return (
     <div className="space-y-3">
@@ -62,6 +76,14 @@ export function IpsBundlePreview({ bundle, validation }: IpsBundlePreviewProps) 
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* SNOMED CT coding indicator (Phase 2.1) */}
+      {snomedCodedCount > 0 && (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <BadgeCheck className="h-4 w-4 shrink-0" />
+          <span>{x.snomedCoded.replace('{count}', String(snomedCodedCount))}</span>
         </div>
       )}
 

@@ -208,6 +208,62 @@ describe('curateForIps — problem list', () => {
   })
 })
 
+describe('curateForIps — SNOMED CT problem-list annotation (Phase 2.1)', () => {
+  it('attaches a high-confidence _sct to conditions whose ICD-10 hits the allowlist', () => {
+    const data = emptyCollection()
+    data.conditions = [
+      {
+        id: 'dm',
+        clinicalStatus: 'active',
+        category: [{ coding: [{ code: 'problem-list-item' }] }],
+        code: {
+          text: '第二型糖尿病',
+          coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9', display: 'Type 2 diabetes mellitus' }],
+        },
+      },
+      {
+        id: 'uncoded',
+        clinicalStatus: 'active',
+        category: [{ coding: [{ code: 'problem-list-item' }] }],
+        code: { text: 'Some uncoded problem', coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'Z99.9' }] },
+      },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection({ problemList: true, conditions: true }),
+      filters: filters({ problemListStatus: 'active' }),
+      now: NOW,
+    })
+    const dm = out.conditions.find((c) => c.id === 'dm')
+    const uncoded = out.conditions.find((c) => c.id === 'uncoded')
+    expect(dm?._sct).toEqual({
+      system: 'http://snomed.info/sct',
+      code: '44054006',
+      display: 'Diabetes mellitus type II',
+      confidence: 'high',
+      icd10: 'E11.9',
+    })
+    expect(uncoded?._sct).toBeUndefined()
+  })
+
+  it('does not mutate the source condition objects', () => {
+    const data = emptyCollection()
+    const source = {
+      id: 'dm',
+      clinicalStatus: 'active',
+      code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9' }] },
+    }
+    data.conditions = [source]
+    curateForIps({
+      data,
+      selection: selection({ problemList: true, conditions: true }),
+      filters: filters({ problemListStatus: 'active' }),
+      now: NOW,
+    })
+    expect((source as { _sct?: unknown })._sct).toBeUndefined()
+  })
+})
+
 describe('curateForIps — Results observations (orphans only)', () => {
   it('drops observations already nested under a report and vital-sign observations', () => {
     const data = emptyCollection()

@@ -441,3 +441,56 @@ describe('buildIpsBundle — populated data', () => {
     expect(validateIpsBundle(bundle).ok).toBe(true)
   })
 })
+
+describe('buildIpsBundle — Problem List SNOMED CT dual-coding (Phase 2.1)', () => {
+  it('prepends the verified SNOMED coding while keeping the ICD-10 coding', () => {
+    const data: ClinicalDataCollection = {
+      ...emptyCollection(),
+      conditions: [
+        {
+          id: 'dm',
+          clinicalStatus: 'active',
+          code: {
+            text: '第二型糖尿病',
+            coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9', display: 'Type 2 diabetes mellitus' }],
+          },
+          // The curation step would attach this; set it directly for a unit test.
+          _sct: {
+            system: 'http://snomed.info/sct',
+            code: '44054006',
+            display: 'Diabetes mellitus type II',
+            confidence: 'high',
+            icd10: 'E11.9',
+          },
+        },
+      ],
+    }
+    const bundle = buildIpsBundle({ patient: PATIENT, data })
+    const condition = bundle.entry.find((e) => e.resource.resourceType === 'Condition')!.resource
+    const coding = (condition.code as { coding?: Array<{ system?: string; code?: string }> }).coding ?? []
+    // SNOMED first (IPS-preferred), ICD-10 retained.
+    expect(coding[0]).toMatchObject({ system: 'http://snomed.info/sct', code: '44054006' })
+    expect(coding.some((c) => c.system === 'http://hl7.org/fhir/sid/icd-10' && c.code === 'E11.9')).toBe(true)
+
+    // Narrative prefers the verified SNOMED preferred term.
+    const problems = sectionByLoinc(bundle, IPS_SECTION.problemList.loinc)
+    expect(problems?.text?.div ?? '').toContain('Diabetes mellitus type II')
+  })
+
+  it('leaves Condition.code as ICD-10-only when no _sct is present', () => {
+    const data: ClinicalDataCollection = {
+      ...emptyCollection(),
+      conditions: [
+        {
+          id: 'plain',
+          clinicalStatus: 'active',
+          code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9' }] },
+        },
+      ],
+    }
+    const bundle = buildIpsBundle({ patient: PATIENT, data })
+    const condition = bundle.entry.find((e) => e.resource.resourceType === 'Condition')!.resource
+    const coding = (condition.code as { coding?: Array<{ system?: string }> }).coding ?? []
+    expect(coding.some((c) => c.system === 'http://snomed.info/sct')).toBe(false)
+  })
+})

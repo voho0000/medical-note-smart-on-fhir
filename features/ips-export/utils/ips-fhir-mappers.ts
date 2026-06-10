@@ -233,6 +233,29 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
 // Problem List (required section)
 // ---------------------------------------------------------------------------
 
+/**
+ * Build the IPS Condition.code. When the curation step attached a verified
+ * SNOMED CT mapping (`_sct`, Phase 2.1), PREPEND it as the IPS-preferred coding
+ * while KEEPING the original ICD-10 coding — dual-coding, so the machine-readable
+ * resource carries both. The SNOMED preferred term doubles as the
+ * CodeableConcept.text fallback so the resource stays self-describing even when
+ * the source condition had no text.
+ */
+function problemCode(c: ConditionEntity): FhirCodeableConcept {
+  const base =
+    toCodeableConcept(c.code, c._sct?.display ?? 'Unknown problem') ?? {
+      text: c._sct?.display ?? 'Unknown problem',
+    }
+  if (!c._sct) return base
+  return {
+    ...base,
+    coding: [
+      { system: c._sct.system, code: c._sct.code, display: c._sct.display },
+      ...(base.coding ?? []),
+    ],
+  }
+}
+
 export function mapProblemList(conditions: ConditionEntity[], patientRef: string): SectionMapResult {
   const entries = conditions.map((c) => {
     const resource: FhirResource = {
@@ -249,7 +272,7 @@ export function mapProblemList(conditions: ConditionEntity[], patientRef: string
       category: [
         { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/condition-category', code: 'problem-list-item' }] },
       ],
-      code: toCodeableConcept(c.code, 'Unknown problem') ?? { text: 'Unknown problem' },
+      code: problemCode(c),
       subject: { reference: patientRef },
       ...(c.onsetDateTime ? { onsetDateTime: formatDate(c.onsetDateTime) } : {}),
       ...(c.recordedDate ? { recordedDate: formatDate(c.recordedDate) } : {}),

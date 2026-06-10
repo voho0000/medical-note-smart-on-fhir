@@ -30,6 +30,7 @@ import type {
 } from '@/src/core/entities/clinical-context.entity'
 import { isChronicPrescription } from '@/features/clinical-summary/medications/utils/fhir-helpers'
 import { orphanResultObservations } from './ips-helpers'
+import { findSctForCondition } from './snomed-mapping'
 
 export interface CurateForIpsInput {
   data: ClinicalDataCollection
@@ -171,7 +172,23 @@ function curateConditions(
   const usePLI = selection.problemList && problemItems.length > 0
   const base = usePLI ? problemItems : data.conditions
   const status = usePLI ? filters.problemListStatus : filters.conditionStatus
-  return status === 'active' ? base.filter(isActiveCondition) : base
+  const filtered = status === 'active' ? base.filter(isActiveCondition) : base
+  return annotateConditionsWithSct(filtered)
+}
+
+/**
+ * IPS Phase 2.1 — attach a verified SNOMED CT problem-list code (`_sct`) to each
+ * condition whose ICD-10 coding hits the deterministic allowlist (Strategy B,
+ * confidence 'high'). Returns NEW condition objects (never mutates the input) so
+ * the annotation is local to the IPS snapshot and doesn't leak into the shared
+ * ClinicalDataCollection used elsewhere in the app. Conditions without a
+ * verified mapping pass through unchanged (no SCT invented — that is Phase 2.2).
+ */
+export function annotateConditionsWithSct(conditions: ConditionEntity[]): ConditionEntity[] {
+  return conditions.map((c) => {
+    const sct = findSctForCondition(c)
+    return sct ? { ...c, _sct: sct } : c
+  })
 }
 
 function curateMedications(

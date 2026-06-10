@@ -125,8 +125,10 @@ export function narrativeMedications(medications: MedicationEntity[]): string {
 
 export function narrativeProblemList(conditions: ConditionEntity[]): string {
   const rows = conditions.map((c) => [
-    // Billing-ICD descriptions carry the English label in coding[].display.
-    dash(conceptLabelEn(c.code)),
+    // Prefer the verified SNOMED CT preferred term (Phase 2.1) when present; it
+    // is the IPS-canonical, language-neutral problem label. Otherwise fall back
+    // to the billing-ICD English label carried in coding[].display.
+    dash(c._sct?.display || conceptLabelEn(c.code)),
     dash(c.clinicalStatus || ''),
     dash(formatDate(c.onsetDateTime) || formatDate(c.recordedDate)),
   ])

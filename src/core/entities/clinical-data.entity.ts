@@ -25,6 +25,24 @@ export interface ConditionEntity {
   encounter?: {
     reference?: string
   }
+  /**
+   * IPS Phase 2 — verified SNOMED CT problem-list coding for this condition.
+   * Attached by the IPS curation step (annotateConditionsWithSct), NOT part of
+   * the raw FHIR shape, hence the underscore prefix. `confidence` follows the
+   * plan's ladder: 'high' = deterministic verified ICD-10→SCT lookup (Strategy
+   * B); 'medium-high'/'low' = LLM-assisted (Strategy C/A, Phase 2.2). The
+   * concrete shape lives in features/ips-export/utils/snomed-mapping.ts
+   * (ConditionSctAnnotation); inlined here to keep the core entity free of a
+   * feature-layer import cycle.
+   */
+  _sct?: {
+    system: string
+    code: string
+    display: string
+    confidence: 'high' | 'medium-high' | 'low'
+    icd10?: string
+    needsManualCoding?: boolean
+  }
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
