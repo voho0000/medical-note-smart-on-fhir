@@ -563,28 +563,82 @@ export default function TwcatPickerPage() {
   }
 
   /**
-   * Bridge: take the Quick Test bearer + first patient ID we saw in the
-   * Patient bundle, write them as a synthetic SMART session, and navigate to
-   * the main app. fhirclient.oauth2.ready() then accepts the session as if
-   * the user came through the full OAuth flow.
+   * Bridge: take the Quick Test bearer + a patient that ACTUALLY has data,
+   * write them as a synthetic SMART session, and navigate to the main app.
+   *
+   * Patient selection ladder (first hit wins):
+   *   1. Subject of the first vital-signs Observation. This is the only
+   *      reliable signal that a patient has clinical data attached —
+   *      vendors like 智群 OCTOFLOW serve multiple Patient records but only
+   *      a subset of them are linked to Observations. Picking the wrong one
+   *      means the main app fetches /Observation?patient=X and gets 0 rows.
+   *   2. Subject of any Observation in the Quick Test result.
+   *   3. First entry in the Quick Test Patient bundle (status quo fallback).
+   *
+   * Step 1 issues an extra GET to the vendor through our proxy. Worth it —
+   * the alternative is a successful demo that silently shows an empty
+   * vitals card.
    */
-  const openInMainApp = (vendor: TwcatVendor, t: QuickTestResult) => {
+  const openInMainApp = async (vendor: TwcatVendor, t: QuickTestResult) => {
     if (!t.bearer) {
       setError(`${vendor.name}: no bearer yet — run Quick Test first.`)
       return
     }
-    // Mine the Patient bundle for an id to seed patient context. Optional —
-    // works without one (the main app will fall back to a Bundle query).
     let patientId: string | undefined
-    try {
-      const text = t.steps.patient.responseBody
-      if (text) {
+
+    const extractSubjectId = (text: string | undefined): string | undefined => {
+      if (!text) return undefined
+      try {
         const j = JSON.parse(text)
-        patientId = j?.entry?.[0]?.resource?.id
+        for (const e of j?.entry ?? []) {
+          const ref = e?.resource?.subject?.reference
+          if (typeof ref === "string" && ref.includes("Patient/")) {
+            return ref.split("Patient/")[1].split("/")[0]
+          }
+        }
+      } catch {
+        // not JSON — fall through to next strategy
+      }
+      return undefined
+    }
+
+    // Strategy 1: GET /Observation?category=vital-signs&_count=1 — find a
+    // Patient that demonstrably has vitals attached.
+    try {
+      const url = `${vendor.iss.replace(/\/+$/, "")}/Observation?category=vital-signs&_count=1`
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${t.bearer}`,
+        Accept: "application/fhir+json",
+      }
+      const pt = ParticipantTokenStore.get()
+      if (pt) headers["X-Participant-Token"] = pt
+      const tid = extractTenantId(`Bearer ${t.bearer}`)
+      if (tid) headers["X-Partition-ID"] = tid
+      const res = await fetch(twcatProxyUrl(url), { headers })
+      if (res.ok) {
+        patientId = extractSubjectId(await res.text())
       }
     } catch {
-      // Patient step might not have responded with JSON — ignore.
+      // Network failure — fall through.
     }
+
+    // Strategy 2: any Observation from Quick Test that happens to have subject.
+    if (!patientId) patientId = extractSubjectId(t.steps.observation.responseBody)
+
+    // Strategy 3: first Patient from Quick Test (works for vendors whose
+    // Patients are all populated, e.g. Doorman).
+    if (!patientId) {
+      try {
+        const text = t.steps.patient.responseBody
+        if (text) {
+          const j = JSON.parse(text)
+          patientId = j?.entry?.[0]?.resource?.id
+        }
+      } catch {
+        /* Patient step might not have responded with JSON — ignore. */
+      }
+    }
+
     const expiresIn = t.bearerExpiresAt
       ? Math.max(0, Math.floor((t.bearerExpiresAt - Date.now()) / 1000))
       : 300
@@ -1074,7 +1128,7 @@ export default function TwcatPickerPage() {
                 </button>
                 {test?.bearer && (
                   <button
-                    onClick={() => openInMainApp(v, test)}
+                    onClick={() => { void openInMainApp(v, test) }}
                     title="Inject Quick Test bearer as a synthetic SMART session, then go to the main app"
                     className="px-3 py-1.5 rounded bg-green-600 text-white text-sm"
                   >
