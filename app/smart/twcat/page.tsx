@@ -207,10 +207,15 @@ export default function TwcatPickerPage() {
   // Defaults to the last scenario the user loaded via ScenarioLoaderPanel.
   // The validator uses this to fetch the "expected" data to diff against;
   // mismatched session = mismatched expectations.
-  const [ipsScenarioUrl, setIpsScenarioUrl] = useState<Record<string, string>>({})
+  // Bundle + FHIRfox URL are shared across vendors — same IPS document
+  // typically gets POSTed to multiple connectathon repositories
+  // (大會 + cross-vendor sanity checks). Per-vendor scoping made the UI
+  // appear broken (textarea blanked + button disabled when switching
+  // vendor) for the only use case anyone actually has.
+  const [ipsScenarioUrl, setIpsScenarioUrl] = useState<string>("")
   // Sticky textarea content per vendor so users don't lose paste while
   // switching tabs / clicking other vendor cards.
-  const [ipsBundleText, setIpsBundleText] = useState<Record<string, string>>({})
+  const [ipsBundleText, setIpsBundleText] = useState<string>("")
   // Per-vendor edit form state. Map[vendorId] = working draft; key absent =
   // form closed. Both preset overrides and custom-vendor in-place edits go
   // through this. Saving applies the diff and closes the form.
@@ -1523,9 +1528,11 @@ export default function TwcatPickerPage() {
       </section>
 
       <ScenarioLoaderPanel
-        onBundleReady={(json, vendorId, sessionUrl) => {
-          setIpsBundleText((prev) => ({ ...prev, [vendorId]: json }))
-          setIpsScenarioUrl((prev) => ({ ...prev, [vendorId]: sessionUrl }))
+        onBundleReady={(json, _vendorId, sessionUrl) => {
+          // bundle + session URL are shared across vendors now, so we
+          // overwrite directly. Loading a new scenario replaces both.
+          setIpsBundleText(json)
+          setIpsScenarioUrl(sessionUrl)
           // Smooth-scroll into view so the user sees the freshly populated
           // textarea instead of wondering where their bundle went.
           requestAnimationFrame(() => {
@@ -1915,10 +1922,10 @@ function IpsCreatorPanel({
   onValidate,
 }: {
   vendors: TwcatVendor[]
-  bundleText: Record<string, string>
-  setBundleText: Dispatch<SetStateAction<Record<string, string>>>
-  scenarioUrl: Record<string, string>
-  setScenarioUrl: Dispatch<SetStateAction<Record<string, string>>>
+  bundleText: string
+  setBundleText: Dispatch<SetStateAction<string>>
+  scenarioUrl: string
+  setScenarioUrl: Dispatch<SetStateAction<string>>
   status: Record<string, IpsPostStatus>
   validateStatus: Record<string, IpsValidateStatus>
   onSubmit: (vendor: TwcatVendor, jsonText: string) => void
@@ -1931,8 +1938,11 @@ function IpsCreatorPanel({
     return vendors.find((v) => v.id === "conference")?.id ?? vendors[0]?.id ?? ""
   })
   const vendor = vendors.find((v) => v.id === vendorId)
-  const text = bundleText[vendorId] ?? ""
-  const scenario = scenarioUrl[vendorId] ?? ""
+  // bundleText / scenarioUrl are now global (single string state) — the
+  // same IPS document can be POSTed to multiple vendors back-to-back
+  // without re-pasting after each vendor switch.
+  const text = bundleText
+  const scenario = scenarioUrl
   const cur = vendor ? status[vendor.id] : undefined
   const val = vendor ? validateStatus[vendor.id] : undefined
 
@@ -2005,7 +2015,7 @@ function IpsCreatorPanel({
           className="w-full min-h-[140px] rounded border p-2 font-mono text-[11px] leading-relaxed bg-background"
           placeholder='{"resourceType":"Bundle","type":"document",…}'
           value={text}
-          onChange={(e) => setBundleText((prev) => ({ ...prev, [vendorId]: e.target.value }))}
+          onChange={(e) => setBundleText(e.target.value)}
         />
       </div>
 
@@ -2020,7 +2030,7 @@ function IpsCreatorPanel({
           className="rounded border p-1.5 font-mono text-xs bg-background"
           placeholder="https://twcat-fhirfox.dicom.org.tw/sessions/cwgtcaq  (validator needs this to diff)"
           value={scenario}
-          onChange={(e) => setScenarioUrl((prev) => ({ ...prev, [vendorId]: e.target.value }))}
+          onChange={(e) => setScenarioUrl(e.target.value)}
         />
       </div>
 
@@ -2054,7 +2064,7 @@ function IpsCreatorPanel({
         <CopyBypassButton bundleText={text} scenarioUrl={scenario} disabled={!text.trim() || summary?.ok === false} />
         {text && !cur?.running && (
           <button
-            onClick={() => setBundleText((prev) => ({ ...prev, [vendorId]: "" }))}
+            onClick={() => setBundleText("")}
             className="text-xs underline text-muted-foreground hover:text-foreground"
           >
             clear
