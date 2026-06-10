@@ -17,7 +17,15 @@ export class PatientMapper {
       name: fhirResource.name,
       gender: fhirResource.gender,
       birthDate: fhirResource.birthDate,
-      age: age ?? undefined
+      age: age ?? undefined,
+      // Extended fields — passed through verbatim. Display layer decides
+      // what to render (see PatientInfoDisplay's "更多資料" toggle).
+      identifier: fhirResource.identifier,
+      telecom: fhirResource.telecom,
+      address: fhirResource.address,
+      maritalStatus: fhirResource.maritalStatus,
+      communication: fhirResource.communication,
+      contact: fhirResource.contact,
     }
   }
 

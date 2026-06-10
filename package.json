@@ -7,7 +7,7 @@
     "dev:webpack": "next dev",
     "build": "next build --turbopack",
     "start": "next start",
-    "build:gh": "GITHUB_PAGES=true next build",
+    "build:gh": "node scripts/build-gh.mjs",
     "deploy": "npm run build:gh && gh-pages -d out -b gh-pages",
     "test": "jest",
     "test:watch": "jest --watch",

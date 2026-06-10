@@ -1,14 +1,57 @@
 // Core Domain Entity: Patient
+//
+// Kept intentionally loose on optional fields — TW Core IG Patient resources
+// from TWCAT vendors carry useful demographic data (NI/MR identifiers,
+// telecom, address, contact, communication) that the legacy 4-field display
+// dropped. The display layer opts in to extra fields via a "show more"
+// toggle so existing callers (medical-chat header, IPS export) stay quiet.
 export interface PatientEntity {
   id: string
   resourceType: 'Patient'
   name?: {
+    use?: string
+    text?: string
     given?: string[]
     family?: string
   }[]
   gender?: 'male' | 'female' | 'other' | 'unknown'
   birthDate?: string
   age?: number
+  // Optional extended demographics (filled in by PatientMapper.toDomain).
+  identifier?: {
+    use?: string
+    type?: { coding?: { system?: string; code?: string }[]; text?: string }
+    system?: string
+    value?: string
+  }[]
+  telecom?: {
+    system?: string
+    value?: string
+    use?: string
+  }[]
+  address?: {
+    use?: string
+    text?: string
+    line?: string[]
+    city?: string
+    district?: string
+    state?: string
+    postalCode?: string
+    country?: string
+  }[]
+  maritalStatus?: {
+    coding?: { system?: string; code?: string; display?: string }[]
+    text?: string
+  }
+  communication?: {
+    language?: { coding?: { system?: string; code?: string; display?: string }[]; text?: string }
+    preferred?: boolean
+  }[]
+  contact?: {
+    relationship?: { coding?: { system?: string; code?: string; display?: string }[]; text?: string }[]
+    name?: { text?: string; given?: string[]; family?: string }
+    telecom?: { system?: string; value?: string; use?: string }[]
+  }[]
 }
 
 export function calculateAge(birthDate?: string | null): number | null {

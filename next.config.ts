@@ -12,7 +12,11 @@ const isWorktree = __dirname.includes('.claude/worktrees/');
 const projectRoot = isWorktree ? path.join(__dirname, '../../..') : __dirname;
 
 const nextConfig: NextConfig = {
-  output: "export",
+  // Static export is only required for the GitHub Pages deploy. In dev mode
+  // (and on Vercel) we want the full Next.js server so dynamic API routes
+  // like /api/twcat-proxy work. Without this gate, `output: "export"` forces
+  // every route to be statically renderable, which breaks API routes.
+  ...(isGhPages ? { output: "export" as const } : {}),
   images: { unoptimized: true },
   // 避免 Next 往上層亂抓 lockfile（雲端同步/家目錄）
   // worktree mode: point at main project where node_modules lives

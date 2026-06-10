@@ -3,4 +3,13 @@ export interface PatientInfo {
   gender: string
   age: string
   id?: string
+  // Extended demographics — surfaced behind a "更多資料" toggle in
+  // PatientInfoDisplay. Empty array = nothing to show.
+  identifiers?: Array<{ label: string; value: string }>
+  birthDate?: string
+  telecom?: Array<{ label: string; value: string }>
+  addresses?: string[]
+  maritalStatus?: string
+  languages?: string[]
+  contacts?: Array<{ relationship: string; name: string; phone?: string }>
 }
