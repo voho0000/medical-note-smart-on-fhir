@@ -126,6 +126,30 @@ const SCT_BY_ICD_ROOT: Readonly<Record<string, VerifiedSct>> = {
 }
 
 /**
+ * The verified allowlist as a flat, de-duplicated `VerifiedSct[]` (sorted by
+ * display for stable output). This is the *constraint set* handed to the LLM for
+ * Strategy C (Phase 2.2): the model may PICK a concept from here but must never
+ * invent one. Derived from the same two tables above, so it can never drift from
+ * the deterministic lookup.
+ */
+export const VERIFIED_SCT_LIST: ReadonlyArray<VerifiedSct> = (() => {
+  const byCode = new Map<string, VerifiedSct>()
+  for (const v of [...Object.values(SCT_BY_EXACT_ICD), ...Object.values(SCT_BY_ICD_ROOT)]) {
+    if (!byCode.has(v.code)) byCode.set(v.code, v)
+  }
+  return [...byCode.values()].sort((a, b) => a.display.localeCompare(b.display))
+})()
+
+/** Set of allowlist concept ids — the membership gate for Strategy C. */
+export const VERIFIED_SCT_CODES: ReadonlySet<string> = new Set(VERIFIED_SCT_LIST.map((v) => v.code))
+
+/** Look up a verified concept by its SNOMED id (used to canonicalize a Strategy-C pick). */
+export function verifiedSctByCode(code: string | undefined): VerifiedSct | null {
+  if (!code) return null
+  return VERIFIED_SCT_LIST.find((v) => v.code === code.trim()) ?? null
+}
+
+/**
  * Normalize an ICD-10 code for table lookup: uppercase, strip whitespace and a
  * trailing dot, and insert the conventional dot after the 3-char category when a
  * dotless extension is present (e.g. "e119" → "E11.9", "N186" → "N18.6").

@@ -22,6 +22,7 @@ interface QueryOptions {
   modelId?: string
   temperature?: number
   maxTokens?: number
+  responseFormat?: 'json'
 }
 
 interface StreamOptions extends QueryOptions {
@@ -72,6 +73,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           modelId: queryOptions?.modelId || options.defaultModel || defaultModel,
           temperature: queryOptions?.temperature,
           maxTokens: queryOptions?.maxTokens,
+          responseFormat: queryOptions?.responseFormat,
         })
 
         options.onSuccess?.(result.text)

@@ -115,6 +115,45 @@ describe('GeminiService', () => {
       expect(body.temperature).toBe(0.7)
     })
 
+    it('should set generationConfig.responseMimeType when responseFormat is json', async () => {
+      // Arrange
+      const jsonRequest: AiQueryRequest = {
+        modelId: 'gemini-2.5-flash',
+        messages: [{ role: 'user', content: 'Test' }],
+        responseFormat: 'json',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: '{}' }] } }],
+        }),
+      } as Response)
+
+      // Act
+      await service.query(jsonRequest)
+
+      // Assert
+      const fetchCall = mockFetch.mock.calls[0]
+      const body = JSON.parse(fetchCall[1]?.body as string)
+      expect(body.generationConfig?.responseMimeType).toBe('application/json')
+    })
+
+    it('should NOT set generationConfig when responseFormat is absent', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: 'Response' }] } }],
+        }),
+      } as Response)
+
+      await service.query(mockRequest)
+
+      const fetchCall = mockFetch.mock.calls[0]
+      const body = JSON.parse(fetchCall[1]?.body as string)
+      expect(body.generationConfig).toBeUndefined()
+    })
+
     it('should include API key in headers for direct API', async () => {
       // Arrange
       mockFetch.mockResolvedValueOnce({

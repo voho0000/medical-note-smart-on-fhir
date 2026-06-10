@@ -26,6 +26,13 @@ export interface AiQueryRequest {
   modelId: string
   temperature?: number
   maxTokens?: number
+  /**
+   * Phase 2.2 — ask the model to return a strict JSON object.
+   * Best-effort: maps to OpenAI `response_format: {type:'json_object'}` and
+   * Gemini `generationConfig.responseMimeType: 'application/json'`. Proxies may
+   * drop the flag, so callers must still defensively parse the returned text.
+   */
+  responseFormat?: 'json'
 }
 
 export interface AiQueryResponse {

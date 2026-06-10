@@ -198,6 +198,45 @@ describe('OpenAiService', () => {
       expect(hasBearer || hasProxyKey).toBe(true)
     })
 
+    it('should set response_format json_object when responseFormat is json', async () => {
+      // Arrange
+      const jsonRequest: AiQueryRequest = {
+        modelId: 'gpt-5.1',
+        messages: [{ role: 'user', content: 'Test' }],
+        responseFormat: 'json',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: '{}' } }],
+        }),
+      } as Response)
+
+      // Act
+      await service.query(jsonRequest)
+
+      // Assert
+      const fetchCall = mockFetch.mock.calls[0]
+      const body = JSON.parse(fetchCall[1]?.body as string)
+      expect(body.response_format).toEqual({ type: 'json_object' })
+    })
+
+    it('should NOT set response_format when responseFormat is absent', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response' } }],
+        }),
+      } as Response)
+
+      await service.query(mockRequest)
+
+      const fetchCall = mockFetch.mock.calls[0]
+      const body = JSON.parse(fetchCall[1]?.body as string)
+      expect(body.response_format).toBeUndefined()
+    })
+
     it('should handle empty response content', async () => {
       // Reset mock to clear any leftover mock implementations
       mockFetch.mockReset()

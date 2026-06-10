@@ -62,6 +62,12 @@ export class OpenAiService {
       body.temperature = request.temperature
     }
 
+    // Best-effort JSON mode (Phase 2.2). Proxies may ignore it; callers still
+    // defensively parse the returned text.
+    if (request.responseFormat === 'json') {
+      body.response_format = { type: 'json_object' }
+    }
+
     if (shouldUseProxy && ENV_CONFIG.proxyClientKey) {
       headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
     } else if (this.apiKey) {

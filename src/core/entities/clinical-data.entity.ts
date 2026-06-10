@@ -43,6 +43,33 @@ export interface ConditionEntity {
     icd10?: string
     needsManualCoding?: boolean
   }
+  /**
+   * IPS Phase 2.2 — provenance marker for an LLM-INFERRED problem (a synthetic
+   * Condition the app derived from discharge summaries / outpatient ICDs / meds,
+   * NOT present in the source FHIR). Only ever set on app-synthesized conditions
+   * and only after the user confirms the suggestion; source conditions never
+   * carry it. Like `_sct`, it is app-internal (underscore prefix) and never
+   * written back to the React Query cache — it lives only inside an IPS snapshot.
+   * `strategy` mirrors the SNOMED coding ladder that produced `_sct`
+   * ('B'=verified ICD→SCT, 'C'=LLM picked from allowlist, 'A'=LLM free-generated,
+   * 'none'=no SNOMED). Concrete shapes live in
+   * features/ips-export/utils/inferred-problems-types.ts; inlined here to keep
+   * the core entity free of a feature-layer import cycle.
+   */
+  _inferred?: {
+    strategy: 'B' | 'C' | 'A' | 'none'
+    inferenceConfidence: 'high' | 'medium' | 'low'
+    needsManualCoding?: boolean
+    evidence: Array<{
+      kind: string
+      label: string
+      sourceId?: string
+      icd10?: string
+      date?: string
+      count?: number
+    }>
+    rationale?: string
+  }
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
