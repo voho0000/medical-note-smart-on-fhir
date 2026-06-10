@@ -34,6 +34,12 @@ const ALLOWED_HOSTS = new Set([
   'twcat-services.dicom.org.tw',
   'twcat-fhirsrv.dicom.org.tw',
   'twcat-oauthsrv.dicom.org.tw',
+  // gazelle hosts the IPS Validator API. The validator returns 405 on
+  // OPTIONS preflight (no CORS headers), so browser-side fetch is blocked;
+  // proxying through here lets the smart/twcat "Run IPS Validator" button
+  // hit it directly with the user's Bundle JSON instead of routing
+  // through Prism + share URL.
+  'twcat-gazelle.dicom.org.tw',
 ])
 
 // Headers that must not be forwarded from the client request — Node's

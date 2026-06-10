@@ -1,18 +1,18 @@
 {
   "resourceType": "Bundle",
-  "id": "IPS-MIX-001",
+  "id": "IPS-MIX-003",
   "type": "document",
   "identifier": {
     "system": "urn:ietf:rfc:3986",
-    "value": "urn:uuid:58bcc876-5efc-4452-be5d-58d77722b707"
+    "value": "urn:uuid:457d1690-699e-4769-b4b2-ff96f2e4f04c"
   },
-  "timestamp": "2026-06-10T13:52:59.865Z",
+  "timestamp": "2026-06-10T14:21:56.489Z",
   "entry": [
     {
-      "fullUrl": "urn:uuid:58bcc876-5efc-4452-be5d-58d77722b707",
+      "fullUrl": "urn:uuid:457d1690-699e-4769-b4b2-ff96f2e4f04c",
       "resource": {
         "resourceType": "Composition",
-        "id": "IPS-MIX-001-composition",
+        "id": "IPS-MIX-003-composition",
         "meta": {
           "profile": [
             "http://hl7.org/fhir/uv/ips/StructureDefinition/Composition-uv-ips"
@@ -20,7 +20,7 @@
         },
         "text": {
           "status": "generated",
-          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">International Patient Summary for 楊宥穎 — 6 sections, 2 problems, 12 medications.</div>"
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">International Patient Summary for 洪思辰 — 7 sections, 1 problems, 12 medications.</div>"
         },
         "status": "final",
         "type": {
@@ -32,15 +32,15 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855"
+          "reference": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1"
         },
-        "date": "2026-06-10T13:52:59.864Z",
+        "date": "2026-06-10T14:21:56.489Z",
         "author": [
           {
-            "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+            "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
           }
         ],
         "title": "International Patient Summary",
@@ -57,14 +57,11 @@
             },
             "text": {
               "status": "generated",
-              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Problem</th><th>Status</th><th>Onset</th></tr></thead><tbody><tr><td>心房顫動追蹤</td><td>active</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>急診發燒</td><td>active</td><td>2026-06-08T10:06:43.311Z</td></tr></tbody></table></div>"
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Problem</th><th>Status</th><th>Onset</th></tr></thead><tbody><tr><td>冠狀動脈疾病待支架治療</td><td>active</td><td>2026-06-10T09:55:33.785Z</td></tr></tbody></table></div>"
             },
             "entry": [
               {
-                "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
-              },
-              {
-                "reference": "urn:uuid:8972dd4f-fa9e-44f3-8e50-d7b88697a109"
+                "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
               }
             ]
           },
@@ -80,44 +77,44 @@
             },
             "text": {
               "status": "generated",
-              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Medication</th><th>Status</th><th>Dosage</th><th>Authored</th></tr></thead><tbody><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Clopidogrel 75 mg tablet</td><td>active</td><td>Clopidogrel 75 mg by mouth once daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Atorvastatin 20 mg tablet</td><td>active</td><td>Atorvastatin 20 mg by mouth once nightly.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Clopidogrel 75 mg tablet</td><td>active</td><td>Clopidogrel 75 mg by mouth once daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Atorvastatin 20 mg tablet</td><td>active</td><td>Atorvastatin 20 mg by mouth once nightly.</td><td>2026-06-08T10:06:43.311Z</td></tr></tbody></table></div>"
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Medication</th><th>Status</th><th>Dosage</th><th>Authored</th></tr></thead><tbody><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Atorvastatin 20 mg tablet</td><td>active</td><td>Atorvastatin 20 mg by mouth once nightly.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Clopidogrel 75 mg tablet</td><td>active</td><td>Clopidogrel 75 mg by mouth once daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Clopidogrel 75 mg tablet</td><td>active</td><td>Clopidogrel 75 mg by mouth once daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Metoprolol 25 mg tablet</td><td>active</td><td>Metoprolol 25 mg by mouth twice daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Aspirin 100 mg tablet</td><td>active</td><td>Aspirin 100 mg by mouth once daily.</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Atorvastatin 20 mg tablet</td><td>active</td><td>Atorvastatin 20 mg by mouth once nightly.</td><td>2026-06-10T09:55:33.785Z</td></tr></tbody></table></div>"
             },
             "entry": [
               {
-                "reference": "urn:uuid:e116673a-2b9b-412f-9dbd-14b102440770"
+                "reference": "urn:uuid:e060983d-6446-402b-b809-98b828a20b1d"
               },
               {
-                "reference": "urn:uuid:8b82c8c6-15ef-4cb4-953a-285de2add116"
+                "reference": "urn:uuid:7ae0fa0f-3e62-4065-b04d-26c63148d182"
               },
               {
-                "reference": "urn:uuid:824fd099-7292-4c53-b4bb-cc57d457f050"
+                "reference": "urn:uuid:58081440-67f2-47a4-bb96-35b66c313315"
               },
               {
-                "reference": "urn:uuid:e8c00706-a04f-4940-8582-7e1cc6287c61"
+                "reference": "urn:uuid:dbc10589-c096-421f-ac61-a88b69cb8ec2"
               },
               {
-                "reference": "urn:uuid:6655f8bc-d112-43a9-9de1-572d8f3d4047"
+                "reference": "urn:uuid:9f793750-658a-45c3-9e2c-52339aadc8b7"
               },
               {
-                "reference": "urn:uuid:f079dc04-6130-4dd0-83a4-37aa38fc8e62"
+                "reference": "urn:uuid:4cdc0c7a-7076-4fd6-a795-6f437082e27a"
               },
               {
-                "reference": "urn:uuid:9a2ccdd0-874a-4cd6-9036-08488d0364de"
+                "reference": "urn:uuid:ec88624a-257d-4199-9382-5233c67f653d"
               },
               {
-                "reference": "urn:uuid:f871b2f2-cc74-4a06-8149-acacc950775b"
+                "reference": "urn:uuid:609b14b9-732b-41ed-9536-a5b30e593b7e"
               },
               {
-                "reference": "urn:uuid:04e3cf76-fc2c-4bce-b11c-7970f2c846d4"
+                "reference": "urn:uuid:eb66d67a-de5d-4bdf-8a86-ba9f5abcfe5d"
               },
               {
-                "reference": "urn:uuid:0fd441a2-5d94-426e-ad18-b8b3bb028032"
+                "reference": "urn:uuid:89bac866-750f-4b7f-9ba2-c2a03c9a805e"
               },
               {
-                "reference": "urn:uuid:dd4911fe-cb54-45f8-9db6-e04e9a0d21aa"
+                "reference": "urn:uuid:ee3d5205-25a9-4261-8e28-6d97a19720c0"
               },
               {
-                "reference": "urn:uuid:60a2c3b4-d773-4f13-ad33-7d66a7a23ce1"
+                "reference": "urn:uuid:856779a8-be55-40a9-939a-13e8a5ac19e5"
               }
             ]
           },
@@ -157,14 +154,37 @@
             },
             "text": {
               "status": "generated",
-              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Test</th><th>Value</th><th>Reference</th><th>Date</th></tr></thead><tbody><tr><td>Lab-0005</td><td>0.07 ng/mL</td><td>0–0.04 ng/mL</td><td>2026-06-08T10:06:43.311Z</td></tr><tr><td>Lab-0012</td><td>107 mg/dL</td><td>0–100 mg/dL</td><td>2026-06-08T10:06:43.311Z</td></tr></tbody></table></div>"
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Test</th><th>Value</th><th>Reference</th><th>Date</th></tr></thead><tbody><tr><td>Lab-0005</td><td>0.06 ng/mL</td><td>0–0.04 ng/mL</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Lab-0012</td><td>114 mg/dL</td><td>0–100 mg/dL</td><td>2026-06-10T09:55:33.785Z</td></tr><tr><td>Lab-0027</td><td>1.1 %</td><td>0.8–1.2 %</td><td>2026-06-10T09:55:33.785Z</td></tr></tbody></table></div>"
             },
             "entry": [
               {
-                "reference": "urn:uuid:f4a76d7c-f84c-4de3-ba32-0fa0c265252b"
+                "reference": "urn:uuid:c88b16da-35b2-4984-b4bd-63fcab70dd59"
               },
               {
-                "reference": "urn:uuid:5dfe845f-9b16-468d-8a95-a7f31cfb35cf"
+                "reference": "urn:uuid:a0586219-c47e-4888-a9b0-fb5a02fa3e96"
+              },
+              {
+                "reference": "urn:uuid:cb0a4d9a-9538-4139-a370-309fcd3d9e5b"
+              }
+            ]
+          },
+          {
+            "title": "History of Procedures",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "47519-4"
+                }
+              ]
+            },
+            "text": {
+              "status": "generated",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><div>History of Procedures: 1 entry</div></div>"
+            },
+            "entry": [
+              {
+                "reference": "urn:uuid:57ca1c9c-65a1-4ad1-b9d8-8bca0cfc9a61"
               }
             ]
           },
@@ -180,23 +200,23 @@
             },
             "text": {
               "status": "generated",
-              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>ID</th><th>Class</th><th>Service</th><th>Start</th><th>Status</th></tr></thead><tbody><tr><td>1</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-08T10:06:43.311Z</td><td>finished</td></tr><tr><td>2</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-08T10:06:43.311Z</td><td>finished</td></tr><tr><td>3</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-08T10:06:43.311Z</td><td>finished</td></tr><tr><td>4</td><td>EMER</td><td>急診</td><td>2026-06-08T10:06:43.311Z</td><td>finished</td></tr><tr><td>5</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-08T10:06:43.311Z</td><td>finished</td></tr></tbody></table></div>"
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>ID</th><th>Class</th><th>Service</th><th>Start</th><th>Status</th></tr></thead><tbody><tr><td>1</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-10T09:55:33.785Z</td><td>finished</td></tr><tr><td>2</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-10T09:55:33.785Z</td><td>finished</td></tr><tr><td>3</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-10T09:55:33.785Z</td><td>finished</td></tr><tr><td>4</td><td>AMB</td><td>心臟內科門診</td><td>2026-06-10T09:55:33.785Z</td><td>finished</td></tr><tr><td>5</td><td>IMP</td><td>心臟內科住院</td><td>2026-06-10T09:55:33.785Z</td><td>finished</td></tr></tbody></table></div>"
             },
             "entry": [
               {
-                "reference": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855"
+                "reference": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1"
               },
               {
-                "reference": "urn:uuid:a4ab5101-f028-4578-ad07-ab3c97bcc9ea"
+                "reference": "urn:uuid:7ea8f8ad-02bc-4d8a-a127-2490b97eb28a"
               },
               {
-                "reference": "urn:uuid:b7d1c4e8-3941-4a55-b2af-a1a94710aaf8"
+                "reference": "urn:uuid:8b239b8e-3ef2-4862-8767-7c185407fa57"
               },
               {
-                "reference": "urn:uuid:960cce29-eca1-4557-95be-ed5fa0aa1317"
+                "reference": "urn:uuid:05d4ad43-6b6c-4192-943b-78fd90fd9207"
               },
               {
-                "reference": "urn:uuid:ca6d54ce-8f74-4fd4-9ff2-c57df4c9d9b9"
+                "reference": "urn:uuid:934b3657-0837-4c6e-b57d-cbaa6fe97638"
               }
             ]
           },
@@ -212,14 +232,17 @@
             },
             "text": {
               "status": "generated",
-              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Report</th><th>Category</th><th>Date</th><th>Conclusion</th></tr></thead><tbody><tr><td>空腹血糖報告</td><td>實驗室檢驗</td><td>2026-06-08T10:06:43.311Z</td><td>血糖檢查已完成，建議配合症狀與用藥狀況判讀。</td></tr><tr><td>血脂檢查報告</td><td>實驗室檢驗</td><td>2026-06-08T10:06:43.311Z</td><td>血脂檢查已完成，建議配合心血管風險因子評估。</td></tr></tbody></table></div>"
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><table><thead><tr><th>Report</th><th>Category</th><th>Date</th><th>Conclusion</th></tr></thead><tbody><tr><td>空腹血糖報告</td><td>實驗室檢驗</td><td>2026-06-10T09:55:33.785Z</td><td>血糖檢查已完成，建議配合症狀與用藥狀況判讀。</td></tr><tr><td>血脂檢查報告</td><td>實驗室檢驗</td><td>2026-06-10T09:55:33.785Z</td><td>血脂檢查已完成，建議配合心血管風險因子評估。</td></tr><tr><td>血液常規檢查報告</td><td>實驗室檢驗</td><td>2026-06-10T09:55:33.785Z</td><td>血液常規檢查已完成，結果供臨床追蹤感染或貧血狀態。</td></tr></tbody></table></div>"
             },
             "entry": [
               {
-                "reference": "urn:uuid:72a968f3-2781-4d90-b17e-4dae0cb2b445"
+                "reference": "urn:uuid:d5b6ffdc-14ce-4345-a885-29617bbd3577"
               },
               {
-                "reference": "urn:uuid:86215295-d686-43e9-8145-3940049be6b4"
+                "reference": "urn:uuid:3f9890f4-e2fe-4812-8ea1-5ed144775aa8"
+              },
+              {
+                "reference": "urn:uuid:3b4f88dc-2b85-49de-bacd-82e7243005d2"
               }
             ]
           }
@@ -227,7 +250,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d",
+      "fullUrl": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66",
       "resource": {
         "resourceType": "Patient",
         "id": "1",
@@ -261,37 +284,37 @@
               ]
             },
             "system": "http://www.moi.gov.tw",
-            "value": "Q295370993"
+            "value": "Y134881457"
           }
         ],
         "active": true,
         "name": [
           {
             "use": "official",
-            "text": "楊宥穎"
+            "text": "洪思辰"
           }
         ],
         "telecom": [
           {
             "system": "phone",
             "use": "mobile",
-            "value": "0954233859"
+            "value": "0914686263"
           }
         ],
-        "gender": "male",
-        "birthDate": "1970-04-02",
+        "gender": "female",
+        "birthDate": "1928-03-09",
         "address": [
           {
-            "text": "新北市新店區建國路230號之3"
+            "text": "新北市新店區新店路147巷310號12樓"
           }
         ],
         "managingOrganization": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
+          "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
         }
       }
     },
     {
-      "fullUrl": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973",
+      "fullUrl": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f",
       "resource": {
         "resourceType": "Organization",
         "id": "1",
@@ -333,10 +356,10 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110",
+      "fullUrl": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449",
       "resource": {
         "resourceType": "Practitioner",
-        "id": "2",
+        "id": "1",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Practitioner-twcore"
@@ -352,23 +375,23 @@
         "name": [
           {
             "use": "official",
-            "text": "洪欣辰"
+            "text": "陳佳穎"
           }
         ],
         "telecom": [
           {
             "system": "phone",
             "use": "work",
-            "value": "0975097404"
+            "value": "0931844073"
           }
         ],
         "address": [
           {
-            "text": "臺北市信義區松智路216號"
+            "text": "新北市新店區安康路1段121號"
           }
         ],
-        "gender": "other",
-        "birthDate": "1985-02-28",
+        "gender": "unknown",
+        "birthDate": "1985-08-01",
         "qualification": [
           {
             "code": {
@@ -379,70 +402,17 @@
               ]
             },
             "issuer": {
-              "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
+              "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
             }
           }
         ]
       }
     },
     {
-      "fullUrl": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa",
-      "resource": {
-        "resourceType": "Practitioner",
-        "id": "1",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Practitioner-twcore"
-          ]
-        },
-        "identifier": [
-          {
-            "system": "https://www.tph.mohw.gov.tw/fhir/practitioner-license",
-            "value": "醫字第045678號"
-          }
-        ],
-        "active": true,
-        "name": [
-          {
-            "use": "official",
-            "text": "陳承君"
-          }
-        ],
-        "telecom": [
-          {
-            "system": "phone",
-            "use": "work",
-            "value": "0907808092"
-          }
-        ],
-        "address": [
-          {
-            "text": "臺南市中西區西門路2段281號"
-          }
-        ],
-        "gender": "female",
-        "birthDate": "1970-03-21",
-        "qualification": [
-          {
-            "code": {
-              "coding": [
-                {
-                  "code": "Qual-0001"
-                }
-              ]
-            },
-            "issuer": {
-              "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:658250b7-4e12-4040-813f-37e64249c399",
+      "fullUrl": "urn:uuid:f0cf8c91-3cb3-4dbb-93a1-2ef09ad3f73e",
       "resource": {
         "resourceType": "PractitionerRole",
-        "id": "2",
+        "id": "1",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/PractitionerRole-twcore"
@@ -451,7 +421,7 @@
         "identifier": [
           {
             "system": "https://www.tph.mohw.gov.tw",
-            "value": "KP00034"
+            "value": "KP00052"
           }
         ],
         "active": true,
@@ -460,10 +430,10 @@
           "end": "2026-12-31T17:00:00+08:00"
         },
         "practitioner": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "organization": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
+          "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
         },
         "code": [
           {
@@ -494,62 +464,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:45669c09-96b2-46cd-824f-f42b1e7a0b7d",
-      "resource": {
-        "resourceType": "PractitionerRole",
-        "id": "1",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/PractitionerRole-twcore"
-          ]
-        },
-        "identifier": [
-          {
-            "system": "https://www.tph.mohw.gov.tw",
-            "value": "KP00052"
-          }
-        ],
-        "active": true,
-        "period": {
-          "start": "2024-01-01T08:00:00+08:00",
-          "end": "2026-12-31T17:00:00+08:00"
-        },
-        "practitioner": {
-          "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
-        },
-        "organization": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
-        },
-        "code": [
-          {
-            "coding": [
-              {
-                "code": "PR-0008",
-                "display": "急診醫師"
-              }
-            ]
-          }
-        ],
-        "specialty": [
-          {
-            "coding": [
-              {
-                "code": "Spec-0004"
-              }
-            ]
-          }
-        ],
-        "telecom": [
-          {
-            "system": "phone",
-            "use": "work",
-            "value": "02-2312-3456"
-          }
-        ]
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855",
+      "fullUrl": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1",
       "resource": {
         "resourceType": "Encounter",
         "id": "1",
@@ -587,7 +502,7 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "participant": [
           {
@@ -602,13 +517,13 @@
               }
             ],
             "individual": {
-              "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+              "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
             }
           }
         ],
         "period": {
-          "start": "2026-06-08T10:06:43.311Z",
-          "end": "2026-06-08T10:31:43.311Z"
+          "start": "2026-06-10T09:55:33.785Z",
+          "end": "2026-06-10T10:20:33.785Z"
         },
         "reasonCode": [
           {
@@ -625,7 +540,7 @@
         "diagnosis": [
           {
             "condition": {
-              "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+              "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
             },
             "use": {
               "coding": [
@@ -638,12 +553,12 @@
           }
         ],
         "serviceProvider": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
+          "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
         }
       }
     },
     {
-      "fullUrl": "urn:uuid:a4ab5101-f028-4578-ad07-ab3c97bcc9ea",
+      "fullUrl": "urn:uuid:7ea8f8ad-02bc-4d8a-a127-2490b97eb28a",
       "resource": {
         "resourceType": "Encounter",
         "id": "2",
@@ -681,7 +596,7 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "participant": [
           {
@@ -696,13 +611,13 @@
               }
             ],
             "individual": {
-              "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+              "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
             }
           }
         ],
         "period": {
-          "start": "2026-06-08T10:06:43.311Z",
-          "end": "2026-06-08T10:31:43.311Z"
+          "start": "2026-06-10T09:55:33.785Z",
+          "end": "2026-06-10T10:20:33.785Z"
         },
         "reasonCode": [
           {
@@ -719,7 +634,7 @@
         "diagnosis": [
           {
             "condition": {
-              "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+              "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
             },
             "use": {
               "coding": [
@@ -732,12 +647,12 @@
           }
         ],
         "serviceProvider": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
+          "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
         }
       }
     },
     {
-      "fullUrl": "urn:uuid:b7d1c4e8-3941-4a55-b2af-a1a94710aaf8",
+      "fullUrl": "urn:uuid:8b239b8e-3ef2-4862-8767-7c185407fa57",
       "resource": {
         "resourceType": "Encounter",
         "id": "3",
@@ -775,7 +690,7 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "participant": [
           {
@@ -790,13 +705,13 @@
               }
             ],
             "individual": {
-              "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+              "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
             }
           }
         ],
         "period": {
-          "start": "2026-06-08T10:06:43.311Z",
-          "end": "2026-06-08T10:31:43.311Z"
+          "start": "2026-06-10T09:55:33.785Z",
+          "end": "2026-06-10T10:20:33.785Z"
         },
         "reasonCode": [
           {
@@ -813,7 +728,7 @@
         "diagnosis": [
           {
             "condition": {
-              "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+              "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
             },
             "use": {
               "coding": [
@@ -826,12 +741,12 @@
           }
         ],
         "serviceProvider": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
+          "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
         }
       }
     },
     {
-      "fullUrl": "urn:uuid:960cce29-eca1-4557-95be-ed5fa0aa1317",
+      "fullUrl": "urn:uuid:05d4ad43-6b6c-4192-943b-78fd90fd9207",
       "resource": {
         "resourceType": "Encounter",
         "id": "4",
@@ -844,110 +759,6 @@
           {
             "system": "https://www.tph.mohw.gov.tw/fhir/encounter",
             "value": "4"
-          }
-        ],
-        "status": "finished",
-        "class": {
-          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-          "code": "EMER"
-        },
-        "type": [
-          {
-            "coding": [
-              {
-                "code": "EMER"
-              }
-            ]
-          }
-        ],
-        "serviceType": {
-          "coding": [
-            {
-              "code": "emergency",
-              "display": "急診"
-            }
-          ]
-        },
-        "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
-        },
-        "participant": [
-          {
-            "type": [
-              {
-                "coding": [
-                  {
-                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
-                    "code": "ATND"
-                  }
-                ]
-              }
-            ],
-            "individual": {
-              "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
-            }
-          }
-        ],
-        "period": {
-          "start": "2026-06-08T10:06:43.311Z",
-          "end": "2026-06-08T10:31:43.311Z"
-        },
-        "reasonCode": [
-          {
-            "text": "急診發燒",
-            "coding": [
-              {
-                "system": "http://snomed.info/sct",
-                "code": "386661006",
-                "display": "Fever"
-              }
-            ]
-          }
-        ],
-        "diagnosis": [
-          {
-            "condition": {
-              "reference": "urn:uuid:8972dd4f-fa9e-44f3-8e50-d7b88697a109"
-            },
-            "use": {
-              "coding": [
-                {
-                  "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
-                  "code": "AD"
-                }
-              ]
-            }
-          }
-        ],
-        "hospitalization": {
-          "admitSource": {
-            "coding": [
-              {
-                "system": "http://terminology.hl7.org/CodeSystem/admit-source",
-                "code": "emd"
-              }
-            ]
-          }
-        },
-        "serviceProvider": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
-        }
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:ca6d54ce-8f74-4fd4-9ff2-c57df4c9d9b9",
-      "resource": {
-        "resourceType": "Encounter",
-        "id": "5",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Encounter-twcore"
-          ]
-        },
-        "identifier": [
-          {
-            "system": "https://www.tph.mohw.gov.tw/fhir/encounter",
-            "value": "5"
           }
         ],
         "status": "finished",
@@ -973,7 +784,7 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "participant": [
           {
@@ -988,13 +799,13 @@
               }
             ],
             "individual": {
-              "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+              "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
             }
           }
         ],
         "period": {
-          "start": "2026-06-08T10:06:43.311Z",
-          "end": "2026-06-08T10:31:43.311Z"
+          "start": "2026-06-10T09:55:33.785Z",
+          "end": "2026-06-10T10:20:33.785Z"
         },
         "reasonCode": [
           {
@@ -1011,7 +822,7 @@
         "diagnosis": [
           {
             "condition": {
-              "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+              "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
             },
             "use": {
               "coding": [
@@ -1024,15 +835,127 @@
           }
         ],
         "serviceProvider": {
-          "reference": "urn:uuid:d04aa8f2-4f99-47a0-b443-a92b4390a973"
+          "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
         }
       }
     },
     {
-      "fullUrl": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb",
+      "fullUrl": "urn:uuid:934b3657-0837-4c6e-b57d-cbaa6fe97638",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "5",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Encounter-twcore"
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://www.tph.mohw.gov.tw/fhir/encounter",
+            "value": "5"
+          }
+        ],
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "IMP"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "code": "IMP"
+              }
+            ]
+          }
+        ],
+        "serviceType": {
+          "coding": [
+            {
+              "code": "cardiology",
+              "display": "心臟內科住院"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
+        },
+        "participant": [
+          {
+            "type": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                    "code": "ATND"
+                  }
+                ]
+              }
+            ],
+            "individual": {
+              "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
+            }
+          }
+        ],
+        "period": {
+          "start": "2026-06-10T09:55:33.785Z",
+          "end": "2026-06-10T10:20:33.785Z"
+        },
+        "reasonCode": [
+          {
+            "text": "冠狀動脈疾病待支架治療",
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "22298006",
+                "display": "Myocardial infarction"
+              }
+            ]
+          }
+        ],
+        "diagnosis": [
+          {
+            "condition": {
+              "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
+            },
+            "use": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/diagnosis-role",
+                  "code": "AD"
+                }
+              ]
+            }
+          }
+        ],
+        "hospitalization": {
+          "admitSource": {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/admit-source",
+                "code": "emd"
+              }
+            ]
+          },
+          "dischargeDisposition": {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/discharge-disposition",
+                "code": "home"
+              }
+            ]
+          }
+        },
+        "serviceProvider": {
+          "reference": "urn:uuid:83bb37a4-30bc-46c6-946e-8c3a41d4988f"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e",
       "resource": {
         "resourceType": "Condition",
-        "id": "2",
+        "id": "1",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Condition-twcore"
@@ -1073,24 +996,24 @@
           ]
         },
         "code": {
-          "text": "心房顫動追蹤",
+          "text": "冠狀動脈疾病待支架治療",
           "coding": [
             {
               "system": "http://snomed.info/sct",
-              "code": "49436004",
-              "display": "Atrial fibrillation"
+              "code": "22298006",
+              "display": "Myocardial infarction"
             }
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
-        "onsetDateTime": "2026-06-08T10:06:43.311Z",
+        "onsetDateTime": "2026-06-10T09:55:33.785Z",
         "recorder": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "asserter": {
-          "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "note": [
           {
@@ -1100,78 +1023,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:8972dd4f-fa9e-44f3-8e50-d7b88697a109",
-      "resource": {
-        "resourceType": "Condition",
-        "id": "1",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Condition-twcore"
-          ]
-        },
-        "clinicalStatus": {
-          "coding": [
-            {
-              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
-              "code": "active"
-            }
-          ]
-        },
-        "verificationStatus": {
-          "coding": [
-            {
-              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
-              "code": "confirmed"
-            }
-          ]
-        },
-        "category": [
-          {
-            "coding": [
-              {
-                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
-                "code": "encounter-diagnosis"
-              }
-            ]
-          }
-        ],
-        "severity": {
-          "coding": [
-            {
-              "system": "http://snomed.info/sct",
-              "code": "255604002"
-            }
-          ]
-        },
-        "code": {
-          "text": "急診發燒",
-          "coding": [
-            {
-              "system": "http://snomed.info/sct",
-              "code": "386661006",
-              "display": "Fever"
-            }
-          ]
-        },
-        "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
-        },
-        "onsetDateTime": "2026-06-08T10:06:43.311Z",
-        "recorder": {
-          "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
-        },
-        "asserter": {
-          "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
-        },
-        "note": [
-          {
-            "text": "依臨床評估持續追蹤。"
-          }
-        ]
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:f4a76d7c-f84c-4de3-ba32-0fa0c265252b",
+      "fullUrl": "urn:uuid:c88b16da-35b2-4984-b4bd-63fcab70dd59",
       "resource": {
         "resourceType": "Observation",
         "id": "1",
@@ -1202,19 +1054,19 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855"
+          "reference": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1"
         },
-        "effectiveDateTime": "2026-06-08T10:06:43.311Z",
+        "effectiveDateTime": "2026-06-10T09:55:33.785Z",
         "performer": [
           {
-            "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
+            "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
           }
         ],
         "valueQuantity": {
-          "value": 0.07,
+          "value": 0.06,
           "unit": "ng/mL",
           "system": "http://unitsofmeasure.org",
           "code": "ng/mL"
@@ -1238,7 +1090,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:5dfe845f-9b16-468d-8a95-a7f31cfb35cf",
+      "fullUrl": "urn:uuid:a0586219-c47e-4888-a9b0-fb5a02fa3e96",
       "resource": {
         "resourceType": "Observation",
         "id": "2",
@@ -1269,19 +1121,19 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:b7d1c4e8-3941-4a55-b2af-a1a94710aaf8"
+          "reference": "urn:uuid:8b239b8e-3ef2-4862-8767-7c185407fa57"
         },
-        "effectiveDateTime": "2026-06-08T10:06:43.311Z",
+        "effectiveDateTime": "2026-06-10T09:55:33.785Z",
         "performer": [
           {
-            "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
+            "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
           }
         ],
         "valueQuantity": {
-          "value": 107,
+          "value": 114,
           "unit": "mg/dL",
           "system": "http://unitsofmeasure.org",
           "code": "mg/dL"
@@ -1305,7 +1157,151 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:72a968f3-2781-4d90-b17e-4dae0cb2b445",
+      "fullUrl": "urn:uuid:cb0a4d9a-9538-4139-a370-309fcd3d9e5b",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "3",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Observation-laboratory-twcore"
+          ]
+        },
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "laboratory"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "INR in Platelet poor plasma by Coagulation assay",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "6301-6",
+              "display": "INR in Platelet poor plasma by Coagulation assay"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
+        },
+        "encounter": {
+          "reference": "urn:uuid:05d4ad43-6b6c-4192-943b-78fd90fd9207"
+        },
+        "effectiveDateTime": "2026-06-10T09:55:33.785Z",
+        "performer": [
+          {
+            "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
+          }
+        ],
+        "valueQuantity": {
+          "value": 1.1,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "referenceRange": [
+          {
+            "low": {
+              "value": 0.8,
+              "unit": "%",
+              "system": "http://unitsofmeasure.org",
+              "code": "%"
+            },
+            "high": {
+              "value": 1.2,
+              "unit": "%",
+              "system": "http://unitsofmeasure.org",
+              "code": "%"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:57ca1c9c-65a1-4ad1-b9d8-8bca0cfc9a61",
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "1",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Procedure-twcore"
+          ]
+        },
+        "status": "completed",
+        "category": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "387713003"
+            }
+          ]
+        },
+        "code": {
+          "text": "冠狀動脈支架置放術",
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "232717009"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
+        },
+        "encounter": {
+          "reference": "urn:uuid:934b3657-0837-4c6e-b57d-cbaa6fe97638"
+        },
+        "performedDateTime": "2026-06-10T09:55:33.785Z",
+        "performer": [
+          {
+            "function": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/performer-function",
+                  "code": "Perf-0014"
+                }
+              ]
+            },
+            "actor": {
+              "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
+            }
+          }
+        ],
+        "bodySite": [
+          {
+            "text": "coronary-artery"
+          }
+        ],
+        "reasonCode": [
+          {
+            "text": "冠狀動脈疾病待支架治療",
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "22298006",
+                "display": "Myocardial infarction"
+              }
+            ]
+          }
+        ],
+        "outcome": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "385669000"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:d5b6ffdc-14ce-4345-a885-29617bbd3577",
       "resource": {
         "resourceType": "DiagnosticReport",
         "id": "1",
@@ -1337,28 +1333,28 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855"
+          "reference": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1"
         },
-        "effectiveDateTime": "2026-06-08T10:06:43.311Z",
-        "issued": "2026-06-08T11:36:43.311Z",
+        "effectiveDateTime": "2026-06-10T09:55:33.785Z",
+        "issued": "2026-06-10T11:25:33.785Z",
         "performer": [
           {
-            "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
+            "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
           }
         ],
         "result": [
           {
-            "reference": "urn:uuid:f4a76d7c-f84c-4de3-ba32-0fa0c265252b"
+            "reference": "urn:uuid:c88b16da-35b2-4984-b4bd-63fcab70dd59"
           }
         ],
         "conclusion": "血糖檢查已完成，建議配合症狀與用藥狀況判讀。"
       }
     },
     {
-      "fullUrl": "urn:uuid:86215295-d686-43e9-8145-3940049be6b4",
+      "fullUrl": "urn:uuid:3f9890f4-e2fe-4812-8ea1-5ed144775aa8",
       "resource": {
         "resourceType": "DiagnosticReport",
         "id": "2",
@@ -1390,28 +1386,81 @@
           ]
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:b7d1c4e8-3941-4a55-b2af-a1a94710aaf8"
+          "reference": "urn:uuid:8b239b8e-3ef2-4862-8767-7c185407fa57"
         },
-        "effectiveDateTime": "2026-06-08T10:06:43.311Z",
-        "issued": "2026-06-08T11:36:43.311Z",
+        "effectiveDateTime": "2026-06-10T09:55:33.785Z",
+        "issued": "2026-06-10T11:25:33.785Z",
         "performer": [
           {
-            "reference": "urn:uuid:8ec2f6bd-7176-49b0-8c24-1bd1473383aa"
+            "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
           }
         ],
         "result": [
           {
-            "reference": "urn:uuid:5dfe845f-9b16-468d-8a95-a7f31cfb35cf"
+            "reference": "urn:uuid:a0586219-c47e-4888-a9b0-fb5a02fa3e96"
           }
         ],
         "conclusion": "血脂檢查已完成，建議配合心血管風險因子評估。"
       }
     },
     {
-      "fullUrl": "urn:uuid:8884d693-ec8c-4753-ae7d-cf558c6e2ddb",
+      "fullUrl": "urn:uuid:3b4f88dc-2b85-49de-bacd-82e7243005d2",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "3",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/DiagnosticReport-twcore"
+          ]
+        },
+        "status": "final",
+        "category": [
+          {
+            "text": "實驗室檢驗",
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0074",
+                "code": "LAB"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "血液常規檢查報告",
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "57021-8",
+              "display": "CBC W Auto Differential panel - Blood"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
+        },
+        "encounter": {
+          "reference": "urn:uuid:05d4ad43-6b6c-4192-943b-78fd90fd9207"
+        },
+        "effectiveDateTime": "2026-06-10T09:55:33.785Z",
+        "issued": "2026-06-10T11:25:33.785Z",
+        "performer": [
+          {
+            "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
+          }
+        ],
+        "result": [
+          {
+            "reference": "urn:uuid:cb0a4d9a-9538-4139-a370-309fcd3d9e5b"
+          }
+        ],
+        "conclusion": "血液常規檢查已完成，結果供臨床追蹤感染或貧血狀態。"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:50110759-048b-4488-b9fd-661c01271153",
       "resource": {
         "resourceType": "Medication",
         "id": "2",
@@ -1432,7 +1481,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:f71ba681-3ac8-48af-a42b-8e79a3c87a3d",
+      "fullUrl": "urn:uuid:6bab585a-9a5a-4488-8fb4-11e438966c04",
       "resource": {
         "resourceType": "Medication",
         "id": "3",
@@ -1453,28 +1502,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:165b1b43-8e6d-4872-9b53-97e434191de7",
-      "resource": {
-        "resourceType": "Medication",
-        "id": "4",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Medication-twcore"
-          ]
-        },
-        "code": {
-          "text": "Clopidogrel 75 mg tablet",
-          "coding": [
-            {
-              "system": "http://snomed.info/sct",
-              "code": "386876001"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:fc910fcf-74f7-4ad9-9d3e-abad417ce2da",
+      "fullUrl": "urn:uuid:9fcd7b24-a1fe-47bf-bdc4-4d3d0363bd9c",
       "resource": {
         "resourceType": "Medication",
         "id": "1",
@@ -1495,7 +1523,28 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:e116673a-2b9b-412f-9dbd-14b102440770",
+      "fullUrl": "urn:uuid:6b261ce1-57da-4b82-8c78-2ac3795bbcc3",
+      "resource": {
+        "resourceType": "Medication",
+        "id": "4",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Medication-twcore"
+          ]
+        },
+        "code": {
+          "text": "Clopidogrel 75 mg tablet",
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "386876001"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e060983d-6446-402b-b809-98b828a20b1d",
       "resource": {
         "resourceType": "MedicationRequest",
         "id": "1",
@@ -1513,21 +1562,21 @@
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:8884d693-ec8c-4753-ae7d-cf558c6e2ddb"
+          "reference": "urn:uuid:50110759-048b-4488-b9fd-661c01271153"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855"
+          "reference": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -1579,7 +1628,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:8b82c8c6-15ef-4cb4-953a-285de2add116",
+      "fullUrl": "urn:uuid:7ae0fa0f-3e62-4065-b04d-26c63148d182",
       "resource": {
         "resourceType": "MedicationRequest",
         "id": "2",
@@ -1597,21 +1646,21 @@
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:f71ba681-3ac8-48af-a42b-8e79a3c87a3d"
+          "reference": "urn:uuid:6bab585a-9a5a-4488-8fb4-11e438966c04"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855"
+          "reference": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -1663,7 +1712,7 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:824fd099-7292-4c53-b4bb-cc57d457f050",
+      "fullUrl": "urn:uuid:58081440-67f2-47a4-bb96-35b66c313315",
       "resource": {
         "resourceType": "MedicationRequest",
         "id": "3",
@@ -1681,273 +1730,21 @@
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:165b1b43-8e6d-4872-9b53-97e434191de7"
+          "reference": "urn:uuid:9fcd7b24-a1fe-47bf-bdc4-4d3d0363bd9c"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:19b50eaf-da67-4e02-8b24-ad0e6936b855"
+          "reference": "urn:uuid:d98425e9-0ae6-44db-82eb-6b043fe442c1"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
-          }
-        ],
-        "dosageInstruction": [
-          {
-            "text": "Clopidogrel 75 mg by mouth once daily.",
-            "timing": {
-              "repeat": {
-                "frequency": 1,
-                "period": 1,
-                "periodUnit": "d"
-              },
-              "code": {
-                "coding": [
-                  {
-                    "system": "http://terminology.hl7.org/CodeSystem/v3-GTSAbbreviation",
-                    "code": "QD"
-                  }
-                ]
-              }
-            },
-            "route": {
-              "coding": [
-                {
-                  "system": "http://snomed.info/sct",
-                  "code": "26643006"
-                }
-              ]
-            },
-            "doseAndRate": [
-              {
-                "doseQuantity": {
-                  "value": 1,
-                  "unit": "{tbl}",
-                  "system": "http://unitsofmeasure.org",
-                  "code": "{tbl}"
-                }
-              }
-            ]
-          }
-        ],
-        "dispenseRequest": {
-          "expectedSupplyDuration": {
-            "value": 28,
-            "unit": "d",
-            "system": "http://unitsofmeasure.org",
-            "code": "d"
-          }
-        }
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:e8c00706-a04f-4940-8582-7e1cc6287c61",
-      "resource": {
-        "resourceType": "MedicationRequest",
-        "id": "4",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
-          ]
-        },
-        "identifier": [
-          {
-            "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "4"
-          }
-        ],
-        "status": "active",
-        "intent": "order",
-        "medicationReference": {
-          "reference": "urn:uuid:8884d693-ec8c-4753-ae7d-cf558c6e2ddb"
-        },
-        "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
-        },
-        "encounter": {
-          "reference": "urn:uuid:a4ab5101-f028-4578-ad07-ab3c97bcc9ea"
-        },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
-        "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
-        },
-        "reasonReference": [
-          {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
-          }
-        ],
-        "dosageInstruction": [
-          {
-            "text": "Metoprolol 25 mg by mouth twice daily.",
-            "timing": {
-              "repeat": {
-                "frequency": 2,
-                "period": 1,
-                "periodUnit": "d"
-              },
-              "code": {
-                "coding": [
-                  {
-                    "system": "http://terminology.hl7.org/CodeSystem/v3-GTSAbbreviation",
-                    "code": "BID"
-                  }
-                ]
-              }
-            },
-            "route": {
-              "coding": [
-                {
-                  "system": "http://snomed.info/sct",
-                  "code": "26643006"
-                }
-              ]
-            },
-            "doseAndRate": [
-              {
-                "doseQuantity": {
-                  "value": 1,
-                  "unit": "{tbl}",
-                  "system": "http://unitsofmeasure.org",
-                  "code": "{tbl}"
-                }
-              }
-            ]
-          }
-        ],
-        "dispenseRequest": {
-          "expectedSupplyDuration": {
-            "value": 28,
-            "unit": "d",
-            "system": "http://unitsofmeasure.org",
-            "code": "d"
-          }
-        }
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:6655f8bc-d112-43a9-9de1-572d8f3d4047",
-      "resource": {
-        "resourceType": "MedicationRequest",
-        "id": "5",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
-          ]
-        },
-        "identifier": [
-          {
-            "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "5"
-          }
-        ],
-        "status": "active",
-        "intent": "order",
-        "medicationReference": {
-          "reference": "urn:uuid:f71ba681-3ac8-48af-a42b-8e79a3c87a3d"
-        },
-        "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
-        },
-        "encounter": {
-          "reference": "urn:uuid:a4ab5101-f028-4578-ad07-ab3c97bcc9ea"
-        },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
-        "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
-        },
-        "reasonReference": [
-          {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
-          }
-        ],
-        "dosageInstruction": [
-          {
-            "text": "Aspirin 100 mg by mouth once daily.",
-            "timing": {
-              "repeat": {
-                "frequency": 1,
-                "period": 1,
-                "periodUnit": "d"
-              },
-              "code": {
-                "coding": [
-                  {
-                    "system": "http://terminology.hl7.org/CodeSystem/v3-GTSAbbreviation",
-                    "code": "QD"
-                  }
-                ]
-              }
-            },
-            "route": {
-              "coding": [
-                {
-                  "system": "http://snomed.info/sct",
-                  "code": "26643006"
-                }
-              ]
-            },
-            "doseAndRate": [
-              {
-                "doseQuantity": {
-                  "value": 1,
-                  "unit": "{tbl}",
-                  "system": "http://unitsofmeasure.org",
-                  "code": "{tbl}"
-                }
-              }
-            ]
-          }
-        ],
-        "dispenseRequest": {
-          "expectedSupplyDuration": {
-            "value": 28,
-            "unit": "d",
-            "system": "http://unitsofmeasure.org",
-            "code": "d"
-          }
-        }
-      }
-    },
-    {
-      "fullUrl": "urn:uuid:f079dc04-6130-4dd0-83a4-37aa38fc8e62",
-      "resource": {
-        "resourceType": "MedicationRequest",
-        "id": "6",
-        "meta": {
-          "profile": [
-            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
-          ]
-        },
-        "identifier": [
-          {
-            "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "6"
-          }
-        ],
-        "status": "active",
-        "intent": "order",
-        "medicationReference": {
-          "reference": "urn:uuid:fc910fcf-74f7-4ad9-9d3e-abad417ce2da"
-        },
-        "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
-        },
-        "encounter": {
-          "reference": "urn:uuid:a4ab5101-f028-4578-ad07-ab3c97bcc9ea"
-        },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
-        "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
-        },
-        "reasonReference": [
-          {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -1999,10 +1796,10 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:9a2ccdd0-874a-4cd6-9036-08488d0364de",
+      "fullUrl": "urn:uuid:dbc10589-c096-421f-ac61-a88b69cb8ec2",
       "resource": {
         "resourceType": "MedicationRequest",
-        "id": "7",
+        "id": "4",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
@@ -2011,27 +1808,27 @@
         "identifier": [
           {
             "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "7"
+            "value": "4"
           }
         ],
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:8884d693-ec8c-4753-ae7d-cf558c6e2ddb"
+          "reference": "urn:uuid:50110759-048b-4488-b9fd-661c01271153"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:b7d1c4e8-3941-4a55-b2af-a1a94710aaf8"
+          "reference": "urn:uuid:7ea8f8ad-02bc-4d8a-a127-2490b97eb28a"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -2083,10 +1880,10 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:f871b2f2-cc74-4a06-8149-acacc950775b",
+      "fullUrl": "urn:uuid:9f793750-658a-45c3-9e2c-52339aadc8b7",
       "resource": {
         "resourceType": "MedicationRequest",
-        "id": "8",
+        "id": "5",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
@@ -2095,27 +1892,27 @@
         "identifier": [
           {
             "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "8"
+            "value": "5"
           }
         ],
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:f71ba681-3ac8-48af-a42b-8e79a3c87a3d"
+          "reference": "urn:uuid:6bab585a-9a5a-4488-8fb4-11e438966c04"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:b7d1c4e8-3941-4a55-b2af-a1a94710aaf8"
+          "reference": "urn:uuid:7ea8f8ad-02bc-4d8a-a127-2490b97eb28a"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -2167,10 +1964,10 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:04e3cf76-fc2c-4bce-b11c-7970f2c846d4",
+      "fullUrl": "urn:uuid:4cdc0c7a-7076-4fd6-a795-6f437082e27a",
       "resource": {
         "resourceType": "MedicationRequest",
-        "id": "9",
+        "id": "6",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
@@ -2179,27 +1976,27 @@
         "identifier": [
           {
             "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "9"
+            "value": "6"
           }
         ],
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:165b1b43-8e6d-4872-9b53-97e434191de7"
+          "reference": "urn:uuid:6b261ce1-57da-4b82-8c78-2ac3795bbcc3"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:b7d1c4e8-3941-4a55-b2af-a1a94710aaf8"
+          "reference": "urn:uuid:7ea8f8ad-02bc-4d8a-a127-2490b97eb28a"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -2251,10 +2048,10 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:0fd441a2-5d94-426e-ad18-b8b3bb028032",
+      "fullUrl": "urn:uuid:ec88624a-257d-4199-9382-5233c67f653d",
       "resource": {
         "resourceType": "MedicationRequest",
-        "id": "10",
+        "id": "7",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
@@ -2263,27 +2060,27 @@
         "identifier": [
           {
             "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "10"
+            "value": "7"
           }
         ],
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:8884d693-ec8c-4753-ae7d-cf558c6e2ddb"
+          "reference": "urn:uuid:50110759-048b-4488-b9fd-661c01271153"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:ca6d54ce-8f74-4fd4-9ff2-c57df4c9d9b9"
+          "reference": "urn:uuid:8b239b8e-3ef2-4862-8767-7c185407fa57"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -2335,10 +2132,10 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:dd4911fe-cb54-45f8-9db6-e04e9a0d21aa",
+      "fullUrl": "urn:uuid:609b14b9-732b-41ed-9536-a5b30e593b7e",
       "resource": {
         "resourceType": "MedicationRequest",
-        "id": "11",
+        "id": "8",
         "meta": {
           "profile": [
             "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
@@ -2347,27 +2144,27 @@
         "identifier": [
           {
             "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
-            "value": "11"
+            "value": "8"
           }
         ],
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:f71ba681-3ac8-48af-a42b-8e79a3c87a3d"
+          "reference": "urn:uuid:6bab585a-9a5a-4488-8fb4-11e438966c04"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:ca6d54ce-8f74-4fd4-9ff2-c57df4c9d9b9"
+          "reference": "urn:uuid:8b239b8e-3ef2-4862-8767-7c185407fa57"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [
@@ -2419,7 +2216,259 @@
       }
     },
     {
-      "fullUrl": "urn:uuid:60a2c3b4-d773-4f13-ad33-7d66a7a23ce1",
+      "fullUrl": "urn:uuid:eb66d67a-de5d-4bdf-8a86-ba9f5abcfe5d",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "9",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
+            "value": "9"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "urn:uuid:6b261ce1-57da-4b82-8c78-2ac3795bbcc3"
+        },
+        "subject": {
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
+        },
+        "encounter": {
+          "reference": "urn:uuid:8b239b8e-3ef2-4862-8767-7c185407fa57"
+        },
+        "authoredOn": "2026-06-10T09:55:33.785Z",
+        "requester": {
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
+        },
+        "reasonReference": [
+          {
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
+          }
+        ],
+        "dosageInstruction": [
+          {
+            "text": "Clopidogrel 75 mg by mouth once daily.",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              },
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-GTSAbbreviation",
+                    "code": "QD"
+                  }
+                ]
+              }
+            },
+            "route": {
+              "coding": [
+                {
+                  "system": "http://snomed.info/sct",
+                  "code": "26643006"
+                }
+              ]
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "{tbl}",
+                  "system": "http://unitsofmeasure.org",
+                  "code": "{tbl}"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "d",
+            "system": "http://unitsofmeasure.org",
+            "code": "d"
+          }
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:89bac866-750f-4b7f-9ba2-c2a03c9a805e",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "10",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
+            "value": "10"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "urn:uuid:50110759-048b-4488-b9fd-661c01271153"
+        },
+        "subject": {
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
+        },
+        "encounter": {
+          "reference": "urn:uuid:05d4ad43-6b6c-4192-943b-78fd90fd9207"
+        },
+        "authoredOn": "2026-06-10T09:55:33.785Z",
+        "requester": {
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
+        },
+        "reasonReference": [
+          {
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
+          }
+        ],
+        "dosageInstruction": [
+          {
+            "text": "Metoprolol 25 mg by mouth twice daily.",
+            "timing": {
+              "repeat": {
+                "frequency": 2,
+                "period": 1,
+                "periodUnit": "d"
+              },
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-GTSAbbreviation",
+                    "code": "BID"
+                  }
+                ]
+              }
+            },
+            "route": {
+              "coding": [
+                {
+                  "system": "http://snomed.info/sct",
+                  "code": "26643006"
+                }
+              ]
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "{tbl}",
+                  "system": "http://unitsofmeasure.org",
+                  "code": "{tbl}"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "d",
+            "system": "http://unitsofmeasure.org",
+            "code": "d"
+          }
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ee3d5205-25a9-4261-8e28-6d97a19720c0",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "11",
+        "meta": {
+          "profile": [
+            "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore"
+          ]
+        },
+        "identifier": [
+          {
+            "system": "https://www.tph.mohw.gov.tw/fhir/medicationrequest",
+            "value": "11"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "medicationReference": {
+          "reference": "urn:uuid:6bab585a-9a5a-4488-8fb4-11e438966c04"
+        },
+        "subject": {
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
+        },
+        "encounter": {
+          "reference": "urn:uuid:05d4ad43-6b6c-4192-943b-78fd90fd9207"
+        },
+        "authoredOn": "2026-06-10T09:55:33.785Z",
+        "requester": {
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
+        },
+        "reasonReference": [
+          {
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
+          }
+        ],
+        "dosageInstruction": [
+          {
+            "text": "Aspirin 100 mg by mouth once daily.",
+            "timing": {
+              "repeat": {
+                "frequency": 1,
+                "period": 1,
+                "periodUnit": "d"
+              },
+              "code": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-GTSAbbreviation",
+                    "code": "QD"
+                  }
+                ]
+              }
+            },
+            "route": {
+              "coding": [
+                {
+                  "system": "http://snomed.info/sct",
+                  "code": "26643006"
+                }
+              ]
+            },
+            "doseAndRate": [
+              {
+                "doseQuantity": {
+                  "value": 1,
+                  "unit": "{tbl}",
+                  "system": "http://unitsofmeasure.org",
+                  "code": "{tbl}"
+                }
+              }
+            ]
+          }
+        ],
+        "dispenseRequest": {
+          "expectedSupplyDuration": {
+            "value": 28,
+            "unit": "d",
+            "system": "http://unitsofmeasure.org",
+            "code": "d"
+          }
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:856779a8-be55-40a9-939a-13e8a5ac19e5",
       "resource": {
         "resourceType": "MedicationRequest",
         "id": "12",
@@ -2437,21 +2486,21 @@
         "status": "active",
         "intent": "order",
         "medicationReference": {
-          "reference": "urn:uuid:fc910fcf-74f7-4ad9-9d3e-abad417ce2da"
+          "reference": "urn:uuid:9fcd7b24-a1fe-47bf-bdc4-4d3d0363bd9c"
         },
         "subject": {
-          "reference": "urn:uuid:fda8be2a-67db-412a-b673-1f7e6681886d"
+          "reference": "urn:uuid:9705c2fe-71a9-4943-a3dd-e845ce7b3c66"
         },
         "encounter": {
-          "reference": "urn:uuid:ca6d54ce-8f74-4fd4-9ff2-c57df4c9d9b9"
+          "reference": "urn:uuid:05d4ad43-6b6c-4192-943b-78fd90fd9207"
         },
-        "authoredOn": "2026-06-08T10:06:43.311Z",
+        "authoredOn": "2026-06-10T09:55:33.785Z",
         "requester": {
-          "reference": "urn:uuid:b88e7037-0b3a-43f9-8df1-eb3160b39110"
+          "reference": "urn:uuid:873ee94e-70f6-4f5e-b4d6-3bf36aad5449"
         },
         "reasonReference": [
           {
-            "reference": "urn:uuid:c363b218-0ca6-4a55-9515-5aef6349bbfb"
+            "reference": "urn:uuid:94363cac-338e-49c3-93b8-3a12c4c62c7e"
           }
         ],
         "dosageInstruction": [

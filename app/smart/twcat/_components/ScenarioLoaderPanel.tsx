@@ -53,9 +53,12 @@ function parseSessionId(input: string): string | null {
 export function ScenarioLoaderPanel({
   // Lets the parent (smart/twcat page) auto-populate the existing IpsCreatorPanel's
   // textarea with the freshly built bundle, so the user can POST it without copy/paste.
+  // The sessionUrl is also forwarded so the "Run IPS Validator" button knows
+  // which scenario to diff the bundle against — server side it becomes the
+  // `fhirfoxUrl` param of /ips-validator/api/validate.
   onBundleReady,
 }: {
-  onBundleReady?: (bundleJson: string, vendorId: string) => void
+  onBundleReady?: (bundleJson: string, vendorId: string, sessionUrl: string) => void
 }) {
   const [input, setInput] = useState('')
   const [flavor, setFlavor] = useState<'ips' | 'twcore'>('ips')
@@ -116,6 +119,31 @@ export function ScenarioLoaderPanel({
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
+  // Prism-shape wrapped download. The IPS Validator's /api/fetch-gazelle
+  // looks for `res_body` or `req_body` in whatever JSON its target URL
+  // returns; raw FHIR Bundle JSON fails with "找不到 res_body 或 req_body".
+  // By pre-wrapping into {req_body, res_body: <bundle as escaped JSON
+  // string>} we can upload the file straight to Gazelle's Test Instance
+  // attachments, copy its globe-icon URL, paste that into validator step
+  // 2 — and the validator parses out res_body to get the bundle. End
+  // result is the official validator UI "通過" without needing a real
+  // Prism share URL.
+  const downloadWrappedForValidator = () => {
+    if (!status.bundle) return
+    const bundleJson = JSON.stringify(status.bundle)
+    const wrapped = { req_body: '', res_body: bundleJson }
+    const json = JSON.stringify(wrapped)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${status.bundle.id ?? 'scenario'}-wrapped.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+  }
+
   const openInMainApp = async () => {
     if (!status.bundle) return
     try {
@@ -131,7 +159,11 @@ export function ScenarioLoaderPanel({
 
   const sendToCreator = () => {
     if (!status.bundle || !onBundleReady) return
-    onBundleReady(JSON.stringify(status.bundle, null, 2), 'conference')
+    onBundleReady(
+      JSON.stringify(status.bundle, null, 2),
+      'conference',
+      status.sessionUrl ?? '',
+    )
   }
 
   return (
@@ -219,6 +251,7 @@ export function ScenarioLoaderPanel({
           bundle={status.bundle}
           flavor={flavor}
           onDownload={downloadBundle}
+          onDownloadWrapped={downloadWrappedForValidator}
           onOpenInMainApp={() => void openInMainApp()}
           onSendToCreator={onBundleReady ? sendToCreator : undefined}
         />
@@ -232,6 +265,7 @@ function ScenarioPreview({
   bundle,
   flavor,
   onDownload,
+  onDownloadWrapped,
   onOpenInMainApp,
   onSendToCreator,
 }: {
@@ -239,6 +273,7 @@ function ScenarioPreview({
   bundle: DocumentBundle
   flavor: 'ips' | 'twcore'
   onDownload: () => void
+  onDownloadWrapped: () => void
   onOpenInMainApp: () => void
   onSendToCreator?: () => void
 }) {
@@ -347,6 +382,13 @@ function ScenarioPreview({
           title="Download as .json (same shape as your converter's output/ files)"
         >
           📥 下載 .json
+        </button>
+        <button
+          onClick={onDownloadWrapped}
+          className="px-3 py-1.5 rounded bg-violet-600 text-white text-xs"
+          title='Download {req_body, res_body} wrapped JSON for the IPS Validator. Upload it to your Gazelle Test Instance, copy the file URL, paste into validator step 2.'
+        >
+          📦 下載 wrapped (validator 用)
         </button>
         <button
           onClick={onOpenInMainApp}

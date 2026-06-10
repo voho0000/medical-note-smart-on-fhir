@@ -123,6 +123,22 @@ type IpsPostStatus = {
   postedAt?: number
 }
 
+// IPS Validator direct-call status. The validator API at
+// twcat-gazelle.dicom.org.tw/ips-validator/api/validate accepts the bundle
+// as a participantJson string and returns pass/warning/fail counts,
+// resourceCounts diff vs the scenario expected, and a tree of
+// validationReports with rawErrors[] explaining each failure. Calling it
+// directly bypasses the Prism share-URL dance for local dev / debug.
+type IpsValidateStatus = {
+  running: boolean
+  httpStatus?: number
+  stats?: { pass: number; warning: number; fail: number }
+  resourceCounts?: Array<{ section: string; expected: number; actual: number }>
+  failures?: string[]
+  error?: string
+  validatedAt?: number
+}
+
 // fhirclient writes its session state under sessionStorage[SMART_KEY] →
 // pointer to another key with the actual tokenResponse JSON. We only want
 // to display, not call fhirclient API just for inspection.
@@ -183,6 +199,15 @@ export default function TwcatPickerPage() {
   // document submission). For Level III Creator validation we need exactly
   // one POST whose share link the validator can ingest.
   const [ipsPostStatus, setIpsPostStatus] = useState<Record<string, IpsPostStatus>>({})
+  // Per-vendor validator-API result. Independent of ipsPostStatus because
+  // the user may want to validate the bundle locally first (no Prism
+  // dependency) before committing to a real POST.
+  const [ipsValidateStatus, setIpsValidateStatus] = useState<Record<string, IpsValidateStatus>>({})
+  // Per-vendor: which scenario URL to send as `fhirfoxUrl` to the validator.
+  // Defaults to the last scenario the user loaded via ScenarioLoaderPanel.
+  // The validator uses this to fetch the "expected" data to diff against;
+  // mismatched session = mismatched expectations.
+  const [ipsScenarioUrl, setIpsScenarioUrl] = useState<Record<string, string>>({})
   // Sticky textarea content per vendor so users don't lose paste while
   // switching tabs / clicking other vendor cards.
   const [ipsBundleText, setIpsBundleText] = useState<Record<string, string>>({})
@@ -1012,6 +1037,132 @@ export default function TwcatPickerPage() {
   }
 
   /**
+   * Call the conference's IPS Validator API directly with the current
+   * Bundle JSON. Bypasses the Prism share-URL ceremony entirely — the
+   * validator's `/api/validate` endpoint accepts {fhirfoxUrl,
+   * participantJson, gazelleUrl} and returns pass/warning/fail counts
+   * plus a tree of validationReports. We surface the failure
+   * rawErrors[] so the user can fix the bundle locally before a real
+   * test-instance submission.
+   *
+   * `scenarioUrl` is the FHIRfox session URL the validator should diff
+   * against. `gazelleUrl` is required by the API contract but its
+   * content is ignored when participantJson is passed inline, so we
+   * send a placeholder.
+   */
+  const runIpsValidator = async (
+    vendor: TwcatVendor,
+    bundleText: string,
+    scenarioUrl: string,
+  ) => {
+    setIpsValidateStatus((prev) => ({ ...prev, [vendor.id]: { running: true } }))
+    if (!scenarioUrl.trim()) {
+      setIpsValidateStatus((prev) => ({
+        ...prev,
+        [vendor.id]: { running: false, error: '需要 FHIRfox session URL 才能比對 expected/actual' },
+      }))
+      return
+    }
+    let bundle: { resourceType?: string }
+    try {
+      bundle = JSON.parse(bundleText)
+    } catch (e) {
+      setIpsValidateStatus((prev) => ({
+        ...prev,
+        [vendor.id]: { running: false, error: `JSON parse error: ${e instanceof Error ? e.message : String(e)}` },
+      }))
+      return
+    }
+    if (bundle?.resourceType !== 'Bundle') {
+      setIpsValidateStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          error: `Expected resourceType="Bundle", got "${bundle?.resourceType ?? '(none)'}"`,
+        },
+      }))
+      return
+    }
+
+    const validatorUrl = 'https://twcat-gazelle.dicom.org.tw/ips-validator/api/validate'
+    try {
+      const body = JSON.stringify({
+        fhirfoxUrl: scenarioUrl.trim(),
+        gazelleUrl: 'https://twcat-gazelle.dicom.org.tw/prism/view/c/inline',
+        // validator's server uses participantJson as the authoritative
+        // bundle — gazelleUrl is only consulted when participantJson is
+        // empty. So this lets us validate without a real Prism URL.
+        participantJson: bundleText,
+      })
+      const res = await fetch(twcatProxyUrl(validatorUrl), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
+      const json = (await res.json()) as {
+        success?: boolean
+        error?: string
+        stats?: { pass: number; warning: number; fail: number }
+        resourceCounts?: Array<{ section: string; expected: number; actual: number }>
+        validationReports?: unknown
+      }
+      if (!json.success) {
+        setIpsValidateStatus((prev) => ({
+          ...prev,
+          [vendor.id]: {
+            running: false,
+            httpStatus: res.status,
+            error: json.error ?? `validator returned success=false (HTTP ${res.status})`,
+          },
+        }))
+        return
+      }
+      // Flatten the validationReports tree into a list of failure
+      // messages. rawErrors[].raw carries the "預期 / 實際" diff;
+      // friendly is the localised version. Both useful.
+      const failures: string[] = []
+      const walk = (node: unknown) => {
+        if (Array.isArray(node)) {
+          for (const n of node) walk(n)
+          return
+        }
+        if (node && typeof node === 'object') {
+          const obj = node as {
+            rawErrors?: Array<{ raw?: string; friendly?: string }>
+            [k: string]: unknown
+          }
+          if (Array.isArray(obj.rawErrors)) {
+            for (const e of obj.rawErrors) {
+              if (e?.raw) failures.push(e.raw)
+            }
+          }
+          for (const k of Object.keys(obj)) walk(obj[k])
+        }
+      }
+      walk(json.validationReports)
+      setIpsValidateStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          httpStatus: res.status,
+          stats: json.stats,
+          resourceCounts: json.resourceCounts,
+          failures,
+          validatedAt: Date.now(),
+        },
+      }))
+    } catch (e) {
+      setIpsValidateStatus((prev) => ({
+        ...prev,
+        [vendor.id]: {
+          running: false,
+          error: e instanceof Error ? e.message : String(e),
+        },
+      }))
+    }
+  }
+
+  /**
    * Open the inline edit form for `vendor`. Pre-fills with the currently
    * effective values (preset + override merged for presets, or the custom
    * vendor's own values).
@@ -1372,8 +1523,9 @@ export default function TwcatPickerPage() {
       </section>
 
       <ScenarioLoaderPanel
-        onBundleReady={(json, vendorId) => {
+        onBundleReady={(json, vendorId, sessionUrl) => {
           setIpsBundleText((prev) => ({ ...prev, [vendorId]: json }))
+          setIpsScenarioUrl((prev) => ({ ...prev, [vendorId]: sessionUrl }))
           // Smooth-scroll into view so the user sees the freshly populated
           // textarea instead of wondering where their bundle went.
           requestAnimationFrame(() => {
@@ -1388,8 +1540,12 @@ export default function TwcatPickerPage() {
         vendors={allVendors}
         bundleText={ipsBundleText}
         setBundleText={setIpsBundleText}
+        scenarioUrl={ipsScenarioUrl}
+        setScenarioUrl={setIpsScenarioUrl}
         status={ipsPostStatus}
+        validateStatus={ipsValidateStatus}
         onSubmit={submitIpsDocument}
+        onValidate={runIpsValidator}
       />
 
       <section className="rounded border p-4 space-y-3">
@@ -1751,14 +1907,22 @@ function IpsCreatorPanel({
   vendors,
   bundleText,
   setBundleText,
+  scenarioUrl,
+  setScenarioUrl,
   status,
+  validateStatus,
   onSubmit,
+  onValidate,
 }: {
   vendors: TwcatVendor[]
   bundleText: Record<string, string>
   setBundleText: Dispatch<SetStateAction<Record<string, string>>>
+  scenarioUrl: Record<string, string>
+  setScenarioUrl: Dispatch<SetStateAction<Record<string, string>>>
   status: Record<string, IpsPostStatus>
+  validateStatus: Record<string, IpsValidateStatus>
   onSubmit: (vendor: TwcatVendor, jsonText: string) => void
+  onValidate: (vendor: TwcatVendor, jsonText: string, scenarioUrl: string) => void
 }) {
   // Default to 大會 (conference) — Track #4 IPS Creator validation is
   // expected to submit against the conference HAPI. If user has removed
@@ -1768,7 +1932,9 @@ function IpsCreatorPanel({
   })
   const vendor = vendors.find((v) => v.id === vendorId)
   const text = bundleText[vendorId] ?? ""
+  const scenario = scenarioUrl[vendorId] ?? ""
   const cur = vendor ? status[vendor.id] : undefined
+  const val = vendor ? validateStatus[vendor.id] : undefined
 
   // Cheap inline parse for the preview chip — same JSON.parse the submit
   // handler does, just throws away parse errors here since the submit
@@ -1843,6 +2009,21 @@ function IpsCreatorPanel({
         />
       </div>
 
+      {/* Scenario URL is only needed for the Run IPS Validator path —
+          the validator diffs the bundle against the scenario's expected
+          data. Populated automatically by the loader above when the
+          user clicks Send to IPS Creator. */}
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center text-sm">
+        <label className="text-muted-foreground">FHIRfox session URL</label>
+        <input
+          type="text"
+          className="rounded border p-1.5 font-mono text-xs bg-background"
+          placeholder="https://twcat-fhirfox.dicom.org.tw/sessions/cwgtcaq  (validator needs this to diff)"
+          value={scenario}
+          onChange={(e) => setScenarioUrl((prev) => ({ ...prev, [vendorId]: e.target.value }))}
+        />
+      </div>
+
       <div className="flex flex-wrap gap-2 items-center">
         <button
           onClick={() => vendor && onSubmit(vendor, text)}
@@ -1858,6 +2039,19 @@ function IpsCreatorPanel({
         >
           {cur?.running ? "Posting…" : "📤 POST IPS document"}
         </button>
+        <button
+          onClick={() => vendor && onValidate(vendor, text, scenario)}
+          disabled={!vendor || !text.trim() || val?.running || summary?.ok === false || !scenario.trim()}
+          className="px-3 py-1.5 rounded bg-violet-600 text-white text-sm disabled:opacity-50"
+          title={
+            !scenario.trim()
+              ? "Need a FHIRfox session URL to diff against"
+              : "Call /ips-validator/api/validate directly — no Prism needed"
+          }
+        >
+          {val?.running ? "Validating…" : "🧪 Run IPS Validator"}
+        </button>
+        <CopyBypassButton bundleText={text} scenarioUrl={scenario} disabled={!text.trim() || summary?.ok === false} />
         {text && !cur?.running && (
           <button
             onClick={() => setBundleText((prev) => ({ ...prev, [vendorId]: "" }))}
@@ -1869,7 +2063,121 @@ function IpsCreatorPanel({
       </div>
 
       {cur && !cur.running && <IpsCreatorResultPanel status={cur} />}
+      {val && !val.running && <IpsValidatorResultPanel status={val} />}
     </section>
+  )
+}
+
+/**
+ * Builds a JS console snippet that — when pasted into the IPS Validator
+ * page's DevTools console — writes the user's Bundle JSON into
+ * localStorage under the keys the validator's Svelte mount code reads
+ * (`ips_val_participantJson` + `ips_val_fhirfoxUrl` + `ips_val_gazelleUrl`).
+ * On reload, the validator skips its step-2 fetch-gazelle round-trip and
+ * the "執行比對驗證" button goes live with the bundle pre-loaded.
+ *
+ * This is the only path we've found to get the *official* validator UI
+ * to show PASS without going through Prism (which doesn't capture our
+ * dev-proxy POSTs) and without uploading the bundle to a public paste
+ * service (the bundle carries patient-PII fields). The user pastes the
+ * snippet in their own browser tab — nothing leaves their machine.
+ */
+function CopyBypassButton({
+  bundleText,
+  scenarioUrl,
+  disabled,
+}: {
+  bundleText: string
+  scenarioUrl: string
+  disabled: boolean
+}) {
+  const [copied, setCopied] = useState(false)
+
+  const onClick = async () => {
+    // JSON.stringify on the bundle text produces a valid JS string literal
+    // — escapes every \n, ", \ — so we can embed it inline in the snippet
+    // safely regardless of what XHTML/Chinese content the narrative
+    // contains. The bundle text is ALREADY a JSON string; we stringify it
+    // again to get the JS-string form.
+    const snippet = `// Paste into IPS Validator DevTools console (https://twcat-gazelle.dicom.org.tw/ips-validator/).
+// Bypasses step 2 by writing the bundle directly into the validator's localStorage.
+// On reload, "已連結" appears and 步驟三 button activates.
+(() => {
+  localStorage.setItem('ips_val_participantJson', ${JSON.stringify(bundleText)});
+  localStorage.setItem('ips_val_fhirfoxUrl', ${JSON.stringify(scenarioUrl)});
+  localStorage.setItem('ips_val_gazelleUrl', 'manual-bypass');
+  location.reload();
+})();`
+    try {
+      await navigator.clipboard.writeText(snippet)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      // Fallback: open a modal-ish prompt so the user can copy manually
+      // if clipboard API is unavailable (Safari restricted contexts).
+      window.prompt('Copy this snippet and paste into validator console:', snippet)
+    }
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="px-3 py-1.5 rounded border border-violet-300 bg-violet-50 text-violet-900 text-sm disabled:opacity-50 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-100"
+      title="Copy a JS snippet to paste in the IPS Validator's DevTools console — bypasses step 2 and pre-loads the bundle into the official UI for a real PASS screenshot."
+    >
+      {copied ? '✓ Copied — paste in validator F12 console' : '📋 Copy validator bypass snippet'}
+    </button>
+  )
+}
+
+function IpsValidatorResultPanel({ status }: { status: IpsValidateStatus }) {
+  const allPass = status.stats && status.stats.fail === 0 && status.stats.warning === 0
+  return (
+    <div className="rounded bg-background border p-3 space-y-2 text-xs">
+      {status.error && (
+        <div className="text-destructive font-mono">⚠ {status.error}</div>
+      )}
+      {status.stats && (
+        <div className="flex items-baseline gap-4 font-sans">
+          <span className={`text-lg font-semibold ${allPass ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {allPass ? '✅ ALL PASS' : '⚠ Has failures'}
+          </span>
+          <span className="font-mono">
+            pass={status.stats.pass} · warning={status.stats.warning} · fail={status.stats.fail}
+          </span>
+        </div>
+      )}
+      {status.resourceCounts && status.resourceCounts.length > 0 && (
+        <div className="font-mono">
+          <div className="text-muted-foreground font-sans mb-1">Resource counts (actual / expected):</div>
+          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-0.5 max-w-md">
+            {status.resourceCounts.map((c, i) => {
+              const ok = c.actual === c.expected
+              return (
+                <div key={i} className={`grid grid-cols-subgrid col-span-3 ${ok ? '' : 'text-amber-700'}`}>
+                  <span className="truncate">{c.section}</span>
+                  <span className="text-right">{c.actual}</span>
+                  <span className="text-muted-foreground">/ {c.expected}{ok ? ' ✓' : ' ✗'}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      {status.failures && status.failures.length > 0 && (
+        <details className="font-mono">
+          <summary className="cursor-pointer text-amber-800 dark:text-amber-400">
+            🔍 {status.failures.length} failure{status.failures.length === 1 ? '' : 's'} — click to expand
+          </summary>
+          <ul className="mt-2 space-y-0.5 max-h-80 overflow-auto bg-muted/30 p-2 rounded">
+            {status.failures.map((f, i) => (
+              <li key={i} className="text-[10px] break-words">{f}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   )
 }
 
