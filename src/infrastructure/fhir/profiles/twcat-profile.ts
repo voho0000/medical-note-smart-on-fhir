@@ -63,6 +63,21 @@ const SMART_V2_DEFAULT_SCOPE =
 
 export const TWCAT_PRESET_VENDORS: readonly TwcatVendor[] = [
   {
+    id: 'conference',
+    name: '大會 Hapi FHIR',
+    iss: 'https://twcat-fhirsrv.dicom.org.tw/fhir',
+    clientId: 'hapifhir',
+    clientSecret: 'cMn3GsZa0Rnb7pWubeaIqerxyS7OgOi8',
+    authMethod: 'client_credentials',
+    tokenEndpoint:
+      'https://twcat-oauthsrv.dicom.org.tw/realms/twcat2026/protocol/openid-connect/token',
+    scope: '',
+    smartScope:
+      'openid fhirUser launch/patient system/Patient.read system/Observation.read offline_access',
+    notes:
+      '大會 (conference) server — shared across tracks #1, #2, #3 IUA, #4. LOINC-coded vitals, multiple patients (王小明 has 心率 + 體溫). No Participant Token, no Partition header.',
+  },
+  {
     id: 'daikon',
     name: '玳康 Daikon (Hapi FHIR)',
     iss: 'https://twcat-services.dicom.org.tw:10012/fhir',
