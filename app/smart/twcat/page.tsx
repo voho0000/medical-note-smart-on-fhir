@@ -14,6 +14,7 @@ import {
   twcatProxyUrl,
   installParticipantTokenFetch,
   synthesizeSmartSession,
+  extractTenantId,
   type TwcatVendor,
   type FlowLogEntry,
 } from "@/src/infrastructure/fhir/profiles/twcat-profile"
@@ -476,6 +477,11 @@ export default function TwcatPickerPage() {
       }
       const pt = ParticipantTokenStore.get()
       if (pt) requestHeaders["X-Participant-Token"] = pt
+      // HAPI Partitioning auto-route (智群 OCTOFLOW): the bearer carries
+      // tenant_id; copy it into X-Partition-ID. Other vendors' bearers don't
+      // have the claim, so this is a no-op for them.
+      const tid = extractTenantId(`Bearer ${bearer}`)
+      if (tid) requestHeaders["X-Partition-ID"] = tid
       const requestRecord = {
         method: "GET",
         url,
@@ -672,6 +678,13 @@ export default function TwcatPickerPage() {
     const pt = ParticipantTokenStore.get()
     if (pt) ptHeader["X-Participant-Token"] = pt
 
+    // Same HAPI Partitioning auto-route as runQuickTest. Vendors without
+    // tenant_id in the bearer get nothing added.
+    const partitionTid = extractTenantId(`Bearer ${bearer}`)
+    const partitionHeader: Record<string, string> = partitionTid
+      ? { "X-Partition-ID": partitionTid }
+      : {}
+
     const results: Array<{ status: number; location?: string; outcome?: string }> = []
     for (const r of resources) {
       const url = `${base}/${r.resourceType}`
@@ -683,6 +696,7 @@ export default function TwcatPickerPage() {
             "Content-Type": "application/fhir+json",
             Accept: "application/fhir+json",
             ...ptHeader,
+            ...partitionHeader,
           },
           body: JSON.stringify(r),
         })

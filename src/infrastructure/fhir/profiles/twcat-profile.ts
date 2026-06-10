@@ -97,6 +97,24 @@ export const TWCAT_PRESET_VENDORS: readonly TwcatVendor[] = [
     notes: 'OIDC + client_credentials. Token = 5 min. Verified by 同事 curl. No Participant Token needed.',
   },
   {
+    id: 'sgsc',
+    name: '智群 OCTOFLOW',
+    iss: 'https://twcat-services.dicom.org.tw:10013/fhir',
+    clientId: 'sgsc-track3-smart-app',
+    clientSecret: 'secret',
+    authMethod: 'client_credentials',
+    // NOTE: token endpoint is NOT under /fhir/.well-known/. That URL on the
+    // sheet is the SMART discovery doc; the actual /token sits under /connect/.
+    tokenEndpoint: 'https://twcat-services.dicom.org.tw:10013/connect/token',
+    scope: 'system/*.rs',
+    // SMART v2 user-flow scope (public client `gazelle-smart-authcode-partner`
+    // available too — switch via Edit if you want PKCE-only flow).
+    smartScope:
+      'openid fhirUser launch/patient system/Patient.read system/Observation.read offline_access',
+    notes:
+      'HAPI Partitioning enabled — the wrapper auto-adds X-Partition-ID from the bearer\'s tenant_id claim. Bearer scope: system/*.rs. Patient + Observation + Condition + MedicationRequest all return data.',
+  },
+  {
     id: 'esi',
     name: '商之器 EBM (fhir)',
     iss: 'https://twcat-services.dicom.org.tw:10051/fhir',
@@ -302,6 +320,37 @@ export function resolveVendorByIss(iss: string): TwcatVendor | null {
   return null
 }
 
+/**
+ * Decode a JWT payload and return its `tenant_id` claim (if any). Used to
+ * auto-set X-Partition-ID for HAPI Partitioning servers like 智群 OCTOFLOW
+ * where the partition is baked into the OAuth bearer. Returns null when the
+ * token isn't a JWT or doesn't carry a tenant claim — in that case the
+ * caller should skip adding the partition header.
+ *
+ * No signature verification (we don't have the public key, and we're only
+ * reading our OWN bearer to copy a claim into a header — not authenticating
+ * a remote party).
+ */
+export function extractTenantId(authHeader: string | null | undefined): string | null {
+  if (!authHeader) return null
+  const m = authHeader.match(/^Bearer\s+(.+)$/i)
+  if (!m) return null
+  const token = m[1]
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = payload + '='.repeat((4 - (payload.length % 4)) % 4)
+    const decoded = typeof atob === 'function' ? atob(padded) : Buffer.from(padded, 'base64').toString()
+    const claims = JSON.parse(decoded)
+    const tid = claims?.tenant_id
+    if (tid === undefined || tid === null || tid === '') return null
+    return String(tid)
+  } catch {
+    return null
+  }
+}
+
 /** True if a URL points at any TWCAT proxy host. */
 export function isTwcatHost(host: string): boolean {
   return (
@@ -500,6 +549,14 @@ export function installParticipantTokenFetch() {
       if (discoveryBearer) {
         headers.set('Authorization', `Bearer ${discoveryBearer}`)
       }
+    }
+    // HAPI Partitioning vendors (e.g. 智群 OCTOFLOW) require X-Partition-ID
+    // matching the tenant baked into the bearer. We auto-extract from the
+    // JWT we're about to send; vendors that don't use partitioning issue
+    // tokens with no tenant_id claim, so the header is simply not added.
+    if (!headers.has('X-Partition-ID')) {
+      const tid = extractTenantId(headers.get('Authorization'))
+      if (tid) headers.set('X-Partition-ID', tid)
     }
 
     const proxyUrl = `/api/twcat-proxy?upstream=${encodeURIComponent(urlObj.toString())}`
