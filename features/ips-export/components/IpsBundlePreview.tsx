@@ -1,11 +1,11 @@
 "use client"
 
 import { useMemo, useState } from 'react'
-import { BadgeCheck, CheckCircle2, ChevronDown, ChevronRight, XCircle } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, ChevronDown, ChevronRight, Sparkles, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { IpsSectionPreview } from './IpsSectionPreview'
-import { SYSTEM } from '../utils/ips-constants'
+import { INFERENCE_TAG, SYSTEM } from '../utils/ips-constants'
 import type { IpsBundle, IpsCompositionSection } from '../utils/ips-types'
 import type { ValidationResult } from '../utils/ips-lite-validator'
 
@@ -33,6 +33,28 @@ export function IpsBundlePreview({ bundle, validation }: IpsBundlePreviewProps) 
       const r = e.resource as { resourceType?: string; code?: { coding?: Array<{ system?: string }> } }
       if (r?.resourceType !== 'Condition') continue
       if ((r.code?.coding ?? []).some((cd) => cd?.system === SYSTEM.snomed)) n++
+    }
+    return n
+  }, [bundle])
+
+  // Count Problem List conditions that originated from user-confirmed AI
+  // inference (carry the `ai-inferred` meta.tag). These are surfaced separately
+  // so reviewers can see, at a glance, how much of the exported problem list was
+  // synthesized rather than ingested verbatim from the source records.
+  const aiInferredCount = useMemo(() => {
+    let n = 0
+    for (const e of bundle.entry ?? []) {
+      const r = e.resource as {
+        resourceType?: string
+        meta?: { tag?: Array<{ system?: string; code?: string }> }
+      }
+      if (r?.resourceType !== 'Condition') continue
+      if (
+        (r.meta?.tag ?? []).some(
+          (tg) => tg?.system === INFERENCE_TAG.system && tg?.code === INFERENCE_TAG.code,
+        )
+      )
+        n++
     }
     return n
   }, [bundle])
@@ -84,6 +106,14 @@ export function IpsBundlePreview({ bundle, validation }: IpsBundlePreviewProps) 
         <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
           <BadgeCheck className="h-4 w-4 shrink-0" />
           <span>{x.snomedCoded.replace('{count}', String(snomedCodedCount))}</span>
+        </div>
+      )}
+
+      {/* AI-inferred (user-confirmed) problem indicator (Phase 2.2) */}
+      {aiInferredCount > 0 && (
+        <div className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          <span>{x.aiInferred.replace('{count}', String(aiInferredCount))}</span>
         </div>
       )}
 

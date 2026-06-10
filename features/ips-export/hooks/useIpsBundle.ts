@@ -9,6 +9,7 @@ import { buildIpsBundle, type IpsSectionLabels } from '../utils/ips-builder'
 import { curateForIps } from '../utils/ips-curation'
 import { validateIpsBundle, type ValidationResult } from '../utils/ips-lite-validator'
 import type { IpsBundle } from '../utils/ips-types'
+import type { ConditionEntity } from '@/src/core/entities/clinical-data.entity'
 
 export interface UseIpsBundleResult {
   bundle: IpsBundle | null
@@ -23,8 +24,14 @@ export interface UseIpsBundleResult {
 /**
  * Build a (memoized) IPS document Bundle from the clinical data currently loaded
  * in the app, plus a lite structural validation. Pure assembly — no LLM.
+ *
+ * `extraConditions` lets a caller merge synthetic conditions (Phase 2.2 — the
+ * user-CONFIRMED LLM-inferred problems) into the Problem List before the bundle
+ * is built. They flow through the EXACT same mappers as source conditions
+ * (dual-coding via `_sct`, `ai-inferred` meta.tag via `_inferred`), so there is
+ * no FHIR-layer special-casing. Default `[]` ⇒ byte-identical to the pure path.
  */
-export function useIpsBundle(): UseIpsBundleResult {
+export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBundleResult {
   const { t } = useLanguage()
   const { data, isLoading: dataLoading, error } = useClinicalDataQuery()
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
@@ -57,8 +64,14 @@ export function useIpsBundle(): UseIpsBundleResult {
 
   const bundle = useMemo<IpsBundle | null>(() => {
     if (!curated) return null
-    return buildIpsBundle({ patient: patient ?? null, data: curated, labels })
-  }, [curated, patient, labels])
+    // Merge confirmed inferred problems into the Problem List. When the caller
+    // passes none, this is the same object shape as before (empty spread).
+    const merged =
+      extraConditions.length > 0
+        ? { ...curated, conditions: [...curated.conditions, ...extraConditions] }
+        : curated
+    return buildIpsBundle({ patient: patient ?? null, data: merged, labels })
+  }, [curated, patient, labels, extraConditions])
 
   const validation = useMemo<ValidationResult | null>(
     () => (bundle ? validateIpsBundle(bundle) : null),

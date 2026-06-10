@@ -27,7 +27,7 @@ import type {
   IpsBundleEntry,
   SectionMapResult,
 } from './ips-types'
-import { IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
+import { INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
 import { formatDate, makeEntry } from './ips-helpers'
 
 // ---------------------------------------------------------------------------
@@ -260,7 +260,13 @@ export function mapProblemList(conditions: ConditionEntity[], patientRef: string
   const entries = conditions.map((c) => {
     const resource: FhirResource = {
       resourceType: 'Condition',
-      meta: { profile: [IPS_PROFILES.condition] },
+      meta: {
+        profile: [IPS_PROFILES.condition],
+        // Phase 2.2 — flag a confirmed AI-inferred problem for downstream audit.
+        ...(c._inferred
+          ? { tag: [{ system: INFERENCE_TAG.system, code: INFERENCE_TAG.code, display: INFERENCE_TAG.display }] }
+          : {}),
+      },
       clinicalStatus: conditionClinicalStatus(c.clinicalStatus),
       ...(c.verificationStatus
         ? {

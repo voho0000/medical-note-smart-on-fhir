@@ -1,19 +1,35 @@
 "use client"
 
+import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { FileOutput, Loader2 } from 'lucide-react'
 import { CARD_BORDER_CLASSES } from '@/src/shared/config/ui-theme.config'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useIpsBundle } from './hooks/useIpsBundle'
 import { useIpsExport } from './hooks/useIpsExport'
+import { useInferredProblems } from './hooks/useInferredProblems'
+import { inferredToCondition } from './utils/inference-engine'
 import { IpsExportActions } from './components/IpsExportActions'
 import { IpsBundlePreview } from './components/IpsBundlePreview'
+import { InferredProblemsReview } from './components/InferredProblemsReview'
 
 export default function IpsExportFeature() {
   const { t } = useLanguage()
   const x = t.ipsExport
-  const { bundle, validation, isLoading, error, hasPatient, resourceCount } = useIpsBundle()
   const { download, copy, copied, copyError } = useIpsExport()
+
+  // Phase 2.2b — async LLM problem-list inference runs as a side-channel. Only
+  // the user-CONFIRMED suggestions are turned into synthetic conditions and
+  // merged into the bundle; nothing reaches the export without a checkbox click.
+  const [llmEnabled, setLlmEnabled] = useState(false)
+  const inferred = useInferredProblems()
+  const confirmedConditions = useMemo(
+    () => inferred.confirmed.map(inferredToCondition),
+    [inferred.confirmed],
+  )
+
+  const { bundle, validation, isLoading, error, hasPatient, resourceCount } =
+    useIpsBundle(confirmedConditions)
 
   // Loading clinical data
   if (isLoading) {
@@ -66,7 +82,23 @@ export default function IpsExportFeature() {
         copied={copied}
         copyError={copyError}
         disabled={!bundle}
+        llmEnabled={llmEnabled}
+        onToggleLlm={setLlmEnabled}
+        llmAvailable={inferred.available}
       />
+
+      {llmEnabled && (
+        <InferredProblemsReview
+          status={inferred.status}
+          problems={inferred.problems}
+          confirmedIds={inferred.confirmedIds}
+          confirmedCount={inferred.confirmedCount}
+          available={inferred.available}
+          error={inferred.error}
+          onRun={inferred.run}
+          onToggle={inferred.toggleConfirm}
+        />
+      )}
 
       <IpsBundlePreview bundle={bundle} validation={validation} />
     </div>

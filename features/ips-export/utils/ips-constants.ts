@@ -47,6 +47,16 @@ export const SYSTEM = {
   absentUnknown: 'http://hl7.org/fhir/uv/ips/CodeSystem/absent-unknown-uv-ips',
 } as const
 
+// Provenance tag for an LLM-INFERRED, user-confirmed problem (Phase 2.2). Emitted
+// as Condition.meta.tag so a downstream reader can tell an AI-synthesized problem
+// apart from one that came straight from the source FHIR. App-local namespace —
+// not an HL7-registered system.
+export const INFERENCE_TAG = {
+  system: 'urn:ips:inference',
+  code: 'ai-inferred',
+  display: 'AI-inferred problem (user-confirmed)',
+} as const
+
 // Composition.type — "Patient summary Document"
 export const COMPOSITION_TYPE_LOINC = '60591-5'
 

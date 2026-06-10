@@ -1,6 +1,6 @@
 import { inferredToCondition } from '@/features/ips-export/utils/inference-engine'
 import { buildIpsBundle } from '@/features/ips-export/utils/ips-builder'
-import { IPS_SECTION, SYSTEM } from '@/features/ips-export/utils/ips-constants'
+import { INFERENCE_TAG, IPS_SECTION, SYSTEM } from '@/features/ips-export/utils/ips-constants'
 import type { InferredProblem } from '@/features/ips-export/utils/inferred-problems-types'
 import type { ClinicalDataCollection, ConditionEntity } from '@/src/core/entities/clinical-data.entity'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
@@ -142,5 +142,34 @@ describe('inferredToCondition → buildIpsBundle (no FHIR special-casing)', () =
     // problemCode() with ZERO inference-specific branching.
     expect(code.coding?.[0]).toMatchObject({ system: SYSTEM.snomed, code: '44054006' })
     expect(code.coding?.some((c) => c.system === SYSTEM.icd10 && c.code === 'E11.9')).toBe(true)
+
+    // Auditability: the synthetic condition carries the `ai-inferred` meta.tag so
+    // a downstream reader can distinguish AI-synthesized problems from ingested
+    // ones (mapProblemList emits the tag solely from the `_inferred` marker).
+    const meta = resource.meta as { tag?: Array<{ system?: string; code?: string }> }
+    expect(
+      meta.tag?.some((tg) => tg.system === INFERENCE_TAG.system && tg.code === INFERENCE_TAG.code),
+    ).toBe(true)
+  })
+
+  it('does NOT tag an ordinary (non-inferred) source condition', () => {
+    const source: ConditionEntity = {
+      id: 'cond-src',
+      resourceType: 'Condition',
+      code: { text: '高血壓', coding: [{ system: SYSTEM.icd10, code: 'I10', display: 'Hypertension' }] },
+      clinicalStatus: 'active',
+    }
+    const bundle = buildIpsBundle({ patient: PATIENT, data: emptyCollection([source]) })
+    const conditionEntry = bundle.entry.find(
+      (e) => (e.resource as FhirResource).resourceType === 'Condition',
+    )
+    const meta = (conditionEntry!.resource as FhirResource).meta as
+      | { tag?: Array<{ system?: string; code?: string }> }
+      | undefined
+    expect(
+      (meta?.tag ?? []).some(
+        (tg) => tg.system === INFERENCE_TAG.system && tg.code === INFERENCE_TAG.code,
+      ),
+    ).toBe(false)
   })
 })

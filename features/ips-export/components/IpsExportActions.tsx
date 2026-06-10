@@ -11,16 +11,32 @@ interface IpsExportActionsProps {
   copied: boolean
   copyError: string | null
   disabled: boolean
+  /** Whether the AI problem-list inference panel is shown. */
+  llmEnabled: boolean
+  /** Toggle the inference panel on/off. */
+  onToggleLlm: (next: boolean) => void
+  /** False when no LLM provider is usable (no API key / proxy). */
+  llmAvailable: boolean
 }
 
 /**
- * Download / Copy actions plus the (Phase 1: stubbed) LLM-augmentation toggle.
- * The toggle is rendered but disabled so users can see the upcoming capability;
- * it is wired up in a later phase.
+ * Download / Copy actions plus the live LLM problem-list inference toggle
+ * (Phase 2.2b). When no provider is usable the toggle is disabled and a hint
+ * points the user at the API-key settings.
  */
-export function IpsExportActions({ onDownload, onCopy, copied, copyError, disabled }: IpsExportActionsProps) {
+export function IpsExportActions({
+  onDownload,
+  onCopy,
+  copied,
+  copyError,
+  disabled,
+  llmEnabled,
+  onToggleLlm,
+  llmAvailable,
+}: IpsExportActionsProps) {
   const { t } = useLanguage()
   const x = t.ipsExport
+  const p = x.inferredProblems
 
   return (
     <div className="space-y-3">
@@ -43,8 +59,15 @@ export function IpsExportActions({ onDownload, onCopy, copied, copyError, disabl
             {x.llmToggleLabel}
           </div>
           <p className="text-xs text-muted-foreground">{x.llmToggleHint}</p>
+          {!llmAvailable && <p className="text-xs text-amber-700 dark:text-amber-400">{p.noKeyHint}</p>}
         </div>
-        <Switch checked={false} disabled aria-label={x.llmToggleLabel} />
+        <Switch
+          checked={llmEnabled}
+          onCheckedChange={onToggleLlm}
+          disabled={!llmAvailable}
+          aria-label={x.llmToggleLabel}
+          title={llmAvailable ? undefined : p.noKeyHint}
+        />
       </div>
     </div>
   )
