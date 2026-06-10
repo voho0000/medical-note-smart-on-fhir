@@ -399,10 +399,26 @@ export default function TwcatPickerPage() {
     // Auto-discover tokenEndpoint from .well-known/smart-configuration if
     // not pre-configured. Keeps the custom-vendor form simpler — users only
     // need to know the iss; the form doesn't even need to ask for token URL.
+    // On a successful discovery we PERSIST the URL back into the vendor
+    // record so subsequent Quick Tests skip the discovery hop and the card
+    // header shows the resolved `token: …` line.
     let tokenEndpoint = vendor.tokenEndpoint
     if (!tokenEndpoint) {
       const disc = await discoverEndpoints(vendor.iss)
       tokenEndpoint = disc?.tokenEndpoint
+      if (tokenEndpoint) {
+        const isCustom = customList.some((c) => c.id === vendor.id)
+        if (isCustom) {
+          CustomVendorStore.add({ ...vendor, tokenEndpoint })
+          setCustomList(CustomVendorStore.list())
+        } else {
+          // Preset vendor — store as an override so a future hard-coded
+          // change still wins after the operator clicks "reset to default".
+          const prev = VendorOverrideStore.get(vendor.id) ?? {}
+          VendorOverrideStore.set(vendor.id, { ...prev, tokenEndpoint })
+          setOverrideCount((n) => n + 1)
+        }
+      }
     }
     if (!tokenEndpoint) {
       setError(
@@ -1129,36 +1145,11 @@ export default function TwcatPickerPage() {
             value={custom.iss}
             onChange={(e) => setCustom({ ...custom, iss: e.target.value })}
           />
-          <div className="col-span-2 flex gap-1">
-            <input
-              className="flex-1 rounded border p-1.5 font-mono text-xs"
-              placeholder="tokenEndpoint (auto-discoverable from iss)"
-              value={custom.tokenEndpoint || ""}
-              onChange={(e) => setCustom({ ...custom, tokenEndpoint: e.target.value })}
-            />
-            <button
-              type="button"
-              onClick={async () => {
-                if (!custom.iss) {
-                  setError("Need iss before discovery.")
-                  return
-                }
-                setError("")
-                const disc = await discoverEndpoints(custom.iss)
-                if (disc?.tokenEndpoint) {
-                  setCustom({ ...custom, tokenEndpoint: disc.tokenEndpoint })
-                } else {
-                  setError(
-                    `Discovery from ${custom.iss}/.well-known/smart-configuration failed.`
-                  )
-                }
-              }}
-              className="px-2 py-1 rounded border text-xs whitespace-nowrap"
-              title="GET ${iss}/.well-known/smart-configuration and pre-fill token_endpoint"
-            >
-              🔍 discover
-            </button>
-          </div>
+          {/* tokenEndpoint intentionally not asked here — it gets discovered
+              from ${iss}/.well-known/smart-configuration on first Run quick
+              test and persisted back into the vendor record so the next run
+              skips the discovery hop. Edit form still surfaces it for the
+              rare vendor whose discovery doc lies. */}
           <input
             className="rounded border p-1.5 font-mono text-xs"
             placeholder="client_id"
