@@ -40,6 +40,10 @@ interface DocumentDetailDialogProps {
     openInDialog: string
   }
   resolveSectionLabel: (i18nKey: string) => string | null
+  /** Forwarded to CompositionRenderer — see its docstring. Lets the
+   *  maximised view pick up the same minimal-narrative fallback the inline
+   *  view uses. */
+  entryResolver?: (reference: string) => unknown
 }
 
 function formatDate(iso?: string): string {
@@ -59,6 +63,7 @@ export function DocumentDetailDialog({
   entry,
   strings,
   resolveSectionLabel,
+  entryResolver,
 }: DocumentDetailDialogProps) {
   const [open, setOpen] = useState(false)
 
@@ -159,6 +164,7 @@ export function DocumentDetailDialog({
               composition={entry.composition}
               defaultExpandFirst={true}
               resolveSectionLabel={resolveSectionLabel}
+              entryResolver={entryResolver}
               labels={{
                 documentDate: strings.documentDate,
                 author: strings.author,
