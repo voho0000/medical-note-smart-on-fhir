@@ -20,6 +20,7 @@ import {
   type FlowLogEntry,
 } from "@/src/infrastructure/fhir/profiles/twcat-profile"
 import { ScenarioLoaderPanel } from "./_components/ScenarioLoaderPanel"
+import { LocalBundleService } from "@/src/infrastructure/fhir/services/local-bundle.service"
 
 type EditableVendor = TwcatVendor
 
@@ -2060,6 +2061,29 @@ function IpsCreatorPanel({
           }
         >
           {val?.running ? "Validating…" : "🧪 Run IPS Validator"}
+        </button>
+        {/* Consumer-side path: load the *raw* Bundle JSON sitting in the
+            textarea straight into the main app, bypassing our FHIRfox→
+            transform pipeline. Used when EHR_VGHTPE_0 needs to render a
+            Bundle produced by another vendor (e.g. 資慧's POSTed IPS
+            document fetched from EHR_MISAT or copied from a Prism
+            transcript). ScenarioLoaderPanel already had an Open-in-main-
+            app button but only against its FHIRfox-derived bundle. */}
+        <button
+          onClick={async () => {
+            try {
+              const parsed = JSON.parse(text)
+              await LocalBundleService.save(parsed)
+              window.location.href = '/'
+            } catch (e) {
+              alert(`載入失敗: ${e instanceof Error ? e.message : String(e)}`)
+            }
+          }}
+          disabled={!text.trim() || summary?.ok === false}
+          className="px-3 py-1.5 rounded border border-amber-300 bg-amber-50 text-amber-900 text-sm disabled:opacity-50 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          title="把 textarea 裡的 Bundle 直接存到本地、跳到主 app 渲染（適合 Consumer 角色載入他人產的 IPS Bundle）"
+        >
+          ▶ Open in main app
         </button>
         <CopyBypassButton bundleText={text} scenarioUrl={scenario} disabled={!text.trim() || summary?.ok === false} />
         {text && !cur?.running && (
