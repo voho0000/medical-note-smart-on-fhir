@@ -2085,6 +2085,35 @@ function IpsCreatorPanel({
         >
           ▶ Open in main app
         </button>
+        {/* Save-to-disk for the same textarea content. Useful when the
+            Bundle was copied off a Prism transcript and the user wants a
+            local file copy (evidence archive, share with teammates,
+            re-upload to validator later) without re-pasting. Filename is
+            derived from Bundle.id so multiple downloads don't collide. */}
+        <button
+          onClick={() => {
+            try {
+              const parsed = JSON.parse(text) as { id?: string }
+              const fileBase = parsed?.id || 'bundle'
+              const blob = new Blob([text], { type: 'application/fhir+json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `${fileBase}.json`
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+              setTimeout(() => URL.revokeObjectURL(url), 0)
+            } catch (e) {
+              alert(`下載失敗: ${e instanceof Error ? e.message : String(e)}`)
+            }
+          }}
+          disabled={!text.trim() || summary?.ok === false}
+          className="px-3 py-1.5 rounded border border-sky-300 bg-sky-50 text-sky-900 text-sm disabled:opacity-50 dark:border-sky-700 dark:bg-sky-950/30 dark:text-sky-100"
+          title="把 textarea 裡的 Bundle JSON 另存成 .json 檔（檔名取自 Bundle.id）"
+        >
+          💾 Save JSON
+        </button>
         <CopyBypassButton bundleText={text} scenarioUrl={scenario} disabled={!text.trim() || summary?.ok === false} />
         {text && !cur?.running && (
           <button
