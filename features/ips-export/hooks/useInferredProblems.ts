@@ -9,8 +9,9 @@
 // bundle path — confirmed rows are turned into synthetic conditions by the
 // caller (inferredToCondition) and merged via useIpsBundle(extraConditions).
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useClinicalDataQuery } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { usePatientQuery } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
@@ -47,6 +48,7 @@ function computeAvailable(apiKey: string | null, geminiKey: string | null): bool
 
 export function useInferredProblems(): UseInferredProblemsResult {
   const { data } = useClinicalDataQuery()
+  const { data: patient } = usePatientQuery()
   const { query } = useUnifiedAi()
   const { apiKey, geminiKey } = useAllApiKeys()
 
@@ -72,6 +74,19 @@ export function useInferredProblems(): UseInferredProblemsResult {
     setConfirmedIds(new Set())
     setError(null)
   }, [])
+
+  // Suggestions are PATIENT-specific. The IPS tab is force-mounted so this
+  // state survives tab switches — which means unmount no longer acts as an
+  // implicit reset. The loaded patient's identity is the reset signal instead:
+  // without it, confirmed AI problems from one patient could silently merge
+  // into the next imported patient's export.
+  const patientId = patient?.id ?? null
+  const lastPatientIdRef = useRef(patientId)
+  useEffect(() => {
+    if (lastPatientIdRef.current === patientId) return
+    lastPatientIdRef.current = patientId
+    reset()
+  }, [patientId, reset])
 
   const run = useCallback(async () => {
     if (!available) {

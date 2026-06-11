@@ -73,6 +73,10 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     component: () => null,
     order: 3,
     enabled: true,
+    // AI-inferred suggestions + per-item confirmations are expensive (LLM call)
+    // and clinically reviewed state — they must survive tab switches.
+    // useInferredProblems resets them when the loaded patient changes.
+    forceMount: true,
     contentClassName: 'flex-1 mt-4',
   },
   {
