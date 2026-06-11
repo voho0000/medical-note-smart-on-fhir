@@ -23,11 +23,26 @@ function normalizeFormUnit(u?: string): string {
 
 export function humanDoseAmount(doseAndRate?: DoseAndRate[], text?: string): string {
   const d = doseAndRate?.[0]
-  
+
   if (d?.doseQuantity?.value != null) {
     const v = round1(d.doseQuantity.value!)
     const u = normalizeFormUnit(d.doseQuantity.unit || "")
-    return `${v}${u ? " " + u : ""}`
+    // Surface UCUM `code` separately when it carries information the human-
+    // readable `unit` doesn't already cover. Without this, modifications
+    // the connectathon inspector makes to the UCUM code (e.g. changing
+    // `{tbl}` to `6666` for Step 300 random-edit verification) would be
+    // invisible — `unit` keeps showing "tablet" and we'd appear to have
+    // dropped the inspector's edit. We hide the code when it's empty,
+    // identical to the unit, or matches our internal normalization of the
+    // unit (so the common `unit: "tablet"` + `code: "{tbl}"` shape stays
+    // tidy as just "1 tablet").
+    const codeRaw = d.doseQuantity.code?.trim()
+    const showCode = codeRaw
+      && codeRaw !== u
+      && codeRaw !== (d.doseQuantity.unit?.trim() ?? '')
+      && codeRaw !== '{tbl}'
+    const codeSuffix = showCode ? ` [UCUM: ${codeRaw}]` : ''
+    return `${v}${u ? " " + u : ""}${codeSuffix}`
   }
   
   if (d?.doseRange?.low?.value != null || d?.doseRange?.high?.value != null) {
