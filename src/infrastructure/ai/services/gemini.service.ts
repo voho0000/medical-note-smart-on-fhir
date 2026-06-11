@@ -22,7 +22,11 @@ export class GeminiService {
       throw new Error('Gemini API key is required for this model')
     }
 
-    const targetUrl = shouldUseProxy ? '/api/gemini-proxy' : this.buildDirectApiUrl(request.modelId)
+    // Use the absolute Firebase proxy URL (NEXT_PUBLIC_GEMINI_URL), consistent
+    // with the streaming adapter and the provider factory. The relative
+    // `/api/gemini-proxy` route only exists in a Next.js server runtime; on the
+    // static GitHub Pages deployment it 405s, so always target the configured URL.
+    const targetUrl = shouldUseProxy ? ENV_CONFIG.geminiProxyUrl : this.buildDirectApiUrl(request.modelId)
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

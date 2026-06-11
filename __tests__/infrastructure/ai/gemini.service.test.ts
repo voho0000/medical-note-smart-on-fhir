@@ -1,6 +1,20 @@
 // Unit Tests: Gemini Service
 import { GeminiService } from '@/src/infrastructure/ai/services/gemini.service'
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import type { AiQueryRequest } from '@/src/core/entities/ai.entity'
+
+// Mock the env config so the proxy path can be exercised deterministically.
+// Default values mirror the test runtime (no proxy), keeping the keyed/direct
+// tests below unchanged; the proxy describe mutates them per-test.
+jest.mock('@/src/shared/config/env.config', () => ({
+  ENV_CONFIG: { geminiProxyUrl: '', hasGeminiProxy: false, proxyClientKey: '' },
+}))
+
+const mutableEnv = ENV_CONFIG as unknown as {
+  geminiProxyUrl: string
+  hasGeminiProxy: boolean
+  proxyClientKey: string
+}
 
 // Mock fetch
 global.fetch = jest.fn()
@@ -190,7 +204,7 @@ describe('GeminiService', () => {
 
     it('should handle timeout', async () => {
       // Arrange
-      mockFetch.mockImplementationOnce(() => 
+      mockFetch.mockImplementationOnce(() =>
         new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Timeout')), 100)
         })
@@ -198,6 +212,48 @@ describe('GeminiService', () => {
 
       // Act & Assert
       await expect(service.query(mockRequest)).rejects.toThrow()
+    })
+  })
+
+  // Regression guard for the GitHub Pages 405: the non-streaming proxy path must
+  // target the ABSOLUTE Firebase proxy URL (NEXT_PUBLIC_GEMINI_URL), like the
+  // streaming adapter and provider factory — never the relative
+  // `/api/gemini-proxy`, which has no backend on the static deployment.
+  describe('query via proxy (no API key — static deployment)', () => {
+    const proxyRequest: AiQueryRequest = {
+      modelId: 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'Hello' }],
+    }
+
+    beforeEach(() => {
+      jest.clearAllMocks()
+      mutableEnv.geminiProxyUrl = 'https://proxy.example.com/gemini'
+      mutableEnv.hasGeminiProxy = true
+      mutableEnv.proxyClientKey = 'client-key'
+    })
+
+    afterEach(() => {
+      mutableEnv.geminiProxyUrl = ''
+      mutableEnv.hasGeminiProxy = false
+      mutableEnv.proxyClientKey = ''
+    })
+
+    it('targets the absolute geminiProxyUrl, not the relative /api/gemini-proxy', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ message: 'hi' }),
+      } as Response)
+
+      const proxyService = new GeminiService(null)
+      const result = await proxyService.query(proxyRequest)
+
+      const fetchUrl = mockFetch.mock.calls[0][0]
+      expect(fetchUrl).toBe('https://proxy.example.com/gemini')
+      expect(fetchUrl).not.toBe('/api/gemini-proxy')
+
+      const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>
+      expect(headers['x-proxy-key']).toBe('client-key')
+      expect(result.text).toBe('hi')
     })
   })
 })

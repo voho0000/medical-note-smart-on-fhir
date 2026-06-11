@@ -82,9 +82,15 @@ export function InferredProblemsReview({
         </div>
       )}
 
-      {status === 'error' && (
-        <p className="text-xs text-destructive">{error === 'no-key' ? p.noKeyHint : p.error}</p>
-      )}
+      {status === 'error' &&
+        (error === 'no-key' ? (
+          <p className="text-xs text-destructive">{p.noKeyHint}</p>
+        ) : (
+          <div className="space-y-0.5">
+            <p className="text-xs text-destructive">{p.error}</p>
+            {error && <p className="break-words text-[11px] text-destructive/80">{error}</p>}
+          </div>
+        ))}
 
       {status === 'ready' && problems.length === 0 && (
         <p className="py-2 text-xs text-muted-foreground">{p.empty}</p>
