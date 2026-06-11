@@ -107,7 +107,15 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
       })
 
       return {
-        id: procedure?.id || `procedure-row-${Math.random().toString(36).slice(2, 10)}`,
+        // Prefix with `procedure:` because ReportsCard concatenates these rows
+        // with DiagnosticReport-derived rows (which use the report's raw id).
+        // FHIR ids are unique per resource type, so DiagnosticReport/1 and
+        // Procedure/1 happily coexist — but as React siblings they collided
+        // (key=`1`). Type prefix mirrors `orphan:${k}` used elsewhere in the
+        // same merged list.
+        id: procedure?.id
+          ? `procedure:${procedure.id}`
+          : `procedure-row-${Math.random().toString(36).slice(2, 10)}`,
         title,
         meta: `Procedure • ${procedure?.status || "—"}`,
         obs: [observation, ...relatedObservations],
