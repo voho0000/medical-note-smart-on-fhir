@@ -66,6 +66,7 @@ export const zhTW = {
       run: '產生建議',
       rerun: '重新產生',
       loading: '正在分析病歷…',
+      loadingSeconds: '已等待 {seconds} 秒',
       empty: '依目前病歷，沒有額外建議的問題。',
       noKeyHint: '請在設定中加入 OpenAI 或 Gemini API 金鑰以啟用 AI 推論。',
       error: 'AI 推論失敗，請再試一次。',

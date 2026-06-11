@@ -8,7 +8,7 @@
 // evidence trail so a clinician can verify before confirming. Only checked rows
 // are surfaced (via the hook's `confirmed`) for the bundle merge.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   BadgeCheck,
@@ -22,6 +22,22 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import type { InferredProblem, ProblemEvidence } from '../utils/inferred-problems-types'
 import type { InferenceStatus } from '../hooks/useInferredProblems'
+
+/**
+ * Seconds elapsed while `active` is true; resets to 0 each time it flips on.
+ * Drives the inline timer next to the loading message so the user can see how
+ * long an inference run has been going (typically 20–60s).
+ */
+function useElapsedSeconds(active: boolean): number {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    setSeconds(0)
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [active])
+  return seconds
+}
 
 interface InferredProblemsReviewProps {
   status: InferenceStatus
@@ -47,6 +63,7 @@ export function InferredProblemsReview({
   const { t } = useLanguage()
   const x = t.ipsExport
   const p = x.inferredProblems
+  const elapsedSeconds = useElapsedSeconds(status === 'loading')
 
   return (
     <div className="space-y-3 rounded-md border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900 dark:bg-violet-950/20">
@@ -79,6 +96,9 @@ export function InferredProblemsReview({
         <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {p.loading}
+          <span className="tabular-nums text-muted-foreground/70">
+            {p.loadingSeconds.replace('{seconds}', String(elapsedSeconds))}
+          </span>
         </div>
       )}
 

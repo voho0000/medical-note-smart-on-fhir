@@ -64,6 +64,7 @@ export const en = {
       run: 'Generate suggestions',
       rerun: 'Regenerate',
       loading: 'Analyzing records…',
+      loadingSeconds: '{seconds}s elapsed',
       empty: 'No additional problems suggested from the current records.',
       noKeyHint: 'Add an OpenAI or Gemini API key in settings to enable AI inference.',
       error: 'AI inference failed. Please try again.',
