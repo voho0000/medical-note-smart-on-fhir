@@ -369,6 +369,10 @@ describe('runProblemInference', () => {
     const out = await runProblemInference({ data, llm })
     expect(out[0].strategy).toBe('A')
     expect(out[0].needsManualCoding).toBe(true)
+    // The best-guess code is preserved (so a human can web-search verify it) but
+    // can never be more than low confidence.
+    expect(out[0].coding?.code).toBe('88888888')
+    expect(out[0].coding?.confidence).toBe('low')
   })
 
   it('returns [] and does NOT call the LLM when there is no primary evidence', async () => {
@@ -394,7 +398,7 @@ describe('runProblemInference', () => {
 // ── buildInferencePrompt ─────────────────────────────────────────────────────
 
 describe('buildInferencePrompt', () => {
-  it('embeds the allowlist and the digest, and forbids inventing codes', () => {
+  it('embeds the allowlist + digest and frames non-allowlist codes as provisional/verify', () => {
     const digest = buildEvidenceDigest(
       makeData({
         encounters: [{ id: 'e1', reasonCode: [{ coding: [{ code: 'E11.9' }] }] }],
@@ -416,7 +420,8 @@ describe('buildInferencePrompt', () => {
     // digest present
     expect(user.content).toContain('E11.9')
     expect(user.content).toContain('Metformin')
-    // strict instruction
-    expect(system.content.toLowerCase()).toContain('never invent')
+    // allowlist-first + mandatory human web-search verification for best-guesses
+    expect(system.content.toLowerCase()).toContain('prefer the allowlist')
+    expect(system.content.toLowerCase()).toContain('browser.ihtsdotools.org')
   })
 })

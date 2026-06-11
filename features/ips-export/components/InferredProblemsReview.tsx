@@ -141,6 +141,11 @@ function InferredProblemRow({
             <ConfidenceBadge confidence={problem.inferenceConfidence} />
             <CodingBadge problem={problem} />
           </div>
+          {problem.needsManualCoding && (
+            <p className="mt-1 text-[10px] leading-relaxed text-amber-700 dark:text-amber-400">
+              {p.codingManualHint}
+            </p>
+          )}
         </div>
       </div>
 
@@ -219,9 +224,13 @@ function CodingBadge({ problem }: { problem: InferredProblem }) {
 
   if (problem.needsManualCoding) {
     return (
-      <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+      <span
+        title={p.codingManualHint}
+        className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+      >
         <AlertTriangle className="h-3 w-3" />
         {p.codingManual}
+        {problem.coding?.code ? ` · ${problem.coding.code}` : ''}
       </span>
     )
   }

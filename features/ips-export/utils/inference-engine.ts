@@ -303,9 +303,10 @@ Your task — clinical synthesis (be thorough/aggressive):
 - Prefer durable/chronic problems. Do NOT list transient acute events (a single URI, a resolved injury) unless they are clearly ongoing.
 - Merge duplicates: one problem per distinct clinical entity.
 
-SNOMED coding rules (STRICT — you are NOT trusted to invent codes):
+SNOMED coding rules (two-tier — the system RE-VALIDATES every code you return, so you are never trusted blindly):
 - When the problem is anchored to an ICD-10 you can see in the evidence, return that code in "evidenceIcd10".
-- For "suggestedSnomed": you may ONLY pick a code that appears verbatim in the ALLOWLIST provided in the user message, or return null. NEVER invent or recall a SNOMED id from memory. When unsure, return null — the system will code it.
+- PREFER THE ALLOWLIST: if a concept in the ALLOWLIST provided in the user message matches the problem, return it verbatim in "suggestedSnomed". Allowlist codes are pre-verified.
+- If NO allowlist concept fits, you MAY return your single best-guess SNOMED CT concept id in "suggestedSnomed". Any non-allowlist code is treated as PROVISIONAL: the system flags it for MANDATORY human web-search verification on browser.ihtsdotools.org before it is trusted, and it can never be marked high-confidence. Offer a best-guess ONLY when you genuinely believe the concept id is correct and would expect to confirm it by web search; if you are unsure, return null instead of fabricating an id.
 
 Output: a SINGLE JSON object, no prose, no markdown fences. Do not include patient identifiers.`
 
@@ -362,7 +363,7 @@ export function buildInferencePrompt(
       "labelEn": "English diagnosis name",
       "inferenceConfidence": "high" | "medium" | "low",
       "evidenceIcd10": "E11.9",            // OPTIONAL: the ICD-10 from the evidence this is anchored to
-      "suggestedSnomed": { "code": "44054006", "display": "Diabetes mellitus type II" } | null,  // ONLY from the ALLOWLIST, else null
+      "suggestedSnomed": { "code": "44054006", "display": "Diabetes mellitus type II" } | null,  // PREFER the ALLOWLIST; a non-allowlist best-guess is allowed but flagged for human web-search verification
       "supportingEvidence": [
         { "kind": "encounter-icd" | "medication" | "discharge-excerpt" | "lab" | "composition", "label": "human-readable", "icd10": "E11.9", "date": "2025-01-01", "count": 4 }
       ],
@@ -385,7 +386,7 @@ ${dischargeLines}
 ## Abnormal labs (corroboration only)
 ${labLines}
 
-# SNOMED CT allowlist (pick suggestedSnomed ONLY from here, else null)
+# SNOMED CT allowlist (PREFER these pre-verified concepts; a non-allowlist best-guess is allowed but will be flagged for verification)
 code\tdisplay
 ${allowlistText}
 

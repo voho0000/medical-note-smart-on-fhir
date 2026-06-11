@@ -155,7 +155,6 @@ describe('inferredToCondition → buildIpsBundle (no FHIR special-casing)', () =
   it('does NOT tag an ordinary (non-inferred) source condition', () => {
     const source: ConditionEntity = {
       id: 'cond-src',
-      resourceType: 'Condition',
       code: { text: '高血壓', coding: [{ system: SYSTEM.icd10, code: 'I10', display: 'Hypertension' }] },
       clinicalStatus: 'active',
     }
