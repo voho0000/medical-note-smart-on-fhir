@@ -20,7 +20,7 @@
 // or once the bridge ships discharge summaries.
 "use client"
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Building2, Info } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -29,7 +29,6 @@ import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
 import { HtmlDocumentRenderer } from './components/HtmlDocumentRenderer'
 import { DocumentDetailDialog } from './components/DocumentDetailDialog'
-import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import type { DocumentEntry } from './types'
 
 interface DocSummaryStrings {
@@ -111,44 +110,6 @@ export function DocumentSummaryCard() {
   const resolveSectionLabel = (i18nKey: string): string | null =>
     strings.sections[i18nKey] ?? null
 
-  // Lookup table for the CompositionRenderer's minimal-narrative fallback.
-  // Several Track #4 IPS Creator vendors (資慧, Hoone) emit Composition
-  // section narratives like "Results: 4 record(s)" with no actual content;
-  // we resolve section.entry[].reference against the local bundle so the
-  // viewer can pull the per-resource narrative back into the section body.
-  // useState + useEffect because LocalBundleService.load() is async (reads
-  // IndexedDB) — kept null while loading so the renderer falls back to the
-  // (sparse) narrative path until the bundle arrives.
-  const [refMap, setRefMap] = useState<Map<string, unknown> | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    LocalBundleService.load().then((bundle) => {
-      if (cancelled) return
-      const map = new Map<string, unknown>()
-      const entries = (bundle as { entry?: Array<{ fullUrl?: string; resource?: { resourceType?: string; id?: string } }> } | null)?.entry
-      if (Array.isArray(entries)) {
-        for (const e of entries) {
-          if (e?.fullUrl) map.set(e.fullUrl, e.resource)
-          // Also key by ResourceType/id for non-document Bundle styles where
-          // section.entry references look like "Observation/abc" instead of
-          // matching a urn:uuid:… fullUrl.
-          const r = e?.resource
-          if (r?.resourceType && r?.id) map.set(`${r.resourceType}/${r.id}`, r)
-        }
-      }
-      setRefMap(map)
-    }).catch(() => {
-      // Bundle unavailable (no IPS loaded) — leave resolver absent; renderer
-      // falls back to plain narrative path.
-      if (!cancelled) setRefMap(null)
-    })
-    return () => { cancelled = true }
-  }, [entries.length])  // re-build when entries list changes (e.g. new bundle loaded)
-  const entryResolver = useMemo(() => {
-    if (!refMap) return undefined
-    return (ref: string) => refMap.get(ref) ?? null
-  }, [refMap])
-
   const isEmpty = entries.length === 0
   // One-doc datasets auto-expand the body to save a click; multi-doc lists
   // stay collapsed so the card height doesn't balloon.
@@ -191,7 +152,6 @@ export function DocumentSummaryCard() {
               autoExpand={autoExpand}
               strings={strings}
               resolveSectionLabel={resolveSectionLabel}
-              entryResolver={entryResolver}
             />
           ))}
         </ul>
@@ -209,10 +169,6 @@ interface DocumentEntryCardProps {
   autoExpand: boolean
   strings: DocSummaryStrings
   resolveSectionLabel: (i18nKey: string) => string | null
-  /** See CompositionRenderer.entryResolver — passed through unchanged so
-   *  the inline CompositionRenderer below gets the same minimal-narrative
-   *  fallback the maximised dialog already gets via DocumentDetailDialog. */
-  entryResolver?: (reference: string) => unknown
 }
 
 function DocumentEntryCard({
@@ -220,7 +176,6 @@ function DocumentEntryCard({
   autoExpand,
   strings,
   resolveSectionLabel,
-  entryResolver,
 }: DocumentEntryCardProps) {
   const dateStr = formatDate(entry.date)
   const periodStr = formatPeriod(entry.period)
@@ -271,7 +226,6 @@ function DocumentEntryCard({
             entry={entry}
             strings={strings}
             resolveSectionLabel={resolveSectionLabel}
-            entryResolver={entryResolver}
           />
         </div>
       </div>
@@ -320,7 +274,6 @@ function DocumentEntryCard({
           composition={entry.composition}
           defaultExpandFirst={autoExpand}
           resolveSectionLabel={resolveSectionLabel}
-          entryResolver={entryResolver}
           labels={{
             documentDate: strings.documentDate,
             author: strings.author,

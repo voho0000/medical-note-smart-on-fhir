@@ -23,13 +23,6 @@ interface CompositionRendererProps {
    *  or null if the key isn't translated. Passed in so the renderer stays
    *  free of i18n provider coupling. */
   resolveSectionLabel: (i18nKey: string) => string | null
-  /** Optional reference resolver for the augment-from-entries fallback.
-   *  Several Track #4 IPS Creator implementations ship minimal section
-   *  narratives like "Results: 4 record(s)" — when we detect that, we
-   *  walk section.entry[].reference and render each resource's own
-   *  text.div as a sub-card to recover the content. When this resolver
-   *  is absent, minimal-narrative sections are rendered as-is. */
-  entryResolver?: (reference: string) => unknown
   /** Labels for the metadata strip. */
   labels: {
     documentDate: string
@@ -37,18 +30,6 @@ interface CompositionRendererProps {
     custodian: string
     noSections: string
   }
-}
-
-// Strip XHTML tags and collapse whitespace, then check the remaining
-// visible text length. IPS section narratives like "Results: 4 record(s)"
-// or "Allergies and Intolerances: 1 record(s)" come in under ~50 chars,
-// while a real table narrative (the kind our own transform-ips.ts emits)
-// runs into the hundreds or thousands. Threshold chosen by inspection of
-// both 資慧 and Hoone bundles in IPS-MIX-001 / 002.
-function isMinimalNarrative(div: string | undefined): boolean {
-  if (!div) return true
-  const txt = div.replace(/<[^>]*>/g, '').trim()
-  return txt.length < 50
 }
 
 function formatDate(iso?: string): string {
@@ -87,21 +68,12 @@ export function CompositionRenderer({
   composition,
   defaultExpandFirst = false,
   resolveSectionLabel,
-  entryResolver,
   labels,
 }: CompositionRendererProps) {
   const sections = Array.isArray(composition.section) ? composition.section : []
-  // A section is renderable if EITHER:
-  //   (a) it has real narrative content, OR
-  //   (b) it has structured entries and a resolver — we'll synthesize a
-  //       table from the entries' own narratives.
-  // Previously only (a) qualified, so Hoone / 資慧 bundles with minimal
-  // section narratives (e.g. "Results: 4 record(s)") looked half-empty.
-  const renderableSections = sections.filter((s) => {
-    if (hasNarrativeContent(s?.text?.div)) return true
-    const entries = Array.isArray(s?.entry) ? s.entry : []
-    return entries.length > 0 && !!entryResolver
-  })
+  // Only render sections whose narrative actually has content. (Structured-only
+  // sections with no .text are already represented in the other cards.)
+  const renderableSections = sections.filter((s) => hasNarrativeContent(s?.text?.div))
 
   const documentDate = formatDate(composition.date)
   const authorNames = getAuthorNames(composition)
@@ -148,14 +120,6 @@ export function CompositionRenderer({
           {renderableSections.map((section, idx) => {
             const title = getSectionTitle(section, resolveSectionLabel)
             const sanitized = sanitizeNarrative(section?.text?.div)
-            const entries = Array.isArray(section?.entry) ? section.entry : []
-            // Augment when the section's own narrative is minimal AND we have
-            // a resolver AND there are entries to expand from. The original
-            // narrative still shows above the augmented block so the reader
-            // sees what the publisher wrote alongside the recovered content.
-            const augment = isMinimalNarrative(section?.text?.div)
-              && entries.length > 0
-              && !!entryResolver
             return (
               <AccordionItem
                 key={idx}
@@ -171,7 +135,7 @@ export function CompositionRenderer({
                     <span className="truncate font-medium">{title}</span>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-3 pb-3 space-y-2">
+                <AccordionContent className="px-3 pb-3">
                   {/* Sanitized FHIR Narrative XHTML. `prose` gives the embedded
                       tables/lists/headings sensible defaults. */}
                   <div
@@ -179,42 +143,6 @@ export function CompositionRenderer({
                     // eslint-disable-next-line react/no-danger -- sanitized via DOMPurify with FHIR Narrative whitelist
                     dangerouslySetInnerHTML={{ __html: sanitized }}
                   />
-                  {augment && (
-                    <div className="space-y-1.5">
-                      <div className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                        ⚠ Augmented from {entries.length} structured entr{entries.length === 1 ? 'y' : 'ies'}
-                        <span className="text-amber-700/80 dark:text-amber-300/80">
-                          · section narrative was minimal
-                        </span>
-                      </div>
-                      <ul className="space-y-1">
-                        {entries.map((e: { reference?: string }, i: number) => {
-                          const ref = e?.reference ?? ''
-                          const resolved = ref && entryResolver ? entryResolver(ref) as { text?: { div?: string } } | null : null
-                          const childDiv = resolved?.text?.div
-                          const childSanitized = childDiv ? sanitizeNarrative(childDiv) : null
-                          return (
-                            <li
-                              key={`${idx}-aug-${i}`}
-                              className="rounded border border-border/60 bg-muted/30 px-2 py-1.5 text-xs"
-                            >
-                              {childSanitized ? (
-                                <div
-                                  className="prose prose-xs dark:prose-invert max-w-none"
-                                  // eslint-disable-next-line react/no-danger -- sanitized
-                                  dangerouslySetInnerHTML={{ __html: childSanitized }}
-                                />
-                              ) : (
-                                <span className="font-mono text-muted-foreground">
-                                  {ref || '(unresolved entry)'}
-                                </span>
-                              )}
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </div>
-                  )}
                 </AccordionContent>
               </AccordionItem>
             )
