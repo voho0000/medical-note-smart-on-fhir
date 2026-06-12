@@ -14,12 +14,28 @@
 //     repeated reads don't hit IndexedDB.
 //   - Bundles written by older builds (full JSON under the same localStorage
 //     key) are migrated to IndexedDB transparently on first read.
+//
+// Encryption at rest (audit B1, v0.12): everything in IndexedDB — bundle JSON
+// and image Blobs — is AES-GCM ciphertext under a tab-session key (see
+// bundle-crypto.ts). A new tab session that cannot decrypt what it finds
+// purges it, and records older than MAX_BUNDLE_AGE_MS are purged even within
+// a session, so an imported chart never lingers on a shared workstation.
+// Plaintext data written by older builds is re-encrypted on first read.
 
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
+import {
+  getSessionBundleKey,
+  clearSessionBundleKey,
+  isEncryptedRecord,
+  encryptBytes,
+  decryptBytes,
+  encryptJson,
+  decryptJson,
+} from './bundle-crypto'
 
 // localStorage key. Holds the small marker `'1'` in the current scheme, but may
 // still hold a full bundle JSON written by an older build (migrated on read).
@@ -41,6 +57,11 @@ const IMG_STORE = 'images'
 // Session cache: avoids re-reading IndexedDB on every query. Module-level so it
 // is shared across all hook instances in the same tab.
 let memBundle: object | null = null
+
+// Even within a live tab session, a bundle older than this is purged on read —
+// a workstation left logged-in overnight shouldn't still expose yesterday's
+// patient.
+const MAX_BUNDLE_AGE_MS = 12 * 60 * 60 * 1000
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -127,16 +148,16 @@ async function idbClearImages(): Promise<void> {
   }
 }
 
-// Persist all extracted image Blobs in a single transaction (one DB open for
-// the whole import, not one per image).
-async function idbPutImages(items: Array<{ id: string; blob: Blob }>): Promise<void> {
+// Persist all extracted image records in a single transaction (one DB open for
+// the whole import, not one per image). Values are EncryptedRecords.
+async function idbPutImages(items: Array<{ id: string; record: unknown }>): Promise<void> {
   if (!items.length) return
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IMG_STORE, 'readwrite')
       const store = tx.objectStore(IMG_STORE)
-      for (const { id, blob } of items) store.put(blob, id)
+      for (const { id, record } of items) store.put(record, id)
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
       tx.onabort = () => reject(tx.error)
@@ -146,13 +167,15 @@ async function idbPutImages(items: Array<{ id: string; blob: Blob }>): Promise<v
   }
 }
 
-async function idbGetImage(id: string): Promise<Blob | null> {
+// Raw read — value may be an EncryptedRecord (current) or a plaintext Blob
+// (written by older builds); getImage() handles both.
+async function idbGetImage(id: string): Promise<unknown> {
   const db = await openDb()
   try {
-    return await new Promise<Blob | null>((resolve, reject) => {
+    return await new Promise<unknown>((resolve, reject) => {
       const tx = db.transaction(IMG_STORE, 'readonly')
       const req = tx.objectStore(IMG_STORE).get(id)
-      req.onsuccess = () => resolve((req.result as Blob) ?? null)
+      req.onsuccess = () => resolve(req.result ?? null)
       req.onerror = () => reject(req.error)
     })
   } finally {
@@ -196,14 +219,26 @@ export function prepareImagesForStorage(bundle: any): Array<{ id: string; blob: 
   return toStore
 }
 
-// Strip images out of the bundle (in place) and persist them to the IndexedDB
-// image store. Always clears the previous import's images first (even when this
-// import has none) so stale Blobs don't accumulate.
+// Strip images out of the bundle (in place), encrypt each one, and persist to
+// the IndexedDB image store. Always clears the previous import's images first
+// (even when this import has none) so stale Blobs don't accumulate. When no
+// session key is available the bundle is left untouched (images stay inline);
+// the caller will then also skip persisting the bundle itself.
 async function extractAndStoreImages(bundle: any): Promise<void> {
   if (typeof indexedDB === 'undefined') return
+  const key = await getSessionBundleKey({ create: true })
+  if (!key) {
+    await idbClearImages()
+    return
+  }
   const toStore = prepareImagesForStorage(bundle)
+  const encrypted: Array<{ id: string; record: unknown }> = []
+  for (const { id, blob } of toStore) {
+    const bytes = await blob.arrayBuffer()
+    encrypted.push({ id, record: await encryptBytes(key, bytes, blob.type) })
+  }
   await idbClearImages()
-  await idbPutImages(toStore)
+  await idbPutImages(encrypted)
 }
 
 // --- Bundle identity canonicalisation -----------------------------------------
@@ -432,6 +467,8 @@ export const LocalBundleService = {
   // the retained copies (memBundle + the JSON in IndexedDB) stay small. Only a
   // tiny marker goes to localStorage. After save resolves, `memBundle` holds the
   // stripped bundle, so no image base64 lingers in the JS heap.
+  // Everything persisted is ciphertext; if encryption is unavailable the bundle
+  // lives in memory only for this session — never plaintext at rest.
   async save(bundle: object): Promise<void> {
     if (typeof window !== 'undefined') {
       try {
@@ -444,18 +481,28 @@ export const LocalBundleService = {
     memBundle = bundle
     if (typeof window === 'undefined') return
     try {
+      const key = await getSessionBundleKey({ create: true })
+      if (!key) throw new Error('bundle session key unavailable')
+      await idbPut(await encryptJson(key, bundle))
       localStorage.setItem(STORAGE_KEY, MARKER)
     } catch {
-      // Marker is a single byte; a quota failure here is unexpected but not fatal
-      // — the in-memory cache and IndexedDB still carry the bundle this session.
+      // Could not persist ciphertext — make sure no stale marker/payload from a
+      // previous import survives pointing at the wrong data. The current import
+      // still works from the in-memory cache for this session.
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+        await idbDelete()
+      } catch {
+        // Best-effort cleanup.
+      }
     }
-    await idbPut(bundle)
   },
 
   async clear(): Promise<void> {
     memBundle = null
     if (typeof window === 'undefined') return
     localStorage.removeItem(STORAGE_KEY)
+    clearSessionBundleKey()
     try {
       await idbDelete()
     } catch {
@@ -468,12 +515,22 @@ export const LocalBundleService = {
     }
   },
 
-  // Fetch a stored image Blob by its `_imageRef`. Used by the lazy viewer so the
-  // bytes are only pulled into memory while the dialog is open.
+  // Fetch a stored image by its `_imageRef`. Used by the lazy viewer so the
+  // bytes are only pulled into memory while the dialog is open. Handles both
+  // encrypted records (current) and plaintext Blobs from older builds.
   async getImage(ref: string): Promise<Blob | null> {
     if (typeof window === 'undefined') return null
     try {
-      return await idbGetImage(ref)
+      const stored = await idbGetImage(ref)
+      if (!stored) return null
+      if (stored instanceof Blob) return stored // legacy plaintext (purged on next load/import)
+      if (isEncryptedRecord(stored)) {
+        const key = await getSessionBundleKey()
+        if (!key) return null
+        const plain = await decryptBytes(key, stored)
+        return new Blob([plain], { type: stored.type || 'image/jpeg' })
+      }
+      return null
     } catch {
       return null
     }
@@ -485,10 +542,40 @@ export const LocalBundleService = {
 
     // Primary path: IndexedDB.
     try {
-      const fromIdb = await idbGet<object>()
+      const fromIdb = await idbGet<unknown>()
+      if (isEncryptedRecord(fromIdb)) {
+        // Expired (workstation left open) or undecryptable (previous tab
+        // session's data) → purge so the chart never outlives its session.
+        if (Date.now() - fromIdb.savedAt > MAX_BUNDLE_AGE_MS) {
+          await this.clear()
+          return null
+        }
+        const key = await getSessionBundleKey()
+        if (!key) {
+          await this.clear()
+          return null
+        }
+        try {
+          const bundle = await decryptJson<object>(key, fromIdb)
+          memBundle = bundle
+          return bundle
+        } catch {
+          await this.clear()
+          return null
+        }
+      }
       if (fromIdb) {
-        memBundle = fromIdb
-        return fromIdb
+        // Plaintext bundle written by an older build — serve it this once and
+        // immediately re-encrypt in place so it stops existing as plaintext.
+        memBundle = fromIdb as object
+        try {
+          const key = await getSessionBundleKey({ create: true })
+          if (key) await idbPut(await encryptJson(key, fromIdb))
+          else await idbDelete()
+        } catch {
+          // Re-encryption failed — leave the in-memory copy serving this session.
+        }
+        return fromIdb as object
       }
     } catch {
       // IndexedDB unavailable (private mode, etc.) — fall through to migration.
@@ -501,10 +588,14 @@ export const LocalBundleService = {
         const parsed = JSON.parse(raw)
         if (parsed && (parsed.resourceType === 'Bundle' || Array.isArray(parsed.entry))) {
           memBundle = parsed
-          // Move it to IndexedDB and shrink the marker so we don't re-migrate.
+          // Move it (encrypted) to IndexedDB and shrink the marker so we don't
+          // re-migrate.
           try {
-            await idbPut(parsed)
-            localStorage.setItem(STORAGE_KEY, MARKER)
+            const key = await getSessionBundleKey({ create: true })
+            if (key) {
+              await idbPut(await encryptJson(key, parsed))
+              localStorage.setItem(STORAGE_KEY, MARKER)
+            }
           } catch {
             // Migration write failed — keep serving from the in-memory copy.
           }
