@@ -42,6 +42,12 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Lint
+        # Errors only — warnings are the tracked burn-down backlog
+        # (react-hooks compiler rules, unused vars). Boundary rules
+        # (core/shared/infrastructure layering) fail as errors.
+        run: npm run lint
+
       - name: Unit tests
         # `--testPathIgnorePatterns="worktrees"` keeps jest from picking up
         # the copies of these tests living under `.claude/worktrees/<branch>/`

@@ -112,28 +112,6 @@ export default function ClinicalInsightsFeature() {
   // Only enable insights when data is fully loaded and context is available
   const hasData = !clinicalDataLoading && !clinicalDataError && context.trim().length > 0
 
-  // If FHIR data failed to load, show error and disable the feature
-  if (clinicalDataError) {
-    return (
-      <ScrollArea className="h-full pr-3">
-        <div className="space-y-4">
-          <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.insight}`}>
-            <CardContent>
-              <div className="text-sm">
-                <div className="font-medium text-destructive mb-2">{t.clinicalInsights.fhirDataRequired}</div>
-                <div className="text-muted-foreground mb-3">{t.clinicalInsights.fhirDataRequiredDesc}</div>
-                <div className="text-destructive">
-                  <div className="font-medium mb-1">{t.common.error}:</div>
-                  <div>{clinicalDataError instanceof Error ? clinicalDataError.message : t.errors.fetchClinicalData}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </ScrollArea>
-    )
-  }
-
   const panelEntries = useMemo(() => {
     return panels.map((panel) => {
       const responseEntry = responses[panel.id] ?? { text: "", isEdited: false }
@@ -167,6 +145,29 @@ export default function ClinicalInsightsFeature() {
       }
     })
   }, [canGenerate, hasData, handlePromptChange, handleResponseChange, clearResponse, model, panelStatus, panels, prompts, responses, runPanel, stopPanel])
+
+  // If FHIR data failed to load, show error and disable the feature
+  if (clinicalDataError) {
+    return (
+      <ScrollArea className="h-full pr-3">
+        <div className="space-y-4">
+          <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.insight}`}>
+            <CardContent>
+              <div className="text-sm">
+                <div className="font-medium text-destructive mb-2">{t.clinicalInsights.fhirDataRequired}</div>
+                <div className="text-muted-foreground mb-3">{t.clinicalInsights.fhirDataRequiredDesc}</div>
+                <div className="text-destructive">
+                  <div className="font-medium mb-1">{t.common.error}:</div>
+                  <div>{clinicalDataError instanceof Error ? clinicalDataError.message : t.errors.fetchClinicalData}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ScrollArea>
+    )
+  }
+
 
   return (
     <ScrollArea className="h-full pr-3">

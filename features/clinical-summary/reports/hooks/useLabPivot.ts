@@ -265,7 +265,8 @@ export function useLabPivot(observations: any[]): Record<string, LabPivot> {
 
         const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
         const fv = formatValue(obs)
-        let { value, unit, numericValue, isAbnormal, interpretationCode, hasFhirRefRange } = fv
+        const { value, unit, numericValue, interpretationCode, hasFhirRefRange } = fv
+        let { isAbnormal } = fv
 
         // Layer B: hardcoded reference ranges — only when FHIR provided no usable
         // numeric range (hasFhirRefRange=false). Skipped when FHIR has bounds so
