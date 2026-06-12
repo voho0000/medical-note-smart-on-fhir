@@ -20,6 +20,8 @@ import {
 import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '@/src/shared/config/firebase.config'
 import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
+import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
+import { clearSessionKey } from '@/src/shared/utils/crypto.utils'
 
 export interface User {
   uid: string
@@ -96,30 +98,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const handleRedirect = async () => {
       try {
-        console.log('[Auth] Checking for redirect result...')
-        console.log('[Auth] Current URL:', window.location.href)
-        
-        // Set persistence to local storage
+        // 不 log URL（redirect 期間可能含 auth code）與 email/UID — 共用工作站的 console 會留存
         await setPersistence(auth, browserLocalPersistence)
-        console.log('[Auth] Persistence set to local storage')
-        
+
         const result = await getRedirectResult(auth)
-        console.log('[Auth] getRedirectResult returned:', result ? 'User object' : 'null')
-        
         if (result) {
-          console.log('[Auth] Redirect sign-in successful!')
-          console.log('[Auth] User email:', result.user.email)
-          console.log('[Auth] User UID:', result.user.uid)
           // User successfully signed in via redirect
           // onAuthStateChanged will handle the rest
-        } else {
-          console.log('[Auth] No redirect result found (this is normal on first load)')
+          console.log('[Auth] Redirect sign-in successful')
         }
       } catch (error: any) {
-        console.error('[Auth] Redirect sign-in error:', error)
-        console.error('[Auth] Error code:', error.code)
-        console.error('[Auth] Error message:', error.message)
-        console.error('[Auth] Full error:', JSON.stringify(error, null, 2))
+        console.error('[Auth] Redirect sign-in error:', error.code, error.message)
       }
     }
     
@@ -212,8 +201,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Set persistence before sign-in
       await setPersistence(auth, browserLocalPersistence)
       
-      const result = await signInWithPopup(auth, provider)
-      console.log('[Auth] Sign-in successful:', result.user.email)
+      await signInWithPopup(auth, provider)
+      console.log('[Auth] Sign-in successful')
       setLoading(false)
     } catch (error: any) {
       console.error('[Auth] Google sign-in error:', error)
@@ -263,11 +252,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign out
   const signOut = async () => {
     if (!auth) throw new Error('Firebase not initialized')
-    
+
     setLoading(true)
     try {
       await firebaseSignOut(auth)
       // User state will be updated by onAuthStateChanged listener
+
+      // Shared-workstation hygiene: logout also wipes locally stored LLM API
+      // keys and the obfuscation key so the next user can't reuse them
+      useAiConfigStore.getState().clearAllKeys()
+      clearSessionKey()
     } finally {
       setLoading(false)
     }

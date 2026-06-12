@@ -87,11 +87,13 @@ const saveEncryptedKey = async (storageType: StorageType, key: string, value: st
 export const useAiConfigStore = create<AiConfigState>()(
   persist(
     (set, get) => ({
-      // Initial state
+      // Initial state — sessionStorage by default (shared-workstation safety);
+      // onRehydrateStorage migrates legacy users who already hold keys in
+      // localStorage without a saved preference
       apiKey: null,
       geminiKey: null,
       perplexityKey: null,
-      storageType: 'localStorage',
+      storageType: 'sessionStorage',
       model: DEFAULT_MODEL_ID,
       
       // Actions
@@ -159,9 +161,22 @@ export const useAiConfigStore = create<AiConfigState>()(
       onRehydrateStorage: () => async (state) => {
         if (!state || typeof window === 'undefined') return
         
-        // Load storage type preference
+        // Load storage type preference. No saved preference: legacy users who
+        // already have keys in localStorage keep that behavior (and we persist
+        // the choice so it stays stable); fresh users default to sessionStorage
+        // so keys don't outlive the browser session on shared workstations.
         const savedStorageType = window.localStorage.getItem(STORAGE_KEYS.STORAGE_TYPE) as StorageType | null
-        const storageType = savedStorageType || 'localStorage'
+        let storageType: StorageType
+        if (savedStorageType) {
+          storageType = savedStorageType
+        } else {
+          const hasLegacyLocalKeys =
+            window.localStorage.getItem(STORAGE_KEYS.OPENAI_API_KEY) !== null ||
+            window.localStorage.getItem(STORAGE_KEYS.GEMINI_API_KEY) !== null ||
+            window.localStorage.getItem(STORAGE_KEYS.PERPLEXITY_API_KEY) !== null
+          storageType = hasLegacyLocalKeys ? 'localStorage' : 'sessionStorage'
+          window.localStorage.setItem(STORAGE_KEYS.STORAGE_TYPE, storageType)
+        }
         
         // Load encrypted keys from appropriate storage (async)
         const [apiKey, geminiKey, perplexityKey] = await Promise.all([

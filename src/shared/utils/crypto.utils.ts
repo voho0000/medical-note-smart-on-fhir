@@ -1,5 +1,11 @@
-// Crypto Utilities - Secure API Key Storage
-// Uses Web Crypto API for encryption/decryption
+// Crypto Utilities - API Key Storage Obfuscation
+//
+// Honest threat model: the PBKDF2 password lives in localStorage next to the
+// ciphertext, so this protects ONLY against casual disk/backup inspection and
+// shoulder-surfing of devtools Storage panels. It is NOT a security boundary —
+// any XSS or local user who can run JS can decrypt. Defense against XSS is the
+// app's sanitization layer; defense on shared workstations is sessionStorage
+// mode (default for new users) + clearing keys on logout.
 
 const ENCRYPTION_ALGORITHM = 'AES-GCM'
 const KEY_LENGTH = 256
@@ -91,9 +97,9 @@ export async function encrypt(plaintext: string): Promise<string> {
     // Convert to base64
     return btoa(String.fromCharCode(...combined))
   } catch (error) {
+    // Never fall back to storing the plaintext — callers catch and skip the save
     console.error('Encryption failed:', error)
-    // Fallback to plaintext if encryption fails
-    return plaintext
+    throw error
   }
 }
 
