@@ -2,7 +2,7 @@
 import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
-import { formatNumberSmart } from "@/features/clinical-summary/reports/utils/number-format.utils"
+import { formatNumberSmart } from "@/src/shared/utils/number-format.utils"
 import type { ClinicalData, Observation } from "./types"
 
 export function useVitalSignsContext(

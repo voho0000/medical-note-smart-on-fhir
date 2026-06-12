@@ -28,7 +28,7 @@ import type {
   DataSelection,
   TimeRange,
 } from '@/src/core/entities/clinical-context.entity'
-import { isChronicPrescription } from '@/features/clinical-summary/medications/utils/fhir-helpers'
+import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 import { orphanResultObservations } from './ips-helpers'
 import { findSctForCondition } from './snomed-mapping'
 

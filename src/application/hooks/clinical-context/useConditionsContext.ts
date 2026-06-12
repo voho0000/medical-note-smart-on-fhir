@@ -5,7 +5,7 @@ import { mapAndFilter } from "./formatters"
 import type { ClinicalData } from "./types"
 import { lookupIcd, buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { pickByLocale } from "@/features/clinical-summary/medications/utils/fhir-helpers"
+import { pickByLocale } from "@/src/shared/utils/fhir-display-helpers"
 
 function formatConditionName(condition: any, dict: Map<string, string>, locale: string): string {
   const coding = condition.code?.coding ?? []

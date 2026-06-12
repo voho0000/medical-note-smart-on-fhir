@@ -34,9 +34,9 @@ import {
   type ConditionSctAnnotation,
 } from './snomed-mapping'
 import { SYSTEM } from './ips-constants'
-import { decodeBase64Utf8 } from '@/features/clinical-summary/document-summary/utils/base64'
-import { checkReferenceRangeAbnormal } from '@/features/clinical-summary/reports/utils/interpretation-helpers'
-import { isChronicPrescription } from '@/features/clinical-summary/medications/utils/fhir-helpers'
+import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
+import { checkReferenceRangeAbnormal } from '@/src/shared/utils/interpretation-helpers'
+import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 import { parseInferenceResponse, type InferredProblemRaw } from './llm-json'
 import type {
   InferredProblem,

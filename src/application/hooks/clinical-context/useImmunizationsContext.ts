@@ -6,7 +6,7 @@ import type { ClinicalData } from "./types"
 import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { pickLocalizedText } from "@/features/clinical-summary/medications/utils/fhir-helpers"
+import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
 
 function vaccineKey(imm: any): string {
   return (

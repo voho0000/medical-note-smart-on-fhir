@@ -5,7 +5,7 @@ import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/cl
 import type { ClinicalData } from "./types"
 import { lookupIcd, buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { pickByLocale } from "@/features/clinical-summary/medications/utils/fhir-helpers"
+import { pickByLocale } from "@/src/shared/utils/fhir-display-helpers"
 
 function isProblemListItem(cond: any): boolean {
   const categories = cond?.category

@@ -8,8 +8,8 @@ import type { ClinicalData } from "./types"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { pickLocalizedText } from "@/features/clinical-summary/medications/utils/fhir-helpers"
-import { routeAbbr } from "@/features/clinical-summary/medications/utils/route-display"
+import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
+import { routeAbbr } from "@/src/shared/utils/route-display"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
 

@@ -12,7 +12,7 @@ import type { ClinicalData } from "./types"
 import { buildIcdDictionary, extractEncounterIcds } from "@/src/shared/utils/icd-lookup"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { pickLocalizedText } from "@/features/clinical-summary/medications/utils/fhir-helpers"
+import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
 
 const MAX_VISITS = 10
 const RECENT_DAYS = 365
