@@ -43,3 +43,6 @@ next-env.d.ts
 
 # IDE and editor files
 .claude
+
+# build-gh.mjs temp stash (left behind if a GH Pages build is interrupted)
+.api-stash-gh-build/
