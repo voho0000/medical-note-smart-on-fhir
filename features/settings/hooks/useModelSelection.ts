@@ -1,5 +1,6 @@
 // Custom Hook: Model Selection Logic
 import { useMemo } from 'react'
+import { toast } from 'sonner'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import {
   GPT_MODELS,
@@ -59,17 +60,17 @@ export function useModelSelection(
     if (!definition) return
 
     if (definition.provider === "openai" && definition.requiresUserKey && !apiKey) {
-      alert("Add an OpenAI API key to use premium GPT models.")
+      toast.error(t.settings.requiresOpenAiKey)
       return
     }
 
     if (definition.provider === "openai" && !definition.requiresUserKey && !apiKey && !hasChatProxy) {
-      alert("Configure the Firebase Functions proxy or add your OpenAI key to use this model.")
+      toast.error(t.settings.requiresProxyOrOpenAiKey)
       return
     }
 
     if (definition.provider === "gemini" && !geminiKey && !hasGeminiProxy) {
-      alert("Add a Gemini API key or configure the Firebase Functions proxy before using this model.")
+      toast.error(t.settings.requiresGeminiKeyOrProxy)
       return
     }
 

@@ -2,6 +2,9 @@
 export const en = {
   common: {
     loading: 'Loading...',
+    copy: 'Copy',
+    copied: 'Copied',
+    copyFailed: 'Copy failed',
     error: 'Error',
     save: 'Save',
     cancel: 'Cancel',
@@ -481,6 +484,7 @@ export const en = {
     mediaConsentBody: 'Images and voice recordings are sent as-is to OpenAI / Google for processing — no de-identification is applied. Any patient names or IDs visible in a photo or spoken aloud will be transmitted. Please make sure the content contains no unnecessary identifiers.',
     mediaConsentAccept: 'I understand, continue',
     mediaConsentCancel: 'Cancel',
+    voiceNeedsApiKey: 'Voice transcription requires an OpenAI API key — add one in Settings first',
     stopRecording: 'Stop Recording',
     processing: 'Processing…',
     voiceInputError: 'Voice input error:',
@@ -742,6 +746,9 @@ export const en = {
   },
 
   clinicalInsights: {
+    regenerateOverwriteTitle: 'Regenerating will overwrite your edits',
+    regenerateOverwriteDescription: 'This note has been manually edited. Regenerating replaces it with a new AI response and your edits cannot be recovered.',
+    regenerateOverwriteConfirm: 'Regenerate anyway',
     title: 'Clinical Insights',
     generate: 'Generate Insights',
     analyzing: 'Analyzing...',
@@ -799,6 +806,8 @@ export const en = {
     fhirServerLabel: 'FHIR Server',
     errorCode: 'Error Code',
     fhirServerRetry: 'Please try again later, or use a different FHIR server',
+    errorLoadingContext: 'Error loading {context}',
+    retry: 'Retry',
     // AppError codes
     NETWORK_ERROR: 'Network connection error, please check your internet connection',
     TIMEOUT_ERROR: 'Request timeout, please try again later',
@@ -931,6 +940,9 @@ export const en = {
     switchWhileStreamingDescription: 'A response is currently being generated. Switching now will lose the incomplete content. Continue?',
     switchWhileStreamingCancel: 'Cancel',
     switchWhileStreamingConfirm: 'Switch Anyway',
+    deleteConfirmTitle: 'Delete this conversation?',
+    deleteConfirmDescription: 'This conversation will be permanently deleted and cannot be recovered.',
+    deleteFailed: 'Delete failed — please try again',
   },
 
   connectionInfo: {
@@ -1121,6 +1133,8 @@ export const en = {
   },
 
   importBundle: {
+    clearConfirmTitle: 'Clear the imported data?',
+    clearConfirmDescription: 'The patient data and all derived views will be cleared. Re-import the file to view it again.',
     button: 'Import',
     importing: 'Importing…',
     localData: 'Local data',

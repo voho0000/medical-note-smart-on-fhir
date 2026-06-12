@@ -4,6 +4,9 @@ import type { Translation } from './en'
 export const zhTW = {
   common: {
     loading: '載入中...',
+    copy: '複製',
+    copied: '已複製',
+    copyFailed: '複製失敗',
     error: '錯誤',
     save: '儲存',
     cancel: '取消',
@@ -485,6 +488,7 @@ export const zhTW = {
     mediaConsentBody: '圖片與語音會以原始內容直接傳送至 OpenAI / Google 進行辨識，不會經過去識別化處理。照片或口述中若含有病人姓名、病歷號等資訊，將一併送出。請確認內容不含不必要的個人識別資訊。',
     mediaConsentAccept: '我瞭解，繼續',
     mediaConsentCancel: '取消',
+    voiceNeedsApiKey: '語音轉錄需要 OpenAI API Key，請先到「設定」加入',
     stopRecording: '停止錄音',
     processing: '處理中…',
     voiceInputError: '語音輸入錯誤：',
@@ -746,6 +750,9 @@ export const zhTW = {
   },
 
   clinicalInsights: {
+    regenerateOverwriteTitle: '重新生成將覆蓋你的編輯',
+    regenerateOverwriteDescription: '此筆記已經過手動編輯，重新生成會以新的 AI 回應取代，編輯內容將無法復原。',
+    regenerateOverwriteConfirm: '仍要重新生成',
     title: '臨床洞察',
     generate: '產生洞察',
     analyzing: '分析中...',
@@ -803,6 +810,8 @@ export const zhTW = {
     fhirServerLabel: 'FHIR 伺服器',
     errorCode: '錯誤代碼',
     fhirServerRetry: '請稍後再試，或使用其他 FHIR 伺服器',
+    errorLoadingContext: '載入{context}時發生錯誤',
+    retry: '重試',
     // AppError codes
     NETWORK_ERROR: '網路連線錯誤，請檢查您的網路連線',
     TIMEOUT_ERROR: '請求逾時，請稍後再試',
@@ -935,6 +944,9 @@ export const zhTW = {
     switchWhileStreamingDescription: '目前有對話正在生成回答，切換將會丟失未完成的內容。確定要切換嗎？',
     switchWhileStreamingCancel: '取消',
     switchWhileStreamingConfirm: '確定切換',
+    deleteConfirmTitle: '刪除對話？',
+    deleteConfirmDescription: '此對話將被永久刪除，無法復原。',
+    deleteFailed: '刪除失敗，請稍後再試',
   },
 
   connectionInfo: {
@@ -1125,6 +1137,8 @@ export const zhTW = {
   },
 
   importBundle: {
+    clearConfirmTitle: '清除已匯入的資料？',
+    clearConfirmDescription: '病人資料與所有衍生畫面將被清除。若要再次檢視，需要重新匯入檔案。',
     button: '匯入資料',
     importing: '匯入中…',
     localData: '本地資料',

@@ -1,6 +1,7 @@
 // app/layout.tsx
 import "./globals.css"
 import type { Metadata } from "next"
+import { Toaster } from "sonner"
 import { TwcatBootstrap } from "./twcat-bootstrap"
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body suppressHydrationWarning>
         <TwcatBootstrap />
         {children}
+        <Toaster richColors closeButton position="top-center" />
       </body>
     </html>
   )
