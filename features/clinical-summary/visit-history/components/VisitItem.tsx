@@ -94,8 +94,9 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
               {visit.department && (
                 <span className="text-xs text-muted-foreground">{visit.department}</span>
               )}
+              {/* The i18n label already ends with a colon (主治醫師：/ Physician:) */}
               {visit.physician && (
-                <span className="text-xs text-muted-foreground">{t.visitHistory.physician}: {visit.physician}</span>
+                <span className="text-xs text-muted-foreground">{t.visitHistory.physician} {visit.physician}</span>
               )}
             </div>
             {visit.status === "in-progress" && (

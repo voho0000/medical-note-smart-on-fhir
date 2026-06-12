@@ -299,6 +299,65 @@ export function canonicalizeBundleResources(bundle: any): any[] {
   return resources
 }
 
+/** Best human-readable name for a person/place resource (display resolution). */
+function resourceDisplayName(res: any): string | undefined {
+  if (!res) return undefined
+  // Organization / Location use a plain string `name`.
+  if (typeof res.name === 'string') return res.name || undefined
+  // Practitioner (and other HumanName[] holders): prefer `text`, else assemble.
+  const n = Array.isArray(res.name) ? res.name[0] : undefined
+  if (!n) return undefined
+  if (n.text) return n.text
+  const parts = [n.family, ...(n.given ?? [])].filter(Boolean)
+  return parts.length ? parts.join(' ') : undefined
+}
+
+/**
+ * Display canonicalisation: stamp a human-readable `display` onto every
+ * in-bundle reference that lacks one and whose target is a person/place
+ * resource (Practitioner / PractitionerRole / Organization / Location).
+ *
+ * Why: TW-Core document bundles (e.g. 門診 scenario files) model the attending
+ * physician as `Encounter.participant[].individual → Reference(Practitioner)`
+ * and the institution as `serviceProvider → Reference(Organization)` with NO
+ * display strings — the UI renders only `.display`, so both showed blank.
+ * PractitionerRole references resolve through to the underlying practitioner's
+ * name. Existing display strings are never overwritten. Mutates in place (the
+ * canonicalised clones, never the cached raw bundle).
+ */
+export function attachReferenceDisplays(resources: any[]): void {
+  const displayByRef = new Map<string, string>()
+  for (const res of resources) {
+    if (!['Practitioner', 'Organization', 'Location'].includes(res.resourceType)) continue
+    const display = resourceDisplayName(res)
+    if (display) displayByRef.set(`${res.resourceType}/${res.id}`, display)
+  }
+  // Second pass: PractitionerRole → its practitioner's resolved name.
+  for (const res of resources) {
+    if (res.resourceType !== 'PractitionerRole') continue
+    const display = res.practitioner?.reference
+      ? displayByRef.get(res.practitioner.reference)
+      : undefined
+    if (display) displayByRef.set(`PractitionerRole/${res.id}`, display)
+  }
+  if (!displayByRef.size) return
+
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if (!node || typeof node !== 'object') return
+    const obj = node as Record<string, unknown>
+    if (typeof obj.reference === 'string' && !obj.display) {
+      const display = displayByRef.get(obj.reference)
+      if (display) obj.display = display
+    }
+    for (const key of Object.keys(obj)) walk(obj[key])
+  }
+  walk(resources)
+}
+
 export interface LocalBundleData {
   patient: PatientEntity
   collection: ClinicalDataCollection
@@ -466,6 +525,11 @@ export const LocalBundleService = {
     // style. See canonicalizeBundleResources.
     const entries: any[] = canonicalizeBundleResources(bundle)
     if (!entries.length) return null
+
+    // Display canonicalisation: resolve Practitioner / Organization / Location
+    // references to human-readable display strings (attending physician,
+    // institution) so the UI's `.display`-only renderers can show them.
+    attachReferenceDisplays(entries)
 
     const byType = (type: string) => entries.filter((r) => r.resourceType === type)
 
