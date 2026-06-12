@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useMemo } from "react"
-import { streamText } from "ai"
+import { streamText, stepCountIs } from "ai"
 import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
@@ -132,11 +132,18 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           ...newMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         ]
 
-        // Stream with tools
+        // Stream with tools. stopWhen enables the AI SDK's NATIVE multi-step
+        // loop: after a tool call the SDK feeds the result back to the model
+        // automatically and continues, up to N steps. Without it (v6 default
+        // is a single step) the run dead-ends whenever the model narrates a
+        // preamble *and* calls a tool in the same step — which Claude does
+        // ("讓我先查詢…") but GPT/Gemini usually don't, hence the manual
+        // follow-up below only papered over the latter.
         const result = await streamText({
           model,
           messages: apiMessages,
           tools,
+          stopWhen: stepCountIs(10),
           abortSignal: abortControllerRef.current.signal,
           onStepFinish: ({ toolCalls }) => {
             if (toolCalls && toolCalls.length > 0) {
