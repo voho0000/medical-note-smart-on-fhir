@@ -1,8 +1,18 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { Download, Trash2, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useImportBundle } from "./hooks/useImportBundle"
 
@@ -24,6 +34,8 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
   const { t } = useLanguage()
   const i18n = t.importBundle
   const { importFile, clear, loading, error, hasBundle, bundleIsActive } = useImportBundle()
+  // Clearing wipes the whole patient context in one click — confirm first
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -75,12 +87,30 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
             variant="ghost"
             size="icon"
             className="h-8 w-8 sm:h-9 sm:w-9 text-destructive hover:text-destructive"
-            onClick={clear}
+            onClick={() => setConfirmClearOpen(true)}
             title={i18n.clearTitle}
+            aria-label={i18n.clearTitle}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         )}
+        <AlertDialog open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{i18n.clearConfirmTitle}</AlertDialogTitle>
+              <AlertDialogDescription>{i18n.clearConfirmDescription}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => { setConfirmClearOpen(false); clear() }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {i18n.clearTitle}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
       {error && (
         <p className="text-xs text-destructive px-1">{error}</p>

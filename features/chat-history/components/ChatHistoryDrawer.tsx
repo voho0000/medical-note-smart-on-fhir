@@ -40,6 +40,9 @@ export function ChatHistoryDrawer() {
     isLoading,
     handleLoadSession,
     handleDeleteSession,
+    pendingDeleteId,
+    confirmDeleteSession,
+    cancelDeleteSession,
     handleNewChat,
     handleOpenAuthDialog,
     handleConfirmSwitch,
@@ -138,6 +141,24 @@ export function ChatHistoryDrawer() {
           </ScrollArea>
         )}
       </SheetContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={pendingDeleteId !== null} onOpenChange={(next) => { if (!next) cancelDeleteSession() }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.chatHistory.deleteConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.chatHistory.deleteConfirmDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDeleteSession}>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteSession} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t.common.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Streaming Confirmation Dialog */}
       <AlertDialog open={showStreamingConfirm} onOpenChange={handleCancelSwitch}>

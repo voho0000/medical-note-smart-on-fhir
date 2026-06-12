@@ -1,5 +1,6 @@
 // Chat History Drawer State Management Hook
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useChatHistory } from '@/src/application/hooks/chat/use-chat-history.hook'
 import { useChatSession } from '@/src/application/hooks/chat/use-chat-session.hook'
@@ -13,6 +14,7 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const [showStreamingConfirm, setShowStreamingConfirm] = useState(false)
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const { sessions, isLoading, deleteSession } = useChatHistory(patientId, fhirServerUrl)
   const { loadSession, startNewSession } = useChatSession()
   const { forceSave } = useAutoSaveChat({ patientId, fhirServerUrl })
@@ -67,14 +69,27 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
     setPendingSessionId(null)
   }
 
-  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
+  // Deleting is irreversible — route through a confirm dialog instead of
+  // firing on the (hover-revealed) trash click
+  const handleDeleteSession = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    setPendingDeleteId(sessionId)
+  }
 
+  const confirmDeleteSession = async () => {
+    const sessionId = pendingDeleteId
+    setPendingDeleteId(null)
+    if (!sessionId) return
     try {
       await deleteSession(sessionId)
     } catch (error) {
       console.error('Failed to delete session:', error)
+      toast.error(t.chatHistory.deleteFailed)
     }
+  }
+
+  const cancelDeleteSession = () => {
+    setPendingDeleteId(null)
   }
 
   const handleNewChat = async () => {
@@ -119,6 +134,9 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
     isLoading,
     handleLoadSession,
     handleDeleteSession,
+    pendingDeleteId,
+    confirmDeleteSession,
+    cancelDeleteSession,
     handleNewChat,
     handleOpenAuthDialog,
     handleConfirmSwitch,

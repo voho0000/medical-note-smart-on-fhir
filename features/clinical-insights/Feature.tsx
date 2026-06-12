@@ -5,6 +5,16 @@ import { useEffect, useMemo, useState, useCallback } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
@@ -33,6 +43,9 @@ export default function ClinicalInsightsFeature() {
 
   const [context, setContext] = useState("")
   const [activeTabId, setActiveTabId] = useState<string>("")
+  // Regenerate nukes manual edits — when the response is edited, hold the
+  // request here until the user confirms
+  const [pendingRegenerateId, setPendingRegenerateId] = useState<string | null>(null)
   
   const panels = configPanels
 
@@ -134,7 +147,10 @@ export default function ClinicalInsightsFeature() {
           title: panel.title,
           prompt: prompts[panel.id] ?? panel.prompt,
           onPromptChange: (value: string) => handlePromptChange(panel.id, value),
-          onRegenerate: () => runPanel(panel.id, { force: true }),
+          onRegenerate: () => {
+            if (responseEntry.isEdited) setPendingRegenerateId(panel.id)
+            else runPanel(panel.id, { force: true })
+          },
           onStopGeneration: () => stopPanel(panel.id),
           isLoading: status.isLoading,
           response: responseEntry.text,
@@ -185,6 +201,34 @@ export default function ClinicalInsightsFeature() {
               </TabsContent>
             ))}
           </Tabs>
+          <AlertDialog
+            open={pendingRegenerateId !== null}
+            onOpenChange={(next) => { if (!next) setPendingRegenerateId(null) }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t.clinicalInsights.regenerateOverwriteTitle}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t.clinicalInsights.regenerateOverwriteDescription}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setPendingRegenerateId(null)}>
+                  {t.common.cancel}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    const id = pendingRegenerateId
+                    setPendingRegenerateId(null)
+                    if (id) runPanel(id, { force: true })
+                  }}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {t.clinicalInsights.regenerateOverwriteConfirm}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           </> ) : (
           <Card className={CARD_BORDER_CLASSES.insight}>
             <CardContent className="py-6 text-sm text-muted-foreground">
