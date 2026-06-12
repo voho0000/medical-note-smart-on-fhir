@@ -100,8 +100,9 @@ export function useMedicationRows(
 
       const doseSummary = humanDoseAmount(dosage?.doseAndRate, dosage?.text)
       // Route goes through the SNOMED route map (route-display.ts) so a bare
-      // coding without display/text renders as 口服/Oral instead of 26643006.
-      const routeSummary = routeDisplayText(dosage?.route, locale)
+      // coding without display/text renders per audience — PO for medical
+      // staff, 口服 for patients — instead of the raw 26643006.
+      const routeSummary = routeDisplayText(dosage?.route, { audience, locale })
       const frequencySummary = humanDoseFreq(dosage?.timing?.repeat) || extractFrequencyFromText(dosage?.text) || ""
 
       const detail = buildDetail({
@@ -109,6 +110,7 @@ export function useMedicationRows(
         doseText: dosage?.text,
         route: dosage?.route,
         repeat: dosage?.timing?.repeat,
+        audience,
         locale,
       })
 

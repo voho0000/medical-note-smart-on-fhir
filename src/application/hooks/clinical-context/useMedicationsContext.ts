@@ -9,6 +9,7 @@ import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { pickLocalizedText } from "@/features/clinical-summary/medications/utils/fhir-helpers"
+import { routeAbbr } from "@/features/clinical-summary/medications/utils/route-display"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
 
@@ -72,7 +73,11 @@ function summarize(
 
   const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
   const frequency = dosage?.text || undefined
-  const route = dosage?.route?.text || dosage?.route?.coding?.[0]?.display || undefined
+  // Bare SNOMED route codings (no text/display) resolve to the canonical
+  // clinical abbreviation (PO / SC / …) — the AI context always speaks
+  // canonical English regardless of UI audience/language.
+  const route =
+    dosage?.route?.text || dosage?.route?.coding?.[0]?.display || routeAbbr(dosage?.route) || undefined
   const dose = dosage?.doseAndRate?.[0]?.doseQuantity
     ? `${dosage.doseAndRate[0].doseQuantity.value} ${dosage.doseAndRate[0].doseQuantity.unit || ''}`.trim()
     : undefined
