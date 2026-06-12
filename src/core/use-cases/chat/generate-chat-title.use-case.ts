@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@/src/application/stores/chat.store'
+import type { ChatMessage } from '@/src/core/entities/chat-message.entity'
 
 export class GenerateChatTitleUseCase {
   async execute(messages: ChatMessage[], aiService?: any): Promise<string> {

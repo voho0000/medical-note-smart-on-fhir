@@ -4,7 +4,7 @@
  * Shared utilities for creating and managing chat messages.
  * Eliminates code duplication across chat hooks.
  */
-import type { ChatMessage, AgentState, ChatImage } from "@/src/application/stores/chat.store"
+import type { ChatMessage, AgentState, ChatImage } from "@/src/core/entities/chat-message.entity"
 
 /**
  * Create a user message

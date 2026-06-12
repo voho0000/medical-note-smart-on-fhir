@@ -7,30 +7,11 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { ChatMessage } from '@/src/core/entities/chat-message.entity'
 
-export interface ChatImage {
-  data: string        // base64 data URL for API (full size)
-  thumbnail?: string  // base64 data URL for storage/display (compressed)
-  mimeType: string    // image/jpeg, image/png, etc.
-  fileName?: string   // original file name
-  size?: number       // file size in bytes
-}
-
-export interface ChatMessage {
-  id: string
-  role: "user" | "assistant" | "system"
-  content: string
-  timestamp: number
-  modelId?: string
-  agentStates?: AgentState[]
-  images?: ChatImage[]  // Support multiple images
-  toolCalls?: string[]  // List of tool names that were called
-}
-
-export interface AgentState {
-  state: string
-  timestamp: number
-}
+// Domain types live in core (audit C3); re-exported here so existing
+// consumers importing from the store keep working.
+export type { ChatMessage, ChatImage, AgentState } from '@/src/core/entities/chat-message.entity'
 
 interface ChatState {
   messages: ChatMessage[]

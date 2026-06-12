@@ -8,9 +8,9 @@ import { useUpdateSessionMutation } from './use-chat-sessions-query.hook'
 import { useFhirContext } from './use-fhir-context.hook'
 import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
 import { GenerateSmartTitleUseCase } from '@/src/core/use-cases/chat/generate-smart-title.use-case'
+import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 
 const repository = new FirestoreChatSessionRepository()
-const generateSmartTitleUseCase = new GenerateSmartTitleUseCase()
 
 export function useSmartTitleGeneration() {
   const { user } = useAuth()
@@ -93,11 +93,13 @@ export function useSmartTitleGeneration() {
       // Set generating state to true
       setIsTitleGenerating(true)
       
-      const smartTitle = await generateSmartTitleUseCase.execute({
+      // Composition happens here (application layer): OpenAiService falls
+      // back to the Firebase proxy when no key is set
+      const useCase = new GenerateSmartTitleUseCase(new OpenAiService(apiKey))
+      const smartTitle = await useCase.execute({
         userMessage,
         assistantMessage,
         locale,
-        apiKey,  // Pass decrypted API key from store
       })
       
       // Wait a bit to ensure auto-save has completed

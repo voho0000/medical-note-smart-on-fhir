@@ -1,5 +1,5 @@
-import type { ChatMessage } from '@/src/application/stores/chat.store'
-import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
+import type { ChatMessage } from '@/src/core/entities/chat-message.entity'
+import type { IAiService } from '@/src/core/interfaces/services/ai.service.interface'
 import { logger } from '@/src/shared/services/logger.service'
 
 const titleLogger = logger.scope('AI Title')
@@ -8,23 +8,26 @@ export interface GenerateSmartTitleOptions {
   userMessage: string
   assistantMessage: string
   locale: string
-  apiKey?: string | null  // Decrypted API key from store
 }
 
+/** The single capability this use case needs (interface segregation). */
+export type TitleAiService = Pick<IAiService, 'query'>
+
 export class GenerateSmartTitleUseCase {
+  // Injected interface — core must not construct concrete infrastructure
+  // services (audit C3); the caller picks the provider/key
+  constructor(private readonly aiService: TitleAiService) {}
+
   async execute(options: GenerateSmartTitleOptions): Promise<string> {
-    const { userMessage, assistantMessage, locale, apiKey } = options
-    
+    const { userMessage, assistantMessage, locale } = options
+
     // Prepare prompt based on locale
     const prompt = locale === 'zh-TW' 
       ? this.getChinesePrompt(userMessage, assistantMessage)
       : this.getEnglishPrompt(userMessage, assistantMessage)
     
     try {
-      // Use OpenAiService which has built-in fallback to Firebase proxy
-      const openAiService = new OpenAiService(apiKey)
-      
-      const response = await openAiService.query({
+      const response = await this.aiService.query({
         modelId: 'gpt-5-nano',
         messages: [{
           role: 'user',
