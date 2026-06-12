@@ -32,7 +32,7 @@ interface FeedbackDialogProps {
 
 export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const { t } = useLanguage()
-  const { patientId, fhirServerUrl } = useFhirContext()
+  const { fhirServerUrl } = useFhirContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitStatus, setSubmitStatus] = useState<"idle" | "success" | "error">("idle")
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -79,6 +79,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     setSubmitStatus("idle")
 
     try {
+      // patientId 刻意不收集 — 回報信會經過第三方郵件服務，不可夾帶病人識別資訊
       const systemInfo = {
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
@@ -86,7 +87,6 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         language: navigator.language,
         currentPath: window.location.pathname,
         fhirServerUrl: fhirServerUrl || "未連線",
-        patientId: patientId || "無",
       }
 
       const feedbackUrl = process.env.NEXT_PUBLIC_FEEDBACK_URL || "/api/feedback"
@@ -215,6 +215,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
             )}
             <p className="text-sm text-muted-foreground">
               {t.feedback?.descriptionHint || "至少 20 個字元"}
+              {" · "}
+              {t.feedback?.noPhiHint || "請勿包含病人姓名、病歷號等個人資訊"}
             </p>
           </div>
 

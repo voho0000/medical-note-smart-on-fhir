@@ -7,6 +7,7 @@ interface FeedbackRequest {
   severity: string
   description: string
   steps?: string
+  // patientId 刻意排除 — 回報信經第三方郵件服務（Resend），不可夾帶病人識別資訊
   systemInfo: {
     timestamp: string
     userAgent: string
@@ -14,7 +15,6 @@ interface FeedbackRequest {
     language: string
     currentPath: string
     fhirServerUrl: string
-    patientId: string
   }
 }
 
@@ -31,8 +31,51 @@ function escapeHtml(value: unknown): string {
 const ISSUE_TYPES = new Set(["bug", "ui", "performance", "feature", "other"])
 const SEVERITIES = new Set(["low", "medium", "high", "critical"])
 
+// 瀏覽器發出的跨站請求帶 Origin — 擋掉非本站的網頁；curl 可偽造，但配合
+// rate limit 已足以擋掉順手亂打的濫用（正式驗證需等 Functions 端做 ID token）
+const ALLOWED_ORIGINS = new Set([
+  "https://voho0000.github.io",
+  "http://localhost:3001",
+  "http://localhost:3000",
+])
+
+// Serverless 每個 instance 各自計數（非全域精確），但足以把單一來源的
+// email 轟炸從「無上限」壓到「每 instance 每小時個位數」
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
+const RATE_LIMIT_MAX = 5
+const rateBuckets = new Map<string, { count: number; resetAt: number }>()
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const bucket = rateBuckets.get(ip)
+  if (!bucket || now > bucket.resetAt) {
+    rateBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+    return false
+  }
+  bucket.count += 1
+  return bucket.count > RATE_LIMIT_MAX
+}
+
+const MAX_FIELD_LENGTH = 5000
+
 export async function POST(request: NextRequest) {
   try {
+    const origin = request.headers.get("origin")
+    const vercelHost = request.headers.get("host")
+    const sameHostOrigin = origin && vercelHost && origin === `https://${vercelHost}`
+    if (origin && !ALLOWED_ORIGINS.has(origin) && !sameHostOrigin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+    if (isRateLimited(ip)) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429 }
+      )
+    }
+
     const body: FeedbackRequest = await request.json()
 
     const { email, issueType, severity, description, steps, systemInfo } = body
@@ -41,6 +84,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
+      )
+    }
+
+    if (
+      String(email).length > 320 ||
+      String(description).length > MAX_FIELD_LENGTH ||
+      String(steps ?? "").length > MAX_FIELD_LENGTH
+    ) {
+      return NextResponse.json(
+        { error: "Payload too large" },
+        { status: 413 }
       )
     }
 
@@ -117,7 +171,6 @@ export async function POST(request: NextRequest) {
           <div><strong>語言:</strong> ${escapeHtml(systemInfo.language)}</div>
           <div><strong>當前頁面:</strong> ${escapeHtml(systemInfo.currentPath)}</div>
           <div><strong>FHIR Server:</strong> ${escapeHtml(systemInfo.fhirServerUrl)}</div>
-          <div><strong>患者 ID:</strong> ${escapeHtml(systemInfo.patientId)}</div>
         </div>
       </div>
     </div>
@@ -151,7 +204,6 @@ ${steps ? `重現步驟:\n${steps}\n` : ''}
 - 語言: ${systemInfo.language}
 - 當前頁面: ${systemInfo.currentPath}
 - FHIR Server: ${systemInfo.fhirServerUrl}
-- 患者 ID: ${systemInfo.patientId}
 
 ---
 此郵件由 MediPrisma 系統自動發送
