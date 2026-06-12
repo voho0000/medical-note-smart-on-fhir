@@ -6,7 +6,8 @@ import { Info } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { Label } from "@/components/ui/label"
-import { DEFAULT_MODEL_ID, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { cn } from "@/src/shared/utils/cn.utils"
+import { DEFAULT_MODEL_ID, getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
 import { hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
 import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSelection'
 import { ModelSelector } from './ModelSelector'
@@ -60,6 +61,27 @@ export function ModelAndKeySettings() {
     model,
     setModel
   )
+
+  // Show one provider's models at a time (was 12 cards stacked). The visible
+  // provider follows the currently-selected model, but the user can browse
+  // other providers without changing their selection.
+  const PROVIDER_TABS: Array<{ id: ModelProvider; label: string }> = [
+    { id: "openai", label: "GPT" },
+    { id: "gemini", label: "Gemini" },
+    { id: "claude", label: "Claude" },
+  ]
+  const selectedProvider = getModelDefinition(model)?.provider ?? "openai"
+  const [activeProvider, setActiveProvider] = useState<ModelProvider>(selectedProvider)
+  // Keep the visible tab in sync when the model changes elsewhere
+  useEffect(() => {
+    setActiveProvider(selectedProvider)
+  }, [selectedProvider])
+
+  const modelsByProvider: Record<ModelProvider, typeof gptModels> = {
+    openai: gptModels,
+    gemini: geminiModels,
+    claude: claudeModels,
+  }
 
   const handleSaveOpenAiKey = async () => {
     if (openAiValue) setApiKey(openAiValue.trim())
@@ -126,21 +148,36 @@ export function ModelAndKeySettings() {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
+          {/* Provider tabs */}
+          <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+            {PROVIDER_TABS.map((tab) => {
+              const isActive = activeProvider === tab.id
+              const hasSelected = selectedProvider === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveProvider(tab.id)}
+                  className={cn(
+                    "relative rounded-md px-3 py-1.5 text-sm font-medium transition",
+                    isActive
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tab.label}
+                  {/* dot marks the provider holding the active model */}
+                  {hasSelected && (
+                    <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
           <ModelSelector
-            models={gptModels}
-            selectedModel={model}
-            onSelectModel={handleSelectModel}
-            getModelStatus={getModelStatus}
-          />
-          <ModelSelector
-            models={geminiModels}
-            selectedModel={model}
-            onSelectModel={handleSelectModel}
-            getModelStatus={getModelStatus}
-          />
-          <ModelSelector
-            models={claudeModels}
+            models={modelsByProvider[activeProvider]}
             selectedModel={model}
             onSelectModel={handleSelectModel}
             getModelStatus={getModelStatus}

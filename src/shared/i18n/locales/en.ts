@@ -648,6 +648,11 @@ export const en = {
   },
 
   settings: {
+    fontSize: 'Font Size',
+    fontSizeSmall: 'Small',
+    fontSizeNormal: 'Normal',
+    fontSizeLarge: 'Large',
+    fontSizeXLarge: 'X-Large',
     title: 'Settings',
     apiKey: 'API Key',
     model: 'AI Model',

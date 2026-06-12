@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { ThemeProvider } from './theme.provider'
+import { FontSizeProvider } from './font-size.provider'
 import { LanguageProvider } from './language.provider'
 import { AudienceProvider } from './audience.provider'
 import { QueryProvider } from './query-provider'
@@ -45,15 +46,17 @@ export function AppProviders({ children }: AppProvidersProps) {
   return (
     <QueryProvider>
       <ThemeProvider>
-        <LanguageProvider>
-          <AudienceProvider>
-            <AuthProvider>
-              <RightPanelProvider>
-                {children}
-              </RightPanelProvider>
-            </AuthProvider>
-          </AudienceProvider>
-        </LanguageProvider>
+        <FontSizeProvider>
+          <LanguageProvider>
+            <AudienceProvider>
+              <AuthProvider>
+                <RightPanelProvider>
+                  {children}
+                </RightPanelProvider>
+              </AuthProvider>
+            </AudienceProvider>
+          </LanguageProvider>
+        </FontSizeProvider>
       </ThemeProvider>
     </QueryProvider>
   )

@@ -652,6 +652,11 @@ export const zhTW = {
   },
 
   settings: {
+    fontSize: '字體大小',
+    fontSizeSmall: '小',
+    fontSizeNormal: '標準',
+    fontSizeLarge: '大',
+    fontSizeXLarge: '特大',
     title: '設定',
     apiKey: 'API 金鑰',
     model: 'AI 模型',

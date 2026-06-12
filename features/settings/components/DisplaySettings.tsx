@@ -15,6 +15,7 @@ import { Moon, Sun, ExternalLink, Bug } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useTheme } from '@/src/application/providers/theme.provider'
+import { useFontSize, type FontSize } from '@/src/application/providers/font-size.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { useFhirContext, LOCAL_BUNDLE_FHIR_URL } from '@/src/application/hooks/chat/use-fhir-context.hook'
@@ -22,8 +23,16 @@ import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
 
+const FONT_SIZE_OPTIONS: Array<{ value: FontSize; labelKey: string; fallback: string; preview: string }> = [
+  { value: 'sm', labelKey: 'fontSizeSmall', fallback: '小', preview: 'text-xs' },
+  { value: 'base', labelKey: 'fontSizeNormal', fallback: '標準', preview: 'text-sm' },
+  { value: 'lg', labelKey: 'fontSizeLarge', fallback: '大', preview: 'text-base' },
+  { value: 'xl', labelKey: 'fontSizeXLarge', fallback: '特大', preview: 'text-lg' },
+]
+
 export function DisplaySettings() {
   const { theme, setTheme } = useTheme()
+  const { fontSize, setFontSize } = useFontSize()
   const { t } = useLanguage()
   const version = useAppVersion()
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
@@ -61,6 +70,27 @@ export function DisplaySettings() {
             <Moon className="h-4 w-4" />
             {(t.settings as any).themeDark ?? '暗色'}
           </Button>
+        </div>
+      </div>
+
+      {/* Font size — scales the whole UI proportionally */}
+      <div className="space-y-3">
+        <Label className="text-xs uppercase text-muted-foreground">
+          {(t.settings as any).fontSize ?? '字體大小'}
+        </Label>
+        <div className="flex gap-2">
+          {FONT_SIZE_OPTIONS.map((opt) => (
+            <Button
+              key={opt.value}
+              variant={fontSize === opt.value ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFontSize(opt.value)}
+              className="flex-1 gap-1.5"
+            >
+              <span className={opt.preview}>A</span>
+              {(t.settings as any)[opt.labelKey] ?? opt.fallback}
+            </Button>
+          ))}
         </div>
       </div>
 
