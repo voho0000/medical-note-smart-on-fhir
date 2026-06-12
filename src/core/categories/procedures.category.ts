@@ -3,7 +3,6 @@ import type { DataCategory, ClinicalContextSection } from '../interfaces/data-ca
 import type { Procedure } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange, getMostRecentDate } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
-import { ProcedureFilter } from '@/features/data-selection/components/DataFilters'
 
 const getPerformedDate = (procedure: Procedure): string | undefined => {
   return getMostRecentDate(
@@ -58,7 +57,7 @@ export const proceduresCategory: DataCategory<Procedure> = {
     }
   ],
   
-  FilterComponent: ProcedureFilter,
+  filterComponentKey: 'procedure',
   
   extractData: (clinicalData) => clinicalData?.procedures || [],
   

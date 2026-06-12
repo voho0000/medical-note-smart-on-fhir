@@ -2,7 +2,16 @@
 // This defines the contract for all data categories in the application
 // Adding a new category only requires implementing this interface
 
-import type { ReactNode, ComponentType } from 'react'
+
+export type DataFilterKey =
+  | 'vitalSigns'
+  | 'condition'
+  | 'imagingReport'
+  | 'immunization'
+  | 'labReport'
+  | 'medication'
+  | 'problemList'
+  | 'procedure'
 
 export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | 'all'
 
@@ -49,9 +58,11 @@ export interface DataCategory<TData = any> {
   // Filter configuration for this category
   filters?: CategoryFilter[]
   
-  // Optional React component for rendering filters
-  // If provided, this component will be used instead of auto-generating filters
-  FilterComponent?: ComponentType<CategoryFilterProps>
+  // Optional custom filter UI, referenced BY KEY (audit C3): core declares
+  // which filter it wants; the feature layer maps keys to React components
+  // (features/data-selection/components/filter-registry.ts). Core must never
+  // import UI.
+  filterComponentKey?: DataFilterKey
   
   // Extract relevant data from clinical data
   extractData: (clinicalData: any) => TData[]

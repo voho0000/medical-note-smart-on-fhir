@@ -3,7 +3,6 @@ import type { DataCategory, ClinicalContextSection } from '../interfaces/data-ca
 import type { Observation } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { getCodeableConceptText } from '../utils/data-grouping.utils'
-import { VitalSignsFilter } from '@/features/data-selection/components/DataFilters'
 
 const getVitalSignType = (obs: Observation): string => {
   let type = obs.code?.text || obs.code?.coding?.[0]?.display
@@ -56,7 +55,7 @@ export const vitalSignsCategory: DataCategory<Observation> = {
     }
   ],
   
-  FilterComponent: VitalSignsFilter,
+  filterComponentKey: 'vitalSigns',
   
   extractData: (clinicalData) => clinicalData?.vitalSigns || [],
   

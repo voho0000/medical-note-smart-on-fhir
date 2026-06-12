@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { DataCategoryItem } from "./DataCategoryItem"
+import { getFilterComponent } from "./filter-registry"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
@@ -129,7 +130,7 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
               <div className="space-y-3">
                 {items.map((item) => {
                   const category = dataCategoryRegistry.get(item.id)
-                  const FilterComponent = category?.FilterComponent
+                  const FilterComponent = getFilterComponent(category?.filterComponentKey)
                   const adaptedFilters = filters as unknown as Record<string, FilterValue>
                   const adaptedOnFilterChange = (key: string, value: FilterValue) => {
                     onFilterChange(key as keyof DataFilters, value)
@@ -157,7 +158,7 @@ export function DataSelectionTab(props: DataSelectionTabProps) {
           <div className="space-y-3">
             {groupedCategories.unknown.map((item) => {
               const category = dataCategoryRegistry.get(item.id)
-              const FilterComponent = category?.FilterComponent
+              const FilterComponent = getFilterComponent(category?.filterComponentKey)
               const adaptedFilters = filters as unknown as Record<string, FilterValue>
               const adaptedOnFilterChange = (key: string, value: FilterValue) => {
                 onFilterChange(key as keyof DataFilters, value)

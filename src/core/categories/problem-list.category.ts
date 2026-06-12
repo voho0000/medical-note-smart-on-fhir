@@ -3,7 +3,6 @@
 // encounter-bound diagnoses).
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Condition } from '@/src/shared/types/fhir.types'
-import { ProblemListFilter } from '@/features/data-selection/components/DataFilters'
 
 function isProblemListItem(cond: any): boolean {
   const categories = cond?.category
@@ -45,7 +44,7 @@ export const problemListCategory: DataCategory<Condition> = {
     }
   ],
 
-  FilterComponent: ProblemListFilter,
+  filterComponentKey: 'problemList',
 
   extractData: (clinicalData) =>
     (clinicalData?.conditions || []).filter(isProblemListItem),

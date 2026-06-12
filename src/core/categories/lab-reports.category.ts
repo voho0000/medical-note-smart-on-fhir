@@ -1,12 +1,11 @@
 // Lab Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
-import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
-import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
+import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
-import { LabReportFilter } from '@/features/data-selection/components/DataFilters'
 
 // Union type for lab data (can be DiagnosticReport or standalone Observation)
 // Using shared FHIR types following SSOT principle
@@ -74,7 +73,7 @@ export const labReportsCategory: DataCategory<LabData> = {
     }
   ],
   
-  FilterComponent: LabReportFilter,
+  filterComponentKey: 'labReport',
   
   extractData: (clinicalData) => {
     // Lab DiagnosticReports + standalone lab observations. The standalone-obs

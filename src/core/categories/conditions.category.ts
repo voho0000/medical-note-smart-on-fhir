@@ -1,7 +1,6 @@
 // Conditions Category
 import type { DataCategory, ClinicalContextSection, FilterValue } from '../interfaces/data-category.interface'
 import type { Condition } from '@/src/shared/types/fhir.types'
-import { ConditionFilter } from '@/features/data-selection/components/DataFilters'
 
 const isActiveCondition = (condition: Condition): boolean => {
   const clinicalStatus = condition.clinicalStatus
@@ -39,7 +38,7 @@ export const conditionsCategory: DataCategory<Condition> = {
     }
   ],
   
-  FilterComponent: ConditionFilter,
+  filterComponentKey: 'condition',
   
   extractData: (clinicalData) => clinicalData?.conditions || [],
   

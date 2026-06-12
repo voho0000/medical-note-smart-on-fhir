@@ -20,7 +20,7 @@ import type {
   ClinicalDataCollection,
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
-import { inferGroupFromObservation } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { inferGroupFromObservation } from '@/src/shared/utils/report-grouping-helpers'
 
 /** Minimal shape the selectors read; tolerant of partial / nullable inputs. */
 export type ObservationSource = Partial<

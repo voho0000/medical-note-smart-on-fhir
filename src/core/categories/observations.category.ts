@@ -5,9 +5,8 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Observation } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
-import { formatNumberSmart } from '@/features/clinical-summary/reports/utils/number-format.utils'
+import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 import { selectOtherObservations } from '../utils/observation-selectors'
-import { VitalSignsFilter } from '@/features/data-selection/components/DataFilters'
 
 export const observationsCategory: DataCategory<Observation> = {
   id: 'observations',
@@ -36,7 +35,7 @@ export const observationsCategory: DataCategory<Observation> = {
     }
   ],
 
-  FilterComponent: VitalSignsFilter,
+  filterComponentKey: 'vitalSigns',
 
   extractData: (clinicalData) => {
     // Leftover observations only: NOT lab (-> Lab Reports), NOT imaging

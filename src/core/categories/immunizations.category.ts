@@ -4,7 +4,6 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { ImmunizationEntity } from '@/src/core/entities/clinical-data.entity'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
-import { ImmunizationFilter } from '@/features/data-selection/components/DataFilters'
 
 function vaccineKey(imm: any): string {
   return (
@@ -48,7 +47,7 @@ export const immunizationsCategory: DataCategory<ImmunizationEntity> = {
     }
   ],
 
-  FilterComponent: ImmunizationFilter,
+  filterComponentKey: 'immunization',
 
   extractData: (clinicalData) => clinicalData?.immunizations || [],
 

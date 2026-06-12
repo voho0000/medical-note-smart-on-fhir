@@ -1,11 +1,10 @@
 // Imaging Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
-import { inferGroupFromCategory } from '@/features/clinical-summary/reports/utils/grouping-helpers'
+import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { referenceId } from '../utils/observation-selectors'
-import { ImagingReportFilter } from '@/features/data-selection/components/DataFilters'
 
 // Helper to get latest imaging reports by name
 const getLatestImagingReports = (reports: DiagnosticReport[]): DiagnosticReport[] => {
@@ -56,7 +55,7 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
     }
   ],
   
-  FilterComponent: ImagingReportFilter,
+  filterComponentKey: 'imagingReport',
   
   extractData: (clinicalData) => {
     const reports = clinicalData?.diagnosticReports || []

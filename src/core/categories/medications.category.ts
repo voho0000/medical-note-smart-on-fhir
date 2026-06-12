@@ -2,7 +2,6 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { MedicationRequest } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
-import { MedicationFilter } from '@/features/data-selection/components/DataFilters'
 
 const isActiveMedication = (med: MedicationRequest): boolean => {
   return med.status === 'active' || med.status === 'completed'
@@ -85,7 +84,7 @@ export const medicationsCategory: DataCategory<MedicationRequest> = {
     }
   ],
 
-  FilterComponent: MedicationFilter,
+  filterComponentKey: 'medication',
 
   extractData: (clinicalData) => clinicalData?.medications || [],
 
