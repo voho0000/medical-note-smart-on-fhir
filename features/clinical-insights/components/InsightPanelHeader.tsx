@@ -1,5 +1,6 @@
 // Insight Panel Header Component
 import { useMemo } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -8,9 +9,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Loader2, Square, Sparkles, Trash2 } from "lucide-react"
+import { Check, Copy, Loader2, Square, Sparkles, Trash2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
+import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
 
 interface InsightPanelHeaderProps {
   title: string
@@ -36,7 +39,13 @@ export function InsightPanelHeader({
   onStopGeneration,
 }: InsightPanelHeaderProps) {
   const { t } = useLanguage()
-  
+  const { copied, copy } = useCopyToClipboard()
+
+  const handleCopy = async () => {
+    const ok = await copy(markdownToPlainText(response))
+    if (!ok) toast.error(t.common.copyFailed)
+  }
+
   const modelInfo = useMemo(() => {
     const definition = getModelDefinition(fallbackModelId)
     return {
@@ -56,6 +65,26 @@ export function InsightPanelHeader({
       <div className="flex gap-2">
         {response && !isLoading && (
           <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleCopy}
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1 text-muted-foreground"
+                  aria-label={copied ? t.common.copied : t.common.copy}
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-green-600" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{copied ? t.common.copied : t.common.copy}</p>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

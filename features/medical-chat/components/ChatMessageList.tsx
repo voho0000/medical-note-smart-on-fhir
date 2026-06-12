@@ -1,15 +1,18 @@
 "use client"
 
 import { useEffect, useRef, memo } from "react"
+import { toast } from "sonner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { MarkdownRenderer } from "@/src/shared/components/MarkdownRenderer"
+import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
+import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
 import type { ChatMessage } from "@/src/application/stores/chat.store"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
-import { Sparkles } from "lucide-react"
+import { Check, Copy, Sparkles } from "lucide-react"
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
@@ -45,6 +48,13 @@ function formatTimestamp(timestamp: number): string {
 }
 
 const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMessage; t: any }) {
+  const { copied, copy } = useCopyToClipboard()
+
+  const handleCopy = async () => {
+    const ok = await copy(markdownToPlainText(message.content))
+    if (!ok) toast.error(t.common.copyFailed)
+  }
+
   return (
     <div
       className={cn(
@@ -102,9 +112,17 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
                     alt={image.fileName || `Image ${idx + 1}`}
                     className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => {
-                      const win = window.open()
+                      // DOM APIs instead of document.write — no HTML-string
+                      // interpolation in an app-origin window
+                      const win = window.open('about:blank')
                       if (win) {
-                        win.document.write(`<img src="${image.data}" style="max-width:100%;height:auto;" />`)
+                        const img = win.document.createElement('img')
+                        img.src = image.data
+                        img.style.maxWidth = '100%'
+                        img.style.height = 'auto'
+                        win.document.body.style.margin = '0'
+                        win.document.body.style.background = '#000'
+                        win.document.body.appendChild(img)
                       }
                     }}
                   />
@@ -118,6 +136,26 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
             <CollapsibleMessage content={message.content} />
           )}
         </div>
+        {message.role === "assistant" && message.content && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label={copied ? t.common.copied : t.common.copy}
+            className="self-start flex items-center gap-1 px-1.5 py-0.5 text-[0.65rem] text-muted-foreground/70 hover:text-foreground rounded transition-colors"
+          >
+            {copied ? (
+              <>
+                <Check className="h-3 w-3 text-green-600" />
+                {t.common.copied}
+              </>
+            ) : (
+              <>
+                <Copy className="h-3 w-3" />
+                {t.common.copy}
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   )
