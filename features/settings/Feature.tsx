@@ -48,29 +48,29 @@ export function SettingsFeature() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="ai" className="space-y-6">
-          <Card className={CARD_BORDER_CLASSES.settings}>
-            <CardContent className="pt-6">
+          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
+            <CardContent>
               <ModelAndKeySettings />
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="templates" className="space-y-4">
-          <Card className={CARD_BORDER_CLASSES.settings}>
-            <CardContent className="pt-6">
+          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
+            <CardContent>
               <ChatTemplatesSettings />
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="insights" className="space-y-4">
-          <Card className={CARD_BORDER_CLASSES.settings}>
-            <CardContent className="pt-6">
+          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
+            <CardContent>
               <ClinicalInsightsSettings />
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="display" className="space-y-4">
-          <Card className={CARD_BORDER_CLASSES.settings}>
-            <CardContent className="pt-6">
+          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
+            <CardContent>
               <DisplaySettings />
             </CardContent>
           </Card>

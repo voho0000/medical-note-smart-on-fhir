@@ -103,7 +103,7 @@ export function InsightPanel({
 
   return (
     <>
-      <Card className={CARD_BORDER_CLASSES.insight}>
+      <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.insight}`}>
         <InsightPanelHeader
           title={title}
           fallbackModelId={fallbackModelId}

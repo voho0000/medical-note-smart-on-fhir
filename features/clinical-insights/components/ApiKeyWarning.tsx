@@ -8,7 +8,7 @@ export function ApiKeyWarning() {
   const { t } = useLanguage()
   
   return (
-    <Card className={`border-destructive/40 bg-destructive/5 text-destructive ${CARD_BORDER_CLASSES.insight}`}>
+    <Card className={`gap-0 py-0 border-destructive/40 bg-destructive/5 text-destructive ${CARD_BORDER_CLASSES.insight}`}>
       <CardContent className="flex items-center gap-3 py-4 text-sm font-medium">
         <AlertCircle className="h-5 w-5" />
         <div>

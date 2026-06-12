@@ -44,8 +44,8 @@ export default function IpsExportFeature() {
   // Clinical data failed to load
   if (error) {
     return (
-      <Card className={`border-destructive ${CARD_BORDER_CLASSES.clinical}`}>
-        <CardContent className="pt-6 text-sm">
+      <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.clinical}`}>
+        <CardContent className="text-sm">
           <div className="mb-1 font-medium text-destructive">{x.errorTitle}</div>
           <div className="text-muted-foreground">{error.message}</div>
         </CardContent>
@@ -56,8 +56,8 @@ export default function IpsExportFeature() {
   // No patient / no data loaded yet
   if (!hasPatient || !bundle) {
     return (
-      <Card className={CARD_BORDER_CLASSES.clinical}>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+      <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.clinical}`}>
+        <CardContent className="py-4 text-center text-sm text-muted-foreground">
           <FileOutput className="mx-auto mb-2 h-6 w-6 opacity-60" />
           {x.noData}
         </CardContent>

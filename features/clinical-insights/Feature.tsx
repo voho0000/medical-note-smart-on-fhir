@@ -117,8 +117,8 @@ export default function ClinicalInsightsFeature() {
     return (
       <ScrollArea className="h-full pr-3">
         <div className="space-y-4">
-          <Card className={`border-destructive ${CARD_BORDER_CLASSES.insight}`}>
-            <CardContent className="pt-6">
+          <Card className={`gap-2 py-4 border-destructive ${CARD_BORDER_CLASSES.insight}`}>
+            <CardContent>
               <div className="text-sm">
                 <div className="font-medium text-destructive mb-2">{t.clinicalInsights.fhirDataRequired}</div>
                 <div className="text-muted-foreground mb-3">{t.clinicalInsights.fhirDataRequiredDesc}</div>
@@ -230,8 +230,8 @@ export default function ClinicalInsightsFeature() {
             </AlertDialogContent>
           </AlertDialog>
           </> ) : (
-          <Card className={CARD_BORDER_CLASSES.insight}>
-            <CardContent className="py-6 text-sm text-muted-foreground">
+          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.insight}`}>
+            <CardContent className="text-sm text-muted-foreground">
               {t.clinicalInsights.noTabsConfigured}
             </CardContent>
           </Card>
