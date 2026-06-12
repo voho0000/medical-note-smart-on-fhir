@@ -18,6 +18,19 @@ interface FeedbackRequest {
   }
 }
 
+// All request fields are attacker-controlled; escape anything interpolated into the HTML email
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+const ISSUE_TYPES = new Set(["bug", "ui", "performance", "feature", "other"])
+const SEVERITIES = new Set(["low", "medium", "high", "critical"])
+
 export async function POST(request: NextRequest) {
   try {
     const body: FeedbackRequest = await request.json()
@@ -30,6 +43,10 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Badge CSS classes must come from the allowlist, never from raw input
+    const issueTypeClass = ISSUE_TYPES.has(issueType) ? issueType : "other"
+    const severityClass = SEVERITIES.has(severity) ? severity : "medium"
 
     const emailContent = `
 <!DOCTYPE html>
@@ -66,41 +83,41 @@ export async function POST(request: NextRequest) {
     
     <div class="content">
       <div class="section">
-        <span class="label">回報者 Email:</span> ${email}
+        <span class="label">回報者 Email:</span> ${escapeHtml(email)}
       </div>
-      
+
       <div class="section">
-        <span class="label">問題類型:</span> 
-        <span class="badge badge-${issueType}">${getIssueTypeLabel(issueType)}</span>
+        <span class="label">問題類型:</span>
+        <span class="badge badge-${issueTypeClass}">${escapeHtml(getIssueTypeLabel(issueType))}</span>
       </div>
-      
+
       <div class="section">
-        <span class="label">嚴重程度:</span> 
-        <span class="badge badge-${severity}">${getSeverityLabel(severity)}</span>
+        <span class="label">嚴重程度:</span>
+        <span class="badge badge-${severityClass}">${escapeHtml(getSeverityLabel(severity))}</span>
       </div>
-      
+
       <div class="section">
         <span class="label">問題描述:</span>
-        <div style="margin-top: 8px; white-space: pre-wrap; background: white; padding: 12px; border-radius: 6px;">${description}</div>
+        <div style="margin-top: 8px; white-space: pre-wrap; background: white; padding: 12px; border-radius: 6px;">${escapeHtml(description)}</div>
       </div>
-      
+
       ${steps ? `
       <div class="section">
         <span class="label">重現步驟:</span>
-        <div style="margin-top: 8px; white-space: pre-wrap; background: white; padding: 12px; border-radius: 6px;">${steps}</div>
+        <div style="margin-top: 8px; white-space: pre-wrap; background: white; padding: 12px; border-radius: 6px;">${escapeHtml(steps)}</div>
       </div>
       ` : ''}
-      
+
       <div class="section">
         <span class="label">系統資訊:</span>
         <div class="system-info">
-          <div><strong>時間:</strong> ${new Date(systemInfo.timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</div>
-          <div><strong>瀏覽器:</strong> ${systemInfo.userAgent}</div>
-          <div><strong>螢幕解析度:</strong> ${systemInfo.screenResolution}</div>
-          <div><strong>語言:</strong> ${systemInfo.language}</div>
-          <div><strong>當前頁面:</strong> ${systemInfo.currentPath}</div>
-          <div><strong>FHIR Server:</strong> ${systemInfo.fhirServerUrl}</div>
-          <div><strong>患者 ID:</strong> ${systemInfo.patientId}</div>
+          <div><strong>時間:</strong> ${escapeHtml(new Date(systemInfo.timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }))}</div>
+          <div><strong>瀏覽器:</strong> ${escapeHtml(systemInfo.userAgent)}</div>
+          <div><strong>螢幕解析度:</strong> ${escapeHtml(systemInfo.screenResolution)}</div>
+          <div><strong>語言:</strong> ${escapeHtml(systemInfo.language)}</div>
+          <div><strong>當前頁面:</strong> ${escapeHtml(systemInfo.currentPath)}</div>
+          <div><strong>FHIR Server:</strong> ${escapeHtml(systemInfo.fhirServerUrl)}</div>
+          <div><strong>患者 ID:</strong> ${escapeHtml(systemInfo.patientId)}</div>
         </div>
       </div>
     </div>
@@ -145,26 +162,22 @@ This email was automatically sent by MediPrisma system
     const resendApiKey = process.env.RESEND_API_KEY
     
     if (!resendApiKey) {
-      console.error("RESEND_API_KEY not configured")
-      // 在沒有配置 API key 的情況下，記錄到控制台並返回成功
-      // 這樣開發環境中不會因為缺少 API key 而失敗
-      console.log("Feedback submission (no email sent):", {
-        email,
+      // 開發環境中不因缺少 API key 而失敗，但不把回報內容寫進 server logs，
+      // 並回傳 emailSent: false 讓 UI 能區分「收到但沒寄出」
+      console.error("RESEND_API_KEY not configured — feedback received but no email sent", {
         issueType,
         severity,
-        description: description.substring(0, 100) + "...",
       })
-      
-      return NextResponse.json({ 
+
+      return NextResponse.json({
         success: true,
-        message: "Feedback received (email not configured)" 
+        emailSent: false,
+        message: "Feedback received (email not configured)"
       })
     }
 
     // 初始化 Resend
     const resend = new Resend(resendApiKey)
-
-    console.log("Sending email via Resend SDK...")
 
     // 使用 Resend SDK 發送郵件
     const { data, error } = await resend.emails.send({
@@ -181,18 +194,15 @@ This email was automatically sent by MediPrisma system
       throw new Error(`Failed to send email: ${error.message}`)
     }
 
-    console.log("Email sent successfully:", data)
-    
-    return NextResponse.json({ success: true })
+    console.log("Email sent successfully, id:", data?.id)
+
+    return NextResponse.json({ success: true, emailSent: true })
   } catch (error) {
+    // 細節只留在 server log，不回給 caller
     console.error("Feedback API error:", error)
-    console.error("Error details:", error instanceof Error ? error.message : String(error))
-    
+
     return NextResponse.json(
-      { 
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error)
-      },
+      { error: "Internal server error" },
       { status: 500 }
     )
   }
