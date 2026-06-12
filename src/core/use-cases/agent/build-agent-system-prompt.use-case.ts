@@ -6,14 +6,19 @@
 export interface BuildAgentSystemPromptInput {
   baseSystemPrompt: string
   clinicalContext: string
-  patientId?: string
+  /**
+   * Whether a patient context is loaded. The actual FHIR ID is deliberately
+   * NOT included in the prompt — it would be sent to cloud LLM providers on
+   * every turn, defeating the tool-layer PII scrubber. Tools resolve the
+   * patient implicitly from the bound data source.
+   */
+  hasPatient?: boolean
   /** 'local' = querying an in-memory uploaded FHIR bundle; 'live' (default) = SMART server */
   mode?: 'live' | 'local'
   hasPerplexityKey: boolean
   translations: {
     deepModeIntro: string
     currentPatient: string
-    patientId: string
     hasPermission: string
     organizedClinicalData: string
     organizedClinicalDataDesc: string
@@ -58,18 +63,16 @@ export interface BuildAgentSystemPromptInput {
 
 export class BuildAgentSystemPromptUseCase {
   execute(input: BuildAgentSystemPromptInput): string {
-    const { baseSystemPrompt, clinicalContext, patientId, mode = 'live', hasPerplexityKey, translations: t } = input
+    const { baseSystemPrompt, clinicalContext, hasPatient, mode = 'live', hasPerplexityKey, translations: t } = input
 
     const hasClinicalData = clinicalContext.trim().length > 0
-    const hasPatientId = !!patientId
     const isLocalMode = mode === 'local'
 
     // Build patient context section. In local-bundle mode the patient ID is
     // implicit (single patient per bundle), so the warning about needing one
     // is misleading — swap it for a local-mode notice.
-    const patientSection = hasPatientId
+    const patientSection = hasPatient
       ? `**${t.currentPatient}**
-- ${t.patientId.replace('{id}', patientId)}
 - ${t.hasPermission}`
       : isLocalMode
         ? `**${t.currentPatient}**

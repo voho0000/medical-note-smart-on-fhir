@@ -117,7 +117,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
           baseSystemPrompt: systemPrompt,
           clinicalContext: '', // Empty - let user control via toggle
-          patientId: patient?.id,
+          hasPatient: !!patient?.id,
           mode: isLocalMode ? 'local' : 'live',
           hasPerplexityKey: hasLiteratureSearch,
           translations: t.agent.systemPrompt,

@@ -7,7 +7,6 @@ describe('BuildAgentSystemPromptUseCase', () => {
   const mockTranslations = {
     deepModeIntro: 'Deep Mode',
     currentPatient: 'Current Patient',
-    patientId: 'Patient ID',
     hasPermission: 'Has Permission',
     organizedClinicalData: 'Clinical Data',
     organizedClinicalDataDesc: 'Organized data',
@@ -82,20 +81,23 @@ describe('BuildAgentSystemPromptUseCase', () => {
       expect(result).toContain('Patient has diabetes')
     })
 
-    it('should include patient ID when provided', () => {
+    it('should mark patient context without leaking the FHIR id', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: 'Clinical data',
-        patientId: 'patient-123',
+        hasPatient: true,
         hasPerplexityKey: false,
         translations: mockTranslations
       }
 
       const result = useCase.execute(input)
 
-      // The prompt includes patient ID label, not the actual ID value
-      expect(result).toContain('Patient ID')
+      // Patient section present, but no patient identifier anywhere —
+      // the prompt goes to cloud LLM providers on every agent turn
+      expect(result).toContain('Current Patient')
+      expect(result).toContain('Has Permission')
       expect(result).toContain('Clinical data')
+      expect(result).not.toContain('patient-123')
     })
 
     it('should include Perplexity tool when key is available', () => {
@@ -157,7 +159,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
         clinicalContext: 'Clinical data',
-        patientId: 'patient-123',
+        hasPatient: true,
         hasPerplexityKey: false,
         translations: mockTranslations
       }
