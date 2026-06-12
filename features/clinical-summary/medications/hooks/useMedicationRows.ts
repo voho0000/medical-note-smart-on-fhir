@@ -2,7 +2,6 @@
 import { useMemo } from 'react'
 import type { Medication, MedicationRow } from '../types'
 import {
-  getCodeableConceptText,
   formatDate,
   extractFrequencyFromText,
   isChronicPrescription,
@@ -10,6 +9,7 @@ import {
   pickByLocale,
 } from '../utils/fhir-helpers'
 import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpers'
+import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 
 export function useMedicationRows(
@@ -99,14 +99,17 @@ export function useMedicationRows(
       const statusInactive = inactiveStatuses.has(status)
 
       const doseSummary = humanDoseAmount(dosage?.doseAndRate, dosage?.text)
-      const routeSummary = getCodeableConceptText(dosage?.route)
+      // Route goes through the SNOMED route map (route-display.ts) so a bare
+      // coding without display/text renders as 口服/Oral instead of 26643006.
+      const routeSummary = routeDisplayText(dosage?.route, locale)
       const frequencySummary = humanDoseFreq(dosage?.timing?.repeat) || extractFrequencyFromText(dosage?.text) || ""
 
       const detail = buildDetail({
         doseAndRate: dosage?.doseAndRate,
         doseText: dosage?.text,
         route: dosage?.route,
-        repeat: dosage?.timing?.repeat
+        repeat: dosage?.timing?.repeat,
+        locale,
       })
 
       const startDateRaw = med.authoredOn || med.effectiveDateTime || med.dispenseRequest?.validityPeriod?.start

@@ -1,6 +1,6 @@
 // Dose and Frequency Helper Functions
 import type { DosageInstruction, CodeableConcept } from '@/src/shared/types/fhir.types'
-import { getCodeableConceptText } from '@/src/shared/utils/fhir-helpers'
+import { routeDisplayText } from './route-display'
 
 type DoseAndRate = NonNullable<DosageInstruction['doseAndRate']>[number]
 type TimingRepeat = NonNullable<NonNullable<DosageInstruction['timing']>['repeat']>
@@ -85,18 +85,20 @@ export function humanDoseFreq(rep?: TimingRepeat): string {
 }
 
 export function buildDetail({
-  doseAndRate, 
-  doseText, 
-  route, 
-  repeat
+  doseAndRate,
+  doseText,
+  route,
+  repeat,
+  locale,
 }: {
   doseAndRate?: DoseAndRate[]
   doseText?: string
   route?: CodeableConcept
   repeat?: TimingRepeat
+  locale?: string
 }): string {
   const dose = humanDoseAmount(doseAndRate, doseText)
-  const r = getCodeableConceptText(route)
+  const r = routeDisplayText(route, locale)
   const freq = humanDoseFreq(repeat)
 
   const parts = [
