@@ -1,6 +1,7 @@
 // OpenAI Service Implementation
 import type { AiQueryRequest, AiQueryResponse, AiMessage } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { getProxyAuthHeaders } from '../utils/proxy-auth'
 import { isGptModelId, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 import { AiError, AiErrorCode } from '@/src/core/errors'
 import type { IAiProvider, AiProviderConfig, StreamingOptions } from '@/src/core/interfaces/services/ai-provider.interface'
@@ -68,8 +69,13 @@ export class OpenAiService {
       body.response_format = { type: 'json_object' }
     }
 
-    if (shouldUseProxy && ENV_CONFIG.proxyClientKey) {
-      headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
+    if (shouldUseProxy) {
+      if (ENV_CONFIG.proxyClientKey) {
+        headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
+      }
+      // Proxy requires a signed-in user — Authorization carries the Firebase
+      // ID token here (the user's own OpenAI key is the direct branch below)
+      Object.assign(headers, await getProxyAuthHeaders())
     } else if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`
     }

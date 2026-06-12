@@ -1,5 +1,6 @@
 // OpenAI Streaming Adapter
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
+import { getProxyAuthHeaders } from "../utils/proxy-auth"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 
 export interface StreamConfig {
@@ -35,6 +36,7 @@ export class OpenAiStreamAdapter {
     if (ENV_CONFIG.proxyClientKey) {
       headers["x-proxy-key"] = ENV_CONFIG.proxyClientKey
     }
+    Object.assign(headers, await getProxyAuthHeaders())
 
 
     const res = await fetch(ENV_CONFIG.chatProxyUrl, {

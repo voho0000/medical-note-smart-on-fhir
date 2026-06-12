@@ -1,6 +1,7 @@
 // Gemini Service Implementation
 import type { AiQueryRequest, AiQueryResponse, AiMessage } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { getProxyAuthHeaders } from '../utils/proxy-auth'
 import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 
 export class GeminiService {
@@ -50,8 +51,11 @@ export class GeminiService {
       }
     }
 
-    if (shouldUseProxy && ENV_CONFIG.proxyClientKey) {
-      headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
+    if (shouldUseProxy) {
+      if (ENV_CONFIG.proxyClientKey) {
+        headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
+      }
+      Object.assign(headers, await getProxyAuthHeaders())
     } else if (this.apiKey) {
       headers['x-goog-api-key'] = this.apiKey
     }

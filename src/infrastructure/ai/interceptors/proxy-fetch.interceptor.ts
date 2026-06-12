@@ -6,6 +6,7 @@
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { geminiRequestTransformer } from '../transformers/gemini-request.transformer'
 import { openAIRequestTransformer } from '../transformers/openai-request.transformer'
+import { getProxyIdToken } from '../utils/proxy-auth'
 
 export interface ProxyFetchConfig {
   proxyUrl: string
@@ -31,6 +32,13 @@ export class ProxyFetchInterceptor {
       // Add proxy client key if available
       if (config.proxyClientKey) {
         headers.set('x-proxy-key', config.proxyClientKey)
+      }
+
+      // Proxy requires a signed-in user (audit A6): Authorization now carries
+      // the Firebase ID token in place of the deleted provider key
+      const idToken = await getProxyIdToken()
+      if (idToken) {
+        headers.set('Authorization', `Bearer ${idToken}`)
       }
 
       let body = init?.body

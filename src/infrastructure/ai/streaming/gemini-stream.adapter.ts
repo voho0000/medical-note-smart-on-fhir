@@ -1,5 +1,6 @@
 // Gemini Streaming Adapter
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
+import { getProxyAuthHeaders } from "../utils/proxy-auth"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import type { StreamConfig } from "./openai-stream.adapter"
 
@@ -61,6 +62,7 @@ export class GeminiStreamAdapter {
     if (ENV_CONFIG.proxyClientKey) {
       headers["x-proxy-key"] = ENV_CONFIG.proxyClientKey
     }
+    Object.assign(headers, await getProxyAuthHeaders())
 
     // Firebase proxy expects simple messages format, not Gemini native format
     const res = await fetch(ENV_CONFIG.geminiProxyUrl, {

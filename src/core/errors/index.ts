@@ -29,6 +29,15 @@ interface ErrorMapping {
 }
 
 const ERROR_MAPPINGS: ErrorMapping[] = [
+  // Proxy auth / quota (the Firebase Functions respond with these)
+  {
+    pattern: /sign-?in required|invalid or expired session/i,
+    message: '🔐 內建額度僅供登入使用者 - 請先登入，或在設定中加入自己的 API Key'
+  },
+  {
+    pattern: /daily quota exceeded/i,
+    message: '📊 今日內建額度已用完 - 請在設定中加入自己的 API Key，或明天再試'
+  },
   // API Key errors (most common)
   {
     pattern: /401|unauthorized|authentication failed.*check.*api key|incorrect api key|invalid api key|invalid_api_key|api_key_invalid/i,
@@ -76,26 +85,28 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
  * Enhanced with detailed error mapping
  */
 export function getUserErrorMessage(error: unknown): string {
-  // First, check if it's a BaseError with custom message
-  if (isBaseError(error)) {
-    return error.getUserMessage()
-  }
-  
-  // Get the error message
   const message = error instanceof Error ? error.message : String(error)
-  
-  // Check for known error patterns
+
+  // Chinese pattern table FIRST — typed AiError/FhirError getUserMessage()
+  // strings are English, so checking isBaseError before the table used to
+  // route the most common failures (401, rate limit, timeout…) around the
+  // localized messages (audit D5)
   for (const mapping of ERROR_MAPPINGS) {
     if (mapping.pattern.test(message)) {
       return mapping.message
     }
   }
-  
+
+  // No pattern matched — fall back to the error type's curated message
+  if (isBaseError(error)) {
+    return error.getUserMessage()
+  }
+
   // For unknown errors, return the original message
   if (error instanceof Error) {
     return error.message
   }
-  
+
   return '發生未知錯誤，請稍後再試'
 }
 

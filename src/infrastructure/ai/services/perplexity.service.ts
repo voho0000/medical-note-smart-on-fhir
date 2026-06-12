@@ -1,4 +1,7 @@
 // Perplexity API Service - Direct API calls with user-provided key
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { getProxyAuthHeaders } from '../utils/proxy-auth'
+
 export class PerplexityService {
   async searchLiterature(
     query: string, 
@@ -103,6 +106,8 @@ export class PerplexityService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(ENV_CONFIG.proxyClientKey ? {'x-proxy-key': ENV_CONFIG.proxyClientKey} : {}),
+          ...(await getProxyAuthHeaders()),
         },
         body: JSON.stringify({
           query,

@@ -2,7 +2,6 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { perplexityService } from '../services/perplexity.service'
-import { trackUsage } from '@/src/infrastructure/firebase/usage-tracker'
 import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 
 const literatureSearchSchema = z.object({
@@ -34,7 +33,6 @@ export function createLiteratureTools(perplexityKey: string | null, isUserAuthen
           
           // Track usage if using proxy (no API key) and user is authenticated
           if (!perplexityKey && isUserAuthenticated && userId && result.success) {
-            trackUsage(userId).catch(() => {})
           }
           
           if (!result.success) {

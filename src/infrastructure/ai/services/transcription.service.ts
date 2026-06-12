@@ -2,6 +2,7 @@
 import type { ITranscriptionService } from '@/src/core/interfaces/services/transcription.service.interface'
 import type { TranscriptionRequest, TranscriptionResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { getProxyAuthHeaders } from '../utils/proxy-auth'
 
 export class TranscriptionService implements ITranscriptionService {
   constructor(private apiKey: string | null = null) {}
@@ -28,8 +29,11 @@ export class TranscriptionService implements ITranscriptionService {
     const targetUrl = useProxy ? ENV_CONFIG.whisperProxyUrl : 'https://api.openai.com/v1/audio/transcriptions'
     const headers: Record<string, string> = {}
 
-    if (useProxy && ENV_CONFIG.proxyClientKey) {
-      headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
+    if (useProxy) {
+      if (ENV_CONFIG.proxyClientKey) {
+        headers['x-proxy-key'] = ENV_CONFIG.proxyClientKey
+      }
+      Object.assign(headers, await getProxyAuthHeaders())
     } else if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`
     }

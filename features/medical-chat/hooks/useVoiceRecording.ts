@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import { useAsr } from "@/src/application/providers/asr.provider"
+import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shared/config/env.config"
+import { getProxyAuthHeaders } from "@/src/infrastructure/ai/utils/proxy-auth"
 
 /**
  * Voice Recording Hook - 語音錄製與轉錄
@@ -18,6 +21,7 @@ import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shar
  */
 export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
   const { isAsrLoading, setIsAsrLoading } = useAsr()
+  const { t } = useLanguage()
   const apiKey = useAiConfigStore((state) => state.apiKey)
   
   // Internal state - 內部狀態
@@ -58,7 +62,7 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
       const useProxy = !apiKey && hasWhisperProxy
 
       if (!apiKey && !useProxy) {
-        alert("Add your OpenAI API key in Settings or configure the ASR proxy endpoint.")
+        toast.error(t.chat.voiceNeedsApiKey)
         return null
       }
 
@@ -80,6 +84,7 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
           if (PROXY_CLIENT_KEY) {
             headers["x-proxy-key"] = PROXY_CLIENT_KEY
           }
+          Object.assign(headers, await getProxyAuthHeaders())
         } else if (apiKey) {
           headers["Authorization"] = `Bearer ${apiKey}`
         }
@@ -115,7 +120,7 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
         setIsAsrLoading(false)
       }
     },
-    [apiKey, setIsAsrLoading]
+    [apiKey, setIsAsrLoading, t]
   )
 
   // Start recording - 開始錄音（內部使用）
@@ -123,14 +128,14 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
     if (isAsrLoading) return
 
     if (!apiKey && !hasWhisperProxy) {
-      alert("Add your OpenAI API key in Settings or configure the ASR proxy endpoint.")
+      toast.error(t.chat.voiceNeedsApiKey)
       return
     }
 
     setAsrError(null)
     setSeconds(0)
     startRecordingRef.current()
-  }, [apiKey, isAsrLoading])
+  }, [apiKey, isAsrLoading, t])
 
   // Stop recording - 停止錄音（內部使用）
   const handleStopRecording = useCallback(() => {
