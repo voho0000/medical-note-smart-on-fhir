@@ -11,6 +11,7 @@ import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
 import { WelcomeOnboarding } from "@/src/shared/components/WelcomeOnboarding"
+import { ErrorBoundary } from "@/src/shared/components/ErrorBoundary"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
@@ -111,7 +112,10 @@ function PageContent() {
           }`}
           style={isLargeScreen ? { width: `${leftWidth}%` } : undefined}
         >
-          <ClinicalSummaryFeature />
+          {/* Per-panel boundary: a render crash in one panel must not white-screen the other */}
+          <ErrorBoundary>
+            <ClinicalSummaryFeature />
+          </ErrorBoundary>
         </section>
         
         {/* Resizable Divider - Hidden on mobile */}
@@ -130,7 +134,9 @@ function PageContent() {
           }`}
           style={isLargeScreen ? { width: `${100 - leftWidth - 0.5}%` } : undefined}
         >
-          <RightPanelFeature />
+          <ErrorBoundary>
+            <RightPanelFeature />
+          </ErrorBoundary>
         </section>
       </main>
       </>
@@ -144,7 +150,9 @@ function PageContent() {
 export default function Page() {
   return (
     <AppProviders>
-      <PageContent />
+      <ErrorBoundary>
+        <PageContent />
+      </ErrorBoundary>
     </AppProviders>
   )
 }

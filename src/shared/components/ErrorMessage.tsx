@@ -1,16 +1,22 @@
 // Shared Error Message Component
-import { AlertCircle, ServerCrash } from 'lucide-react'
+import { AlertCircle, RotateCw, ServerCrash } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { getUserErrorMessage } from '@/src/core/errors'
 
 interface ErrorMessageProps {
   error: Error | unknown
   context?: string
+  /** When provided, renders a retry button (wire to React Query's refetch) */
+  onRetry?: () => void
 }
 
 function isFhirServerError(message: string): { isFhirError: boolean; serverUrl?: string; statusCode?: string } {
-  const fhirUrlMatch = message.match(/https?:\/\/[^\s<]+smarthealthit\.org[^\s<]*/i)
+  // Any FHIR server URL counts (VGH / TWCAT / sandboxes) — matching only
+  // smarthealthit.org let real-server failures fall through to the raw branch
+  const fhirUrlMatch = message.match(/https?:\/\/[^\s<]+\/(?:fhir|Patient|metadata)[^\s<]*/i)
+    ?? message.match(/https?:\/\/[^\s<]+smarthealthit\.org[^\s<]*/i)
   const statusMatch = message.match(/\b(502|503|500|504)\b/)
-  
+
   return {
     isFhirError: !!(fhirUrlMatch || statusMatch),
     serverUrl: fhirUrlMatch?.[0],
@@ -31,10 +37,21 @@ function getStatusCodeText(statusCode: string): { en: string; zh: string } {
   }
 }
 
-export function ErrorMessage({ error, context }: ErrorMessageProps) {
+export function ErrorMessage({ error, context, onRetry }: ErrorMessageProps) {
   const { t, locale } = useLanguage()
   const message = error instanceof Error ? error.message : String(error)
   const { isFhirError, serverUrl, statusCode } = isFhirServerError(message)
+
+  const retryButton = onRetry ? (
+    <button
+      type="button"
+      onClick={onRetry}
+      className="mt-2 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs hover:bg-accent text-foreground"
+    >
+      <RotateCw className="h-3 w-3" />
+      {t.errors.retry}
+    </button>
+  ) : null
   
   if (isFhirError) {
     const statusText = statusCode ? getStatusCodeText(statusCode) : null
@@ -69,16 +86,22 @@ export function ErrorMessage({ error, context }: ErrorMessageProps) {
         <div className="pl-6 text-xs text-muted-foreground">
           💡 {t.errors.fhirServerRetry}
         </div>
+        {retryButton && <div className="pl-6">{retryButton}</div>}
       </div>
     )
   }
-  
+
   return (
     <div className="flex items-start gap-2 text-sm text-destructive">
       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
       <div>
-        {context && <div className="font-medium mb-1">Error loading {context}</div>}
-        <div className="wrap-break-word">{message}</div>
+        {context && (
+          <div className="font-medium mb-1">
+            {t.errors.errorLoadingContext.replace('{context}', context)}
+          </div>
+        )}
+        <div className="wrap-break-word">{getUserErrorMessage(error)}</div>
+        {retryButton}
       </div>
     </div>
   )

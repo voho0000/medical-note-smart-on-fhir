@@ -148,7 +148,11 @@ export function ScenarioLoaderPanel({
     if (!status.bundle) return
     try {
       await LocalBundleService.save(status.bundle)
-      window.location.href = '/'
+      // Respect the GH Pages base path — a bare '/' lands on the domain root
+      // (same logic as repoBaseRedirect in ../page.tsx)
+      const repoBase = '/medical-note-smart-on-fhir'
+      const prefix = window.location.pathname.startsWith(`${repoBase}/`) ? repoBase : ''
+      window.location.href = `${prefix}/`
     } catch (e) {
       setStatus((prev) => ({
         ...prev,

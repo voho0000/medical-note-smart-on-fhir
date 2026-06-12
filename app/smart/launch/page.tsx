@@ -48,5 +48,5 @@ export default function SmartLaunchPage() {
     })()
   }, [])
 
-  return <p className="p-6 text-sm text-muted-foreground">Launching SMART…</p>
+  return <p className="p-6 text-sm text-muted-foreground">正在啟動 SMART… / Launching SMART…</p>
 }
