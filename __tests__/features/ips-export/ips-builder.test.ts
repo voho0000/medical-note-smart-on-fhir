@@ -440,6 +440,39 @@ describe('buildIpsBundle — populated data', () => {
     expect(JSON.stringify(patient.name)).toContain('Unknown Patient')
     expect(validateIpsBundle(bundle).ok).toBe(true)
   })
+
+  // Regression: a TW Core / IPS patient whose name lives only in `text`
+  // (Chinese name, no given/family) must export with that text intact — not
+  // collapse to "Unknown Patient" and bake the loss into the file on a
+  // round-trip. See IPS_Unknown_Patient_*.json.
+  it('preserves a text-only patient name (no given/family) through export', () => {
+    const textOnly: PatientEntity = {
+      id: 'pat-text',
+      resourceType: 'Patient',
+      name: [{ use: 'official', text: '楊雅霖' }],
+      gender: 'female',
+      birthDate: '1917-04-07',
+    }
+    const bundle = buildIpsBundle({ patient: textOnly, data: emptyCollection() })
+    const patient = bundle.entry[1].resource as { name?: Array<{ text?: string }> }
+    expect(patient.name?.[0]?.text).toBe('楊雅霖')
+    expect(JSON.stringify(patient.name)).not.toContain('Unknown Patient')
+  })
+
+  it('keeps the Chinese text alongside Pinyin given/family on export', () => {
+    const bilingual: PatientEntity = {
+      id: 'pat-bi',
+      resourceType: 'Patient',
+      name: [{ text: '楊雅霖', given: ['Yalin'], family: 'Yang' }],
+    }
+    const bundle = buildIpsBundle({ patient: bilingual, data: emptyCollection() })
+    const patient = bundle.entry[1].resource as {
+      name?: Array<{ text?: string; given?: string[]; family?: string }>
+    }
+    expect(patient.name?.[0]?.text).toBe('楊雅霖')
+    expect(patient.name?.[0]?.family).toBe('Yang')
+    expect(patient.name?.[0]?.given).toEqual(['Yalin'])
+  })
 })
 
 describe('buildIpsBundle — Problem List SNOMED CT dual-coding (Phase 2.1)', () => {

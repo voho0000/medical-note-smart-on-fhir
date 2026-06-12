@@ -201,5 +201,44 @@ describe('Patient Entity Helper Functions', () => {
       const name = getPatientDisplayName(patient)
       expect(name).toBe('Unknown Patient')
     })
+
+    // Regression: a text-only name (TW Core / IPS local-script convention, and
+    // what our own IPS export emits) must NOT collapse to "Unknown Patient" —
+    // that was the round-trip data-loss bug (IPS_Unknown_Patient_*.json).
+    it('uses name[0].text when there is no given/family (TW Core 中文名)', () => {
+      const patient: PatientEntity = {
+        id: 'patient-1',
+        resourceType: 'Patient',
+        name: [{ use: 'official', text: '楊雅霖' }]
+      }
+      expect(getPatientDisplayName(patient)).toBe('楊雅霖')
+    })
+
+    it('prefers text (中文) over given/family (Pinyin) when both are present', () => {
+      const patient: PatientEntity = {
+        id: 'patient-1',
+        resourceType: 'Patient',
+        name: [{ text: '楊雅霖', given: ['Yalin'], family: 'Yang' }]
+      }
+      expect(getPatientDisplayName(patient)).toBe('楊雅霖')
+    })
+
+    it('finds a text entry even when it is not the first name entry', () => {
+      const patient: PatientEntity = {
+        id: 'patient-1',
+        resourceType: 'Patient',
+        name: [{ given: ['Yalin'], family: 'Yang' }, { text: '楊雅霖' }]
+      }
+      expect(getPatientDisplayName(patient)).toBe('楊雅霖')
+    })
+
+    it('trims and ignores a blank text, falling back to given/family', () => {
+      const patient: PatientEntity = {
+        id: 'patient-1',
+        resourceType: 'Patient',
+        name: [{ text: '   ', given: ['John'], family: 'Doe' }]
+      }
+      expect(getPatientDisplayName(patient)).toBe('John Doe')
+    })
   })
 })

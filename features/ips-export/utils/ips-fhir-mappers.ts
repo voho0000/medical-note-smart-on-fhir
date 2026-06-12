@@ -132,10 +132,14 @@ function referenceRangeFields(o: Pick<ObservationEntity, 'referenceRange'>): Rec
 
 export function buildPatient(patient: PatientEntity | null): { entry: IpsBundleEntry; reference: string } {
   const name = patient?.name?.[0]
+  // Carry whatever the source had — text (TW Core/IPS local-script name),
+  // family, given — so a round-trip never drops the name. Only when there is
+  // no usable name at all do we fall back to the "Unknown Patient" sentinel.
   const nameArray =
-    name && (name.family || name.given?.length)
+    name && (name.text || name.family || name.given?.length)
       ? [
           {
+            ...(name.text ? { text: name.text } : {}),
             ...(name.family ? { family: name.family } : {}),
             ...(name.given?.length ? { given: name.given } : {}),
           },

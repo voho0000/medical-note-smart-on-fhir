@@ -70,6 +70,12 @@ export function calculateAge(birthDate?: string | null): number | null {
 
 export function getPatientDisplayName(patient: PatientEntity | null): string {
   if (!patient?.name?.[0]) return 'Unknown Patient'
+  // Prefer the official local-script name in `text` (TW Core / IPS put the
+  // Chinese name there; given/family hold Pinyin). Mirrors patient-info's
+  // formatName so a text-only name — legal FHIR, and exactly what our own IPS
+  // export emits — never collapses to "Unknown Patient" on a round-trip.
+  const text = patient.name.find((n) => n.text)?.text?.trim()
+  if (text) return text
   const nameEntry = patient.name[0]
   const given = nameEntry.given?.join(' ')?.trim()
   const family = nameEntry.family?.trim()
