@@ -653,6 +653,7 @@ export const zhTW = {
 
   settings: {
     fontSize: '字體大小',
+    fontSizeXSmall: '特小',
     fontSizeSmall: '小',
     fontSizeNormal: '標準',
     fontSizeLarge: '大',

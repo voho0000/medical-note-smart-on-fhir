@@ -4,7 +4,6 @@
  */
 
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
-import { geminiRequestTransformer } from '../transformers/gemini-request.transformer'
 import { openAIRequestTransformer } from '../transformers/openai-request.transformer'
 import { getProxyIdToken } from '../utils/proxy-auth'
 
@@ -49,14 +48,37 @@ export class ProxyFetchInterceptor {
         // Anthropic messages payloads pass through verbatim — the Claude proxy
         // forwards them to /v1/messages unchanged
       } else if (config.isGemini) {
-        // Transform Gemini request format
-        body = this.transformGeminiRequest(body, config.modelId)
+        // Pass the native Gemini body through (contents/tools/etc) instead of
+        // flattening to {role, content:string}. The old transform dropped
+        // functionCall/functionResponse parts (no `.text`), so multi-step
+        // agent tool loops lost their results and Gemini gave up. The proxy
+        // forwards it to Google verbatim; we only inject routing markers
+        // (model is forced server-side; streaming is signalled by the SDK URL).
+        body = this.markGeminiPassthrough(body, String(url))
       } else {
         // Transform OpenAI request format
         body = this.transformOpenAIRequest(body)
       }
 
       return originalFetch(config.proxyUrl, { ...init, headers, body })
+    }
+  }
+
+  /**
+   * Pass the AI SDK's native Gemini body through, injecting only routing
+   * markers the proxy strips before forwarding to Google.
+   */
+  private markGeminiPassthrough(body: BodyInit | null | undefined, requestUrl: string): string | undefined {
+    if (!body || typeof body !== 'string') {
+      return body as string | undefined
+    }
+    try {
+      const parsed = JSON.parse(body)
+      // The SDK targets :streamGenerateContent for streaming, :generateContent otherwise
+      parsed.__proxyStreaming = requestUrl.includes('streamGenerateContent')
+      return JSON.stringify(parsed)
+    } catch {
+      return body
     }
   }
 
@@ -72,25 +94,6 @@ export class ProxyFetchInterceptor {
     try {
       const parsed = JSON.parse(body)
       const transformed = openAIRequestTransformer.transform(parsed)
-      return JSON.stringify(transformed)
-    } catch {
-      // Keep original body if parsing fails
-    }
-
-    return body
-  }
-
-  /**
-   * Transform Gemini request: convert AI SDK native format to proxy format
-   */
-  private transformGeminiRequest(body?: BodyInit | null, modelId?: string): string | undefined {
-    if (!body || typeof body !== 'string' || !modelId) {
-      return body as string | undefined
-    }
-
-    try {
-      const parsed = JSON.parse(body)
-      const transformed = geminiRequestTransformer.transform(parsed, modelId)
       return JSON.stringify(transformed)
     } catch {
       // Keep original body if parsing fails

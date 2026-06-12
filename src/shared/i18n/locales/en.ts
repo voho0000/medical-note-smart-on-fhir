@@ -649,6 +649,7 @@ export const en = {
 
   settings: {
     fontSize: 'Font Size',
+    fontSizeXSmall: 'X-Small',
     fontSizeSmall: 'Small',
     fontSizeNormal: 'Normal',
     fontSizeLarge: 'Large',

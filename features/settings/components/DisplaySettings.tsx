@@ -24,6 +24,7 @@ import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 const REPO = 'voho0000/medical-note-smart-on-fhir'
 
 const FONT_SIZE_OPTIONS: Array<{ value: FontSize; labelKey: string; fallback: string; preview: string }> = [
+  { value: 'xs', labelKey: 'fontSizeXSmall', fallback: '特小', preview: 'text-[10px]' },
   { value: 'sm', labelKey: 'fontSizeSmall', fallback: '小', preview: 'text-xs' },
   { value: 'base', labelKey: 'fontSizeNormal', fallback: '標準', preview: 'text-sm' },
   { value: 'lg', labelKey: 'fontSizeLarge', fallback: '大', preview: 'text-base' },
@@ -85,7 +86,7 @@ export function DisplaySettings() {
               variant={fontSize === opt.value ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFontSize(opt.value)}
-              className="flex-1 gap-1.5"
+              className="flex-1 gap-1 px-2"
             >
               <span className={opt.preview}>A</span>
               {(t.settings as any)[opt.labelKey] ?? opt.fallback}

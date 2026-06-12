@@ -6,10 +6,11 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react"
 
-export type FontSize = "sm" | "base" | "lg" | "xl"
+export type FontSize = "xs" | "sm" | "base" | "lg" | "xl"
 
 // Root px per level (browser default is 16). Kept modest so layout holds.
 const FONT_SIZE_PX: Record<FontSize, string> = {
+  xs: "12px",
   sm: "14px",
   base: "16px",
   lg: "18px",
