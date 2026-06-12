@@ -6,6 +6,8 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { VoiceRecorder } from "./VoiceRecorder"
 import { ImageUploadButton } from "./ImageUploadButton"
 import { ImagePreview } from "./ImagePreview"
+import { MediaConsentDialog } from "./MediaConsentDialog"
+import { useMediaConsent } from "../hooks/useMediaConsent"
 import type { ImageFile } from "../hooks/useImageUpload"
 
 interface ChatInputAreaProps {
@@ -49,6 +51,8 @@ export function ChatInputArea({
   disabled = false
 }: ChatInputAreaProps) {
   const { t } = useLanguage()
+  // First-use consent before any image/audio leaves the device (audit B4)
+  const consent = useMediaConsent()
   const hasContent = input.input.trim().length > 0
   const hasImages = images?.images && images.images.length > 0
 
@@ -74,13 +78,19 @@ export function ChatInputArea({
 
     if (imageFiles.length > 0) {
       e.preventDefault() // Prevent default paste behavior
-      images.addImages(imageFiles)
+      consent.withConsent(() => { void images.addImages(imageFiles) })
     }
   }
   const hasContentOrImages = input.input.trim() || hasImages
 
   return (
     <>
+      <MediaConsentDialog
+        open={consent.dialogOpen}
+        onAccept={consent.accept}
+        onCancel={consent.decline}
+      />
+
       {/* Image Preview */}
       {images && images.images.length > 0 && (
         <ImagePreview
@@ -107,7 +117,7 @@ export function ChatInputArea({
         {/* Image Upload Button - positioned on the left */}
         {images && (
           <ImageUploadButton
-            onFilesSelected={images.addImages}
+            onFilesSelected={(files) => consent.withConsent(() => { void images.addImages(files) })}
             disabled={disabled || isLoading}
             isProcessing={images.isProcessing}
             multiple={true}
@@ -130,7 +140,11 @@ export function ChatInputArea({
         <VoiceRecorder
           isRecording={voice.isRecording}
           isLoading={voice.isAsrLoading}
-          onToggleRecording={voice.toggleRecording}
+          onToggleRecording={() => {
+            // Stopping an in-progress recording never needs a consent prompt
+            if (voice.isRecording) voice.toggleRecording()
+            else consent.withConsent(voice.toggleRecording)
+          }}
           onRecordingStart={voice.onRecordingStart}
           onRecordingStop={voice.onRecordingStop}
           startRecordingRef={voice.startRecordingRef}
