@@ -100,9 +100,9 @@ export function MultiLineTrendChart({ componentData, unit }: MultiLineTrendChart
             fontSize: '12px',
           }}
           labelStyle={{ color: 'hsl(var(--foreground))' }}
-          formatter={(value: number | undefined, name?: string) => {
-            if (value === undefined) return ['', name || '']
-            return [`${formatNumberSmart(value)} ${unit || ''}`, name || '']
+          formatter={(value, name) => {
+            if (typeof value !== 'number') return ['', String(name ?? '')]
+            return [`${formatNumberSmart(value)} ${unit || ''}`, String(name ?? '')]
           }}
         />
         <Legend />

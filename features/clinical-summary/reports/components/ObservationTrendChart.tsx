@@ -109,8 +109,8 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
             fontSize: '12px',
           }}
           labelStyle={{ color: 'hsl(var(--foreground))' }}
-          formatter={(value: number | undefined) => {
-            if (value === undefined) return ['', '數值']
+          formatter={(value) => {
+            if (typeof value !== 'number') return ['', '數值']
             return [`${formatNumberSmart(value)} ${unit || ''}`, '數值']
           }}
         />
