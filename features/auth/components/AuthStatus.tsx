@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
+import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 import { AuthDialog } from './AuthDialog'
 import { LogIn, LogOut, User, Info } from 'lucide-react'
 import {
@@ -13,9 +14,26 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
+function UsageRow({ label, used, limit }: { label: string; used: number; limit: number }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">{used} / {limit}</span>
+      </div>
+      <div className="mt-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary transition-all"
+          style={{ width: `${Math.min((used / limit) * 100, 100)}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function AuthStatus() {
   const { t } = useLanguage()
-  const { user, loading, signOut, dailyUsage, dailyLimit } = useAuth()
+  const { user, loading, signOut, dailyUsage, dailyLimit, perplexityUsage, whisperUsage } = useAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
 
   if (loading) {
@@ -88,29 +106,29 @@ export function AuthStatus() {
         </Button>
       </div>
 
-      <div className="pt-3 border-t">
-        <div className="flex items-center justify-between text-sm">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="text-muted-foreground flex items-center gap-1 cursor-help">
-                {t.auth.usageToday}
-                <Info className="h-3 w-3" />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {t.auth.usageTodayTooltip}
-            </TooltipContent>
-          </Tooltip>
-          <span className="font-medium">
-            {dailyUsage} / {dailyLimit}
-          </span>
-        </div>
-        <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all"
-            style={{ width: `${(dailyUsage / dailyLimit) * 100}%` }}
-          />
-        </div>
+      <div className="pt-3 border-t space-y-3">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-sm text-muted-foreground flex items-center gap-1 cursor-help w-fit">
+              {t.auth.usageToday}
+              <Info className="h-3 w-3" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {t.auth.usageTodayTooltip}
+          </TooltipContent>
+        </Tooltip>
+        <UsageRow label={t.auth.usageChat} used={dailyUsage} limit={dailyLimit} />
+        <UsageRow
+          label={t.auth.usagePerplexity}
+          used={perplexityUsage}
+          limit={QUOTA_CONFIG.PERPLEXITY_DAILY_LIMIT}
+        />
+        <UsageRow
+          label={t.auth.usageWhisper}
+          used={whisperUsage}
+          limit={QUOTA_CONFIG.WHISPER_DAILY_LIMIT}
+        />
       </div>
     </div>
   )

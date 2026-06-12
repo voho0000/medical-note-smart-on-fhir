@@ -41,6 +41,9 @@ export interface AuthContextType {
   resetPassword: (email: string) => Promise<void>
   dailyUsage: number
   dailyLimit: number
+  /** Per-service usage read from the same daily doc the Functions meter */
+  perplexityUsage: number
+  whisperUsage: number
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -67,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [dailyUsage, setDailyUsage] = useState(0)
+  const [perplexityUsage, setPerplexityUsage] = useState(0)
+  const [whisperUsage, setWhisperUsage] = useState(0)
   const dailyLimit = QUOTA_CONFIG.DAILY_LIMIT
 
   // Load user's daily usage from Firestore
@@ -83,12 +88,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const usageDoc = await getDoc(usageRef)
       
       if (usageDoc.exists()) {
-        setDailyUsage(usageDoc.data().count || 0)
+        const data = usageDoc.data()
+        setDailyUsage(data.count || 0)
+        setPerplexityUsage(data.perplexityCount || 0)
+        setWhisperUsage(data.whisperCount || 0)
       } else {
         setDailyUsage(0)
+        setPerplexityUsage(0)
+        setWhisperUsage(0)
       }
     } catch {
       setDailyUsage(0)
+      setPerplexityUsage(0)
+      setWhisperUsage(0)
     }
   }
 
@@ -168,9 +180,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       usageRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          setDailyUsage(snapshot.data().count || 0)
+          const data = snapshot.data()
+          setDailyUsage(data.count || 0)
+          setPerplexityUsage(data.perplexityCount || 0)
+          setWhisperUsage(data.whisperCount || 0)
         } else {
           setDailyUsage(0)
+          setPerplexityUsage(0)
+          setWhisperUsage(0)
         }
       },
       () => {}
@@ -284,6 +301,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     dailyUsage,
     dailyLimit,
+    perplexityUsage,
+    whisperUsage,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
