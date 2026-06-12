@@ -6,6 +6,7 @@
 import {
   GPT_MODELS,
   GEMINI_MODELS,
+  CLAUDE_MODELS,
   INTERNAL_MODELS,
   ALL_MODELS,
   DEFAULT_MODEL_ID,
@@ -46,7 +47,7 @@ describe('ai-models.constants', () => {
 
     it('ALL_MODELS = internal + GPT + Gemini (no overlap-counting expected)', () => {
       expect(ALL_MODELS.length).toBe(
-        INTERNAL_MODELS.length + GPT_MODELS.length + GEMINI_MODELS.length,
+        INTERNAL_MODELS.length + GPT_MODELS.length + GEMINI_MODELS.length + CLAUDE_MODELS.length,
       )
     })
   })

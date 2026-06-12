@@ -15,6 +15,7 @@ import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-clie
 import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
+import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
 import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-agent-stream.use-case"
 import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
@@ -22,7 +23,7 @@ import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.cons
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
-  const { apiKey: openAiKey, geminiKey, perplexityKey } = useAllApiKeys()
+  const { apiKey: openAiKey, geminiKey, perplexityKey, claudeKey } = useAllApiKeys()
   const { patient } = usePatient()
   const { locale, t } = useLanguage()
   const { getFullClinicalContext } = useClinicalContext()
@@ -77,8 +78,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       abortControllerRef.current = new AbortController()
 
       try {
-        const isGemini = modelId.startsWith("gemini") || modelId.startsWith("models/gemini")
-        const apiKey = isGemini ? geminiKey : openAiKey
+        const provider = getModelDefinition(modelId)?.provider ?? "openai"
+        const apiKey =
+          provider === 'gemini' ? geminiKey :
+          provider === 'claude' ? claudeKey :
+          openAiKey
 
         // Check if user can use deep mode
         if (!apiKey && !user) {

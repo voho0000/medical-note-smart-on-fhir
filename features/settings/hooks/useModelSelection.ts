@@ -5,12 +5,13 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import {
   GPT_MODELS,
   GEMINI_MODELS,
+  CLAUDE_MODELS,
   DEFAULT_MODEL_ID,
   getModelDefinition,
   isModelId,
   ModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
-import { hasChatProxy, hasGeminiProxy } from "@/src/shared/config/env.config"
+import { hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
 
 export interface ModelEntry {
   id: string
@@ -22,6 +23,7 @@ export interface ModelEntry {
 export function useModelSelection(
   apiKey: string | null,
   geminiKey: string | null,
+  claudeKey: string | null,
   model: string,
   setModel: (model: string) => void
 ) {
@@ -54,6 +56,20 @@ export function useModelSelection(
     })
   }, [geminiKey, t.settings.modelDescriptions])
 
+  const claudeModels = useMemo(() => {
+    return CLAUDE_MODELS.map((entry): ModelEntry => {
+      const definition = getModelDefinition(entry.id)
+      const isLocked = definition?.requiresUserKey && !claudeKey
+      const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
+      return {
+        id: entry.id,
+        label: entry.label,
+        description,
+        isLocked: isLocked || false
+      }
+    })
+  }, [claudeKey, t.settings.modelDescriptions])
+
   const handleSelectModel = (candidate: string) => {
     if (!isModelId(candidate)) return
     const definition = getModelDefinition(candidate)
@@ -71,6 +87,16 @@ export function useModelSelection(
 
     if (definition.provider === "gemini" && !geminiKey && !hasGeminiProxy) {
       toast.error(t.settings.requiresGeminiKeyOrProxy)
+      return
+    }
+
+    if (definition.provider === "claude" && definition.requiresUserKey && !claudeKey) {
+      toast.error(t.settings.requiresClaudeKey)
+      return
+    }
+
+    if (definition.provider === "claude" && !definition.requiresUserKey && !claudeKey && !hasClaudeProxy) {
+      toast.error(t.settings.requiresClaudeKeyOrProxy)
       return
     }
 
@@ -96,12 +122,22 @@ export function useModelSelection(
       return t.settings.requiresGeminiKeyOrProxy
     }
 
+    if (definition.provider === "claude") {
+      if (definition.requiresUserKey) {
+        return claudeKey ? t.settings.usingPersonalClaudeKey : t.settings.requiresClaudeKey
+      }
+      if (claudeKey) return t.settings.usingPersonalClaudeKey
+      if (hasClaudeProxy) return t.settings.routedViaProxy
+      return t.settings.requiresClaudeKeyOrProxy
+    }
+
     return ""
   }
 
   return {
     gptModels,
     geminiModels,
+    claudeModels,
     handleSelectModel,
     getModelStatus,
   }

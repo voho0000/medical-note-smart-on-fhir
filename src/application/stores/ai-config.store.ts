@@ -14,7 +14,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { encrypt, decrypt } from '@/src/shared/utils/crypto.utils'
-import { DEFAULT_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { DEFAULT_MODEL_ID, isModelId } from '@/src/shared/constants/ai-models.constants'
 
 type StorageType = 'localStorage' | 'sessionStorage'
 
@@ -23,6 +23,7 @@ interface AiConfigState {
   apiKey: string | null
   geminiKey: string | null
   perplexityKey: string | null
+  claudeKey: string | null
   storageType: StorageType
   
   // Model Selection
@@ -32,6 +33,7 @@ interface AiConfigState {
   setApiKey: (key: string | null) => void
   setGeminiKey: (key: string | null) => void
   setPerplexityKey: (key: string | null) => void
+  setClaudeKey: (key: string | null) => void
   setStorageType: (type: StorageType) => void
   setModel: (model: string) => void
   clearAllKeys: () => void
@@ -41,6 +43,7 @@ const STORAGE_KEYS = {
   OPENAI_API_KEY: 'openai_api_key',
   GEMINI_API_KEY: 'gemini_api_key',
   PERPLEXITY_API_KEY: 'perplexity_api_key',
+  CLAUDE_API_KEY: 'claude_api_key',
   STORAGE_TYPE: 'api_key_storage_type',
   MODEL: 'selected_model',
 }
@@ -93,6 +96,7 @@ export const useAiConfigStore = create<AiConfigState>()(
       apiKey: null,
       geminiKey: null,
       perplexityKey: null,
+      claudeKey: null,
       storageType: 'sessionStorage',
       model: DEFAULT_MODEL_ID,
       
@@ -114,6 +118,12 @@ export const useAiConfigStore = create<AiConfigState>()(
         // Fire and forget - async save
         saveEncryptedKey(get().storageType, STORAGE_KEYS.PERPLEXITY_API_KEY, key).catch(console.error)
       },
+
+      setClaudeKey: (key) => {
+        set({ claudeKey: key })
+        // Fire and forget - async save
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.CLAUDE_API_KEY, key).catch(console.error)
+      },
       
       setStorageType: (type) => {
         const oldType = get().storageType
@@ -121,19 +131,21 @@ export const useAiConfigStore = create<AiConfigState>()(
         
         // Migrate keys to new storage (async)
         if (typeof window !== 'undefined') {
-          const { apiKey, geminiKey, perplexityKey } = get()
+          const { apiKey, geminiKey, perplexityKey, claudeKey } = get()
           
           // Clear old storage
           const oldStorage = getStorage(oldType)
           oldStorage?.removeItem(STORAGE_KEYS.OPENAI_API_KEY)
           oldStorage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
           oldStorage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
+          oldStorage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
           
           // Save to new storage (fire and forget)
           Promise.all([
             saveEncryptedKey(type, STORAGE_KEYS.OPENAI_API_KEY, apiKey),
             saveEncryptedKey(type, STORAGE_KEYS.GEMINI_API_KEY, geminiKey),
             saveEncryptedKey(type, STORAGE_KEYS.PERPLEXITY_API_KEY, perplexityKey),
+            saveEncryptedKey(type, STORAGE_KEYS.CLAUDE_API_KEY, claudeKey),
           ]).catch(console.error)
           
           // Save storage type preference
@@ -147,12 +159,13 @@ export const useAiConfigStore = create<AiConfigState>()(
       
       clearAllKeys: () => {
         const storageType = get().storageType
-        set({ apiKey: null, geminiKey: null, perplexityKey: null })
+        set({ apiKey: null, geminiKey: null, perplexityKey: null, claudeKey: null })
         
         const storage = getStorage(storageType)
         storage?.removeItem(STORAGE_KEYS.OPENAI_API_KEY)
         storage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
         storage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
+        storage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
       },
     }),
     {
@@ -160,6 +173,12 @@ export const useAiConfigStore = create<AiConfigState>()(
       partialize: (state) => ({ model: state.model }), // Only persist model in Zustand storage
       onRehydrateStorage: () => async (state) => {
         if (!state || typeof window === 'undefined') return
+
+        // Model lineup changes between releases — a persisted id that no
+        // longer exists falls back to the default instead of dead-ending
+        if (!isModelId(state.model)) {
+          state.model = DEFAULT_MODEL_ID
+        }
         
         // Load storage type preference. No saved preference: legacy users who
         // already have keys in localStorage keep that behavior (and we persist
@@ -179,16 +198,18 @@ export const useAiConfigStore = create<AiConfigState>()(
         }
         
         // Load encrypted keys from appropriate storage (async)
-        const [apiKey, geminiKey, perplexityKey] = await Promise.all([
+        const [apiKey, geminiKey, perplexityKey, claudeKey] = await Promise.all([
           loadEncryptedKey(storageType, STORAGE_KEYS.OPENAI_API_KEY),
           loadEncryptedKey(storageType, STORAGE_KEYS.GEMINI_API_KEY),
           loadEncryptedKey(storageType, STORAGE_KEYS.PERPLEXITY_API_KEY),
+          loadEncryptedKey(storageType, STORAGE_KEYS.CLAUDE_API_KEY),
         ])
         
         // Update state - this will trigger re-renders in components
         state.apiKey = apiKey
         state.geminiKey = geminiKey
         state.perplexityKey = perplexityKey
+        state.claudeKey = claudeKey
         state.storageType = storageType
       },
     }
@@ -199,11 +220,13 @@ export const useAiConfigStore = create<AiConfigState>()(
 const selectApiKey = (state: AiConfigState) => state.apiKey
 const selectGeminiKey = (state: AiConfigState) => state.geminiKey
 const selectPerplexityKey = (state: AiConfigState) => state.perplexityKey
+const selectClaudeKey = (state: AiConfigState) => state.claudeKey
 const selectModel = (state: AiConfigState) => state.model
 
 export const useApiKey = () => useAiConfigStore(selectApiKey)
 export const useGeminiKey = () => useAiConfigStore(selectGeminiKey)
 export const usePerplexityKey = () => useAiConfigStore(selectPerplexityKey)
+export const useClaudeKey = () => useAiConfigStore(selectClaudeKey)
 export const useModel = () => useAiConfigStore(selectModel)
 
 // Use useShallow to prevent infinite loops from object reference changes
@@ -212,5 +235,6 @@ export const useAllApiKeys = () => useAiConfigStore(
     apiKey: state.apiKey,
     geminiKey: state.geminiKey,
     perplexityKey: state.perplexityKey,
+    claudeKey: state.claudeKey,
   }))
 )

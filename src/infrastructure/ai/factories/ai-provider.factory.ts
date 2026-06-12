@@ -5,7 +5,9 @@
 
 import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { createAnthropic } from '@ai-sdk/anthropic'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { getModelDefinition, type ModelProvider } from '@/src/shared/constants/ai-models.constants'
 import { proxyFetchInterceptor } from '../interceptors/proxy-fetch.interceptor'
 
 export interface ProviderConfig {
@@ -24,80 +26,111 @@ export class AiProviderFactory {
    * Create AI provider with appropriate configuration
    */
   create(config: ProviderConfig): ProviderResult {
-    const isGemini = this.isGeminiModel(config.modelId)
+    const provider = this.providerOf(config.modelId)
 
     if (config.useProxy) {
-      return this.createProxyProvider(config.modelId, isGemini)
+      return this.createProxyProvider(config.modelId, provider)
     } else {
-      return this.createDirectProvider(config.modelId, config.apiKey!, isGemini)
+      return this.createDirectProvider(config.modelId, config.apiKey!, provider)
     }
   }
 
   /**
-   * Check if model is Gemini
+   * Resolve the provider from the model definition (id-prefix fallback for
+   * unknown/internal ids)
    */
-  private isGeminiModel(modelId: string): boolean {
-    return modelId.startsWith('gemini') || modelId.startsWith('models/gemini')
+  private providerOf(modelId: string): ModelProvider {
+    const def = getModelDefinition(modelId)
+    if (def) return def.provider
+    if (modelId.startsWith('gemini') || modelId.startsWith('models/gemini')) return 'gemini'
+    if (modelId.startsWith('claude')) return 'claude'
+    return 'openai'
   }
 
   /**
    * Create provider with proxy configuration
    */
-  private createProxyProvider(modelId: string, isGemini: boolean): ProviderResult {
-    const proxyUrl = isGemini ? ENV_CONFIG.geminiProxyUrl : ENV_CONFIG.chatProxyUrl
-    
+  private createProxyProvider(modelId: string, provider: ModelProvider): ProviderResult {
+    const proxyUrl =
+      provider === 'gemini' ? ENV_CONFIG.geminiProxyUrl :
+      provider === 'claude' ? ENV_CONFIG.claudeProxyUrl :
+      ENV_CONFIG.chatProxyUrl
+
     const customFetch = proxyFetchInterceptor.createProxyFetch({
       proxyUrl,
       proxyClientKey: ENV_CONFIG.proxyClientKey,
-      isGemini,
+      isGemini: provider === 'gemini',
+      isClaude: provider === 'claude',
       modelId,
     })
 
-    if (isGemini) {
-      const provider = createGoogleGenerativeAI({
+    if (provider === 'gemini') {
+      const sdk = createGoogleGenerativeAI({
         baseURL: proxyUrl,
         apiKey: 'proxy', // Dummy key required by SDK
         fetch: customFetch,
       })
-      return { model: provider(modelId), isGemini: true }
-    } else {
-      const provider = createOpenAI({
-        baseURL: proxyUrl,
-        apiKey: 'proxy', // Dummy key required by SDK
-        fetch: customFetch,
-      })
-      // Use .chat() to force Chat Completions API instead of Responses API
-      return { model: provider.chat(modelId), isGemini: false }
+      return { model: sdk(modelId), isGemini: true }
     }
+    if (provider === 'claude') {
+      const sdk = createAnthropic({
+        baseURL: proxyUrl,
+        apiKey: 'proxy', // Dummy key required by SDK
+        fetch: customFetch,
+      })
+      return { model: sdk(modelId), isGemini: false }
+    }
+    const sdk = createOpenAI({
+      baseURL: proxyUrl,
+      apiKey: 'proxy', // Dummy key required by SDK
+      fetch: customFetch,
+    })
+    // Use .chat() to force Chat Completions API instead of Responses API
+    return { model: sdk.chat(modelId), isGemini: false }
   }
 
   /**
    * Create provider with direct API access
    */
-  private createDirectProvider(modelId: string, apiKey: string, isGemini: boolean): ProviderResult {
-    if (isGemini) {
-      const provider = createGoogleGenerativeAI({ apiKey })
-      return { model: provider(modelId), isGemini: true }
-    } else {
-      const provider = createOpenAI({ apiKey })
-      return { model: provider.chat(modelId), isGemini: false }
+  private createDirectProvider(modelId: string, apiKey: string, provider: ModelProvider): ProviderResult {
+    if (provider === 'gemini') {
+      const sdk = createGoogleGenerativeAI({ apiKey })
+      return { model: sdk(modelId), isGemini: true }
     }
+    if (provider === 'claude') {
+      const sdk = createAnthropic({
+        apiKey,
+        // Anthropic blocks browser-origin calls unless explicitly opted in;
+        // BYO-key direct mode runs in the browser by design here
+        headers: { 'anthropic-dangerous-direct-browser-access': 'true' },
+      })
+      return { model: sdk(modelId), isGemini: false }
+    }
+    const sdk = createOpenAI({ apiKey })
+    return { model: sdk.chat(modelId), isGemini: false }
   }
 
   /**
    * Validate proxy availability
    */
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
-    const isGemini = this.isGeminiModel(modelId)
+    const provider = this.providerOf(modelId)
 
-    if (isGemini && !ENV_CONFIG.hasGeminiProxy) {
+    if (provider === 'gemini' && !ENV_CONFIG.hasGeminiProxy) {
       return {
         available: false,
         error: 'Gemini models require an API key for deep mode. Please add your Gemini API key in Settings or switch to an OpenAI model.',
       }
     }
 
-    if (!isGemini && !ENV_CONFIG.hasChatProxy) {
+    if (provider === 'claude' && !ENV_CONFIG.hasClaudeProxy) {
+      return {
+        available: false,
+        error: 'Claude proxy is not available. Please add your Claude API key in Settings.',
+      }
+    }
+
+    if (provider === 'openai' && !ENV_CONFIG.hasChatProxy) {
       return {
         available: false,
         error: 'OpenAI proxy is not available. Please add your OpenAI API key in Settings.',

@@ -4,12 +4,14 @@ export const ENV_CONFIG = {
   chatProxyUrl: process.env.NEXT_PUBLIC_CHAT_URL || '',
   whisperProxyUrl: process.env.NEXT_PUBLIC_WHISPER_URL || '',
   geminiProxyUrl: process.env.NEXT_PUBLIC_GEMINI_URL || '',
+  claudeProxyUrl: process.env.NEXT_PUBLIC_CLAUDE_URL || '',
   proxyClientKey: process.env.NEXT_PUBLIC_PROXY_KEY || '',
   
   // Feature flags
   hasChatProxy: Boolean(process.env.NEXT_PUBLIC_CHAT_URL),
   hasWhisperProxy: Boolean(process.env.NEXT_PUBLIC_WHISPER_URL),
   hasGeminiProxy: Boolean(process.env.NEXT_PUBLIC_GEMINI_URL),
+  hasClaudeProxy: Boolean(process.env.NEXT_PUBLIC_CLAUDE_URL),
   
   // SMART on FHIR
   smartClientId: 'my_web_app',
@@ -30,3 +32,4 @@ export const PROXY_CLIENT_KEY = ENV_CONFIG.proxyClientKey
 export const hasChatProxy = ENV_CONFIG.hasChatProxy
 export const hasWhisperProxy = ENV_CONFIG.hasWhisperProxy
 export const hasGeminiProxy = ENV_CONFIG.hasGeminiProxy
+export const hasClaudeProxy = ENV_CONFIG.hasClaudeProxy

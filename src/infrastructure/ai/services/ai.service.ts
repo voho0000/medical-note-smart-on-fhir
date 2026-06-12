@@ -4,17 +4,21 @@ import type { AiQueryRequest, AiQueryResponse, AiModelDefinition } from '@/src/c
 import { ALL_MODELS, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 import { OpenAiService } from './openai.service'
 import { GeminiService } from './gemini.service'
+import { ClaudeService } from './claude.service'
 
 export class AiService implements IAiService {
   private openAiService: OpenAiService
   private geminiService: GeminiService
+  private claudeService: ClaudeService
 
   constructor(
     private openAiApiKey: string | null = null,
-    private geminiApiKey: string | null = null
+    private geminiApiKey: string | null = null,
+    private claudeApiKey: string | null = null
   ) {
     this.openAiService = new OpenAiService(openAiApiKey)
     this.geminiService = new GeminiService(geminiApiKey)
+    this.claudeService = new ClaudeService(claudeApiKey)
   }
 
   setOpenAiApiKey(apiKey: string | null): void {
@@ -27,8 +31,13 @@ export class AiService implements IAiService {
     this.geminiService.setApiKey(apiKey)
   }
 
+  setClaudeApiKey(apiKey: string | null): void {
+    this.claudeApiKey = apiKey
+    this.claudeService.setApiKey(apiKey)
+  }
+
   isAvailable(): boolean {
-    return this.openAiService.isAvailable() || this.geminiService.isAvailable()
+    return this.openAiService.isAvailable() || this.geminiService.isAvailable() || this.claudeService.isAvailable()
   }
 
   getSupportedModels(): AiModelDefinition[] {
@@ -43,6 +52,8 @@ export class AiService implements IAiService {
       return await this.openAiService.query(request)
     } else if (provider === 'gemini') {
       return await this.geminiService.query(request)
+    } else if (provider === 'claude') {
+      return await this.claudeService.query(request)
     }
 
     throw new Error(`Unsupported AI provider: ${provider}`)

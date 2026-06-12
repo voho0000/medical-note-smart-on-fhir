@@ -12,6 +12,7 @@ export interface ProxyFetchConfig {
   proxyUrl: string
   proxyClientKey?: string
   isGemini: boolean
+  isClaude?: boolean
   modelId: string
 }
 
@@ -28,6 +29,7 @@ export class ProxyFetchInterceptor {
       // Remove API keys - proxy will use its own
       headers.delete('authorization')
       headers.delete('x-goog-api-key')
+      headers.delete('x-api-key')
       
       // Add proxy client key if available
       if (config.proxyClientKey) {
@@ -43,7 +45,10 @@ export class ProxyFetchInterceptor {
 
       let body = init?.body
 
-      if (config.isGemini) {
+      if (config.isClaude) {
+        // Anthropic messages payloads pass through verbatim — the Claude proxy
+        // forwards them to /v1/messages unchanged
+      } else if (config.isGemini) {
         // Transform Gemini request format
         body = this.transformGeminiRequest(body, config.modelId)
       } else {

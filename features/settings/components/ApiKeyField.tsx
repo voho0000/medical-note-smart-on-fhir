@@ -7,7 +7,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { Label } from "@/components/ui/label"
 import { DEFAULT_MODEL_ID, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
-import { hasChatProxy, hasGeminiProxy } from "@/src/shared/config/env.config"
+import { hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
 import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSelection'
 import { ModelSelector } from './ModelSelector'
 import { ApiKeyInput } from './ApiKeyInput'
@@ -24,15 +24,18 @@ export function ModelAndKeySettings() {
   const apiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const perplexityKey = useAiConfigStore((state) => state.perplexityKey)
+  const claudeKey = useAiConfigStore((state) => state.claudeKey)
   const model = useAiConfigStore((state) => state.model)
   const setApiKey = useAiConfigStore((state) => state.setApiKey)
   const setGeminiKey = useAiConfigStore((state) => state.setGeminiKey)
   const setPerplexityKey = useAiConfigStore((state) => state.setPerplexityKey)
+  const setClaudeKey = useAiConfigStore((state) => state.setClaudeKey)
   const setModel = useAiConfigStore((state) => state.setModel)
   const clearAllKeys = useAiConfigStore((state) => state.clearAllKeys)
   const [openAiValue, setOpenAiValue] = useState(apiKey)
   const [geminiValue, setGeminiValue] = useState(geminiKey)
   const [perplexityValue, setPerplexityValue] = useState(perplexityKey)
+  const [claudeValue, setClaudeValue] = useState(claudeKey)
 
   useEffect(() => {
     setOpenAiValue(apiKey)
@@ -46,9 +49,14 @@ export function ModelAndKeySettings() {
     setPerplexityValue(perplexityKey)
   }, [perplexityKey])
 
-  const { gptModels, geminiModels, handleSelectModel, getModelStatus } = useModelSelectionLogic(
+  useEffect(() => {
+    setClaudeValue(claudeKey)
+  }, [claudeKey])
+
+  const { gptModels, geminiModels, claudeModels, handleSelectModel, getModelStatus } = useModelSelectionLogic(
     apiKey,
     geminiKey,
+    claudeKey,
     model,
     setModel
   )
@@ -83,6 +91,19 @@ export function ModelAndKeySettings() {
     if (perplexityValue) setPerplexityKey(perplexityValue.trim())
   }
 
+  const handleSaveClaudeKey = async () => {
+    if (claudeValue) setClaudeKey(claudeValue.trim())
+  }
+
+  const handleClearClaudeKey = () => {
+    setClaudeValue("")
+    setClaudeKey(null)
+    const definition = getModelDefinition(model)
+    if (definition?.provider === "claude" && (definition.requiresUserKey || !hasClaudeProxy)) {
+      setModel(DEFAULT_MODEL_ID)
+    }
+  }
+
   const handleClearPerplexityKey = () => {
     setPerplexityValue("")
     setPerplexityKey(null)
@@ -114,6 +135,12 @@ export function ModelAndKeySettings() {
           />
           <ModelSelector
             models={geminiModels}
+            selectedModel={model}
+            onSelectModel={handleSelectModel}
+            getModelStatus={getModelStatus}
+          />
+          <ModelSelector
+            models={claudeModels}
             selectedModel={model}
             onSelectModel={handleSelectModel}
             getModelStatus={getModelStatus}
@@ -159,6 +186,19 @@ export function ModelAndKeySettings() {
         onClear={handleClearGeminiKey}
         helpText={t.settings.geminiKeyHelp}
         clearWarning={t.settings.clearGeminiKeyWarning}
+      />
+
+      {/* Claude API Key */}
+      <ApiKeyInput
+        id="claude-key"
+        label={t.settings.personalClaudeKey}
+        placeholder="sk-ant-..."
+        value={claudeValue || ''}
+        onChange={setClaudeValue}
+        onSave={handleSaveClaudeKey}
+        onClear={handleClearClaudeKey}
+        helpText={t.settings.claudeKeyHelp}
+        clearWarning={t.settings.clearClaudeKeyWarning}
       />
 
       {/* Perplexity API Key */}

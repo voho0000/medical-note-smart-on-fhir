@@ -1,3 +1,13 @@
+
+// The AI SDK's eventsource-parser needs web streams at module load; jsdom
+// strips Node's globals, so restore them for suites that import the SDK.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const webStreams = require('node:stream/web')
+for (const name of ['TransformStream', 'ReadableStream', 'WritableStream'] as const) {
+  if (typeof (globalThis as Record<string, unknown>)[name] === 'undefined') {
+    ;(globalThis as Record<string, unknown>)[name] = webStreams[name]
+  }
+}
 // Jest Test Setup
 // Global setup for all tests
 

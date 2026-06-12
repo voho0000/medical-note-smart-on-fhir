@@ -10,6 +10,7 @@ import { AiService } from '@/src/infrastructure/ai/services/ai.service'
 import { QueryAiUseCase } from '@/src/core/use-cases/ai/query-ai.use-case'
 import { StreamOrchestrator } from '@/src/infrastructure/ai/streaming/stream-orchestrator'
 import { getUserErrorMessage } from '@/src/core/errors'
+import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 
 interface UseUnifiedAiOptions {
@@ -35,7 +36,7 @@ interface StreamOptions extends QueryOptions {
  * Consolidates AI query and streaming functionality
  */
 export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
-  const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
+  const { apiKey: openAiKey, geminiKey, claudeKey } = useAllApiKeys()
   const defaultModel = useModel()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,8 +44,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
   // Cache AI service instance to avoid recreating on every call
   const aiService = useMemo(
-    () => new AiService(openAiKey, geminiKey),
-    [openAiKey, geminiKey]
+    () => new AiService(openAiKey, geminiKey, claudeKey),
+    [openAiKey, geminiKey, claudeKey]
   )
 
   // Cache use case instance
@@ -100,7 +101,11 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       abortControllerRef.current = new AbortController()
 
       const modelId = streamOptions?.modelId || options.defaultModel || defaultModel
-      const apiKey = modelId.startsWith('gemini') ? geminiKey : openAiKey
+      const provider = getModelDefinition(modelId)?.provider ?? 'openai'
+      const apiKey =
+        provider === 'gemini' ? geminiKey :
+        provider === 'claude' ? claudeKey :
+        openAiKey
 
       let fullText = ''
 
@@ -133,7 +138,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         abortControllerRef.current = null
       }
     },
-    [streamOrchestrator, openAiKey, geminiKey, defaultModel, options]
+    [streamOrchestrator, openAiKey, geminiKey, claudeKey, defaultModel, options]
   )
 
   /**

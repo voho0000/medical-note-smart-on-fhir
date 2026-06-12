@@ -16,6 +16,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.84",
     "@ai-sdk/google": "^3.0.2",
     "@ai-sdk/openai": "^3.0.2",
     "@radix-ui/react-accordion": "^1.2.12",
