@@ -36,11 +36,6 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
           })
           .filter(Boolean)
           .join(", ")
-        
-        // Debug: log if we have performer array but no extracted names
-        if (!performer && procedure.performer.length > 0) {
-          console.log('[Procedure] performer data structure:', procedure.performer[0])
-        }
       }
       const outcome = getConceptText(procedure?.outcome)
       const category = getConceptText(procedure?.category)

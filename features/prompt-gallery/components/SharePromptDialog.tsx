@@ -137,8 +137,7 @@ export function SharePromptDialog({
   }
 
   const handleShare = async () => {
-    console.log('=== SharePromptDialog: handleShare 開始 ===')
-    
+
     if (!title.trim()) {
       setError(t.promptGallery.shareError + ': ' + t.promptGallery.errorTitleRequired)
       return
@@ -159,17 +158,6 @@ export function SharePromptDialog({
     setError(null)
 
     try {
-      console.log('準備分享的資料:', {
-        title: title.trim(),
-        promptLength: prompt.trim().length,
-        types: selectedTypes,
-        category,
-        specialty: selectedSpecialties,
-        tags,
-        isAnonymous,
-        userId: user?.uid,
-      })
-
       const promptId = await createSharedPrompt({
         title: title.trim(),
         prompt: prompt.trim(),
