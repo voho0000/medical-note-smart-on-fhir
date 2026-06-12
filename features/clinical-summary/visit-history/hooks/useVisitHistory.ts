@@ -92,7 +92,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         const institution = (providerDisplay && !isUuid(providerDisplay))
           ? providerDisplay
           : (locationDisplay && !isUuid(locationDisplay) ? locationDisplay : '')
-        let location = locationDisplay ||
+        const location = locationDisplay ||
                      (providerDisplay && !isUuid(providerDisplay) ? providerDisplay : '')
         
         // Extract every ICD diagnosis on the visit (primary + secondaries).

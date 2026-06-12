@@ -26,7 +26,7 @@ export function truncateToContextWindow(
   
   // Always include system prompt
   const systemTokens = estimateTokens(config.systemPrompt)
-  let remainingTokens = availableTokens - systemTokens
+  const remainingTokens = availableTokens - systemTokens
   
   if (remainingTokens <= 0) {
     console.warn('[ContextWindow] System prompt too long, truncating')

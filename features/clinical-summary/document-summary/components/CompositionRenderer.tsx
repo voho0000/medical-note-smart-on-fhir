@@ -140,7 +140,7 @@ export function CompositionRenderer({
                       tables/lists/headings sensible defaults. */}
                   <div
                     className="prose prose-sm dark:prose-invert max-w-none [&_table]:text-xs [&_th]:font-medium"
-                    // eslint-disable-next-line react/no-danger -- sanitized via DOMPurify with FHIR Narrative whitelist
+                     
                     dangerouslySetInnerHTML={{ __html: sanitized }}
                   />
                 </AccordionContent>

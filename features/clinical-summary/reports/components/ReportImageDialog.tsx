@@ -122,7 +122,7 @@ export function ReportImageDialog({ images, title, open, onOpenChange }: ReportI
               {urls[i] ? (
                 // loading="lazy" + decoding="async" keep the main thread free
                 // while the (large) JPEG paints.
-                // eslint-disable-next-line @next/next/no-img-element
+                 
                 <img
                   src={urls[i]}
                   alt={img.title || title}

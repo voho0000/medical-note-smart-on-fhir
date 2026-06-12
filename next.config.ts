@@ -14,7 +14,7 @@ const projectRoot = isWorktree ? path.join(__dirname, '../../..') : __dirname;
 const nextConfig: NextConfig = {
   // Static export is only required for the GitHub Pages deploy. In dev mode
   // (and on Vercel) we want the full Next.js server so dynamic API routes
-  // like /api/twcat-proxy work. Without this gate, `output: "export"` forces
+  // like /api/feedback work. Without this gate, `output: "export"` forces
   // every route to be statically renderable, which breaks API routes.
   ...(isGhPages ? { output: "export" as const } : {}),
   images: { unoptimized: true },

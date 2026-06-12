@@ -233,7 +233,7 @@ describe('buildIpsBundle — populated data', () => {
     const result = validateIpsBundle(bundle)
     if (!result.ok) {
       // Surface which checks failed for easier debugging.
-      // eslint-disable-next-line no-console
+       
       console.error(result.items.filter((i) => !i.ok))
     }
     expect(result.ok).toBe(true)

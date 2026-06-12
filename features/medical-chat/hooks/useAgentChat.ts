@@ -155,8 +155,8 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         })
 
         let accumulatedContent = ""
-        let toolResults: Array<{ toolName: string; result: unknown }> = []
-        let usedToolNames: string[] = [] // Track which tools were called
+        const toolResults: Array<{ toolName: string; result: unknown }> = []
+        const usedToolNames: string[] = [] // Track which tools were called
         let lastUpdateTime = 0
         let timeoutId: NodeJS.Timeout | null = null
         const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
@@ -269,7 +269,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           })
           
           let followUpContent = ""
-          let followUpToolResults: Array<{ toolName: string; result: unknown }> = []
+          const followUpToolResults: Array<{ toolName: string; result: unknown }> = []
           let followUpLastUpdateTime = 0
           let followUpTimeoutId: NodeJS.Timeout | null = null
           

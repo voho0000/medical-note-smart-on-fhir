@@ -81,7 +81,7 @@ export function HtmlDocumentBody({ attachment, labels }: HtmlDocumentBodyProps) 
   return (
     <div
       className="prose prose-sm dark:prose-invert max-w-none break-words [&_table]:w-full [&_table]:table-fixed [&_table]:text-xs [&_table]:border-collapse [&_td]:border [&_td]:border-border/40 [&_td]:px-1.5 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:border [&_th]:border-border/40 [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:font-medium [&_th]:break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words"
-      // eslint-disable-next-line react/no-danger -- sanitised via DOMPurify with the FHIR-Narrative whitelist
+       
       dangerouslySetInnerHTML={{ __html: sanitised }}
     />
   )

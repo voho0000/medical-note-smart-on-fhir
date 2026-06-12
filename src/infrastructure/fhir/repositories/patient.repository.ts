@@ -18,7 +18,7 @@ export class FhirPatientRepository implements IPatientRepository {
       // empty even when real data exists for another patient on the
       // server. Reading by id avoids that.
       const client = await fhirClient.getClient()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const pinnedId = (client as any)?.patient?.id as string | undefined
       if (pinnedId) {
         const resource = await fhirClient.request(`${FHIR_RESOURCES.PATIENT}/${pinnedId}`)
