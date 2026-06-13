@@ -18,6 +18,16 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import type { IDataMapper } from '@/src/core/interfaces/data-mapper.interface'
 import { dataMapperRegistry } from '@/src/core/interfaces/data-mapper.interface'
+import type {
+  Condition,
+  MedicationRequest,
+  AllergyIntolerance,
+  Observation,
+  DiagnosticReport,
+  Procedure,
+  CodeableConcept,
+  Reference,
+} from '@/src/shared/types/fhir.types'
 
 // Source system identifier for FHIR data
 const FHIR_SOURCE_SYSTEM = 'fhir'
@@ -36,27 +46,27 @@ export class FhirMapper implements IDataMapper {
   readonly sourceType = FHIR_SOURCE_SYSTEM
 
   // Instance methods for IDataMapper interface
-  mapCondition(source: any): ConditionEntity {
+  mapCondition(source: Condition): ConditionEntity {
     return FhirMapper.toCondition(source)
   }
 
-  mapMedication(source: any): MedicationEntity {
+  mapMedication(source: MedicationRequest): MedicationEntity {
     return FhirMapper.toMedication(source)
   }
 
-  mapAllergy(source: any): AllergyEntity {
+  mapAllergy(source: AllergyIntolerance): AllergyEntity {
     return FhirMapper.toAllergy(source)
   }
 
-  mapObservation(source: any): ObservationEntity {
+  mapObservation(source: Observation): ObservationEntity {
     return FhirMapper.toObservation(source)
   }
 
-  mapDiagnosticReport(source: any, observations?: ObservationEntity[]): DiagnosticReportEntity {
+  mapDiagnosticReport(source: DiagnosticReport, observations?: ObservationEntity[]): DiagnosticReportEntity {
     return FhirMapper.toDiagnosticReport(source, observations || [])
   }
 
-  mapProcedure(source: any): ProcedureEntity {
+  mapProcedure(source: Procedure): ProcedureEntity {
     return FhirMapper.toProcedure(source)
   }
 
@@ -73,13 +83,13 @@ export class FhirMapper implements IDataMapper {
   }
 
   // Static methods for backward compatibility
-  static toCondition(fhirResource: any): ConditionEntity {
+  static toCondition(fhirResource: Condition): ConditionEntity {
     return {
       id: fhirResource.id || '',
       code: fhirResource.code,
       category: fhirResource.category,
-      clinicalStatus: fhirResource.clinicalStatus?.coding?.[0]?.code,
-      verificationStatus: fhirResource.verificationStatus?.coding?.[0]?.code,
+      clinicalStatus: (fhirResource.clinicalStatus as CodeableConcept | undefined)?.coding?.[0]?.code,
+      verificationStatus: (fhirResource.verificationStatus as CodeableConcept | undefined)?.coding?.[0]?.code,
       recordedDate: fhirResource.recordedDate || fhirResource.dateRecorded,
       onsetDateTime: fhirResource.onsetDateTime,
       encounter: fhirResource.encounter,
@@ -88,7 +98,7 @@ export class FhirMapper implements IDataMapper {
     }
   }
 
-  static toMedication(fhirResource: any): MedicationEntity {
+  static toMedication(fhirResource: MedicationRequest): MedicationEntity {
     return {
       id: fhirResource.id || '',
       medicationCodeableConcept: fhirResource.medicationCodeableConcept,
@@ -110,7 +120,7 @@ export class FhirMapper implements IDataMapper {
     }
   }
 
-  static toAllergy(fhirResource: any): AllergyEntity {
+  static toAllergy(fhirResource: AllergyIntolerance): AllergyEntity {
     return {
       id: fhirResource.id || '',
       code: fhirResource.code,
@@ -124,7 +134,7 @@ export class FhirMapper implements IDataMapper {
     }
   }
 
-  static toObservation(fhirResource: any): ObservationEntity {
+  static toObservation(fhirResource: Observation): ObservationEntity {
     return {
       id: fhirResource.id || '',
       code: fhirResource.code,
@@ -153,7 +163,7 @@ export class FhirMapper implements IDataMapper {
     }
   }
 
-  static toDiagnosticReport(fhirResource: any, observations: ObservationEntity[]): DiagnosticReportEntity {
+  static toDiagnosticReport(fhirResource: DiagnosticReport, observations: ObservationEntity[]): DiagnosticReportEntity {
     const report: DiagnosticReportEntity = {
       id: fhirResource.id || '',
       code: fhirResource.code,
@@ -175,7 +185,7 @@ export class FhirMapper implements IDataMapper {
     // Attach related observations with expansion of hasMember
     if (fhirResource.result && observations.length > 0) {
       const resultIds = fhirResource.result
-        .map((ref: any) => ref.reference?.split('/').pop())
+        .map((ref: Reference) => ref.reference?.split('/').pop())
         .filter(Boolean)
       
       // Create a map of observations by ID for easy lookup
@@ -183,7 +193,7 @@ export class FhirMapper implements IDataMapper {
       
       // Get the actual observation objects
       const reportObservations = resultIds
-        .map((id: string) => obsMap.get(id))
+        .map((id) => (id ? obsMap.get(id) : undefined))
         .filter(Boolean)
       
       // Expand any observations that have members
@@ -206,7 +216,7 @@ export class FhirMapper implements IDataMapper {
     return report
   }
 
-  static toProcedure(fhirResource: any): ProcedureEntity {
+  static toProcedure(fhirResource: Procedure): ProcedureEntity {
     return {
       id: fhirResource.id || '',
       code: fhirResource.code,

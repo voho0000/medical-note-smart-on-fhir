@@ -74,6 +74,8 @@ export interface Observation {
   hasMember?: Reference[]
   component?: ObservationComponent[]
   performer?: Array<{ display?: string; reference?: string }>
+  // Authoritative blood/urine signal (bridge sets specimen.display)
+  specimen?: Reference
 }
 
 // Diagnostic Report Types
@@ -102,6 +104,7 @@ export interface DiagnosticReport {
     // `data` replaced by this Blob key (LocalBundleService.extractAndStoreImages).
     _imageRef?: string
   }>
+  performer?: Array<{ display?: string; reference?: string }>
   _observations?: Observation[]
 }
 
@@ -149,6 +152,13 @@ export interface MedicationRequest {
     validityPeriod?: Period
     expectedSupplyDuration?: Duration
   }
+  category?: CodeableConcept[]
+  requester?: Reference
+  reasonCode?: CodeableConcept[]
+  courseOfTherapyType?: CodeableConcept
+  // Marker stamped by LocalBundleService.parse (MedicationRequest vs
+  // MedicationStatement); bridge data omits it
+  _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
 }
 
 // Condition (Diagnosis) Types
@@ -168,6 +178,8 @@ export interface Condition {
   onsetPeriod?: Period
   abatementDateTime?: string
   recordedDate?: string
+  // Bridge alternate field name for recordedDate
+  dateRecorded?: string
   recorder?: Reference
   asserter?: Reference
   stage?: Array<{
@@ -205,6 +217,8 @@ export interface AllergyIntolerance {
   encounter?: Reference
   onsetDateTime?: string
   recordedDate?: string
+  // Bridge alternate field name for recordedDate
+  recorded?: string
   recorder?: Reference
   asserter?: Reference
   lastOccurrence?: string
