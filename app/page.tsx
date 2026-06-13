@@ -17,6 +17,9 @@ import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
+import { useState } from "react"
+import { cn } from "@/src/shared/utils/cn.utils"
+import { ChevronsLeft, ChevronsRight } from "lucide-react"
 
 function PageContent() {
   const { t } = useLanguage()
@@ -30,6 +33,11 @@ function PageContent() {
 
   // Responsive view logic (extracted to custom hook)
   const { mobileView, setMobileView, isLargeScreen } = useResponsiveView<'left' | 'right'>('left', 1024)
+
+  // Panel collapse (lg only): collapse either side to give the other full width.
+  // null = normal resizable split. Kept in-session (not persisted) to avoid the
+  // SSR/localStorage hydration mismatch class of bugs.
+  const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
 
   // Onboarding detection: when neither SMART nor a local bundle is available,
   // the data hooks return `patient: null` with no error. Show a welcome
@@ -105,39 +113,108 @@ function PageContent() {
       </div>
 
       <main className="flex flex-1 flex-col lg:flex-row gap-3 sm:gap-6 overflow-hidden p-3 sm:p-6" ref={containerRef}>
+        {/* Left collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
+        {collapsed === 'left' && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(null)}
+            title={`展開 ${t.header.clinicalSummary || '臨床摘要'}`}
+            aria-label={`展開 ${t.header.clinicalSummary || '臨床摘要'}`}
+            className="group hidden lg:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+          >
+            <ChevronsRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
+              {t.header.clinicalSummary || '臨床摘要'}
+            </span>
+          </button>
+        )}
+
         {/* Left Panel - Clinical Summary */}
-        <section 
-          className={`w-full lg:w-auto min-h-0 overflow-y-auto flex-1 lg:flex-initial ${
-            mobileView === 'left' ? 'block' : 'hidden lg:block'
-          }`}
-          style={isLargeScreen ? { width: `${leftWidth}%` } : undefined}
+        <section
+          className={cn(
+            "w-full lg:w-auto min-h-0 overflow-y-auto flex-1",
+            mobileView === 'left' ? 'block' : 'hidden',
+            collapsed === 'left'
+              ? 'lg:hidden'
+              : collapsed === 'right'
+                ? 'lg:block lg:flex-1'
+                : 'lg:block lg:flex-initial',
+          )}
+          style={isLargeScreen && collapsed === null ? { width: `${leftWidth}%` } : undefined}
         >
           {/* Per-panel boundary: a render crash in one panel must not white-screen the other */}
           <ErrorBoundary>
             <ClinicalSummaryFeature />
           </ErrorBoundary>
         </section>
-        
-        {/* Resizable Divider - Hidden on mobile */}
-        <div
-          className="hidden lg:flex group relative w-2 shrink-0 cursor-col-resize items-center justify-center rounded-full bg-border/60 transition-colors hover:bg-primary/20 active:bg-primary/30"
-          onMouseDown={handleMouseDown}
-        >
-          <div className="absolute inset-y-0 -left-2 -right-2" />
-          <div className="h-16 w-1 rounded-full bg-muted-foreground/20 transition-colors group-hover:bg-primary/50 group-active:bg-primary" />
-        </div>
-        
+
+        {/* Resizable Divider with always-visible collapse controls. Hidden on mobile. */}
+        {collapsed === null && (
+          <div className="hidden lg:flex group relative w-2 shrink-0 items-center justify-center">
+            {/* Full-height drag hit-area (extends past the visible bar) */}
+            <div
+              className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize rounded-full bg-border/60 transition-colors group-hover:bg-primary/20 active:bg-primary/30"
+              onMouseDown={handleMouseDown}
+            />
+            {/* Collapse buttons — always visible, centered on the divider */}
+            <div className="absolute z-10 flex flex-col gap-1">
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => setCollapsed('left')}
+                title="收合左欄"
+                aria-label="收合左欄"
+                className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+              >
+                <ChevronsLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => setCollapsed('right')}
+                title="收合右欄"
+                aria-label="收合右欄"
+                className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+              >
+                <ChevronsRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Right Panel - Tabs (Medical Note / Data Selection) */}
         <section
-          className={`w-full lg:w-auto min-h-0 overflow-y-auto flex-1 lg:flex-initial ${
-            mobileView === 'right' ? 'block' : 'hidden lg:block'
-          }`}
-          style={isLargeScreen ? { width: `${100 - leftWidth - 0.5}%` } : undefined}
+          className={cn(
+            "w-full lg:w-auto min-h-0 overflow-y-auto flex-1",
+            mobileView === 'right' ? 'block' : 'hidden',
+            collapsed === 'right'
+              ? 'lg:hidden'
+              : collapsed === 'left'
+                ? 'lg:block lg:flex-1'
+                : 'lg:block lg:flex-initial',
+          )}
+          style={isLargeScreen && collapsed === null ? { width: `${100 - leftWidth - 0.5}%` } : undefined}
         >
           <ErrorBoundary>
             <RightPanelFeature />
           </ErrorBoundary>
         </section>
+
+        {/* Right collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
+        {collapsed === 'right' && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(null)}
+            title={`展開 ${t.header.features || '功能'}`}
+            aria-label={`展開 ${t.header.features || '功能'}`}
+            className="group hidden lg:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+          >
+            <ChevronsLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+            <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
+              {t.header.features || '功能'}
+            </span>
+          </button>
+        )}
       </main>
       </>
       )}
