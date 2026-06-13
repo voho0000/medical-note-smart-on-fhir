@@ -56,7 +56,7 @@ function PageContent() {
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
               <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg`} alt="App Icon" className="h-full w-full object-contain" />
             </div>
-            <h1 className="text-base sm:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
+            <h1 className="text-base sm:text-lg md:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>
           {/* Header right cluster — kept lean (v0.4.0).
               Less-used controls (theme, version, feedback, connection
@@ -115,7 +115,9 @@ function PageContent() {
         </button>
       </div>
 
-      <main className="flex flex-1 flex-col md:flex-row gap-3 sm:gap-6 overflow-hidden p-3 sm:p-6" ref={containerRef}>
+      {/* Tablet (md, split) uses tighter gap/padding than desktop so the two
+          ~360px panels keep more usable width; desktop gets the roomier p-6/gap-6. */}
+      <main className="flex flex-1 flex-col md:flex-row gap-3 sm:gap-4 md:gap-4 lg:gap-6 overflow-hidden p-3 sm:p-4 md:p-4 lg:p-6" ref={containerRef}>
         {/* Left collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'left' && (
           <button
