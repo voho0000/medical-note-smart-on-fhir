@@ -5,14 +5,12 @@ const STORAGE_KEY = "selected-template-id"
 
 export function useTemplateSelector() {
   const { templates, isLoading } = useChatTemplates()
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
-    // Load from localStorage on mount
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(STORAGE_KEY) || ""
-    }
-    return ""
-  })
-  const [hasValidated, setHasValidated] = useState(false)
+  // SSR-safe: start empty so the first client render matches the prerendered
+  // (static-export) HTML, which has no localStorage → templates[0]. Reading
+  // localStorage in the useState initializer made the client's first render
+  // diverge (saved template vs default) → React hydration mismatch.
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("")
+  const [hasInitialized, setHasInitialized] = useState(false)
 
   const selectedTemplate = useMemo(() => {
     if (!templates.length) {
@@ -33,32 +31,20 @@ export function useTemplateSelector() {
     }
   }, [selectedTemplateId])
 
-  // Auto-select first template if current selection is invalid
-  // Only validate ONCE after initial load, not on every template update
+  // One-time init AFTER mount + templates load: restore the persisted
+  // selection, validate it against current templates, fall back to the first.
+  // Reading localStorage here (not in the useState initializer) is what keeps
+  // the first client render identical to the server/prerendered HTML.
   useEffect(() => {
-    // Wait for templates to finish loading before validating
-    if (isLoading) return
-    
-    // Only validate once after initial load
-    if (hasValidated) return
-    
-    if (!templates.length) return
-    
-    const isSelectedIdValid = templates.some((template) => template.id === selectedTemplateId)
-    
-    // Only update if we have a selectedTemplateId that's not in templates
-    // OR if we don't have a selectedTemplateId at all
-    if (selectedTemplateId && !isSelectedIdValid) {
-      // The saved template ID is invalid, select first template
-      setSelectedTemplateId(templates[0].id)
-    } else if (!selectedTemplateId) {
-      // No selection yet, select first template
-      setSelectedTemplateId(templates[0].id)
-    }
-    
-    // Mark as validated
-    setHasValidated(true)
-  }, [templates, isLoading, hasValidated, selectedTemplateId])
+    if (isLoading || hasInitialized || !templates.length) return
+
+    const stored =
+      typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null
+    const isValid = stored ? templates.some((t) => t.id === stored) : false
+
+    setSelectedTemplateId(isValid ? (stored as string) : templates[0].id)
+    setHasInitialized(true)
+  }, [templates, isLoading, hasInitialized])
 
   const setAsDefault = (templateId: string) => {
     setSelectedTemplateId(templateId)
