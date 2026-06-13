@@ -436,12 +436,24 @@ export function useReportsData(diagnosticReports: any[]) {
       // IGG). Resolve the raw uppercase KEY separately so the audience/language
       // lay-name path fires for them too (HbA1c → 糖化血色素 (HbA1c)). Returns
       // null for non-canonical obs, which keep the getAnalyteLabel fallback.
-      const keySet = new Set(
-        obsForTitle
-          .map((o) => getAnalyteCanonicalKey(o as any))
-          .filter((k): k is string => Boolean(k))
-      )
-      const sharedKey = keySet.size === 1 ? [...keySet][0] : null
+      // Resolve the shared canonical KEY only when EVERY observation in the
+      // group canonicalises to the *same* analyte. An earlier version built a
+      // Set and dropped null keys (.filter(Boolean)) BEFORE the size check —
+      // so a multi-analyte panel where only ONE analyte is recognised
+      // collapsed to a single-key set and mistitled the whole panel. Real bug:
+      // urinalysis 06012C carries 18 items but only "Urine Protein" maps to
+      // PROT (the other 17 LOINCs aren't in LOINC_TO_CANONICAL → null), so the
+      // panel rendered as "PROT" for the medical/English audience. Requiring
+      // every obs to resolve to the same non-null key preserves the
+      // double-emission case (長庚嘉義 鈉+Na → NA) while letting genuine panels
+      // fall through to the order-code panel title. (sharedCanonical above is
+      // already null for these — getAnalyteLabel returns 18 distinct fallback
+      // strings — so only this sharedKey path was leaking the wrong title.)
+      const keys = obsForTitle.map((o) => getAnalyteCanonicalKey(o as any))
+      const sharedKey =
+        keys.length > 0 && keys.every((k) => k != null && k === keys[0])
+          ? keys[0]
+          : null
       const sharedCanonicalTitle = sharedKey
         ? getAnalyteDisplayLabel(sharedKey, audience, locale)
         : sharedCanonical

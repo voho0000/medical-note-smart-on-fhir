@@ -378,6 +378,46 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
 
   // ── CBC (additional) ─────────────────────────────────────
   '14196-0': 'RETIC',         // Reticulocytes #/vol in Blood
+
+  // ── Urinalysis (NHI 06012C 尿一般檢查 / 06013C 尿生化檢查) ──────
+  // Added 2026-06-14, each Long Common Name confirmed at loinc.org. The urine
+  // dipstick/sediment LOINCs were previously absent from this map, so the only
+  // resolution route for urinalysis was the text-alias path (TEST_ALIASES) —
+  // which silently misses when a bridge sends bilingual "中文 English" code.text
+  // (e.g. "尿糖 Glucose"): normalizeTestName strips from the first CJK char and
+  // the bare-token aliases ('尿糖') never match. The LOINC route is
+  // language-independent, so adding these makes urinalysis resolve regardless of
+  // how the bridge labels each row. Canonical keys reuse the urine-category keys
+  // already in lab-categories.ts (COLOR/PH/GRAVIT/PROT/…).
+  '5778-6':  'COLOR',         // Color of Urine
+  '5767-9':  'TURBIDITY',     // Appearance of Urine (alias: Appearance→TURBIDITY)
+  '5803-2':  'PH',            // pH of Urine by Test strip
+  '5811-5':  'GRAVIT',        // Specific gravity of Urine by Test strip
+  '20454-5': 'PROT',          // Protein [Presence] in Urine by Test strip
+  '5792-7':  'GLUCOSE',       // Glucose [Mass/vol] in Urine by Test strip
+  '5797-6':  'KETONE',        // Ketones [Mass/vol] in Urine by Test strip
+  '5770-3':  'BILI',          // Bilirubin.total [Presence] in Urine by Test strip
+  '5818-0':  'UROBI',         // Urobilinogen [Presence] in Urine by Test strip
+  '5802-4':  'NITRITE',       // Nitrite [Presence] in Urine by Test strip
+  '5794-3':  'OCCULT',        // Hemoglobin [Presence] in Urine by Test strip (occult blood)
+  '5799-2':  'LE',            // Leukocyte esterase [Presence] in Urine by Test strip
+  // Sediment microscopy (System "Urine sed"). WBC/RBC use the per-HPF keys so
+  // urine sediment counts stay distinct from CBC blood WBC/RBC.
+  '5787-7':  'EPITH',         // Epithelial cells [#/area] in Urine sediment by Microscopy HPF
+  '5821-4':  'WBC/HPF',       // Leukocytes [#/area] in Urine sediment by Microscopy HPF
+  '5808-1':  'RBC/HPF',       // Erythrocytes [#/volume] in Urine sediment by Microscopy HPF
+  '25145-4': 'BACTERIA',      // Bacteria [Presence] in Urine sediment by Light microscopy
+  '5783-6':  'CRYSTAL',       // Unidentified crystals [Presence] in Urine sediment by Light microscopy
+  '8247-9':  'MUCUS',         // Mucus [Presence] in Urine sediment by Light microscopy
+  // NOTE: the bridge ORIGINALLY tagged the "尿黏液 Mucus" row with LOINC 24356-8
+  // ("Urinalysis complete panel", Class PANEL.UA) — a panel code on a single
+  // analyte. The bridge is being corrected to emit 8247-9 (mapped above;
+  // loinc.org-verified 2026-06-14: Component Mucus, Property PrThr, Method
+  // Microscopy.light — matching the row's qualitative 'Negative' value and the
+  // sibling Bacteria 25145-4 / Crystal 5783-6 light-microscopy items in the
+  // same 06012C panel). 24356-8 is deliberately left UNMAPPED — it is genuinely
+  // a panel code and must never resolve to a single analyte.
+  // See memory/feedback_no_masking_bridge_bugs.md.
 }
 
 // Set of every canonical analyte key the pivot is willing to render as a
