@@ -32,7 +32,10 @@ function PageContent() {
   })
 
   // Responsive view logic (extracted to custom hook)
-  const { mobileView, setMobileView, isLargeScreen } = useResponsiveView<'left' | 'right'>('left', 1024)
+  // Two-panel split kicks in at 768px (md) so iPad-portrait tablets get the
+  // resizable + collapsible split instead of the phone single-column tab view.
+  // Below 768 = phone tab switcher. Keep this in sync with the md: classes below.
+  const { mobileView, setMobileView, isLargeScreen } = useResponsiveView<'left' | 'right'>('left', 768)
 
   // Panel collapse (lg only): collapse either side to give the other full width.
   // null = normal resizable split. Kept in-session (not persisted) to avoid the
@@ -89,7 +92,7 @@ function PageContent() {
       ) : (
       <>
       {/* Mobile Tab Switcher - Only visible on small screens */}
-      <div className="lg:hidden flex border-b bg-white/80 backdrop-blur-md">
+      <div className="md:hidden flex border-b bg-white/80 backdrop-blur-md">
         <button
           onClick={() => setMobileView('left')}
           className={`flex-1 px-4 py-3 min-h-[44px] text-sm font-medium transition-colors ${
@@ -112,7 +115,7 @@ function PageContent() {
         </button>
       </div>
 
-      <main className="flex flex-1 flex-col lg:flex-row gap-3 sm:gap-6 overflow-hidden p-3 sm:p-6" ref={containerRef}>
+      <main className="flex flex-1 flex-col md:flex-row gap-3 sm:gap-6 overflow-hidden p-3 sm:p-6" ref={containerRef}>
         {/* Left collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'left' && (
           <button
@@ -120,7 +123,7 @@ function PageContent() {
             onClick={() => setCollapsed(null)}
             title={`展開 ${t.header.clinicalSummary || '臨床摘要'}`}
             aria-label={`展開 ${t.header.clinicalSummary || '臨床摘要'}`}
-            className="group hidden lg:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+            className="group hidden md:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
           >
             <ChevronsRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
@@ -132,13 +135,13 @@ function PageContent() {
         {/* Left Panel - Clinical Summary */}
         <section
           className={cn(
-            "w-full lg:w-auto min-h-0 overflow-y-auto flex-1",
+            "w-full md:w-auto min-h-0 overflow-y-auto flex-1",
             mobileView === 'left' ? 'block' : 'hidden',
             collapsed === 'left'
-              ? 'lg:hidden'
+              ? 'md:hidden'
               : collapsed === 'right'
-                ? 'lg:block lg:flex-1'
-                : 'lg:block lg:flex-initial',
+                ? 'md:block md:flex-1'
+                : 'md:block md:flex-initial',
           )}
           style={isLargeScreen && collapsed === null ? { width: `${leftWidth}%` } : undefined}
         >
@@ -150,7 +153,7 @@ function PageContent() {
 
         {/* Resizable Divider with always-visible collapse controls. Hidden on mobile. */}
         {collapsed === null && (
-          <div className="hidden lg:flex group relative w-2 shrink-0 items-center justify-center">
+          <div className="hidden md:flex group relative w-2 shrink-0 items-center justify-center">
             {/* Full-height drag hit-area (extends past the visible bar) */}
             <div
               className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize rounded-full bg-border/60 transition-colors group-hover:bg-primary/20 active:bg-primary/30"
@@ -185,13 +188,13 @@ function PageContent() {
         {/* Right Panel - Tabs (Medical Note / Data Selection) */}
         <section
           className={cn(
-            "w-full lg:w-auto min-h-0 overflow-y-auto flex-1",
+            "w-full md:w-auto min-h-0 overflow-y-auto flex-1",
             mobileView === 'right' ? 'block' : 'hidden',
             collapsed === 'right'
-              ? 'lg:hidden'
+              ? 'md:hidden'
               : collapsed === 'left'
-                ? 'lg:block lg:flex-1'
-                : 'lg:block lg:flex-initial',
+                ? 'md:block md:flex-1'
+                : 'md:block md:flex-initial',
           )}
           style={isLargeScreen && collapsed === null ? { width: `${100 - leftWidth - 0.5}%` } : undefined}
         >
@@ -207,7 +210,7 @@ function PageContent() {
             onClick={() => setCollapsed(null)}
             title={`展開 ${t.header.features || '功能'}`}
             aria-label={`展開 ${t.header.features || '功能'}`}
-            className="group hidden lg:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+            className="group hidden md:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
           >
             <ChevronsLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
             <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
