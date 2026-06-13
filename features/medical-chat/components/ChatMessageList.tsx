@@ -84,7 +84,7 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
         <span>•</span>
         <span>{formatTimestamp(message.timestamp)}</span>
       </div>
-      <div className="flex flex-col gap-2 max-w-[85%]">
+      <div className="flex flex-col gap-2 max-w-[92%] sm:max-w-[85%]">
         {message.role === "assistant" && message.agentStates && message.agentStates.length > 1 && (
           <AgentStateHistory 
             states={message.agentStates} 
