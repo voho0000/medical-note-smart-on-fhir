@@ -33,7 +33,10 @@ export function ImagePreview({ images, onRemove, disabled }: ImagePreviewProps) 
           {!disabled && (
             <button
               onClick={() => onRemove(index)}
-              className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              // Always visible — the previous `md:opacity-0 md:group-hover:opacity-100`
+              // hid the X on touch tablets (768–1024px iPad have no hover), leaving
+              // no way to remove an image. Keep it always-on across devices.
+              className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-colors"
               title="Remove image"
               aria-label="Remove image"
             >

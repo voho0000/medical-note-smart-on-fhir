@@ -65,7 +65,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
         <Button
           variant="outline"
           size="sm"
-          className={`h-8 sm:h-9 gap-1.5 text-xs sm:text-sm ${
+          className={`h-9 gap-1.5 text-xs sm:text-sm ${
             iconOnlyOnMobile ? 'px-2 sm:px-3' : 'px-3'
           }`}
           onClick={() => fileRef.current?.click()}
@@ -86,7 +86,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 sm:h-9 sm:w-9 text-destructive hover:text-destructive"
+            className="h-9 w-9 text-destructive hover:text-destructive"
             onClick={() => setConfirmClearOpen(true)}
             title={i18n.clearTitle}
             aria-label={i18n.clearTitle}

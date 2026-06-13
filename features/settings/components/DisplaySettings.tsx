@@ -86,7 +86,9 @@ export function DisplaySettings() {
               variant={fontSize === opt.value ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFontSize(opt.value)}
-              className="flex-1 gap-1 px-2"
+              // h-11 (44px) for a comfortable touch target — size="sm" alone is 32px,
+              // and these 5 buttons sit in a tight row on phones.
+              className="h-11 flex-1 gap-1 px-2"
             >
               <span className={opt.preview}>A</span>
               {(t.settings as any)[opt.labelKey] ?? opt.fallback}

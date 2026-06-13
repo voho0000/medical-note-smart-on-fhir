@@ -92,7 +92,7 @@ function PageContent() {
       <div className="lg:hidden flex border-b bg-white/80 backdrop-blur-md">
         <button
           onClick={() => setMobileView('left')}
-          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex-1 px-4 py-3 min-h-[44px] text-sm font-medium transition-colors ${
             mobileView === 'left'
               ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -102,7 +102,7 @@ function PageContent() {
         </button>
         <button
           onClick={() => setMobileView('right')}
-          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex-1 px-4 py-3 min-h-[44px] text-sm font-medium transition-colors ${
             mobileView === 'right'
               ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
