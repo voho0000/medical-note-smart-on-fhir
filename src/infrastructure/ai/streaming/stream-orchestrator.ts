@@ -1,31 +1,17 @@
-// Stream Orchestrator - Coordinates streaming across different providers
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
-import { OpenAiStreamAdapter } from "./openai-stream.adapter"
-import { GeminiStreamAdapter } from "./gemini-stream.adapter"
-import { ClaudeStreamAdapter } from "./claude-stream.adapter"
-import type { StreamConfig } from "./openai-stream.adapter"
+// Stream Orchestrator — one AI-SDK adapter for every provider (audit C6).
+//
+// Previously this fanned out to three hand-rolled per-provider adapters
+// (OpenAI/Gemini parsed proxy SSE by hand). Now a single AiSdkStreamAdapter
+// handles OpenAI/Gemini/Claude — the provider is resolved from the model id
+// inside the factory + fetch interceptor, and every proxy forwards the SDK's
+// native body verbatim.
+import { AiSdkStreamAdapter } from "./ai-sdk-stream.adapter"
+import type { StreamConfig } from "./ai-sdk-stream.adapter"
 
 export class StreamOrchestrator {
-  private openAiAdapter = new OpenAiStreamAdapter()
-  private geminiAdapter = new GeminiStreamAdapter()
-  private claudeAdapter = new ClaudeStreamAdapter()
+  private adapter = new AiSdkStreamAdapter()
 
   async stream(config: StreamConfig): Promise<void> {
-    const modelDef = getModelDefinition(config.model)
-    const provider = modelDef?.provider ?? "openai"
-
-    switch (provider) {
-      case "openai":
-        await this.openAiAdapter.stream(config)
-        break
-      case "gemini":
-        await this.geminiAdapter.stream(config)
-        break
-      case "claude":
-        await this.claudeAdapter.stream(config)
-        break
-      default:
-        throw new Error(`Unsupported provider: ${provider}`)
-    }
+    await this.adapter.stream(config)
   }
 }
