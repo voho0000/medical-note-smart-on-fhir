@@ -1,6 +1,6 @@
 // Custom Hook: Procedure Rows Processing
 import { useMemo } from 'react'
-import type { Observation, Row } from '../types'
+import type { Observation } from '../types'
 import { getCodeableConceptText, getConceptText, formatDate } from '../utils/fhir-helpers'
 import { useLanguage } from "@/src/application/providers/language.provider"
 

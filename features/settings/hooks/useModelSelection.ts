@@ -6,7 +6,6 @@ import {
   GPT_MODELS,
   GEMINI_MODELS,
   CLAUDE_MODELS,
-  DEFAULT_MODEL_ID,
   getModelDefinition,
   isModelId,
   ModelDefinition,

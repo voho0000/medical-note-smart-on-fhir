@@ -87,7 +87,7 @@ describe('FhirPatientRepository', () => {
       // Act
       try {
         await repository.getCurrentPatient()
-      } catch (e) {
+      } catch {
         // Expected
       }
 
@@ -162,7 +162,7 @@ describe('FhirPatientRepository', () => {
       // Act
       try {
         await repository.getPatientById(patientId)
-      } catch (e) {
+      } catch {
         // Expected
       }
 

@@ -1,6 +1,5 @@
 // Unit Tests: Patient Mapper
 import { PatientMapper } from '@/src/infrastructure/fhir/mappers/patient.mapper'
-import type { PatientEntity } from '@/src/core/entities/patient.entity'
 
 describe('PatientMapper', () => {
   describe('toDomain', () => {

@@ -1,7 +1,6 @@
 "use client"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { CategoryFilterProps, FilterValue } from "@/src/core/interfaces/data-category.interface"
 

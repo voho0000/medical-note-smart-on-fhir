@@ -1,7 +1,6 @@
 // Conditions Context Hook
 import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
-import { mapAndFilter } from "./formatters"
 import type { ClinicalData } from "./types"
 import { lookupIcd, buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { useLanguage } from "@/src/application/providers/language.provider"

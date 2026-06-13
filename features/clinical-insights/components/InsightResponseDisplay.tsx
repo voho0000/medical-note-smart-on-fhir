@@ -21,13 +21,10 @@ interface InsightResponseDisplayProps {
 export function InsightResponseDisplay({
   response,
   isLoading,
-  isEditing,
   hasData,
-  isEdited,
   error,
   onResponseChange,
   onExpand,
-  onStartEditing,
 }: InsightResponseDisplayProps) {
   const { t } = useLanguage()
   const textareaRef = useRef<HTMLTextAreaElement>(null)

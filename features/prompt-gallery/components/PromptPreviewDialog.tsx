@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Calendar, TrendingUp, Share2, Trash2 } from 'lucide-react'
+import { Calendar, TrendingUp, Trash2 } from 'lucide-react'
 import type { SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
@@ -53,7 +53,6 @@ export function PromptPreviewDialog({
   open,
   onOpenChange,
   onUse,
-  onShare,
   onDelete,
 }: PromptPreviewDialogProps) {
   const { t } = useLanguage()

@@ -1,4 +1,3 @@
-import type { ChatMessage } from '@/src/core/entities/chat-message.entity'
 import type { IAiService } from '@/src/core/interfaces/services/ai.service.interface'
 import { logger } from '@/src/shared/services/logger.service'
 

@@ -16,14 +16,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info, Library, Share2, Lock, Stethoscope, User } from "lucide-react"
+import { Info, Library, Lock, Stethoscope, User } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { InsightTabEditor } from './InsightTabEditor'
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
-import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import type { SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
 
 export function ClinicalInsightsSettings() {

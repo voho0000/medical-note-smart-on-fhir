@@ -5,7 +5,7 @@ import { CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { Loader2, Eye, EyeOff, Edit, Save, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
+import { Loader2, Eye, EyeOff, Edit, Save, RotateCcw } from "lucide-react"
 
 interface ChatHeaderProps {
   recordingStatus?: string
@@ -33,8 +33,6 @@ export function ChatHeader({
   onResetSystemPrompt,
   isCustomPrompt,
   isExpanded,
-  onToggleExpand,
-  onToggleHeader
 }: ChatHeaderProps) {
   const { t } = useLanguage()
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)

@@ -23,7 +23,6 @@ import { useAuth } from "@/src/application/providers/auth.provider"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { TemplateEditor } from './TemplateEditor'
 import { PromptGalleryDialog, SharePromptDialog } from "@/features/prompt-gallery"
-import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import type { SharedPrompt } from "@/features/prompt-gallery"
 import { useTemplateSelector } from "@/features/medical-chat/hooks/useTemplateSelector"
 

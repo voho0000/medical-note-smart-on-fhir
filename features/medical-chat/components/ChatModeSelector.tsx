@@ -16,7 +16,6 @@ interface ChatModeSelectorProps {
 
 export function ChatModeSelector({ 
   isAgentMode, 
-  showApiKeyWarning, 
   onModeToggle,
   disabled = false,
   disabledReason

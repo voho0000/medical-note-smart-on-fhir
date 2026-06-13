@@ -34,7 +34,7 @@ import { TabManagementToolbar } from './components/TabManagementToolbar'
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
-  const { panels: configPanels, updatePanel } = useClinicalInsightsConfig()
+  const { panels: configPanels } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext()
   const { isLoading: clinicalDataLoading, error: clinicalDataError } = useClinicalData()

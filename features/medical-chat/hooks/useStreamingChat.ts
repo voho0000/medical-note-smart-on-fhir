@@ -17,7 +17,7 @@ export function useStreamingChat(
 ) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
-  const { locale } = useLanguage()
+  const {} = useLanguage()
   const ai = useUnifiedAi()
   const [error, setError] = useState<Error | null>(null)
   const hasReceivedChunkRef = useRef(false)

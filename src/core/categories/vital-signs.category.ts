@@ -2,7 +2,6 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Observation } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
-import { getCodeableConceptText } from '../utils/data-grouping.utils'
 
 const getVitalSignType = (obs: Observation): string => {
   let type = obs.code?.text || obs.code?.coding?.[0]?.display

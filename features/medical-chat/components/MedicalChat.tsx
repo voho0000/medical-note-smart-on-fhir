@@ -92,7 +92,7 @@ export default function MedicalChat() {
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   
   // FHIR context for chat history (patient ID and server URL)
-  const { patientId, patientName, fhirServerUrl } = useFhirContext()
+  const { patientId, fhirServerUrl } = useFhirContext()
   
   // FHIR error handling
   const { error: patientError } = usePatient()

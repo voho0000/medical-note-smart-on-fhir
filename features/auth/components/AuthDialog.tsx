@@ -15,7 +15,7 @@ interface AuthDialogProps {
 }
 
 export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
-  const { t, locale } = useLanguage()
+  const { t } = useLanguage()
   
   const {
     mode,

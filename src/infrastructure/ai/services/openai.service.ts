@@ -1,10 +1,9 @@
 // OpenAI Service Implementation
-import type { AiQueryRequest, AiQueryResponse, AiMessage } from '@/src/core/entities/ai.entity'
+import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getProxyAuthHeaders } from '../utils/proxy-auth'
-import { isGptModelId, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 import { AiError, AiErrorCode } from '@/src/core/errors'
-import type { IAiProvider, AiProviderConfig, StreamingOptions } from '@/src/core/interfaces/services/ai-provider.interface'
 
 export class OpenAiService {
   readonly name = 'openai'

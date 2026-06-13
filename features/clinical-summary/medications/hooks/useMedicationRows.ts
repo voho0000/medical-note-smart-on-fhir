@@ -1,6 +1,6 @@
 // Custom Hook: Medication Rows Processing
 import { useMemo } from 'react'
-import type { Medication, MedicationRow } from '../types'
+import type { MedicationRow } from '../types'
 import {
   formatDate,
   extractFrequencyFromText,

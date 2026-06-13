@@ -2,7 +2,7 @@
 // Central registry for all data categories
 // To add a new category, simply register it here
 
-import type { DataCategory, DataCategoryRegistry, FilterValue } from '../interfaces/data-category.interface'
+import type { DataCategory, DataCategoryRegistry } from '../interfaces/data-category.interface'
 import type { DataSelection, DataFilters } from '../entities/clinical-context.entity'
 
 class DataCategoryRegistryImpl {

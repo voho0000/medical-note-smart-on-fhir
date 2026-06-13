@@ -17,7 +17,6 @@ import {
   Activity,
   AlertTriangle,
   ClipboardList,
-  Library,
   User,
   ScrollText,
   Cpu,

@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { useState, ComponentType, ReactNode } from "react"
+import { ComponentType, ReactNode } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"

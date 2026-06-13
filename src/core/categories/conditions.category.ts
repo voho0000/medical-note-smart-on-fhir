@@ -1,5 +1,5 @@
 // Conditions Category
-import type { DataCategory, ClinicalContextSection, FilterValue } from '../interfaces/data-category.interface'
+import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Condition } from '@/src/shared/types/fhir.types'
 
 const isActiveCondition = (condition: Condition): boolean => {

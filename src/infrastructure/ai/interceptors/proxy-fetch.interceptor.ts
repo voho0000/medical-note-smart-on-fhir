@@ -3,7 +3,6 @@
  * Intercepts fetch requests to add proxy headers and transform request body
  */
 
-import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { openAIRequestTransformer } from '../transformers/openai-request.transformer'
 import { getProxyIdToken } from '../utils/proxy-auth'
 

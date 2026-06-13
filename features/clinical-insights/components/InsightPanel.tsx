@@ -17,9 +17,7 @@ import { InsightResponseDisplay } from './InsightResponseDisplay'
 import type { InsightPanelProps } from '../types'
 
 export function InsightPanel({
-  panelId,
   title,
-  subtitle,
   prompt,
   onPromptChange,
   onRegenerate,
@@ -32,9 +30,7 @@ export function InsightPanel({
   onResponseChange,
   onClearResponse,
   isEdited,
-  modelMetadata,
   fallbackModelId,
-  autoGenerate,
   isEditMode = false,
 }: InsightPanelProps) {
   const { t } = useLanguage()

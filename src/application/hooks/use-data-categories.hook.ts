@@ -5,7 +5,6 @@
 
 import { useMemo } from 'react'
 import { dataCategoryRegistry } from '@/src/core/registry/data-category.registry'
-import type { DataCategory, DataCategoryRegistry } from '@/src/core/interfaces/data-category.interface'
 import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-context.entity'
 
 export interface DataCategoryItem {

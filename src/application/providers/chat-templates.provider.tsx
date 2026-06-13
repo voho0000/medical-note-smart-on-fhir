@@ -5,8 +5,6 @@ import { useLanguage } from "./language.provider"
 import { useAudience, type Audience } from "./audience.provider"
 import { useAuth } from "./auth.provider"
 import {
-  saveChatTemplate,
-  deleteChatTemplate,
   subscribeToChatTemplates,
   batchSaveChatTemplates,
   replaceAllChatTemplates,

@@ -32,7 +32,7 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
       }
 
       // Use Use Case to prepare message send
-      const { messages, assistantMessageId } = sendMessage.prepareMessageSend({
+      const { messages } = sendMessage.prepareMessageSend({
         userMessage: input,
         conversationHistory: chatMessages,
         systemPrompt,

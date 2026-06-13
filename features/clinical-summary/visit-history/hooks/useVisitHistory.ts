@@ -1,5 +1,4 @@
 import { useMemo } from "react"
-import { getReferenceId, getCodeText } from "../utils/formatters"
 import { extractEncounterIcds, type IcdCode } from "@/src/shared/utils/icd-lookup"
 import { getEncounterChannelText, getEncounterKindText } from "@/src/shared/utils/encounter-type.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"

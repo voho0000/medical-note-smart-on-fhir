@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
-import type { Observation } from '../types'
 
 export interface ObservationHistoryItem {
   id: string

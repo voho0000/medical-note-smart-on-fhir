@@ -1,5 +1,5 @@
 // Use Case: Generate Clinical Context
-import type { PatientEntity, calculateAge } from '@/src/core/entities/patient.entity'
+import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
   ClinicalDataCollection,
   ObservationEntity,

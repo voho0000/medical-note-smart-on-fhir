@@ -7,12 +7,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { Settings, Share2, Library, Lock } from "lucide-react"
+import { Settings, Share2, Library } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
-import { LoginRequiredDialog } from "@/features/prompt-gallery/components/LoginRequiredDialog"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 
 interface TabManagementToolbarProps {
@@ -24,11 +23,8 @@ interface TabManagementToolbarProps {
 }
 
 export function TabManagementToolbar({ 
-  currentTabId, 
-  onTabChange,
   currentPrompt = '',
   currentTitle = '',
-  onPromptChange,
 }: TabManagementToolbarProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()

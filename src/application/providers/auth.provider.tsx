@@ -4,7 +4,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { 
   signInWithPopup,
-  signInWithRedirect,
   getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -17,7 +16,7 @@ import {
   GoogleAuthProvider,
   type User as FirebaseUser
 } from 'firebase/auth'
-import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot } from 'firebase/firestore'
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '@/src/shared/config/firebase.config'
 import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'

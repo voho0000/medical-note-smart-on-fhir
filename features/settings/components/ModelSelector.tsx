@@ -1,6 +1,5 @@
 // Model Selector Component
 import { Lock, Check } from "lucide-react"
-import { Label } from "@/components/ui/label"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition, ModelDefinition } from "@/src/shared/constants/ai-models.constants"

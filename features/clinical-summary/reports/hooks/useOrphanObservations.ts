@@ -1,7 +1,7 @@
 // Custom Hook: Orphan Observations Processing
 import { useMemo } from 'react'
-import type { Observation, Row } from '../types'
-import { getCodeableConceptText, formatDate } from '../utils/fhir-helpers'
+import type { Observation } from '../types'
+import { getCodeableConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromObservation } from '../utils/grouping-helpers'
 import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'

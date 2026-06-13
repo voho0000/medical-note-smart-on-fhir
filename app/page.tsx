@@ -22,7 +22,7 @@ function PageContent() {
   const { t } = useLanguage()
 
   // Resizable layout logic (extracted to custom hook)
-  const { leftWidth, isDragging, containerRef, handleMouseDown } = useResizableLayout({
+  const { leftWidth, containerRef, handleMouseDown } = useResizableLayout({
     initialWidth: 50,
     minWidth: 30,
     maxWidth: 70

@@ -9,7 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Check, Copy, Loader2, Square, Sparkles, Trash2 } from "lucide-react"
+import { Check, Copy, Square, Sparkles, Trash2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"

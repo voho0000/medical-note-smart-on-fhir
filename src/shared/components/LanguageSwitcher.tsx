@@ -13,7 +13,7 @@ import {
 import { Languages } from 'lucide-react'
 
 export function LanguageSwitcher() {
-  const { locale, setLocale, t } = useLanguage()
+  const { locale, setLocale } = useLanguage()
 
   return (
     <DropdownMenu>
