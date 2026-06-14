@@ -107,7 +107,11 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
           ""
 
         if (!text) {
-          throw new Error("No transcription returned")
+          // Whisper returns empty when the clip has no detectable speech (e.g.
+          // the user tapped record but didn't say anything). That's expected,
+          // not an error — inform gently and bail without a scary message.
+          toast.info(t.chat.voiceNoSpeech)
+          return null
         }
 
         return text

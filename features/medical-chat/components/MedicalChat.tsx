@@ -2,7 +2,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertCircle, Maximize2, MessageSquareDashed, X } from "lucide-react"
+import { toast } from "sonner"
+import { AlertCircle, Maximize2, MessageSquareDashed, SquarePen, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useModel, useAiConfigStore } from "@/src/application/stores/ai-config.store"
@@ -14,6 +15,16 @@ import {
 } from "@/src/application/stores/chat.store"
 import { useSetCurrentSessionId } from "@/src/application/stores/chat-history.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { ChatMessageList } from "./ChatMessageList"
 import { ChatHeader } from "./ChatHeader"
@@ -53,7 +64,6 @@ export default function MedicalChat() {
   const { t } = useLanguage()
   const { user } = useAuth()
   const model = useModel()
-  const setModel = useAiConfigStore((state) => state.setModel)
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
@@ -90,6 +100,9 @@ export default function MedicalChat() {
   
   // Auth Dialog state
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+
+  // New-conversation confirm — only shown when the current chat would be lost
+  const [showNewChatConfirm, setShowNewChatConfirm] = useState(false)
   
   // FHIR context for chat history (patient ID and server URL)
   const { patientId, fhirServerUrl } = useFhirContext()
@@ -151,6 +164,32 @@ export default function MedicalChat() {
   // Ensure chat.messages is always an array
   const chatMessages = Array.isArray(chat.messages) ? chat.messages : []
   const template = useTemplateSelector()
+
+  // Start a new conversation. Logged-in (non-temp) chats are already auto-saved
+  // to history, so we persist + start fresh silently; signed-out / temp-mode
+  // chats would be lost, so confirm first.
+  const handleNewConversation = useCallback(async () => {
+    if (chatMessages.length === 0) {
+      chat.handleReset()
+      return
+    }
+    if (user && !isTemporaryMode) {
+      try {
+        await forceSave()
+      } catch {
+        // Best-effort save; still start the new chat.
+      }
+      chat.handleReset()
+      toast.success(t.chat.newChatSavedToast)
+      return
+    }
+    setShowNewChatConfirm(true)
+  }, [chatMessages.length, user, isTemporaryMode, forceSave, chat, t])
+
+  const confirmNewConversation = useCallback(() => {
+    setShowNewChatConfirm(false)
+    chat.handleReset()
+  }, [chat])
   
   // Voice recording with callback to insert transcript into input
   const handleTranscriptReady = useCallback((text: string) => {
@@ -327,10 +366,10 @@ export default function MedicalChat() {
             {user && (
               <button
                 onClick={handleToggleTemporaryMode}
-                className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
+                className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs transition-colors ${
                   isTemporaryMode
-                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-950/50 dark:text-purple-300'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    ? 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300'
+                    : 'bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
                 title={
                   isTemporaryMode
@@ -354,13 +393,23 @@ export default function MedicalChat() {
           >
             {showHeader ? `▲ ${t.chat.hideHeader}` : `▼ ${t.chat.showHeader}`}
           </button>
-          <button
-            onClick={expandable.toggle}
-            className="text-muted-foreground hover:text-foreground transition-colors p-1"
-            title={t.common.maximize}
-          >
-            <Maximize2 className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleNewConversation}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/40 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              title={t.chat.newChat}
+            >
+              <SquarePen className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t.chat.newChat}</span>
+            </button>
+            <button
+              onClick={expandable.toggle}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1"
+              title={t.common.maximize}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
       {!isExpanded && showHeader && (
@@ -406,9 +455,7 @@ export default function MedicalChat() {
             />
             <ChatToolbar
               onInsertContext={handleInsertContext}
-              onResetChat={chat.handleReset}
               onInsertTemplate={handleInsertTemplate}
-              hasChatMessages={chatMessages.length > 0}
               templates={template.templates}
               selectedTemplateId={template.selectedTemplate?.id}
               onTemplateChange={template.setSelectedTemplateId}
@@ -471,6 +518,26 @@ export default function MedicalChat() {
     </Card>
   )
 
+  const newChatConfirmDialog = (
+    <AlertDialog open={showNewChatConfirm} onOpenChange={setShowNewChatConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t.chat.newChatConfirmTitle}</AlertDialogTitle>
+          <AlertDialogDescription>{t.chat.newChatConfirmDescription}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={confirmNewConversation}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {t.chat.newChat}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+
   // Render expanded overlay or normal view
   if (isExpanded) {
     return (
@@ -490,6 +557,7 @@ export default function MedicalChat() {
           open={showAuthDialog}
           onOpenChange={setShowAuthDialog}
         />
+        {newChatConfirmDialog}
       </>
     )
   }
@@ -507,6 +575,7 @@ export default function MedicalChat() {
         open={showAuthDialog}
         onOpenChange={setShowAuthDialog}
       />
+      {newChatConfirmDialog}
     </>
   )
 }

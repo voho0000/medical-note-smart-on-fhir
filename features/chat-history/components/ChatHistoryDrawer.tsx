@@ -65,15 +65,19 @@ export function ChatHistoryDrawer() {
             discoverability ("oh, I could save these") without hiding the
             entry point entirely. Clicking still opens the drawer, which
             shows the full LoginPrompt explaining what sign-in unlocks. */}
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+        >
           {user ? (
             <>
-              <History className="h-4 w-4" />
+              <History className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t.chatHistory?.title || 'History'}</span>
             </>
           ) : (
             <>
-              <LogIn className="h-4 w-4" />
+              <LogIn className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">
                 {(t.chatHistory as any)?.signInToSave || 'Sign in to save chats'}
               </span>

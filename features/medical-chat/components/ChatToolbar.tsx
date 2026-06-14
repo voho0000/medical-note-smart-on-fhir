@@ -2,12 +2,12 @@
 
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Switch } from "@/components/ui/switch"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAutoIncludeContext, useSetAutoIncludeContext } from "@/src/application/stores/chat.store"
-import { Plus, Trash2, FileText, Settings, ChevronDown, Library, Sparkles } from "lucide-react"
+import { Plus, FileText, Settings, ChevronDown, Library, Sparkles } from "lucide-react"
 
 interface Template {
   id: string
@@ -17,9 +17,7 @@ interface Template {
 
 interface ChatToolbarProps {
   onInsertContext: () => void
-  onResetChat: () => void
   onInsertTemplate: () => void
-  hasChatMessages: boolean
   templates: Template[]
   selectedTemplateId?: string
   onTemplateChange: (id: string) => void
@@ -30,9 +28,7 @@ interface ChatToolbarProps {
 
 export function ChatToolbar({
   onInsertContext,
-  onResetChat,
   onInsertTemplate,
-  hasChatMessages,
   templates,
   selectedTemplateId,
   onTemplateChange,
@@ -159,15 +155,6 @@ export function ChatToolbar({
           <DropdownMenuItem onClick={handleManageTemplates} className="gap-2 cursor-pointer">
             <Settings className="h-3.5 w-3.5" />
             {t.chat.manageTemplates || "管理範本"}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={onResetChat}
-            disabled={!hasChatMessages}
-            className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            {t.chat.resetChat}
           </DropdownMenuItem>
         </DropdownMenuContent>
         </DropdownMenu>
