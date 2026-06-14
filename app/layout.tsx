@@ -18,7 +18,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // https://nextjs.org/docs/messages/react-hydration-error
     <html lang="zh-TW" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        {/* Allow pinch-zoom — disabling it (maximum-scale=1, user-scalable=no)
+            fails WCAG 1.4.4 and blocks low-vision users from zooming dense lab
+            tables. The in-app font-size control complements, not replaces, zoom. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </head>
       <body suppressHydrationWarning>
         {children}
