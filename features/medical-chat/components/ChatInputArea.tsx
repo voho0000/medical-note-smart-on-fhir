@@ -1,9 +1,11 @@
 // Chat Input Area Component
 "use client"
 
+import { useState } from "react"
 import { Square, Zap, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { VoiceRecorder } from "./VoiceRecorder"
+import { AudioWaveform } from "./AudioWaveform"
 import { ImageUploadButton } from "./ImageUploadButton"
 import { ImagePreview } from "./ImagePreview"
 import { MediaConsentDialog } from "./MediaConsentDialog"
@@ -51,6 +53,8 @@ export function ChatInputArea({
   disabled = false
 }: ChatInputAreaProps) {
   const { t } = useLanguage()
+  // Live mic stream while recording — drives the waveform visualizer
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null)
   // First-use consent before any image/audio leaves the device (audit B4)
   const consent = useMediaConsent()
   const hasContent = input.input.trim().length > 0
@@ -81,7 +85,6 @@ export function ChatInputArea({
       consent.withConsent(() => { void images.addImages(imageFiles) })
     }
   }
-  const hasContentOrImages = input.input.trim() || hasImages
 
   return (
     <>
@@ -138,7 +141,7 @@ export function ChatInputArea({
           />
           {/* One-tap clear — handy on phones after accidentally tapping
               "insert clinical context", which dumps a large block into the box. */}
-          {input.input.length > 0 && !isLoading && (
+          {input.input.length > 0 && !isLoading && !voice.isRecording && (
             <button
               type="button"
               onClick={() => { input.setInput(''); textareaRef.current?.focus() }}
@@ -148,6 +151,17 @@ export function ChatInputArea({
             >
               <X className="h-4 w-4" />
             </button>
+          )}
+          {/* While recording, overlay a live waveform over the textarea so the
+              user gets real-time feedback that the mic is picking up sound. */}
+          {voice.isRecording && (
+            <div className="absolute inset-0 flex items-center gap-3 rounded-xl border-2 border-primary/50 bg-background px-4">
+              <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/60" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+              </span>
+              <AudioWaveform stream={audioStream} className="min-w-0 flex-1" />
+            </div>
           )}
         </div>
         <VoiceRecorder
@@ -162,6 +176,7 @@ export function ChatInputArea({
           onRecordingStop={voice.onRecordingStop}
           startRecordingRef={voice.startRecordingRef}
           stopRecordingRef={voice.stopRecordingRef}
+          onStreamChange={setAudioStream}
         />
         {isLoading ? (
           <button

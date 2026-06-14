@@ -1,6 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { Loader2, Mic, StopCircle } from "lucide-react"
@@ -10,6 +11,25 @@ const ReactMediaRecorder = dynamic(
   { ssr: false }
 )
 
+// Reports the live mic stream upward, but only when the underlying audio track
+// changes — react-media-recorder rebuilds previewAudioStream every render, so
+// reporting it raw would loop (setState → re-render → new object → setState…).
+function StreamReporter({
+  stream,
+  onReport,
+}: {
+  stream: MediaStream | null
+  onReport?: (stream: MediaStream | null) => void
+}) {
+  const trackId = stream?.getAudioTracks()[0]?.id ?? null
+  useEffect(() => {
+    onReport?.(stream)
+    return () => onReport?.(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackId])
+  return null
+}
+
 interface VoiceRecorderProps {
   isRecording: boolean
   isLoading: boolean
@@ -18,6 +38,8 @@ interface VoiceRecorderProps {
   onRecordingStop: (url: string, blob: Blob) => Promise<void>
   startRecordingRef: React.MutableRefObject<() => void>
   stopRecordingRef: React.MutableRefObject<() => void>
+  /** Receives the live audio stream while recording (null when stopped) */
+  onStreamChange?: (stream: MediaStream | null) => void
 }
 
 export function VoiceRecorder({
@@ -28,6 +50,7 @@ export function VoiceRecorder({
   onRecordingStop,
   startRecordingRef,
   stopRecordingRef,
+  onStreamChange,
 }: VoiceRecorderProps) {
   const { t } = useLanguage()
   
@@ -55,10 +78,10 @@ export function VoiceRecorder({
         audio
         onStart={onRecordingStart}
         onStop={onRecordingStop}
-        render={({ startRecording, stopRecording }) => {
+        render={({ startRecording, stopRecording, previewAudioStream }) => {
           startRecordingRef.current = startRecording
           stopRecordingRef.current = stopRecording
-          return <div className="hidden" />
+          return <StreamReporter stream={previewAudioStream ?? null} onReport={onStreamChange} />
         }}
       />
     </>
