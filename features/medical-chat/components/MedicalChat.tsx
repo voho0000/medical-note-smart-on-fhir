@@ -392,11 +392,11 @@ export default function MedicalChat() {
         <ChatMessageList messages={chatMessages} isLoading={chat.isLoading} />
       </CardContent>
 
-      <CardFooter className="flex flex-col gap-2 border-t px-6 !pt-2 pb-2 shrink-0">
+      <CardFooter className="flex flex-col gap-2 border-t px-3 sm:px-6 !pt-2 pb-2 shrink-0">
         <div className="flex w-full flex-col gap-1">
-          {/* Wrap on phones so toolbar buttons never hide behind a sideways
-              scroll; keep the single-row scroll behaviour from sm up. */}
-          <div className="flex flex-wrap items-center gap-1 sm:flex-nowrap sm:overflow-x-auto">
+          {/* Single row; the neutral, condensed toolbar fits one line on phones.
+              overflow-x-auto is only a safety net for very narrow (<360px) devices. */}
+          <div className="flex items-center gap-1 overflow-x-auto">
             <ChatModeSelector
               isAgentMode={isAgentMode}
               showApiKeyWarning={showApiKeyWarning}
