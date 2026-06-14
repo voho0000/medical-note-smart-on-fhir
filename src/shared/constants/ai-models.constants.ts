@@ -6,6 +6,7 @@ export interface ModelDefinition {
   provider: ModelProvider
   requiresUserKey?: boolean
   disableAgentMode?: boolean // Models with known function calling issues
+  disabled?: boolean // Temporarily not selectable (shown locked) — e.g. not yet available
 }
 
 // Internal models for AI title generation (not shown to users)
@@ -35,7 +36,7 @@ export const CLAUDE_MODELS = [
   { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", provider: "claude" },
   { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "claude", requiresUserKey: true },
   { id: "claude-opus-4-8", label: "Claude Opus 4.8", provider: "claude", requiresUserKey: true },
-  { id: "claude-fable-5", label: "Claude Fable 5", provider: "claude", requiresUserKey: true },
+  { id: "claude-fable-5", label: "Claude Fable 5", provider: "claude", requiresUserKey: true, disabled: true },
 ] as const satisfies readonly ModelDefinition[]
 
 export type GptModelId = (typeof GPT_MODELS)[number]["id"]

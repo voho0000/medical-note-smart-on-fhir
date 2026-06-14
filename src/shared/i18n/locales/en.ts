@@ -713,6 +713,7 @@ export const en = {
     usingPersonalGeminiKey: 'Using personal Gemini key',
     usingPersonalClaudeKey: 'Using personal Claude key',
     requiresClaudeKey: 'Requires a personal Claude API key',
+    modelUnavailable: 'Temporarily unavailable',
     requiresClaudeKeyOrProxy: 'Requires a Claude key or proxy',
     willUsePersonalOpenAiKey: 'Will use personal OpenAI key',
     requiresOpenAiKey: 'Requires OpenAI API key',

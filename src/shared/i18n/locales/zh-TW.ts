@@ -717,6 +717,7 @@ export const zhTW = {
     usingPersonalGeminiKey: '使用個人 Gemini 金鑰',
     usingPersonalClaudeKey: '使用個人 Claude 金鑰',
     requiresClaudeKey: '需要個人 Claude API 金鑰',
+    modelUnavailable: '暫不可用',
     requiresClaudeKeyOrProxy: '需要 Claude 金鑰或代理服務',
     willUsePersonalOpenAiKey: '將使用個人 OpenAI 金鑰',
     requiresOpenAiKey: '需要 OpenAI API 金鑰',

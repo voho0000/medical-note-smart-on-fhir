@@ -30,7 +30,7 @@ export function useModelSelection(
   const gptModels = useMemo(() => {
     return GPT_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      const isLocked = definition?.requiresUserKey && !apiKey
+      const isLocked = definition?.disabled || (definition?.requiresUserKey && !apiKey)
       const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
       return {
         id: entry.id,
@@ -44,7 +44,7 @@ export function useModelSelection(
   const geminiModels = useMemo(() => {
     return GEMINI_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      const isLocked = definition?.requiresUserKey && !geminiKey
+      const isLocked = definition?.disabled || (definition?.requiresUserKey && !geminiKey)
       const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
       return {
         id: entry.id,
@@ -58,7 +58,7 @@ export function useModelSelection(
   const claudeModels = useMemo(() => {
     return CLAUDE_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      const isLocked = definition?.requiresUserKey && !claudeKey
+      const isLocked = definition?.disabled || (definition?.requiresUserKey && !claudeKey)
       const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
       return {
         id: entry.id,
@@ -73,6 +73,11 @@ export function useModelSelection(
     if (!isModelId(candidate)) return
     const definition = getModelDefinition(candidate)
     if (!definition) return
+
+    if (definition.disabled) {
+      toast.error(t.settings.modelUnavailable)
+      return
+    }
 
     if (definition.provider === "openai" && definition.requiresUserKey && !apiKey) {
       toast.error(t.settings.requiresOpenAiKey)
@@ -103,6 +108,8 @@ export function useModelSelection(
   }
 
   const getModelStatus = (definition: ModelDefinition) => {
+    if (definition.disabled) return t.settings.modelUnavailable
+
     if (definition.provider === "openai") {
       if (definition.requiresUserKey) {
         return apiKey ? t.settings.usingPersonalOpenAiKey : t.settings.requiresOpenAiKey
