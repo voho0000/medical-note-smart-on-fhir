@@ -7,6 +7,7 @@ import {
   getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInAnonymously,
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
   sendEmailVerification,
@@ -32,6 +33,14 @@ export interface User {
 
 export interface AuthContextType {
   user: User | null
+  /**
+   * True when the active Firebase session is anonymous (a not-signed-in
+   * visitor on the free tier). `user` is deliberately null in this case so
+   * every login-gated feature (cloud history, prompt sharing, settings sync)
+   * stays gated — only the proxy quota is opened up. Check this when you need
+   * "is there a usable proxy token", not `user`.
+   */
+  isAnonymous: boolean
   loading: boolean
   signInWithGoogle: () => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<void>
@@ -39,10 +48,14 @@ export interface AuthContextType {
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   dailyUsage: number
+  /** Daily chat limit for the active tier (smaller for anonymous visitors) */
   dailyLimit: number
   /** Per-service usage read from the same daily doc the Functions meter */
   perplexityUsage: number
   whisperUsage: number
+  /** Per-service limits for the active tier (smaller for anonymous visitors) */
+  perplexityLimit: number
+  whisperLimit: number
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -67,41 +80,20 @@ const isMobileDevice = () => {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [isAnonymous, setIsAnonymous] = useState(false)
+  // uid of the active Firebase session (real OR anonymous) — drives the usage
+  // listener. `user.uid` can't be used because it's null for anonymous.
+  const [activeUid, setActiveUid] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [dailyUsage, setDailyUsage] = useState(0)
   const [perplexityUsage, setPerplexityUsage] = useState(0)
   const [whisperUsage, setWhisperUsage] = useState(0)
-  const dailyLimit = QUOTA_CONFIG.DAILY_LIMIT
 
-  // Load user's daily usage from Firestore
-  const loadDailyUsage = async (uid: string) => {
-    if (!db) {
-      console.warn('Firestore not initialized')
-      setDailyUsage(0)
-      return
-    }
-    
-    try {
-      const today = getTodayString()
-      const usageRef = doc(db, 'users', uid, 'usage', today)
-      const usageDoc = await getDoc(usageRef)
-      
-      if (usageDoc.exists()) {
-        const data = usageDoc.data()
-        setDailyUsage(data.count || 0)
-        setPerplexityUsage(data.perplexityCount || 0)
-        setWhisperUsage(data.whisperCount || 0)
-      } else {
-        setDailyUsage(0)
-        setPerplexityUsage(0)
-        setWhisperUsage(0)
-      }
-    } catch {
-      setDailyUsage(0)
-      setPerplexityUsage(0)
-      setWhisperUsage(0)
-    }
-  }
+  // Anonymous visitors get a smaller free allowance; these are display-only,
+  // the Functions enforce the real numbers (must mirror ANON_LIMITS).
+  const dailyLimit = isAnonymous ? QUOTA_CONFIG.ANON_DAILY_LIMIT : QUOTA_CONFIG.DAILY_LIMIT
+  const perplexityLimit = isAnonymous ? QUOTA_CONFIG.ANON_PERPLEXITY_LIMIT : QUOTA_CONFIG.PERPLEXITY_DAILY_LIMIT
+  const whisperLimit = isAnonymous ? QUOTA_CONFIG.ANON_WHISPER_LIMIT : QUOTA_CONFIG.WHISPER_DAILY_LIMIT
 
   // Handle redirect result on mount (for mobile Google sign-in)
   useEffect(() => {
@@ -134,10 +126,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const convertedUser = convertFirebaseUser(firebaseUser)
-        setUser(convertedUser)
-        
+      if (firebaseUser && !firebaseUser.isAnonymous) {
+        // Real signed-in account
+        setIsAnonymous(false)
+        setActiveUid(firebaseUser.uid)
+        setUser(convertFirebaseUser(firebaseUser))
+
         // Create user document if it doesn't exist (with error handling)
         if (db) {
           try {
@@ -151,16 +145,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 createdAt: new Date().toISOString(),
               })
             }
-            
-            // Load initial usage
-            await loadDailyUsage(firebaseUser.uid)
           } catch {
             // Silently handle errors (offline, permissions, etc.)
           }
         }
-      } else {
+      } else if (firebaseUser) {
+        // Anonymous visitor (free tier). Keep `user` null so login-gated
+        // features stay gated; only the proxy token + small quota are enabled.
+        // No user document is created — the uid is disposable.
+        setIsAnonymous(true)
+        setActiveUid(firebaseUser.uid)
         setUser(null)
+      } else {
+        // No Firebase session at all → mint an anonymous one so the built-in
+        // free model works without an explicit login. This fires
+        // onAuthStateChanged again with the anonymous user (handled above).
+        setUser(null)
+        setIsAnonymous(false)
+        setActiveUid(null)
         setDailyUsage(0)
+        setPerplexityUsage(0)
+        setWhisperUsage(0)
+        signInAnonymously(auth).catch((error: { code?: string }) => {
+          // auth/operation-not-allowed = Anonymous sign-in not enabled in the
+          // Firebase Console (Authentication → Sign-in method). The app still
+          // works with a user's own API key; the free proxy just won't.
+          console.warn('[Auth] Anonymous sign-in unavailable:', error?.code)
+        })
       }
       setLoading(false)
     })
@@ -168,13 +179,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe()
   }, [])
 
-  // Real-time usage listener
+  // Real-time usage listener — keyed on the active Firebase uid so it covers
+  // anonymous visitors too (they meter against the same daily doc shape).
   useEffect(() => {
-    if (!user || !db) return
+    if (!activeUid || !db) return
 
     const today = getTodayString()
-    const usageRef = doc(db, 'users', user.uid, 'usage', today)
-    
+    const usageRef = doc(db, 'users', activeUid, 'usage', today)
+
     const unsubscribe = onSnapshot(
       usageRef,
       (snapshot) => {
@@ -193,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => unsubscribe()
-  }, [user])
+  }, [activeUid])
 
   // Sign in with Google
   const signInWithGoogle = async () => {
@@ -292,6 +304,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextType = {
     user,
+    isAnonymous,
     loading,
     signInWithGoogle,
     signInWithEmail,
@@ -302,6 +315,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dailyLimit,
     perplexityUsage,
     whisperUsage,
+    perplexityLimit,
+    whisperLimit,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1036,6 +1036,9 @@ export const en = {
     noApiKey: 'Don\'t have an API key?',
     signInToUseQuota: 'Sign in to use free quota',
     notSignedIn: 'Not signed in',
+    guest: 'Guest',
+    guestFreeTier: 'Free trial',
+    signInForMore: 'Sign in for more free quota',
   }
   })(),
 

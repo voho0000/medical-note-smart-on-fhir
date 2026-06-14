@@ -1040,6 +1040,9 @@ export const zhTW = {
     noApiKey: '沒有 API 金鑰？',
     signInToUseQuota: '登入以使用免費配額',
     notSignedIn: '未登入',
+    guest: '訪客',
+    guestFreeTier: '免費試用中',
+    signInForMore: '登入解鎖更多免費額度',
   }
   })(),
 

@@ -5,9 +5,8 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
-import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 import { AuthDialog } from './AuthDialog'
-import { LogIn, User, Info } from 'lucide-react'
+import { LogIn, User, Info, Gift } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,8 +40,55 @@ function MiniUsageRow({ label, used, limit }: { label: string; used: number; lim
 
 export function HeaderAuthButton() {
   const { t } = useLanguage()
-  const { user, signOut, dailyUsage, dailyLimit, perplexityUsage, whisperUsage } = useAuth()
+  const {
+    user,
+    isAnonymous,
+    signOut,
+    dailyUsage,
+    dailyLimit,
+    perplexityUsage,
+    whisperUsage,
+    perplexityLimit,
+    whisperLimit,
+  } = useAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+
+  // Anonymous (free-tier) visitor — `user` is null by design. Surface their
+  // free usage and a CTA to sign in for the larger quota.
+  if (!user && isAnonymous) {
+    return (
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2 h-9">
+              <Gift className="h-4 w-4" />
+              <span className="hidden sm:inline">{t.auth.guest}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              <p className="text-sm font-medium">{t.auth.guestFreeTier}</p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-2">
+                <span className="text-xs text-muted-foreground">{t.auth.usageToday}</span>
+                <MiniUsageRow label={t.auth.usageChat} used={dailyUsage} limit={dailyLimit} />
+                <MiniUsageRow label={t.auth.usagePerplexity} used={perplexityUsage} limit={perplexityLimit} />
+                <MiniUsageRow label={t.auth.usageWhisper} used={whisperUsage} limit={whisperLimit} />
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setShowAuthDialog(true)}>
+              <LogIn className="mr-2 h-4 w-4" />
+              {t.auth.signInForMore}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
+      </>
+    )
+  }
 
   if (!user) {
     return (
@@ -94,12 +140,12 @@ export function HeaderAuthButton() {
             <MiniUsageRow
               label={t.auth.usagePerplexity}
               used={perplexityUsage}
-              limit={QUOTA_CONFIG.PERPLEXITY_DAILY_LIMIT}
+              limit={perplexityLimit}
             />
             <MiniUsageRow
               label={t.auth.usageWhisper}
               used={whisperUsage}
-              limit={QUOTA_CONFIG.WHISPER_DAILY_LIMIT}
+              limit={whisperLimit}
             />
           </div>
         </DropdownMenuLabel>

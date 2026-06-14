@@ -27,7 +27,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const { patient } = usePatient()
   const { locale, t } = useLanguage()
   const { getFullClinicalContext } = useClinicalContext()
-  const { user } = useAuth()
+  const { user, isAnonymous } = useAuth()
+  // The proxy accepts any Firebase token — a real account OR an anonymous
+  // (free-tier) one. Gate proxy use on "we have a token", not "real account".
+  const hasProxyAccess = !!user || isAnonymous
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -85,7 +88,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           openAiKey
 
         // Check if user can use deep mode
-        if (!apiKey && !user) {
+        if (!apiKey && !hasProxyAccess) {
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
           )
@@ -93,8 +96,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           return
         }
 
-        // Validate proxy availability for logged-in users without API key
-        const useProxy = !apiKey && !!user
+        // Validate proxy availability when there's no user key but we do have
+        // a Firebase token (real or anonymous)
+        const useProxy = !apiKey && hasProxyAccess
         if (useProxy) {
           const validation = aiProviderFactory.validateProxyAvailability(modelId)
           if (!validation.available) {
@@ -117,7 +121,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         // Note: Clinical context is no longer automatically included
         // Users can choose to include it via the auto-include toggle (consistent with normal mode)
         // Literature search is available if user has Perplexity API key OR is authenticated (can use proxy)
-        const hasLiteratureSearch = !!perplexityKey || !!user
+        const hasLiteratureSearch = !!perplexityKey || hasProxyAccess
         const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
           baseSystemPrompt: systemPrompt,
           clinicalContext: '', // Empty - let user control via toggle
@@ -448,7 +452,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
       }
     },
-    [chatMessages, modelId, openAiKey, geminiKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, locale, tools, user, perplexityKey, getFullClinicalContext, t]
+    [chatMessages, modelId, openAiKey, geminiKey, claudeKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, locale, tools, user, isAnonymous, hasProxyAccess, perplexityKey, getFullClinicalContext, t]
   )
 
   const handleReset = useCallback(() => {
