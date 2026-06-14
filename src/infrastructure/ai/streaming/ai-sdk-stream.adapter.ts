@@ -29,10 +29,18 @@ export class AiSdkStreamAdapter {
       useProxy,
     })
 
+    // The AI SDK does NOT throw request/stream errors out of `textStream`; it
+    // forwards them to `onError` (whose default just console.errors) and then
+    // ends the stream. Without capturing here, a failed call (e.g. a proxy 401
+    // when the user isn't signed in) would end silently → empty output, no error
+    // surfaced ("spinner for a second, then nothing"). Capture it and rethrow
+    // after the loop so callers can show a real error.
+    let streamError: unknown = null
     const result = streamText({
       model,
       messages: this.toSdkMessages(config.messages),
       abortSignal: config.signal,
+      onError: ({ error }) => { streamError = error },
     })
 
     // onChunk receives the CUMULATIVE text (matches the old adapters' contract)
@@ -46,6 +54,12 @@ export class AiSdkStreamAdapter {
       // User pressed stop → end cleanly (the old adapters swallowed abort too)
       if (config.signal.aborted) return
       throw error
+    }
+
+    // Surface an error the SDK reported via onError (the textStream itself ended
+    // without throwing). Aborts are intentional and stay silent.
+    if (streamError && !config.signal.aborted) {
+      throw streamError
     }
   }
 

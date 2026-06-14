@@ -87,12 +87,26 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
 export function getUserErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
 
+  // Build a richer haystack to match against: the AI SDK's APICallError carries
+  // the real signal in statusCode / responseBody, NOT always in .message (a
+  // proxy 401 frequently has an empty .message — which previously produced an
+  // empty error box). The proxy's 401 body contains the "sign-in required" text
+  // that the first mapping matches, so include responseBody too.
+  const e = error as { statusCode?: unknown; status?: unknown; responseBody?: unknown; name?: unknown } | null
+  const haystack = [
+    message,
+    e?.statusCode != null ? `status ${e.statusCode}` : '',
+    e?.status != null ? `status ${e.status}` : '',
+    typeof e?.responseBody === 'string' ? e.responseBody : '',
+    typeof e?.name === 'string' ? e.name : '',
+  ].filter(Boolean).join(' ')
+
   // Chinese pattern table FIRST — typed AiError/FhirError getUserMessage()
   // strings are English, so checking isBaseError before the table used to
   // route the most common failures (401, rate limit, timeout…) around the
   // localized messages (audit D5)
   for (const mapping of ERROR_MAPPINGS) {
-    if (mapping.pattern.test(message)) {
+    if (mapping.pattern.test(haystack)) {
       return mapping.message
     }
   }
@@ -102,12 +116,13 @@ export function getUserErrorMessage(error: unknown): string {
     return error.getUserMessage()
   }
 
-  // For unknown errors, return the original message
-  if (error instanceof Error) {
-    return error.message
+  // For unknown errors, return the original message — but never an empty string,
+  // which would render as a blank error box.
+  if (message && message.trim()) {
+    return message
   }
 
-  return '發生未知錯誤，請稍後再試'
+  return 'AI 服務發生錯誤，請稍後再試'
 }
 
 /**
