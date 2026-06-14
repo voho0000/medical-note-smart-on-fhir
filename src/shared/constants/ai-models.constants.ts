@@ -74,3 +74,16 @@ export function isModelId(value: string): value is ModelId {
 export function getModelDefinition(modelId: string): ModelDefinition | undefined {
   return ALL_MODELS.find((model) => model.id === modelId)
 }
+
+// The base (proxy-eligible, no-user-key) model for a provider — its first
+// non-key, non-disabled entry. Used to downgrade off a premium model when its
+// user key is removed, keeping the user on the same provider's free tier.
+const PROVIDER_MODELS: Record<ModelProvider, readonly ModelDefinition[]> = {
+  openai: GPT_MODELS,
+  gemini: GEMINI_MODELS,
+  claude: CLAUDE_MODELS,
+}
+
+export function getBaseModelIdForProvider(provider: ModelProvider): string | undefined {
+  return PROVIDER_MODELS[provider].find((m) => !m.requiresUserKey && !m.disabled)?.id
+}

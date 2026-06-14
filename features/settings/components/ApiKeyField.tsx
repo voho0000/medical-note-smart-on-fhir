@@ -2,13 +2,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { InfoHint } from "@/src/shared/components/InfoHint"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { DEFAULT_MODEL_ID, getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
-import { hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
+import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
 import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSelection'
 import { ModelSelector } from './ModelSelector'
 import { ApiKeyInput } from './ApiKeyInput'
@@ -81,13 +81,19 @@ export function ModelAndKeySettings() {
     if (openAiValue) setApiKey(openAiValue.trim())
   }
 
+  // The store auto-downgrades a premium model back to the free base model when
+  // its key is removed (covers logout too); here we just notify the user.
+  const notifyIfDowngraded = (provider: ModelProvider) => {
+    const def = getModelDefinition(model)
+    if (def?.provider === provider && def.requiresUserKey) {
+      toast.info(t.settings.modelDowngradedToFree)
+    }
+  }
+
   const handleClearOpenAiKey = () => {
     setOpenAiValue("")
+    notifyIfDowngraded("openai")
     setApiKey(null)
-    const definition = getModelDefinition(model)
-    if (definition?.provider === "openai" && (definition.requiresUserKey || !hasChatProxy)) {
-      setModel(DEFAULT_MODEL_ID)
-    }
   }
 
   const handleSaveGeminiKey = async () => {
@@ -96,11 +102,8 @@ export function ModelAndKeySettings() {
 
   const handleClearGeminiKey = () => {
     setGeminiValue("")
+    notifyIfDowngraded("gemini")
     setGeminiKey(null)
-    const definition = getModelDefinition(model)
-    if (definition?.provider === "gemini" && !hasGeminiProxy) {
-      setModel(DEFAULT_MODEL_ID)
-    }
   }
 
   const handleSavePerplexityKey = async () => {
@@ -113,11 +116,8 @@ export function ModelAndKeySettings() {
 
   const handleClearClaudeKey = () => {
     setClaudeValue("")
+    notifyIfDowngraded("claude")
     setClaudeKey(null)
-    const definition = getModelDefinition(model)
-    if (definition?.provider === "claude" && (definition.requiresUserKey || !hasClaudeProxy)) {
-      setModel(DEFAULT_MODEL_ID)
-    }
   }
 
   const handleClearPerplexityKey = () => {

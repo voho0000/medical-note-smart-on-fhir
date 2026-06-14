@@ -14,7 +14,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { encrypt, decrypt } from '@/src/shared/utils/crypto.utils'
-import { DEFAULT_MODEL_ID, isModelId } from '@/src/shared/constants/ai-models.constants'
+import { DEFAULT_MODEL_ID, isModelId, getModelDefinition, getBaseModelIdForProvider } from '@/src/shared/constants/ai-models.constants'
 
 type StorageType = 'localStorage' | 'sessionStorage'
 
@@ -87,6 +87,28 @@ const saveEncryptedKey = async (storageType: StorageType, key: string, value: st
   }
 }
 
+// When the selected model needs a user key for its provider and that key is
+// now gone, drop back to the provider's free base model. Prevents the "picked a
+// premium model, then deleted the API key → generation errors" trap, and covers
+// every removal path (settings clear button, logout/clearAllKeys, …) in one
+// place. Returns the fallback model id, or null if no change is needed.
+const modelFallbackForMissingKey = (state: {
+  model: string
+  apiKey: string | null
+  geminiKey: string | null
+  claudeKey: string | null
+}): string | null => {
+  const def = getModelDefinition(state.model)
+  if (!def?.requiresUserKey) return null
+  const key =
+    def.provider === 'openai' ? state.apiKey :
+    def.provider === 'gemini' ? state.geminiKey :
+    state.claudeKey
+  if (key) return null
+  const fallback = getBaseModelIdForProvider(def.provider) ?? DEFAULT_MODEL_ID
+  return fallback === state.model ? null : fallback
+}
+
 export const useAiConfigStore = create<AiConfigState>()(
   persist(
     (set, get) => ({
@@ -105,14 +127,23 @@ export const useAiConfigStore = create<AiConfigState>()(
         set({ apiKey: key })
         // Fire and forget - async save
         saveEncryptedKey(get().storageType, STORAGE_KEYS.OPENAI_API_KEY, key).catch(console.error)
+        // Removing the key may strand a premium model — drop to the free tier
+        if (!key) {
+          const fallback = modelFallbackForMissingKey(get())
+          if (fallback) set({ model: fallback })
+        }
       },
-      
+
       setGeminiKey: (key) => {
         set({ geminiKey: key })
         // Fire and forget - async save
         saveEncryptedKey(get().storageType, STORAGE_KEYS.GEMINI_API_KEY, key).catch(console.error)
+        if (!key) {
+          const fallback = modelFallbackForMissingKey(get())
+          if (fallback) set({ model: fallback })
+        }
       },
-      
+
       setPerplexityKey: (key) => {
         set({ perplexityKey: key })
         // Fire and forget - async save
@@ -123,6 +154,10 @@ export const useAiConfigStore = create<AiConfigState>()(
         set({ claudeKey: key })
         // Fire and forget - async save
         saveEncryptedKey(get().storageType, STORAGE_KEYS.CLAUDE_API_KEY, key).catch(console.error)
+        if (!key) {
+          const fallback = modelFallbackForMissingKey(get())
+          if (fallback) set({ model: fallback })
+        }
       },
       
       setStorageType: (type) => {
@@ -160,12 +195,16 @@ export const useAiConfigStore = create<AiConfigState>()(
       clearAllKeys: () => {
         const storageType = get().storageType
         set({ apiKey: null, geminiKey: null, perplexityKey: null, claudeKey: null })
-        
+
         const storage = getStorage(storageType)
         storage?.removeItem(STORAGE_KEYS.OPENAI_API_KEY)
         storage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
         storage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
         storage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
+
+        // Logout strips all keys — drop a premium model back to the free tier
+        const fallback = modelFallbackForMissingKey(get())
+        if (fallback) set({ model: fallback })
       },
     }),
     {
