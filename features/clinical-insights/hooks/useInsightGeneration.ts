@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { getUserErrorMessage } from '@/src/core/errors'
 import { useGenerateInsight } from '@/src/application/hooks/clinical-insights/use-generate-insight.hook'
+import { useInsightResponsesStore } from './useInsightResponsesStore'
 import type { ResponseEntry, PanelStatus } from '../types'
 
 interface Panel {
@@ -35,9 +36,14 @@ export function useInsightGeneration({
 }: UseInsightGenerationProps): UseInsightGenerationReturn {
   const ai = useUnifiedAi()
   const generateInsight = useGenerateInsight()
-  const [responses, setResponses] = useState<Record<string, ResponseEntry>>({})
-  const [panelStatus, setPanelStatus] = useState<Record<string, PanelStatus>>({})
-  const [currentPanelId, setCurrentPanelId] = useState<string | null>(null)
+  // Responses/status live in a module-level store so they survive the panel
+  // unmounting on tab switches (see useInsightResponsesStore). currentPanelId is
+  // only meaningful during an active stream, so it stays local.
+  const responses = useInsightResponsesStore((s) => s.responses)
+  const setResponses = useInsightResponsesStore((s) => s.setResponses)
+  const panelStatus = useInsightResponsesStore((s) => s.panelStatus)
+  const setPanelStatus = useInsightResponsesStore((s) => s.setPanelStatus)
+  const [, setCurrentPanelId] = useState<string | null>(null)
   const runPanel = useCallback(
     async (panelId: string, options?: { force?: boolean }) => {
       const force = options?.force ?? false
@@ -130,7 +136,7 @@ export function useInsightGeneration({
         setCurrentPanelId(null)
       }
     },
-    [context, panels, prompts, responses, model, ai, generateInsight],
+    [context, panels, prompts, responses, model, ai, generateInsight, setResponses, setPanelStatus],
   )
 
   const stopPanel = useCallback(
@@ -147,7 +153,7 @@ export function useInsightGeneration({
       // Clear current panel ID
       setCurrentPanelId(null)
     },
-    [ai]
+    [ai, setPanelStatus]
   )
 
   return { runPanel, stopPanel, responses, panelStatus, setResponses }

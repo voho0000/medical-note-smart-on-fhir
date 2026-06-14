@@ -27,6 +27,7 @@ import { hasChatProxy } from "@/src/shared/config/env.config"
 
 import { useInsightPanels } from './hooks/useInsightPanels'
 import { useInsightGeneration } from './hooks/useInsightGeneration'
+import { useInsightResponsesStore } from './hooks/useInsightResponsesStore'
 import { useAutoGenerate } from './hooks/useAutoGenerate'
 import { InsightPanel } from './components/InsightPanel'
 import { ApiKeyWarning } from './components/ApiKeyWarning'
@@ -55,6 +56,8 @@ export default function ClinicalInsightsFeature() {
   const canUseProxy = hasChatProxy
   const canGenerate = Boolean(openAiKey || geminiKey) || canUseProxy
 
+  const resetForPatient = useInsightResponsesStore((s) => s.resetForPatient)
+
   // Single Source of Truth: All state owned by useInsightGeneration
   const { runPanel, stopPanel, responses, panelStatus, setResponses } = useInsightGeneration({
     panels,
@@ -82,10 +85,12 @@ export default function ClinicalInsightsFeature() {
     }))
   }, [setResponses])
 
-  // Clear all responses when patient changes (new bundle imported)
+  // Clear responses only when the PATIENT actually changes (new bundle) — NOT on
+  // every remount, otherwise output would be wiped each time the user leaves and
+  // returns to this tab. The store tracks the owning patient id.
   useEffect(() => {
-    setResponses({})
-  }, [patientId, setResponses])
+    resetForPatient(patientId)
+  }, [patientId, resetForPatient])
 
   // Update context when it changes (without resetting responses)
   useEffect(() => {
