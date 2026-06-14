@@ -456,6 +456,7 @@ export const en = {
     title: 'Medical Note Chat',
     description: 'Ask follow-up questions or dictate updates using the microphone.',
     placeholder: 'Type your question or instruction…',
+    clearInput: 'Clear input',
     insertContext: 'Data',
     insertAsr: 'Voice',
     clearAsr: 'Voice',

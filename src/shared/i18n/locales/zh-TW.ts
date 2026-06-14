@@ -460,6 +460,7 @@ export const zhTW = {
     title: '醫療對話',
     description: '與 AI 進行醫療相關對話',
     placeholder: '輸入您的問題或指令…',
+    clearInput: '清除輸入',
     insertContext: '病歷',
     insertAsr: '插入語音',
     clearAsr: '清除語音',

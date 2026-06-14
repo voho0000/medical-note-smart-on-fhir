@@ -1,7 +1,7 @@
 // Chat Input Area Component
 "use client"
 
-import { Square, Zap } from "lucide-react"
+import { Square, Zap, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { VoiceRecorder } from "./VoiceRecorder"
 import { ImageUploadButton } from "./ImageUploadButton"
@@ -123,7 +123,7 @@ export function ChatInputArea({
             multiple={true}
           />
         )}
-        <div className="flex-1 flex flex-col justify-end">
+        <div className="relative flex-1 flex flex-col justify-end">
           <textarea
             ref={textareaRef}
             value={input.input}
@@ -133,9 +133,22 @@ export function ChatInputArea({
             placeholder={t.chat.placeholder}
             spellCheck={false}
             rows={1}
-            className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+            className="w-full resize-none overflow-y-auto rounded-xl border-2 border-input bg-background/50 pl-4 pr-10 py-3 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:shadow-lg focus-visible:bg-background hover:border-input/80 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
             style={{ minHeight: '44px', maxHeight: '200px' }}
           />
+          {/* One-tap clear — handy on phones after accidentally tapping
+              "insert clinical context", which dumps a large block into the box. */}
+          {input.input.length > 0 && !isLoading && (
+            <button
+              type="button"
+              onClick={() => { input.setInput(''); textareaRef.current?.focus() }}
+              aria-label={t.chat.clearInput}
+              title={t.chat.clearInput}
+              className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground/70 hover:bg-muted hover:text-foreground active:scale-95 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <VoiceRecorder
           isRecording={voice.isRecording}
