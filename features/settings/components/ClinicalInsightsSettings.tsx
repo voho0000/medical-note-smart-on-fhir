@@ -16,7 +16,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Info, Library, Lock, Stethoscope, User } from "lucide-react"
+import { InfoHint } from "@/src/shared/components/InfoHint"
+import { Library, Lock, Stethoscope, User } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
@@ -135,18 +136,15 @@ export function ClinicalInsightsSettings() {
     <div className="space-y-5">
       <div className="flex items-center gap-2">
         <h3 className="text-base font-semibold">{t.settings.clinicalInsightsSettingsTitle}</h3>
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Info className="h-4 w-4 text-amber-600 dark:text-amber-500 cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent side="right" className="max-w-xs bg-amber-50 dark:bg-amber-950/90 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100">
-              <p className="text-xs">
-                {t.settings.clinicalInsightsLanguageWarning}
-              </p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <InfoHint
+          side="right"
+          iconClassName="h-4 w-4 text-amber-600 dark:text-amber-500"
+          contentClassName="max-w-xs bg-amber-50 dark:bg-amber-950/90 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100"
+        >
+          <p className="text-xs">
+            {t.settings.clinicalInsightsLanguageWarning}
+          </p>
+        </InfoHint>
       </div>
       <p className="text-xs text-muted-foreground">
         {t.settings.clinicalInsightsSettingsDesc}

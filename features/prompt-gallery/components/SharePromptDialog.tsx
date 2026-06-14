@@ -33,15 +33,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ChevronDown } from 'lucide-react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { InfoHint } from '@/src/shared/components/InfoHint'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, X, AlertCircle, CheckCircle2, Info } from 'lucide-react'
+import { Loader2, X, AlertCircle, CheckCircle2 } from 'lucide-react'
 import type { PromptType, PromptCategory, PromptSpecialty } from '../types/prompt.types'
 import { createSharedPrompt } from '../services/prompt-gallery.service'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -244,16 +239,9 @@ export function SharePromptDialog({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 shrink-0">
               <Label>{t.promptGallery.typeLabel} *</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">{t.promptGallery.typeTooltip}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <InfoHint iconClassName="h-4 w-4">
+                <p className="text-xs">{t.promptGallery.typeTooltip}</p>
+              </InfoHint>
             </div>
             <div className="flex gap-2">
               {types.map((type) => (

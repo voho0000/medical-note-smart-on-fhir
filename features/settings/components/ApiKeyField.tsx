@@ -2,7 +2,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Info } from "lucide-react"
+import { InfoHint } from "@/src/shared/components/InfoHint"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { Label } from "@/components/ui/label"
@@ -13,12 +13,6 @@ import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSe
 import { ModelSelector } from './ModelSelector'
 import { ApiKeyInput } from './ApiKeyInput'
 import { AuthStatus } from '@/features/auth'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 
 export function ModelAndKeySettings() {
   const { t } = useLanguage()
@@ -137,16 +131,9 @@ export function ModelAndKeySettings() {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Label className="text-xs uppercase text-muted-foreground">{t.settings.generationModel}</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="h-3.5 w-3.5 text-muted-foreground/70 cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p className="text-xs">{t.settings.modelProxyNote}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <InfoHint contentClassName="max-w-xs">
+            <p className="text-xs">{t.settings.modelProxyNote}</p>
+          </InfoHint>
         </div>
         <div className="space-y-3">
           {/* Provider tabs */}

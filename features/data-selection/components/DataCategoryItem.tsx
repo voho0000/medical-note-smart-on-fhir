@@ -5,9 +5,7 @@ import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Info } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { InfoHint } from "@/src/shared/components/InfoHint"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { CategoryFilterProps } from "@/src/core/interfaces/data-category.interface"
@@ -51,19 +49,9 @@ export function DataCategoryItem({
                 className="font-medium text-sm flex items-center"
               >
                 {item.label}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-4 w-4 ml-1">
-                        <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="sr-only">Info</span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      <p>{item.description}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <InfoHint className="ml-1" contentClassName="max-w-xs" iconClassName="text-muted-foreground">
+                  <p>{item.description}</p>
+                </InfoHint>
               </Label>
             </div>
             <Badge 
