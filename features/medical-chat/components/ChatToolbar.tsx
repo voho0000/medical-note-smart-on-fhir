@@ -2,11 +2,9 @@
 
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Switch } from "@/components/ui/switch"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useAuth } from "@/src/application/providers/auth.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAutoIncludeContext, useSetAutoIncludeContext } from "@/src/application/stores/chat.store"
 import { Plus, Trash2, FileText, Settings, ChevronDown, Library, Sparkles } from "lucide-react"
@@ -43,7 +41,6 @@ export function ChatToolbar({
   isLoadingClinicalData = false,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
-  const { user } = useAuth()
   const { setActiveTab } = useRightPanel()
   const autoIncludeContext = useAutoIncludeContext()
   const setAutoIncludeContext = useSetAutoIncludeContext()
@@ -111,14 +108,14 @@ export function ChatToolbar({
         </div>
       </div>
       {templates.length > 0 ? (
-        <div className="flex items-center gap-0.5 rounded-md border bg-primary/5 p-0.5 h-9 sm:h-8">
+        <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 h-9 sm:h-8">
           <Button
             type="button"
             size="sm"
             variant="ghost"
             onClick={onInsertTemplate}
             disabled={!hasTemplateContent}
-            className="h-8 sm:h-7 gap-0.5 px-1.5 sm:px-1 text-xs hover:bg-primary/10 w-auto sm:w-[100px]"
+            className="h-8 sm:h-7 gap-0.5 px-1.5 sm:px-1 text-xs hover:bg-muted w-auto sm:w-[100px]"
             title={templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
           >
             <FileText className="h-4 w-4 sm:h-3 sm:w-3 shrink-0" />
@@ -127,7 +124,7 @@ export function ChatToolbar({
             </span>
           </Button>
           <Select value={selectedTemplateId} onValueChange={onTemplateChange}>
-            <SelectTrigger className="h-7 w-7 sm:h-6 sm:w-6 gap-0 border-0 rounded bg-primary/15 dark:bg-primary/30 px-1 py-0 shadow-none hover:bg-primary/25 dark:hover:bg-primary/40">
+            <SelectTrigger className="h-7 w-7 sm:h-6 sm:w-6 gap-0 border-0 rounded bg-muted px-1 py-0 shadow-none hover:bg-muted-foreground/15">
             </SelectTrigger>
             <SelectContent align="start" className="w-[200px] text-xs">
               {templates.map((template) => (
@@ -139,38 +136,6 @@ export function ChatToolbar({
           </Select>
         </div>
       ) : null}
-      <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5 h-9 sm:h-8">
-        {!user ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onResetChat}
-                disabled={!hasChatMessages}
-                className="h-8 sm:h-7 gap-1 px-2 sm:px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4 sm:h-3 sm:w-3" />
-                <span className="hidden sm:inline">{t.chat.resetChat}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[200px]">
-              {t.chat.loginToSaveChat || "登入後可保留對話記錄"}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onResetChat}
-            disabled={!hasChatMessages}
-            className="h-8 sm:h-7 gap-1 px-2 sm:px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4 sm:h-3 sm:w-3" />
-            <span className="hidden sm:inline">{t.chat.resetChat}</span>
-          </Button>
-        )}
-      </div>
       <div className="h-9 sm:h-8 flex items-center">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -194,6 +159,15 @@ export function ChatToolbar({
           <DropdownMenuItem onClick={handleManageTemplates} className="gap-2 cursor-pointer">
             <Settings className="h-3.5 w-3.5" />
             {t.chat.manageTemplates || "管理範本"}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={onResetChat}
+            disabled={!hasChatMessages}
+            className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {t.chat.resetChat}
           </DropdownMenuItem>
         </DropdownMenuContent>
         </DropdownMenu>
