@@ -62,38 +62,44 @@ export function ChatToolbar({
     }
   }
   
+  // Mobile-friendly toolbar: bigger touch targets (h-9 groups / h-8 buttons,
+  // 16px icons) and consistent icon-only on phones — every label is
+  // `hidden sm:inline` so the row never shows a half-labelled mix, and the
+  // template button drops its reserved 100px (label is hidden anyway). The
+  // parent row wraps on mobile instead of hiding buttons behind a sideways
+  // scroll. Desktop (sm+) keeps the original compact density.
   return (
     <div className="flex items-center gap-1">
-      <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 h-8">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={onInsertContext} 
+      <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 h-9 sm:h-8">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onInsertContext}
           disabled={isLoadingClinicalData || autoIncludeContext}
-          className={`h-7 gap-0.5 px-1.5 text-xs ${autoIncludeContext ? 'opacity-50' : ''}`}
+          className={`h-8 sm:h-7 gap-0.5 px-2 sm:px-1.5 text-xs ${autoIncludeContext ? 'opacity-50' : ''}`}
           title={
-            autoIncludeContext 
+            autoIncludeContext
               ? (t.chat.autoIncludeEnabled || "自動帶入已啟用")
-              : isLoadingClinicalData 
-                ? t.chat.loadingClinicalData 
+              : isLoadingClinicalData
+                ? t.chat.loadingClinicalData
                 : t.chat.insertContext
           }
         >
-          <Plus className="h-3 w-3" />
+          <Plus className="h-4 w-4 sm:h-3 sm:w-3" />
           <span className="hidden sm:inline">{isLoadingClinicalData ? t.chat.loading : t.chat.insertContext}</span>
         </Button>
         <div className="flex items-center gap-1 px-1.5 border-l">
           <Switch
             checked={autoIncludeContext}
             onCheckedChange={setAutoIncludeContext}
-            className="scale-75"
+            className="scale-90 sm:scale-75"
             title={
               autoIncludeContext
                 ? (t.chat.autoIncludeContextTooltipOn || "每次發送訊息時自動包含病歷資料")
                 : (t.chat.autoIncludeContextTooltipOff || "點擊「臨床資料」按鈕手動帶入")
             }
           />
-          <label 
+          <label
             className={`text-[10px] cursor-pointer select-none whitespace-nowrap hidden sm:inline ${
               autoIncludeContext ? 'text-primary font-medium' : 'text-muted-foreground'
             }`}
@@ -105,23 +111,23 @@ export function ChatToolbar({
         </div>
       </div>
       {templates.length > 0 ? (
-        <div className="flex items-center gap-0.5 rounded-md border bg-primary/5 p-0.5 h-8">
+        <div className="flex items-center gap-0.5 rounded-md border bg-primary/5 p-0.5 h-9 sm:h-8">
           <Button
             type="button"
             size="sm"
             variant="ghost"
             onClick={onInsertTemplate}
             disabled={!hasTemplateContent}
-            className="h-7 gap-0.5 px-1 text-xs hover:bg-primary/10 w-[100px]"
+            className="h-8 sm:h-7 gap-0.5 px-1.5 sm:px-1 text-xs hover:bg-primary/10 w-auto sm:w-[100px]"
             title={templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
           >
-            <FileText className="h-3 w-3 shrink-0" />
+            <FileText className="h-4 w-4 sm:h-3 sm:w-3 shrink-0" />
             <span className="truncate hidden sm:inline">
               {templates.find(t => t.id === selectedTemplateId)?.label || t.chat.insertTemplate}
             </span>
           </Button>
           <Select value={selectedTemplateId} onValueChange={onTemplateChange}>
-            <SelectTrigger className="h-6 w-6 gap-0 border-0 rounded bg-primary/15 dark:bg-primary/30 px-1 py-0 shadow-none hover:bg-primary/25 dark:hover:bg-primary/40">
+            <SelectTrigger className="h-7 w-7 sm:h-6 sm:w-6 gap-0 border-0 rounded bg-primary/15 dark:bg-primary/30 px-1 py-0 shadow-none hover:bg-primary/25 dark:hover:bg-primary/40">
             </SelectTrigger>
             <SelectContent align="start" className="w-[200px] text-xs">
               {templates.map((template) => (
@@ -133,7 +139,7 @@ export function ChatToolbar({
           </Select>
         </div>
       ) : null}
-      <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5 h-8">
+      <div className="flex items-center gap-0.5 rounded-md border border-destructive/20 bg-destructive/5 p-0.5 h-9 sm:h-8">
         {!user ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -142,10 +148,10 @@ export function ChatToolbar({
                 size="sm"
                 onClick={onResetChat}
                 disabled={!hasChatMessages}
-                className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="h-8 sm:h-7 gap-1 px-2 sm:px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
-                <Trash2 className="h-3 w-3" />
-                {t.chat.resetChat}
+                <Trash2 className="h-4 w-4 sm:h-3 sm:w-3" />
+                <span className="hidden sm:inline">{t.chat.resetChat}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-[200px]">
@@ -158,19 +164,19 @@ export function ChatToolbar({
             size="sm"
             onClick={onResetChat}
             disabled={!hasChatMessages}
-            className="h-7 gap-1 px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="h-8 sm:h-7 gap-1 px-2 sm:px-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
-            <Trash2 className="h-3 w-3" />
-            {t.chat.resetChat}
+            <Trash2 className="h-4 w-4 sm:h-3 sm:w-3" />
+            <span className="hidden sm:inline">{t.chat.resetChat}</span>
           </Button>
         )}
       </div>
-      <div className="h-8 flex items-center">
+      <div className="h-9 sm:h-8 flex items-center">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-1.5 text-xs border rounded-md bg-muted/30">
-            <Settings className="h-3 w-3" />
-            {t.chat.settings}
+            <Button variant="ghost" size="sm" className="h-8 sm:h-7 gap-1 px-2 sm:px-1.5 text-xs border rounded-md bg-muted/30">
+            <Settings className="h-4 w-4 sm:h-3 sm:w-3" />
+            <span className="hidden sm:inline">{t.chat.settings}</span>
             <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>

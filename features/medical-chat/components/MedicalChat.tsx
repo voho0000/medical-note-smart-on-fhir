@@ -394,7 +394,9 @@ export default function MedicalChat() {
 
       <CardFooter className="flex flex-col gap-2 border-t px-6 !pt-2 pb-2 shrink-0">
         <div className="flex w-full flex-col gap-1">
-          <div className="flex items-center gap-1 overflow-x-auto">
+          {/* Wrap on phones so toolbar buttons never hide behind a sideways
+              scroll; keep the single-row scroll behaviour from sm up. */}
+          <div className="flex flex-wrap items-center gap-1 sm:flex-nowrap sm:overflow-x-auto">
             <ChatModeSelector
               isAgentMode={isAgentMode}
               showApiKeyWarning={showApiKeyWarning}
