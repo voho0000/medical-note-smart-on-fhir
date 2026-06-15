@@ -479,6 +479,9 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
 // can spread that map's values too.
 export const CANONICAL_DISPLAY: Record<string, string> = {
   'APTT-RATIO': 'APTT-ratio',
+  // CK-MB is universally hyphenated clinically; the canonical key stays 'CKMB'
+  // (sort/match/search) but the column header reads 'CK-MB'.
+  'CKMB': 'CK-MB',
   // Mixed-case clinical conventions — these analytes are universally
   // written in mixed case in clinical reading, so the all-uppercase
   // canonical key would look like a typo to clinicians.
