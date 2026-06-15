@@ -79,36 +79,78 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
             onToggle()
           }
         }}
-        className="w-full rounded-lg p-3 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40 cursor-pointer"
+        className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40 cursor-pointer"
       >
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
+        {/* Header: everything on one wrapping line (date · channel · physician
+            inline rather than stacked) with the expand chevron pinned right, so
+            a collapsed visit is ~2–3 short rows instead of 5. */}
+        <div className="flex items-start justify-between gap-2">
+          {/* One wrapping line: when/where (badge · location · date · channel ·
+              physician) followed by the at-a-glance count pills. Keeping the
+              pills in the SAME wrap (rather than a pinned-right cluster) means
+              the date never gets orphaned onto its own line — only overflow
+              pills wrap. The old full-width "查看就診詳情 ▼" footer row is gone;
+              the chevron (pinned right) carries that hint via its title. */}
+          <div className="flex flex-1 items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
             {visit.location && (
               <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
                 {visit.location}
               </span>
             )}
-            <div className="flex flex-col">
-              <span className="font-medium">{formatDateUtil(visit.date, locale)}</span>
-              {visit.department && (
-                <span className="text-xs text-muted-foreground">{visit.department}</span>
-              )}
-              {/* The i18n label already ends with a colon (主治醫師：/ Physician:) */}
-              {visit.physician && (
-                <span className="text-xs text-muted-foreground">{t.visitHistory.physician} {visit.physician}</span>
-              )}
-            </div>
+            <span className="font-medium">{formatDateUtil(visit.date, locale)}</span>
+            {visit.department && (
+              <span className="text-xs text-muted-foreground">· {visit.department}</span>
+            )}
+            {/* The i18n label already ends with a colon (主治醫師：/ Physician:) */}
+            {visit.physician && (
+              <span className="text-xs text-muted-foreground">{t.visitHistory.physician} {visit.physician}</span>
+            )}
             {visit.status === "in-progress" && (
               <Badge variant="outline" className="border-green-500 text-green-700">
                 {t.visitHistory.inProgress}
               </Badge>
             )}
+            {details && (
+              <>
+                {details.diagnoses.length > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700">
+                    {t.visitHistory.diagnoses} {details.diagnoses.length}
+                  </span>
+                )}
+                {details.tests.length > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                    {t.visitHistory.tests} {details.tests.length}
+                  </span>
+                )}
+                {abnormalCount > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                    {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
+                  </span>
+                )}
+                {details.medications.length > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-700">
+                    {t.visitHistory.medications} {details.medications.length}
+                  </span>
+                )}
+                {details.procedures.length > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] text-orange-700">
+                    {t.visitHistory.procedures} {details.procedures.length}
+                  </span>
+                )}
+              </>
+            )}
           </div>
+          <span
+            className="shrink-0 text-xs text-muted-foreground leading-5"
+            title={hasDetails ? (isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails) : t.visitHistory.noDetails}
+          >
+            {hasDetails ? (isExpanded ? "▲" : "▼") : ""}
+          </span>
         </div>
 
         {(visit.reason || visit.diagnosis) && (
-          <div className="mt-2 space-y-1 text-sm">
+          <div className="mt-1.5 space-y-1 text-sm">
             {visit.reason && (
               <div>
                 <span
@@ -171,46 +213,6 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
           </div>
         )}
 
-        {details && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {details.diagnoses.length > 0 && (
-              <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700">
-                {t.visitHistory.diagnoses} {details.diagnoses.length}
-              </span>
-            )}
-            {details.tests.length > 0 && (
-              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
-                {t.visitHistory.tests} {details.tests.length}
-              </span>
-            )}
-            {abnormalCount > 0 && (
-              <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
-              </span>
-            )}
-            {details.medications.length > 0 && (
-              <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-700">
-                {t.visitHistory.medications} {details.medications.length}
-              </span>
-            )}
-            {details.procedures.length > 0 && (
-              <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] text-orange-700">
-                {t.visitHistory.procedures} {details.procedures.length}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            {hasDetails
-              ? isExpanded
-                ? t.visitHistory.hideDetails
-                : t.visitHistory.viewDetails
-              : t.visitHistory.noDetails}
-          </span>
-          <span>{hasDetails ? (isExpanded ? "▲" : "▼") : "-"}</span>
-        </div>
       </div>
 
       {isExpanded && (
@@ -289,7 +291,7 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
                   count={details.medications.length}
                   collapseThreshold={COLLAPSE_THRESHOLDS.medications}
                 >
-                  <div className="grid gap-2 mt-2">
+                  <div className="grid gap-1.5 mt-2">
                     {/* Multi-day: roll up same-drug refills into MedTrendRow.
                         Single-day: keep flat MedicationRow. */}
                     {details.isMultiDay && details.medSeries.length > 0 ? (

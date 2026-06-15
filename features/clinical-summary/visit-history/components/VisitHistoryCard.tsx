@@ -325,11 +325,9 @@ export function VisitHistoryCard() {
                   {vt.clearFilters}
                 </button>
               )}
-            </div>
-
-            {/* ── Result count ───────────────────────────────────────── */}
-            <div className="flex items-center justify-between border-t pt-2 text-xs text-muted-foreground">
-              <span>
+              {/* Result count — inline at the row's right edge rather than its
+                  own line, to save a row of vertical space. */}
+              <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
                 {hasActiveFilters
                   ? `${(vt.resultCount as string ?? 'Results')}: ${filteredVisits.length} / ${visitHistory.length}`
                   : `${(vt.totalCount as string ?? 'Total')}: ${visitHistory.length}`}
@@ -352,16 +350,22 @@ export function VisitHistoryCard() {
                 )}
               </div>
             ) : (
-              filteredVisits.map((visit) => (
-                <VisitItem
-                  key={visit.id}
-                  visit={visit}
-                  details={encounterDetails.get(visit.id)}
-                  abnormalCount={visitStats.get(visit.id)?.abnormalCount ?? 0}
-                  isExpanded={expandedVisitId === visit.id}
-                  onToggle={() => setExpandedVisitId((prev) => (prev === visit.id ? null : visit.id))}
-                />
-              ))
+              // Tighter list spacing (space-y-2) than the panel's space-y-3 so
+              // more collapsed visits fit on screen at once. border-t keeps the
+              // filters visually separated from the list now that the standalone
+              // count row (which carried that divider) is gone.
+              <div className="space-y-2 border-t pt-2">
+                {filteredVisits.map((visit) => (
+                  <VisitItem
+                    key={visit.id}
+                    visit={visit}
+                    details={encounterDetails.get(visit.id)}
+                    abnormalCount={visitStats.get(visit.id)?.abnormalCount ?? 0}
+                    isExpanded={expandedVisitId === visit.id}
+                    onToggle={() => setExpandedVisitId((prev) => (prev === visit.id ? null : visit.id))}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
