@@ -127,10 +127,17 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
     const procById = new Map<string, any>(
       procedures.filter((p: any) => p?.id).map((p: any) => [p.id, p]),
     )
+    // FHIR `partOf` is a Reference[] that may mix target types (a Procedure can
+    // be part of another Procedure, or e.g. an Observation/Encounter). Scan the
+    // whole list and take the first entry that resolves to another Procedure in
+    // this dataset — never assume partOf[0] is the procedure parent.
     const parentIdOf = (p: any): string | undefined => {
-      const ref = Array.isArray(p?.partOf) ? p.partOf[0]?.reference : undefined
-      const id = ref ? refId(ref) : undefined
-      return id && procById.has(id) ? id : undefined
+      if (!Array.isArray(p?.partOf)) return undefined
+      for (const entry of p.partOf) {
+        const id = entry?.reference ? refId(entry.reference) : undefined
+        if (id && procById.has(id)) return id
+      }
+      return undefined
     }
     const childrenByParent = new Map<string, any[]>()
     for (const p of procedures) {
