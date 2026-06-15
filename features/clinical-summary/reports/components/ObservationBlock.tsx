@@ -115,10 +115,23 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
   const isLongText = !observation.valueQuantity && (observation.valueString?.length ?? 0) > 80
 
   // Procedure detail container: flat list of attribute rows, no main row.
+  // Components flagged `_isSubHeader` (a grouped session's sub-procedure name)
+  // render as a bold divider heading instead of a name/value row.
   if (detailsOnly && hasComponents) {
     return (
       <div className="space-y-0">
         {observation.component!.map((component, idx) => {
+          if ((component as { _isSubHeader?: boolean })._isSubHeader) {
+            const heading = getCodeableConceptText(component.code) || '—'
+            return (
+              <div
+                key={idx}
+                className="mt-2 border-t pt-2 px-2 text-sm font-semibold text-foreground"
+              >
+                {heading}
+              </div>
+            )
+          }
           const cName = getAnalyteDisplayForObs(component, audience, locale)
           const cValue = component.valueQuantity
             ? getValueWithUnit(component.valueQuantity)

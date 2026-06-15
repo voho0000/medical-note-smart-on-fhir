@@ -371,6 +371,12 @@ export interface ProcedureEntity {
     text?: string
     coding?: Array<{ system?: string; code?: string; display?: string }>
   }>
+  /**
+   * Operative-session linkage (bridge ≥0.20.x). Secondary procedures done in
+   * the same session reference the lead procedure here, letting the reports UI
+   * collapse them under one title with the lead. FHIR Procedure.partOf.
+   */
+  partOf?: Array<{ reference?: string; display?: string }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

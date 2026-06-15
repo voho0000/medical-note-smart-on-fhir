@@ -63,4 +63,9 @@ export type Row = {
    *  row header so the bridge bug stays visible — silently merging would
    *  violate the no-mask-bridge-bugs rule. Absent / 0 means no dup. */
   bridgeDupCount?: number
+  /** Procedures only: number of secondary procedures grouped under this
+   *  operative session via Procedure.partOf (bridge ≥0.20.x). Drives the
+   *  "+N 相關處置" hint on the collapsed session header so the user knows
+   *  expanding reveals nested sub-procedures. Absent / 0 = standalone. */
+  relatedCount?: number
 }

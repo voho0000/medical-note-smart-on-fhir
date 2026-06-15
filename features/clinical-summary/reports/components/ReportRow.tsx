@@ -480,6 +480,13 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                       {abnormalCount} 異常
                     </span>
                   )}
+                  {/* Same-session sub-procedures grouped via Procedure.partOf —
+                      tells the user this one title expands to several. */}
+                  {row.group === "procedures" && (row.relatedCount ?? 0) > 0 && (
+                    <span className="inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300 shrink-0">
+                      +{row.relatedCount} 相關處置
+                    </span>
+                  )}
                   {hasImages && <ImageButton stopProp />}
                 </div>
                 {/* Right cluster mirrors the single-value rows: count +

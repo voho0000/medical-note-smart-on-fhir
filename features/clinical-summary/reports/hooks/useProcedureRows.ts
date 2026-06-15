@@ -21,32 +21,46 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
       })
     })
 
-    return procedures.map((procedure: any) => {
+    // ── Locale-aware code/name helpers (shared across main + child) ──────────
+    // A coding can carry the other language via the FHIR `_display` translation
+    // extension (the bridge adds a zh-TW translation on the PCS coding). We keep
+    // coding.display as the English source and read zh from the translation when
+    // present — falling back to English so pre-bilingual bundles don't regress.
+    const pickTranslation = (c: any, langPrefix: string): string | undefined => {
+      const exts = c?._display?.extension
+      if (!Array.isArray(exts)) return undefined
+      for (const e of exts) {
+        if (typeof e?.url !== 'string' || !e.url.includes('translation')) continue
+        const sub: any[] = Array.isArray(e.extension) ? e.extension : []
+        const lang = sub.find((x) => x?.url === 'lang')?.valueCode || sub.find((x) => x?.url === 'lang')?.valueString
+        const content = sub.find((x) => x?.url === 'content')?.valueString
+        if (typeof lang === 'string' && lang.toLowerCase().startsWith(langPrefix) && typeof content === 'string') return content
+      }
+      return undefined
+    }
+    const codeWithDisplay = (c: any, zhName?: string): string => {
+      if (!c?.code) return ''
+      const name = isZh
+        ? (pickTranslation(c, 'zh') || zhName || c.display)
+        : (c.display || pickTranslation(c, 'en') || zhName)
+      return name ? `${c.code} · ${name}` : c.code
+    }
+
+    // Pull the display fields for one Procedure resource.
+    const extract = (procedure: any) => {
       const performed = procedure?.performedDateTime || procedure?.performedPeriod?.start
-      // Extract performer with better fallback logic
       let performer: string | undefined
       if (Array.isArray(procedure?.performer) && procedure.performer.length > 0) {
         performer = procedure.performer
-          .map((p: any) => {
-            // Try different FHIR formats
-            return p?.actor?.display || 
-                   p?.display || 
-                   p?.actor?.reference?.split('/').pop() ||
-                   p?.reference?.split('/').pop()
-          })
+          .map((p: any) =>
+            p?.actor?.display || p?.display ||
+            p?.actor?.reference?.split('/').pop() || p?.reference?.split('/').pop())
           .filter(Boolean)
           .join(", ")
       }
       const outcome = getConceptText(procedure?.outcome)
       const category = getConceptText(procedure?.category)
       const location = procedure?.location?.display
-      // Claim diagnosis (bridge ≥0.18.15: bilingual ICD-10-CM reasonCode). This
-      // is the visit/admission's NHI 申報 diagnosis — shared across every
-      // procedure of that stay, NOT a per-procedure indication — so it's
-      // labelled 申報診斷 / "Claim diagnosis", not 原因 / "Reason".
-      // Follow the UI locale — zh shows the 繁中 name (text), en the English
-      // (coding.display) — and prefix with the ICD-10-CM code to match the
-      // code rows. Falls back to whichever language is present.
       const reasonItems: string[] = Array.isArray(procedure?.reasonCode)
         ? procedure.reasonCode
             .map((rc: any) => {
@@ -67,93 +81,86 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
       const reports = Array.isArray(procedure?.report)
         ? procedure.report.map((ref: any) => ref?.display || ref?.reference).filter(Boolean)
         : []
-
-      // NHI medical-order code (the actual surgery, bridge ≥0.18.14) and the
-      // ICD-10-PCS classification, pulled out of code.coding by system.
       const coding: any[] = Array.isArray(procedure?.code?.coding) ? procedure.code.coding : []
       const nhiCoding = coding.find((c: any) => typeof c?.system === 'string' && c.system.includes('nhi-medical-order-code'))
       const pcsCoding = coding.find((c: any) => typeof c?.system === 'string' && c.system.includes('icd-10-pcs'))
-      // Follow the UI locale. The NHI order's 繁中名 is on code.text; a coding
-      // can also carry the other language via the FHIR `_display` translation
-      // extension (the bridge adds a zh-TW translation on the PCS coding). We
-      // keep coding.display as the English source and read zh from the
-      // translation when present — falling back to English if it isn't, so
-      // pre-bilingual bundles don't regress.
-      const pickTranslation = (c: any, langPrefix: string): string | undefined => {
-        const exts = c?._display?.extension
-        if (!Array.isArray(exts)) return undefined
-        for (const e of exts) {
-          if (typeof e?.url !== 'string' || !e.url.includes('translation')) continue
-          const sub: any[] = Array.isArray(e.extension) ? e.extension : []
-          const lang = sub.find((x) => x?.url === 'lang')?.valueCode || sub.find((x) => x?.url === 'lang')?.valueString
-          const content = sub.find((x) => x?.url === 'content')?.valueString
-          if (typeof lang === 'string' && lang.toLowerCase().startsWith(langPrefix) && typeof content === 'string') return content
-        }
-        return undefined
-      }
-      const codeWithDisplay = (c: any, zhName?: string): string => {
-        if (!c?.code) return ''
-        const name = isZh
-          ? (pickTranslation(c, 'zh') || zhName || c.display)
-          : (c.display || pickTranslation(c, 'en') || zhName)
-        return name ? `${c.code} · ${name}` : c.code
-      }
-
-      // Row title = the surgery name, locale-aware: zh shows the 繁中 name
-      // (code.text), en the NHI order's English display. Falls back to whatever
-      // is present so a single-language bundle never renders blank.
+      const codeText = procedure?.code?.text
+      // Title = surgery name, locale-aware: zh → 繁中 (code.text), en → NHI
+      // English display; falls back to whatever is present.
       const title = (isZh
-        ? (procedure?.code?.text || nhiCoding?.display)
-        : (nhiCoding?.display || procedure?.code?.text)
+        ? (codeText || nhiCoding?.display)
+        : (nhiCoding?.display || codeText)
       ) || getCodeableConceptText(procedure?.code) || "Procedure"
+      return { performed, performer, outcome, category, location, reason, bodySite,
+        followUp, notes, reports, nhiCoding, pcsCoding, codeText, title }
+    }
 
-      const components: any[] = []
+    // Detail rows for a procedure. `child` keeps only the procedure-specific
+    // info (the codes + outcome/site/notes) since the shared context — date,
+    // facility, claim diagnosis — already shows on the parent session row.
+    const buildComponents = (f: ReturnType<typeof extract>, child = false): any[] => {
+      const out: any[] = []
       // Status is intentionally omitted: anything that reaches 健康存摺 is
       // already "completed", so the row carries no signal (user request).
-      if (performed) {
-        components.push({ code: { text: t.procedures.performedDate }, valueString: formatDate(performed) })
-      }
-      if (performer) {
-        components.push({ code: { text: t.procedures.performer }, valueString: performer })
-      }
-      if (nhiCoding?.code) {
-        // The NHI order's 繁中名 is the procedure's code.text.
-        components.push({ code: { text: t.procedures.orderCode }, valueString: codeWithDisplay(nhiCoding, procedure?.code?.text) })
-      }
-      if (pcsCoding?.code) {
-        components.push({ code: { text: t.procedures.classificationCode }, valueString: codeWithDisplay(pcsCoding) })
-      }
-      if (category && category !== "—") {
-        components.push({ code: { text: t.procedures.category }, valueString: category })
-      }
-      if (reason && reason !== "—") {
-        components.push({ code: { text: t.procedures.reason }, valueString: reason })
-      }
-      if (outcome && outcome !== "—") {
-        components.push({ code: { text: t.procedures.outcome }, valueString: outcome })
-      }
-      if (location) {
-        components.push({ code: { text: t.procedures.location }, valueString: location })
-      }
-      if (bodySite && bodySite !== "—") {
-        components.push({ code: { text: t.procedures.bodySite }, valueString: bodySite })
-      }
-      if (followUp && followUp !== "—") {
-        components.push({ code: { text: t.procedures.followUp }, valueString: followUp })
-      }
-      if (reports.length > 0) {
-        components.push({ code: { text: t.procedures.reports }, valueString: reports.join(", ") })
-      }
-      if (notes) {
-        components.push({ code: { text: t.procedures.notes }, valueString: notes })
+      if (!child && f.performed) out.push({ code: { text: t.procedures.performedDate }, valueString: formatDate(f.performed) })
+      if (!child && f.performer) out.push({ code: { text: t.procedures.performer }, valueString: f.performer })
+      if (f.nhiCoding?.code) out.push({ code: { text: t.procedures.orderCode }, valueString: codeWithDisplay(f.nhiCoding, f.codeText) })
+      if (f.pcsCoding?.code) out.push({ code: { text: t.procedures.classificationCode }, valueString: codeWithDisplay(f.pcsCoding) })
+      if (!child && f.category && f.category !== "—") out.push({ code: { text: t.procedures.category }, valueString: f.category })
+      if (!child && f.reason && f.reason !== "—") out.push({ code: { text: t.procedures.reason }, valueString: f.reason })
+      if (f.outcome && f.outcome !== "—") out.push({ code: { text: t.procedures.outcome }, valueString: f.outcome })
+      if (!child && f.location) out.push({ code: { text: t.procedures.location }, valueString: f.location })
+      if (f.bodySite && f.bodySite !== "—") out.push({ code: { text: t.procedures.bodySite }, valueString: f.bodySite })
+      if (f.followUp && f.followUp !== "—") out.push({ code: { text: t.procedures.followUp }, valueString: f.followUp })
+      if (f.reports.length > 0) out.push({ code: { text: t.procedures.reports }, valueString: f.reports.join(", ") })
+      if (f.notes) out.push({ code: { text: t.procedures.notes }, valueString: f.notes })
+      return out
+    }
+
+    // ── Group by Procedure.partOf (bridge ≥0.20.x) ──────────────────────────
+    // Secondary procedures of one operative session reference the main via
+    // partOf. We render one collapsible row per main, nesting the children's
+    // detail under it; a child whose parent isn't in this dataset falls back to
+    // a standalone row so nothing is dropped.
+    const refId = (ref: any): string | undefined =>
+      typeof ref === 'string' ? ref.split('/').pop() : undefined
+    const procById = new Map<string, any>(
+      procedures.filter((p: any) => p?.id).map((p: any) => [p.id, p]),
+    )
+    const parentIdOf = (p: any): string | undefined => {
+      const ref = Array.isArray(p?.partOf) ? p.partOf[0]?.reference : undefined
+      const id = ref ? refId(ref) : undefined
+      return id && procById.has(id) ? id : undefined
+    }
+    const childrenByParent = new Map<string, any[]>()
+    for (const p of procedures) {
+      const pid = parentIdOf(p)
+      if (!pid) continue
+      const arr = childrenByParent.get(pid) ?? []
+      arr.push(p)
+      childrenByParent.set(pid, arr)
+    }
+    // Mains = standalone procedures + session leads (+ orphan children).
+    const mains = procedures.filter((p: any) => !parentIdOf(p))
+
+    return mains.map((procedure: any) => {
+      const f = extract(procedure)
+      const children = childrenByParent.get(procedure?.id) ?? []
+
+      const components: any[] = buildComponents(f, false)
+      for (const child of children) {
+        const cf = extract(child)
+        // Sub-procedure heading (rendered as a bold divider row).
+        components.push({ code: { text: cf.title }, valueString: "", _isSubHeader: true })
+        components.push(...buildComponents(cf, true))
       }
 
       const observation: Observation = {
         resourceType: "Observation",
         id: procedure?.id ? `procedure-${procedure.id}` : `procedure-${Math.random().toString(36).slice(2, 10)}`,
-        code: { text: title },
+        code: { text: f.title },
         valueString: "—",
-        effectiveDateTime: performed,
+        effectiveDateTime: f.performed,
         status: procedure?.status,
         category: procedure?.category,
         component: components,
@@ -162,7 +169,7 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
         _detailsOnly: true,
       } as Observation
 
-      // Find related observations with category "procedure" that share the same encounter
+      // Related procedure-category observations sharing the same encounter.
       const procEncounter = procedure?.encounter?.reference
       const relatedObservations = procedureObservations.filter((obs: any) => {
         const obsEncounter = obs?.encounter?.reference
@@ -172,18 +179,16 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
       return {
         // Prefix with `procedure:` because ReportsCard concatenates these rows
         // with DiagnosticReport-derived rows (which use the report's raw id).
-        // FHIR ids are unique per resource type, so DiagnosticReport/1 and
-        // Procedure/1 happily coexist — but as React siblings they collided
-        // (key=`1`). Type prefix mirrors `orphan:${k}` used elsewhere in the
-        // same merged list.
         id: procedure?.id
           ? `procedure:${procedure.id}`
           : `procedure-row-${Math.random().toString(36).slice(2, 10)}`,
-        title,
+        title: f.title,
         meta: `Procedure • ${procedure?.status || "—"}`,
         obs: [observation, ...relatedObservations],
         group: "procedures" as const,
-        effectiveDate: performed,
+        effectiveDate: f.performed,
+        // Number of sub-procedures grouped under this session (0 = standalone).
+        relatedCount: children.length,
       }
     })
   }, [procedures, observations, t, isZh])

@@ -221,6 +221,7 @@ export class FhirMapper implements IDataMapper {
       performer?: ProcedureEntity['performer']
       note?: ProcedureEntity['note']
       reasonCode?: ProcedureEntity['reasonCode']
+      partOf?: ProcedureEntity['partOf']
     }
     return {
       id: fhirResource.id || '',
@@ -235,6 +236,9 @@ export class FhirMapper implements IDataMapper {
       performer: src.performer,
       note: src.note,
       reasonCode: src.reasonCode,
+      // Same-session linkage (bridge ≥0.20.x) — drives the collapsible grouping
+      // of secondary procedures under their lead in the reports UI.
+      partOf: src.partOf,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
