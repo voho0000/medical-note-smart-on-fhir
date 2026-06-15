@@ -2,12 +2,11 @@
 "use client"
 
 import { useCallback, useMemo } from "react"
-import { useDataSelection } from "@/src/application/providers/data-selection.provider"
+import { useDataSelection, type DataConsumer } from "@/src/application/providers/data-selection.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import { formatClinicalContext } from "./clinical-context/formatters"
 import { usePatientContext } from "./clinical-context/usePatientContext"
-import { useConditionsContext } from "./clinical-context/useConditionsContext"
 import { useMedicationsContext } from "./clinical-context/useMedicationsContext"
 import { useEncountersContext } from "./clinical-context/useEncountersContext"
 import { useAllergiesContext } from "./clinical-context/useAllergiesContext"
@@ -17,6 +16,7 @@ import { useImmunizationsContext } from "./clinical-context/useImmunizationsCont
 import { useProblemListContext } from "./clinical-context/useProblemListContext"
 import type { ClinicalData } from "./clinical-context/types"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
+import { listClinicalDocuments, resolveSelectedDocuments, formatDocumentsSection } from "@/src/core/utils/clinical-documents.utils"
 
 export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
@@ -32,25 +32,35 @@ export type UseClinicalContextReturn = {
 
 export { ClinicalContextSection }
 
-export function useClinicalContext(): UseClinicalContextReturn {
-  const {
-    selectedData,
-    filters,
-    supplementaryNotes,
-    setSupplementaryNotes,
-    editedClinicalContext,
-    setEditedClinicalContext,
-  } = useDataSelection()
+export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextReturn {
+  const ds = useDataSelection()
+  // Each consumer (chat / insights / ips) reads its own profile. When no
+  // consumer is given (the data-selection preview), follow whichever consumer
+  // the user is currently editing.
+  const activeConsumer = consumer ?? ds.editingConsumer
+  const profile = ds.getProfile(activeConsumer)
+  const selectedData = profile.selection
+  const filters = profile.filters
+  const supplementaryNotes = profile.supplementaryNotes
+  const editedClinicalContext = profile.editedClinicalContext
+  const { setNotesFor, setEditedContextFor } = ds
+  const setSupplementaryNotes = useCallback(
+    (notes: string) => setNotesFor(activeConsumer, notes),
+    [setNotesFor, activeConsumer],
+  )
+  const setEditedClinicalContext = useCallback(
+    (context: string | null) => setEditedContextFor(activeConsumer, context),
+    [setEditedContextFor, activeConsumer],
+  )
 
   const clinicalData = (useClinicalData() as ClinicalData | null) ?? null
 
   // Hook-driven sections (richer formatting than registry can provide)
   const patientSection = usePatientContext(selectedData.patientInfo ?? false)
-  const encountersSection = useEncountersContext(selectedData.encounters ?? false, clinicalData)
-  const conditionsSection = useConditionsContext(selectedData.conditions ?? false, clinicalData, filters)
-  const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters)
+  const encountersSection = useEncountersContext(selectedData.encounters ?? false, clinicalData, filters.encounterTimeRange)
+  const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters, selectedData.encounters ?? false)
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
-  const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters)
+  const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters, selectedData.encounters ?? false)
   const vitalSignsSections = useVitalSignsContext(
     selectedData.vitalSigns ?? false,
     clinicalData,
@@ -85,6 +95,33 @@ export function useClinicalContext(): UseClinicalContextReturn {
     return dataCategoryRegistry.getCategoryContext('observations', clinicalData, filters)
   }, [selectedData.observations, clinicalData, filters])
 
+  const advanceDirectivesSection = useMemo(() => {
+    if (!selectedData.advanceDirectives || !clinicalData) return null
+    return dataCategoryRegistry.getCategoryContext('advanceDirectives', clinicalData, filters)
+  }, [selectedData.advanceDirectives, clinicalData, filters])
+
+  const medicalDevicesSection = useMemo(() => {
+    if (!selectedData.medicalDevices || !clinicalData) return null
+    return dataCategoryRegistry.getCategoryContext('medicalDevices', clinicalData, filters)
+  }, [selectedData.medicalDevices, clinicalData, filters])
+
+  const carePlansSection = useMemo(() => {
+    if (!selectedData.carePlans || !clinicalData) return null
+    return dataCategoryRegistry.getCategoryContext('carePlans', clinicalData, filters)
+  }, [selectedData.carePlans, clinicalData, filters])
+
+  const documentsSection = useMemo(() => {
+    if (!selectedData.documents || !clinicalData) return null
+    const docs = resolveSelectedDocuments(
+      // clinicalData is the full ClinicalDataCollection at runtime (carries
+      // compositions + documentReferences); the hook's local type omits them.
+      listClinicalDocuments(clinicalData as unknown as Parameters<typeof listClinicalDocuments>[0]),
+      profile.documentMode,
+      profile.documentIds,
+    )
+    return formatDocumentsSection(docs)
+  }, [selectedData.documents, clinicalData, profile.documentMode, profile.documentIds])
+
   const pushRegistrySection = useCallback(
     (
       sections: ClinicalContextSection[],
@@ -104,10 +141,12 @@ export function useClinicalContext(): UseClinicalContextReturn {
     if (patientSection) sections.push(patientSection)
     sections.push(...vitalSignsSections)
     if (problemListSection) sections.push(problemListSection)
+    pushRegistrySection(sections, advanceDirectivesSection)
+    pushRegistrySection(sections, medicalDevicesSection)
+    pushRegistrySection(sections, carePlansSection)
 
     // Visit group
     if (encountersSection) sections.push(encountersSection)
-    if (conditionsSection) sections.push(conditionsSection)
 
     // Reports group
     pushRegistrySection(sections, labReportsSection)
@@ -120,13 +159,18 @@ export function useClinicalContext(): UseClinicalContextReturn {
     if (allergiesSection) sections.push(allergiesSection)
     if (immunizationsSection) sections.push(immunizationsSection)
 
+    // Documents group
+    pushRegistrySection(sections, documentsSection)
+
     return sections
   }, [
     patientSection,
     vitalSignsSections,
     problemListSection,
+    advanceDirectivesSection,
+    medicalDevicesSection,
+    carePlansSection,
     encountersSection,
-    conditionsSection,
     labReportsSection,
     imagingReportsSection,
     proceduresSection,
@@ -134,6 +178,7 @@ export function useClinicalContext(): UseClinicalContextReturn {
     medicationsSection,
     allergiesSection,
     immunizationsSection,
+    documentsSection,
     pushRegistrySection,
   ])
 

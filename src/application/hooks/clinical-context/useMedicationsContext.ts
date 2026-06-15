@@ -10,6 +10,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
 import { routeAbbr } from "@/src/shared/utils/route-display"
+import { partitionByEncounterLink } from "@/src/core/utils/encounter-link.utils"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
 
@@ -172,7 +173,11 @@ function dedupByDrug(meds: MedSummary[]): MedSummary[] {
 export function useMedicationsContext(
   includeMedications: boolean,
   clinicalData: ClinicalData | null,
-  filters?: DataFilters
+  filters?: DataFilters,
+  // When 就診紀錄 is also shown, visit-linked meds are already listed under each
+  // visit there — so here we keep only orphan meds (e.g. pharmacy pickups) and
+  // flag the split with a note. Defaults false (medications owns everything).
+  encountersShown: boolean = false
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
   const { locale } = useLanguage()
@@ -180,6 +185,15 @@ export function useMedicationsContext(
     if (!includeMedications || !clinicalData?.medications?.length) return null
 
     let meds = clinicalData.medications
+
+    // Only split when encounters is shown AND there are real encounters to host
+    // the visit-linked meds (otherwise the "see Visits above" note is a lie).
+    const encounters = (clinicalData as unknown as { encounters?: { id?: string }[] }).encounters
+    const onlyOrphans = encountersShown && (encounters?.length ?? 0) > 0
+    if (onlyOrphans) {
+      meds = partitionByEncounterLink(meds, encounters).orphan
+      if (meds.length === 0) return null
+    }
 
     // Apply chronic / acute filter
     const chronic = (filters?.medicationChronic as string) || 'all'
@@ -245,6 +259,13 @@ export function useMedicationsContext(
     }
 
     if (items.length === 0) return null
+    if (onlyOrphans) {
+      // Tell the reader/AI this section is the supplement, not the full list.
+      items.unshift(
+        "Note: medications prescribed during a visit are listed under that visit in 'Visits & Treatment History' above and are NOT repeated here. The medications below are not linked to any visit (e.g. pharmacy refills).",
+        '',
+      )
+    }
     return { title: "Patient's Medications", items }
-  }, [includeMedications, clinicalData, filters, audience, locale])
+  }, [includeMedications, clinicalData, filters, audience, locale, encountersShown])
 }

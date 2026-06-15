@@ -6,11 +6,16 @@ import type { ClinicalData } from "./types"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
+import { partitionByEncounterLink } from "@/src/core/utils/encounter-link.utils"
 
 export function useProceduresContext(
   includeProcedures: boolean,
   clinicalData: ClinicalData | null,
-  filters?: DataFilters
+  filters?: DataFilters,
+  // When 就診紀錄 is also shown, visit-linked procedures are already listed under
+  // each visit there — so here we keep only orphan procedures (not tied to a
+  // recorded visit) and flag the split with a note. Defaults false.
+  encountersShown: boolean = false
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
   const { locale } = useLanguage()
@@ -23,13 +28,27 @@ export function useProceduresContext(
       || procedure.code?.coding?.[0]?.display
       || "Procedure"
 
+    // Visit-linked procedures live under their visit (Visits & Treatment
+    // History); here we keep only orphans when encounters is shown.
+    let source = clinicalData.procedures
+    const encounters = (clinicalData as unknown as { encounters?: { id?: string }[] }).encounters
+    const onlyOrphans = encountersShown && (encounters?.length ?? 0) > 0
+    if (onlyOrphans) {
+      source = partitionByEncounterLink(source, encounters).orphan
+      if (source.length === 0) return null
+    }
+
     // Filter by time range
-    let procedures = clinicalData.procedures.filter((procedure) => {
+    let procedures = source.filter((procedure) => {
       const performed = procedure.performedDateTime || procedure.performedPeriod?.end || procedure.performedPeriod?.start
       return isWithinTimeRange(performed, filters?.procedureTimeRange ?? 'all')
     })
 
     if (procedures.length === 0) {
+      // When showing only orphans, an empty result means everything is visit-
+      // linked (already listed above) — emit nothing rather than a misleading
+      // "no procedures" line.
+      if (onlyOrphans) return null
       return { title: "Procedures", items: ["No procedures found within the selected time range."] }
     }
 
@@ -60,6 +79,13 @@ export function useProceduresContext(
 
     if (items.length === 0) return null
 
+    if (onlyOrphans) {
+      items.unshift(
+        "Note: procedures performed during a visit are listed under that visit in 'Visits & Treatment History' above and are NOT repeated here. The procedures below are not linked to any visit.",
+        '',
+      )
+    }
+
     return { title: "Procedures", items }
-  }, [includeProcedures, clinicalData, filters, audience, locale])
+  }, [includeProcedures, clinicalData, filters, audience, locale, encountersShown])
 }
