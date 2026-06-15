@@ -88,8 +88,8 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
 function FieldRow({ label, value }: { label: string; value: string }) {
   return (
     <>
-      <span className="font-medium text-muted-foreground">{label}：</span>
-      <span className="sm:col-span-2">{value}</span>
+      <span className="font-medium text-muted-foreground break-words min-w-0">{label}：</span>
+      <span className="sm:col-span-2 break-words min-w-0">{value}</span>
     </>
   )
 }

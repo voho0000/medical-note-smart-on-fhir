@@ -69,10 +69,27 @@ export function formatIdentifiers(
     PPN: t.passportNumber,
     SS: t.socialSecurityNumber,
   }
+  // Map the identifier `system` URL to a friendly label. TW Core / NHI
+  // identifiers (e.g. .../IdentifierSystem/national-id) carry no type.code or
+  // type.text, so without this they fell through to the raw system URL — which
+  // is far too long for the label column and visually collided with the value.
+  const systemLabel = (system: string): string | undefined => {
+    const s = system.toLowerCase()
+    if (s.includes('national-id') || s.includes('national_id')) return t.nationalId
+    if (s.includes('medical-record') || s.includes('mrn') || s.includes('chart')) return t.medicalRecordNumber
+    if (s.includes('passport')) return t.passportNumber
+    if (s.includes('social-security') || s.includes('ssn')) return t.socialSecurityNumber
+    return undefined
+  }
   return patient.identifier
     .map((id: any) => {
       const code = id?.type?.coding?.[0]?.code
-      const label = (code && codeLabel[code]) || id?.type?.text || id?.system || t.identifierGeneric
+      // Never fall back to the raw system URL — use the generic label instead.
+      const label =
+        (code && codeLabel[code]) ||
+        id?.type?.text ||
+        (typeof id?.system === 'string' ? systemLabel(id.system) : undefined) ||
+        t.identifierGeneric
       return id?.value ? { label, value: id.value } : null
     })
     .filter(Boolean) as Array<{ label: string; value: string }>
