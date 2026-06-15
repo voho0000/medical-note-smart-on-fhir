@@ -33,6 +33,43 @@ export function formatDateTime(dateString: string | undefined, locale: string = 
   }
 }
 
+/**
+ * Search tokens for a date: the date rendered in the common Gregorian formats
+ * AND the ROC / 民國 equivalents (year − 1911), so a search box matches whether
+ * the user types 2025/11/20 or 114/11/20 (also 114-11-20 / 1141120). Returns
+ * plain strings; callers lowercase the haystack as usual.
+ */
+export function dateSearchTokens(dateString: string | undefined): string[] {
+  if (!dateString) return []
+  const d = new Date(dateString)
+  if (Number.isNaN(d.getTime())) return []
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  const mp = String(m).padStart(2, '0')
+  const dp = String(day).padStart(2, '0')
+  const tokens = [
+    d.toLocaleDateString(),  // locale default (e.g. 1/22/2026)
+    `${y}/${m}/${day}`,      // 2025/11/20
+    `${y}/${mp}/${dp}`,      // 2025/11/20 (padded)
+    `${y}-${mp}-${dp}`,      // 2025-11-20
+    `${m}/${day}`,           // 11/20
+    `${mp}/${dp}`,           // 11/20 (padded)
+    `${m}/${day}/${y}`,      // 11/20/2025
+  ]
+  const roc = y - 1911
+  if (roc > 0) {
+    tokens.push(
+      `${roc}/${m}/${day}`,  // 114/11/20
+      `${roc}/${mp}/${dp}`,  // 114/11/20 (padded)
+      `${roc}-${mp}-${dp}`,  // 114-11-20
+      `${roc}${mp}${dp}`,    // 1141120 (NHI compact)
+      `${roc}/${mp}`,        // 114/11
+    )
+  }
+  return tokens
+}
+
 export function isValidDate(dateString: string | undefined): boolean {
   if (!dateString) return false
   const date = new Date(dateString)

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Menu, Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
+import { dateSearchTokens } from "@/src/shared/utils/date.utils"
 import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
 import { useProcedureRows } from './hooks/useProcedureRows'
@@ -140,15 +141,8 @@ export function ReportsCard() {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return rows
     return rows.filter((row) => {
-      const dateStrs: string[] = []
-      if (row.effectiveDate) {
-        const d = new Date(row.effectiveDate)
-        dateStrs.push(d.toLocaleDateString())                          // 1/22/2026
-        const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate()
-        dateStrs.push(`${y}/${m}/${day}`)                              // 2026/1/22
-        dateStrs.push(`${y}/${String(m).padStart(2,'0')}/${String(day).padStart(2,'0')}`) // 2026/01/22
-        dateStrs.push(`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`) // 2026-01-22
-      }
+      // Gregorian + 民國(ROC) date tokens so 2025/11/20 and 114/11/20 both match.
+      const dateStrs = dateSearchTokens(row.effectiveDate)
       // Also look inside accordion children — a multi-item report like
       // "全套血液檢查Ⅰ（八項）" has its individual analytes (RBC, WBC, etc.)
       // in row.obs, and composite tests like BP carry components on each
