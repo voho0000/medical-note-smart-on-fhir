@@ -17,10 +17,12 @@ export interface DataSelection {
   patientInfo: boolean
   vitalSigns: boolean
   problemList: boolean
+  advanceDirectives: boolean // FHIR Consent — DNR / palliative / organ donation
+  medicalDevices: boolean    // FHIR Device — implants / DME
+  carePlans: boolean         // FHIR CarePlan — plan of care
 
   // Visit group
   encounters: boolean
-  conditions: boolean
 
   // Reports group
   labReports: boolean
@@ -32,14 +34,17 @@ export interface DataSelection {
   medications: boolean
   allergies: boolean
   immunizations: boolean
+
+  // Documents group
+  documents: boolean // FHIR Composition — full free-text documents
 }
 
 export interface DataFilters {
-  // Conditions
-  conditionStatus: 'active' | 'all'
-
   // Problem list
   problemListStatus: 'active' | 'all'
+
+  // Encounters / visits
+  encounterTimeRange: TimeRange
 
   // Medications
   medicationStatus: 'active' | 'all'
@@ -55,9 +60,14 @@ export interface DataFilters {
   vitalSignsTimeRange: TimeRange
   procedureVersion: 'latest' | 'all'
   procedureTimeRange: TimeRange
+  observationVersion: 'latest' | 'all'
+  observationTimeRange: TimeRange
 
   // Immunizations
   immunizationTimeRange: TimeRange
+
+  // Care plans
+  carePlanStatus: 'active' | 'all'
 }
 
 export interface ClinicalContextOptions {

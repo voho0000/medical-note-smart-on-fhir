@@ -6,7 +6,6 @@ import { patientInfoCategory } from './patient-info.category'
 import { vitalSignsCategory } from './vital-signs.category'
 import { problemListCategory } from './problem-list.category'
 import { encountersCategory } from './encounters.category'
-import { conditionsCategory } from './conditions.category'
 import { labReportsCategory } from './lab-reports.category'
 import { imagingReportsCategory } from './imaging-reports.category'
 import { proceduresCategory } from './procedures.category'
@@ -14,16 +13,22 @@ import { observationsCategory } from './observations.category'
 import { medicationsCategory } from './medications.category'
 import { allergiesCategory } from './allergies.category'
 import { immunizationsCategory } from './immunizations.category'
+import { advanceDirectivesCategory } from './consent.category'
+import { medicalDevicesCategory } from './device.category'
+import { carePlansCategory } from './care-plan.category'
+import { documentsCategory } from './composition.category'
 
 export function initializeCategories(): void {
   // Patient group
   registerDataCategory(patientInfoCategory)
   registerDataCategory(vitalSignsCategory)
   registerDataCategory(problemListCategory)
+  registerDataCategory(advanceDirectivesCategory)
+  registerDataCategory(medicalDevicesCategory)
+  registerDataCategory(carePlansCategory)
 
   // Visit group
   registerDataCategory(encountersCategory)
-  registerDataCategory(conditionsCategory)
 
   // Reports group
   registerDataCategory(labReportsCategory)
@@ -35,6 +40,9 @@ export function initializeCategories(): void {
   registerDataCategory(medicationsCategory)
   registerDataCategory(allergiesCategory)
   registerDataCategory(immunizationsCategory)
+
+  // Documents group
+  registerDataCategory(documentsCategory)
 }
 
 export {
@@ -42,12 +50,15 @@ export {
   vitalSignsCategory,
   problemListCategory,
   encountersCategory,
-  conditionsCategory,
   labReportsCategory,
   imagingReportsCategory,
   proceduresCategory,
   observationsCategory,
   medicationsCategory,
   allergiesCategory,
-  immunizationsCategory
+  immunizationsCategory,
+  advanceDirectivesCategory,
+  medicalDevicesCategory,
+  carePlansCategory,
+  documentsCategory
 }

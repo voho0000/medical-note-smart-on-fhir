@@ -35,16 +35,6 @@ export class GenerateClinicalContextUseCase {
       }
     }
 
-    // Conditions
-    if (selection.conditions && clinicalData.conditions.length > 0) {
-      const items = clinicalData.conditions
-        .map(c => c.code?.text || 'Unknown diagnosis')
-        .filter(Boolean)
-      if (items.length > 0) {
-        context.push({ title: "Patient's Conditions", items })
-      }
-    }
-
     // Medications
     if (selection.medications && clinicalData.medications.length > 0) {
       const filtered = clinicalData.medications

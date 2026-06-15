@@ -17,10 +17,22 @@ export const observationsCategory: DataCategory<Observation> = {
   group: 'reports',
   order: 65,
 
-  // Reuses vitalSignsTimeRange filter for consistency with neighbouring vital signs.
+  // Own version + time-range filters (decoupled from vital signs), matching the
+  // other report categories: 最新 dedups to the latest reading per analyte, 全部
+  // keeps every reading.
   filters: [
     {
-      key: 'vitalSignsTimeRange',
+      key: 'observationVersion',
+      type: 'select',
+      label: 'Version',
+      options: [
+        { value: 'latest', label: 'Latest Only' },
+        { value: 'all', label: 'All Readings' }
+      ],
+      defaultValue: 'latest'
+    },
+    {
+      key: 'observationTimeRange',
       type: 'select',
       label: 'Time Range',
       options: [
@@ -35,8 +47,6 @@ export const observationsCategory: DataCategory<Observation> = {
     }
   ],
 
-  filterComponentKey: 'vitalSigns',
-
   extractData: (clinicalData) => {
     // Leftover observations only: NOT lab (-> Lab Reports), NOT imaging
     // (-> Imaging Reports), NOT vital (-> Vital Signs). The exclusion rules are
@@ -45,42 +55,47 @@ export const observationsCategory: DataCategory<Observation> = {
   },
 
   getCount: (data, filters) => {
-    const timeRange = (filters?.vitalSignsTimeRange as string) || 'all'
+    const timeRange = (filters?.observationTimeRange as string) || 'all'
     const filtered = timeRange === 'all'
       ? data
       : data.filter((obs) => isWithinTimeRange(obs.effectiveDateTime, timeRange))
 
-    const latestByCode = new Map<string, Observation>()
-    for (const obs of filtered) {
-      const code = obs.code?.text || 'Unknown'
-      const existing = latestByCode.get(code)
-      if (!existing || (obs.effectiveDateTime || '') > (existing.effectiveDateTime || '')) {
-        latestByCode.set(code, obs)
-      }
-    }
-    return latestByCode.size
+    // 全部 → every reading; 最新 → one (latest) per analyte.
+    const version = (filters?.observationVersion as string) || 'latest'
+    if (version === 'all') return filtered.length
+    const codes = new Set<string>()
+    for (const obs of filtered) codes.add(obs.code?.text || 'Unknown')
+    return codes.size
   },
 
   getContextSection: (data, filters): ClinicalContextSection | null => {
     if (data.length === 0) return null
 
-    const timeRange = (filters?.vitalSignsTimeRange as string) || 'all'
+    const timeRange = (filters?.observationTimeRange as string) || 'all'
     const filtered = timeRange === 'all'
       ? data
       : data.filter((obs) => isWithinTimeRange(obs.effectiveDateTime, timeRange))
 
     if (filtered.length === 0) return null
 
-    const latestByCode = new Map<string, Observation>()
-    for (const obs of filtered) {
-      const code = obs.code?.text || 'Unknown'
-      const existing = latestByCode.get(code)
-      if (!existing || (obs.effectiveDateTime || '') > (existing.effectiveDateTime || '')) {
-        latestByCode.set(code, obs)
+    const version = (filters?.observationVersion as string) || 'latest'
+    let toShow: Observation[]
+    if (version === 'all') {
+      // Newest-first so the AI reads the most recent readings first.
+      toShow = [...filtered].sort((a, b) => (b.effectiveDateTime || '').localeCompare(a.effectiveDateTime || ''))
+    } else {
+      const latestByCode = new Map<string, Observation>()
+      for (const obs of filtered) {
+        const code = obs.code?.text || 'Unknown'
+        const existing = latestByCode.get(code)
+        if (!existing || (obs.effectiveDateTime || '') > (existing.effectiveDateTime || '')) {
+          latestByCode.set(code, obs)
+        }
       }
+      toShow = Array.from(latestByCode.values())
     }
 
-    const items = Array.from(latestByCode.values())
+    const items = toShow
       .map((obs) => {
         const value = obs.valueQuantity?.value ?? obs.valueString
         const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ''

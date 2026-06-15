@@ -1,41 +1,93 @@
-// Lab Reports Category
+// Lab Reports Category — presented as a per-analyte TIME SERIES so the AI can
+// see trends (e.g. Creatinine 1.2 → 1.5 → 2.0 = worsening renal function).
+// Lab values are intentionally NOT scattered under each visit in the encounter
+// view; the trend lives here, in one place, undivided.
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
 import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
-import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 
-// Union type for lab data (can be DiagnosticReport or standalone Observation)
-// Using shared FHIR types following SSOT principle
+// Union type for lab data (DiagnosticReport or standalone Observation)
 type LabData = DiagnosticReport | Observation
+
+// Cap the trend at the most recent N readings per analyte to keep the context
+// bounded; older points are summarised as "…(N earlier)".
+const MAX_TREND_POINTS = 8
 
 function isObservation(item: LabData): item is Observation {
   return (item as any).resourceType === 'Observation' || !!(item as Observation).valueQuantity || !!(item as Observation).valueString
 }
 
-// Helper to get date from either DiagnosticReport or Observation
-const getLabDataDate = (item: LabData): string | undefined => {
-  if (isObservation(item)) {
-    return item.effectiveDateTime
-  }
-  // Prefer effectiveDateTime (exam date — 檢查日) over issued (report-release
-  // date). Must match the time-range filter below (effectiveDateTime || issued)
-  // and the reports display; getMostRecentDate would instead pick the LATER of
-  // the two (issued), making "latest version" dedup key off a different date
-  // than the range filter. See useReportsData rawDate.
-  return item.effectiveDateTime || item.issued
+interface LabPoint {
+  name: string
+  unit: string
+  value: string
+  date?: string
+  interp?: string
 }
 
-// Helper to get latest lab data by name
-const getLatestLabData = (items: LabData[]): LabData[] => {
-  return getLatestByName(
-    items,
-    (item) => getCodeableConceptText(item.code),
-    getLabDataDate
-  )
+function obsToLabPoint(o: any): LabPoint | null {
+  const name = o?.code?.text || o?.code?.coding?.[0]?.display || 'Lab'
+  const raw = o?.valueQuantity?.value ?? o?.valueString
+  if (raw === undefined || raw === null || raw === '') return null
+  const value = typeof raw === 'number' ? formatNumberSmart(raw) : String(raw)
+  const unit = o?.valueQuantity?.unit || ''
+  const date = o?.effectiveDateTime
+  const interp = o?.interpretation?.coding?.[0]?.code || o?.interpretation?.text || undefined
+  return { name, unit, value, date, interp }
 }
+
+interface NarrativeReport {
+  text: string
+  date?: string
+}
+
+// Flatten lab data into individual analyte readings (+ narrative conclusions for
+// reports with no numeric results, e.g. microbiology / pathology).
+function collectLabPoints(
+  data: LabData[],
+  allObservations: Observation[],
+): { points: LabPoint[]; conclusions: NarrativeReport[] } {
+  const points: LabPoint[] = []
+  const conclusions: NarrativeReport[] = []
+
+  for (const item of data) {
+    if (isObservation(item)) {
+      const p = obsToLabPoint(item)
+      if (p) points.push(p)
+      continue
+    }
+
+    const report = item as DiagnosticReport
+    const resolved = (report.result ?? [])
+      .map((r: any) => {
+        const id = r?.reference?.split('/').pop()
+        return id ? allObservations.find((o) => o.id === id) : undefined
+      })
+      .filter(Boolean) as Observation[]
+
+    let added = 0
+    for (const o of resolved) {
+      const p = obsToLabPoint(o)
+      if (p) {
+        points.push(p)
+        added++
+      }
+    }
+    if (added === 0 && report.conclusion) {
+      conclusions.push({
+        text: `${report.code?.text || 'Report'}: ${report.conclusion}`,
+        date: report.effectiveDateTime || report.issued,
+      })
+    }
+  }
+
+  return { points, conclusions }
+}
+
+const shortDate = (d?: string): string => (d ? d.slice(0, 10) : '')
 
 export const labReportsCategory: DataCategory<LabData> = {
   id: 'labReports',
@@ -45,17 +97,17 @@ export const labReportsCategory: DataCategory<LabData> = {
   descriptionKey: 'dataSelection.labReportsDesc',
   group: 'reports',
   order: 40,
-  
+
   filters: [
     {
       key: 'labReportVersion',
       type: 'select',
       label: 'Report Version',
       options: [
-        { value: 'latest', label: 'Latest Only' },
-        { value: 'all', label: 'All Reports' }
+        { value: 'latest', label: 'Latest value' },
+        { value: 'all', label: 'Full trend' },
       ],
-      defaultValue: 'latest'
+      defaultValue: 'all',
     },
     {
       key: 'labReportTimeRange',
@@ -67,19 +119,18 @@ export const labReportsCategory: DataCategory<LabData> = {
         { value: '3m', label: 'Last 3 Months' },
         { value: '6m', label: 'Last 6 Months' },
         { value: '1y', label: 'Last Year' },
-        { value: 'all', label: 'All Time' }
+        { value: 'all', label: 'All Time' },
       ],
-      defaultValue: '6m'
-    }
+      defaultValue: '6m',
+    },
   ],
-  
+
   filterComponentKey: 'labReport',
-  
+
   extractData: (clinicalData) => {
     // Lab DiagnosticReports + standalone lab observations. The standalone-obs
     // dedup (skip any observation already attached to a report) lives in the
-    // shared SSOT selector — see src/core/utils/observation-selectors.ts — so
-    // the "is this a report member?" rule isn't re-derived per feature.
+    // shared SSOT selector — see src/core/utils/observation-selectors.ts.
     const reports = clinicalData?.diagnosticReports || []
     const labReports = reports.filter((report: DiagnosticReport) =>
       inferGroupFromCategory(report.category) === 'lab'
@@ -87,128 +138,72 @@ export const labReportsCategory: DataCategory<LabData> = {
     const standaloneLabObs = selectLabOrphanObservations(clinicalData)
     return [...labReports, ...standaloneLabObs] as unknown as LabData[]
   },
-  
+
+  // 最新 → distinct analytes (one latest value each); 全部 → every reading. So
+  // the badge tracks the version filter (matches Other Observations).
   getCount: (data, filters, allClinicalData) => {
-    // Filter out items without content
-    let filtered = data.filter(item => {
-      // For standalone observations, they always have content (valueQuantity or valueString)
-      if (isObservation(item)) {
-        return !!(item.valueQuantity || item.valueString)
-      }
-      
-      // For DiagnosticReports, check if they have observations, conclusion, or notes
-      const report = item as DiagnosticReport
-      const hasObservations = report.result && report.result.length > 0
-      const hasConclusion = !!report.conclusion
-      const hasNotes = Array.isArray((report as any).note) && (report as any).note.length > 0
-      
-      return hasObservations || hasConclusion || hasNotes
-    })
-    
-    // Apply time range filter - with safe access and default value
-    const timeRange = (filters?.labReportTimeRange as string) || 'all'
-    if (timeRange && timeRange !== 'all') {
-      filtered = filtered.filter(item => {
-        const date = isObservation(item) 
-          ? item.effectiveDateTime 
-          : ((item as DiagnosticReport).effectiveDateTime || (item as DiagnosticReport).issued)
-        return isWithinTimeRange(date, timeRange)
-      })
-    }
-    
-    // Apply version filter - with safe access and default value
+    const { points } = collectLabPoints(data, allClinicalData?.observations || [])
+    const range = (filters?.labReportTimeRange as string) || 'all'
+    const inRange = range === 'all' ? points : points.filter((p) => isWithinTimeRange(p.date, range))
     const version = (filters?.labReportVersion as string) || 'latest'
-    if (version === 'latest') {
-      filtered = getLatestLabData(filtered)
-    }
-    
-    return filtered.length
+    if (version === 'all') return inRange.length
+    return new Set(inRange.map((p) => p.name)).size
   },
-  
+
   getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
     if (data.length === 0) return null
-    
-    let filtered = data
-    
-    // Apply time range filter - with safe access and default value
-    const timeRange = (filters?.labReportTimeRange as string) || 'all'
-    if (timeRange && timeRange !== 'all') {
-      filtered = filtered.filter(item => {
-        const date = isObservation(item) 
-          ? item.effectiveDateTime 
-          : ((item as DiagnosticReport).effectiveDateTime || (item as DiagnosticReport).issued)
-        return isWithinTimeRange(date, timeRange)
-      })
-    }
-    
-    if (filtered.length === 0) {
-      return { title: 'Lab Reports', items: ['No lab reports found within the selected time range.'] }
-    }
-    
-    // Apply version filter - with safe access and default value
+
+    const range = (filters?.labReportTimeRange as string) || 'all'
     const version = (filters?.labReportVersion as string) || 'latest'
-    if (version === 'latest') {
-      filtered = getLatestLabData(filtered)
+    const { points, conclusions } = collectLabPoints(data, allClinicalData?.observations || [])
+
+    const inRange = range === 'all' ? points : points.filter((p) => isWithinTimeRange(p.date, range))
+
+    // Group readings by analyte.
+    const byName = new Map<string, LabPoint[]>()
+    for (const p of inRange) {
+      const arr = byName.get(p.name)
+      if (arr) arr.push(p)
+      else byName.set(p.name, [p])
     }
-    
-    // Get observations for reports
-    const observations = allClinicalData?.observations || []
-    
+
     const items: string[] = []
-    filtered.forEach(item => {
-      // Handle standalone observations
-      if (isObservation(item)) {
-        const obs = item as Observation
-        const value = obs.valueQuantity?.value ?? obs.valueString
-        const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ''
-        const datePart = obs.effectiveDateTime 
-          ? ` (${new Date(obs.effectiveDateTime).toLocaleDateString()})` 
-          : ''
-        
-        if (value !== undefined && value !== null) {
-          const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
-          items.push(`${obs.code?.text || 'Lab Test'}: ${formattedValue}${unit}${datePart}`)
-        }
-        return
+    for (const name of [...byName.keys()].sort()) {
+      const series = byName.get(name)!.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      const unit = series[series.length - 1].unit
+      const head = `${name}${unit ? ` (${unit})` : ''}`
+
+      if (version === 'latest') {
+        const last = series[series.length - 1]
+        const flag = last.interp ? ` [${last.interp}]` : ''
+        const date = last.date ? ` (${shortDate(last.date)})` : ''
+        items.push(`${head}: ${last.value}${flag}${date}`)
+      } else {
+        const recent = series.slice(-MAX_TREND_POINTS)
+        const omitted = series.length - recent.length
+        const trend = recent
+          .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${p.date ? ` (${shortDate(p.date)})` : ''}`)
+          .join(' → ')
+        items.push(`${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`)
       }
-      
-      // Handle DiagnosticReports
-      const report = item as DiagnosticReport
-      const reportObs: Observation[] = []
-      report.result?.forEach((result: any) => {
-        const id = result.reference?.split('/').pop()
-        if (id) {
-          const obs = observations.find((o: Observation) => o.id === id)
-          if (obs) reportObs.push(obs)
-        }
-      })
-      
-      const datePart = report.effectiveDateTime 
-        ? ` (${new Date(report.effectiveDateTime).toLocaleDateString()})` 
-        : ''
-      
-      if (reportObs.length > 0) {
-        items.push(`${report.code?.text || 'Lab Panel'}${datePart}`)
-        reportObs.forEach(obs => {
-          const value = obs.valueQuantity?.value ?? obs.valueString
-          const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ''
-          if (value !== undefined && value !== null) {
-            const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
-            items.push(`  • ${obs.code?.text || 'Test'}: ${formattedValue}${unit}`)
-          }
-        })
-      } else if (report.conclusion) {
-        items.push(`${report.code?.text || 'Report'}: ${report.conclusion}${datePart}`)
-      }
-    })
-    
+    }
+
+    // Narrative reports without numeric results (microbiology / pathology).
+    const inRangeConclusions = range === 'all'
+      ? conclusions
+      : conclusions.filter((c) => isWithinTimeRange(c.date, range))
+    if (inRangeConclusions.length > 0) {
+      if (items.length > 0) items.push('')
+      inRangeConclusions
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+        .forEach((c) => items.push(`${c.text}${c.date ? ` (${shortDate(c.date)})` : ''}`))
+    }
+
     if (items.length === 0) return null
-    
-    const reportVersion = (filters?.labReportVersion as string) || 'latest'
-    const title = reportVersion === 'latest' 
-      ? 'Lab Reports (Latest Only)' 
-      : 'Lab Reports'
-    
+
+    const title = version === 'latest'
+      ? 'Lab Reports (latest value per test)'
+      : 'Lab Reports (trend, oldest → newest)'
     return { title, items }
-  }
+  },
 }
