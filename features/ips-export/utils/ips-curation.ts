@@ -15,6 +15,7 @@
 // Pure functions only (no React) so the builder/tests can call this directly.
 
 import type {
+  CarePlanEntity,
   ClinicalDataCollection,
   ConditionEntity,
   DiagnosticReportEntity,
@@ -164,15 +165,13 @@ function curateConditions(
   selection: DataSelection,
   filters: DataFilters,
 ): ConditionEntity[] {
-  if (!selection.problemList && !selection.conditions) return []
+  if (!selection.problemList) return []
   const problemItems = data.conditions.filter(isProblemListItem)
   // Prefer the curated problem-list-item set (the app's Problem List view).
   // Fall back to all conditions when the source doesn't tag problem-list-item
-  // (e.g. non-bridge FHIR) so the required Problem List section isn't empty.
-  const usePLI = selection.problemList && problemItems.length > 0
-  const base = usePLI ? problemItems : data.conditions
-  const status = usePLI ? filters.problemListStatus : filters.conditionStatus
-  const filtered = status === 'active' ? base.filter(isActiveCondition) : base
+  // (e.g. non-bridge FHIR) so the IPS-required Problem List section isn't empty.
+  const base = problemItems.length > 0 ? problemItems : data.conditions
+  const filtered = filters.problemListStatus === 'active' ? base.filter(isActiveCondition) : base
   return annotateConditionsWithSct(filtered)
 }
 
@@ -333,12 +332,24 @@ function curateProcedures(
   return procs
 }
 
+function curateCarePlans(
+  data: ClinicalDataCollection,
+  selection: DataSelection,
+  filters: DataFilters,
+): CarePlanEntity[] {
+  if (!selection.carePlans) return []
+  return filters.carePlanStatus === 'active'
+    ? data.carePlans.filter((cp) => cp.status === 'active')
+    : data.carePlans
+}
+
 /**
  * Produce a curated ClinicalDataCollection for IPS assembly by honoring the
- * data-selection tab's category toggles + filters. Sections without a toggle
- * (devices, care plans, advance directives) and resources the IPS builder
- * doesn't read (encounters, document references, compositions) pass through
- * unchanged.
+ * data-selection tab's category toggles + filters. Advance directives, devices
+ * and care plans now honor their toggles too; resources the IPS builder doesn't
+ * read (encounters, document references, compositions) pass through unchanged.
+ * Documents (Composition) are intentionally chat/insights-only — not folded
+ * back into the IPS, which is itself a Composition.
  */
 export function curateForIps(input: CurateForIpsInput): ClinicalDataCollection {
   const { data, selection, filters } = input
@@ -353,5 +364,8 @@ export function curateForIps(input: CurateForIpsInput): ClinicalDataCollection {
     observations: curateObservations(data, selection, filters, now),
     vitalSigns: curateVitalSigns(data, selection, filters, now),
     procedures: curateProcedures(data, selection, filters, now),
+    consents: selection.advanceDirectives ? data.consents : [],
+    devices: selection.medicalDevices ? data.devices : [],
+    carePlans: curateCarePlans(data, selection, filters),
   }
 }

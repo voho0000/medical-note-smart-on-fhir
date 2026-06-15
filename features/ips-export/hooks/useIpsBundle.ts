@@ -35,13 +35,16 @@ export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBun
   const { t } = useLanguage()
   const { data, isLoading: dataLoading, error } = useClinicalDataQuery()
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
-  const { selectedData, filters } = useDataSelection()
+  const { getProfile } = useDataSelection()
+  const ipsProfile = getProfile('ips')
+  const ipsSelection = ipsProfile.selection
+  const ipsFilters = ipsProfile.filters
 
-  // Curate the full collection down to the user's 資料選擇 (data-selection)
-  // choices so the IPS is a coherent snapshot, not a multi-year data dump.
+  // Curate the full collection down to the IPS consumer's 資料選擇 (data-
+  // selection) choices so the IPS is a coherent snapshot, not a multi-year dump.
   const curated = useMemo(
-    () => (data ? curateForIps({ data, selection: selectedData, filters }) : null),
-    [data, selectedData, filters],
+    () => (data ? curateForIps({ data, selection: ipsSelection, filters: ipsFilters }) : null),
+    [data, ipsSelection, ipsFilters],
   )
 
   const labels = useMemo<Partial<IpsSectionLabels>>(() => {
