@@ -40,7 +40,10 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
       const outcome = getConceptText(procedure?.outcome)
       const category = getConceptText(procedure?.category)
       const location = procedure?.location?.display
-      // Indication / diagnosis (bridge ≥0.18.15: bilingual ICD-10-CM reasonCode).
+      // Claim diagnosis (bridge ≥0.18.15: bilingual ICD-10-CM reasonCode). This
+      // is the visit/admission's NHI 申報 diagnosis — shared across every
+      // procedure of that stay, NOT a per-procedure indication — so it's
+      // labelled 申報診斷 / "Claim diagnosis", not 原因 / "Reason".
       // Follow the UI locale — zh shows the 繁中 name (text), en the English
       // (coding.display) — and prefix with the ICD-10-CM code to match the
       // code rows. Falls back to whichever language is present.

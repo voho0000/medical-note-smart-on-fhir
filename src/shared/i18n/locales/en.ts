@@ -436,7 +436,7 @@ export const en = {
     orderCode: 'NHI order code',
     classificationCode: 'ICD-10-PCS code',
     category: 'Category',
-    reason: 'Reason',
+    reason: 'Claim diagnosis',
     outcome: 'Outcome',
     location: 'Location',
     bodySite: 'Body Site',

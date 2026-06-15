@@ -440,7 +440,7 @@ export const zhTW = {
     orderCode: '健保醫令碼',
     classificationCode: 'ICD-10-PCS',
     category: '類別',
-    reason: '原因',
+    reason: '申報診斷',
     outcome: '結果',
     location: '地點',
     bodySite: '身體部位',
