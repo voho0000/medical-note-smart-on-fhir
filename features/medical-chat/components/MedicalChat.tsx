@@ -67,7 +67,7 @@ export default function MedicalChat() {
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
-  const { getFullClinicalContext } = useClinicalContext()
+  const { getFullClinicalContext } = useClinicalContext('chat')
   const { addTemplate, updateTemplate, saveTemplates, maxTemplates, templates } = useChatTemplates()
   const input = useChatInput()
   const imageUpload = useImageUpload()

@@ -101,10 +101,18 @@ function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
     )
   }
 
-  // Wrap with ScrollArea for non-chat features
+  // Wrap with ScrollArea for non-chat features.
+  //
+  // Radix renders the viewport's content in a `display:table; min-width:100%`
+  // wrapper (shrink-to-fit), which GROWS to a child's max-content width. A
+  // child with a wide intrinsic width — e.g. the data-selection preview
+  // <textarea> whose content has long unbreakable tokens like a drug name —
+  // therefore stretches the whole panel past the column and overflows the
+  // viewport horizontally. These panels only ever scroll vertically, so force
+  // that wrapper to `display:block` (= viewport width, content wraps).
   if (feature.id !== 'medical-chat') {
     return (
-      <ScrollArea className="h-full pr-2">
+      <ScrollArea className="h-full pr-2 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="py-2">
           <Component />
         </div>

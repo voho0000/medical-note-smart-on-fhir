@@ -37,7 +37,7 @@ export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
   const { panels: configPanels } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
-  const { getFullClinicalContext } = useClinicalContext()
+  const { getFullClinicalContext } = useClinicalContext('insights')
   const { isLoading: clinicalDataLoading, error: clinicalDataError } = useClinicalData()
   const { patientId } = useFhirContext()
   const model = useModel()

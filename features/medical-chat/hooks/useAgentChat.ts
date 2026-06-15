@@ -26,7 +26,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const { apiKey: openAiKey, geminiKey, perplexityKey, claudeKey } = useAllApiKeys()
   const { patient } = usePatient()
   const { locale, t } = useLanguage()
-  const { getFullClinicalContext } = useClinicalContext()
+  const { getFullClinicalContext } = useClinicalContext('chat')
   const { user, isAnonymous } = useAuth()
   // The proxy accepts any Firebase token — a real account OR an anonymous
   // (free-tier) one. Gate proxy use on "we have a token", not "real account".

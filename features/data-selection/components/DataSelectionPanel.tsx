@@ -55,6 +55,7 @@ export function DataSelectionPanel({
       </TabsList>
       <TabsContent value="selection">
         <DataSelectionTab
+          clinicalData={clinicalData}
           dataCategories={dataCategories}
           selectedData={selectedData}
           filters={filters}
