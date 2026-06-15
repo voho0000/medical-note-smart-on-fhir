@@ -64,4 +64,8 @@ export interface MedicationRow {
    *  'MedicationRequest'; IPS data uses 'MedicationStatement'. Drives the
    *  per-row source chip (only shown when the list is a mixed source). */
   sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
+  /** Lowercased bilingual search blob: drug name (中文 + English) + NHI code +
+   *  drug class (中/英) + indication ICD (碼 + 中/英) + 機構 + date tokens
+   *  (西元 + 民國). Lets the 用藥 search match regardless of UI language. */
+  searchHaystack: string
 }

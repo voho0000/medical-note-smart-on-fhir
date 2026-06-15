@@ -13,8 +13,8 @@
 // header keeps the left panel scannable.
 "use client"
 
-import { useState } from "react"
-import { Info } from "lucide-react"
+import { useMemo, useState } from "react"
+import { Info, Search, X } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -53,6 +53,21 @@ export function MedListCard() {
 
   const [tab, setTab] = useState<DataTab>('medications')
   const [view, setView] = useState<MedView>('list')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // 用藥 search — matches the bilingual searchHaystack on each row (drug name
+  // 中/英, NHI code, drug class, indication ICD, 機構, date incl. 民國). Both
+  // the list and the timeline view are filtered from the same query.
+  const q = searchQuery.trim().toLowerCase()
+  const filteredRows = useMemo(
+    () => (q ? rows.filter((r) => r.searchHaystack.includes(q)) : rows),
+    [rows, q],
+  )
+  const filteredMedications = useMemo(() => {
+    if (!q) return medications
+    const ids = new Set(filteredRows.map((r) => r.id))
+    return medications.filter((m: any) => ids.has(m?.id))
+  }, [medications, filteredRows, q])
 
   const tabMedicationsLabel = mt.tabMedications ?? '用藥'
   const tabAllergiesLabel = mt.tabAllergies ?? t.allergies.title
@@ -113,22 +128,46 @@ export function MedListCard() {
         </TabsList>
 
         <TabsContent value="medications" className="mt-0 space-y-3">
-          <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
-            {(['list', 'timeline'] as MedView[]).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                className={cn(
-                  'px-3 py-1 rounded-sm transition-colors',
-                  view === v
-                    ? 'bg-background text-foreground shadow-sm font-medium'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {v === 'list' ? listLabel : timelineLabel}
-              </button>
-            ))}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
+              {(['list', 'timeline'] as MedView[]).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={cn(
+                    'px-3 py-1 rounded-sm transition-colors',
+                    view === v
+                      ? 'bg-background text-foreground shadow-sm font-medium'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {v === 'list' ? listLabel : timelineLabel}
+                </button>
+              ))}
+            </div>
+            {/* Bilingual search — matches drug name (中/英), NHI code, class,
+                indication, 機構 and date (西元/民國); filters both views. */}
+            <div className="relative flex-1 min-w-[160px]">
+              <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={mt.searchPlaceholder ?? '搜尋藥名、分類、適應症、機構、日期…'}
+                className="w-full rounded-md border bg-background pl-7 pr-7 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label={mt.clearSearch ?? '清除'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
           {/* Card-level source hint: surfaces only when every row originated
               from a MedicationStatement (typical IPS dataset). Mixed lists
@@ -139,9 +178,13 @@ export function MedListCard() {
               <span>{sourceHintStatement}</span>
             </div>
           )}
-          {view === 'list' ? (
+          {q && filteredRows.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              {mt.searchNoMatch ?? '無符合的藥物'}
+            </div>
+          ) : view === 'list' ? (
             <MedicationList
-              medications={rows}
+              medications={filteredRows}
               isLoading={false}
               error={null}
               showSourceChip={sourceMix === 'mixed'}
@@ -149,7 +192,7 @@ export function MedListCard() {
               sourceChipStatementTooltip={sourceHintStatement}
             />
           ) : (
-            <MedicationTimeline medications={medications} />
+            <MedicationTimeline medications={filteredMedications} />
           )}
         </TabsContent>
 

@@ -11,6 +11,7 @@ import {
 import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpers'
 import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
+import { dateSearchTokens } from '@/src/shared/utils/date.utils'
 
 export function useMedicationRows(
   medications: any[],
@@ -173,6 +174,29 @@ export function useMedicationRows(
         ? rawIcdText.replace(/^[A-Z]\d+(\.\d+)?\s+/, '').trim() || undefined
         : undefined
 
+      // Bilingual search blob — collects BOTH languages of every field so the
+      // 用藥 search matches whether the user types 中文 or English, regardless
+      // of the active UI locale. Mirrors the visit/report search design.
+      // The indication (reasonCode = the visit's billing ICD) IS searched so a
+      // diagnosis code / name finds its meds — but the placeholder deliberately
+      // omits "適應症" so users don't assume every disease name resolves (it
+      // only matches when a med actually carries that billing diagnosis).
+      const cc = med.medicationCodeableConcept
+      const searchHaystack = [
+        cc?.text,                                    // 藥名 中文
+        cc?.coding?.[0]?.display,                    // 藥名 英文
+        cc?.coding?.[0]?.code,                       // NHI 藥碼
+        med.medicationReference?.display,            // fallback name
+        med?.category?.[0]?.text,                    // 分類 中文
+        med?.category?.[0]?.coding?.[0]?.display,    // 分類 英文
+        med?.reasonCode?.[0]?.text,                  // 適應症 中文
+        med?.reasonCode?.[0]?.coding?.[0]?.display,  // 適應症 英文
+        icdCode,                                     // 診斷 ICD 碼
+        pharmacy,                                    // 機構 / 藥局
+        ...dateSearchTokens(startDateRaw),           // 日期 西元 + 民國
+        ...dateSearchTokens(refillAgg?.firstDate),
+      ].filter(Boolean).join(' ').toLowerCase()
+
       return {
         id: med.id || Math.random().toString(36),
         title: medicationName,
@@ -195,6 +219,7 @@ export function useMedicationRows(
         refillCount,
         firstRefillDate,
         sourceResourceType: med._sourceResourceType,
+        searchHaystack,
         _startSortValue: startDateRaw ? new Date(startDateRaw).getTime() : 0
       }
     })
