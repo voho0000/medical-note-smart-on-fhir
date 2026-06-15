@@ -41,20 +41,21 @@ interface VisitItemProps {
 }
 
 const getTypeBadge = (type: VisitType, labels: any) => {
-  const typeMap = {
-    // 門診 blue, 急診 red, 住院 amber — the old 'secondary' grey was too faint
-    // for how important an inpatient stay is. className overrides the variant's
-    // background (tailwind-merge keeps the later class).
-    outpatient: { label: labels.outpatient, variant: "default" as const, className: '' },
-    inpatient: { label: labels.inpatient, variant: 'default' as const, className: 'bg-amber-500 text-white border-transparent hover:bg-amber-500' },
-    emergency: { label: labels.emergency, variant: 'destructive' as const, className: '' },
-    home: { label: labels.home, variant: 'outline' as const, className: '' },
-    virtual: { label: labels.virtual, variant: 'outline' as const, className: '' },
-    pharmacy: { label: labels.pharmacy || '藥局', variant: 'outline' as const, className: '' },
-    other: { label: labels.other, variant: 'outline' as const, className: '' }
+  // Soft pastel tints (light bg + same-hue border/text) so the type badge sits
+  // in the same visual register as the rest of the UI's chips. The earlier
+  // solid blue / red / amber badges were too heavy against the light layout.
+  // 門診 blue · 急診 rose · 住院 violet — still distinct at a glance.
+  const typeMap: Record<VisitType, { label: string; className: string }> = {
+    outpatient: { label: labels.outpatient, className: 'border-blue-200 bg-blue-50 text-blue-700' },
+    inpatient:  { label: labels.inpatient,  className: 'border-violet-200 bg-violet-50 text-violet-700' },
+    emergency:  { label: labels.emergency,  className: 'border-rose-200 bg-rose-50 text-rose-700' },
+    home:       { label: labels.home,       className: '' },
+    virtual:    { label: labels.virtual,    className: '' },
+    pharmacy:   { label: labels.pharmacy || '藥局', className: '' },
+    other:      { label: labels.other,      className: '' },
   }
-  const { label, variant, className } = typeMap[type] || typeMap.other
-  return <Badge variant={variant} className={className || undefined}>{label}</Badge>
+  const { label, className } = typeMap[type] || typeMap.other
+  return <Badge variant="outline" className={className || undefined}>{label}</Badge>
 }
 
 export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {

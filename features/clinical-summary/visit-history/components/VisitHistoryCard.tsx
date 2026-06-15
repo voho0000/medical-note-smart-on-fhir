@@ -21,7 +21,7 @@ import { VisitItem } from "./VisitItem"
 
 type VisitTypeFilter = 'all' | 'outpatient' | 'inpatient' | 'emergency' | 'pharmacy'
 type SortMode = 'date-desc' | 'date-asc' | 'abnormal'
-type ContentFlag = 'tests' | 'medications' | 'procedures'
+type ContentFlag = 'tests' | 'medications' | 'procedures' | 'discharge'
 
 const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'inpatient', 'emergency', 'pharmacy']
 
@@ -76,6 +76,10 @@ export function VisitHistoryCard() {
     }
     return map
   }, [documentEntries])
+  const hasAnyDischargeSummary = useMemo(
+    () => documentEntries.some((e) => e.isDischargeSummary),
+    [documentEntries],
+  )
 
   // Unique institutions for the dropdown
   const institutions = useMemo(() => {
@@ -104,6 +108,7 @@ export function VisitHistoryCard() {
     const wantsTests = contentFlags.has('tests')
     const wantsMeds  = contentFlags.has('medications')
     const wantsProcs = contentFlags.has('procedures')
+    const wantsDischarge = contentFlags.has('discharge')
 
     const result = visitHistory.filter((v) => {
       // type
@@ -117,6 +122,11 @@ export function VisitHistoryCard() {
         if (wantsTests && !s.hasTests) return false
         if (wantsMeds  && !s.hasMedications) return false
         if (wantsProcs && !s.hasProcedures) return false
+      }
+      // 含出院病摘 — only visits with a linked 出院病摘 / discharge summary.
+      if (wantsDischarge) {
+        const docs = docsByEncounter.get(v.id)
+        if (!docs?.some((d) => d.isDischargeSummary)) return false
       }
       // search across visit-level fields + content (tests, medications,
       // procedures, diagnoses) + the visit date in multiple common formats
@@ -174,7 +184,7 @@ export function VisitHistoryCard() {
     })()
 
     return [...result].sort(cmp)
-  }, [visitHistory, typeFilter, institutionFilter, contentFlags, searchQuery, sortMode, visitStats])
+  }, [visitHistory, typeFilter, institutionFilter, contentFlags, searchQuery, sortMode, visitStats, docsByEncounter])
 
   // ── Handlers ──────────────────────────────────────────────────────────
   const handleFilterChange = (f: VisitTypeFilter) => {
@@ -319,6 +329,15 @@ export function VisitHistoryCard() {
                 active={contentFlags.has('procedures')}
                 onClick={() => toggleContent('procedures')}
               />
+              {/* 含出院病摘 — only offered when the dataset actually has one
+                  (discharge summaries are inpatient-only and relatively rare). */}
+              {hasAnyDischargeSummary && (
+                <ContentToggle
+                  label={(vt as any).hasDischarge ?? '含出院病摘'}
+                  active={contentFlags.has('discharge')}
+                  onClick={() => toggleContent('discharge')}
+                />
+              )}
               {hasActiveFilters && (
                 <button
                   type="button"
