@@ -4,8 +4,10 @@ const makeSelection = (value: boolean): DataSelection => ({
   patientInfo: value,
   vitalSigns: value,
   problemList: value,
+  advanceDirectives: value,
+  medicalDevices: value,
+  carePlans: value,
   encounters: value,
-  conditions: value,
   labReports: value,
   imagingReports: value,
   procedures: value,
@@ -13,11 +15,12 @@ const makeSelection = (value: boolean): DataSelection => ({
   medications: value,
   allergies: value,
   immunizations: value,
+  documents: value,
 })
 
 const makeFilters = (range: TimeRange = 'all'): DataFilters => ({
-  conditionStatus: 'active',
   problemListStatus: 'active',
+  encounterTimeRange: range,
   medicationStatus: 'active',
   medicationChronic: 'all',
   medicationTimeRange: range,
@@ -29,7 +32,10 @@ const makeFilters = (range: TimeRange = 'all'): DataFilters => ({
   vitalSignsTimeRange: range,
   procedureVersion: 'latest',
   procedureTimeRange: range,
+  observationVersion: 'latest',
+  observationTimeRange: range,
   immunizationTimeRange: range,
+  carePlanStatus: 'active',
 })
 
 describe('clinical-context.entity', () => {
@@ -47,14 +53,14 @@ describe('clinical-context.entity', () => {
   describe('DataSelection', () => {
     it('should have all data categories', () => {
       const selection = makeSelection(true)
-      expect(Object.keys(selection)).toHaveLength(12)
+      expect(Object.keys(selection)).toHaveLength(15)
     })
 
     it('should allow selective data inclusion', () => {
       const selection: DataSelection = {
         ...makeSelection(false),
         patientInfo: true,
-        conditions: true,
+        encounters: true,
       }
       expect(selection.patientInfo).toBe(true)
       expect(selection.medications).toBe(false)
@@ -64,7 +70,7 @@ describe('clinical-context.entity', () => {
   describe('DataFilters', () => {
     it('should have all filter options', () => {
       const filters = makeFilters()
-      expect(filters.conditionStatus).toBe('active')
+      expect(filters.problemListStatus).toBe('active')
       expect(filters.medicationChronic).toBe('all')
       expect(filters.immunizationTimeRange).toBe('all')
     })

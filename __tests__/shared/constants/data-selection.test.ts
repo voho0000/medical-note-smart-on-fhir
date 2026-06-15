@@ -1,17 +1,83 @@
 import {
   DEFAULT_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
+  DATA_SELECTION_PRESETS,
+  resolveActivePreset,
+  switchPreset,
   STORAGE_KEYS
 } from '@/src/shared/constants/data-selection.constants'
 
 describe('data-selection.constants', () => {
+  describe('switchPreset — per-preset memory (tab-like)', () => {
+    const start = {
+      selection: { ...DEFAULT_DATA_SELECTION },
+      filters: { ...DEFAULT_DATA_FILTERS },
+      activePreset: 'general' as const,
+      presetMemory: {},
+    }
+
+    it('switching to a never-visited preset applies its factory config + remembers the one you left', () => {
+      const s = switchPreset(start, 'followUp')
+      expect(s.activePreset).toBe('followUp')
+      expect(s.selection).toEqual(DATA_SELECTION_PRESETS.followUp.selection)
+      expect(s.presetMemory.general).toEqual({ selection: start.selection, filters: start.filters })
+    })
+
+    it('remembers each scenario tweak across a round-trip', () => {
+      const customized = { ...start, selection: { ...start.selection, encounters: false } }
+      const toFollow = switchPreset(customized, 'followUp')
+      const back = switchPreset(toFollow, 'general')
+      expect(back.activePreset).toBe('general')
+      expect(back.selection.encounters).toBe(false) // the tweak survived
+    })
+
+    it('switching to the already-active preset never wipes current tweaks', () => {
+      const customized = { ...start, selection: { ...start.selection, encounters: false } }
+      const same = switchPreset(customized, 'general')
+      expect(same.selection.encounters).toBe(false)
+    })
+  })
+
+  describe('resolveActivePreset — always exactly one of 通用/初診/追蹤', () => {
+    it('the general baseline (= default) resolves to general', () => {
+      expect(resolveActivePreset(DEFAULT_DATA_SELECTION, DEFAULT_DATA_FILTERS)).toBe('general')
+    })
+
+    it('an exact 初診 profile resolves to newPatient', () => {
+      const p = DATA_SELECTION_PRESETS.newPatient
+      expect(resolveActivePreset(p.selection, p.filters)).toBe('newPatient')
+    })
+
+    it('an exact 追蹤 profile resolves to followUp', () => {
+      const p = DATA_SELECTION_PRESETS.followUp
+      expect(resolveActivePreset(p.selection, p.filters)).toBe('followUp')
+    })
+
+    it('a hand-tuned profile falls back to general (never null)', () => {
+      const tuned = { ...DEFAULT_DATA_SELECTION, immunizations: false } // off the baseline
+      expect(resolveActivePreset(tuned, DEFAULT_DATA_FILTERS)).toBe('general')
+    })
+
+    it('初診 is distinct from the general baseline (其他觀察 on)', () => {
+      expect(DATA_SELECTION_PRESETS.newPatient.selection.observations).toBe(true)
+      expect(DEFAULT_DATA_SELECTION.observations).toBe(false)
+    })
+
+    it('the documents toggle is sticky — it does NOT change the active preset', () => {
+      const p = DATA_SELECTION_PRESETS.newPatient
+      // 初診 with documents either way still resolves to newPatient
+      expect(resolveActivePreset({ ...p.selection, documents: true }, p.filters)).toBe('newPatient')
+      expect(resolveActivePreset({ ...p.selection, documents: false }, p.filters)).toBe('newPatient')
+      // general baseline with documents on still resolves to general
+      expect(resolveActivePreset({ ...DEFAULT_DATA_SELECTION, documents: true }, DEFAULT_DATA_FILTERS)).toBe('general')
+    })
+  })
   describe('DEFAULT_DATA_SELECTION', () => {
     it('should have all data categories defined', () => {
       expect(DEFAULT_DATA_SELECTION.patientInfo).toBeDefined()
       expect(DEFAULT_DATA_SELECTION.vitalSigns).toBeDefined()
       expect(DEFAULT_DATA_SELECTION.problemList).toBeDefined()
       expect(DEFAULT_DATA_SELECTION.encounters).toBeDefined()
-      expect(DEFAULT_DATA_SELECTION.conditions).toBeDefined()
       expect(DEFAULT_DATA_SELECTION.labReports).toBeDefined()
       expect(DEFAULT_DATA_SELECTION.imagingReports).toBeDefined()
       expect(DEFAULT_DATA_SELECTION.procedures).toBeDefined()
@@ -21,23 +87,26 @@ describe('data-selection.constants', () => {
       expect(DEFAULT_DATA_SELECTION.immunizations).toBeDefined()
     })
 
-    it('should default conditions OFF (covered by encounters)', () => {
-      expect(DEFAULT_DATA_SELECTION.conditions).toBe(false)
+    it('should default orphan observations OFF (low-signal noise)', () => {
+      expect(DEFAULT_DATA_SELECTION.observations).toBe(false)
     })
 
-    it('should default orphan observations ON', () => {
-      expect(DEFAULT_DATA_SELECTION.observations).toBe(true)
+    it('should default advance directives ON (safety-critical)', () => {
+      expect(DEFAULT_DATA_SELECTION.advanceDirectives).toBe(true)
+    })
+
+    it('should default documents ON (latest admission summary, bounded by documentMode)', () => {
+      expect(DEFAULT_DATA_SELECTION.documents).toBe(true)
     })
   })
 
   describe('DEFAULT_DATA_FILTERS', () => {
     it('should have all filter options defined', () => {
-      expect(DEFAULT_DATA_FILTERS.conditionStatus).toBe('active')
       expect(DEFAULT_DATA_FILTERS.problemListStatus).toBe('active')
       expect(DEFAULT_DATA_FILTERS.medicationStatus).toBe('active')
       expect(DEFAULT_DATA_FILTERS.medicationChronic).toBe('all')
       expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('all')
-      expect(DEFAULT_DATA_FILTERS.labReportVersion).toBe('latest')
+      expect(DEFAULT_DATA_FILTERS.labReportVersion).toBe('all')
       expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBe('6m')
       expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.imagingReportTimeRange).toBe('1y')

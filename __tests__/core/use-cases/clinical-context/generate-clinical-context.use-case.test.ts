@@ -80,8 +80,10 @@ describe('GenerateClinicalContextUseCase', () => {
       patientInfo: true,
       vitalSigns: true,
       problemList: false,
+      advanceDirectives: false,
+      medicalDevices: false,
+      carePlans: false,
       encounters: false,
-      conditions: true,
       labReports: true,
       imagingReports: false,
       procedures: true,
@@ -89,10 +91,11 @@ describe('GenerateClinicalContextUseCase', () => {
       medications: true,
       allergies: true,
       immunizations: false,
+      documents: false,
     },
     filters: {
-      conditionStatus: 'all',
       problemListStatus: 'all',
+      encounterTimeRange: 'all',
       medicationStatus: 'all',
       medicationChronic: 'all',
       medicationTimeRange: 'all',
@@ -104,7 +107,10 @@ describe('GenerateClinicalContextUseCase', () => {
       vitalSignsTimeRange: 'all',
       procedureVersion: 'all',
       procedureTimeRange: 'all',
+      observationVersion: 'all',
+      observationTimeRange: 'all',
       immunizationTimeRange: 'all',
+      carePlanStatus: 'all',
     }
   }
 
@@ -116,15 +122,6 @@ describe('GenerateClinicalContextUseCase', () => {
       expect(patientSection).toBeDefined()
       expect(patientSection?.items).toContain('Gender: Male')
       expect(patientSection?.items).toContain('Age: 34')
-    })
-
-    it('should generate conditions section', () => {
-      const result = useCase.execute(mockPatient, mockClinicalData, defaultOptions)
-
-      const conditionsSection = result.find(s => s.title === "Patient's Conditions")
-      expect(conditionsSection).toBeDefined()
-      expect(conditionsSection?.items).toContain('Diabetes Type 2')
-      expect(conditionsSection?.items).toContain('Hypertension')
     })
 
     it('should generate medications section', () => {
@@ -238,7 +235,6 @@ describe('GenerateClinicalContextUseCase', () => {
       const result = useCase.execute(mockPatient, mockClinicalData, selectiveOptions)
 
       expect(result.find(s => s.title === 'Patient Information')).toBeDefined()
-      expect(result.find(s => s.title === "Patient's Conditions")).toBeDefined()
       expect(result.find(s => s.title === "Patient's Medications")).toBeUndefined()
       expect(result.find(s => s.title === "Patient's Allergies")).toBeUndefined()
     })

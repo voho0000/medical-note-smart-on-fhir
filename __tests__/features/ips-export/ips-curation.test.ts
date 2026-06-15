@@ -185,7 +185,7 @@ describe('curateForIps — problem list', () => {
     ]
     const out = curateForIps({
       data,
-      selection: selection({ problemList: true, conditions: true }),
+      selection: selection({ problemList: true }),
       filters: filters({ problemListStatus: 'active' }),
       now: NOW,
     })
@@ -200,11 +200,25 @@ describe('curateForIps — problem list', () => {
     ]
     const out = curateForIps({
       data,
-      selection: selection({ problemList: true, conditions: false }),
+      selection: selection({ problemList: true }),
       filters: filters({ problemListStatus: 'active' }),
       now: NOW,
     })
     expect(out.conditions.map((c) => c.id)).toEqual(['c1'])
+  })
+
+  it('excludes the Problem List section entirely when problemList is off', () => {
+    const data = emptyCollection()
+    data.conditions = [
+      { id: 'c1', clinicalStatus: 'active', code: { text: 'Diabetes' } },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection({ problemList: false }),
+      filters: filters(),
+      now: NOW,
+    })
+    expect(out.conditions).toEqual([])
   })
 })
 
@@ -230,7 +244,7 @@ describe('curateForIps — SNOMED CT problem-list annotation (Phase 2.1)', () =>
     ]
     const out = curateForIps({
       data,
-      selection: selection({ problemList: true, conditions: true }),
+      selection: selection({ problemList: true }),
       filters: filters({ problemListStatus: 'active' }),
       now: NOW,
     })
@@ -256,7 +270,7 @@ describe('curateForIps — SNOMED CT problem-list annotation (Phase 2.1)', () =>
     data.conditions = [source]
     curateForIps({
       data,
-      selection: selection({ problemList: true, conditions: true }),
+      selection: selection({ problemList: true }),
       filters: filters({ problemListStatus: 'active' }),
       now: NOW,
     })
@@ -292,7 +306,8 @@ describe('curateForIps — Results observations (orphans only)', () => {
     ]
     const out = curateForIps({
       data,
-      selection: selection(),
+      // Orphan observations default OFF now — opt in for this dedup test
+      selection: selection({ observations: true }),
       filters: filters({ labReportTimeRange: 'all', labReportVersion: 'all' }),
       now: NOW,
     })
@@ -317,15 +332,43 @@ describe('curateForIps — vitals & passthrough', () => {
     expect(out.vitalSigns.map((v) => v.id).sort()).toEqual(['bp-new', 'hr'])
   })
 
-  it('passes through resources without a data-selection toggle (devices/carePlans/consents)', () => {
+  it('keeps devices/carePlans/consents when their toggles are ON', () => {
     const data = emptyCollection()
     data.devices = [{ id: 'dev-1', type: { text: 'Pacemaker' } }]
-    data.carePlans = [{ id: 'cp-1', title: 'Diabetes care' }]
+    data.carePlans = [{ id: 'cp-1', title: 'Diabetes care', status: 'active' }]
     data.consents = [{ id: 'con-1', status: 'active' }]
     const out = curateForIps({ data, selection: selection(), filters: filters(), now: NOW })
     expect(out.devices).toHaveLength(1)
     expect(out.carePlans).toHaveLength(1)
     expect(out.consents).toHaveLength(1)
+  })
+
+  it('drops devices/carePlans/consents when their toggles are OFF', () => {
+    const data = emptyCollection()
+    data.devices = [{ id: 'dev-1', type: { text: 'Pacemaker' } }]
+    data.carePlans = [{ id: 'cp-1', title: 'Diabetes care', status: 'active' }]
+    data.consents = [{ id: 'con-1', status: 'active' }]
+    const out = curateForIps({
+      data,
+      selection: selection({ medicalDevices: false, carePlans: false, advanceDirectives: false }),
+      filters: filters(),
+      now: NOW,
+    })
+    expect(out.devices).toHaveLength(0)
+    expect(out.carePlans).toHaveLength(0)
+    expect(out.consents).toHaveLength(0)
+  })
+
+  it('filters care plans to active when carePlanStatus=active', () => {
+    const data = emptyCollection()
+    data.carePlans = [
+      { id: 'cp-active', title: 'Active plan', status: 'active' },
+      { id: 'cp-done', title: 'Completed plan', status: 'completed' },
+    ]
+    const activeOnly = curateForIps({ data, selection: selection(), filters: filters({ carePlanStatus: 'active' }), now: NOW })
+    expect(activeOnly.carePlans.map((c) => c.id)).toEqual(['cp-active'])
+    const all = curateForIps({ data, selection: selection(), filters: filters({ carePlanStatus: 'all' }), now: NOW })
+    expect(all.carePlans.map((c) => c.id).sort()).toEqual(['cp-active', 'cp-done'])
   })
 
   it('empties allergies when the allergies category is unselected', () => {
