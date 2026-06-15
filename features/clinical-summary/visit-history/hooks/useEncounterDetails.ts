@@ -24,6 +24,20 @@ const CATEGORY_BY_ID: Map<string, (typeof LAB_CATEGORIES)[number]> = new Map(
   LAB_CATEGORIES.map((c) => [c.id, c]),
 )
 
+// Inpatient claims expose 給藥總量 (total quantity) but no per-drug 給藥日數, so
+// the bridge ships those meds with a structured dispenseRequest.quantity but NO
+// pre-formatted dosageInstruction.text — and the row then showed no dose at all.
+// When the text is missing, fall back to the quantity NHI did report (健保存摺
+// shows it). Kept in 給藥總量 wording to match the bridge's zh-only dosage
+// strings on sibling rows. 給藥日數 is only appended when the bridge actually
+// provided a supply duration — never fabricated.
+function medicationQuantityDetail(med: any): string | undefined {
+  const qty = med?.dispenseRequest?.quantity?.value
+  if (qty == null) return undefined
+  const days = med?.dispenseRequest?.expectedSupplyDuration?.value
+  return days != null ? `給藥總量 ${qty}，給藥日數 ${days} 天` : `給藥總量 ${qty}`
+}
+
 export type EncounterDiagnosis = {
   id: string
   title: string
@@ -356,7 +370,7 @@ export function useEncounterDetails(
           id: medId,
           name: getMedicationNameLocalized(med, audience, locale),
           status: med?.status,
-          detail: med?.dosageInstruction?.[0]?.text,
+          detail: med?.dosageInstruction?.[0]?.text || medicationQuantityDetail(med),
           when: formatDateTime(med?.authoredOn, locale),
           isChronic,
         })
