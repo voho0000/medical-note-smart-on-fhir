@@ -29,6 +29,10 @@ export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
+  // Lifted here (not inside CumulativeLabReport) so the selected cumulative
+  // sub-category (生化 …) survives the fullscreen toggle, which remounts the
+  // reports content under a different parent.
+  const [cumulativeCategoryId, setCumulativeCategoryId] = useState<string | undefined>(undefined)
   // Tabs the user has visited at least once in this session. We forceMount
   // only these so the *first* paint of ReportsCard (e.g. when the user
   // switches from "病人資訊" to "報告") doesn't have to mount 500+ rows of
@@ -363,7 +367,12 @@ export function ReportsCard() {
             forceMount={keepMounted}
             className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
           >
-            <CumulativeLabReport observations={observations} fullHeight={expanded} />
+            <CumulativeLabReport
+              observations={observations}
+              fullHeight={expanded}
+              activeCategoryId={cumulativeCategoryId}
+              onCategoryChange={setCumulativeCategoryId}
+            />
           </TabsContent>
         ) : (
           <ReportsTabContent

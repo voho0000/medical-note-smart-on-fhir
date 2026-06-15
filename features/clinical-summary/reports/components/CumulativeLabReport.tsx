@@ -17,6 +17,12 @@ interface CumulativeLabReportProps {
   observations: any[]
   /** When true, allow table to take more vertical space (e.g., parent fullscreen mode) */
   fullHeight?: boolean
+  /** Active category id, lifted to the parent so the selected sub-tab (生化 …)
+   *  survives the fullscreen toggle — which remounts this component and would
+   *  otherwise reset the selection back to the first category (血液). When
+   *  omitted the component falls back to its own internal state. */
+  activeCategoryId?: string
+  onCategoryChange?: (id: string) => void
 }
 
 function formatDateLabel(d: string): string {
@@ -84,7 +90,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
             <tr>
               <th
                 rowSpan={2}
-                className="sticky left-0 z-30 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[88px]"
+                className="sticky left-0 z-30 bg-muted/95 border-b border-r px-2 py-1.5 text-left font-semibold whitespace-nowrap min-w-[64px]"
               >
                 {categoryLabel}
               </th>
@@ -112,7 +118,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
           {/* Test name header row */}
           <tr>
             {!hasSubgroups && (
-              <th className="sticky left-0 z-30 bg-muted/95 border-b border-r p-2 text-left font-semibold whitespace-nowrap min-w-[88px]">
+              <th className="sticky left-0 z-30 bg-muted/95 border-b border-r px-2 py-1.5 text-left font-semibold whitespace-nowrap min-w-[64px]">
                 {categoryLabel}
               </th>
             )}
@@ -121,9 +127,9 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
               return (
                 <th
                   key={test.mapKey}
-                  className="bg-muted/80 backdrop-blur border-b border-l p-2 text-center font-medium align-bottom min-w-[64px]"
+                  className="bg-muted/80 backdrop-blur border-b border-l px-1 py-1.5 text-center font-medium align-bottom min-w-[46px]"
                 >
-                  <div className="mx-auto max-w-[6rem] leading-tight break-words">{name}</div>
+                  <div className="mx-auto max-w-[4.5rem] leading-tight break-words">{name}</div>
                   {(abbr || test.unit) && (
                     <div className="text-[10px] font-normal text-muted-foreground leading-tight whitespace-nowrap">
                       {/* Second line: English short code + unit. No parens — the
@@ -152,14 +158,14 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
           )}
           {pivot.dates.map((date, dateIdx) => (
             <tr key={date} className={dateIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-              <td className="sticky left-0 z-10 bg-inherit border-r p-2 font-medium whitespace-nowrap">
+              <td className="sticky left-0 z-10 bg-inherit border-r px-2 py-1 font-medium whitespace-nowrap">
                 {formatDateLabel(date)}
               </td>
               {flatTests.map((test) => {
                 const cell = test.values.get(date)
                 if (!cell) {
                   return (
-                    <td key={test.mapKey} className="border-l p-1.5 text-center text-muted-foreground">
+                    <td key={test.mapKey} className="border-l px-1 py-1 text-center text-muted-foreground">
                       —
                     </td>
                   )
@@ -168,7 +174,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                 return (
                   <td
                     key={test.mapKey}
-                    className={`border-l p-1.5 text-center ${cls}`}
+                    className={`border-l px-1 py-1 text-center ${cls}`}
                     title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
                   >
                     {cell.value}
@@ -183,7 +189,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
   )
 }
 
-export function CumulativeLabReport({ observations, fullHeight = false }: CumulativeLabReportProps) {
+export function CumulativeLabReport({ observations, fullHeight = false, activeCategoryId, onCategoryChange }: CumulativeLabReportProps) {
   const pivots = useLabPivot(observations)
   const { t } = useLanguage()
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
@@ -197,7 +203,16 @@ export function CumulativeLabReport({ observations, fullHeight = false }: Cumula
       .filter((p) => !!p)
   }, [pivots])
 
-  const [activeId, setActiveId] = useState<string>(() => nonEmpty[0]?.category.id || 'cbc')
+  const [internalActiveId, setInternalActiveId] = useState<string>(() => nonEmpty[0]?.category.id || 'cbc')
+  // Prefer the parent-controlled id (survives the fullscreen remount) when it
+  // points at a category that still has data; otherwise use internal state.
+  const activeId = (activeCategoryId && nonEmpty.some((p) => p.category.id === activeCategoryId))
+    ? activeCategoryId
+    : internalActiveId
+  const setActiveId = (id: string) => {
+    setInternalActiveId(id)
+    onCategoryChange?.(id)
+  }
 
   if (nonEmpty.length === 0) {
     return (
