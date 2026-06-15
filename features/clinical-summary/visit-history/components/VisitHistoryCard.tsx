@@ -8,11 +8,15 @@ import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clini
 import { Card, CardContent } from "@/components/ui/card"
 import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { dateSearchTokens } from "@/src/shared/utils/date.utils"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { useVisitHistory } from "../hooks/useVisitHistory"
 import { useEncounterDetails } from "../hooks/useEncounterDetails"
 import { useClinicalNotes } from "../hooks/useClinicalNotes"
 import { useVisitStats } from "../hooks/useVisitStats"
+import { useDocumentSummaries } from "@/features/clinical-summary/document-summary/hooks/useDocumentSummaries"
+import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
+import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import { VisitItem } from "./VisitItem"
 
 type VisitTypeFilter = 'all' | 'outpatient' | 'inpatient' | 'emergency' | 'pharmacy'
@@ -55,6 +59,23 @@ export function VisitHistoryCard() {
   const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
   const visitHistory = useVisitHistory(encounters, icdDict)
   const visitStats = useVisitStats(encounterDetails)
+
+  // Documents that reference an Encounter (e.g. 出院病摘 / discharge summaries)
+  // are surfaced inline on their linked visit. Keyed by encounter id so each
+  // VisitItem can pull its own.
+  const docStrings = useDocumentSummaryStrings()
+  const { entries: documentEntries } = useDocumentSummaries(docStrings.docTypes)
+  const docsByEncounter = useMemo(() => {
+    const map = new Map<string, DocumentEntry[]>()
+    for (const e of documentEntries) {
+      const encId = e.encounterRef?.split('/').pop()
+      if (!encId) continue
+      const arr = map.get(encId) ?? []
+      arr.push(e)
+      map.set(encId, arr)
+    }
+    return map
+  }, [documentEntries])
 
   // Unique institutions for the dropdown
   const institutions = useMemo(() => {
@@ -103,25 +124,8 @@ export function VisitHistoryCard() {
         const parts: string[] = [
           v.institution, v.location, v.department, v.diagnosis, v.physician, v.reason,
         ].filter(Boolean) as string[]
-        if (v.date) {
-          const d = new Date(v.date)
-          if (!isNaN(d.getTime())) {
-            const y = d.getFullYear()
-            const m = d.getMonth() + 1
-            const day = d.getDate()
-            const mp = String(m).padStart(2, '0')
-            const dp = String(day).padStart(2, '0')
-            parts.push(
-              d.toLocaleDateString(),                  // 1/22/2026
-              `${y}/${m}/${day}`,                      // 2026/1/22
-              `${y}/${mp}/${dp}`,                      // 2026/01/22
-              `${y}-${mp}-${dp}`,                      // 2026-01-22
-              `${m}/${day}`,                           // 1/22
-              `${mp}/${dp}`,                           // 01/22
-              `${m}/${day}/${y}`,                      // 1/22/2026 plain
-            )
-          }
-        }
+        // Gregorian + 民國(ROC) date tokens so 2025/11/20 and 114/11/20 both match.
+        if (v.date) parts.push(...dateSearchTokens(v.date))
         const d = encounterDetails.get(v.id)
         if (d) {
           for (const t of d.tests) {
@@ -360,6 +364,7 @@ export function VisitHistoryCard() {
                     key={visit.id}
                     visit={visit}
                     details={encounterDetails.get(visit.id)}
+                    documents={docsByEncounter.get(visit.id)}
                     abnormalCount={visitStats.get(visit.id)?.abnormalCount ?? 0}
                     isExpanded={expandedVisitId === visit.id}
                     onToggle={() => setExpandedVisitId((prev) => (prev === visit.id ? null : visit.id))}

@@ -20,58 +20,16 @@
 // or once the bridge ships discharge summaries.
 "use client"
 
-import { useMemo } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Building2, Info } from 'lucide-react'
-import { useLanguage } from '@/src/application/providers/language.provider'
 import { FeatureCard } from '@/src/shared/components'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
 import { HtmlDocumentRenderer } from './components/HtmlDocumentRenderer'
 import { DocumentDetailDialog } from './components/DocumentDetailDialog'
+import { useDocumentSummaryStrings, makeResolveSectionLabel, type DocSummaryStrings } from './utils/strings'
 import type { DocumentEntry } from './types'
 
-interface DocSummaryStrings {
-  title: string
-  noData: string
-  documentDate: string
-  author: string
-  custodian: string
-  noSections: string
-  tooltip: string
-  ipsBadge: string
-  ipsBadgeTooltip: string
-  dischargeBadge: string
-  dischargeBadgeTooltip: string
-  htmlBodyHeader: string
-  htmlNoContent: string
-  htmlExternalUrl: string
-  primaryDiagnosisTooltip: string
-  openInDialog: string
-  docTypes: Record<string, string>
-  sections: Record<string, string>
-}
-
-const FALLBACK_STRINGS: DocSummaryStrings = {
-  title: '文件摘要',
-  noData: '目前尚無文件資料。匯入 IPS（國際病人摘要）或當健保存摺載入出院病摘後，文件內容將顯示於此。',
-  documentDate: '文件日期',
-  author: '作者',
-  custodian: '機構',
-  noSections: '本份文件未提供可顯示的敘事內容。',
-  tooltip: '此處顯示匯入文件原始的人類可讀敘事內容（如 IPS 國際病人摘要、出院病摘）。當中的結構化資料已分別呈現在上方各卡片，本卡片保留原始敘事供對照或摘要參考。',
-  ipsBadge: 'IPS',
-  ipsBadgeTooltip: '此份文件依 IPS（國際病人摘要）規範產出。',
-  dischargeBadge: '出院病摘',
-  dischargeBadgeTooltip: '此份為 LOINC 18842-5 出院病摘。',
-  htmlBodyHeader: '文件內容',
-  htmlNoContent: '本份文件無可顯示的內容。',
-  htmlExternalUrl: '開啟外部文件',
-  primaryDiagnosisTooltip: '此 ICD-10 碼為醫療院所申報健保時提供的住院主診斷（健保署彙整後同步至健康存摺）。並非醫師直接撰寫的診斷敘述，詳細病情請展開文件內容。',
-  openInDialog: '彈出全文檢視',
-  docTypes: {},
-  sections: {},
-}
 
 function formatDate(iso?: string): string {
   if (!iso) return ''
@@ -91,24 +49,9 @@ function formatPeriod(period?: { start?: string; end?: string }): string {
 }
 
 export function DocumentSummaryCard() {
-  const { t } = useLanguage()
-
-  // Pull localised strings with safe fallbacks — the i18n bundle may be in
-  // a partial rollout, so we always merge over FALLBACK_STRINGS.
-  const strings = useMemo<DocSummaryStrings>(() => {
-    const src = (t as any).documentSummary as Partial<DocSummaryStrings> | undefined
-    return {
-      ...FALLBACK_STRINGS,
-      ...(src ?? {}),
-      docTypes: { ...FALLBACK_STRINGS.docTypes, ...(src?.docTypes ?? {}) },
-      sections: { ...FALLBACK_STRINGS.sections, ...(src?.sections ?? {}) },
-    }
-  }, [t])
-
+  const strings = useDocumentSummaryStrings()
   const { entries, isLoading, error } = useDocumentSummaries(strings.docTypes)
-
-  const resolveSectionLabel = (i18nKey: string): string | null =>
-    strings.sections[i18nKey] ?? null
+  const resolveSectionLabel = makeResolveSectionLabel(strings)
 
   const isEmpty = entries.length === 0
   // One-doc datasets auto-expand the body to save a click; multi-doc lists

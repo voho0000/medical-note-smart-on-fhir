@@ -8,6 +8,9 @@ import { AnalyteTrendRow } from "./AnalyteTrendRow"
 import { MedTrendRow } from "./MedTrendRow"
 import { EncounterSection } from "./EncounterSection"
 // import { NoteItem } from "./NoteItem" // TODO: 暫時隱藏，等有真實資料時再啟用測試
+import { DocumentDetailDialog } from "@/features/clinical-summary/document-summary/components/DocumentDetailDialog"
+import { useDocumentSummaryStrings, makeResolveSectionLabel } from "@/features/clinical-summary/document-summary/utils/strings"
+import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import type { VisitRecord } from "../hooks/useVisitHistory"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -28,6 +31,10 @@ type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' |
 interface VisitItemProps {
   visit: VisitRecord
   details?: EncounterDetails
+  /** Documents linked to this visit's Encounter (e.g. 出院病摘 / discharge
+   *  summary) — surfaced inline so the user can open the full text from the
+   *  visit without hunting through the 文件 tab. */
+  documents?: DocumentEntry[]
   abnormalCount?: number
   isExpanded: boolean
   onToggle: () => void
@@ -35,33 +42,39 @@ interface VisitItemProps {
 
 const getTypeBadge = (type: VisitType, labels: any) => {
   const typeMap = {
-    outpatient: { label: labels.outpatient, variant: "default" as const },
-    inpatient: { label: labels.inpatient, variant: 'secondary' as const },
-    emergency: { label: labels.emergency, variant: 'destructive' as const },
-    home: { label: labels.home, variant: 'outline' as const },
-    virtual: { label: labels.virtual, variant: 'outline' as const },
-    pharmacy: { label: labels.pharmacy || '藥局', variant: 'outline' as const },
-    other: { label: labels.other, variant: 'outline' as const }
+    // 門診 blue, 急診 red, 住院 amber — the old 'secondary' grey was too faint
+    // for how important an inpatient stay is. className overrides the variant's
+    // background (tailwind-merge keeps the later class).
+    outpatient: { label: labels.outpatient, variant: "default" as const, className: '' },
+    inpatient: { label: labels.inpatient, variant: 'default' as const, className: 'bg-amber-500 text-white border-transparent hover:bg-amber-500' },
+    emergency: { label: labels.emergency, variant: 'destructive' as const, className: '' },
+    home: { label: labels.home, variant: 'outline' as const, className: '' },
+    virtual: { label: labels.virtual, variant: 'outline' as const, className: '' },
+    pharmacy: { label: labels.pharmacy || '藥局', variant: 'outline' as const, className: '' },
+    other: { label: labels.other, variant: 'outline' as const, className: '' }
   }
-  const { label, variant } = typeMap[type] || typeMap.other
-  return <Badge variant={variant}>{label}</Badge>
+  const { label, variant, className } = typeMap[type] || typeMap.other
+  return <Badge variant={variant} className={className || undefined}>{label}</Badge>
 }
 
-export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
+export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
+  const docStrings = useDocumentSummaryStrings()
+  const resolveDocSectionLabel = makeResolveSectionLabel(docStrings)
   const categoryLabel = (id: string): string =>
     (t.reports.cumulativeCategories as Record<string, string>)[id] || id
   const reasonCodes = visit.icdCodes
   const hasIcdCodes = reasonCodes.length > 0 && /^[A-Z]\d/.test(reasonCodes[0].code)
   const hasSecondaryIcds = hasIcdCodes && reasonCodes.length > 1
   const [icdExpanded, setIcdExpanded] = useState(false)
-  const hasDetails = !!(details && (
+  const docs = documents ?? []
+  const hasDetails = !!(docs.length > 0 || (details && (
     details.diagnoses.length > 0 ||
     details.medications.length > 0 ||
     details.tests.length > 0 ||
     details.procedures.length > 0
     // || details.clinicalNotes.length > 0 // TODO: 暫時隱藏病歷記錄判斷
-  ))
+  )))
 
   return (
     <div className="rounded-lg border transition-colors">
@@ -81,16 +94,12 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
         }}
         className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40 cursor-pointer"
       >
-        {/* Header: everything on one wrapping line (date · channel · physician
-            inline rather than stacked) with the expand chevron pinned right, so
-            a collapsed visit is ~2–3 short rows instead of 5. */}
+        {/* Header: when/where on the left, the at-a-glance count pills pushed
+            to the right (justify-between), then the expand chevron. A collapsed
+            visit stays ~2 short rows. The pills live in their own right cluster
+            that wraps INTERNALLY (max-w cap) when they're many/wide, so the
+            left date never gets orphaned onto its own line. */}
         <div className="flex items-start justify-between gap-2">
-          {/* One wrapping line: when/where (badge · location · date · channel ·
-              physician) followed by the at-a-glance count pills. Keeping the
-              pills in the SAME wrap (rather than a pinned-right cluster) means
-              the date never gets orphaned onto its own line — only overflow
-              pills wrap. The old full-width "查看就診詳情 ▼" footer row is gone;
-              the chevron (pinned right) carries that hint via its title. */}
           <div className="flex flex-1 items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
             {visit.location && (
@@ -111,6 +120,10 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
                 {t.visitHistory.inProgress}
               </Badge>
             )}
+          </div>
+          {/* Right cluster: count pills (right-aligned, separated from the left
+              content) + the expand chevron. */}
+          <div className="shrink-0 flex flex-wrap items-center justify-end gap-1 max-w-[55%]">
             {details && (
               <>
                 {details.diagnoses.length > 0 && (
@@ -140,13 +153,23 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
                 )}
               </>
             )}
+            {/* Discharge-summary indicator — at-a-glance marker that this visit
+                has a linked 出院病摘 to open in the expanded view. */}
+            {docs.length > 0 && (
+              <span
+                title={docStrings.dischargeBadgeTooltip}
+                className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700"
+              >
+                {docStrings.dischargeBadge}
+              </span>
+            )}
+            <span
+              className="text-xs text-muted-foreground leading-5"
+              title={hasDetails ? (isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails) : t.visitHistory.noDetails}
+            >
+              {hasDetails ? (isExpanded ? "▲" : "▼") : ""}
+            </span>
           </div>
-          <span
-            className="shrink-0 text-xs text-muted-foreground leading-5"
-            title={hasDetails ? (isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails) : t.visitHistory.noDetails}
-          >
-            {hasDetails ? (isExpanded ? "▲" : "▼") : ""}
-          </span>
         </div>
 
         {(visit.reason || visit.diagnosis) && (
@@ -219,6 +242,39 @@ export function VisitItem({ visit, details, abnormalCount = 0, isExpanded, onTog
         <div className="border-t bg-muted/30 px-3 py-3 text-sm">
           {hasDetails ? (
             <div className="space-y-4">
+              {/* Linked documents (出院病摘 / discharge summary). The popout
+                  button opens the full text in the shared DocumentDetailDialog
+                  — same reader as the 文件 tab. */}
+              {docs.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {docStrings.dischargeBadge}
+                  </div>
+                  <div className="grid gap-2">
+                    {docs.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 shadow-sm"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-foreground">{doc.typeLabel}</div>
+                          {(doc.subtitle || doc.institution) && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {doc.subtitle || doc.institution}
+                            </div>
+                          )}
+                        </div>
+                        <DocumentDetailDialog
+                          entry={doc}
+                          strings={docStrings}
+                          resolveSectionLabel={resolveDocSectionLabel}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {details?.diagnoses.length ? (
                 <EncounterSection
                   title={t.visitHistory.diagnoses}
