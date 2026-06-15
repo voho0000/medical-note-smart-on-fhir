@@ -81,8 +81,8 @@ export const TEST_ALIASES: Record<string, string> = {
   ESR: 'ESR', 'ERYTHROCYTE SEDIMENTATION RATE': 'ESR',
   LACTATE: 'LACTATE',
   // Cardiac
-  CK: 'CK', 'CREATINE KINASE': 'CK',
-  CKMB: 'CKMB', 'CK-MB': 'CKMB',
+  CK: 'CK', 'CREATINE KINASE': 'CK', CPK: 'CK', 'CREATINE PHOSPHOKINASE': 'CK', '肌酸激酶': 'CK',
+  CKMB: 'CKMB', 'CK-MB': 'CKMB', 'CK MB': 'CKMB', 'CREATINE KINASE MB': 'CKMB', 'CREATINE KINASE.MB': 'CKMB', '肌酸激酶MB': 'CKMB',
   TROP: 'TROP', TROPONIN: 'TROP', 'TROPONIN I': 'TROP', 'TROPONIN T': 'TROP',
   // Iron
   IRON: 'IRON', FE: 'IRON',
@@ -275,6 +275,8 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   '1988-5':  'CRP',           // NHI 12015C — C reactive protein Mass/vol S/P
   '33959-8': 'PCT',           // NHI 12192C — Procalcitonin Mass/vol S/P
   '10839-9': 'TROP',          // NHI 09099C — Troponin I cardiac S/P
+  '2157-6':  'CK',            // Creatine kinase total — verified loinc.org 2026-06-16
+  '13969-1': 'CKMB',          // Creatine kinase.MB [Mass/vol] — verified loinc.org 2026-06-16
 
   // ── CBC ───────────────────────────────────────────────────
   '6690-2': 'WBC',            // NHI 08002C — Leukocytes #/vol Blood Auto

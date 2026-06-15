@@ -85,28 +85,34 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'chem',
-    // Inflammation tail (CRP → PCT → ESR → LACTATE → FIB-4) follows
-    // clinical reading habit: acute-phase reactants first (CRP/PCT used
-    // together for bacterial vs viral discrimination), then ESR for
-    // sub-acute / autoimmune, then LACTATE for sepsis/shock context.
-    // FIB-4 (calculated liver fibrosis index) tails because it's derived.
-    // TROP (cardiac troponin) is grouped here per Taiwan convention —
-    // 生化室 owns the assay even though clinically it's a cardiac marker.
-    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TROP', 'TP', 'ALB', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4'],
-    codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE'],
+    // Column order: …liver → 發炎/感染(inflam) → 心肌酵素(cardiac). Inflammation
+    // group (CRP → PCT → ESR → LACTATE → FIB-4) reads acute-phase reactants
+    // first (CRP/PCT for bacterial vs viral), then ESR (sub-acute/autoimmune),
+    // then LACTATE (sepsis/shock); FIB-4 (derived liver fibrosis index) tails.
+    // Cardiac (TROP → CK → CK-MB) is grouped here per Taiwan convention —
+    // 生化室 owns the assay even though clinically they're cardiac markers.
+    // A/G (LOINC 1759-0) was removed from loincCodes: it has no subgroup home
+    // and surfaced as an orphan in the "其他" column; not wanted in 累積報告.
+    preferredOrder: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA', 'NA', 'K', 'CL', 'CA', 'IP', 'AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB', 'CRP', 'PCT', 'ESR', 'LACTATE', 'FIB-4', 'TROP', 'CK', 'CKMB'],
+    codes: ['TP', 'ALB', 'BUN', 'CREA', 'CREAT', 'CREAT.', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'NA', 'K', 'CL', 'CHLORIDE', 'CA', 'CACAL', 'IP', 'UA', 'AST', 'ALT', 'ALK-P', 'ALKP', 'GGT', 'G-GT', 'LDH', 'T.BILI', 'T.BILI.', 'TBILI', 'BILIT', 'BILI', 'D.BILI', 'DBILI', 'TROP', 'TROPONIN', 'TROPONIN I', 'TROPONIN T', 'CK', 'CK-MB', 'CKMB', 'CREATINE KINASE', 'CPK', '肌酸激酶', 'CRP', 'FIB-4', 'PCT', 'PROCALCITONIN', 'ESR', 'LACTATE'],
     // 2075-0 = Chloride Moles/vol S/P — verified at loinc.org (2026-06-02).
     // 10839-9 = Troponin I.cardiac [Mass/volume] in Serum or Plasma — bridge
     // ships this for NHI 09099C 心肌旋轉蛋白Ｉ. The high-sensitivity LOINCs
     // (49563-0 hs-cTnI, 6598-7 cTnT, 67151-1 hs-cTnT) are intentionally
     // omitted until we see a real bridge bundle using them, so the
     // LOINC_TO_CANONICAL map stays in lock-step.
-    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '1988-5', '30522-7', '1759-0', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8'],
+    // 2157-6 = Creatine kinase [Enzymatic activity/volume] in Serum or Plasma
+    // (CK total) and 13969-1 = Creatine kinase.MB [Mass/volume] in Serum or
+    // Plasma (CK-MB) — both verified at loinc.org (2026-06-16).
+    loincCodes: ['2951-2', '2947-0', '2823-3', '6298-4', '2075-0', '3094-0', '6299-2', '2160-0', '38483-4', '33914-3', '48642-3', '48643-1', '62238-1', '69405-9', '77147-7', '1742-6', '1920-8', '6768-6', '2324-2', '14804-9', '1975-2', '1968-7', '1971-1', '2885-2', '1751-7', '17861-6', '2000-8', '49765-1', '2777-1', '14879-1', '3084-1', '10839-9', '2157-6', '13969-1', '1988-5', '30522-7', '2532-0', '75241-0', '4537-7', '30341-2', '14338-8'],
     subgroups: [
       { id: 'renal',       members: ['BUN', 'CREA', 'EGFR(EPI)', 'EGFR(M)', 'EGFR', 'UA'] },
       { id: 'electrolyte', members: ['NA', 'K', 'CL', 'CA', 'IP'] },
       { id: 'liver',       members: ['AST', 'ALT', 'T.BILI', 'D.BILI', 'ALK-P', 'GGT', 'LDH', 'TP', 'ALB'] },
-      { id: 'cardiac',     members: ['TROP'] },
+      // 發炎/感染 sits to the LEFT of 心肌酵素 (inflam before cardiac) per the
+      // user's reading order. CK + CK-MB join TROP under 心肌酵素.
       { id: 'inflam',      members: ['CRP', 'PROCALCITONIN', 'PCT', 'ESR', 'FIB-4', 'LACTATE'] },
+      { id: 'cardiac',     members: ['TROP', 'CK', 'CKMB'] },
     ],
     // CL deliberately not pinned — most ambulatory chem panels don't include
     // chloride, so pinning would create persistent empty columns. When a
