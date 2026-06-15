@@ -116,7 +116,11 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
     }
   }
 
-  const displayObs = row.group === "procedures" ? row.obs.slice(1) : row.obs
+  // A procedure's details (status, date, performer, NHI/PCS codes, reason) live
+  // as components on the synthetic observation at index 0 — keep it. (It used to
+  // be sliced off, which left bridge ≥0.18.14 procedures — that carry no related
+  // observations — showing "0 項" with an empty body.)
+  const displayObs = row.obs
   const firstObs = row.obs[0]
 
   const images = row.images
@@ -483,7 +487,11 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                     (accordionMeta) live on the badge's hover tooltip — no
                     separate meta line, so nothing is shown twice. */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted-foreground">{displayObs.length} 項</span>
+                  {/* "N 項" = sub-item count for a lab panel; meaningless for a
+                      single procedure event, so hide it there. */}
+                  {row.group !== "procedures" && (
+                    <span className="text-xs text-muted-foreground">{displayObs.length} 項</span>
+                  )}
                   {row.institution && (
                     <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
                       <Building2 className="h-3 w-3 shrink-0" />

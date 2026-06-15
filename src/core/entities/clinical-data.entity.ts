@@ -340,6 +340,8 @@ export interface ProcedureEntity {
   code?: {
     text?: string
     coding?: Array<{
+      system?: string
+      code?: string
       display?: string
     }>
   }
@@ -352,6 +354,23 @@ export interface ProcedureEntity {
   encounter?: {
     reference?: string
   }
+  /** Operating hospital(s) — bridge sends performer[].actor.display. */
+  performer?: Array<{
+    actor?: { display?: string; reference?: string }
+    display?: string
+    reference?: string
+  }>
+  /** Free-text notes — bridge ≥0.18.14 puts the NHI diagnosis reason here. */
+  note?: Array<{ text?: string }>
+  /**
+   * Indication / diagnosis (bridge ≥0.18.15). ICD-10-CM, bilingual: `text` is
+   * the 繁中 name, `coding[].display` the English. Earlier bundles carried this
+   * as a "Reason: …" note instead.
+   */
+  reasonCode?: Array<{
+    text?: string
+    coding?: Array<{ system?: string; code?: string; display?: string }>
+  }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

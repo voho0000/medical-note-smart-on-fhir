@@ -102,6 +102,9 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
   const ref = getReferenceRangeText(observation.referenceRange)
   const hasComponents = Array.isArray(observation.component) && observation.component.length > 0
   const isReportSummary = observation.code?.text === 'Report Summary'
+  // Procedure detail container: the row header already shows the title + date,
+  // so render only the attribute rows (no redundant title/value line, no trend).
+  const detailsOnly = (observation as { _detailsOnly?: boolean })._detailsOnly === true
 
   const primaryValue = observation.valueQuantity
     ? getValueWithUnit(observation.valueQuantity)
@@ -110,6 +113,21 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
     ? getOriginalValueWithUnit(observation.valueQuantity)
     : observation.valueString || '—'
   const isLongText = !observation.valueQuantity && (observation.valueString?.length ?? 0) > 80
+
+  // Procedure detail container: flat list of attribute rows, no main row.
+  if (detailsOnly && hasComponents) {
+    return (
+      <div className="space-y-0">
+        {observation.component!.map((component, idx) => {
+          const cName = getAnalyteDisplayForObs(component, audience, locale)
+          const cValue = component.valueQuantity
+            ? getValueWithUnit(component.valueQuantity)
+            : component.valueString || '—'
+          return <ObsRow key={idx} name={cName || '—'} value={cValue} originalValue={cValue} interp={null} refText="" />
+        })}
+      </div>
+    )
+  }
 
   // Report Summary block: show as plain text, no trend
   if (isReportSummary) {

@@ -217,6 +217,11 @@ export class FhirMapper implements IDataMapper {
   }
 
   static toProcedure(fhirResource: Procedure): ProcedureEntity {
+    const src = fhirResource as Procedure & {
+      performer?: ProcedureEntity['performer']
+      note?: ProcedureEntity['note']
+      reasonCode?: ProcedureEntity['reasonCode']
+    }
     return {
       id: fhirResource.id || '',
       code: fhirResource.code,
@@ -224,6 +229,12 @@ export class FhirMapper implements IDataMapper {
       performedDateTime: fhirResource.performedDateTime,
       performedPeriod: fhirResource.performedPeriod,
       encounter: fhirResource.encounter,
+      // Operating hospital + NHI diagnosis reason (bridge ≥0.18.14). Without
+      // these the procedure row showed no performer / reason. ≥0.18.15 moves the
+      // reason from a note to a structured (bilingual) reasonCode.
+      performer: src.performer,
+      note: src.note,
+      reasonCode: src.reasonCode,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
