@@ -348,7 +348,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                   count={details.medications.length}
                   collapseThreshold={COLLAPSE_THRESHOLDS.medications}
                 >
-                  <div className="grid gap-1.5 mt-2">
+                  <div className="grid gap-1 mt-2">
                     {/* Multi-day: roll up same-drug refills into MedTrendRow.
                         Single-day: keep flat MedicationRow. */}
                     {details.isMultiDay && details.medSeries.length > 0 ? (

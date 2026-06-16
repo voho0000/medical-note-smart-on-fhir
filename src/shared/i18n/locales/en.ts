@@ -30,6 +30,8 @@ export const en = {
     features: "Features",
     language: 'Language',
     moreMenu: 'More',
+    collapseHeader: 'Collapse header',
+    expandHeader: 'Expand header',
   },
 
   tabs: {
@@ -598,7 +600,6 @@ export const en = {
     syncToAll: 'Apply to all',
     inSync: 'All three in sync',
     customized: 'Customized (differ)',
-    previewFor: 'Preview',
     ipsPreviewNote: 'IPS export uses structured FHIR data; below is a read-only preview of what will be included (supplementary notes and manual edits do not apply to IPS).',
     medicationStatus: 'Medication Status:',
     medicationChronic: 'Chronic / Acute:',
@@ -681,6 +682,7 @@ export const en = {
     hasProcedures: 'With procedures',
     hasDischarge: 'With discharge summary',
     abnormal: 'Abnormal',
+    typeLabel: 'Visit type',
     sortLabel: 'Sort',
     sortDateDesc: 'Date (newest first)',
     sortDateAsc: 'Date (oldest first)',

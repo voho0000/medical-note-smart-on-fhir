@@ -32,6 +32,8 @@ export const zhTW = {
     features: "功能",
     language: '語言',
     moreMenu: '更多',
+    collapseHeader: '收合頁首列',
+    expandHeader: '展開頁首列',
   },
 
   tabs: {
@@ -602,7 +604,6 @@ export const zhTW = {
     syncToAll: '套用到全部',
     inSync: '三者同步中',
     customized: '已自訂（三者不同）',
-    previewFor: '預覽',
     ipsPreviewNote: 'IPS 匯出使用結構化 FHIR 資料；下方為將納入的內容預覽（純參考，補充說明與手動編輯不適用於 IPS）。',
     medicationStatus: '用藥狀態：',
     medicationChronic: '長期 / 急性：',
@@ -685,6 +686,7 @@ export const zhTW = {
     hasProcedures: '含處置',
     hasDischarge: '含出院病摘',
     abnormal: '異常',
+    typeLabel: '就診類型',
     sortLabel: '排序',
     sortDateDesc: '日期（新→舊）',
     sortDateAsc: '日期（舊→新）',

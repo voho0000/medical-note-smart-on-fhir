@@ -19,7 +19,7 @@ import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useState } from "react"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { ChevronsLeft, ChevronsRight } from "lucide-react"
+import { ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown } from "lucide-react"
 
 function PageContent() {
   const { t } = useLanguage()
@@ -42,6 +42,12 @@ function PageContent() {
   // SSR/localStorage hydration mismatch class of bugs.
   const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
 
+  // Header collapse: tuck the title/toolbar away into a slim strip so the
+  // panels get the full viewport height. In-session only (same hydration
+  // reasoning as `collapsed`). The less-used header controls (匯入資料 /
+  // 語言 / 身份 …) come back with one click on the strip.
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
+
   // Onboarding detection: when neither SMART nor a local bundle is available,
   // the data hooks return `patient: null` with no error. Show a welcome
   // screen instead of empty / failing panels.
@@ -50,7 +56,23 @@ function PageContent() {
   
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
-      <header className="shrink-0 border-b bg-white/80 backdrop-blur-md px-3 py-3 sm:px-6 sm:py-4 shadow-sm">
+      {headerCollapsed ? (
+        // Slim strip — reclaims the full header height for the panels. The
+        // whole strip is the expand affordance; the app icon + chevron make it
+        // read as a clickable control rather than a stray divider.
+        <button
+          type="button"
+          onClick={() => setHeaderCollapsed(false)}
+          aria-expanded={false}
+          aria-label={t.header.expandHeader}
+          title={t.header.expandHeader}
+          className="group shrink-0 border-b bg-white/80 backdrop-blur-md shadow-sm flex items-center justify-center gap-1.5 py-1 text-muted-foreground hover:bg-blue-50/60 hover:text-blue-600 transition-colors"
+        >
+          <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg`} alt="" className="h-4 w-4 object-contain opacity-70" />
+          <ChevronDown className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
+        </button>
+      ) : (
+      <header className="relative shrink-0 border-b bg-white/80 backdrop-blur-md px-3 py-3 sm:px-6 sm:py-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
@@ -77,7 +99,21 @@ function PageContent() {
             <HeaderOverflowMenu />
           </div>
         </div>
+        {/* Centred collapse handle — straddles the header's bottom edge so it
+            shares the same horizontal centre as the expand strip, giving the
+            toggle one consistent spot. Bordered pill so the chevron reads as a
+            button (a flat icon got mistaken for decoration). */}
+        <button
+          type="button"
+          onClick={() => setHeaderCollapsed(true)}
+          aria-label={t.header.collapseHeader}
+          title={t.header.collapseHeader}
+          className="absolute left-1/2 bottom-0 z-20 -translate-x-1/2 translate-y-1/2 inline-flex items-center justify-center rounded-full border border-border bg-background px-3 py-0.5 text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <ChevronUp className="h-4 w-4" />
+        </button>
       </header>
+      )}
       
       {/* Email Verification Banner */}
       <div className="px-3 sm:px-6">

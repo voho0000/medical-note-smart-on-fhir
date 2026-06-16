@@ -52,20 +52,10 @@ export function PreviewTab({
   const { t } = useLanguage()
   const { editingConsumer } = useDataSelection()
   const ds = t.dataSelection as unknown as Record<string, string>
-  const consumerLabel =
-    editingConsumer === 'chat' ? (ds.consumerChat ?? '對話') :
-    editingConsumer === 'insights' ? (ds.consumerInsights ?? '洞察') :
-    (ds.consumerIps ?? 'IPS')
   const isIps = editingConsumer === 'ips'
 
   return (
     <div className="space-y-3">
-      {/* Which consumer this preview reflects */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>{ds.previewFor ?? '預覽'}</span>
-        <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">{consumerLabel}</span>
-      </div>
-
       {isIps ? (
         // IPS uses structured curation — the text edit + supplementary notes
         // don't apply. Show a read-only preview of the data that will be included.

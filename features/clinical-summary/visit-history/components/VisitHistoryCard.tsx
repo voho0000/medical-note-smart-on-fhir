@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, Building2, AlertCircle, X } from "lucide-react"
+import { Search, AlertCircle, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
@@ -42,7 +42,9 @@ export function VisitHistoryCard() {
   } = useClinicalData()
 
   // ── State ──────────────────────────────────────────────────────────────
-  const [expandedVisitId, setExpandedVisitId] = useState<string | null>(null)
+  // Set (not a single id) so several visits can stay expanded at once —
+  // opening one no longer collapses the others.
+  const [expandedVisitIds, setExpandedVisitIds] = useState<Set<string>>(new Set())
   const [typeFilter, setTypeFilter] = useState<VisitTypeFilter>('all')
   const [institutionFilter, setInstitutionFilter] = useState<string>('all')
   const [contentFlags, setContentFlags] = useState<Set<ContentFlag>>(new Set())
@@ -189,7 +191,7 @@ export function VisitHistoryCard() {
   // ── Handlers ──────────────────────────────────────────────────────────
   const handleFilterChange = (f: VisitTypeFilter) => {
     setTypeFilter(f)
-    setExpandedVisitId(null)
+    setExpandedVisitIds(new Set())
   }
   const toggleContent = (f: ContentFlag) => {
     setContentFlags((prev) => {
@@ -197,7 +199,7 @@ export function VisitHistoryCard() {
       if (next.has(f)) next.delete(f); else next.add(f)
       return next
     })
-    setExpandedVisitId(null)
+    setExpandedVisitIds(new Set())
   }
   const clearAllFilters = () => {
     setTypeFilter('all')
@@ -232,9 +234,10 @@ export function VisitHistoryCard() {
           <div className="text-sm text-muted-foreground">{t.procedures.noData}</div>
         ) : (
           <div className="space-y-3">
-            {/* ── Search + sort row ──────────────────────────────────── */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[180px]">
+            {/* ── Search + sort row (sort isn't a filter, so it stays here;
+                the actual filters live on the row below). ────────────────── */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="relative flex-1 min-w-[160px]">
                 <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
@@ -266,54 +269,41 @@ export function VisitHistoryCard() {
               </select>
             </div>
 
-            {/* ── Type chips ─────────────────────────────────────────── */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {FILTER_TYPES.map((f) => {
-                const label = f === 'all' ? vt.filterAll : vt.badges[f]
-                const count = counts[f]
-                if (f !== 'all' && count === 0) return null
-                const active = typeFilter === f
-                return (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => handleFilterChange(f)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : "border bg-background text-foreground hover:bg-muted"
-                    )}
-                  >
-                    {label}
-                    <span className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
-                      active ? "bg-white/20 text-primary-foreground" : "bg-muted text-muted-foreground"
-                    )}>
-                      {count}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* ── Institution + content filters row ─────────────────── */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* ── Filters row: 就診類型 + 機構 (single-select dropdowns) followed
+                by the content toggles (multi-select) + result count — all the
+                filters grouped together, separate from search/sort above. ──── */}
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              {/* 就診類型 is single-select (擇一), so a dropdown is both
+                  semantically right and far more compact than five chips; counts
+                  stay visible inside each option, e.g. "門診 (117)". */}
+              <select
+                value={typeFilter}
+                onChange={(e) => handleFilterChange(e.target.value as VisitTypeFilter)}
+                className="rounded-md border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
+                aria-label={(vt as any).typeLabel ?? '就診類型'}
+              >
+                {FILTER_TYPES.map((f) => {
+                  const label = f === 'all' ? vt.filterAll : vt.badges[f]
+                  const count = counts[f]
+                  if (f !== 'all' && count === 0) return null
+                  return <option key={f} value={f}>{label} ({count})</option>
+                })}
+              </select>
               {institutions.length > 0 && (
-                <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <Building2 className="h-3.5 w-3.5" />
-                  <select
-                    value={institutionFilter}
-                    onChange={(e) => { setInstitutionFilter(e.target.value); setExpandedVisitId(null) }}
-                    className="rounded-md border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
-                  >
-                    <option value="all">{vt.institutionAll}</option>
-                    {institutions.map((inst) => (
-                      <option key={inst} value={inst}>{inst}</option>
-                    ))}
-                  </select>
-                </label>
+                <select
+                  value={institutionFilter}
+                  onChange={(e) => { setInstitutionFilter(e.target.value); setExpandedVisitIds(new Set()) }}
+                  className="rounded-md border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  aria-label={vt.institutionAll}
+                >
+                  <option value="all">{vt.institutionAll}</option>
+                  {institutions.map((inst) => (
+                    <option key={inst} value={inst}>{inst}</option>
+                  ))}
+                </select>
               )}
+              {/* Divider between the single-select filters and the content toggles */}
+              <span className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
               <ContentToggle
                 label={vt.hasTests}
                 active={contentFlags.has('tests')}
@@ -342,14 +332,13 @@ export function VisitHistoryCard() {
                 <button
                   type="button"
                   onClick={clearAllFilters}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
                 >
                   <X className="h-3 w-3" />
                   {vt.clearFilters}
                 </button>
               )}
-              {/* Result count — inline at the row's right edge rather than its
-                  own line, to save a row of vertical space. */}
+              {/* Result count — right-aligned at the end of the filters row. */}
               <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
                 {hasActiveFilters
                   ? `${(vt.resultCount as string ?? 'Results')}: ${filteredVisits.length} / ${visitHistory.length}`
@@ -385,8 +374,12 @@ export function VisitHistoryCard() {
                     details={encounterDetails.get(visit.id)}
                     documents={docsByEncounter.get(visit.id)}
                     abnormalCount={visitStats.get(visit.id)?.abnormalCount ?? 0}
-                    isExpanded={expandedVisitId === visit.id}
-                    onToggle={() => setExpandedVisitId((prev) => (prev === visit.id ? null : visit.id))}
+                    isExpanded={expandedVisitIds.has(visit.id)}
+                    onToggle={() => setExpandedVisitIds((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(visit.id)) next.delete(visit.id); else next.add(visit.id)
+                      return next
+                    })}
                   />
                 ))}
               </div>
@@ -406,7 +399,7 @@ function ContentToggle({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
         active
           ? "border-primary bg-primary/10 text-primary"
           : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
