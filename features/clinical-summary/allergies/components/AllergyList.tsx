@@ -27,8 +27,11 @@ export function AllergyList({ allergies, isLoading, error }: AllergyListProps) {
 
   return (
     <ul className="space-y-2">
-      {allergies.map((allergy) => (
-        <AllergyItem key={allergy.id || Math.random()} allergy={allergy} />
+      {allergies.map((allergy, index) => (
+        // Stable fallback key: Math.random() here generated a fresh key every
+        // render, remounting the row (lost state / flicker). The list is static
+        // (no reordering), so the index is a safe fallback when id is absent.
+        <AllergyItem key={allergy.id || `allergy-${index}`} allergy={allergy} />
       ))}
     </ul>
   )

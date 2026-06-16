@@ -6,7 +6,7 @@ import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage }
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
-import { truncateToContextWindow, getTokenStats } from "@/src/shared/utils/context-window-manager"
+import { truncateToContextWindow, getTokenStats, selectMessagesToSend } from "@/src/shared/utils/context-window-manager"
 import { addMessagePair } from "@/src/shared/utils/chat-message.utils"
 
 export function useStreamingChat(
@@ -66,10 +66,12 @@ export function useStreamingChat(
 
         // Build final messages for API - pass full message objects with images
         // The StreamOrchestrator/Proxy will handle multimodal formatting
+        // Map the fitted-message COUNT back onto the original objects (which
+        // still carry images). selectMessagesToSend guards the zero case —
+        // `slice(-0)` would otherwise send the whole history (see its doc).
         const apiMessages = [
           { role: "system" as const, content: systemPrompt },
-          ...userMessages
-            .slice(-truncatedMessages.length)
+          ...selectMessagesToSend(userMessages, truncatedMessages.length)
             .map(m => ({
               role: m.role as "user" | "assistant" | "system",
               content: m.content,

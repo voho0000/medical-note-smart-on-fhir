@@ -54,6 +54,20 @@ export function truncateToContextWindow(
 }
 
 /**
+ * Pick which trailing messages to actually send, given how many fit
+ * (`truncateToContextWindow(...).length`). Guards the zero case: in JS
+ * `arr.slice(-0)` === `arr.slice(0)` returns the WHOLE array, so naively doing
+ * `messages.slice(-keepCount)` would send the ENTIRE history when nothing fit —
+ * the opposite of truncating. When nothing fits we fall back to just the latest
+ * turn so the chat still works without blowing the context window wide open.
+ */
+export function selectMessagesToSend<T>(messages: T[], keepCount: number): T[] {
+  if (messages.length === 0) return []
+  if (keepCount <= 0) return messages.slice(-1)
+  return messages.slice(-keepCount)
+}
+
+/**
  * Check if messages would exceed context window
  */
 export function wouldExceedContextWindow(
