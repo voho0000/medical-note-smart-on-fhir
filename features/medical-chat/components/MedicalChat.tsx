@@ -163,6 +163,21 @@ export default function MedicalChat() {
   
   // Ensure chat.messages is always an array
   const chatMessages = Array.isArray(chat.messages) ? chat.messages : []
+
+  // Reset the conversation when the patient context changes (a local bundle is
+  // imported or cleared). Chat messages are in-memory only, so without this the
+  // previous patient's conversation would linger on the newly-loaded patient —
+  // a privacy leak. handleReset stops any in-flight stream, clears the messages,
+  // and drops the saved-session pointer so the next turn starts fresh. The ref
+  // keeps the listener stable while always invoking the active mode's reset.
+  const handleResetRef = useRef(chat.handleReset)
+  handleResetRef.current = chat.handleReset
+  useEffect(() => {
+    const onBundleChange = () => handleResetRef.current()
+    window.addEventListener('mediprisma:local-bundle-changed', onBundleChange)
+    return () => window.removeEventListener('mediprisma:local-bundle-changed', onBundleChange)
+  }, [])
+
   const template = useTemplateSelector()
 
   // Start a new conversation. Logged-in (non-temp) chats are already auto-saved
