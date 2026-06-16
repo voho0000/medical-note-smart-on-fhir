@@ -756,7 +756,7 @@ export const zhTW = {
     saveKey: '儲存金鑰',
     clear: '清除',
     rememberKeyOnDevice: '在此裝置記住金鑰',
-    rememberKeyHint: '開啟後，金鑰會持久保存在這台電腦的瀏覽器，重開仍在。共用電腦請關閉——關閉時金鑰只在目前分頁有效，關閉視窗即清除。',
+    rememberKeyHint: '開啟後，API 金鑰會保存在此瀏覽器，下次開啟仍可使用。關閉時，金鑰只在目前瀏覽工作階段有效，關閉分頁或視窗後即清除。共用電腦建議關閉。',
     clearOpenAiKeyWarning: '此操作將從本機儲存中永久刪除您的金鑰。如果您使用的模型需要此金鑰，將無法繼續使用。',
     clearGeminiKeyWarning: '此操作將從本機儲存中永久刪除您的金鑰。如果您使用的模型需要此金鑰，將無法繼續使用。',
     clearPerplexityKeyWarning: '此操作將從本機儲存中永久刪除您的金鑰，深入模式的醫學文獻搜尋功能將無法使用。',

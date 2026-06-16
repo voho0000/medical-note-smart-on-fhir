@@ -752,7 +752,7 @@ export const en = {
     saveKey: 'Save key',
     clear: 'Clear',
     rememberKeyOnDevice: 'Remember keys on this device',
-    rememberKeyHint: 'When on, keys persist in this browser and survive a restart. Turn off on shared computers — keys then last only for the current tab and clear when you close the window.',
+    rememberKeyHint: 'When enabled, API keys are saved in this browser and will be available the next time you open the app. When disabled, they are kept only for the current browser session and cleared when you close this tab or window. Keep this off on shared computers.',
     clearOpenAiKeyWarning: 'This will permanently delete your key from local storage. If your selected model requires this key, it will no longer work.',
     clearGeminiKeyWarning: 'This will permanently delete your key from local storage. If your selected model requires this key, it will no longer work.',
     clearPerplexityKeyWarning: 'This will permanently delete your key from local storage. Medical literature search in Deep Mode will no longer be available.',
