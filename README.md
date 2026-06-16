@@ -145,7 +145,11 @@ npm test:coverage
 npm run deploy
 ```
 
-### Vercel（支援機密客戶端模式）
+### Vercel（Node 伺服器託管）
+
+> ⚠️ **關於 SMART client secret**：SMART 啟動流程在**瀏覽器端**讀取 `NEXT_PUBLIC_SMART_CLIENT_SECRET`（`app/smart/launch/page.tsx`）。凡 `NEXT_PUBLIC_` 前綴的變數都會被編入前端 bundle、對使用者可見——**這並不是真正的 confidential client**，只適合開發／測試沙箱。正式對外上架請改用 **public client + PKCE**，或由**後端／BFF 進行 token exchange**，切勿在前端放真正的 client secret。
+>
+> Vercel（相對於 GitHub Pages 靜態部署）的實際好處是：以 Node 伺服器執行，`next.config.ts` 的 `headers()`（CSP 等）會實際送出。
 
 **步驟**：
 
@@ -158,9 +162,10 @@ npm run deploy
    
    在 Vercel 專案設定中添加：
    
-   **必要（機密客戶端模式）**：
+   **SMART on FHIR**（⚠️ secret 會曝露於前端，非真正 confidential client——見上方警告）：
    ```
    NEXT_PUBLIC_SMART_CLIENT_ID=your_client_id
+   # 僅供開發/測試沙箱；正式上架請改 public PKCE 或後端 token exchange
    NEXT_PUBLIC_SMART_CLIENT_SECRET=your_client_secret
    ```
    

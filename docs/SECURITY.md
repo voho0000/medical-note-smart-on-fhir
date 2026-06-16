@@ -8,17 +8,19 @@
 - Session-based 加密密碼
 - 實作檔案：`src/shared/utils/crypto.utils.ts`
 
-### 2. 安全 Headers
-實作檔案：`next.config.ts`
-- X-Frame-Options: SAMEORIGIN
+### 2. 安全 Headers / CSP
+實作檔案：`next.config.ts`（`headers()`）
+- **Content-Security-Policy: frame-ancestors** — 白名單 `'self'` + 健保存摺 + `*.vghtpe.gov.tw` + 本機 mock-his。**刻意不設 X-Frame-Options**：其唯一的 allow-list 值（ALLOW-FROM）Chrome 已不支援，SAMEORIGIN 又會擋掉 EHR-FHIR Bridge 在 HIS 頁面內嵌本 app，故改用 CSP `frame-ancestors` 白名單。
 - X-Content-Type-Options: nosniff
 - X-XSS-Protection: 1; mode=block
 - Referrer-Policy: strict-origin-when-cross-origin
 - Permissions-Policy: camera=(), microphone=(self), geolocation=()
 
-### 3. HTML Sanitization
-- 移除危險的 script、iframe、事件處理器
-- 實作檔案：`src/shared/utils/string.utils.ts`
+> ⚠️ **重要限制**：`next.config.ts` 的 `headers()` 只在 Node 伺服器（`next dev` / `next start`）生效。正式部署在 **GitHub Pages（靜態 CDN）時這些 response header 不會送出**——嵌入防護需改由 CDN／反向代理層或實際的 Node 託管提供。
+
+### 3. HTML Sanitization（DOMPurify）
+- FHIR 敘述性 XHTML（Composition / IPS narrative）注入前一律經 **DOMPurify 3.4.10** 淨化：`features/clinical-summary/document-summary/utils/sanitize-narrative.ts`、`features/ips-export/components/IpsSectionPreview.tsx`
+- 其餘字串移除危險的 script、iframe、事件處理器：`src/shared/utils/string.utils.ts`
 
 ### 4. 錯誤訊息過濾
 - 過濾 API keys、tokens 等敏感資訊
@@ -43,10 +45,10 @@
 ## ⚠️ 建議改進
 
 ### 高優先級
-1. **Content Security Policy (CSP)** - 目前尚未實作
-2. **DOMPurify** - 增強 HTML sanitization
-3. **Rate Limiting** - 防止 API 濫用
-4. **環境變數驗證** - 使用 zod 驗證
+1. **正式部署的安全 Headers** — GitHub Pages 靜態部署不套用 `headers()`；CSP／嵌入防護需在 CDN／代理層補上（CSP、DOMPurify 本身已實作，見上方）
+2. **Rate Limiting（durable）** — feedback endpoint 目前是 serverless instance 記憶體層級的盡力防濫用，公開上線建議改 durable 限流 + Turnstile / Firebase ID token
+3. **環境變數驗證** - 使用 zod 驗證
+4. **SMART confidential client** — `NEXT_PUBLIC_SMART_CLIENT_SECRET` 會送到瀏覽器，不是真正的機密客戶端；正式上架應改 public PKCE 或 BFF/backend token exchange
 
 ### 中優先級
 5. 更新測試
@@ -63,8 +65,9 @@
 - [x] HTTPS
 - [x] SMART on FHIR OAuth
 - [x] Firebase Authentication
-- [x] Firestore Security Rules
-- [ ] Content Security Policy (CSP)
+- [x] Firestore Security Rules（位於 `firebase-smart-on-fhir` repo，需確認已 deploy）
+- [x] Content Security Policy（frame-ancestors；⚠️ GH Pages 靜態部署不套用，見上方）
+- [x] DOMPurify（FHIR narrative 淨化）
 - [ ] 所有測試通過
 - [ ] npm audit 無高危漏洞
 
@@ -81,15 +84,15 @@
 ✅ 資料加密（AES-GCM 256-bit）
 ✅ 傳輸安全（HTTPS）
 ✅ 認證授權（OAuth 2.0 + Firebase）
-✅ XSS 防護（HTML Sanitization + 安全 Headers）
+✅ XSS 防護（DOMPurify narrative 淨化 + CSP frame-ancestors + 安全 Headers）
 ✅ 資料隔離（Firestore Rules）
 ✅ 錯誤處理（敏感資訊過濾）
 ✅ AI 安全（客戶端 Tool Calling 限制）
 
 建議改進：
-⚠️ 實作完整的 Content Security Policy (CSP)
-⚠️ 安裝 DOMPurify
-⚠️ 加入 Rate Limiting
+⚠️ 正式（GitHub Pages）部署補上 response-header 層級的 CSP／嵌入防護
+⚠️ feedback endpoint 改用 durable rate limit + Turnstile
+⚠️ SMART 改 public PKCE / BFF（勿在瀏覽器放 client secret）
 
 ## 📞 聯絡資訊
 

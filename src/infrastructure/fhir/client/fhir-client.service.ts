@@ -137,9 +137,51 @@ export class FhirClientService {
     return await client.request(query)
   }
 
+  /**
+   * Like `request`, but follows `Bundle.link[relation="next"]` and merges every
+   * page's entries into a single Bundle. A plain `request()` only returns the
+   * FIRST page, so on a real FHIR server that paginates (most do beyond
+   * `_count`), long-running patients would silently lose the older data past
+   * page 1. The returned object keeps the first page's shape with a combined
+   * `entry[]`, so callers that do `response.entry?.map(...)` need no change.
+   *
+   * `maxPages` is a safety cap against a server returning an endless / cyclic
+   * next-link; if hit we log and stop with whatever we have (partial > hang).
+   */
+  async requestAllPages<T = any>(query: string, maxPages = 50): Promise<T> {
+    const client = await this.getClient()
+    const first = await client.request<any>(query)
+    const entries: any[] = Array.isArray(first?.entry) ? [...first.entry] : []
+
+    let next = nextPageUrl(first)
+    let pages = 1
+    while (next && pages < maxPages) {
+      const page = await client.request<any>(next)
+      if (Array.isArray(page?.entry)) entries.push(...page.entry)
+      next = nextPageUrl(page)
+      pages += 1
+    }
+    if (next) {
+      console.warn(`[FhirClient] Stopped paginating "${query.split('?')[0]}" at ${maxPages} pages; results may be truncated.`)
+    }
+    return { ...(first as object), entry: entries } as T
+  }
+
   clearClient(): void {
     this.client = null
   }
+}
+
+/**
+ * Pull the `next` page URL out of a FHIR searchset Bundle's `link` array.
+ * Returns undefined when there's no further page. Pure + exported so the
+ * pagination contract is unit-testable without a live SMART client.
+ */
+export function nextPageUrl(bundle: unknown): string | undefined {
+  const links = (bundle as { link?: Array<{ relation?: string; url?: string }> })?.link
+  if (!Array.isArray(links)) return undefined
+  const next = links.find((l) => l?.relation === 'next' && typeof l.url === 'string')
+  return next?.url
 }
 
 export const fhirClient = FhirClientService.getInstance()

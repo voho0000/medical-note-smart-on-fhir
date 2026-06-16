@@ -31,7 +31,7 @@ describe('FhirClinicalDataRepository', () => {
       const mockProcedure = { id: 'proc-1', code: { text: 'Surgery' }, status: 'completed' }
       const mockEncounter = { id: 'enc-1', status: 'finished' }
 
-      mockFhirClient.request.mockImplementation((url: string) => {
+      mockFhirClient.requestAllPages.mockImplementation((url: string) => {
         if (url.startsWith('Condition')) return Promise.resolve({ entry: [{ resource: {} }] })
         if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [{ resource: {} }] })
         if (url.startsWith('AllergyIntolerance')) return Promise.resolve({ entry: [{ resource: {} }] })
@@ -66,7 +66,7 @@ describe('FhirClinicalDataRepository', () => {
     })
 
     it('should handle empty responses', async () => {
-      mockFhirClient.request.mockResolvedValue({ entry: [] })
+      mockFhirClient.requestAllPages.mockResolvedValue({ entry: [] })
 
       const result = await repository.fetchAllClinicalData('patient-123')
 
@@ -84,20 +84,20 @@ describe('FhirClinicalDataRepository', () => {
           { resource: { id: 'cond-2', code: { text: 'Hypertension' } } }
         ]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toCondition.mockImplementation((r: any) => ({ id: r.id, code: r.code }))
 
       const result = await repository.fetchConditions('patient-123')
 
       expect(result).toHaveLength(2)
-      expect(mockFhirClient.request).toHaveBeenCalledWith(
+      expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
         expect.stringContaining('Condition?patient=patient-123')
       )
     })
 
     it('should fallback when sort fails', async () => {
       const mockResponse = { entry: [{ resource: { id: 'cond-1' } }] }
-      mockFhirClient.request
+      mockFhirClient.requestAllPages
         .mockRejectedValueOnce(new Error('Sort not supported'))
         .mockResolvedValueOnce(mockResponse)
       mockMapper.toCondition.mockReturnValue({ id: 'cond-1', code: { text: 'Test' } })
@@ -105,12 +105,12 @@ describe('FhirClinicalDataRepository', () => {
       const result = await repository.fetchConditions('patient-123')
 
       expect(result).toHaveLength(1)
-      expect(mockFhirClient.request).toHaveBeenCalledTimes(2)
+      expect(mockFhirClient.requestAllPages).toHaveBeenCalledTimes(2)
     })
 
     it('should return empty array on complete failure', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
-      mockFhirClient.request.mockRejectedValue(new Error('Network error'))
+      mockFhirClient.requestAllPages.mockRejectedValue(new Error('Network error'))
 
       const result = await repository.fetchConditions('patient-123')
 
@@ -120,7 +120,7 @@ describe('FhirClinicalDataRepository', () => {
     })
 
     it('should handle missing entry field', async () => {
-      mockFhirClient.request.mockResolvedValue({})
+      mockFhirClient.requestAllPages.mockResolvedValue({})
 
       const result = await repository.fetchConditions('patient-123')
 
@@ -133,20 +133,20 @@ describe('FhirClinicalDataRepository', () => {
       const mockResponse = {
         entry: [{ resource: { id: 'med-1', medicationCodeableConcept: { text: 'Aspirin' } } }]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toMedication.mockReturnValue({ id: 'med-1', medicationCodeableConcept: { text: 'Aspirin' }, status: 'active', intent: 'order' })
 
       const result = await repository.fetchMedications('patient-123')
 
       expect(result).toHaveLength(1)
-      expect(mockFhirClient.request).toHaveBeenCalledWith(
+      expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
         expect.stringContaining('MedicationRequest?patient=patient-123')
       )
     })
 
     it('should return empty array on error', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
-      mockFhirClient.request.mockRejectedValue(new Error('Fetch error'))
+      mockFhirClient.requestAllPages.mockRejectedValue(new Error('Fetch error'))
 
       const result = await repository.fetchMedications('patient-123')
 
@@ -160,7 +160,7 @@ describe('FhirClinicalDataRepository', () => {
       const mockResponse = {
         entry: [{ resource: { id: 'allergy-1', code: { text: 'Peanuts' } } }]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toAllergy.mockReturnValue({ id: 'allergy-1', code: { text: 'Peanuts' } })
 
       const result = await repository.fetchAllergies('patient-123')
@@ -170,7 +170,7 @@ describe('FhirClinicalDataRepository', () => {
 
     it('should return empty array on error', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
-      mockFhirClient.request.mockRejectedValue(new Error('Error'))
+      mockFhirClient.requestAllPages.mockRejectedValue(new Error('Error'))
 
       const result = await repository.fetchAllergies('patient-123')
 
@@ -184,20 +184,20 @@ describe('FhirClinicalDataRepository', () => {
       const mockResponse = {
         entry: [{ resource: { id: 'obs-1', code: { text: 'Glucose' } } }]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toObservation.mockReturnValue({ id: 'obs-1', code: { text: 'Glucose' }, status: 'final' })
 
       const result = await repository.fetchObservations('patient-123')
 
       expect(result).toHaveLength(1)
-      expect(mockFhirClient.request).toHaveBeenCalledWith(
+      expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
         expect.stringContaining('Observation?patient=patient-123')
       )
     })
 
     it('should return empty array on error', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
-      mockFhirClient.request.mockRejectedValue(new Error('Error'))
+      mockFhirClient.requestAllPages.mockRejectedValue(new Error('Error'))
 
       const result = await repository.fetchObservations('patient-123')
 
@@ -211,13 +211,13 @@ describe('FhirClinicalDataRepository', () => {
       const mockResponse = {
         entry: [{ resource: { id: 'vital-1', code: { text: 'Blood Pressure' } } }]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toObservation.mockReturnValue({ id: 'vital-1', code: { text: 'Blood Pressure' }, status: 'final' })
 
       const result = await repository.fetchVitalSigns('patient-123')
 
       expect(result).toHaveLength(1)
-      expect(mockFhirClient.request).toHaveBeenCalledWith(
+      expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
         expect.stringContaining('category=vital-signs')
       )
     })
@@ -231,7 +231,7 @@ describe('FhirClinicalDataRepository', () => {
           { resource: { resourceType: 'Observation', id: 'obs-1', code: { text: 'Hemoglobin' } } }
         ]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toObservation.mockReturnValue({ id: 'obs-1', code: { text: 'Hemoglobin' }, status: 'final' })
       mockMapper.toDiagnosticReport.mockReturnValue({ id: 'report-1', code: { text: 'CBC' }, status: 'final' })
 
@@ -243,7 +243,7 @@ describe('FhirClinicalDataRepository', () => {
 
     it('should return empty array on error', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
-      mockFhirClient.request.mockRejectedValue(new Error('Error'))
+      mockFhirClient.requestAllPages.mockRejectedValue(new Error('Error'))
 
       const result = await repository.fetchDiagnosticReports('patient-123')
 
@@ -257,7 +257,7 @@ describe('FhirClinicalDataRepository', () => {
       const mockResponse = {
         entry: [{ resource: { id: 'proc-1', code: { text: 'Surgery' } } }]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toProcedure.mockReturnValue({ id: 'proc-1', code: { text: 'Surgery' }, status: 'completed' })
 
       const result = await repository.fetchProcedures('patient-123')
@@ -271,7 +271,7 @@ describe('FhirClinicalDataRepository', () => {
       const mockResponse = {
         entry: [{ resource: { id: 'enc-1', status: 'finished' } }]
       }
-      mockFhirClient.request.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toEncounter.mockReturnValue({ id: 'enc-1', status: 'finished' })
 
       const result = await repository.fetchEncounters('patient-123')

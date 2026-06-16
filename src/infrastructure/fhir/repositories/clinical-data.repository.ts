@@ -107,7 +107,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchConsents(patientId: string): Promise<ConsentEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Consent?patient=${patientId}&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toConsent(e.resource)) || []
@@ -119,7 +119,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchDevices(patientId: string): Promise<DeviceEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Device?patient=${patientId}&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toDevice(e.resource)) || []
@@ -131,7 +131,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchCarePlans(patientId: string): Promise<CarePlanEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `CarePlan?patient=${patientId}&_sort=-date&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toCarePlan(e.resource)) || []
@@ -143,7 +143,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchImmunizations(patientId: string): Promise<import('@/src/core/entities/clinical-data.entity').ImmunizationEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Immunization?patient=${patientId}&_sort=-date&_count=200`
       )
       return response.entry?.map((e: any) => FhirMapper.toImmunization(e.resource)) || []
@@ -155,14 +155,14 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchConditions(patientId: string): Promise<ConditionEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Condition?patient=${patientId}&_sort=-recorded-date&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
     } catch (error) {
       warnFhirError('Failed to sort conditions, trying without sort:', error)
       try {
-        const response = await fhirClient.request(`Condition?patient=${patientId}&_count=100`)
+        const response = await fhirClient.requestAllPages(`Condition?patient=${patientId}&_count=100`)
         return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
       } catch (fallbackError) {
         logFhirError('Failed to fetch conditions:', fallbackError)
@@ -173,7 +173,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchMedications(patientId: string): Promise<MedicationEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `MedicationRequest?patient=${patientId}&_sort=-authoredon&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toMedication(e.resource)) || []
@@ -185,7 +185,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchAllergies(patientId: string): Promise<AllergyEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `AllergyIntolerance?patient=${patientId}&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toAllergy(e.resource)) || []
@@ -198,7 +198,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
   async fetchObservations(patientId: string): Promise<ObservationEntity[]> {
     try {
       // Fetch all observations (laboratory, procedure, etc.)
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Observation?patient=${patientId}&_count=200&_sort=-date`
       )
 
@@ -211,7 +211,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchVitalSigns(patientId: string): Promise<ObservationEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=200`
       )
       return response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
@@ -223,7 +223,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchDiagnosticReports(patientId: string): Promise<DiagnosticReportEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `DiagnosticReport?patient=${patientId}&_count=500&_sort=-date&_include=DiagnosticReport:result&_include:iterate=Observation:has-member`
       )
 
@@ -247,7 +247,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchProcedures(patientId: string): Promise<ProcedureEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Procedure?patient=${patientId}&_count=100&_sort=-date`
       )
       return response.entry?.map((e: any) => FhirMapper.toProcedure(e.resource)) || []
@@ -259,7 +259,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchEncounters(patientId: string): Promise<EncounterEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Encounter?patient=${patientId}&_sort=-date&_count=100&_include=Encounter:patient&_include=Encounter:location`
       )
       return response.entry?.map((e: any) => FhirMapper.toEncounter(e.resource)) || []
@@ -271,7 +271,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchDocumentReferences(patientId: string): Promise<DocumentReferenceEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `DocumentReference?patient=${patientId}&_sort=-date&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toDocumentReference(e.resource)) || []
@@ -283,7 +283,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchCompositions(patientId: string): Promise<CompositionEntity[]> {
     try {
-      const response = await fhirClient.request(
+      const response = await fhirClient.requestAllPages(
         `Composition?patient=${patientId}&_sort=-date&_count=100`
       )
       return response.entry?.map((e: any) => FhirMapper.toComposition(e.resource)) || []
