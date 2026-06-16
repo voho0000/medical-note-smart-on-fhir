@@ -34,16 +34,12 @@ export default function SmartLaunchPage() {
         completeInTarget: true,
       }
 
-      // Only add clientSecret if provided (for confidential client mode)
-      const clientSecret = process.env.NEXT_PUBLIC_SMART_CLIENT_SECRET
-      if (clientSecret) {
-        authConfig.clientSecret = clientSecret.trim()
-        console.log('🔐 Using CONFIDENTIAL client mode with clientSecret')
-      } else {
-        console.log('🔓 Using PUBLIC client mode (no clientSecret)')
-      }
-      console.log('Client ID:', authConfig.clientId)
-
+      // Public client + PKCE only. We deliberately do NOT support a
+      // browser-side clientSecret: NEXT_PUBLIC_* is baked into the static
+      // bundle, so it could never actually be confidential. (The old
+      // confidential path existed only for an MOHW conformance sandbox.)
+      // clientId stays configurable via NEXT_PUBLIC_SMART_CLIENT_ID — it is
+      // a public identifier, not a secret.
       await FHIR.oauth2.authorize(authConfig)
     })()
   }, [])

@@ -93,7 +93,7 @@ npm run test:coverage
 - Client Type：Public（PKCE）
 - Scopes：`launch openid fhirUser patient/*.read online_access`
 
-> ⚠️ 本專案不是真正的 confidential client。`NEXT_PUBLIC_SMART_CLIENT_SECRET` 會被編入前端 bundle、對使用者可見，僅適合開發／測試沙箱。正式對外請用 public PKCE，或由後端／BFF 進行 token exchange，切勿在前端放真正的 client secret。
+> 本專案只用 **public client + PKCE**，不支援 client secret（靜態前端無法藏密碼）。`NEXT_PUBLIC_SMART_CLIENT_ID` 為公開識別碼、選用（預設 `my_web_app`）。
 
 ## 部署
 
@@ -122,9 +122,8 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 NEXT_PUBLIC_FIREBASE_APP_ID=...
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 
-# SMART（選用，僅開發／測試沙箱；見上方警告）
+# SMART（選用；公開 client id，預設 my_web_app）
 NEXT_PUBLIC_SMART_CLIENT_ID=...
-NEXT_PUBLIC_SMART_CLIENT_SECRET=...
 ```
 
 ## 架構
@@ -251,7 +250,7 @@ Register the app in your FHIR sandbox/server (**public client + PKCE**):
 - Client Type: Public (PKCE)
 - Scopes: `launch openid fhirUser patient/*.read online_access`
 
-> ⚠️ This is **not** a true confidential client. `NEXT_PUBLIC_SMART_CLIENT_SECRET` is compiled into the front-end bundle and visible to users — dev/test sandboxes only. For production use public PKCE, or do token exchange in a backend/BFF; never ship a real client secret to the browser.
+> This app uses **public client + PKCE** only — no client secret (a static front end can't keep one). `NEXT_PUBLIC_SMART_CLIENT_ID` is a public identifier, optional (defaults to `my_web_app`).
 
 ## Deployment
 

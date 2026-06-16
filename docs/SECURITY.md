@@ -46,9 +46,9 @@
 
 ### 高優先級
 1. **正式部署的安全 Headers** — GitHub Pages 靜態部署不套用 `headers()`；CSP／嵌入防護需在 CDN／代理層補上（CSP、DOMPurify 本身已實作，見上方）
-2. **Rate Limiting（durable）** — feedback endpoint 目前是 serverless instance 記憶體層級的盡力防濫用，公開上線建議改 durable 限流 + Turnstile / Firebase ID token
-3. **環境變數驗證** - 使用 zod 驗證
-4. **SMART confidential client** — `NEXT_PUBLIC_SMART_CLIENT_SECRET` 會送到瀏覽器，不是真正的機密客戶端；正式上架應改 public PKCE 或 BFF/backend token exchange
+2. **環境變數驗證** — 使用 zod 驗證
+
+> ✅ 已處理：feedback endpoint 改用 durable Firestore 限流（per-IP、fail-open；可再加 Turnstile / Firebase ID token 進一步強化）；SMART 移除瀏覽器端 client secret，改為 **public client + PKCE only**。
 
 ### 中優先級
 5. 更新測試
