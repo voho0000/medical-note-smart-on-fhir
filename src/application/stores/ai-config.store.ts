@@ -112,9 +112,11 @@ const modelFallbackForMissingKey = (state: {
 export const useAiConfigStore = create<AiConfigState>()(
   persist(
     (set, get) => ({
-      // Initial state — sessionStorage by default (shared-workstation safety);
-      // onRehydrateStorage migrates legacy users who already hold keys in
-      // localStorage without a saved preference
+      // Initial state — sessionStorage by default (shared-workstation safety):
+      // keys clear when the window closes. Users who want persistence flip the
+      // "remember on this device" toggle in Settings, which switches storage to
+      // localStorage and migrates any saved keys. onRehydrateStorage keeps
+      // legacy users who already hold keys in localStorage on localStorage.
       apiKey: null,
       geminiKey: null,
       perplexityKey: null,

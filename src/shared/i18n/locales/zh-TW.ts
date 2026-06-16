@@ -755,6 +755,8 @@ export const zhTW = {
     perplexityKeyHelp: '用於深入模式的醫學文獻搜尋功能。您的 Perplexity 金鑰僅保存在此裝置的本機儲存中。',
     saveKey: '儲存金鑰',
     clear: '清除',
+    rememberKeyOnDevice: '在此裝置記住金鑰',
+    rememberKeyHint: '開啟後，金鑰會持久保存在這台電腦的瀏覽器，重開仍在。共用電腦請關閉——關閉時金鑰只在目前分頁有效，關閉視窗即清除。',
     clearOpenAiKeyWarning: '此操作將從本機儲存中永久刪除您的金鑰。如果您使用的模型需要此金鑰，將無法繼續使用。',
     clearGeminiKeyWarning: '此操作將從本機儲存中永久刪除您的金鑰。如果您使用的模型需要此金鑰，將無法繼續使用。',
     clearPerplexityKeyWarning: '此操作將從本機儲存中永久刪除您的金鑰，深入模式的醫學文獻搜尋功能將無法使用。',

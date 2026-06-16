@@ -7,6 +7,7 @@ import { InfoHint } from "@/src/shared/components/InfoHint"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
 import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSelection'
@@ -27,6 +28,8 @@ export function ModelAndKeySettings() {
   const setClaudeKey = useAiConfigStore((state) => state.setClaudeKey)
   const setModel = useAiConfigStore((state) => state.setModel)
   const clearAllKeys = useAiConfigStore((state) => state.clearAllKeys)
+  const storageType = useAiConfigStore((state) => state.storageType)
+  const setStorageType = useAiConfigStore((state) => state.setStorageType)
   const [openAiValue, setOpenAiValue] = useState(apiKey)
   const [geminiValue, setGeminiValue] = useState(geminiKey)
   const [perplexityValue, setPerplexityValue] = useState(perplexityKey)
@@ -184,6 +187,28 @@ export function ModelAndKeySettings() {
             {t.common.or || '或'}
           </span>
         </div>
+      </div>
+
+      {/* Persistence toggle — keys default to session-only (cleared when the
+          window closes) for shared-workstation safety. This was the missing
+          piece behind "my saved key disappeared on reopen": there was no way
+          to opt into persistence. Flipping it migrates any saved keys via
+          setStorageType. */}
+      <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
+        <div className="min-w-0 space-y-0.5">
+          <Label htmlFor="remember-keys" className="text-sm font-medium">
+            {t.settings.rememberKeyOnDevice}
+          </Label>
+          <p className="text-xs text-muted-foreground">{t.settings.rememberKeyHint}</p>
+        </div>
+        <Switch
+          id="remember-keys"
+          className="shrink-0"
+          checked={storageType === 'localStorage'}
+          onCheckedChange={(checked) =>
+            setStorageType(checked ? 'localStorage' : 'sessionStorage')
+          }
+        />
       </div>
 
       {/* OpenAI API Key */}

@@ -751,6 +751,8 @@ export const en = {
     perplexityKeyHelp: 'Used for medical literature search in Deep Mode. Your Perplexity key is kept in local storage on this device only.',
     saveKey: 'Save key',
     clear: 'Clear',
+    rememberKeyOnDevice: 'Remember keys on this device',
+    rememberKeyHint: 'When on, keys persist in this browser and survive a restart. Turn off on shared computers — keys then last only for the current tab and clear when you close the window.',
     clearOpenAiKeyWarning: 'This will permanently delete your key from local storage. If your selected model requires this key, it will no longer work.',
     clearGeminiKeyWarning: 'This will permanently delete your key from local storage. If your selected model requires this key, it will no longer work.',
     clearPerplexityKeyWarning: 'This will permanently delete your key from local storage. Medical literature search in Deep Mode will no longer be available.',
