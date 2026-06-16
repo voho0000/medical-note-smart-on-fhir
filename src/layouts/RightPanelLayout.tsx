@@ -153,7 +153,7 @@ function RightPanelContentInner() {
       onValueChange={setActiveTab}
       className="h-full flex flex-col"
     >
-      <TabsList className="w-full grid grid-cols-5 gap-1 h-12 bg-muted/50 p-1 border">
+      <TabsList className="w-full grid grid-cols-5 gap-1 h-12 shrink-0 bg-muted/50 p-1 border">
         {features.map(feature => {
           const theme = getTabTheme(feature.id)
           const Icon = theme.icon
@@ -175,7 +175,7 @@ function RightPanelContentInner() {
         <TabsContent 
           key={feature.id}
           value={feature.id} 
-          className={feature.contentClassName || 'flex-1 mt-4'}
+          className={feature.contentClassName || 'flex-1 mt-1'}
           forceMount={feature.forceMount ? true : undefined}
         >
           <FeatureTabContent feature={feature} />

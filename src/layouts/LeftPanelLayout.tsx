@@ -23,7 +23,7 @@ function TabFeatureContent({ tabId }: { tabId: string }) {
         grows with the widest child (wide tables in CumulativeLabReport),
         pushing absolute-positioned UI like the expand button off-screen.
       */}
-      <div className="space-y-4 w-full" style={{ contain: 'inline-size' }}>
+      <div className="space-y-3 w-full" style={{ contain: 'inline-size' }}>
         {features.map(feature => {
           const Component = feature.component
           return <Component key={feature.id} />
@@ -62,7 +62,10 @@ export default function ClinicalSummaryFeature() {
             already uses `truncate` + a `title` tooltip, so narrower per-tab
             widths still render the full label on hover. */}
         <TabsList
-          className="w-full grid gap-1 h-12 bg-muted/50 p-1 border"
+          // shrink-0: without it the flex column squeezes this h-12 bar by a
+          // few px when a tab's content is tall (e.g. 報告), so the tab bar
+          // jumped height between tabs. Pin it so the height is stable.
+          className="w-full grid gap-1 h-12 shrink-0 bg-muted/50 p-1 border"
           style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
         >
           {tabs.map(tab => {
@@ -86,7 +89,7 @@ export default function ClinicalSummaryFeature() {
         </TabsList>
 
         {tabs.map(tab => (
-          <TabsContent key={tab.id} value={tab.id} className="flex-1 mt-4">
+          <TabsContent key={tab.id} value={tab.id} className="flex-1 mt-1">
             <TabFeatureContent tabId={tab.id} />
           </TabsContent>
         ))}

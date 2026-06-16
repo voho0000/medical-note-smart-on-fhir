@@ -45,7 +45,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     order: 0,
     enabled: true,
     forceMount: true,
-    contentClassName: 'flex-1 overflow-hidden mt-4',
+    contentClassName: 'flex-1 overflow-hidden mt-1',
   },
   {
     id: 'data-selection',
@@ -54,7 +54,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     component: () => null,
     order: 1,
     enabled: true,
-    contentClassName: 'flex-1 mt-4',
+    contentClassName: 'flex-1 mt-1',
   },
   {
     id: 'clinical-insights',
@@ -64,7 +64,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     order: 2,
     enabled: true,
     forceMount: true,
-    contentClassName: 'flex-1 mt-4',
+    contentClassName: 'flex-1 mt-1',
   },
   {
     id: 'ips-export',
@@ -77,7 +77,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     // and clinically reviewed state — they must survive tab switches.
     // useInferredProblems resets them when the loaded patient changes.
     forceMount: true,
-    contentClassName: 'flex-1 mt-4',
+    contentClassName: 'flex-1 mt-1',
   },
   {
     id: 'settings',
@@ -86,7 +86,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     component: () => null,
     order: 4,
     enabled: true,
-    contentClassName: 'flex-1 mt-4',
+    contentClassName: 'flex-1 mt-1',
   },
 ]
 

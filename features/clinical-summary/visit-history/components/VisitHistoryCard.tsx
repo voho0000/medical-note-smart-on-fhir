@@ -219,10 +219,10 @@ export function VisitHistoryCard() {
 
   // ── Render ────────────────────────────────────────────────────────────
   // No CardHeader/title here — the 就診紀錄 tab label already identifies this
-  // card, so the heading would be redundant. gap-2 py-4 mirrors FeatureCard
+  // card, so the heading would be redundant. gap-2 py-3 mirrors FeatureCard
   // for consistent spacing (base Card is gap-6 py-6).
   return (
-    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-4`}>
+    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-3`}>
       <CardContent>
         {isLoading ? (
           <div className="text-sm text-muted-foreground">{t.common.loading}</div>

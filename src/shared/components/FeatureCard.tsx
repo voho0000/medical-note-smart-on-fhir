@@ -44,8 +44,10 @@ export function FeatureCard({
     // 24px vertical padding makes the title↔content spacing feel too airy for
     // dense clinical cards, so tighten both here — this is the single shared
     // wrapper every feature card renders through, so the change applies
-    // uniformly. twMerge lets gap-3/py-4 override the base gap-6/py-6.
-    <Card className={`border-l-4 ${borderColor} gap-2 py-4`}>
+    // uniformly. twMerge lets gap-2/py-3 override the base gap-6/py-6. py-3
+    // (12px) keeps every clinical card's top padding consistent with the
+    // reports card.
+    <Card className={`border-l-4 ${borderColor} gap-2 py-3`}>
       {hasTitle && (
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

@@ -84,13 +84,17 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
       style={{ scrollbarWidth: 'thin' }}
     >
       <table className="text-xs border-collapse w-max min-w-full">
-        <thead className="sticky top-0 z-10">
+        {/* z-layering for the dual-sticky table: header row (z-20) must sit
+            ABOVE the sticky date column (z-10) or the scrolling dates paint
+            over the column names; the top-left corner cell (z-30) stays above
+            both. */}
+        <thead className="sticky top-0 z-20">
           {/* Subgroup header row */}
           {hasSubgroups && (
             <tr>
               <th
                 rowSpan={2}
-                className="sticky left-0 z-30 bg-muted/95 border-b border-r px-2 py-1.5 text-left font-semibold whitespace-nowrap min-w-[64px]"
+                className="sticky left-0 z-30 bg-muted border-b border-r px-2 py-1.5 text-left font-semibold whitespace-nowrap min-w-[64px]"
               >
                 {categoryLabel}
               </th>
@@ -118,7 +122,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
           {/* Test name header row */}
           <tr>
             {!hasSubgroups && (
-              <th className="sticky left-0 z-30 bg-muted/95 border-b border-r px-2 py-1.5 text-left font-semibold whitespace-nowrap min-w-[64px]">
+              <th className="sticky left-0 z-30 bg-muted border-b border-r px-2 py-1.5 text-left font-semibold whitespace-nowrap min-w-[64px]">
                 {categoryLabel}
               </th>
             )}
@@ -232,7 +236,7 @@ export function CumulativeLabReport({ observations, fullHeight = false, activeCa
               <TabsTrigger
                 key={p.category.id}
                 value={p.category.id}
-                className="!flex-1 !min-w-fit text-xs h-7 px-3 whitespace-nowrap data-[state=active]:bg-background"
+                className="!flex-none !min-w-fit text-xs h-7 px-2 whitespace-nowrap data-[state=active]:bg-background"
               >
                 {label} ({p.dates.length})
               </TabsTrigger>
@@ -243,7 +247,7 @@ export function CumulativeLabReport({ observations, fullHeight = false, activeCa
           <TabsContent
             key={p.category.id}
             value={p.category.id}
-            className={fullHeight ? 'mt-3 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-3 min-w-0 w-full max-w-full overflow-hidden'}
+            className={fullHeight ? 'mt-1 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-1 min-w-0 w-full max-w-full overflow-hidden'}
           >
             <LabPivotTable pivot={p} fullHeight={fullHeight} />
           </TabsContent>

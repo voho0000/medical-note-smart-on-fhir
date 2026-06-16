@@ -72,7 +72,7 @@ function PageContent() {
           <ChevronDown className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
         </button>
       ) : (
-      <header className="relative shrink-0 border-b bg-white/80 backdrop-blur-md px-3 py-3 sm:px-6 sm:py-4 shadow-sm">
+      <header className="relative shrink-0 border-b bg-white/80 backdrop-blur-md px-3 py-2 sm:px-6 sm:py-3 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
@@ -153,7 +153,7 @@ function PageContent() {
 
       {/* Tablet (md, split) uses tighter gap/padding than desktop so the two
           ~360px panels keep more usable width; desktop gets the roomier p-6/gap-6. */}
-      <main className="flex flex-1 flex-col md:flex-row gap-3 sm:gap-4 md:gap-4 lg:gap-6 overflow-hidden p-3 sm:p-4 md:p-4 lg:p-6" ref={containerRef}>
+      <main className="flex flex-1 flex-col md:flex-row gap-2 sm:gap-3 md:gap-3 lg:gap-4 overflow-hidden p-2 sm:p-3 md:p-3 lg:p-4" ref={containerRef}>
         {/* Left collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'left' && (
           <button

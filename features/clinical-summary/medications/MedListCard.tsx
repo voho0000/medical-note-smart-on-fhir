@@ -109,7 +109,7 @@ export function MedListCard() {
     >
       <Tabs value={tab} onValueChange={(v) => setTab(v as DataTab)} className="w-full">
         {/* Top tab bar (matches ReportsCard styling) */}
-        <TabsList className="!flex !justify-start shrink-0 mb-3 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1">
+        <TabsList className="!flex !justify-start shrink-0 mb-2 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1">
           {tabConfigs.map((c) => (
             <TabsTrigger
               key={c.value}
