@@ -1,561 +1,285 @@
 # 醫析 MediPrisma · SMART on FHIR
 
-> **語言選擇 / Language Selection:**  
-> 📖 [**中文版**](#中文版) | 📖 [**English Version**](#english-version)
+> 語言 / Language: [**中文**](#中文) ｜ [**English**](#english)
+
+基於 **Next.js 16** 與 **SMART on FHIR** 的臨床文件 AI 助理：把病人的 FHIR 資料整理成可讀的臨床摘要，並用 AI 協助查詢資料、檢索醫學文獻、起草病歷。
+
+> ⚠️ 研究／教學用途，非醫療器材，輸出僅供參考，臨床決策請以醫師判斷為準。
 
 ---
 
-# 中文版
+# 中文
 
-基於 **Next.js 16**、**SMART on FHIR** 和 **AI 整合**的智能臨床文件助理系統。
+## 這個 app 做什麼
 
-**核心亮點**：
-- 🤖 **AI Agent 深入模式**：自動調用 8 種工具查詢 FHIR 資料和醫學文獻
-- 📚 **提示範本庫**：社群共享的提示範本
-- 💬 **對話歷史**：依病人分類儲存，支援跨裝置同步
-- � **使用者回饋**：即時收集使用者意見，持續改進系統
-- �🔌 **可插拔架構**：透過 Registry 輕鬆新增或替換功能
+- **臨床摘要**：病人資訊、就診紀錄、報告（含**累積報告**：檢驗數值跨時間表格化）、用藥、文件，從 FHIR 自動整理。
+- **AI 協助**：
+  - **筆記對話**（一般模式）：互動式 AI 助理，可插入選定的臨床資料、起草病歷章節。
+  - **深入模式（AI Agent）**：以客戶端 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）＋醫學文獻搜尋（Perplexity）。
+  - **臨床洞察**：自動生成摘要。
+  - **語音口述**：Whisper 轉錄。
+- **資料選擇**：挑選要餵給 AI 的資料範圍（門診／檢驗／用藥…），多種預設與每用途記憶。
+- **IPS 匯出**：International Patient Summary。
+- **提示範本庫**：社群共享的提示範本。
+- **多語言（中／英）、深色模式、響應式**。
 
-## 🌐 線上展示
+## 資料來源（兩種）
 
-- **Launch URL**：https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
+1. **SMART on FHIR**：由 EHR 啟動（OAuth 2.0 + PKCE），即時讀取 FHIR 伺服器資料。
+2. **本地匯入**：匯入健保存摺等來源的 FHIR Bundle（`.json`）。資料**只留在本機**，不上傳。
 
-> 💡 透過 [SMART Health IT Launcher](https://launch.smarthealthit.org/) 輸入 Launch URL 啟動應用程式
+## 隱私與安全
 
-## 🎯 主要功能
+- **病人 FHIR 資料只存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。
+- **API 金鑰**：預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。金鑰一律留在瀏覽器，不上雲端。
+- **回饋**：刻意不收集病人識別資訊。
+- 詳見 [SECURITY.md](./docs/SECURITY.md)、[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)。
 
-### 臨床資料整合
-- SMART on FHIR OAuth 2.0 認證（PKCE）
-- 即時擷取 FHIR 資料
-- 完整臨床資料顯示：病人資料、診斷、用藥、過敏史、報告、就診紀錄
+## 線上展示
 
-### AI 功能
-- **AI Agent（深入模式）**：
-  - 8 種 FHIR 資源查詢工具（病人資料、診斷、用藥、過敏、檢驗報告、生命徵象、處置、就診紀錄）
-  - 醫學文獻搜尋（Perplexity API）
-  - 客戶端 Tool Calling 架構
-- **筆記對話（一般模式）**：互動式 AI 助理
-- **臨床洞察**：自動生成臨床摘要
-- **提示範本庫**：瀏覽、搜尋、分享提示範本
-- **語音錄製**：Whisper 轉錄
-- **對話歷史**：依病人儲存，Firestore 雲端同步
-- **使用者回饋**：即時回饋系統，支援 Firebase 儲存
+- **App**：<https://voho0000.github.io/medical-note-smart-on-fhir/>
+- **SMART Launch URL**：`https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch`
+- 可用 [SMART Health IT Launcher](https://launch.smarthealthit.org/) 輸入 Launch URL 啟動。
 
-### 使用者體驗
-- 多語言支援（中英文）
-- Firebase Authentication（Google 登入、Email/密碼）
-- 響應式設計、深色模式
-- shadcn/ui + Tailwind CSS
+## AI 模型
 
----
+不需自備金鑰時，請求會經由 Firebase Functions 代理（有每日免費額度，登入可提高、訪客較低）。也可在**設定**填自己的金鑰直接呼叫。
 
-## 🛠️ 技術堆疊
+| 類別 | 模型 |
+|------|------|
+| 免費內建（免金鑰，經代理） | **Gemini 3.1 Flash-Lite（預設）**、GPT-5.4 Nano、Claude Haiku 4.5 |
+| 進階（需自備金鑰） | GPT-5.4 Mini／GPT-5.4／GPT-5.5；Gemini 3 Flash Preview／Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
 
-- **框架**：Next.js 16（App Router + Turbopack）
+醫學文獻搜尋使用 Perplexity（深入模式）。
+
+## 技術堆疊
+
+- **框架**：Next.js 16（App Router、Turbopack）、靜態匯出
 - **UI**：shadcn/ui、Tailwind CSS 4
 - **FHIR**：fhirclient 2.6.3
-- **AI**：Vercel AI SDK、OpenAI、Gemini、Perplexity
-- **後端**：Firebase（Auth、Firestore、Functions）
-  - Firebase Functions Repo: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
-- **狀態**：React Context + Zustand
+- **AI**：Vercel AI SDK（OpenAI、Gemini、Claude、Perplexity）
+- **後端**：Firebase（Auth、Firestore、Functions）— Functions 與 Firestore Rules 在另一個 repo：[firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
+- **狀態**：Zustand + React Context
 - **測試**：Jest 30 + React Testing Library
-- **架構**：Clean Architecture + Feature-based Organization
+- **架構**：Clean Architecture + 功能模組（feature-based）
 
----
+## 快速開始
 
-## 📋 前置需求
+需要 Node.js 20+（CI 使用 24）。
 
-- Node.js 18.18+ 或 20.x LTS
-- API 金鑰（選用）：OpenAI、Gemini、Perplexity
-- Firebase 專案（選用，用於認證和對話歷史，設定請參考 [Firebase Functions Repo](https://github.com/voho0000/firebase-smart-on-fhir)）
-- FHIR 伺服器存取權限
-
----
-
-## 🚀 快速開始
-
-### 安裝
 ```bash
 npm install
-```
 
-### 開發
-```bash
-npm run dev:webpack  # 推薦
-npm run dev          # Turbopack（實驗性）
-```
+# 開發
+npm run dev:webpack   # webpack，http://localhost:3000（推薦）
+npm run dev           # Turbopack，http://localhost:3001（較快、實驗性）
 
-應用程式將在 `http://localhost:3000` 運行
-
-### 建置
-```bash
+# 建置 / 啟動
 npm run build
 npm start
-```
 
-### 測試
-```bash
+# 測試
 npm test
-npm test:watch
-npm test:coverage
+npm run test:watch
+npm run test:coverage
 ```
 
----
+## SMART on FHIR 設定
 
-## 🔐 SMART on FHIR 配置
+在 FHIR 沙盒／伺服器註冊應用程式（**public client + PKCE**）：
 
-### 公開客戶端模式（Public Client）
+- Launch URL：`<origin>/smart/launch`
+- Redirect URL：`<origin>/smart/callback`
+- Client Type：Public（PKCE）
+- Scopes：`launch openid fhirUser patient/*.read online_access`
 
-1. 在 SMART 沙盒註冊應用程式
-2. 配置：
-   - Launch URL: `http://localhost:3000/smart/launch`
-   - Redirect URL: `http://localhost:3000/smart/callback`
-   - Client Type: Public（PKCE）
-   - Scopes: `launch openid fhirUser patient/*.read online_access`
-3. 透過 SMART launcher 啟動
+> ⚠️ 本專案不是真正的 confidential client。`NEXT_PUBLIC_SMART_CLIENT_SECRET` 會被編入前端 bundle、對使用者可見，僅適合開發／測試沙箱。正式對外請用 public PKCE，或由後端／BFF 進行 token exchange，切勿在前端放真正的 client secret。
 
-### 機密客戶端模式（Confidential Client）
+## 部署
 
-如需使用 `clientSecret`（例如比賽測試要求）：
+**GitHub Pages（靜態，目前正式環境）**：push 到 `master` → CI 通過後自動部署。手動：`npm run deploy`。
 
-1. 設定環境變數：
-   ```bash
-   NEXT_PUBLIC_SMART_CLIENT_ID=your_client_id
-   NEXT_PUBLIC_SMART_CLIENT_SECRET=your_client_secret
-   ```
+> 注意：`next.config.ts` 的 `headers()`（CSP `frame-ancestors` 等）只在 Node 託管（`next start` / Vercel）生效；GitHub Pages 為靜態 CDN，這些 response header 不會送出。
 
-2. 部署到支援環境變數的平台（如 Vercel）
-
-3. 應用程式會自動偵測環境變數並使用機密客戶端模式
-
-> ⚠️ **安全提醒**：`clientSecret` 會暴露在前端，僅在受信任的測試環境使用
-
----
-
-## 🚀 部署
-
-### GitHub Pages（公開客戶端模式）
-
-**自動部署**：
-- Push 到 `master` 分支會自動觸發 GitHub Actions
-- 部署到：`https://voho0000.github.io/medical-note-smart-on-fhir/`
-
-**手動部署**：
-```bash
-npm run deploy
-```
-
-### Vercel（Node 伺服器託管）
-
-> ⚠️ **關於 SMART client secret**：SMART 啟動流程在**瀏覽器端**讀取 `NEXT_PUBLIC_SMART_CLIENT_SECRET`（`app/smart/launch/page.tsx`）。凡 `NEXT_PUBLIC_` 前綴的變數都會被編入前端 bundle、對使用者可見——**這並不是真正的 confidential client**，只適合開發／測試沙箱。正式對外上架請改用 **public client + PKCE**，或由**後端／BFF 進行 token exchange**，切勿在前端放真正的 client secret。
->
-> Vercel（相對於 GitHub Pages 靜態部署）的實際好處是：以 Node 伺服器執行，`next.config.ts` 的 `headers()`（CSP 等）會實際送出。
-
-**步驟**：
-
-1. **連接 GitHub Repo**
-   - 前往 [Vercel Dashboard](https://vercel.com/new)
-   - 選擇此 repository
-   - 點擊 "Import"
-
-2. **配置環境變數**
-   
-   在 Vercel 專案設定中添加：
-   
-   **SMART on FHIR**（⚠️ secret 會曝露於前端，非真正 confidential client——見上方警告）：
-   ```
-   NEXT_PUBLIC_SMART_CLIENT_ID=your_client_id
-   # 僅供開發/測試沙箱；正式上架請改 public PKCE 或後端 token exchange
-   NEXT_PUBLIC_SMART_CLIENT_SECRET=your_client_secret
-   ```
-   
-   **選用（API 服務）**：
-   ```
-   NEXT_PUBLIC_CHAT_URL=your_chat_url
-   NEXT_PUBLIC_WHISPER_URL=your_whisper_url
-   NEXT_PUBLIC_GEMINI_URL=your_gemini_url
-   NEXT_PUBLIC_PROXY_KEY=your_proxy_key
-   ```
-   
-   **選用（Firebase）**：
-   ```
-   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-   NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
-   ```
-
-3. **部署**
-   - Vercel 會自動偵測 Next.js 並部署
-   - 部署完成後會提供 URL（例如：`https://your-app.vercel.app`）
-
-4. **更新 SMART 配置**
-   
-   在 FHIR 伺服器註冊應用程式時使用：
-   - Launch URL: `https://your-app.vercel.app/smart/launch`
-   - Redirect URL: `https://your-app.vercel.app/smart/callback`
-
-**比較**：
-
-| 功能 | GitHub Pages | Vercel |
-|------|-------------|---------|
-| 部署方式 | 靜態網站 | Full-stack |
-| 客戶端模式 | ✅ 公開模式 | ✅ 公開 + 機密模式 |
-| 環境變數 | ❌ 不支援私密變數 | ✅ 完整支援 |
-| 自動部署 | ✅ GitHub Actions | ✅ Git push |
-| 費用 | 免費 | 免費（Hobby 方案） |
-
----
-
-## 🔑 API 金鑰配置
-
-在**設定**標籤配置 API 金鑰（選用）：
-
-**內建模型**（無需金鑰）：
-- GPT-5.4 Nano
-- Gemini 3 Flash Preview（預設）
-
-**進階模型**（需要金鑰）：
-- GPT-5.4 Mini、GPT-5.4
-- Gemini 2.5 Pro、Gemini 3.1 Pro Preview
-
----
-
-## 📁 專案結構
+環境變數（皆為 `NEXT_PUBLIC_`，建置時注入）：
 
 ```
-medical-note-smart-on-fhir/
-├── app/                    # Next.js App Router
-├── components/             # UI 元件
-├── features/               # 功能模組（可插拔）
-│   ├── auth/              # 認證
-│   ├── chat-history/      # 對話歷史
-│   ├── clinical-insights/ # 臨床洞察
-│   ├── clinical-summary/  # 臨床摘要
-│   ├── data-selection/    # 資料選擇
-│   ├── feedback/          # 使用者回饋
-│   ├── medical-chat/      # AI 對話
-│   ├── prompt-gallery/    # 提示範本庫
-│   └── settings/          # 設定
-├── src/
-│   ├── application/       # 應用層
-│   ├── core/              # 領域層
-│   ├── infrastructure/    # 基礎設施層
-│   └── shared/            # 共用工具
-├── docs/                  # 📚 文件庫（7 個核心文件）
-│   ├── AI_AGENT_IMPLEMENTATION.md
-│   ├── ARCHITECTURE.md
-│   ├── FEATURES.md
-│   ├── FEEDBACK_SETUP.md
-│   ├── MEDICAL_CHAT.md
-│   ├── PROMPT_GALLERY.md
-│   ├── SECURITY.md
-└── __tests__/             # 測試
+# AI / 語音 / 回饋 代理（選用）
+NEXT_PUBLIC_CHAT_URL=...
+NEXT_PUBLIC_GEMINI_URL=...
+NEXT_PUBLIC_CLAUDE_URL=...
+NEXT_PUBLIC_PERPLEXITY_PROXY_URL=...
+NEXT_PUBLIC_WHISPER_URL=...
+NEXT_PUBLIC_FEEDBACK_URL=...
+NEXT_PUBLIC_PROXY_KEY=...
+
+# Firebase（選用：登入、對話歷史、提示範本庫、免費額度）
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
+
+# SMART（選用，僅開發／測試沙箱；見上方警告）
+NEXT_PUBLIC_SMART_CLIENT_ID=...
+NEXT_PUBLIC_SMART_CLIENT_SECRET=...
 ```
 
----
+## 架構
 
-## 🏗️ 架構
-
-### Clean Architecture
+Clean Architecture 分層：
 
 ```
-展示層 (Presentation) → app/ • features/ • components/
-應用層 (Application)   → src/application/
-領域層 (Domain)        → src/core/
-基礎設施層 (Infrastructure) → src/infrastructure/
+展示層 (Presentation)      app/ · features/ · components/
+應用層 (Application)        src/application/
+領域層 (Domain)            src/core/
+基礎設施層 (Infrastructure) src/infrastructure/
 ```
 
-### 可插拔架構
+功能以 registry 可插拔：
 
-**左側 Panel**：`src/shared/config/feature-registry.ts`
-- 4 個 Tabs、7 個功能模組
+- **左側面板** `src/shared/config/feature-registry.ts` — 5 個分頁：病人資訊／就診紀錄／報告／用藥／文件。
+- **右側面板** `src/shared/config/right-panel-registry.ts` — 5 個功能：筆記對話／資料選擇／臨床洞察／IPS／設定。
 
-**右側 Panel**：`src/shared/config/right-panel-registry.ts`
-- 4 個功能：筆記對話、資料選擇、臨床洞察、設定
+## 文件
 
-**新增功能範例**：
-```typescript
-{
-  id: 'my-feature',
-  name: 'My Feature',
-  component: MyFeatureCard,
-  tab: 'patient',
-  order: 3,
-  enabled: true,
-}
-```
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 系統架構
+- [docs/AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md) — AI Agent 實作
+- [docs/MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md) — 對話功能
+- [docs/PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md) — 提示範本庫
+- [docs/FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md) — 回饋系統
+- [docs/FEATURES.md](./docs/FEATURES.md) — 功能模組
+- [docs/SECURITY.md](./docs/SECURITY.md) ／ [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) — 安全與隱私
+- [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir) — 後端 Functions / Rules / 部署
 
-### AI Agent 架構
+## 授權與支援
 
-**客戶端 Tool Calling**：
-- 在瀏覽器執行 tool calling
-- 8 個 FHIR Tools + 1 個 Literature Tool
-- 安全且高效
-
-詳見：[AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md)
+私有專有專案。問題請開 GitHub Issue，或用 app 內的「回報問題」。
 
 ---
 
-## 🧪 測試
+# English
 
-```bash
-npm test              # 執行測試
-npm test:watch        # 監視模式
-npm test:coverage     # 覆蓋率報告
-```
+[🔝 Back to top](#醫析-mediprisma--smart-on-fhir) ｜ [切換中文](#中文)
 
----
+A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHIR**: it turns a patient's FHIR data into a readable clinical summary and uses AI to query data, search medical literature, and draft notes.
 
-## 📚 文件
+> ⚠️ For research/education only — not a medical device. Output is for reference; clinical decisions remain the clinician's.
 
-### 使用者文件
-- [USER_GUIDE.md](./USER_GUIDE.md) - 使用者操作指南
+## What it does
 
-### 開發者文件
+- **Clinical summary**: patient info, visits, reports (including a **cumulative lab report** — values tabulated across dates), medications, documents — assembled from FHIR.
+- **AI**:
+  - **Note Chat** (normal): interactive assistant; insert selected clinical data, draft note sections.
+  - **Deep Mode (AI Agent)**: client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters) + medical-literature search (Perplexity).
+  - **Clinical Insights**: auto-generated summaries.
+  - **Voice dictation**: Whisper transcription.
+- **Data Selection**: choose which data to feed the AI, with presets and per-consumer memory.
+- **IPS export**: International Patient Summary.
+- **Prompt Gallery**: community-shared prompt templates.
+- **Bilingual (EN/中文), dark mode, responsive.**
 
-**架構與設計**：
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - 完整系統架構
+## Data sources
 
-**功能實作指南**：
-- [AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md) - AI Agent 實作
-- [MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md) - Medical Chat 功能
-- [PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md) - 提示範本庫
-- [FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md) - 使用者回饋系統
-- [FEATURES.md](./docs/FEATURES.md) - Feature 模組架構
+1. **SMART on FHIR** — launched from an EHR (OAuth 2.0 + PKCE), reading the FHIR server live.
+2. **Local import** — import a FHIR Bundle (`.json`, e.g. from Taiwan's NHI health record). Data **stays on the device**, never uploaded.
 
-**部署與設定**：
-- [Firebase Functions Repo](https://github.com/voho0000/firebase-smart-on-fhir) - Firebase 設定與部署指南
+## Privacy & security
 
-**安全性**：
-- [SECURITY.md](./docs/SECURITY.md) - 安全性指南
+- **Patient FHIR data stays local**: AES-GCM-encrypted in IndexedDB, kept at most **12 hours**, purged on next load when expired and on logout; users can "clear local data" anytime.
+- **API keys**: by default kept only for the current browser session (cleared when you close the window); a "remember on this device" toggle in Settings makes them persist. Keys never leave the browser.
+- **Feedback** deliberately collects no patient identifiers.
+- See [SECURITY.md](./docs/SECURITY.md) and [PRIVACY_POLICY.md](./PRIVACY_POLICY.md).
 
----
+## Live demo
 
-## 📄 授權
+- **App**: <https://voho0000.github.io/medical-note-smart-on-fhir/>
+- **SMART Launch URL**: `https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch`
+- Launch via the [SMART Health IT Launcher](https://launch.smarthealthit.org/).
 
-本專案為私有和專有。
+## AI models
 
----
+Without your own key, requests go through a Firebase Functions proxy (daily free quota — higher signed in, lower for guests). Or add your own key in **Settings** to call providers directly.
 
-## 🆘 支援
+| Tier | Models |
+|------|--------|
+| Free, built-in (no key, via proxy) | **Gemini 3.1 Flash-Lite (default)**, GPT-5.4 Nano, Claude Haiku 4.5 |
+| Advanced (your own key) | GPT-5.4 Mini / GPT-5.4 / GPT-5.5; Gemini 3 Flash Preview / Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
 
-如有問題，請透過 GitHub Issues 回報。
+Literature search uses Perplexity (Deep Mode).
 
----
+## Tech stack
 
-# English Version
-
-[🔝 Back to Top](#mediprisma--smart-on-fhir) | [🌐 Switch to 中文](#中文版)
-
-An intelligent clinical documentation assistant built with **Next.js 16**, **SMART on FHIR**, and **AI Integration** (OpenAI GPT / Google Gemini / Perplexity).
-
-**Core Highlights**:
-- 🤖 **AI Agent Deep Mode**: Auto-invokes 8 tools to query FHIR data and medical literature
-- 📚 **Prompt Gallery**: Community-shared prompt templates
-- 💬 **Chat History**: Patient-categorized storage with cross-device sync
-- 📝 **User Feedback**: Real-time feedback collection for continuous improvement
-- 🔌 **Pluggable Architecture**: Easy to add or replace features via Registry
-
-## 🌐 Live Demo
-
-- **Demo**: https://voho0000.github.io/medical-note-smart-on-fhir
-- **Launch URL**: https://voho0000.github.io/medical-note-smart-on-fhir/smart/launch
-
-> 💡 Launch via [SMART Health IT Launcher](https://launch.smarthealthit.org/)
-
-## 🎯 Key Features
-
-### Clinical Data Integration
-- SMART on FHIR OAuth 2.0 (PKCE)
-- Real-time FHIR data retrieval
-- Complete clinical data display
-
-### AI Features
-- **AI Agent (Deep Mode)**: 8 FHIR tools (patient info, conditions, medications, allergies, diagnostic reports, observations, procedures, encounters) + Medical literature search
-- **Note Chat (Normal Mode)**: Interactive AI assistant
-- **Clinical Insights**: Auto-generated summaries
-- **Prompt Gallery**: Browse, search, share templates
-- **Voice Recording**: Whisper transcription
-- **Chat History**: Patient-based storage with Firestore sync
-- **User Feedback**: Real-time feedback system with Firebase storage
-
-### User Experience
-- Multi-language (EN/ZH-TW)
-- Firebase Authentication
-- Responsive design, dark mode
-- shadcn/ui + Tailwind CSS
-
----
-
-## 🛠️ Tech Stack
-
-- **Framework**: Next.js 16 (App Router + Turbopack)
+- **Framework**: Next.js 16 (App Router, Turbopack), static export
 - **UI**: shadcn/ui, Tailwind CSS 4
 - **FHIR**: fhirclient 2.6.3
-- **AI**: Vercel AI SDK, OpenAI, Gemini, Perplexity
-- **Backend**: Firebase (Auth, Firestore, Functions)
-  - Firebase Functions Repo: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
-- **State**: React Context + Zustand
+- **AI**: Vercel AI SDK (OpenAI, Gemini, Claude, Perplexity)
+- **Backend**: Firebase (Auth, Firestore, Functions) — Functions & Firestore Rules live in a separate repo: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
+- **State**: Zustand + React Context
 - **Testing**: Jest 30 + React Testing Library
-- **Architecture**: Clean Architecture + Feature-based Organization
+- **Architecture**: Clean Architecture + feature-based modules
 
----
+## Quick start
 
-## 📋 Prerequisites
+Requires Node.js 20+ (CI uses 24).
 
-- Node.js 18.18+ or 20.x LTS
-- API Keys (optional): OpenAI, Gemini, Perplexity
-- Firebase project (optional, for auth and chat history. See [Firebase Functions Repo](https://github.com/voho0000/firebase-smart-on-fhir) for setup)
-- FHIR server access
-
----
-
-## 🚀 Quick Start
-
-### Install
 ```bash
 npm install
-```
 
-### Development
-```bash
-npm run dev:webpack  # Recommended
-npm run dev          # Turbopack (experimental)
-```
+# Development
+npm run dev:webpack   # webpack, http://localhost:3000 (recommended)
+npm run dev           # Turbopack, http://localhost:3001 (faster, experimental)
 
-App runs at `http://localhost:3000`
-
-### Build
-```bash
+# Build / start
 npm run build
 npm start
-```
 
-### Test
-```bash
+# Test
 npm test
-npm test:watch
-npm test:coverage
+npm run test:watch
+npm run test:coverage
 ```
 
----
+## SMART on FHIR config
 
-## 🔐 SMART on FHIR Configuration
+Register the app in your FHIR sandbox/server (**public client + PKCE**):
 
-1. Register app in SMART sandbox
-2. Configure:
-   - Launch URL: `http://localhost:3000/smart/launch`
-   - Redirect URL: `http://localhost:3000/smart/callback`
-   - Client Type: Public (PKCE)
-   - Scopes: `launch openid fhirUser patient/*.read online_access`
-3. Launch via SMART launcher
+- Launch URL: `<origin>/smart/launch`
+- Redirect URL: `<origin>/smart/callback`
+- Client Type: Public (PKCE)
+- Scopes: `launch openid fhirUser patient/*.read online_access`
 
----
+> ⚠️ This is **not** a true confidential client. `NEXT_PUBLIC_SMART_CLIENT_SECRET` is compiled into the front-end bundle and visible to users — dev/test sandboxes only. For production use public PKCE, or do token exchange in a backend/BFF; never ship a real client secret to the browser.
 
-## 🔑 API Key Configuration
+## Deployment
 
-Configure in **Settings** tab (optional):
+**GitHub Pages (static, current production)**: push to `master` → auto-deploys after CI. Manual: `npm run deploy`.
 
-**Built-in Models** (no key needed):
-- GPT-5.4 Nano
-- Gemini 3 Flash Preview (default)
+> Note: `next.config.ts`'s `headers()` (CSP `frame-ancestors`, etc.) only takes effect on a Node host (`next start` / Vercel); GitHub Pages is a static CDN and won't send those response headers.
 
-**Advanced Models** (key required):
-- GPT-5.4 Mini, GPT-5.4
-- Gemini 2.5 Pro, Gemini 3.1 Pro Preview
+Env vars are all `NEXT_PUBLIC_` (injected at build) — see the Chinese section above for the full list (AI/voice/feedback proxies, Firebase, optional SMART).
 
----
-
-## 📁 Project Structure
+## Architecture
 
 ```
-medical-note-smart-on-fhir/
-├── app/                    # Next.js App Router
-├── components/             # UI components
-├── features/               # Feature modules (pluggable)
-├── src/
-│   ├── application/       # Application layer
-│   ├── core/              # Domain layer
-│   ├── infrastructure/    # Infrastructure layer
-│   └── shared/            # Shared utilities
-├── docs/                  # 📚 Documentation (7 core files)
-│   ├── AI_AGENT_IMPLEMENTATION.md
-│   ├── ARCHITECTURE.md
-│   ├── FEATURES.md
-│   ├── FEEDBACK_SETUP.md
-│   ├── MEDICAL_CHAT.md
-│   ├── PROMPT_GALLERY.md
-│   └── SECURITY.md
-└── __tests__/             # Tests
+Presentation      app/ · features/ · components/
+Application       src/application/
+Domain            src/core/
+Infrastructure    src/infrastructure/
 ```
 
----
+Pluggable via registries:
 
-## 🏗️ Architecture
+- **Left panel** `src/shared/config/feature-registry.ts` — 5 tabs: Patient / Visits / Reports / Medications / Documents.
+- **Right panel** `src/shared/config/right-panel-registry.ts` — 5 features: Note Chat / Data Selection / Clinical Insights / IPS / Settings.
 
-### Clean Architecture
+## Docs
 
-```
-Presentation → app/ • features/ • components/
-Application  → src/application/
-Domain       → src/core/
-Infrastructure → src/infrastructure/
-```
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md), [docs/AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md), [docs/MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md), [docs/PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md), [docs/FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md), [docs/FEATURES.md](./docs/FEATURES.md), [docs/SECURITY.md](./docs/SECURITY.md), [PRIVACY_POLICY.md](./PRIVACY_POLICY.md)
+- Backend: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
 
-### Pluggable Architecture
+## License & support
 
-**Left Panel**: `src/shared/config/feature-registry.ts`
-**Right Panel**: `src/shared/config/right-panel-registry.ts`
-
-See: [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-
----
-
-## 🧪 Testing
-
-```bash
-npm test              # Run tests
-npm test:watch        # Watch mode
-npm test:coverage     # Coverage report
-```
-
----
-
-## 📚 Documentation
-
-### User Documentation
-- [USER_GUIDE.md](./USER_GUIDE.md) - User guide
-
-### Developer Documentation
-
-**Architecture**:
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System architecture
-
-**Implementation Guides**:
-- [AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md) - AI Agent
-- [MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md) - Medical Chat
-- [PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md) - Prompt Gallery
-- [FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md) - User Feedback System
-- [FEATURES.md](./docs/FEATURES.md) - Feature modules
-
-**Deployment**:
-- [Firebase Functions Repo](https://github.com/voho0000/firebase-smart-on-fhir) - Firebase setup and deployment guide
-
-**Security**:
-- [SECURITY.md](./docs/SECURITY.md) - Security guide
-
----
-
-## 📄 License
-
-This project is private and proprietary.
-
----
-
-## 🆘 Support
-
-For questions, please report via GitHub Issues.
+Private and proprietary. Report issues via GitHub Issues or the in-app "report a problem".
