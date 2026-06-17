@@ -25,6 +25,24 @@ import type { Row } from './types'
 // referential equality on the prop.
 const EMPTY_EXPANDED_IDS: string[] = []
 
+// Does any observation (or component) in this row match the query — by analyte
+// NAME or by free-text result/narrative (valueString)? The valueString arm is
+// what makes imaging / ECG / pathology conclusions and text lab results
+// (cultures, "Target Not Detected") searchable by content, not just by title.
+// Shared by the filter and the auto-expand pass so the two never diverge.
+function rowInnerMatch(row: Row, q: string): boolean {
+  return row.obs.some((o: any) => {
+    const codeText = (o?.code?.text || o?.code?.coding?.[0]?.display || '').toLowerCase()
+    if (codeText.includes(q)) return true
+    if (typeof o?.valueString === 'string' && o.valueString.toLowerCase().includes(q)) return true
+    return Array.isArray(o?.component) && o.component.some((c: any) => {
+      const cText = (c?.code?.text || c?.code?.coding?.[0]?.display || '').toLowerCase()
+      if (cText.includes(q)) return true
+      return typeof c?.valueString === 'string' && c.valueString.toLowerCase().includes(q)
+    })
+  })
+}
+
 export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
@@ -147,24 +165,15 @@ export function ReportsCard() {
     return rows.filter((row) => {
       // Gregorian + 民國(ROC) date tokens so 2025/11/20 and 114/11/20 both match.
       const dateStrs = dateSearchTokens(row.effectiveDate)
-      // Also look inside accordion children — a multi-item report like
-      // "全套血液檢查Ⅰ（八項）" has its individual analytes (RBC, WBC, etc.)
-      // in row.obs, and composite tests like BP carry components on each
-      // observation. Without checking these, searching for "RBC" misses
-      // the row it lives in.
-      const innerMatch = row.obs.some((o: any) => {
-        const codeText = (o?.code?.text || o?.code?.coding?.[0]?.display || '').toLowerCase()
-        if (codeText.includes(q)) return true
-        return Array.isArray(o?.component) && o.component.some((c: any) => {
-          const cText = (c?.code?.text || c?.code?.coding?.[0]?.display || '').toLowerCase()
-          return cText.includes(q)
-        })
-      })
+      // rowInnerMatch also looks inside accordion children — a multi-item panel
+      // like "全套血液檢查Ⅰ（八項）" keeps its analytes (RBC, WBC…) in row.obs,
+      // and now the report narrative / text result (valueString) too.
       return (
         row.title.toLowerCase().includes(q) ||
         row.meta.toLowerCase().includes(q) ||
+        (row.institution ?? '').toLowerCase().includes(q) ||
         dateStrs.some(s => s.toLowerCase().includes(q)) ||
-        innerMatch
+        rowInnerMatch(row, q)
       )
     })
   }, [rows, searchQuery])
@@ -179,15 +188,7 @@ export function ReportsCard() {
     for (const row of filteredRows) {
       // Skip if the row itself already matches on title — no need to expand.
       if (row.title.toLowerCase().includes(q)) continue
-      const innerHit = row.obs.some((o: any) => {
-        const codeText = (o?.code?.text || o?.code?.coding?.[0]?.display || '').toLowerCase()
-        if (codeText.includes(q)) return true
-        return Array.isArray(o?.component) && o.component.some((c: any) => {
-          const cText = (c?.code?.text || c?.code?.coding?.[0]?.display || '').toLowerCase()
-          return cText.includes(q)
-        })
-      })
-      if (innerHit) ids.push(row.id)
+      if (rowInnerMatch(row, q)) ids.push(row.id)
     }
     // Preserve referential equality across renders when nothing changes so
     // React.memo on ReportRow keeps skipping.
@@ -334,23 +335,30 @@ export function ReportsCard() {
 
       {/* Search bar — hidden on cumulative tab */}
       {activeTab !== "cumulative" && (
-        <div className="relative mb-3">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜尋檢驗名稱、日期..."
-            className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+        <div className="mb-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜尋檢驗名稱、機構、日期..."
+              className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {searchQuery.trim() && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              顯示 {filteredRows.length} / 共 {rows.length} 筆
+            </p>
           )}
         </div>
       )}
@@ -382,6 +390,8 @@ export function ReportsCard() {
             fullHeight={expanded}
             forceMount={keepMounted}
             defaultOpenIds={expandedRowIds}
+            searchActive={!!searchQuery.trim()}
+            query={searchQuery}
           />
         )
       })}

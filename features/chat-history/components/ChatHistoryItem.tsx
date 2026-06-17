@@ -3,6 +3,7 @@ import { Clock, Trash2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useIsTitleGenerating, useCurrentSessionId } from '@/src/application/stores/chat-history.store'
+import { HighlightText } from '@/src/shared/components/HighlightText'
 import type { ChatSessionMetadata } from '@/src/core/entities/chat-session.entity'
 
 interface ChatHistoryItemProps {
@@ -11,9 +12,11 @@ interface ChatHistoryItemProps {
   onDelete: (sessionId: string, e: React.MouseEvent) => void
   formatDate: (date: Date) => string
   locale?: string
+  /** Active search query — highlights matches in the title/summary. */
+  query?: string
 }
 
-export function ChatHistoryItem({ session, onLoad, onDelete, formatDate, locale = 'en' }: ChatHistoryItemProps) {
+export function ChatHistoryItem({ session, onLoad, onDelete, formatDate, locale = 'en', query }: ChatHistoryItemProps) {
   const isTitleGenerating = useIsTitleGenerating()
   const currentSessionId = useCurrentSessionId()
   
@@ -43,13 +46,13 @@ export function ChatHistoryItem({ session, onLoad, onDelete, formatDate, locale 
                 {isDefaultTitle && currentSessionId === session.id && (
                   <Sparkles className="h-3.5 w-3.5 text-muted-foreground/50" />
                 )}
-                {session.title}
+                <HighlightText text={session.title} query={query} />
               </>
             )}
           </h4>
           {session.summary && (
             <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-              {session.summary}
+              <HighlightText text={session.summary} query={query} />
             </p>
           )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

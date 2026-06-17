@@ -997,6 +997,8 @@ export const en = {
     loginRequired: "Login Required",
     loginPrompt: "Please log in to use chat history. Your conversations will be automatically saved and synced across devices.",
     noHistory: "No chat history yet",
+    searchPlaceholder: 'Search conversations...',
+    searchNoMatch: 'No conversations match your search',
     startConversation: 'Start a conversation to see it here',
     confirmDelete: 'Delete this conversation?',
     justNow: 'Just now',

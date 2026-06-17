@@ -10,6 +10,7 @@ import { getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
+import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
@@ -41,6 +42,8 @@ function BridgeDupBadge({ count }: { count: number }) {
 interface ReportRowProps {
   row: Row
   defaultOpen: string[]
+  /** Active search query — highlights matches in the report title. */
+  query?: string
 }
 
 function formatDisplayDate(date?: string, showTime?: boolean): string {
@@ -83,7 +86,7 @@ function countAbnormal(obs: Observation[]): number {
   return count
 }
 
-function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
+function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
   const [trendDialogOpen, setTrendDialogOpen] = useState(false)
   // Separate "mounted" flag so the dialog (and its expensive history hooks)
   // only enter the React tree after the user actually opens it the first
@@ -269,7 +272,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-sm font-semibold text-foreground truncate">{row.title}</span>
+                    <span className="text-sm font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
                   </TooltipTrigger>
                   <TooltipContent>{row.title}</TooltipContent>
                 </Tooltip>
@@ -372,7 +375,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="text-sm font-semibold text-foreground truncate">{row.title}</span>
+                <span className="text-sm font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
               </TooltipTrigger>
               <TooltipContent>{row.title}</TooltipContent>
             </Tooltip>
@@ -470,7 +473,7 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="font-semibold text-foreground truncate">{row.title}</span>
+                      <span className="font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
                     </TooltipTrigger>
                     <TooltipContent>{row.title}</TooltipContent>
                   </Tooltip>

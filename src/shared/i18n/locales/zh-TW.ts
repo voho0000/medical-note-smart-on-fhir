@@ -1001,6 +1001,8 @@ export const zhTW = {
     loginRequired: '需要登入',
     loginPrompt: '請登入以使用對話紀錄功能。登入後，您的對話將自動儲存並可在不同裝置間同步。',
     noHistory: '尚無對話紀錄',
+    searchPlaceholder: '搜尋對話...',
+    searchNoMatch: '沒有符合的對話',
     startConversation: '開始對話後將顯示在這裡',
     confirmDelete: '確定要刪除此對話嗎？',
     justNow: '剛剛',

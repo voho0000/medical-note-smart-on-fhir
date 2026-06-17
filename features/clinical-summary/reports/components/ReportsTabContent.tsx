@@ -31,6 +31,11 @@ interface ReportsTabContentProps {
    *  (e.g. "RBC" inside "全套血液檢查Ⅰ"), so the user can see the matched
    *  item without an extra click. */
   defaultOpenIds?: string[]
+  /** True when a search query is active, so the empty state can say "no
+   *  matches" instead of the misleading "no data in this category". */
+  searchActive?: boolean
+  /** Active search query — forwarded to ReportRow to highlight title matches. */
+  query?: string
 }
 
 // Stable fallback so referential equality holds when no expand list is
@@ -43,7 +48,7 @@ const EMPTY_OPEN_IDS: string[] = []
 // any drift as soon as rows are in the DOM.
 const ESTIMATED_ROW_HEIGHT = 72
 
-function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, defaultOpenIds }: ReportsTabContentProps) {
+function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, defaultOpenIds, searchActive, query }: ReportsTabContentProps) {
   const openIds = defaultOpenIds ?? EMPTY_OPEN_IDS
   // Callback-ref-into-state pattern: when the scroll div attaches, React
   // calls setScrollEl with the element. That triggers a re-render whose
@@ -77,7 +82,9 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, de
       className={fullHeight ? 'mt-0 flex-1 min-h-0' : 'mt-0'}
     >
       {rows.length === 0 ? (
-        <div className="text-sm text-muted-foreground">No reports available in this category.</div>
+        <div className="text-sm text-muted-foreground">
+          {searchActive ? '沒有符合搜尋的報告' : 'No reports available in this category.'}
+        </div>
       ) : (
         <div
           ref={setScrollEl}
@@ -123,7 +130,7 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, de
                     paddingBottom: '8px', // matches the old space-y-2 gap
                   }}
                 >
-                  <ReportRow row={row} defaultOpen={openIds} />
+                  <ReportRow row={row} defaultOpen={openIds} query={query} />
                 </div>
               )
             })}
