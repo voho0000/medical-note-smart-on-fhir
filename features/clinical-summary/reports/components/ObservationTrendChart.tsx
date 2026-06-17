@@ -114,6 +114,9 @@ export function ObservationTrendChart({ data, unit }: ObservationTrendChartProps
           tick={{ fontSize: 12 }}
           tickLine={false}
           minTickGap={24}
+          // Inset the first/last points so their value labels clear the axis
+          // edges instead of overlapping the Y-axis ticks (worst with 2 points).
+          padding={{ left: 30, right: 30 }}
           className="text-muted-foreground"
         />
         <YAxis

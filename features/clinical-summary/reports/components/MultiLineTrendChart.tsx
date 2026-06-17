@@ -90,6 +90,9 @@ export function MultiLineTrendChart({ componentData, unit, displayNames }: Multi
         <XAxis
           dataKey="date"
           tick={{ fontSize: 12 }}
+          // Inset the first/last points so their value labels clear the axis
+          // edges instead of overlapping the Y-axis ticks (worst with 2 points).
+          padding={{ left: 30, right: 30 }}
           className="text-muted-foreground"
         />
         <YAxis
