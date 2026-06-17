@@ -1039,6 +1039,26 @@ function pickFallbackDisplayForObs(
   return (codings[0]?.display as string) || (codings[0]?.code as string) || '—'
 }
 
+// Blood-pressure component abbreviation, for COMPACT contexts ONLY — e.g. the
+// trend dialog's history-table header / chart legend, where the full LOINC name
+// "Systolic blood pressure" doesn't fit. Deliberately NOT used by
+// getAnalyteDisplayForObs: the spacious expanded value rows keep the full name.
+// Detected by LOINC code (verified: 8480-6 systolic, 8462-4 diastolic) with a
+// text fallback for bridges that omit the coding. Returns null for non-BP codes.
+export function bpComponentAbbr(
+  obsOrComponent: { code?: any } | null | undefined,
+): 'SBP' | 'DBP' | null {
+  const code = obsOrComponent?.code
+  if (!code) return null
+  const codes: string[] = Array.isArray(code.coding)
+    ? code.coding.map((c: any) => c?.code).filter(Boolean)
+    : []
+  const text = String(code.text || code.coding?.[0]?.display || '').toLowerCase()
+  if (codes.includes('8480-6') || /systolic\s+blood\s+pressure/.test(text)) return 'SBP'
+  if (codes.includes('8462-4') || /diastolic\s+blood\s+pressure/.test(text)) return 'DBP'
+  return null
+}
+
 /**
  * Convenience wrapper: resolves canonical via getAnalyteCanonicalKey(obs)
  * and then applies audience/language display logic. For non-canonical rows

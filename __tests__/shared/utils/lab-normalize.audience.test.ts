@@ -12,6 +12,7 @@ import {
   getAnalyteDisplayParts,
   getAnalyteDisplayForObs,
   getAnalyteCanonicalKey,
+  bpComponentAbbr,
   CANONICAL_TO_LAY_ZH,
   CANONICAL_TO_LAY_EN,
 } from '@/src/shared/utils/lab-normalize'
@@ -289,6 +290,37 @@ describe('getAnalyteDisplayForObs', () => {
     expect(getAnalyteDisplayForObs(null, 'patient', 'zh-TW')).toBe('—')
     expect(getAnalyteDisplayForObs(undefined, 'patient', 'en')).toBe('—')
     expect(getAnalyteDisplayForObs({}, 'patient', 'zh-TW')).toBe('—')
+  })
+
+  describe('blood-pressure component abbreviation (compact contexts only)', () => {
+    const sbpByLoinc = { code: { coding: [{ system: 'http://loinc.org', code: '8480-6', display: 'Systolic blood pressure' }] } }
+    const dbpByLoinc = { code: { coding: [{ system: 'http://loinc.org', code: '8462-4', display: 'Diastolic blood pressure' }] } }
+    const sbpByText = { code: { text: 'Systolic blood pressure' } }
+    const dbpByText = { code: { text: 'Diastolic blood pressure' } }
+
+    it('bpComponentAbbr → SBP / DBP by LOINC code', () => {
+      expect(bpComponentAbbr(sbpByLoinc)).toBe('SBP')
+      expect(bpComponentAbbr(dbpByLoinc)).toBe('DBP')
+    })
+
+    it('bpComponentAbbr → SBP / DBP by text fallback when coding omitted', () => {
+      expect(bpComponentAbbr(sbpByText)).toBe('SBP')
+      expect(bpComponentAbbr(dbpByText)).toBe('DBP')
+    })
+
+    it('bpComponentAbbr → null for the BP panel, unrelated analytes, and empties', () => {
+      const panel = { code: { coding: [{ system: 'http://loinc.org', code: '55284-4', display: 'Blood pressure systolic and diastolic' }] } }
+      const wbc = { code: { coding: [{ system: 'http://loinc.org', code: '6690-2', display: 'Leukocytes' }] } }
+      expect(bpComponentAbbr(panel)).toBeNull()
+      expect(bpComponentAbbr(wbc)).toBeNull()
+      expect(bpComponentAbbr(null)).toBeNull()
+      expect(bpComponentAbbr({})).toBeNull()
+    })
+
+    it('getAnalyteDisplayForObs keeps the FULL name (the spacious value rows are not abbreviated)', () => {
+      expect(getAnalyteDisplayForObs(sbpByLoinc, 'medical', 'en')).toBe('Systolic blood pressure')
+      expect(getAnalyteDisplayForObs(dbpByLoinc, 'medical', 'zh-TW')).toBe('Diastolic blood pressure')
+    })
   })
 })
 

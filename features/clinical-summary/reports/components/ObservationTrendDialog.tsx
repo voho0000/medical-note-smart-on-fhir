@@ -9,7 +9,7 @@ import { ObservationHistoryTable } from './ObservationHistoryTable'
 import { CompositeHistoryTable } from './CompositeHistoryTable'
 import { ReportHistoryList } from './ReportHistoryList'
 import type { Observation } from '../types'
-import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForObs, bpComponentAbbr } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 
@@ -45,23 +45,42 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
   // abbreviation ("心電圖 (ECG)") that no longer matches DiagnosticReport.code.text.
   const reportHistory = useReportHistory(isReportSummary ? (reportLookupTitle || reportTitle) : undefined)
 
-  // Check if observation has components (like Blood Pressure with SBP/DBP)
+  // Check if observation has components (like Blood Pressure with SBP/DBP).
+  // componentNames stays RAW — it's the lookup key the history hooks match
+  // against component.code.text. componentDisplayNames is the audience-aware
+  // render label (e.g. "SBP"/"DBP"), kept in the same order so callers can zip
+  // the two together. Display vs lookup stay separate (see getAnalyteLabel).
   const hasComponents = observation?.component && observation.component.length > 0
-  const componentNames = useMemo(() => {
-    if (!hasComponents) return []
-    const names = observation.component
-      ?.map((comp: any) => comp.code?.text || comp.code?.coding?.[0]?.display)
-      .filter(Boolean) as string[]
-    
+  const { componentNames, componentDisplayNames } = useMemo(() => {
+    if (!hasComponents) return { componentNames: [] as string[], componentDisplayNames: [] as string[] }
+    const comps = (observation.component ?? []).filter(
+      (comp: any) => comp.code?.text || comp.code?.coding?.[0]?.display
+    )
     // Sort so Systolic comes before Diastolic for Blood Pressure
-    return names.sort((a, b) => {
-      const aLower = a.toLowerCase()
-      const bLower = b.toLowerCase()
+    const sorted = [...comps].sort((a: any, b: any) => {
+      const aLower = (a.code?.text || a.code?.coding?.[0]?.display || '').toLowerCase()
+      const bLower = (b.code?.text || b.code?.coding?.[0]?.display || '').toLowerCase()
       if (aLower.includes('systolic') && bLower.includes('diastolic')) return -1
       if (aLower.includes('diastolic') && bLower.includes('systolic')) return 1
       return 0
     })
+    return {
+      componentNames: sorted.map(
+        (comp: any) => (comp.code?.text || comp.code?.coding?.[0]?.display) as string
+      ),
+      componentDisplayNames: sorted.map(
+        (comp: any) => bpComponentAbbr(comp) ?? ((comp.code?.text || comp.code?.coding?.[0]?.display) as string)
+      ),
+    }
   }, [observation, hasComponents])
+
+  // raw component name → display label, for the chart (whose dataKey must stay
+  // raw to match the series data, while the legend/tooltip show the label).
+  const componentDisplayMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    componentNames.forEach((raw, i) => { map[raw] = componentDisplayNames[i] })
+    return map
+  }, [componentNames, componentDisplayNames])
   
   const history = useObservationHistory(isReportSummary ? undefined : observationCode)
   const componentHistory = useComponentHistory(isReportSummary ? undefined : observationCode, componentNames)
@@ -117,8 +136,8 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
               共 {hasComponents && componentHistory.length > 0 
                 ? componentHistory[0]?.data.length || 0 
                 : history.length} 筆記錄
-              {hasComponents && componentNames.length > 0 && (
-                <span className="ml-2">({componentNames.join(', ')})</span>
+              {hasComponents && componentDisplayNames.length > 0 && (
+                <span className="ml-2">({componentDisplayNames.join(', ')})</span>
               )}
             </div>
           </div>
@@ -132,7 +151,7 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
 
           <TabsContent value="table" className="mt-4">
             {hasComponents && compositeHistory.length > 0 ? (
-              <CompositeHistoryTable data={compositeHistory} componentNames={componentNames} />
+              <CompositeHistoryTable data={compositeHistory} componentNames={componentDisplayNames} />
             ) : (
               <ObservationHistoryTable data={history} />
             )}
@@ -141,7 +160,7 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
           <TabsContent value="chart" className="mt-4">
             <div className="rounded-lg border p-4 bg-muted/20">
               {hasComponents && componentHistory.length > 0 ? (
-                <MultiLineTrendChart componentData={componentHistory} unit={unit} />
+                <MultiLineTrendChart componentData={componentHistory} unit={unit} displayNames={componentDisplayMap} />
               ) : (
                 <ObservationTrendChart data={history} unit={unit} />
               )}

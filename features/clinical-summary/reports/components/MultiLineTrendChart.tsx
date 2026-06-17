@@ -6,9 +6,13 @@ import { formatNumberSmart } from '../utils/number-format.utils'
 interface MultiLineTrendChartProps {
   componentData: ComponentHistoryItem[]
   unit?: string
+  /** Raw component name → display label (e.g. "Systolic blood pressure" → "SBP").
+   *  The series dataKey stays raw to match the data; only the legend/tooltip
+   *  label is swapped. Falls back to the raw name when no mapping is given. */
+  displayNames?: Record<string, string>
 }
 
-export function MultiLineTrendChart({ componentData, unit }: MultiLineTrendChartProps) {
+export function MultiLineTrendChart({ componentData, unit, displayNames }: MultiLineTrendChartProps) {
   const chartData = useMemo(() => {
     if (componentData.length === 0) return []
 
@@ -115,7 +119,7 @@ export function MultiLineTrendChart({ componentData, unit }: MultiLineTrendChart
             key={comp.componentName}
             type="monotone"
             dataKey={comp.componentName}
-            name={comp.componentName}
+            name={displayNames?.[comp.componentName] ?? comp.componentName}
             stroke={comp.color}
             strokeWidth={2}
             dot={{

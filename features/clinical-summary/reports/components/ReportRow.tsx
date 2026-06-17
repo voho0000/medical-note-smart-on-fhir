@@ -474,6 +474,12 @@ function ReportRowImpl({ row, defaultOpen }: ReportRowProps) {
                     </TooltipTrigger>
                     <TooltipContent>{row.title}</TooltipContent>
                   </Tooltip>
+                  {/* Single observation that expands to components (e.g. Blood
+                      Pressure → systolic/diastolic) — surface its composite
+                      trend here. Multi-item panels (length > 1) are skipped:
+                      the dialog only trends firstObs, which would mislead.
+                      Procedures are skipped too — they're events, not values. */}
+                  {displayObs.length === 1 && row.group !== 'procedures' && <TrendButton stopProp />}
                   {abnormalCount > 0 && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                       <AlertCircle className="h-3 w-3" />
