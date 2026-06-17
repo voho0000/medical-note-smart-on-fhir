@@ -11,6 +11,7 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
 import { routeAbbr } from "@/src/shared/utils/route-display"
 import { partitionByEncounterLink } from "@/src/core/utils/encounter-link.utils"
+import { useNow } from "@/src/shared/hooks/use-now.hook"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
 
@@ -34,7 +35,7 @@ function isChronicMedication(med: any): boolean {
   return coding.some((c: any) => c?.code === 'continuous')
 }
 
-function isWithinTimeRangeDays(date: string | undefined, range: string): boolean {
+function isWithinTimeRangeDays(date: string | undefined, range: string, nowMs: number): boolean {
   if (range === 'all' || !date) return true
   const ms = Date.parse(date)
   if (Number.isNaN(ms)) return false
@@ -44,7 +45,7 @@ function isWithinTimeRangeDays(date: string | undefined, range: string): boolean
     range === '6m' ? 180 :
     range === '1y' ? 365 :
     Infinity
-  return Date.now() - ms <= days * 86400000
+  return nowMs - ms <= days * 86400000
 }
 
 function toDays(duration: any): number | undefined {
@@ -65,6 +66,7 @@ function summarize(
   med: any,
   audience: 'medical' | 'patient',
   locale: string,
+  nowMs: number,
 ): MedSummary {
   const name = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
     || med.medicationCodeableConcept?.text
@@ -95,7 +97,7 @@ function summarize(
       const end = new Date(start)
       end.setDate(end.getDate() + days)
       endDate = end.toISOString().slice(0, 10)
-      daysRemaining = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
     }
   }
 
@@ -181,6 +183,9 @@ export function useMedicationsContext(
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
   const { locale } = useLanguage()
+  // See useNow: re-run when the day rolls over so daysRemaining / recently-ended
+  // windows fed to the AI don't go stale on a long-lived tab.
+  const nowMs = useNow()
   return useMemo(() => {
     if (!includeMedications || !clinicalData?.medications?.length) return null
 
@@ -206,12 +211,12 @@ export function useMedicationsContext(
     // Apply time-range filter on authoredOn
     const timeRange = (filters?.medicationTimeRange as string) || 'all'
     if (timeRange !== 'all') {
-      meds = meds.filter((m: any) => isWithinTimeRangeDays(m.authoredOn, timeRange))
+      meds = meds.filter((m: any) => isWithinTimeRangeDays(m.authoredOn, timeRange, nowMs))
     }
 
-    const summaries = meds.map((m: any) => summarize(m, audience, locale))
+    const summaries = meds.map((m: any) => summarize(m, audience, locale, nowMs))
 
-    const now = Date.now()
+    const now = nowMs
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
     const activeRaw: MedSummary[] = []
     const recentRaw: MedSummary[] = []
@@ -267,5 +272,5 @@ export function useMedicationsContext(
       )
     }
     return { title: "Patient's Medications", items }
-  }, [includeMedications, clinicalData, filters, audience, locale, encountersShown])
+  }, [includeMedications, clinicalData, filters, audience, locale, encountersShown, nowMs])
 }

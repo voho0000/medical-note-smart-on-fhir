@@ -15,6 +15,7 @@ import { partitionByEncounterLink } from "@/src/core/utils/encounter-link.utils"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
+import { useNow } from "@/src/shared/hooks/use-now.hook"
 
 const MAX_VISITS = 10
 
@@ -92,6 +93,7 @@ function getCurrentlyActiveMeds(
   meds: any[],
   audience: 'medical' | 'patient',
   locale: string,
+  nowMs: number,
 ): ActiveMed[] {
   const out: ActiveMed[] = []
   for (const m of meds) {
@@ -104,7 +106,7 @@ function getCurrentlyActiveMeds(
     if (Number.isNaN(start.getTime())) continue
     const end = new Date(start)
     end.setDate(end.getDate() + days)
-    const daysRemaining = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    const daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
     if (daysRemaining < 0) continue
     const name = pickLocalizedText(m.medicationCodeableConcept, audience, locale)
       || m.medicationCodeableConcept?.text
@@ -122,6 +124,9 @@ export function useEncountersContext(
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
   const { locale } = useLanguage()
+  // See useNow: re-run when the day rolls over so the meds "Nd left" lines
+  // built here stay fresh on a long-lived tab.
+  const nowMs = useNow()
   return useMemo(() => {
     if (!includeEncounters || !clinicalData) return null
     const encounters: any[] = (clinicalData as any).encounters ?? []
@@ -181,7 +186,7 @@ export function useEncountersContext(
     // meds only — orphan meds (e.g. pharmacy pickups) are owned by the
     // Medications section, so including them here would double-list them.
     const { linked: visitLinkedMeds } = partitionByEncounterLink(medications, encounters)
-    const activeMeds = getCurrentlyActiveMeds(visitLinkedMeds, audience, locale)
+    const activeMeds = getCurrentlyActiveMeds(visitLinkedMeds, audience, locale, nowMs)
     if (activeMeds.length > 0) {
       items.push(`Currently active medications (${activeMeds.length}):`)
       activeMeds.slice(0, 15).forEach((m) => {
@@ -229,5 +234,5 @@ export function useEncountersContext(
     }
 
     return { title: 'Visits & Treatment History', items }
-  }, [includeEncounters, clinicalData, timeRange, audience, locale])
+  }, [includeEncounters, clinicalData, timeRange, audience, locale, nowMs])
 }

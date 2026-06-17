@@ -12,12 +12,16 @@ import { humanDoseAmount, humanDoseFreq, buildDetail } from '../utils/dose-helpe
 import { routeDisplayText } from '../utils/route-display'
 import { computeDurationDays } from '../utils/duration-helpers'
 import { dateSearchTokens } from '@/src/shared/utils/date.utils'
+import { useNow } from '@/src/shared/hooks/use-now.hook'
 
 export function useMedicationRows(
   medications: any[],
   audience: 'medical' | 'patient' = 'medical',
   locale: string = 'zh-TW',
 ) {
+  // Re-run when the calendar day rolls over (tab left open) so "days left" /
+  // active-vs-inactive don't freeze on the mount-time snapshot.
+  const nowMs = useNow()
   return useMemo<MedicationRow[]>(() => {
     if (!Array.isArray(medications)) return []
 
@@ -72,7 +76,7 @@ export function useMedicationRows(
       }
     }
 
-    const enriched = medications.map((med: any) => {
+    const enriched = medications.map((med: any, idx: number) => {
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
 
       // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
@@ -138,7 +142,7 @@ export function useMedicationRows(
           const end = new Date(start)
           end.setDate(end.getDate() + durationDays)
           endDate = end.toISOString()
-          daysRemaining = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
         }
       }
 
@@ -198,7 +202,10 @@ export function useMedicationRows(
       ].filter(Boolean).join(' ').toLowerCase()
 
       return {
-        id: med.id || Math.random().toString(36),
+        // Deterministic fallback (was Math.random()) so the row key stays
+        // stable across the now-more-frequent memo recomputes — a random id
+        // would remount id-less rows on every focus/day tick.
+        id: med.id || `med-${idx}`,
         title: medicationName,
         status,
         detail: detail || undefined,
@@ -235,5 +242,5 @@ export function useMedicationRows(
     // `audience` controls drug-name and ICD localisation; `locale` drives
     // category labels. Both must be in deps so flipping either updates the
     // list immediately instead of requiring a page reload.
-  }, [medications, audience, locale])
+  }, [medications, audience, locale, nowMs])
 }
