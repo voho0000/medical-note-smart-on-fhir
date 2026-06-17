@@ -1,7 +1,7 @@
 // Firebase Configuration
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
-import { getFirestore, type Firestore } from 'firebase/firestore'
+import { initializeFirestore, getFirestore, type Firestore } from 'firebase/firestore'
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -32,8 +32,26 @@ if (typeof window !== 'undefined') {
   // Set language to user's preferred language
   auth.languageCode = 'zh-TW'
   
-  // Use named database 'mediprisma'
-  db = getFirestore(app, 'mediprisma')
+  // Use named database 'mediprisma'.
+  //
+  // experimentalAutoDetectLongPolling: Firestore's default realtime transport
+  // is a long-lived WebChannel stream, which hospital proxies / corporate
+  // firewalls frequently break (symptom: "WebChannelConnection RPC 'Listen'
+  // transport errored", offline fallback). Auto-detect probes that connection
+  // and transparently falls back to HTTPS long-polling when streaming doesn't
+  // work — keeping streaming's speed where the network allows it. Important
+  // for in-hospital (VGH) deployments behind restrictive networks.
+  try {
+    db = initializeFirestore(
+      app,
+      { experimentalAutoDetectLongPolling: true },
+      'mediprisma',
+    )
+  } catch {
+    // Already initialized (e.g. Fast Refresh re-evaluated this module) — reuse
+    // the existing instance rather than throwing.
+    db = getFirestore(app, 'mediprisma')
+  }
 }
 
 export { app, auth, db }
