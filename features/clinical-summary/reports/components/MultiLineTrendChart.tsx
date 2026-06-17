@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts'
 import type { ComponentHistoryItem } from '../hooks/useObservationHistory'
 import { formatNumberSmart } from '../utils/number-format.utils'
 
@@ -85,7 +85,7 @@ export function MultiLineTrendChart({ componentData, unit, displayNames }: Multi
   return (
     <div className="h-[240px] sm:h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+      <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 14 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis
           dataKey="date"
@@ -114,7 +114,7 @@ export function MultiLineTrendChart({ componentData, unit, displayNames }: Multi
         />
         <Legend />
         
-        {componentData.map((comp) => (
+        {componentData.map((comp, i) => (
           <Line
             key={comp.componentName}
             type="monotone"
@@ -128,14 +128,36 @@ export function MultiLineTrendChart({ componentData, unit, displayNames }: Multi
               stroke: '#1e293b',
               strokeWidth: 1
             }}
-            activeDot={{ 
+            activeDot={{
               r: 7,
               fill: comp.color,
               stroke: '#1e293b',
               strokeWidth: 2
             }}
             connectNulls
-          />
+          >
+            {/* Always-on value labels. The first series (systolic for BP, the
+                higher line) labels above; the rest below, so the two don't
+                collide. */}
+            <LabelList
+              dataKey={comp.componentName}
+              content={(props: any) => {
+                const { x, y, value, index } = props
+                if (x == null || y == null || typeof value !== 'number') return null
+                return (
+                  <text
+                    key={`${comp.componentName}-${index}`}
+                    x={x}
+                    y={y + (i === 0 ? -10 : 16)}
+                    textAnchor="middle"
+                    style={{ fontSize: 11, fontWeight: 500, fill: comp.color }}
+                  >
+                    {formatNumberSmart(value)}
+                  </text>
+                )
+              }}
+            />
+          </Line>
         ))}
       </LineChart>
     </ResponsiveContainer>
