@@ -52,7 +52,7 @@ jobs:
           NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
           NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
           NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ./out
 
