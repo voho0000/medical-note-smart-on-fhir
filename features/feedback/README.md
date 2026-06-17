@@ -108,8 +108,13 @@ import { FeedbackButton } from '@/features/feedback'
 RESEND_API_KEY=re_your_api_key_here
 ```
 
-5. 更新發件人地址（`app/api/feedback/route.ts`）：
+5. 設定收件地址與發件人地址：
+```bash
+# .env.local
+FEEDBACK_TO_EMAIL=you@example.com   # 回報信收件地址
+```
 ```typescript
+// app/api/feedback/route.ts
 from: "MediPrisma <noreply@yourdomain.com>"
 ```
 
@@ -139,7 +144,7 @@ import { FeedbackButton } from "@/features/feedback"
 
 ## 隱私與安全
 
-- ✅ 僅收集患者 ID，不收集患者姓名
+- ✅ 不夾帶任何病人識別資訊（patientId 已從回報內容移除）
 - ✅ 使用者需主動提供電子郵件
 - ✅ 所有資料僅用於問題診斷
 - ✅ 建議使用者在截圖前移除敏感資訊
@@ -161,4 +166,4 @@ import { FeedbackButton } from "@/features/feedback"
 
 ## 技術支援
 
-如有問題，請聯繫：voho0000@gmail.com
+如有問題，請開 [GitHub Issue](https://github.com/voho0000/medical-note-smart-on-fhir/issues)。

@@ -27,8 +27,9 @@
 - 實作檔案：AI service 層
 
 ### 5. SMART on FHIR 認證
-- OAuth 2.0 with PKCE
-- 符合 HIPAA 和 FHIR 安全標準
+- OAuth 2.0 with PKCE（public client，無瀏覽器端 client secret）
+- 遵循 SMART on FHIR 授權模型
+- ⚠️ HIPAA／法規合規須由部署者自行評估，本專案不提供 BAA
 
 ### 6. Firebase Authentication
 - Google 登入、Email/密碼登入
@@ -37,6 +38,7 @@
 ### 7. Firestore Security Rules
 - 使用者資料隔離
 - 僅作者可修改自己的資料
+- 規則原始碼位於 companion repo [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir) 的 `firestore.rules`（部署前請確認已套用）
 
 ### 8. HTTPS 加密
 - 全站 HTTPS

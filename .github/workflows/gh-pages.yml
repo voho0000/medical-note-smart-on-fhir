@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm install
+      - run: npm ci
       - name: Build static export for GH Pages
         run: npm run build:gh
         env:

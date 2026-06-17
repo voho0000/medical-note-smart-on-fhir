@@ -210,13 +210,15 @@ ${steps ? `重現步驟:\n${steps}\n` : ''}
 This email was automatically sent by MediPrisma system
 `
 
-    // 使用 Resend SDK 發送郵件
+    // 使用 Resend SDK 發送郵件。收件信箱由部署者透過 FEEDBACK_TO_EMAIL 設定，
+    // 不在原始碼中硬編任何個人信箱。
     const resendApiKey = process.env.RESEND_API_KEY
-    
-    if (!resendApiKey) {
-      // 開發環境中不因缺少 API key 而失敗，但不把回報內容寫進 server logs，
+    const feedbackTo = process.env.FEEDBACK_TO_EMAIL
+
+    if (!resendApiKey || !feedbackTo) {
+      // 開發環境中不因缺少設定而失敗，但不把回報內容寫進 server logs，
       // 並回傳 emailSent: false 讓 UI 能區分「收到但沒寄出」
-      console.error("RESEND_API_KEY not configured — feedback received but no email sent", {
+      console.error("Feedback email not configured (RESEND_API_KEY / FEEDBACK_TO_EMAIL) — feedback received but no email sent", {
         issueType,
         severity,
       })
@@ -234,7 +236,7 @@ This email was automatically sent by MediPrisma system
     // 使用 Resend SDK 發送郵件
     const { data, error } = await resend.emails.send({
       from: "onboarding@resend.dev",
-      to: ["voho0000@gmail.com"],
+      to: [feedbackTo],
       replyTo: email,
       subject: `[問題回報] ${getIssueTypeLabel(issueType)} - ${getSeverityLabel(severity)}`,
       html: emailContent,

@@ -50,11 +50,13 @@
    在專案根目錄建立 `.env.local` 檔案：
    ```bash
    RESEND_API_KEY=re_your_api_key_here
+   # 回報信的收件地址（必填，否則只會收到回報但不寄信）
+   FEEDBACK_TO_EMAIL=you@example.com
    ```
 
 5. **更新發件人地址**
-   
-   編輯 `app/api/feedback/route.ts`，將第 146 行的發件人地址改為您的域名：
+
+   編輯 `app/api/feedback/route.ts`，將 `from:` 發件人地址改為您驗證過的網域：
    ```typescript
    from: "MediPrisma <noreply@yourdomain.com>", // 改為您的域名
    ```
@@ -87,7 +89,7 @@
    
    await transporter.sendMail({
      from: process.env.SMTP_FROM,
-     to: 'voho0000@gmail.com',
+     to: process.env.FEEDBACK_TO_EMAIL,
      replyTo: email,
      subject: `[問題回報] ${getIssueTypeLabel(issueType)}`,
      html: emailContent,
@@ -198,4 +200,4 @@ app/page.tsx                      # 整合到 header
 
 ## 技術支援
 
-如有任何問題，請聯繫：voho0000@gmail.com
+如有任何問題，請開 [GitHub Issue](https://github.com/voho0000/medical-note-smart-on-fhir/issues)。

@@ -155,7 +155,7 @@ Clean Architecture 分層：
 
 ## 授權與支援
 
-私有專有專案。問題請開 GitHub Issue，或用 app 內的「回報問題」。
+本專案以 **Apache License 2.0** 授權（見 [LICENSE](LICENSE)）。問題請開 GitHub Issue，或用 app 內的「回報問題」。
 
 ---
 
@@ -281,4 +281,4 @@ Pluggable via registries:
 
 ## License & support
 
-Private and proprietary. Report issues via GitHub Issues or the in-app "report a problem".
+Licensed under the **Apache License 2.0** (see [LICENSE](LICENSE)). Report issues via GitHub Issues or the in-app "report a problem".
