@@ -1,0 +1,119 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "test-patient-1",
+        "name": [{ "text": "王小明", "family": "王", "given": ["小明"] }],
+        "gender": "male",
+        "birthDate": "1958-03-12"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "bp-2017",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "vital-signs" }] }],
+        "code": { "text": "Blood Pressure", "coding": [{ "system": "http://loinc.org", "code": "85354-9", "display": "Blood pressure panel" }] },
+        "effectiveDateTime": "2017-01-25",
+        "performer": [{ "display": "台北測試醫院" }],
+        "component": [
+          { "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6", "display": "Systolic blood pressure" }] }, "valueQuantity": { "value": 165, "unit": "mmHg" } },
+          { "code": { "coding": [{ "system": "http://loinc.org", "code": "8462-4", "display": "Diastolic blood pressure" }] }, "valueQuantity": { "value": 85, "unit": "mmHg" } }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "bp-2018",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "vital-signs" }] }],
+        "code": { "text": "Blood Pressure", "coding": [{ "system": "http://loinc.org", "code": "85354-9", "display": "Blood pressure panel" }] },
+        "effectiveDateTime": "2018-02-12",
+        "performer": [{ "display": "台北測試醫院" }],
+        "component": [
+          { "code": { "coding": [{ "system": "http://loinc.org", "code": "8480-6", "display": "Systolic blood pressure" }] }, "valueQuantity": { "value": 154, "unit": "mmHg" } },
+          { "code": { "coding": [{ "system": "http://loinc.org", "code": "8462-4", "display": "Diastolic blood pressure" }] }, "valueQuantity": { "value": 88, "unit": "mmHg" } }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "alb-2024",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "Albumin", "coding": [{ "system": "http://loinc.org", "code": "1751-7", "display": "Albumin" }] },
+        "effectiveDateTime": "2024-03-06",
+        "valueQuantity": { "value": 4.3, "unit": "g/dL" },
+        "referenceRange": [{ "low": { "value": 3.5, "unit": "g/dL" }, "high": { "value": 5.5, "unit": "g/dL" } }],
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "alb-2025",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "Albumin", "coding": [{ "system": "http://loinc.org", "code": "1751-7", "display": "Albumin" }] },
+        "effectiveDateTime": "2025-02-12",
+        "valueQuantity": { "value": 3.0, "unit": "g/dL" },
+        "interpretation": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation", "code": "L", "display": "Low" }] }],
+        "referenceRange": [{ "low": { "value": 3.5, "unit": "g/dL" }, "high": { "value": 5.5, "unit": "g/dL" } }],
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "alb-2026",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "Albumin", "coding": [{ "system": "http://loinc.org", "code": "1751-7", "display": "Albumin" }] },
+        "effectiveDateTime": "2026-06-02",
+        "valueQuantity": { "value": 3.8, "unit": "g/dL" },
+        "referenceRange": [{ "low": { "value": 3.5, "unit": "g/dL" }, "high": { "value": 5.5, "unit": "g/dL" } }],
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "img-cxr",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0074", "code": "RAD", "display": "Radiology" }] }],
+        "code": { "text": "Chest X-ray" },
+        "effectiveDateTime": "2026-05-01",
+        "performer": [{ "display": "台北測試醫院" }],
+        "conclusion": "No acute cardiopulmonary process. Mild cardiomegaly noted."
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med-amlodipine",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": { "text": "Amlodipine 5mg" },
+        "authoredOn": "2026-06-01",
+        "dosageInstruction": [{ "text": "1 tab PO daily", "timing": { "repeat": { "frequency": 1, "period": 1, "periodUnit": "d" } } }],
+        "dispenseRequest": { "expectedSupplyDuration": { "value": 30, "unit": "d" } }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "enc-1",
+        "status": "finished",
+        "class": { "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB", "display": "ambulatory" },
+        "period": { "start": "2026-06-01", "end": "2026-06-01" },
+        "serviceProvider": { "display": "台北測試醫院" }
+      }
+    }
+  ]
+}

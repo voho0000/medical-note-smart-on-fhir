@@ -117,6 +117,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
       )}
       <input
         ref={fileRef}
+        data-testid="import-bundle-input"
         type="file"
         accept=".json,application/json"
         className="hidden"
