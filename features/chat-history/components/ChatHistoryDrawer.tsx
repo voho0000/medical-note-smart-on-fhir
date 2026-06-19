@@ -114,11 +114,45 @@ export function ChatHistoryDrawer() {
           </SheetDescription>
         </SheetHeader>
 
-        <div className="px-6 py-3 border-b bg-muted/30">
+        {/* Top controls — New Chat plus (when signed in with history) the
+            search, grouped in ONE band so the drawer doesn't stack three
+            dividers in a row (header / new-chat / search). */}
+        <div className="px-6 py-3 border-b bg-muted/30 space-y-2.5">
           <Button onClick={handleNewChat} className="w-full gap-2" size="sm">
             <MessageSquare className="h-4 w-4" />
             {t.chatHistory?.newChat || 'New Chat'}
           </Button>
+          {user && sessions.length > 0 && (
+            <div>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t.chatHistory.searchPlaceholder}
+                  className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={t.common.close}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {query.trim() && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {locale === 'zh-TW'
+                    ? `顯示 ${filteredSessions.length} / 共 ${sessions.length}`
+                    : `Showing ${filteredSessions.length} of ${sessions.length}`}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {!user ? (
@@ -132,66 +166,33 @@ export function ChatHistoryDrawer() {
             <AuthDialog open={showAuthDialog} onOpenChange={setShowAuthDialog} />
           </>
         ) : (
-          <>
-            {sessions.length > 0 && (
-              <div className="px-6 py-2 border-b">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={t.chatHistory.searchPlaceholder}
-                    className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          <ScrollArea className="h-[calc(100vh-240px)] px-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-muted-foreground">{t.common.loading}</p>
+              </div>
+            ) : sessions.length === 0 ? (
+              <EmptyState message={t.chatHistory.noHistory} />
+            ) : filteredSessions.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                {t.chatHistory.searchNoMatch}
+              </div>
+            ) : (
+              <div className="space-y-2 pb-4">
+                {filteredSessions.map((session) => (
+                  <ChatHistoryItem
+                    key={session.id}
+                    session={session}
+                    onLoad={handleLoadSession}
+                    onDelete={handleDeleteSession}
+                    formatDate={formatDate}
+                    locale={locale}
+                    query={query}
                   />
-                  {query && (
-                    <button
-                      type="button"
-                      onClick={() => setQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={t.common.close}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-                {query.trim() && (
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {locale === 'zh-TW'
-                      ? `顯示 ${filteredSessions.length} / 共 ${sessions.length}`
-                      : `Showing ${filteredSessions.length} of ${sessions.length}`}
-                  </p>
-                )}
+                ))}
               </div>
             )}
-            <ScrollArea className="h-[calc(100vh-240px)] px-6">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <p className="text-sm text-muted-foreground">{t.common.loading}</p>
-                </div>
-              ) : sessions.length === 0 ? (
-                <EmptyState message={t.chatHistory.noHistory} />
-              ) : filteredSessions.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  {t.chatHistory.searchNoMatch}
-                </div>
-              ) : (
-                <div className="space-y-2 pb-4">
-                  {filteredSessions.map((session) => (
-                    <ChatHistoryItem
-                      key={session.id}
-                      session={session}
-                      onLoad={handleLoadSession}
-                      onDelete={handleDeleteSession}
-                      formatDate={formatDate}
-                      locale={locale}
-                      query={query}
-                    />
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </>
+          </ScrollArea>
         )}
       </SheetContent>
 
