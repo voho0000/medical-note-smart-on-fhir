@@ -131,6 +131,10 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
             </div>
           )}
           {message.role === "assistant" ? (
+            // MarkdownRenderer renders block-by-block and memoizes each block,
+            // so while a reply streams in only the trailing (growing) block is
+            // re-parsed — keeping live formatting without freezing the UI on
+            // long/fast responses.
             <MarkdownRenderer content={message.content} />
           ) : (
             <CollapsibleMessage content={message.content} />
@@ -210,7 +214,11 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
           </div>
         ) : (
           messages.map((message) => (
-            <MessageItem key={message.id} message={message} t={t} />
+            <MessageItem
+              key={message.id}
+              message={message}
+              t={t}
+            />
           ))
         )}
         {isLoading ? (

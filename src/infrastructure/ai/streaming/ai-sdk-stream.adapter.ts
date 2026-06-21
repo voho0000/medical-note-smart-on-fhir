@@ -11,6 +11,7 @@ import { streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { aiProviderFactory } from "../factories/ai-provider.factory"
+import { withIdleTimeout, resolveStreamIdleTimeoutMs } from "./stream-idle-timeout"
 
 export interface StreamConfig {
   messages: { role: string; content: string; images?: { data: string }[] }[]
@@ -29,6 +30,13 @@ export class AiSdkStreamAdapter {
       useProxy,
     })
 
+    // Drive the SDK off our OWN controller so the idle watchdog can abort a
+    // stalled stream independently of the user's stop (config.signal).
+    const controller = new AbortController()
+    const onExternalAbort = () => controller.abort()
+    if (config.signal.aborted) controller.abort()
+    else config.signal.addEventListener("abort", onExternalAbort, { once: true })
+
     // The AI SDK does NOT throw request/stream errors out of `textStream`; it
     // forwards them to `onError` (whose default just console.errors) and then
     // ends the stream. Without capturing here, a failed call (e.g. a proxy 401
@@ -39,21 +47,30 @@ export class AiSdkStreamAdapter {
     const result = streamText({
       model,
       messages: this.toSdkMessages(config.messages),
-      abortSignal: config.signal,
+      abortSignal: controller.signal,
       onError: ({ error }) => { streamError = error },
     })
 
-    // onChunk receives the CUMULATIVE text (matches the old adapters' contract)
+    // withIdleTimeout aborts + throws StreamIdleTimeoutError if no token arrives
+    // for streamIdleTimeoutMs — so a stalled upstream surfaces a timeout error
+    // (getUserErrorMessage maps it) instead of hanging the UI forever.
     let fullText = ""
     try {
-      for await (const delta of result.textStream) {
+      for await (const delta of withIdleTimeout(
+        result.textStream,
+        resolveStreamIdleTimeoutMs(),
+        () => controller.abort(),
+      )) {
         fullText += delta
         config.onChunk(fullText)
       }
     } catch (error) {
-      // User pressed stop → end cleanly (the old adapters swallowed abort too)
+      // User pressed stop → end cleanly (the old adapters swallowed abort too).
+      // A StreamIdleTimeoutError is NOT a user abort, so it propagates.
       if (config.signal.aborted) return
       throw error
+    } finally {
+      config.signal.removeEventListener("abort", onExternalAbort)
     }
 
     // Surface an error the SDK reported via onError (the textStream itself ended

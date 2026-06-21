@@ -19,6 +19,7 @@ import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
 import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-agent-stream.use-case"
 import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
+import { withIdleTimeout, resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
@@ -79,6 +80,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       setIsLoading(true)
       setError(null)
       abortControllerRef.current = new AbortController()
+      // Idle watchdog for every agent stream below: abort + surface a timeout
+      // error if a stream stalls (same anti-hang guard as normal mode). Idle-
+      // based, so legitimate long tool runs that keep emitting events are fine.
+      const idleMs = resolveStreamIdleTimeoutMs()
+      const onStreamIdle = () => abortControllerRef.current?.abort()
 
       try {
         const provider = getModelDefinition(modelId)?.provider ?? "openai"
@@ -176,8 +182,8 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         let timeoutId: NodeJS.Timeout | null = null
         const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
 
-        // Process stream chunks
-        for await (const chunk of result.fullStream) {
+        // Process stream chunks (idle-watchdog guarded)
+        for await (const chunk of withIdleTimeout(result.fullStream, idleMs, onStreamIdle)) {
           if (chunk.type === 'text-delta') {
             accumulatedContent += chunk.text
 
@@ -288,7 +294,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           let followUpLastUpdateTime = 0
           let followUpTimeoutId: NodeJS.Timeout | null = null
           
-          for await (const chunk of followUpResult.fullStream) {
+          for await (const chunk of withIdleTimeout(followUpResult.fullStream, idleMs, onStreamIdle)) {
             if (chunk.type === 'text-delta') {
               followUpContent += chunk.text
               
@@ -374,7 +380,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             })
             
             let finalContent = ""
-            for await (const chunk of finalResult.fullStream) {
+            for await (const chunk of withIdleTimeout(finalResult.fullStream, idleMs, onStreamIdle)) {
               if (chunk.type === 'text-delta') {
                 finalContent += chunk.text
                 // Show streaming content in real-time

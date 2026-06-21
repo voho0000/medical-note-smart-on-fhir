@@ -13,6 +13,12 @@ export const ENV_CONFIG = {
   hasGeminiProxy: Boolean(process.env.NEXT_PUBLIC_GEMINI_URL),
   hasClaudeProxy: Boolean(process.env.NEXT_PUBLIC_CLAUDE_URL),
   
+  // Streaming watchdog: abort a chat stream that produces no new token for this
+  // long (ms), so a stalled/never-closing upstream stream surfaces a timeout
+  // error instead of hanging the UI forever. Idle-based, so legitimate long
+  // replies that keep streaming are unaffected. Overridable for E2E.
+  streamIdleTimeoutMs: Number(process.env.NEXT_PUBLIC_STREAM_IDLE_TIMEOUT_MS) || 60_000,
+
   // SMART on FHIR
   smartClientId: 'my_web_app',
   smartScopes: 'launch openid fhirUser patient/*.read online_access',

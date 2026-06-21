@@ -23,5 +23,14 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     // First Turbopack compile can be slow on a cold CI runner.
     timeout: 180_000,
+    // Pin the AI proxy URLs to sentinels so `hasChatProxy` is true (a no-user-
+    // key model routes through the proxy) AND the mock-stream test knows the
+    // exact host to intercept. @next/env won't override an already-set
+    // process.env var, so these win over any real value in .env.local.
+    env: {
+      NEXT_PUBLIC_CHAT_URL: 'https://e2e-proxy.test/chat',
+      NEXT_PUBLIC_GEMINI_URL: 'https://e2e-proxy.test/gemini',
+      NEXT_PUBLIC_CLAUDE_URL: 'https://e2e-proxy.test/claude',
+    },
   },
 })
