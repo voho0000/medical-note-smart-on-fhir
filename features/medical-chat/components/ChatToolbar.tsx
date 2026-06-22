@@ -13,6 +13,7 @@ interface Template {
   id: string
   label: string
   content: string
+  shortcut?: string
 }
 
 interface ChatToolbarProps {
@@ -125,7 +126,14 @@ export function ChatToolbar({
             <SelectContent align="start" className="w-[200px] text-xs">
               {templates.map((template) => (
                 <SelectItem key={template.id} value={template.id}>
-                  {template.label}
+                  <span className="flex w-full items-center justify-between gap-4">
+                    <span className="truncate">{template.label}</span>
+                    {template.shortcut ? (
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground/80">
+                        /{template.shortcut}
+                      </span>
+                    ) : null}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

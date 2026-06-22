@@ -7,6 +7,7 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { MarkdownRenderer } from "@/src/shared/components/MarkdownRenderer"
+import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
 import type { ChatMessage } from "@/src/application/stores/chat.store"
@@ -222,7 +223,7 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
           ))
         )}
         {isLoading ? (
-          <div className="text-xs text-muted-foreground">{t.common.loading}</div>
+          <StreamingIndicator label={t.common.loading} />
         ) : null}
         <div ref={messagesEndRef} />
       </div>
