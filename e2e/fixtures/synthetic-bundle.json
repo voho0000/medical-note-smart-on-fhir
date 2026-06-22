@@ -13,6 +13,28 @@
     },
     {
       "resource": {
+        "resourceType": "Condition",
+        "id": "cond-htn",
+        "clinicalStatus": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/condition-clinical", "code": "active" }] },
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/condition-category", "code": "encounter-diagnosis" }] }],
+        "code": { "text": "Hypertension", "coding": [{ "system": "http://snomed.info/sct", "code": "38341003", "display": "Hypertension" }] },
+        "subject": { "reference": "Patient/test-patient-1" },
+        "onsetDateTime": "2019-05-02"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond-sinusitis",
+        "clinicalStatus": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/condition-clinical", "code": "resolved" }] },
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/condition-category", "code": "encounter-diagnosis" }] }],
+        "code": { "text": "Viral sinusitis (disorder)", "coding": [{ "system": "http://snomed.info/sct", "code": "444814009", "display": "Viral sinusitis (disorder)" }] },
+        "subject": { "reference": "Patient/test-patient-1" },
+        "onsetDateTime": "2018-01-19"
+      }
+    },
+    {
+      "resource": {
         "resourceType": "Observation",
         "id": "bp-2017",
         "status": "final",

@@ -215,6 +215,10 @@ export const zhTW = {
   problemList: {
     title: '問題清單',
     noData: '無問題清單資料。',
+    filterActive: '進行中',
+    filterResolved: '已解決',
+    filterAll: '全部',
+    filterNone: '目前篩選下沒有項目',
   },
 
   advanceDirectives: {

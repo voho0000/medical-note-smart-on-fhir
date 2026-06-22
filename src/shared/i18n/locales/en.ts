@@ -212,6 +212,10 @@ export const en = {
   problemList: {
     title: 'Problem List',
     noData: 'No problem list items.',
+    filterActive: 'Active',
+    filterResolved: 'Resolved',
+    filterAll: 'All',
+    filterNone: 'No items for this filter',
   },
 
   advanceDirectives: {
