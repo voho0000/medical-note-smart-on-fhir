@@ -67,6 +67,8 @@ export const en = {
     evidenceLabel: 'Evidence',
     autoScan: 'Auto-scan',
     autoScanTooltip: 'Scan once automatically when a patient loads (result is cached, not re-run)',
+    modelLabel: 'Model',
+    modelTooltip: 'Choose the AI model for the safety scan (independent of the chat model)',
   },
 
   ipsExport: {

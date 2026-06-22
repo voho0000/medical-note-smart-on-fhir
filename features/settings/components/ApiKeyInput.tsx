@@ -4,6 +4,7 @@ import { Eye, EyeOff } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import {
   Tooltip,
@@ -51,14 +52,25 @@ export function ApiKeyInput({
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative sm:flex-1">
+          {/* NOT type="password": Chrome ignores autoComplete="off" on password
+              fields and offers saved-login autofill (these aren't credentials).
+              Stay type="text" and mask via -webkit-text-security so no password
+              manager latches on, plus the usual ignore attributes. */}
           <Input
             id={id}
-            type={showPassword ? "text" : "password"}
+            name={id}
+            type="text"
             placeholder={placeholder}
-            className="pr-10"
+            className={cn("pr-10", !showPassword && "[-webkit-text-security:disc]")}
             value={value || ''}
             onChange={(event) => onChange(event.target.value)}
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
           />
           <button
             type="button"

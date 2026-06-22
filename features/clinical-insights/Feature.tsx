@@ -1,7 +1,7 @@
 // Refactored Clinical Insights Feature
 "use client"
 
-import { useEffect, useMemo, useState, useCallback } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -21,9 +21,16 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAllApiKeys, useModel } from "@/src/application/stores/ai-config.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
-import { useFhirContext } from "@/src/application/hooks/chat/use-fhir-context.hook"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
 import { hasChatProxy } from "@/src/shared/config/env.config"
+import {
+  saveEncryptedCache,
+  loadEncryptedCache,
+  removeEncryptedCache,
+  aiResultCacheKey,
+  contentSignature,
+} from "@/src/infrastructure/cache/encrypted-session-cache"
 
 import { useInsightPanels } from './hooks/useInsightPanels'
 import { useInsightGeneration } from './hooks/useInsightGeneration'
@@ -34,10 +41,15 @@ import { ApiKeyWarning } from './components/ApiKeyWarning'
 import { TabManagementToolbar } from './components/TabManagementToolbar'
 import { SafetyAlertsPanel } from '@/features/proactive-safety-alerts/SafetyAlertsPanel'
 import { ShieldAlert } from 'lucide-react'
+import type { ResponseEntry } from './types'
 
 // A fixed, LOCKED tab living alongside the user's editable insight tabs:
 // no prompt editing, fixed structured output + UI (its own scan + cards).
 const SAFETY_TAB_ID = '__safety-alerts__'
+
+// Cached insight responses share the bundle's 12h lifecycle (encrypted, session-
+// scoped) so a refresh reuses them but they never outlive the chart.
+const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
@@ -45,7 +57,10 @@ export default function ClinicalInsightsFeature() {
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext('insights')
   const { isLoading: clinicalDataLoading, error: clinicalDataError } = useClinicalData()
-  const { patientId } = useFhirContext()
+  // usePatient (not useFhirContext) so the id is present for LOCAL/demo bundles
+  // too — it keys both the per-patient reset and the response cache.
+  const { patient } = usePatient()
+  const patientId = patient?.id ?? ''
   const model = useModel()
 
   const [context, setContext] = useState("")
@@ -104,11 +119,81 @@ export default function ClinicalInsightsFeature() {
     setContext(latestContext)
   }, [getFullClinicalContext])
 
+  // Per-panel cache key: a response is reusable only for the SAME prompt, so we
+  // tag each cached entry with the prompt's signature.
+  const promptSig = useCallback(
+    (panelId: string) => contentSignature(prompts[panelId] ?? panels.find((p) => p.id === panelId)?.prompt ?? ''),
+    [prompts, panels],
+  )
+
+  // Restore cached responses on (re)load so a refresh on the same patient + same
+  // template keeps the output instead of regenerating. Only entries whose prompt
+  // signature still matches are restored; a changed template falls through to
+  // auto-generate. `hydratedPatient` gates auto-generate so it can't race the
+  // restore and re-bill.
+  //
+  // Deps are kept STABLE (`patientId` + a `panelsReady` boolean) so the async
+  // load isn't cancelled by spurious re-renders while panels/prompts settle —
+  // panels + the signature fn are read through refs at restore time instead.
+  const panelsRef = useRef(panels)
+  panelsRef.current = panels
+  const promptSigRef = useRef(promptSig)
+  promptSigRef.current = promptSig
+  const panelsReady = panels.length > 0
+  const [hydratedPatient, setHydratedPatient] = useState<string | null>(null)
+  useEffect(() => {
+    if (!patientId || !panelsReady) return
+    const store = useInsightResponsesStore.getState()
+    if (store.ownerPatientId === patientId && Object.keys(store.responses).length > 0) {
+      setHydratedPatient(patientId)
+      return
+    }
+    let cancelled = false
+    void loadEncryptedCache<{ entries: Record<string, ResponseEntry & { promptSig: string }> }>(
+      aiResultCacheKey('insights', patientId),
+      INSIGHTS_CACHE_MAX_AGE_MS,
+    ).then((cached) => {
+      if (cancelled) return
+      const curPanels = panelsRef.current
+      const sig = promptSigRef.current
+      const restored: Record<string, ResponseEntry> = {}
+      for (const [pid, entry] of Object.entries(cached?.entries ?? {})) {
+        if (!curPanels.some((p) => p.id === pid)) continue
+        if (entry.promptSig !== sig(pid)) continue
+        restored[pid] = { text: entry.text, isEdited: entry.isEdited, metadata: entry.metadata }
+      }
+      if (Object.keys(restored).length) {
+        resetForPatient(patientId)
+        setResponses((prev) => ({ ...restored, ...prev }))
+      }
+      setHydratedPatient(patientId)
+    })
+    return () => { cancelled = true }
+  }, [patientId, panelsReady, resetForPatient, setResponses])
+
+  // Persist completed responses (once all panels are idle) so they survive a
+  // reload. Skips while any panel streams; clears the cache when nothing is left.
+  useEffect(() => {
+    if (!patientId || hydratedPatient !== patientId) return
+    if (panels.some((p) => panelStatus[p.id]?.isLoading)) return
+    const entries: Record<string, ResponseEntry & { promptSig: string }> = {}
+    for (const panel of panels) {
+      const r = responses[panel.id]
+      if (r?.text?.trim() && !panelStatus[panel.id]?.error) {
+        entries[panel.id] = { text: r.text, isEdited: r.isEdited, metadata: r.metadata ?? null, promptSig: promptSig(panel.id) }
+      }
+    }
+    const key = aiResultCacheKey('insights', patientId)
+    if (Object.keys(entries).length) void saveEncryptedCache(key, { entries })
+    else removeEncryptedCache(key)
+  }, [responses, panelStatus, patientId, hydratedPatient, panels, promptSig])
+
   useAutoGenerate({
     panels,
-    canGenerate,
+    canGenerate: canGenerate && hydratedPatient === patientId,
     context,
     runPanel,
+    responses,
   })
 
   // Safety Alerts is the pinned, locked FIRST tab and the default selection.

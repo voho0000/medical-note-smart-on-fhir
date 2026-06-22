@@ -69,6 +69,8 @@ export const zhTW = {
     evidenceLabel: '依據',
     autoScan: '自動掃描',
     autoScanTooltip: '載入病人後自動掃描一次（結果會快取，不重複跑）',
+    modelLabel: '模型',
+    modelTooltip: '選擇安全掃描使用的 AI 模型（與聊天模型獨立）',
   },
 
   ipsExport: {

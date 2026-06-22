@@ -93,8 +93,12 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
       const w = window as unknown as {
         __longTasks?: { d: number; t: number }[]
         __resetLongTasks?: () => void
+        __chatCallCount?: number
       }
       w.__longTasks = []
+      // Reset per navigation (addInitScript re-runs on reload) — lets a test
+      // assert that a reload did NOT trigger a fresh AI call.
+      w.__chatCallCount = 0
       w.__resetLongTasks = () => {
         w.__longTasks = []
       }
@@ -135,6 +139,7 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
           typeof init?.body === 'string' ? init.body : input instanceof Request ? '' : ''
         const isChatCall = PROXY_HOSTS.test(url) && (body.includes(marker) || init?.method === 'POST')
         if (!isChatCall) return realFetch(input as RequestInfo, init)
+        w.__chatCallCount = (w.__chatCallCount ?? 0) + 1
 
         const enc = new TextEncoder()
         const stream = new ReadableStream<Uint8Array>({
@@ -172,4 +177,9 @@ export async function resetLongTasks(page: Page): Promise<void> {
 /** Read the long tasks the in-page observer collected: {d:duration, t:start} ms. */
 export async function getLongTasks(page: Page): Promise<{ d: number; t: number }[]> {
   return page.evaluate(() => (window as unknown as { __longTasks?: { d: number; t: number }[] }).__longTasks ?? [])
+}
+
+/** How many mocked AI chat calls fired since the current navigation loaded. */
+export async function getChatCallCount(page: Page): Promise<number> {
+  return page.evaluate(() => (window as unknown as { __chatCallCount?: number }).__chatCallCount ?? 0)
 }

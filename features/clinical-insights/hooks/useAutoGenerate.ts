@@ -12,6 +12,9 @@ interface UseAutoGenerateProps {
   canGenerate: boolean
   context: string
   runPanel: (panelId: string) => Promise<void>
+  /** Current responses — a panel that already has output (this session OR
+   *  restored from cache on reload) is NOT auto-run again. */
+  responses?: Record<string, { text?: string } | undefined>
 }
 
 export function useAutoGenerate({
@@ -19,6 +22,7 @@ export function useAutoGenerate({
   canGenerate,
   context,
   runPanel,
+  responses,
 }: UseAutoGenerateProps) {
   const [autoRunPanels, setAutoRunPanels] = useState<Set<string>>(new Set())
 
@@ -34,7 +38,10 @@ export function useAutoGenerate({
     }
 
     const panelsToAutoRun = panels.filter(
-      (panel) => panel.autoGenerate === true && !autoRunPanels.has(panel.id)
+      (panel) =>
+        panel.autoGenerate === true &&
+        !autoRunPanels.has(panel.id) &&
+        !responses?.[panel.id]?.text?.trim()
     )
     if (panelsToAutoRun.length === 0) {
       return
@@ -61,7 +68,7 @@ export function useAutoGenerate({
         return next
       })
     })
-  }, [canGenerate, context, autoRunPanels, panels, runPanel])
+  }, [canGenerate, context, autoRunPanels, panels, runPanel, responses])
 
   return { autoRunPanels, setAutoRunPanels }
 }

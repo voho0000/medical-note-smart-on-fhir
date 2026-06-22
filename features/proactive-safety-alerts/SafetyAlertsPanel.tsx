@@ -7,23 +7,27 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useSafetyAlerts } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
 import { SafetyAlertCard } from "./components/SafetyAlertCard"
+import { SafetyModelPicker } from "./components/SafetyModelPicker"
 
 // Locked sub-tab inside Clinical Insights: pure-AI scan → fixed structured cards.
 // No editable prompt (it lives in the core use-case) — fixed output + fixed UI.
+// The MODEL, however, is user-selectable (independent of the chat model).
 export function SafetyAlertsPanel() {
   const { t } = useLanguage()
-  const { result, isScanning, error, hasPatient, autoScan, setAutoScan, scan } = useSafetyAlerts()
+  const { result, isScanning, error, hasPatient, autoScan, setAutoScan, model, setModel, scan } = useSafetyAlerts()
 
   return (
     <div className="space-y-3 py-1">
-      {/* Header: title + proactive badge (left), scan/re-scan button (top-right) */}
-      <div className="flex items-center gap-2">
+      {/* Header: title + proactive badge (left); model picker + auto-scan +
+          scan/re-scan (top-right). Wraps on narrow widths so nothing clips. */}
+      <div className="flex flex-wrap items-center gap-2">
         <ShieldAlert className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
         <h2 className="text-base font-semibold text-foreground">{t.safetyAlerts.title}</h2>
         <span className="rounded-md bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
           {t.safetyAlerts.proactiveBadge}
         </span>
         <div className="ml-auto flex items-center gap-3">
+          <SafetyModelPicker model={model} onSelectModel={setModel} />
           <label
             className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
             title={t.safetyAlerts.autoScanTooltip}

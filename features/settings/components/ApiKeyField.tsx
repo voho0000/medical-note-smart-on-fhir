@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
-import { useModelSelection as useModelSelectionLogic } from '../hooks/useModelSelection'
+import { useModelSelection as useModelSelectionLogic } from '@/src/application/hooks/useModelSelection'
 import { ModelSelector } from './ModelSelector'
 import { ApiKeyInput } from './ApiKeyInput'
 import { AuthStatus } from '@/features/auth'

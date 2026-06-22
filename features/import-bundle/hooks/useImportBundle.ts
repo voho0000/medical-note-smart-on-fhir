@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
 
 const BUNDLE_CHANGED_EVENT = 'mediprisma:local-bundle-changed'
 // Set while the currently-loaded bundle is the bundled demo ("試用資料"), so the
@@ -120,6 +121,9 @@ export function useImportBundle(): UseImportBundleReturn {
   const clear = useCallback(async () => {
     await LocalBundleService.clear()
     localStorage.removeItem(DEMO_FLAG_KEY)
+    // Clearing the bundle must also drop cached AI results (safety scan,
+    // insights) so re-importing the same patient starts fresh, not stale.
+    purgeAiResultCaches()
     setHasBundle(false)
     setBundleIsActive(false)
     setIsDemo(false)
