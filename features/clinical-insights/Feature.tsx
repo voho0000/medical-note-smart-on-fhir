@@ -32,6 +32,12 @@ import { useAutoGenerate } from './hooks/useAutoGenerate'
 import { InsightPanel } from './components/InsightPanel'
 import { ApiKeyWarning } from './components/ApiKeyWarning'
 import { TabManagementToolbar } from './components/TabManagementToolbar'
+import { SafetyAlertsPanel } from '@/features/proactive-safety-alerts/SafetyAlertsPanel'
+import { ShieldAlert } from 'lucide-react'
+
+// A fixed, LOCKED tab living alongside the user's editable insight tabs:
+// no prompt editing, fixed structured output + UI (its own scan + cards).
+const SAFETY_TAB_ID = '__safety-alerts__'
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
@@ -105,12 +111,13 @@ export default function ClinicalInsightsFeature() {
     runPanel,
   })
 
-  // Initialize active tab when panels change
+  // Safety Alerts is the pinned, locked FIRST tab and the default selection.
   useEffect(() => {
-    if (!activeTabId && panels.length > 0) {
-      setActiveTabId(panels[0].id)
-    } else if (activeTabId && !panels.find(p => p.id === activeTabId)) {
-      setActiveTabId(panels[0]?.id || "")
+    if (!activeTabId) {
+      setActiveTabId(SAFETY_TAB_ID)
+    } else if (activeTabId !== SAFETY_TAB_ID && !panels.find(p => p.id === activeTabId)) {
+      // active editable tab was deleted → fall back to Safety
+      setActiveTabId(SAFETY_TAB_ID)
     }
   }, [panels, activeTabId])
 
@@ -178,11 +185,22 @@ export default function ClinicalInsightsFeature() {
     <ScrollArea className="h-full pr-3">
       <div className="space-y-4">
         {!canGenerate && <ApiKeyWarning />}
-        {panelEntries.length > 0 ? (
+        {/* Safety Alerts is always present (locked first tab), so the tab block
+            always renders — even if the user deletes all editable insight tabs. */}
+        {(
           <>
             <Tabs value={activeTabId} onValueChange={setActiveTabId} className="space-y-4">
             <div className="flex items-center gap-2">
-              <TabsList className="grid flex-1 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length}, minmax(0, 1fr))` }}>
+              <TabsList className="grid flex-1 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length + 1}, minmax(0, 1fr))` }}>
+                {/* Locked safety-alerts tab — pinned FIRST, fixed prompt + fixed UI */}
+                <TabsTrigger
+                  value={SAFETY_TAB_ID}
+                  title={t.safetyAlerts.title}
+                  className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.insight} min-w-0 flex items-center justify-center gap-1`}
+                >
+                  <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{t.tabs.safetyAlerts}</span>
+                </TabsTrigger>
                 {panelEntries.map((panel) => (
                   <TabsTrigger
                     key={panel.id}
@@ -193,14 +211,19 @@ export default function ClinicalInsightsFeature() {
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <TabManagementToolbar 
-                currentTabId={activeTabId} 
-                onTabChange={setActiveTabId}
-                currentPrompt={prompts[activeTabId] ?? panels.find(p => p.id === activeTabId)?.prompt ?? ''}
-                currentTitle={panels.find(p => p.id === activeTabId)?.title ?? ''}
-                onPromptChange={(prompt) => handlePromptChange(activeTabId, prompt)}
-              />
+              {activeTabId !== SAFETY_TAB_ID && (
+                <TabManagementToolbar
+                  currentTabId={activeTabId}
+                  onTabChange={setActiveTabId}
+                  currentPrompt={prompts[activeTabId] ?? panels.find(p => p.id === activeTabId)?.prompt ?? ''}
+                  currentTitle={panels.find(p => p.id === activeTabId)?.title ?? ''}
+                  onPromptChange={(prompt) => handlePromptChange(activeTabId, prompt)}
+                />
+              )}
             </div>
+            <TabsContent value={SAFETY_TAB_ID} className="mt-0">
+              <SafetyAlertsPanel />
+            </TabsContent>
             {panelEntries.map((panel) => (
               <TabsContent key={panel.id} value={panel.id} className="mt-0">
                 <InsightPanel {...panel.props} />
@@ -235,12 +258,7 @@ export default function ClinicalInsightsFeature() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          </> ) : (
-          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.insight}`}>
-            <CardContent className="text-sm text-muted-foreground">
-              {t.clinicalInsights.noTabsConfigured}
-            </CardContent>
-          </Card>
+          </>
         )}
       </div>
     </ScrollArea>

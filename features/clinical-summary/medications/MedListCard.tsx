@@ -151,11 +151,18 @@ export function MedListCard() {
             <div className="relative flex-1 min-w-[160px]">
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <input
-                type="text"
+                type="search"
+                inputMode="search"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore="true"
+                data-lpignore="true"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={mt.searchPlaceholder ?? '搜尋藥名、分類、適應症、機構、日期…'}
-                className="w-full rounded-md border bg-background pl-7 pr-7 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
+                className="w-full rounded-md border bg-background pl-7 pr-7 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
               />
               {searchQuery && (
                 <button

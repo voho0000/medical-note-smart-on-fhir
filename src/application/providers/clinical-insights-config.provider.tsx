@@ -9,6 +9,7 @@ import {
   batchSaveClinicalInsightPanels,
   replaceAllClinicalInsightPanels,
 } from "@/src/infrastructure/firebase/clinical-insights-sync"
+import { stripLegacySafetyPanels } from "./clinical-insights-legacy"
 
 export type InsightPanelConfig = {
   id: string
@@ -20,21 +21,15 @@ export type InsightPanelConfig = {
 }
 
 const DEFAULT_PANELS_EN_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
-  {
-    id: "safety",
-    title: "Safety Flag",
-    prompt:
-      "Review the clinical context and flag any immediate patient safety risks, including drug interactions, abnormal results, or urgent follow-up needs. Respond with concise bullet points ordered by severity.",
-    autoGenerate: false,
-    order: 0,
-  },
+  // NOTE: the legacy "safety" panel was removed — superseded by the dedicated
+  // Safety Alerts locked tab (structured output + fixed UI).
   {
     id: "changes",
     title: "What's Changed",
     prompt:
       "Compare the patient's recent clinical data to prior information and list the most important changes in status, therapy, or results. Emphasize deltas that require attention.",
     autoGenerate: false,
-    order: 1,
+    order: 0,
   },
   {
     id: "snapshot",
@@ -42,7 +37,7 @@ const DEFAULT_PANELS_EN_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
     prompt:
       "Create a succinct clinical snapshot covering active problems, current therapies, recent results, and outstanding tasks. Keep it brief and actionable.",
     autoGenerate: false,
-    order: 2,
+    order: 1,
   },
 ]
 
@@ -74,21 +69,14 @@ const DEFAULT_PANELS_EN_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
 ]
 
 const DEFAULT_PANELS_ZH_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
-  {
-    id: "safety",
-    title: "安全警示",
-    prompt:
-      "檢視臨床資料並標記任何立即的病人安全風險，包括藥物交互作用、異常結果或緊急追蹤需求。以簡潔的條列式回應，依嚴重程度排序。",
-    autoGenerate: false,
-    order: 0,
-  },
+  // 註：舊的「安全警示」面板已移除——由獨立的「安全警示」鎖定分頁取代（結構化輸出 + 固定 UI）。
   {
     id: "changes",
     title: "變化摘要",
     prompt:
       "比較病人最近的臨床資料與先前資訊，列出狀態、治療或結果中最重要的變化。強調需要注意的差異。",
     autoGenerate: false,
-    order: 1,
+    order: 0,
   },
   {
     id: "snapshot",
@@ -96,7 +84,7 @@ const DEFAULT_PANELS_ZH_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
     prompt:
       "建立簡潔的臨床快照，涵蓋活動中的問題、目前治療、近期結果和待辦事項。保持簡短且可執行。",
     autoGenerate: false,
-    order: 2,
+    order: 1,
   },
 ]
 
@@ -233,10 +221,12 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
           setCustomByAudience({ medical: false, patient: false })
           return
         }
-        const sanitized = parsed
-          .map((e, i) => sanitizePanel(e, i))
-          .filter((p): p is InsightPanelConfig => p !== null)
-          .slice(0, MAX_PANELS)
+        const sanitized = stripLegacySafetyPanels(
+          parsed
+            .map((e, i) => sanitizePanel(e, i))
+            .filter((p): p is InsightPanelConfig => p !== null)
+            .slice(0, MAX_PANELS),
+        )
 
         const seen = new Set(sanitized.map((p) => p.audience))
         const merged = [...sanitized]
@@ -263,10 +253,12 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
         try {
           const parsed = JSON.parse(stored)
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const sanitized = parsed
-              .map((e, i) => sanitizePanel(e, i))
-              .filter((p): p is InsightPanelConfig => p !== null)
-              .slice(0, MAX_PANELS)
+            const sanitized = stripLegacySafetyPanels(
+              parsed
+                .map((e, i) => sanitizePanel(e, i))
+                .filter((p): p is InsightPanelConfig => p !== null)
+                .slice(0, MAX_PANELS),
+            )
             if (sanitized.length > 0) {
               batchSaveClinicalInsightPanels(user.uid, sanitized).catch((err) => {
                 console.warn('[Clinical Insights] Migration failed', err)
@@ -289,8 +281,16 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
   useEffect(() => {
     if (!user?.uid || !hasLoadedFromStorage) return
 
-    const unsubscribe = subscribeToClinicalInsightPanels(user.uid, (updated: InsightPanelConfig[]) => {
+    const unsubscribe = subscribeToClinicalInsightPanels(user.uid, (incoming: InsightPanelConfig[]) => {
       if (isSyncing) return
+      // One-time legacy cleanup: drop the pristine "safety" panel and persist the
+      // cleaned set back. Idempotent — the write echoes back already clean, and
+      // isSyncing suppresses our own echo (same pattern as resetPanels).
+      const updated = stripLegacySafetyPanels(incoming)
+      if (updated.length < incoming.length && user?.uid) {
+        setIsSyncing(true)
+        replaceAllClinicalInsightPanels(user.uid, updated).finally(() => setIsSyncing(false))
+      }
       if (updated.length === 0) {
         setAllPanels(getAllDefaults(currentLang))
         setCustomByAudience({ medical: false, patient: false })
