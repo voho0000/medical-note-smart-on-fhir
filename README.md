@@ -14,19 +14,20 @@
 
 - **臨床摘要**：病人資訊、就診紀錄、報告（含**累積報告**：檢驗數值跨時間表格化）、用藥、文件，從 FHIR 自動整理。
 - **AI 協助**：
-  - **筆記對話**（一般模式）：互動式 AI 助理，可插入選定的臨床資料、起草病歷章節。
+  - **筆記對話**（一般模式）：互動式 AI 助理，可插入選定的臨床資料、起草病歷章節；輸入 `/` 即可快速套用提示模板。
   - **深入模式（AI Agent）**：以客戶端 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）＋醫學文獻搜尋（Perplexity）。
-  - **臨床洞察**：自動生成摘要。
+  - **臨床洞察**：自動生成摘要，並內建**主動用藥安全警示**（純 AI、結構化卡片，固定置於最前且不可改寫提示）。
   - **語音口述**：Whisper 轉錄。
 - **資料選擇**：挑選要餵給 AI 的資料範圍（門診／檢驗／用藥…），多種預設與每用途記憶。
 - **IPS 匯出**：International Patient Summary。
 - **提示範本庫**：社群共享的提示範本。
 - **多語言（中／英）、深色模式、響應式**。
 
-## 資料來源（兩種）
+## 資料來源（三種）
 
 1. **SMART on FHIR**：由 EHR 啟動（OAuth 2.0 + PKCE），即時讀取 FHIR 伺服器資料。
 2. **本地匯入**：匯入健保存摺等來源的 FHIR Bundle（`.json`）。資料**只留在本機**，不上傳。
+3. **試用資料（示範病人）**：一鍵載入內建、**去識別化**的示範病人（改編自真實健保存摺，含出院病摘與真實影像），無需匯入任何檔案即可體驗；資料同樣只留在本機。
 
 ## 隱私與安全
 
@@ -171,9 +172,9 @@ A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHI
 
 - **Clinical summary**: patient info, visits, reports (including a **cumulative lab report** — values tabulated across dates), medications, documents — assembled from FHIR.
 - **AI**:
-  - **Note Chat** (normal): interactive assistant; insert selected clinical data, draft note sections.
+  - **Note Chat** (normal): interactive assistant; insert selected clinical data, draft note sections; type `/` to quickly apply a prompt template.
   - **Deep Mode (AI Agent)**: client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters) + medical-literature search (Perplexity).
-  - **Clinical Insights**: auto-generated summaries.
+  - **Clinical Insights**: auto-generated summaries, with a built-in **proactive medication-safety scanner** (pure-AI, structured cards, pinned first and prompt-locked).
   - **Voice dictation**: Whisper transcription.
 - **Data Selection**: choose which data to feed the AI, with presets and per-consumer memory.
 - **IPS export**: International Patient Summary.
@@ -184,6 +185,7 @@ A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHI
 
 1. **SMART on FHIR** — launched from an EHR (OAuth 2.0 + PKCE), reading the FHIR server live.
 2. **Local import** — import a FHIR Bundle (`.json`, e.g. from Taiwan's NHI health record). Data **stays on the device**, never uploaded.
+3. **Demo data (sample patient)** — one-click load of a built-in, **de-identified** sample patient (adapted from a real NHI record, with a discharge summary and real images); no file needed, and it also stays on the device.
 
 ## Privacy & security
 

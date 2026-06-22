@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { Download, Trash2, Database } from "lucide-react"
+import { Download, Trash2, Database, FlaskConical, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -33,7 +33,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
   const fileRef = useRef<HTMLInputElement>(null)
   const { t } = useLanguage()
   const i18n = t.importBundle
-  const { importFile, clear, loading, error, hasBundle, bundleIsActive } = useImportBundle()
+  const { importFile, clear, loading, error, hasBundle, bundleIsActive, isDemo } = useImportBundle()
   // Clearing wipes the whole patient context in one click — confirm first
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
 
@@ -52,15 +52,50 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
-        {/* "Local data" badge only when the bundle is genuinely the data
-            source — SMART context, if active, suppresses the badge so users
-            aren't misled. The bundle's presence is still indicated by the
-            Trash button below. */}
+        {/* Data-source badge, only when the bundle is genuinely the data
+            source — SMART context, if active, suppresses it so users aren't
+            misled. Reads "示範資料" (green) for the bundled demo, "本地資料"
+            (amber) for a real local import. The bundle's presence is also
+            indicated by the Trash button below (which exits demo too). */}
         {bundleIsActive && (
-          <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-            <Database className="h-3 w-3" />
-            {i18n.localData}
-          </span>
+          isDemo ? (
+            // Demo badge doubles as the exit control — clicking it ends the demo
+            // and returns to the welcome screen immediately (no confirm; demo
+            // data is disposable). The trailing × signals it's dismissible.
+            <button
+              type="button"
+              onClick={() => { void clear() }}
+              disabled={loading}
+              title={i18n.exitDemo}
+              aria-label={i18n.exitDemo}
+              className="group flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-200 disabled:opacity-50"
+            >
+              <FlaskConical className="h-3 w-3" />
+              {i18n.demoData}
+              <X className="h-3 w-3 opacity-60 transition-opacity group-hover:opacity-100" />
+            </button>
+          ) : (
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+              <Database className="h-3 w-3" />
+              {i18n.localData}
+            </span>
+          )
+        )}
+        {/* Trash (with confirm) for a real imported bundle — placed right next
+            to the 本地資料 badge it acts on, so "clear this data" is the
+            intuitive click target. The demo uses its clickable badge × instead,
+            so this is hidden in demo mode. */}
+        {hasBundle && !isDemo && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-destructive hover:text-destructive"
+            onClick={() => setConfirmClearOpen(true)}
+            title={i18n.clearTitle}
+            aria-label={i18n.clearTitle}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         )}
         <Button
           variant="outline"
@@ -82,18 +117,6 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
             {loading ? i18n.importing : i18n.button}
           </span>
         </Button>
-        {hasBundle && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-destructive hover:text-destructive"
-            onClick={() => setConfirmClearOpen(true)}
-            title={i18n.clearTitle}
-            aria-label={i18n.clearTitle}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        )}
         <AlertDialog open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>

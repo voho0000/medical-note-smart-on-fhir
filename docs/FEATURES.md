@@ -96,6 +96,7 @@ import { MedicalChatFeature } from '@/features/medical-chat'
 - 支援 OpenAI、Gemini、Perplexity
 - 語音錄製和轉錄
 - 對話歷史整合
+- `/` 斜線快速套用提示模板
 
 ---
 
@@ -112,7 +113,7 @@ import { ClinicalInsightsFeature } from '@/features/clinical-insights'
 **功能**：
 - AI 生成臨床摘要
 - 可自訂洞察標籤
-- 安全警示（Safety Flag）
+- 主動安全警示（Safety Alerts）— 純 AI、結構化卡片，固定置於最前、提示不可改寫
 - 變化摘要（What's Changed）
 - 臨床快照（Clinical Snapshot）
 

@@ -7,7 +7,7 @@
 "use client"
 
 import { useCallback, useRef, useState } from 'react'
-import { Download, Hospital, Shield } from 'lucide-react'
+import { Download, FlaskConical, Hospital, Shield } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { ImportBundleButton } from '@/features/import-bundle/ImportBundleButton'
 import { useImportBundle } from '@/features/import-bundle/hooks/useImportBundle'
@@ -17,7 +17,7 @@ export function WelcomeOnboarding() {
   const w = (t as any).welcome ?? {}
   const i18n = t.importBundle
 
-  const { importFile, loading, error } = useImportBundle()
+  const { importFile, loadDemo, loading, error } = useImportBundle()
   const [isDragging, setIsDragging] = useState(false)
   const dragCounter = useRef(0)
 
@@ -63,6 +63,14 @@ export function WelcomeOnboarding() {
     e.preventDefault()
     e.stopPropagation()
   }, [])
+
+  const handleLoadDemo = useCallback(async () => {
+    try {
+      await loadDemo()
+    } catch {
+      // error surfaces via the hook's `error` state
+    }
+  }, [loadDemo])
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
@@ -137,7 +145,7 @@ export function WelcomeOnboarding() {
           <p className="mb-4 text-sm text-destructive">{error}</p>
         )}
 
-        <div className="grid gap-4 text-left sm:grid-cols-2">
+        <div className="grid gap-4 text-left sm:grid-cols-3">
           {/* Local-import card — clickable, opens file picker. Treated as
               a second CTA (the primary one is the button above), so
               hover/focus styles + cursor-pointer telegraph that clicking
@@ -156,6 +164,27 @@ export function WelcomeOnboarding() {
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {w.localDesc ?? 'Import a JSON bundle — data stays in your browser.'}
+            </p>
+          </button>
+
+          {/* Demo card — clickable, loads the bundled anonymised demo patient
+              through the same import path. Green accent so it reads as the
+              low-commitment "just try it" option. */}
+          <button
+            type="button"
+            onClick={handleLoadDemo}
+            disabled={loading}
+            data-testid="welcome-demo-card"
+            className="text-left rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 cursor-pointer transition-colors hover:border-emerald-400 hover:bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                <FlaskConical className="h-4 w-4" />
+              </div>
+              <h3 className="text-sm font-semibold">{w.demoTitle ?? 'Try demo data'}</h3>
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {w.demoDesc ?? 'Load an anonymised sample patient — explore without importing anything.'}
             </p>
           </button>
 
