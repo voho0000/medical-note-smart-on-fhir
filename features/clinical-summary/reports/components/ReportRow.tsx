@@ -1,11 +1,14 @@
 // Report Row Component
-import { useState, memo } from 'react'
+import { useRef, useState, memo } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown, ImageIcon } from 'lucide-react'
+import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
-import type { Row, Observation } from '../types'
+import { useLanguage } from "@/src/application/providers/language.provider"
+import { useRightDetail } from "@/src/application/providers/right-detail.provider"
+import { useReportImageUrls } from '../hooks/useReportImageUrls'
+import type { Row, Observation, ReportImage } from '../types'
 import { getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
@@ -36,6 +39,231 @@ function BridgeDupBadge({ count }: { count: number }) {
         健保署送出 {count + 1} 份內容相同（或截斷版）的副本，本 App 已自動保留最完整一份顯示。如需追蹤可回報 bridge 端 dedup 漏網。
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+function formatImageBytes(size?: number): string {
+  if (!size || size <= 0) return ''
+  const mb = size / (1024 * 1024)
+  if (mb >= 1) return `${mb.toFixed(1)} MB`
+  return `${Math.round(size / 1024)} KB`
+}
+
+/** Report detail rendered in the right pane (向右展開) — findings text on top,
+ *  images below, each its own scroll region (per the user's 文上圖下、各自捲動).
+ *  Self-contained (owns copy + lightbox state + image-URL lifecycle) because the
+ *  node is snapshotted into the right-detail context and rendered apart from the
+ *  originating ReportRow, so it can't share the row's local state. Falls back to
+ *  a single natural-scroll column when only text OR only images are present. */
+function ReportImagingDetail({ text, images, title }: { text: string; images: ReportImage[]; title: string }) {
+  const { t } = useLanguage()
+  const tt = (t as any).reports?.image
+  const hasText = text.length > 0
+  const hasImages = images.length > 0
+  const urls = useReportImageUrls(images, hasImages)
+  const [copied, setCopied] = useState(false)
+  // Lazy-mount the full-screen lightbox only after the user clicks an image;
+  // kept mounted afterwards so re-opening is instant. Inline images already
+  // decode (via the hook) for the docked preview; the lightbox offers the
+  // zoom/full-res view the half-width pane can't.
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxMounted, setLightboxMounted] = useState(false)
+  const openLightbox = () => {
+    setLightboxMounted(true)
+    setLightboxOpen(true)
+  }
+
+  // Draggable splitter between the text (top) and image (bottom) regions: the
+  // user can pull it to give the image more (or less) room. `topPct` is the text
+  // region's share of the height; pointer capture keeps the drag tracking even
+  // when the cursor leaves the thin handle. Clamped so neither region vanishes.
+  const splitRef = useRef<HTMLDivElement>(null)
+  const textRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false) // synchronous flag so moves track off-handle
+  // null = auto: the text region hugs its content (a short report leaves no
+  // blank gap — the image starts right under the text) and the image takes the
+  // rest. Becomes a number once the user drags the splitter, switching to an
+  // explicit ratio they control (needed when BOTH text and image are long).
+  const [topPct, setTopPct] = useState<number | null>(null)
+  const [dragging, setDragging] = useState(false) // mirror, for the visual state
+  const clampPct = (p: number) => Math.min(80, Math.max(15, p))
+  // Current rendered share of the text region — the starting point for keyboard
+  // nudges while still in auto mode.
+  const measurePct = () => {
+    const c = splitRef.current?.getBoundingClientRect()
+    const tr = textRef.current?.getBoundingClientRect()
+    if (!c || !tr || c.height === 0) return 42
+    return (tr.height / c.height) * 100
+  }
+  const onHandleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    draggingRef.current = true
+    setDragging(true)
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* capture is best-effort */ }
+  }
+  const onHandleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return
+    const rect = splitRef.current?.getBoundingClientRect()
+    if (!rect || rect.height === 0) return
+    setTopPct(clampPct(((e.clientY - rect.top) / rect.height) * 100))
+  }
+  const onHandleUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    draggingRef.current = false
+    setDragging(false)
+    try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* no-op */ }
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (err) {
+      console.warn('[ReportRow] Clipboard copy failed', err)
+    }
+  }
+
+  const textBlock = hasText ? (
+    <div>
+      {/* Copy button pinned to the top-right of the (scrolling) text region —
+          floated so the report text flows past it, sticky so it stays put as
+          the text scrolls. */}
+      <button
+        type="button"
+        onClick={copy}
+        className="sticky top-0 z-10 float-right ml-2 inline-flex items-center gap-1 rounded-md border bg-card/95 px-1.5 py-0.5 text-xs text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:text-primary"
+        aria-label="複製報告全文"
+      >
+        {copied ? (
+          <>
+            <Check className="h-3 w-3" />
+            已複製
+          </>
+        ) : (
+          <>
+            <Copy className="h-3 w-3" />
+            複製全文
+          </>
+        )}
+      </button>
+      <FormattedReportText text={text} className="text-sm leading-relaxed text-foreground/90" />
+    </div>
+  ) : null
+
+  // Source caveat — 健保存摺 carries at most 10 preview JPEGs per exam (no
+  // DICOM). It's an IMAGE caveat, so it renders inside the image region (above
+  // the images, below the splitter) — not above the text report.
+  const noticeBlock = hasImages && tt?.previewLimitNotice ? (
+    <div className="flex shrink-0 items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span>{tt.previewLimitNotice}</span>
+    </div>
+  ) : null
+
+  const imageBlock = hasImages ? (
+    <div className="space-y-3">
+      {images.map((img, i) => (
+        <figure key={i} className="space-y-1">
+          {urls[i] ? (
+            <button
+              type="button"
+              onClick={openLightbox}
+              title={tt?.view ?? '放大檢視'}
+              className="block w-full"
+            >
+              <img
+                src={urls[i]}
+                alt={img.title || title}
+                loading="lazy"
+                decoding="async"
+                className="mx-auto max-h-[60vh] w-auto max-w-full rounded-md border bg-black/5 object-contain cursor-zoom-in"
+              />
+            </button>
+          ) : (
+            <div className="flex h-40 items-center justify-center rounded-md border bg-muted/40 text-sm text-muted-foreground">
+              {tt?.loading ?? '載入影像…'}
+            </div>
+          )}
+          {(img.title || img.size) && (
+            <figcaption className="text-center text-xs text-muted-foreground">
+              {img.title}
+              {img.title && img.size ? ' • ' : ''}
+              {formatImageBytes(img.size)}
+            </figcaption>
+          )}
+        </figure>
+      ))}
+    </div>
+  ) : null
+
+  const lightbox = lightboxMounted ? (
+    <ReportImageDialog images={images} title={title} open={lightboxOpen} onOpenChange={setLightboxOpen} />
+  ) : null
+
+  // Both present → a fixed notice bar on top, then two independently-scrolling
+  // regions split 50/50 (the text caps at half so the image gets a genuine
+  // half — the notice sits OUTSIDE the split so it doesn't steal image space).
+  // Otherwise a single natural-scroll column (the pane's own overflow handles).
+  if (hasText && hasImages) {
+    return (
+      <div ref={splitRef} className="flex h-full flex-col">
+        <div
+          ref={textRef}
+          className="scrollbar-thin-persistent shrink-0 overflow-y-auto pr-1"
+          style={topPct === null ? { maxHeight: '40%' } : { height: `${topPct}%` }}
+        >{textBlock}</div>
+        {/* Draggable splitter — defaults to sitting right under the text (auto),
+            so a short report leaves no blank gap; drag up/down (or focus + ↑/↓)
+            to rebalance when both text and image are long enough to scroll. */}
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="拖移以調整文字與影像的高度比例"
+          aria-valuenow={topPct === null ? undefined : Math.round(topPct)}
+          aria-valuemin={15}
+          aria-valuemax={80}
+          tabIndex={0}
+          onPointerDown={onHandleDown}
+          onPointerMove={onHandleMove}
+          onPointerUp={onHandleUp}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowUp') { e.preventDefault(); setTopPct((p) => clampPct((p ?? measurePct()) - 4)) }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); setTopPct((p) => clampPct((p ?? measurePct()) + 4)) }
+          }}
+          className="group relative shrink-0 cursor-row-resize touch-none py-2 outline-none"
+        >
+          {/* full-width hairline so the divider reads as a movable boundary */}
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border" />
+          {/* centered grip handle — a clear, obviously-draggable affordance */}
+          <div
+            className={cn(
+              'relative mx-auto flex h-4 w-9 items-center justify-center rounded-md border bg-card shadow-sm transition-colors',
+              dragging
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'text-muted-foreground group-hover:border-primary/50 group-hover:text-primary group-focus-visible:border-primary/50',
+            )}
+          >
+            <GripHorizontal className="h-3.5 w-3.5" />
+          </div>
+        </div>
+        {/* Image region — the preview-limit caveat lives HERE (with the images,
+            below the splitter), not above the text. The image gets the majority
+            of the height since the text caps at 40%. */}
+        <div className="scrollbar-thin-persistent min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {noticeBlock}
+          {imageBlock}
+        </div>
+        {lightbox}
+      </div>
+    )
+  }
+  return (
+    <>
+      {textBlock}
+      {noticeBlock}
+      {imageBlock}
+      {lightbox}
+    </>
   )
 }
 
@@ -108,6 +336,11 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
   }
   const [textExpanded, setTextExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  // 向右展開 — single long reports (imaging / ECG / pathology narratives) can be
+  // pushed to the right pane so the long text reads beside the rest of the list.
+  // Lab panels / 累積報告 are deliberately excluded (handled below in the
+  // isLongText branch only).
+  const { detail: rightDetail, toggleDetail } = useRightDetail()
 
   const handleCopy = async (text: string) => {
     try {
@@ -244,9 +477,38 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
       // render just the header (title + image indicator), with no toggle,
       // chevron, or empty expandable.
       const hasText = fullText.length > 0
+      // 向右展開 target id — namespaced so it can't collide with visit/med ids
+      // that share the single right-pane slot.
+      const reportSourceId = `report:${row.id}`
+      const isReportRightActive = rightDetail?.sourceId === reportSourceId
+      const openReportRight = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        toggleDetail({
+          sourceId: reportSourceId,
+          title: (
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="truncate">{row.title}</span>
+              {dateLabel && (
+                <span className="text-xs font-normal text-muted-foreground whitespace-nowrap">· {dateLabel}</span>
+              )}
+            </span>
+          ),
+          // key per report so the splitter ratio (and lightbox state) reset to
+          // the content-aware default on each open instead of React reusing the
+          // instance and carrying a previous report's dragged ratio over.
+          node: <ReportImagingDetail key={reportSourceId} text={fullText} images={images ?? []} title={row.title} />,
+        })
+      }
       return (
         <>
-          <div className="rounded-lg border bg-muted/40 px-3 py-2">
+          <div
+            className={cn(
+              'rounded-lg border bg-muted/40 px-3 py-2 transition-colors',
+              // 向右展開 active: tint the row so it's clear which report the
+              // right pane is showing.
+              isReportRightActive && 'border-primary/40 bg-primary/5',
+            )}
+          >
             <div
               className={cn(
                 'flex items-center justify-between gap-2 mb-1 rounded-md transition-all outline-none',
@@ -283,6 +545,26 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
                 <HeaderRight />
                 {row.isPossibleDuplicate && (
                   <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
+                )}
+                {/* 向右展開 — full report text + images in the right pane
+                    (desktop only; no side-by-side room on phones). Sits beside
+                    the ▼ chevron (向下展開) so the user picks per report. Shown
+                    whenever there's text OR images to dock. */}
+                {(hasText || hasImages) && (
+                  <button
+                    type="button"
+                    onClick={openReportRight}
+                    title={isReportRightActive ? '已在右側面板展開' : (hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文')}
+                    aria-label={hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文'}
+                    className={cn(
+                      'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 transition-colors',
+                      isReportRightActive
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    <PanelRight className="h-3.5 w-3.5" />
+                  </button>
                 )}
                 {hasText && (
                   <ChevronDown

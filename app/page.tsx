@@ -11,13 +11,15 @@ import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
 import { EmailVerificationBanner } from "@/features/auth/components/EmailVerificationBanner"
 import { WelcomeOnboarding } from "./_components/WelcomeOnboarding"
+import { RightDetailPane } from "./_components/RightDetailPane"
+import { RightDetailProvider, useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { ErrorBoundary } from "@/src/shared/components/ErrorBoundary"
 import ClinicalSummaryFeature from "@/src/layouts/LeftPanelLayout"
 import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown } from "lucide-react"
 
@@ -53,7 +55,16 @@ function PageContent() {
   // screen instead of empty / failing panels.
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const showOnboarding = !patientLoading && !patient && !patientError
-  
+
+  // Right-pane detail: a left-panel card can push its expanded detail here
+  // instead of expanding downward (see RightDetailProvider). When set, the right
+  // section shows the detail (✕ returns to the AI features). Cleared on patient
+  // change so one patient's detail never lingers onto the next.
+  const { detail, clearDetail } = useRightDetail()
+  useEffect(() => {
+    clearDetail()
+  }, [patient?.id, clearDetail])
+
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
       {headerCollapsed ? (
@@ -197,29 +208,35 @@ function PageContent() {
               className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize rounded-full bg-border/60 transition-colors group-hover:bg-primary/20 active:bg-primary/30"
               onMouseDown={handleMouseDown}
             />
-            {/* Collapse buttons — always visible, centered on the divider */}
-            <div className="absolute z-10 flex flex-col gap-1">
-              <button
-                type="button"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => setCollapsed('left')}
-                title="收合左欄"
-                aria-label="收合左欄"
-                className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
-              >
-                <ChevronsLeft className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={() => setCollapsed('right')}
-                title="收合右欄"
-                aria-label="收合右欄"
-                className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
-              >
-                <ChevronsRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            {/* Collapse buttons — centered on the divider. Hidden while a
+                right-pane detail is open (向右展開): in that mode the detail
+                replaces the AI 功能 panel, so the collapse control moves to the
+                far-right 「功能」rail (added after the right section) and the
+                middle bar stays drag-only — no two competing collapse controls. */}
+            {!detail && (
+              <div className="absolute z-10 flex flex-col gap-1">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => setCollapsed('left')}
+                  title="收合左欄"
+                  aria-label="收合左欄"
+                  className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+                >
+                  <ChevronsLeft className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => setCollapsed('right')}
+                  title="收合右欄"
+                  aria-label="收合右欄"
+                  className="rounded-md border bg-card p-0.5 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+                >
+                  <ChevronsRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -237,9 +254,34 @@ function PageContent() {
           style={isLargeScreen && collapsed === null ? { width: `${100 - leftWidth - 0.5}%` } : undefined}
         >
           <ErrorBoundary>
-            <RightPanelFeature />
+            {detail ? (
+              <RightDetailPane title={detail.title} onClose={clearDetail}>
+                {detail.node}
+              </RightDetailPane>
+            ) : (
+              <RightPanelFeature />
+            )}
           </ErrorBoundary>
         </section>
+
+        {/* Detail-mode rail (向右展開): the detail occupies the right column in
+            place of the AI 功能 panel, so the collapse control sits here at the
+            far right — clicking it brings the 功能 panel back (same as closing
+            the detail). Only when not already collapsed. */}
+        {detail && collapsed === null && (
+          <button
+            type="button"
+            onClick={clearDetail}
+            title={`顯示 ${t.header.features || '功能'} 面板`}
+            aria-label={`顯示 ${t.header.features || '功能'} 面板`}
+            className="group hidden md:flex w-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border bg-card/70 text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-muted hover:text-foreground"
+          >
+            <ChevronsLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+            <span className="select-none text-xs font-medium [writing-mode:vertical-rl]">
+              {t.header.features || '功能'}
+            </span>
+          </button>
+        )}
 
         {/* Right collapsed rail (lg only) — the WHOLE strip is clickable to expand */}
         {collapsed === 'right' && (
@@ -269,7 +311,9 @@ export default function Page() {
   return (
     <AppProviders>
       <ErrorBoundary>
-        <PageContent />
+        <RightDetailProvider>
+          <PageContent />
+        </RightDetailProvider>
       </ErrorBoundary>
     </AppProviders>
   )

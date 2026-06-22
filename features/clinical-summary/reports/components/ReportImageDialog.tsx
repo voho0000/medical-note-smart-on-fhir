@@ -11,11 +11,10 @@
 // large) bundle. The parent (ReportRow) also lazy-mounts this on first open.
 "use client"
 
-import { useEffect, useState } from 'react'
 import { Info } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { ReportImage } from '../types'
 
 interface ReportImageDialogProps {
@@ -23,28 +22,6 @@ interface ReportImageDialogProps {
   title: string
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-/** Decode raw base64 → Blob → object URL. Tolerates a stray
- *  `data:<mime>;base64,` prefix even though the bridge omits it. */
-function base64ToBlobUrl(base64: string, contentType: string): string {
-  const raw = base64.includes(',') ? base64.slice(base64.indexOf(',') + 1) : base64
-  const binary = atob(raw)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return URL.createObjectURL(new Blob([bytes], { type: contentType || 'image/jpeg' }))
-}
-
-/** Resolve a single image source to an object URL. Prefers the IndexedDB Blob
- *  (`ref`); falls back to inline base64 (`data`). Returns '' when neither
- *  resolves so the caller can keep showing the loading placeholder. */
-async function resolveImageUrl(img: ReportImage): Promise<string> {
-  if (img.ref) {
-    const blob = await LocalBundleService.getImage(img.ref)
-    if (blob) return URL.createObjectURL(blob)
-  }
-  if (img.data) return base64ToBlobUrl(img.data, img.contentType)
-  return ''
 }
 
 function formatBytes(size?: number): string {
@@ -64,36 +41,10 @@ export function ReportImageDialog({ images, title, open, onOpenChange }: ReportI
       'NHI 健康存摺 carries at most 10 preview images per exam; the full DICOM files are not transmitted. For complete imaging studies, request the DICOM disc from the imaging hospital or download the DCM file via the NHI health record.',
   }
 
-  // Resolve only while the dialog is open; revoke on close/unmount so the
-  // decoded bytes don't linger in memory across the (potentially large) bundle.
-  // Resolution is async (IndexedDB Blob fetch) and progressive — each image
-  // appears as soon as it's ready rather than waiting for the whole set.
-  const [urls, setUrls] = useState<string[]>([])
-  useEffect(() => {
-    if (!open) {
-      setUrls([])
-      return
-    }
-    let cancelled = false
-    const created: string[] = []
-    ;(async () => {
-      for (const img of images) {
-        if (cancelled) break
-        let url = ''
-        try {
-          url = await resolveImageUrl(img)
-        } catch (err) {
-          console.warn('[ReportImageDialog] Failed to load image', err)
-        }
-        created.push(url)
-        if (!cancelled) setUrls([...created])
-      }
-    })()
-    return () => {
-      cancelled = true
-      created.forEach((u) => u && URL.revokeObjectURL(u))
-    }
-  }, [open, images])
+  // Resolve only while the dialog is open; the hook revokes on close/unmount so
+  // the decoded bytes don't linger in memory across the (potentially large)
+  // bundle. Resolution is progressive — each image appears as it's ready.
+  const urls = useReportImageUrls(images, open)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

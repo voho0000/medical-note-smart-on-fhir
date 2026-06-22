@@ -1,30 +1,17 @@
 "use client"
 
 import { useState } from "react"
+import { PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { EncounterObservationCard } from "./EncounterObservationCard"
-import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
-import { AnalyteTrendRow } from "./AnalyteTrendRow"
-import { MedTrendRow } from "./MedTrendRow"
-import { EncounterSection } from "./EncounterSection"
-// import { NoteItem } from "./NoteItem" // TODO: 暫時隱藏，等有真實資料時再啟用測試
-import { DocumentDetailDialog } from "@/features/clinical-summary/document-summary/components/DocumentDetailDialog"
-import { useDocumentSummaryStrings, makeResolveSectionLabel } from "@/features/clinical-summary/document-summary/utils/strings"
+import { VisitDetailContent, visitHasDetails } from "./VisitDetailContent"
+import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import type { VisitRecord } from "../hooks/useVisitHistory"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
-
-// Auto-collapse thresholds — counts above these flip the section to closed
-// by default. Tuned for the typical inpatient stay (50+ labs, 10+ meds)
-// while keeping short outpatient visits visible without an extra click.
-const COLLAPSE_THRESHOLDS = {
-  diagnoses: 6,
-  tests: 20,
-  medications: 10,
-  procedures: Infinity, // procedures are rarely numerous; always show.
-} as const
+import { cn } from "@/src/shared/utils/cn.utils"
 
 type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
@@ -61,24 +48,41 @@ const getTypeBadge = (type: VisitType, labels: any) => {
 export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
   const docStrings = useDocumentSummaryStrings()
-  const resolveDocSectionLabel = makeResolveSectionLabel(docStrings)
-  const categoryLabel = (id: string): string =>
-    (t.reports.cumulativeCategories as Record<string, string>)[id] || id
+  const { detail: rightDetail, toggleDetail } = useRightDetail()
   const reasonCodes = visit.icdCodes
   const hasIcdCodes = reasonCodes.length > 0 && /^[A-Z]\d/.test(reasonCodes[0].code)
   const hasSecondaryIcds = hasIcdCodes && reasonCodes.length > 1
   const [icdExpanded, setIcdExpanded] = useState(false)
   const docs = documents ?? []
-  const hasDetails = !!(docs.length > 0 || (details && (
-    details.diagnoses.length > 0 ||
-    details.medications.length > 0 ||
-    details.tests.length > 0 ||
-    details.procedures.length > 0
-    // || details.clinicalNotes.length > 0 // TODO: 暫時隱藏病歷記錄判斷
-  )))
+  const hasDetails = visitHasDetails(details, documents)
+  const isRightActive = rightDetail?.sourceId === visit.id
+
+  // Open this visit's detail in the right pane (向右展開). Reuses the very same
+  // VisitDetailContent that renders inline.
+  const openInRightPane = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    toggleDetail({
+      sourceId: visit.id,
+      title: (
+        <span className="flex items-center gap-1.5">
+          {getTypeBadge(visit.type, t.visitHistory.badges)}
+          <span>{formatDateUtil(visit.date, locale)}</span>
+          {visit.location && <span className="text-xs font-normal text-muted-foreground">· {visit.location}</span>}
+        </span>
+      ),
+      node: <VisitDetailContent details={details} documents={documents} abnormalCount={abnormalCount} />,
+    })
+  }
 
   return (
-    <div className="rounded-lg border transition-colors">
+    <div
+      className={cn(
+        "rounded-lg border transition-colors",
+        // 向右展開 active: tint the whole row so it's clear which visit the
+        // right pane is showing.
+        isRightActive && "border-primary/40 bg-primary/5",
+      )}
+    >
       {/* role="button" instead of <button> so we can nest the +N ICD-expand
           <button> inside without producing invalid HTML (button-in-button
           triggers React hydration error). Keyboard accessibility preserved
@@ -164,6 +168,26 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                 {docStrings.dischargeBadge}
               </span>
             )}
+            {/* 向右展開 — show this visit's detail in the right pane (desktop
+                only; no side-by-side room on phones). Sits beside the ▼/▲
+                (向下展開) so the user picks per row. */}
+            {hasDetails && (
+              <button
+                type="button"
+                onClick={openInRightPane}
+                onMouseDown={(e) => e.stopPropagation()}
+                title={(t.visitHistory as any).openRight ?? '在右側展開'}
+                aria-label={(t.visitHistory as any).openRight ?? '在右側展開'}
+                className={cn(
+                  "hidden md:inline-flex items-center rounded-md border px-1 py-0.5 transition-colors",
+                  isRightActive
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <PanelRight className="h-3.5 w-3.5" />
+              </button>
+            )}
             <span
               className="text-xs text-muted-foreground leading-5"
               title={hasDetails ? (isExpanded ? t.visitHistory.hideDetails : t.visitHistory.viewDetails) : t.visitHistory.noDetails}
@@ -241,159 +265,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
 
       {isExpanded && (
         <div className="border-t bg-muted/30 px-3 py-3 text-sm">
-          {hasDetails ? (
-            <div className="space-y-4">
-              {/* Linked documents (出院病摘 / discharge summary). The popout
-                  button opens the full text in the shared DocumentDetailDialog
-                  — same reader as the 文件 tab. */}
-              {docs.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {docStrings.dischargeBadge}
-                  </div>
-                  <div className="grid gap-2">
-                    {docs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 shadow-sm"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-foreground">{doc.typeLabel}</div>
-                          {(doc.subtitle || doc.institution) && (
-                            <div className="truncate text-xs text-muted-foreground">
-                              {doc.subtitle || doc.institution}
-                            </div>
-                          )}
-                        </div>
-                        <DocumentDetailDialog
-                          entry={doc}
-                          strings={docStrings}
-                          resolveSectionLabel={resolveDocSectionLabel}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {details?.diagnoses.length ? (
-                <EncounterSection
-                  title={t.visitHistory.diagnoses}
-                  count={details.diagnoses.length}
-                  collapseThreshold={COLLAPSE_THRESHOLDS.diagnoses}
-                >
-                  <div className="grid gap-2 mt-2">
-                    {details.diagnoses.map((dx) => (
-                      <DiagnosisTag key={dx.id} diagnosis={dx} />
-                    ))}
-                  </div>
-                </EncounterSection>
-              ) : null}
-
-              {details?.testGroups.length ? (
-                <EncounterSection
-                  title={t.visitHistory.tests}
-                  count={details.tests.length}
-                  collapseThreshold={COLLAPSE_THRESHOLDS.tests}
-                  rightBadges={
-                    abnormalCount > 0 ? (
-                      <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[10px] font-medium text-red-700 normal-case">
-                        {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
-                      </span>
-                    ) : undefined
-                  }
-                >
-                  <div className="space-y-3 mt-2">
-                    {details.testGroups.map((group, gi) => (
-                      <div key={group.categoryId ?? `other-${gi}`} className="space-y-1">
-                        {/* Render a label for EVERY group — categorised
-                            ones use the cumulativeCategories i18n entry;
-                            uncategorised ones fall back to "其他" so the
-                            tests don't visually attach to the previous
-                            group's header. */}
-                        <div className="px-0.5 text-[11px] font-medium text-muted-foreground/80">
-                          {group.categoryId
-                            ? categoryLabel(group.categoryId)
-                            : categoryLabel('other')}
-                        </div>
-                        {/* Multi-day visits: collapse same-analyte runs into
-                            AnalyteTrendRow so 4× HB rows don't look identical.
-                            Single-day visits keep the flat card layout. */}
-                        {details.isMultiDay && group.testSeries.length > 0 ? (
-                          <div className="rounded-lg border bg-muted/40 overflow-hidden">
-                            {group.testSeries.map((series) => (
-                              <AnalyteTrendRow key={series.id} series={series} />
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="rounded-lg border bg-muted/40 divide-y overflow-hidden">
-                            {group.tests.map((test) => (
-                              <EncounterObservationCard
-                                key={test.id}
-                                observation={test}
-                                showDate={details.isMultiDay}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </EncounterSection>
-              ) : null}
-
-              {details?.medications.length ? (
-                <EncounterSection
-                  title={t.visitHistory.medications}
-                  count={details.medications.length}
-                  collapseThreshold={COLLAPSE_THRESHOLDS.medications}
-                >
-                  <div className="grid gap-1 mt-2">
-                    {/* Multi-day: roll up same-drug refills into MedTrendRow.
-                        Single-day: keep flat MedicationRow. */}
-                    {details.isMultiDay && details.medSeries.length > 0 ? (
-                      details.medSeries.map((s) => (
-                        <MedTrendRow key={s.id} series={s} />
-                      ))
-                    ) : (
-                      details.medications.map((med) => (
-                        <MedicationRow key={med.id} medication={med} />
-                      ))
-                    )}
-                  </div>
-                </EncounterSection>
-              ) : null}
-
-              {details?.procedures.length ? (
-                <EncounterSection
-                  title={t.visitHistory.procedures}
-                  count={details.procedures.length}
-                  collapseThreshold={COLLAPSE_THRESHOLDS.procedures}
-                >
-                  <div className="grid gap-2 mt-2">
-                    {details.procedures.map((procedure) => (
-                      <ProcedureRow key={procedure.id} procedure={procedure} />
-                    ))}
-                  </div>
-                </EncounterSection>
-              ) : null}
-
-              {/* TODO: 病歷記錄功能暫時隱藏，等 FHIR 服務器提供真實資料後再啟用測試
-              {details?.clinicalNotes.length ? (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.clinicalNotes.title}</div>
-                  <div className="grid gap-2">
-                    {details.clinicalNotes.map((note) => (
-                      <NoteItem key={note.id} note={note} />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              */}
-            </div>
-          ) : (
-            <div className="text-xs text-muted-foreground">{t.visitHistory.noDetailsExpanded}</div>
-          )}
+          <VisitDetailContent details={details} documents={documents} abnormalCount={abnormalCount} />
         </div>
       )}
     </div>

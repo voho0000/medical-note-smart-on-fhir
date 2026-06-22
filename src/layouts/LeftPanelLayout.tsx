@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 
 // ============================================================================
@@ -38,6 +39,7 @@ function TabFeatureContent({ tabId }: { tabId: string }) {
 // ============================================================================
 export default function ClinicalSummaryFeature() {
   const { t } = useLanguage()
+  const { clearDetail } = useRightDetail()
   const tabs = getEnabledTabs()
   const defaultTab = tabs[0]?.id || 'patient'
 
@@ -54,7 +56,14 @@ export default function ClinicalSummaryFeature() {
 
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
-      <Tabs defaultValue={defaultTab} className="flex h-full flex-col">
+      <Tabs
+        defaultValue={defaultTab}
+        // Switching the left clinical tab dismisses any right-pane detail
+        // (向右展開) opened from the previous tab — the detail is tied to that
+        // tab's content, so navigating away retracts it back to the AI panel.
+        onValueChange={() => clearDetail()}
+        className="flex h-full flex-col"
+      >
         {/* Grid columns are driven by the registered tab count so adding /
             removing tabs in feature-registry.ts doesn't need a layout edit.
             Tailwind JIT can't generate dynamic `grid-cols-N` from a runtime

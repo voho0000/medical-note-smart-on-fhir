@@ -13,10 +13,11 @@
 // header keeps the left panel scannable.
 "use client"
 
-import { useMemo, useState } from "react"
-import { Info, Search, X } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Info, PanelRight, Search, X } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { FeatureCard } from "@/src/shared/components"
 import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
@@ -35,6 +36,9 @@ import { AllergyList } from '../allergies/components/AllergyList'
 
 type DataTab = 'medications' | 'allergies' | 'vaccines'
 type MedView = 'list' | 'timeline'
+
+// Right-pane detail source id for the medication timeline (one per app).
+const MED_TIMELINE_ID = 'med-timeline'
 
 export function MedListCard() {
   const { t, locale } = useLanguage()
@@ -74,6 +78,29 @@ export function MedListCard() {
   const tabVaccinesLabel = mt.tabVaccines ?? '疫苗'
   const listLabel = mt.viewList ?? '清單'
   const timelineLabel = mt.viewTimeline ?? '時間軸'
+
+  // 向右展開：push the timeline into the right pane so the list (left) and the
+  // timeline (right) show side-by-side. Kept in sync with the search filter.
+  const { detail: rightDetail, toggleDetail, showDetail } = useRightDetail()
+  const isTimelineRight = rightDetail?.sourceId === MED_TIMELINE_ID
+  const timelineTitle = `${tabMedicationsLabel} · ${timelineLabel}`
+  const openTimelineRight = () =>
+    toggleDetail({
+      sourceId: MED_TIMELINE_ID,
+      title: timelineTitle,
+      node: <MedicationTimeline medications={filteredMedications} />,
+    })
+  useEffect(() => {
+    if (rightDetail?.sourceId === MED_TIMELINE_ID) {
+      showDetail({
+        sourceId: MED_TIMELINE_ID,
+        title: timelineTitle,
+        node: <MedicationTimeline medications={filteredMedications} />,
+      })
+    }
+    // re-sync only when the filtered set changes (not on every rightDetail tick)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMedications])
   // IPS-source hint copy. Bridge data (the dominant source) never triggers
   // this UI — the strings only render when an IPS bundle is loaded.
   const sourceHintStatement: string = mt.sourceHintStatement
@@ -129,22 +156,41 @@ export function MedListCard() {
 
         <TabsContent value="medications" className="mt-0 space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
-              {(['list', 'timeline'] as MedView[]).map((v) => (
+            <div className="flex items-center gap-1.5">
+              <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
+                {(['list', 'timeline'] as MedView[]).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    className={cn(
+                      'px-3 py-1 rounded-sm transition-colors',
+                      view === v
+                        ? 'bg-background text-foreground shadow-sm font-medium'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {v === 'list' ? listLabel : timelineLabel}
+                  </button>
+                ))}
+              </div>
+              {/* 向右展開：時間軸移到右側面板，與左側清單並排（桌機限定） */}
+              {rows.length > 0 && (
                 <button
-                  key={v}
                   type="button"
-                  onClick={() => setView(v)}
+                  onClick={openTimelineRight}
+                  title={mt.openTimelineRight ?? '時間軸移到右側面板並排顯示'}
+                  aria-label={mt.openTimelineRight ?? '時間軸移到右側面板'}
                   className={cn(
-                    'px-3 py-1 rounded-sm transition-colors',
-                    view === v
-                      ? 'bg-background text-foreground shadow-sm font-medium'
-                      : 'text-muted-foreground hover:text-foreground',
+                    'hidden md:inline-flex items-center rounded-md border px-2 py-1 text-xs transition-colors',
+                    isTimelineRight
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
-                  {v === 'list' ? listLabel : timelineLabel}
+                  <PanelRight className="h-3.5 w-3.5" />
                 </button>
-              ))}
+              )}
             </div>
             {/* Bilingual search — matches drug name (中/英), NHI code, class,
                 indication, 機構 and date (西元/民國); filters both views. */}
