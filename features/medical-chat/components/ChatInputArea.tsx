@@ -11,6 +11,9 @@ import { ImagePreview } from "./ImagePreview"
 import { MediaConsentDialog } from "./MediaConsentDialog"
 import { useMediaConsent } from "../hooks/useMediaConsent"
 import type { ImageFile } from "../hooks/useImageUpload"
+import { useSlashTemplates } from "../hooks/useSlashTemplates"
+import { useSlashMenu } from "../hooks/useSlashMenu"
+import { SlashTemplateMenu } from "./SlashTemplateMenu"
 
 interface ChatInputAreaProps {
   input: {
@@ -58,6 +61,10 @@ export function ChatInputArea({
   // First-use consent before any image/audio leaves the device (audit B4)
   const consent = useMediaConsent()
   const hasContent = input.input.trim().length > 0
+
+  // "/shortcut" template autocomplete (Epic SmartPhrase style).
+  const slashTemplates = useSlashTemplates()
+  const slash = useSlashMenu(input.input, input.setInput, textareaRef, slashTemplates)
   const hasImages = images?.images && images.images.length > 0
 
   // Handle paste event for images
@@ -127,11 +134,20 @@ export function ChatInputArea({
           />
         )}
         <div className="relative flex-1 flex flex-col justify-end">
+          {slash.open && (
+            <SlashTemplateMenu
+              items={slash.matches}
+              active={slash.active}
+              onSelect={slash.choose}
+              onHover={slash.setActive}
+            />
+          )}
           <textarea
             ref={textareaRef}
             value={input.input}
-            onChange={(event) => input.setInput(event.target.value)}
-            onKeyDown={(e) => input.handleKeyDown(e, onSend, isLoading, disabled)}
+            onChange={(event) => { input.setInput(event.target.value); slash.syncCaret() }}
+            onKeyDown={(e) => { if (slash.onKeyDown(e)) return; input.handleKeyDown(e, onSend, isLoading, disabled) }}
+            onSelect={() => slash.syncCaret()}
             onPaste={handlePaste}
             placeholder={t.chat.placeholder}
             spellCheck={false}

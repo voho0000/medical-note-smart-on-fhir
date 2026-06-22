@@ -19,6 +19,8 @@ export interface ChatTemplate {
   id: string
   label: string
   content: string
+  /** Optional "/shortcut" trigger keyword for the slash-template menu. */
+  shortcut?: string
   order: number
   audience: TemplateAudience
   createdAt?: Date
@@ -29,6 +31,7 @@ interface FirestoreChatTemplate {
   id: string
   label: string
   content: string
+  shortcut?: string | null
   order: number
   audience?: TemplateAudience
   createdAt: Timestamp
@@ -54,6 +57,7 @@ export async function getUserChatTemplates(userId: string): Promise<ChatTemplate
         content: data.content,
         order: data.order || 0,
         audience: data.audience ?? 'medical',
+        shortcut: data.shortcut ?? undefined,
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }
@@ -83,6 +87,7 @@ export async function saveChatTemplate(
       content: template.content,
       order: template.order,
       audience: template.audience ?? 'medical',
+      shortcut: template.shortcut ?? null,
       createdAt: template.createdAt ? Timestamp.fromDate(template.createdAt) : now,
       updatedAt: now,
     })
@@ -135,6 +140,7 @@ export function subscribeToChatTemplates(
         content: data.content,
         order: data.order || 0,
         audience: data.audience ?? 'medical',
+        shortcut: data.shortcut ?? undefined,
         createdAt: data.createdAt?.toDate(),
         updatedAt: data.updatedAt?.toDate(),
       }

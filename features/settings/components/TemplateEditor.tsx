@@ -19,6 +19,7 @@ interface Template {
   id: string
   label: string
   content: string
+  shortcut?: string
 }
 
 interface TemplateEditorProps {
@@ -165,6 +166,20 @@ export function TemplateEditor({
             value={template.label}
             onChange={(event) => onUpdate(template.id, { label: event.target.value })}
             placeholder={t.settings.labelPlaceholder}
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label className="text-xs uppercase text-muted-foreground" htmlFor={`template-shortcut-${template.id}`}>
+            {t.settings.shortcut ?? '快捷鍵'}
+          </Label>
+          <Input
+            id={`template-shortcut-${template.id}`}
+            value={template.shortcut ?? ''}
+            onChange={(event) =>
+              onUpdate(template.id, { shortcut: event.target.value.replace(/[^\w-]/g, '').toLowerCase() })
+            }
+            placeholder={t.settings.shortcutPlaceholder ?? '例如 soap → 在輸入框打 /soap 叫出'}
           />
         </div>
 

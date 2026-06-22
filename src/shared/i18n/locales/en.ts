@@ -785,6 +785,8 @@ export const en = {
     remove: 'Remove',
     label: 'Label',
     prompt: 'Prompt',
+    shortcut: 'Shortcut',
+    shortcutPlaceholder: 'e.g. soap → type /soap in the chat box',
     tab: 'Tab',
     tabLabel: 'Tab label',
     subtitleOptional: 'Subtitle (optional)',

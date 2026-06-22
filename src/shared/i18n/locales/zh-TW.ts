@@ -789,6 +789,8 @@ export const zhTW = {
     remove: '移除',
     label: '標籤',
     prompt: '提示',
+    shortcut: '快捷鍵',
+    shortcutPlaceholder: '例如 soap → 在輸入框打 /soap 叫出',
     tab: '標籤',
     tabLabel: '標籤名稱',
     subtitleOptional: '副標題（選填）',
