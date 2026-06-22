@@ -763,6 +763,7 @@ export const en = {
     requiresClaudeKey: 'Requires a personal Claude API key',
     modelUnavailable: 'Temporarily unavailable',
     modelDowngradedToFree: 'API key removed — switched back to the free base model',
+    invalidApiKey: 'Invalid API key format (contains non-ASCII characters). Please check you pasted the key, not other text.',
     requiresClaudeKeyOrProxy: 'Requires a Claude key or proxy',
     willUsePersonalOpenAiKey: 'Will use personal OpenAI key',
     requiresOpenAiKey: 'Requires OpenAI API key',

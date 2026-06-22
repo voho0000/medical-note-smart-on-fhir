@@ -767,6 +767,7 @@ export const zhTW = {
     requiresClaudeKey: '需要個人 Claude API 金鑰',
     modelUnavailable: '暫不可用',
     modelDowngradedToFree: '已刪除金鑰，已自動切換回免費基礎模型',
+    invalidApiKey: 'API 金鑰格式不正確（含非 ASCII 字元），請確認貼上的是金鑰而非其他文字',
     requiresClaudeKeyOrProxy: '需要 Claude 金鑰或代理服務',
     willUsePersonalOpenAiKey: '將使用個人 OpenAI 金鑰',
     requiresOpenAiKey: '需要 OpenAI API 金鑰',

@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { InfoHint } from "@/src/shared/components/InfoHint"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
+import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/src/shared/utils/cn.utils"
@@ -80,8 +81,19 @@ export function ModelAndKeySettings() {
     claude: claudeModels,
   }
 
+  // Reject a non-empty value that isn't header-safe (e.g. pasted text/Chinese) —
+  // it would crash the provider SDK's Headers construction. Returns true if bad.
+  const rejectIfInvalidKey = (value: string | null | undefined): boolean => {
+    if (value && value.trim() && !isUsableApiKey(value)) {
+      toast.error(t.settings.invalidApiKey ?? "API 金鑰格式不正確（含非 ASCII 字元），請確認貼上的是金鑰")
+      return true
+    }
+    return false
+  }
+
   const handleSaveOpenAiKey = async () => {
-    if (openAiValue) setApiKey(openAiValue.trim())
+    if (!openAiValue || rejectIfInvalidKey(openAiValue)) return
+    setApiKey(openAiValue.trim())
   }
 
   // The store auto-downgrades a premium model back to the free base model when
@@ -100,6 +112,7 @@ export function ModelAndKeySettings() {
   }
 
   const handleSaveGeminiKey = async () => {
+    if (rejectIfInvalidKey(geminiValue)) return
     setGeminiKey(geminiValue)
   }
 
@@ -110,11 +123,13 @@ export function ModelAndKeySettings() {
   }
 
   const handleSavePerplexityKey = async () => {
-    if (perplexityValue) setPerplexityKey(perplexityValue.trim())
+    if (!perplexityValue || rejectIfInvalidKey(perplexityValue)) return
+    setPerplexityKey(perplexityValue.trim())
   }
 
   const handleSaveClaudeKey = async () => {
-    if (claudeValue) setClaudeKey(claudeValue.trim())
+    if (!claudeValue || rejectIfInvalidKey(claudeValue)) return
+    setClaudeKey(claudeValue.trim())
   }
 
   const handleClearClaudeKey = () => {

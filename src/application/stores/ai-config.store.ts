@@ -14,6 +14,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { encrypt, decrypt } from '@/src/shared/utils/crypto.utils'
+import { isUsableApiKey, sanitizeApiKey } from '@/src/shared/utils/api-key.utils'
 import { DEFAULT_MODEL_ID, isModelId, getModelDefinition, getBaseModelIdForProvider } from '@/src/shared/constants/ai-models.constants'
 
 type StorageType = 'localStorage' | 'sessionStorage'
@@ -61,9 +62,17 @@ const loadEncryptedKey = async (storageType: StorageType, key: string): Promise<
   
   const encrypted = storage.getItem(key)
   if (!encrypted) return null
-  
+
   try {
-    return await decrypt(encrypted)
+    const decrypted = await decrypt(encrypted)
+    // A stored key with non-Latin1 chars (e.g. a chat message pasted into the
+    // key field) would crash the provider's Headers construction. Ignore + clear
+    // it so the app falls back to the proxy instead of an opaque error.
+    if (!isUsableApiKey(decrypted)) {
+      storage.removeItem(key)
+      return null
+    }
+    return decrypted
   } catch (error) {
     console.warn(`Failed to decrypt ${key}:`, error)
     return null
@@ -126,37 +135,41 @@ export const useAiConfigStore = create<AiConfigState>()(
       
       // Actions
       setApiKey: (key) => {
-        set({ apiKey: key })
+        const clean = sanitizeApiKey(key)
+        set({ apiKey: clean })
         // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.OPENAI_API_KEY, key).catch(console.error)
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.OPENAI_API_KEY, clean).catch(console.error)
         // Removing the key may strand a premium model — drop to the free tier
-        if (!key) {
+        if (!clean) {
           const fallback = modelFallbackForMissingKey(get())
           if (fallback) set({ model: fallback })
         }
       },
 
       setGeminiKey: (key) => {
-        set({ geminiKey: key })
+        const clean = sanitizeApiKey(key)
+        set({ geminiKey: clean })
         // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.GEMINI_API_KEY, key).catch(console.error)
-        if (!key) {
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.GEMINI_API_KEY, clean).catch(console.error)
+        if (!clean) {
           const fallback = modelFallbackForMissingKey(get())
           if (fallback) set({ model: fallback })
         }
       },
 
       setPerplexityKey: (key) => {
-        set({ perplexityKey: key })
+        const clean = sanitizeApiKey(key)
+        set({ perplexityKey: clean })
         // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.PERPLEXITY_API_KEY, key).catch(console.error)
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.PERPLEXITY_API_KEY, clean).catch(console.error)
       },
 
       setClaudeKey: (key) => {
-        set({ claudeKey: key })
+        const clean = sanitizeApiKey(key)
+        set({ claudeKey: clean })
         // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.CLAUDE_API_KEY, key).catch(console.error)
-        if (!key) {
+        saveEncryptedKey(get().storageType, STORAGE_KEYS.CLAUDE_API_KEY, clean).catch(console.error)
+        if (!clean) {
           const fallback = modelFallbackForMissingKey(get())
           if (fallback) set({ model: fallback })
         }
