@@ -132,27 +132,27 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
             {details && (
               <>
                 {details.diagnoses.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] text-violet-700">
+                  <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[0.6875rem] text-violet-700">
                     {t.visitHistory.diagnoses} {details.diagnoses.length}
                   </span>
                 )}
                 {details.tests.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                  <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[0.6875rem] text-blue-700">
                     {t.visitHistory.tests} {details.tests.length}
                   </span>
                 )}
                 {abnormalCount > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[0.6875rem] font-medium text-red-700">
                     {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
                   </span>
                 )}
                 {details.medications.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] text-green-700">
+                  <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[0.6875rem] text-green-700">
                     {t.visitHistory.medications} {details.medications.length}
                   </span>
                 )}
                 {details.procedures.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] text-orange-700">
+                  <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[0.6875rem] text-orange-700">
                     {t.visitHistory.procedures} {details.procedures.length}
                   </span>
                 )}
@@ -163,7 +163,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
             {docs.length > 0 && (
               <span
                 title={docStrings.dischargeBadgeTooltip}
-                className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700"
+                className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.6875rem] text-emerald-700"
               >
                 {docStrings.dischargeBadge}
               </span>
@@ -235,7 +235,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                           setIcdExpanded((v) => !v)
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50/60 px-1.5 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100 transition-colors"
+                        className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50/60 px-1.5 py-0.5 text-[0.6875rem] text-amber-700 hover:bg-amber-100 transition-colors"
                       >
                         {icdExpanded ? '−' : `+${reasonCodes.length - 1}`}
                       </button>

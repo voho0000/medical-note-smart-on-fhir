@@ -39,20 +39,20 @@ export function MedicationRow({ medication }: { medication: EncounterMedication 
     <div className="rounded-md border bg-background px-2.5 py-1 leading-tight">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-x-1.5 gap-y-0.5 flex-wrap min-w-0">
-          <span className="text-[13px] font-semibold text-foreground">{medication.name}</span>
+          <span className="text-[0.8125rem] font-semibold text-foreground">{medication.name}</span>
           {medication.isChronic && (
             <span
               title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-              className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[10px] font-medium text-violet-700"
+              className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700"
             >
               {mt.chronic ?? '慢箋'}
             </span>
           )}
-          {medication.detail && <span className="text-[10px] text-muted-foreground">{medication.detail}</span>}
+          {medication.detail && <span className="text-[0.625rem] text-muted-foreground">{medication.detail}</span>}
         </div>
         {medication.status && (
           <span className={cn(
-            "shrink-0 inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] capitalize",
+            "shrink-0 inline-flex items-center rounded-full border px-1.5 py-0 text-[0.625rem] capitalize",
             medication.status === "active"
               ? "border-sky-200 bg-sky-50 text-sky-700"
               : "border-muted bg-muted/60 text-muted-foreground"

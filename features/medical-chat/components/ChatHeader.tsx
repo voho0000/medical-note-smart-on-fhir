@@ -132,7 +132,7 @@ export function ChatHeader({
         </div>
       )}
       {recordingStatus || asrError || chatError ? (
-        <div className="space-y-0.5 text-[11px]">
+        <div className="space-y-0.5 text-[0.6875rem]">
           {recordingStatus ? (
             <p className="flex items-center gap-2 text-muted-foreground">
               {isRecording ? (

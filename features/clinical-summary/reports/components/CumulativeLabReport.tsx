@@ -103,7 +103,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                   <th
                     key={`sg-${g.sg.id}`}
                     colSpan={g.tests.length}
-                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold tracking-wide text-muted-foreground"
+                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[0.6875rem] font-bold tracking-wide text-muted-foreground"
                   >
                     {subgroupLabel(g.sg.id)}
                   </th>
@@ -111,7 +111,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                   <th
                     key={`sg-other-${i}`}
                     colSpan={g.tests.length}
-                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[11px] font-bold tracking-wide text-muted-foreground"
+                    className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[0.6875rem] font-bold tracking-wide text-muted-foreground"
                   >
                     Other
                   </th>
@@ -135,7 +135,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                 >
                   <div className="mx-auto max-w-[4.5rem] leading-tight break-words">{name}</div>
                   {(abbr || test.unit) && (
-                    <div className="text-[10px] font-normal text-muted-foreground leading-tight whitespace-nowrap">
+                    <div className="text-[0.625rem] font-normal text-muted-foreground leading-tight whitespace-nowrap">
                       {/* Second line: English short code + unit. No parens — the
                           code is already on its own line. A middot separates the
                           code from the unit (matches the app's "·" convention)

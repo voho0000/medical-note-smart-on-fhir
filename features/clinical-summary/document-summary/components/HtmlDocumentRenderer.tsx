@@ -10,7 +10,7 @@
 // a DocumentReference attachment is one self-contained document.
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { FileText } from 'lucide-react'
 import {
   Accordion,
@@ -98,6 +98,9 @@ interface HtmlDocumentRendererProps {
   /** Whether to expand the body by default. The card sets this to true when
    *  the dataset contains exactly one document, to save the user a click. */
   defaultExpanded?: boolean
+  /** Optional control rendered inside the trigger, just left of the ▼ chevron
+   *  (e.g. the 向右展開 button). */
+  rightControl?: ReactNode
   /** Labels for the empty / fallback states. */
   labels: {
     /** Header shown above the collapsible HTML body. */
@@ -113,6 +116,7 @@ interface HtmlDocumentRendererProps {
 export function HtmlDocumentRenderer({
   attachment,
   defaultExpanded = false,
+  rightControl,
   labels,
 }: HtmlDocumentRendererProps) {
   // Track open state ourselves so we can defer the decode + sanitise pipeline
@@ -143,6 +147,7 @@ export function HtmlDocumentRenderer({
             <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <span className="truncate font-medium">{labels.bodyHeader}</span>
           </div>
+          {rightControl && <span className="mr-1 shrink-0">{rightControl}</span>}
         </AccordionTrigger>
         <AccordionContent className="px-3 pb-3">
           {hasOpened && (

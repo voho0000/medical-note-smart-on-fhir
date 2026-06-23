@@ -27,7 +27,7 @@ export function VersionLink() {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="hidden sm:inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+      className="hidden sm:inline-flex items-center gap-0.5 text-[0.6875rem] text-muted-foreground hover:text-foreground transition-colors"
       title={`MediPrisma v${version} — 查看更新內容`}
     >
       v{version}

@@ -44,7 +44,7 @@ export function EncounterSection({
         aria-expanded={expanded}
       >
         <span>{title}</span>
-        <span className="inline-flex items-center rounded-full bg-muted/70 px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground normal-case">
+        <span className="inline-flex items-center rounded-full bg-muted/70 px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground normal-case">
           {count}
         </span>
         {rightBadges}

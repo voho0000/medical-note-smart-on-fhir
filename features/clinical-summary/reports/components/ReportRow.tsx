@@ -29,7 +29,7 @@ function BridgeDupBadge({ count }: { count: number }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0 text-[10px] font-medium text-amber-800 cursor-help"
+          className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0 text-[0.625rem] font-medium text-amber-800 cursor-help"
           aria-label={`Bridge sent ${count + 1} duplicate copies; merged into one`}
         >
           ⚠ bridge dup ×{count}
@@ -154,7 +154,7 @@ function ReportImagingDetail({ text, images, title }: { text: string; images: Re
   // DICOM). It's an IMAGE caveat, so it renders inside the image region (above
   // the images, below the splitter) — not above the text report.
   const noticeBlock = hasImages && tt?.previewLimitNotice ? (
-    <div className="flex shrink-0 items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+    <div className="flex shrink-0 items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-2.5 py-1.5 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
       <span>{tt.previewLimitNotice}</span>
     </div>
@@ -264,6 +264,20 @@ function ReportImagingDetail({ text, images, title }: { text: string; images: Re
       {imageBlock}
       {lightbox}
     </>
+  )
+}
+
+/** Lab-panel detail rendered in the right pane (向右展開) — the panel's analyte
+ *  rows (the very same ObservationBlocks the accordion expands to inline), in a
+ *  scroll region with a persistent scrollbar so a long panel reads beside the
+ *  list. */
+function ReportPanelDetail({ observations }: { observations: Observation[] }) {
+  return (
+    <div className="scrollbar-thin-persistent grid h-full content-start gap-3 overflow-y-auto pr-1">
+      {observations.map((obs, i) => (
+        <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
+      ))}
+    </div>
   )
 }
 
@@ -741,6 +755,35 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
   const accordionDateLabel = formatDisplayDate(row.effectiveDate, row.showTime)
   const accordionMeta = row.meta + (accordionDateLabel ? ` • ${accordionDateLabel}` : '')
 
+  // 向右展開 for multi-analyte lab panels (e.g. CBC's 8 items) and procedures:
+  // dock the detail in the right pane to read it beside the list. Lab panels
+  // gate to 3+ analytes (a 1–2 item panel expands inline fine); a procedure is
+  // always eligible — its detail (status / date / performer / NHI codes /
+  // reason, plus any related sub-procedures) is rich enough to be worth docking.
+  const panelSourceId = `report:${row.id}`
+  const isPanelRightActive = rightDetail?.sourceId === panelSourceId
+  const canExpandPanelRight = row.group === 'procedures' || displayObs.length >= 3
+  const openPanelRight = (e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    toggleDetail({
+      sourceId: panelSourceId,
+      title: (
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="truncate">{row.title}</span>
+          {accordionDateLabel && (
+            <span className="text-xs font-normal text-muted-foreground whitespace-nowrap">· {accordionDateLabel}</span>
+          )}
+          {abnormalCount > 0 && (
+            <span className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0 text-[0.6875rem] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+              {abnormalCount} 異常
+            </span>
+          )}
+        </span>
+      ),
+      node: <ReportPanelDetail key={panelSourceId} observations={displayObs} />,
+    })
+  }
+
   return (
     <>
       <Accordion
@@ -748,7 +791,15 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
         defaultValue={defaultOpen.includes(row.id) ? [row.id] : []}
         className="w-full"
       >
-        <AccordionItem value={row.id} className="border rounded-lg bg-muted/40 px-3">
+        <AccordionItem
+          value={row.id}
+          className={cn(
+            'border rounded-lg bg-muted/40 px-3 transition-colors',
+            // 向右展開 active: tint the panel row so it's clear which one the
+            // right pane is showing.
+            isPanelRightActive && 'border-primary/40 bg-primary/5',
+          )}
+        >
           <AccordionTrigger className="py-3">
             <div className="flex w-full flex-col gap-1 text-left">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -802,6 +853,35 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
                     </TooltipTrigger>
                     <TooltipContent>{accordionMeta}</TooltipContent>
                   </Tooltip>
+                  {/* 向右展開 — placed LAST in the right cluster so it sits just
+                      to the left of the AccordionTrigger's ▼ chevron, matching
+                      the imaging-report layout. div[role=button] (not <button>)
+                      avoids button-in-button; mousedown stopProp keeps the click
+                      from toggling the accordion. */}
+                  {canExpandPanelRight && (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={openPanelRight}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          openPanelRight(e)
+                        }
+                      }}
+                      title={isPanelRightActive ? '已在右側面板展開' : '在右側面板展開細項'}
+                      aria-label="在右側面板展開細項"
+                      className={cn(
+                        'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 cursor-pointer transition-colors',
+                        isPanelRightActive
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                    >
+                      <PanelRight className="h-3.5 w-3.5" />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

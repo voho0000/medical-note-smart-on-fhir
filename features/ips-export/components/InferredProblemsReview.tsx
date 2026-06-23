@@ -88,7 +88,7 @@ export function InferredProblemsReview({
         </Button>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-muted-foreground">{p.disclaimer}</p>
+      <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">{p.disclaimer}</p>
 
       {!available && <p className="text-xs text-amber-700 dark:text-amber-400">{p.noKeyHint}</p>}
 
@@ -108,7 +108,7 @@ export function InferredProblemsReview({
         ) : (
           <div className="space-y-0.5">
             <p className="text-xs text-destructive">{p.error}</p>
-            {error && <p className="break-words text-[11px] text-destructive/80">{error}</p>}
+            {error && <p className="break-words text-[0.6875rem] text-destructive/80">{error}</p>}
           </div>
         ))}
 
@@ -118,7 +118,7 @@ export function InferredProblemsReview({
 
       {status === 'ready' && problems.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between text-[0.6875rem] text-muted-foreground">
             <span>{p.confirmHint}</span>
             <span className="font-medium text-violet-700 dark:text-violet-300">
               {p.confirmedCount.replace('{count}', String(confirmedCount))}
@@ -168,7 +168,7 @@ function InferredProblemRow({
             <CodingBadge problem={problem} />
           </div>
           {problem.needsManualCoding && (
-            <p className="mt-1 text-[10px] leading-relaxed text-amber-700 dark:text-amber-400">
+            <p className="mt-1 text-[0.625rem] leading-relaxed text-amber-700 dark:text-amber-400">
               {p.codingManualHint}
             </p>
           )}
@@ -180,13 +180,13 @@ function InferredProblemRow({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1 text-[0.6875rem] text-muted-foreground hover:text-foreground"
           >
             {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             {open ? p.hideEvidence : p.showEvidence}
           </button>
           {open && (
-            <div className="mt-1 space-y-1.5 border-l-2 border-muted pl-2 text-[11px]">
+            <div className="mt-1 space-y-1.5 border-l-2 border-muted pl-2 text-[0.6875rem]">
               {problem.evidence.length > 0 && (
                 <ul className="space-y-0.5">
                   {problem.evidence.map((e, i) => (
@@ -238,7 +238,7 @@ function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low'
     low: 'bg-muted text-muted-foreground border-border',
   }
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${styles[confidence]}`}>
+    <span className={`rounded border px-1.5 py-0.5 text-[0.625rem] font-medium ${styles[confidence]}`}>
       {labels[confidence]}
     </span>
   )
@@ -252,7 +252,7 @@ function CodingBadge({ problem }: { problem: InferredProblem }) {
     return (
       <span
         title={p.codingManualHint}
-        className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+        className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[0.625rem] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
       >
         <AlertTriangle className="h-3 w-3" />
         {p.codingManual}
@@ -262,14 +262,14 @@ function CodingBadge({ problem }: { problem: InferredProblem }) {
   }
   if (problem.coding) {
     return (
-      <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[0.625rem] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
         <BadgeCheck className="h-3 w-3" />
         {p.codingVerified} · {problem.coding.code}
       </span>
     )
   }
   return (
-    <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+    <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-medium text-muted-foreground">
       {p.codingNone}
     </span>
   )

@@ -44,7 +44,7 @@ export function AgentStateHistory({ states, currentState }: AgentStateHistoryPro
           )}
           <span>{t.chat.thinkingProcess} ({states.length} {t.chat.steps})</span>
         </div>
-        <span className="text-[10px] text-muted-foreground/60">
+        <span className="text-[0.625rem] text-muted-foreground/60">
           {isExpanded ? t.chat.collapse : t.chat.expand}
         </span>
       </button>
@@ -57,7 +57,7 @@ export function AgentStateHistory({ states, currentState }: AgentStateHistoryPro
                 key={index}
                 className="flex items-start gap-2 text-xs pb-2 border-b border-muted/50 last:border-0"
               >
-                <span className="text-[10px] text-muted-foreground/60 mt-0.5 shrink-0 font-mono">
+                <span className="text-[0.625rem] text-muted-foreground/60 mt-0.5 shrink-0 font-mono">
                   {formatStateTimestamp(state.timestamp)}
                 </span>
                 <span className="text-muted-foreground/80 flex-1">
@@ -66,7 +66,7 @@ export function AgentStateHistory({ states, currentState }: AgentStateHistoryPro
               </div>
             ))}
             <div className="flex items-start gap-2 text-xs pt-1">
-              <span className="text-[10px] text-primary/60 mt-0.5 shrink-0 font-mono">
+              <span className="text-[0.625rem] text-primary/60 mt-0.5 shrink-0 font-mono">
                 {formatStateTimestamp(states[states.length - 1].timestamp)}
               </span>
               <span className="text-primary font-medium flex-1">

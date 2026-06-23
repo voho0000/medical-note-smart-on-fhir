@@ -57,7 +57,7 @@ export function SafetyModelPicker({ model, onSelectModel }: SafetyModelPickerPro
         {groups.map((group, groupIndex) => (
           <div key={group.label}>
             {groupIndex > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+            <DropdownMenuLabel className="text-[0.6875rem] font-normal text-muted-foreground">
               {group.label}
             </DropdownMenuLabel>
             {group.items.map((entry) => (

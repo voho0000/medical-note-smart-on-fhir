@@ -71,7 +71,7 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <CardTitle className="text-sm line-clamp-1 leading-tight">{prompt.title}</CardTitle>
             {isMyPrompt && (
-              <Badge className="text-[9px] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border-0">
+              <Badge className="text-[0.5625rem] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border-0">
                 {t.promptGallery.myBadge}
               </Badge>
             )}
@@ -85,7 +85,7 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
               return (
                 <Badge 
                   key={type} 
-                  className={`text-[10px] px-1.5 py-0 h-4 border-0 flex items-center gap-0.5 ${getTypeBadgeStyle(type)}`}
+                  className={`text-[0.625rem] px-1.5 py-0 h-4 border-0 flex items-center gap-0.5 ${getTypeBadgeStyle(type)}`}
                 >
                   <TypeIcon className="h-2.5 w-2.5" />
                   {getTypeLabel(type)}
@@ -97,27 +97,27 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
       </CardHeader>
 
       <CardContent className="!pb-2 !pt-2 !px-3 flex flex-col gap-1">
-        <p className="text-[11px] text-muted-foreground line-clamp-2 leading-tight h-[30px]">
+        <p className="text-[0.6875rem] text-muted-foreground line-clamp-2 leading-tight h-[30px]">
           {prompt.prompt}
         </p>
 
         <div className="flex flex-wrap gap-1 min-h-[18px]">
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+          <Badge variant="secondary" className="text-[0.625rem] px-1.5 py-0">
             {getCategoryLabel(prompt.category)}
           </Badge>
           {prompt.specialty.slice(0, 1).map((spec) => (
-            <Badge key={spec} variant="outline" className="text-[10px] px-1 py-0">
+            <Badge key={spec} variant="outline" className="text-[0.625rem] px-1 py-0">
               {t.promptGallery.specialties[spec as keyof typeof t.promptGallery.specialties] || spec}
             </Badge>
           ))}
           {prompt.specialty.length > 1 && (
-            <Badge variant="outline" className="text-[10px] px-1 py-0">
+            <Badge variant="outline" className="text-[0.625rem] px-1 py-0">
               +{prompt.specialty.length - 1}
             </Badge>
           )}
         </div>
 
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground h-[16px]">
+        <div className="flex items-center gap-1 text-[0.625rem] text-muted-foreground h-[16px]">
           {isPopular ? (
             <Flame className="h-2.5 w-2.5 text-orange-500" />
           ) : (

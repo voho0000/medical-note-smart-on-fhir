@@ -63,7 +63,7 @@ export function ReportImageDialog({ images, title, open, onOpenChange }: ReportI
             exam (no DICOM). Make the limit explicit on every dialog open so
             clinicians don't mistake the previews for the full imaging study
             and miss key images that didn't make the 10-slot cap. */}
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>{tt.previewLimitNotice}</span>
         </div>

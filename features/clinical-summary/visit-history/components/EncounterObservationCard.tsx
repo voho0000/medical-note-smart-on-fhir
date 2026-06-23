@@ -69,7 +69,7 @@ function ObsRow({
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
       <div className="flex items-baseline gap-2 shrink-0">
         {date && (
-          <span className="font-mono text-[11px] text-muted-foreground tabular-nums min-w-[2.5rem]">
+          <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums min-w-[2.5rem]">
             {date}
           </span>
         )}

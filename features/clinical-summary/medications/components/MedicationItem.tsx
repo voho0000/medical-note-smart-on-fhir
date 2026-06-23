@@ -109,7 +109,7 @@ export function MedicationItem({
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <span
-            className="text-[13px] font-semibold truncate"
+            className="text-[0.8125rem] font-semibold truncate"
             title={medication.title}
           >
             {medication.title}
@@ -117,7 +117,7 @@ export function MedicationItem({
           {medication.category && (
             <span
               title={medication.category}
-              className="inline-flex shrink-0 max-w-[10rem] items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[10px] font-medium text-slate-700 truncate"
+              className="inline-flex shrink-0 max-w-[10rem] items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-700 truncate"
             >
               {medication.category}
             </span>
@@ -125,7 +125,7 @@ export function MedicationItem({
           {medication.isChronic && (
             <span
               title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-              className="inline-flex shrink-0 items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[10px] font-medium text-violet-700"
+              className="inline-flex shrink-0 items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700"
             >
               {mt.chronic ?? '慢箋'}
             </span>
@@ -133,20 +133,20 @@ export function MedicationItem({
           {showStatementChip && (
             <span
               title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
-              className="inline-flex shrink-0 items-center rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0 text-[10px] font-medium text-sky-700"
+              className="inline-flex shrink-0 items-center rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0 text-[0.625rem] font-medium text-sky-700"
             >
               {sourceChipStatementLabel ?? '目前服用'}
             </span>
           )}
         </div>
-        <Badge variant={badge.variant} className="ml-1 capitalize shrink-0 text-[10px] px-1.5 py-0">
+        <Badge variant={badge.variant} className="ml-1 capitalize shrink-0 text-[0.625rem] px-1.5 py-0">
           {badge.label}
         </Badge>
       </div>
 
       {/* ── Line 2 (compact metadata) ──────────────────────────────────── */}
       {parts.length > 0 && (
-        <div className="mt-0 flex flex-wrap items-center gap-x-1.5 gap-y-0 text-[10px] text-muted-foreground">
+        <div className="mt-0 flex flex-wrap items-center gap-x-1.5 gap-y-0 text-[0.625rem] text-muted-foreground">
           {parts.map((node, i) => (
             <span key={i} className="inline-flex items-center gap-x-1.5">
               {i > 0 && <Sep />}

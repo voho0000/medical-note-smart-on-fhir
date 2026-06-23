@@ -23,7 +23,7 @@ export function SafetyAlertsPanel() {
       <div className="flex flex-wrap items-center gap-2">
         <ShieldAlert className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
         <h2 className="text-base font-semibold text-foreground">{t.safetyAlerts.title}</h2>
-        <span className="rounded-md bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+        <span className="rounded-md bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 text-[0.6875rem] font-medium text-blue-700 dark:text-blue-300">
           {t.safetyAlerts.proactiveBadge}
         </span>
         <div className="ml-auto flex items-center gap-3">
@@ -91,7 +91,7 @@ export function SafetyAlertsPanel() {
 
           {/* AI disclaimer — pure-AI output, clinician must verify */}
           {result && result.alerts.length > 0 ? (
-            <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground/70">
+            <p className="pt-1 text-[0.6875rem] leading-relaxed text-muted-foreground/70">
               {t.safetyAlerts.disclaimer}
             </p>
           ) : null}

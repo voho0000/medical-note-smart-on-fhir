@@ -24,7 +24,7 @@ import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
 const REPO = 'voho0000/medical-note-smart-on-fhir'
 
 const FONT_SIZE_OPTIONS: Array<{ value: FontSize; labelKey: string; fallback: string; preview: string }> = [
-  { value: 'xs', labelKey: 'fontSizeXSmall', fallback: '特小', preview: 'text-[10px]' },
+  { value: 'xs', labelKey: 'fontSizeXSmall', fallback: '特小', preview: 'text-[0.625rem]' },
   { value: 'sm', labelKey: 'fontSizeSmall', fallback: '小', preview: 'text-xs' },
   { value: 'base', labelKey: 'fontSizeNormal', fallback: '標準', preview: 'text-sm' },
   { value: 'lg', labelKey: 'fontSizeLarge', fallback: '大', preview: 'text-base' },

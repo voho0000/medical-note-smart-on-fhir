@@ -91,13 +91,16 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, de
           className={
             fullHeight
               ? 'h-full overflow-y-auto pr-1'
-              // Non-fullscreen mode: explicit height so the virtualizer can
-              // measure the viewport immediately. `max-h-[60vh]` collapses
-              // to 0 at mount (no positioned content yet establishes flow
-              // height), which makes the virtualizer think nothing is
-              // visible and render an empty list. Users can hit "Fullscreen"
-              // when they want the panel to take the whole screen.
-              : 'h-[60vh] overflow-y-auto pr-1'
+              // Non-fullscreen mode: an explicit, rem-based height so the
+              // virtualizer can measure the viewport immediately — a flex/max-h
+              // child collapses to 0 at mount (no positioned content yet
+              // establishes flow height) and renders an empty list. It fills the
+              // panel: 100vh minus the chrome above the list (app header + tabs
+              // + sub-tabs + search ≈ 18rem). Because the offset is in REM it
+              // scales with the font-size setting, so 特小 shows MORE rows
+              // instead of leaving dead space below a fixed-vh card. min-h keeps
+              // it usable on very short screens.
+              : 'h-[calc(100vh-18rem)] min-h-[18rem] overflow-y-auto pr-1'
           }
         >
           {/* Outer spacer sized to the *full* list height so the scrollbar

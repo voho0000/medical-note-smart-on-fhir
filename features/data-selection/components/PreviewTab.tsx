@@ -60,7 +60,7 @@ export function PreviewTab({
         // IPS uses structured curation — the text edit + supplementary notes
         // don't apply. Show a read-only preview of the data that will be included.
         <>
-          <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+          <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-[0.6875rem] text-muted-foreground">
             {ds.ipsPreviewNote}
           </p>
           <div className="flex justify-end">

@@ -126,13 +126,13 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm">{row.title}</span>
-              <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[10px] font-semibold text-amber-900">
+              <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-semibold text-amber-900">
                 {sub.length} 項
               </span>
               {row.hasAmbiguity && (
                 <span
                   title={tm.ambiguityWarning}
-                  className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[10px] font-medium text-amber-900"
+                  className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0 text-[0.625rem] font-medium text-amber-900"
                 >
                   <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
                   健保碼共用
@@ -176,7 +176,7 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
           {/* Ambiguity warning — full text shown only when expanded; the
               header carries a compact ⚠ chip for collapsed-state context. */}
           {row.hasAmbiguity && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-100/80 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200">
+            <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-100/80 px-2.5 py-1.5 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>{tm.ambiguityWarning}</span>
             </div>
@@ -229,7 +229,7 @@ export function MultiRegionStudyCard({ row }: MultiRegionStudyCardProps) {
 function SectionDivider({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
         {icon}
         {label}
       </span>
@@ -273,7 +273,7 @@ function NarrativeSubCard({
             )}
           </div>
           {!expanded && (
-            <div className="mt-0.5 text-[11px] text-muted-foreground line-clamp-1">
+            <div className="mt-0.5 text-[0.6875rem] text-muted-foreground line-clamp-1">
               {firstLine}
             </div>
           )}
@@ -323,7 +323,7 @@ function ImageSetSubCard({
           <div className="text-xs font-semibold text-foreground">
             {imageLabel} {circled(index)}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">
+          <div className="mt-0.5 text-[0.6875rem] text-muted-foreground">
             {count} {imagesCount}
             {firstSize ? ` · ${firstFrame} ${formatBytes(firstSize)}` : ''}
           </div>

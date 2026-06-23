@@ -21,11 +21,13 @@
 "use client"
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Building2, Info } from 'lucide-react'
+import { Building2, Info, PanelRight } from 'lucide-react'
 import { FeatureCard } from '@/src/shared/components'
+import { cn } from '@/src/shared/utils/cn.utils'
+import { useRightDetail } from '@/src/application/providers/right-detail.provider'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
-import { HtmlDocumentRenderer } from './components/HtmlDocumentRenderer'
+import { HtmlDocumentRenderer, HtmlDocumentBody } from './components/HtmlDocumentRenderer'
 import { DocumentDetailDialog } from './components/DocumentDetailDialog'
 import { useDocumentSummaryStrings, makeResolveSectionLabel, type DocSummaryStrings } from './utils/strings'
 import type { DocumentEntry } from './types'
@@ -75,7 +77,7 @@ export function DocumentSummaryCard() {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1 text-[0.6875rem] text-muted-foreground hover:text-foreground"
               >
                 <Info className="h-3 w-3" aria-hidden />
                 <span>{strings.title}</span>
@@ -123,8 +125,84 @@ function DocumentEntryCard({
   const dateStr = formatDate(entry.date)
   const periodStr = formatPeriod(entry.period)
 
+  // 向右展開 — dock the full document (the same content the maximize dialog
+  // shows) in the right pane to read it beside the list.
+  const { detail: rightDetail, toggleDetail } = useRightDetail()
+  const sourceId = `doc:${entry.id}`
+  const isRightActive = rightDetail?.sourceId === sourceId
+  const openRight = (e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    toggleDetail({
+      sourceId,
+      title: (
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="truncate">{entry.typeLabel}</span>
+          {(periodStr || (dateStr && !entry.period)) && (
+            <span className="text-xs font-normal text-muted-foreground whitespace-nowrap">
+              · {periodStr || dateStr}
+            </span>
+          )}
+        </span>
+      ),
+      node: (
+        <div key={sourceId} className="scrollbar-thin-persistent h-full overflow-y-auto pr-1">
+          {entry.sourceKind === 'composition' && entry.composition ? (
+            <CompositionRenderer
+              composition={entry.composition}
+              defaultExpandFirst
+              resolveSectionLabel={resolveSectionLabel}
+              labels={{
+                documentDate: strings.documentDate,
+                author: strings.author,
+                custodian: strings.custodian,
+                noSections: strings.noSections,
+              }}
+            />
+          ) : entry.sourceKind === 'documentReference' && entry.attachment ? (
+            <HtmlDocumentBody
+              attachment={entry.attachment}
+              labels={{ noContent: strings.htmlNoContent, externalUrl: strings.htmlExternalUrl }}
+            />
+          ) : null}
+        </div>
+      ),
+    })
+  }
+  // div[role=button] (not <button>) so it can nest inside HtmlDocumentRenderer's
+  // AccordionTrigger button without invalid HTML; mousedown stopProp keeps the
+  // click from toggling the accordion. Desktop-only (no right pane on phones).
+  const rightButton = (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={openRight}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          openRight(e)
+        }
+      }}
+      title={isRightActive ? '已在右側面板展開' : '在右側面板展開文件'}
+      aria-label="在右側面板展開文件"
+      className={cn(
+        'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 cursor-pointer transition-colors',
+        isRightActive
+          ? 'border-primary bg-primary/10 text-primary'
+          : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+    >
+      <PanelRight className="h-3.5 w-3.5" />
+    </div>
+  )
+
   return (
-    <li className="rounded-md border border-border/60 bg-muted/20 p-2.5">
+    <li
+      className={cn(
+        'rounded-md border border-border/60 bg-muted/20 p-2.5 transition-colors',
+        isRightActive && 'border-primary/40 bg-primary/5',
+      )}
+    >
       {/* Header strip: type label · IPS / discharge badge · date · maximize */}
       <div className="mb-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -132,7 +210,7 @@ function DocumentEntryCard({
           {entry.isIps && (
             <span
               title={strings.ipsBadgeTooltip}
-              className="inline-flex shrink-0 items-center rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
+              className="inline-flex shrink-0 items-center rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0 text-[0.625rem] font-medium text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
             >
               {strings.ipsBadge}
             </span>
@@ -142,7 +220,7 @@ function DocumentEntryCard({
           {entry.isDischargeSummary && entry.typeLabel !== strings.dischargeBadge && (
             <span
               title={strings.dischargeBadgeTooltip}
-              className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+              className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[0.625rem] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
             >
               {strings.dischargeBadge}
             </span>
@@ -158,10 +236,14 @@ function DocumentEntryCard({
               it here. For Composition (IPS) the date IS the only temporal
               anchor, so it stays. */}
           {dateStr && !entry.period && (
-            <span className="text-[11px] tabular-nums text-muted-foreground">
+            <span className="text-[0.6875rem] tabular-nums text-muted-foreground">
               {dateStr}
             </span>
           )}
+          {/* IPS compositions have per-section accordions (no single 文件內容
+              chevron), so their 向右展開 button lives here in the header.
+              Discharge summaries get it on the 文件內容 bar instead (below). */}
+          {entry.sourceKind === 'composition' && rightButton}
           {/* Maximize button — opens the same content in a centred dialog
               at ~90vw so the discharge-summary tables breathe. The inline
               accordion below still works for quick previews. */}
@@ -181,10 +263,10 @@ function DocumentEntryCard({
           narrative diagnosis, so users don't mistake the short label for the
           full clinical picture. */}
       {entry.primaryDiagnosis && (
-        <div className="mb-1 flex items-baseline gap-1.5 text-[13px] font-medium text-foreground/90">
+        <div className="mb-1 flex items-baseline gap-1.5 text-[0.8125rem] font-medium text-foreground/90">
           {entry.primaryDiagnosis.code && (
             <span
-              className="font-mono text-[11px] text-muted-foreground cursor-help"
+              className="font-mono text-[0.6875rem] text-muted-foreground cursor-help"
               title={strings.primaryDiagnosisTooltip}
             >
               {entry.primaryDiagnosis.code}
@@ -198,7 +280,7 @@ function DocumentEntryCard({
 
       {/* Secondary line: institution + period (e.g. "長庚嘉義 · 2025-05-18 ~ 2025-05-22") */}
       {(entry.institution || periodStr) && (
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mb-1.5 flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
           {entry.institution && (
             <span className="inline-flex items-center gap-1">
               <Building2 className="h-3 w-3 shrink-0" aria-hidden />
@@ -228,6 +310,7 @@ function DocumentEntryCard({
         <HtmlDocumentRenderer
           attachment={entry.attachment}
           defaultExpanded={autoExpand}
+          rightControl={rightButton}
           labels={{
             bodyHeader: strings.htmlBodyHeader,
             noContent: strings.htmlNoContent,

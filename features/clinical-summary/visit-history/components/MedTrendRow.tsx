@@ -54,13 +54,13 @@ export function MedTrendRow({ series, defaultExpanded = false }: MedTrendRowProp
           {series.isChronic && (
             <span
               title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-              className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[10px] font-medium text-violet-700"
+              className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700"
             >
               {mt.chronic ?? '慢箋'}
             </span>
           )}
           {isFoldable && (
-            <span className="inline-flex items-center rounded-full bg-muted/70 px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground">
+            <span className="inline-flex items-center rounded-full bg-muted/70 px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground">
               {series.refills.length}
             </span>
           )}
@@ -116,7 +116,7 @@ function RefillDetail({
       {medication.status && (
         <span
           className={cn(
-            "ml-auto inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] capitalize",
+            "ml-auto inline-flex items-center rounded-full border px-1.5 py-0 text-[0.625rem] capitalize",
             medication.status === 'active'
               ? "border-sky-200 bg-sky-50 text-sky-700"
               : "border-muted bg-muted/60 text-muted-foreground",

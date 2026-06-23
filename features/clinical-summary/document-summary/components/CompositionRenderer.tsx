@@ -92,7 +92,7 @@ export function CompositionRenderer({
     <div className="space-y-2">
       {/* Metadata strip */}
       {(documentDate || authorNames) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.6875rem] text-muted-foreground">
           {documentDate && (
             <span>
               <span className="font-medium">{labels.documentDate}：</span>

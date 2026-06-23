@@ -212,7 +212,7 @@ export function ChatInputArea({
           </button>
         )}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground/70">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem] text-muted-foreground/70">
         {/* Cloud-AI disclosure: passive notice so users can see, at a glance,
             that their messages + selected clinical data are sent to a cloud
             LLM. No consent gate — just visible transparency. */}

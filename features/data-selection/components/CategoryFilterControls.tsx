@@ -51,7 +51,7 @@ export function CategoryFilterControls({ category, filters, onFilterChange }: Ca
             value={current}
             onValueChange={(v) => onFilterChange(filter.key, v)}
           >
-            <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-border/70 px-2.5 text-[11px] text-muted-foreground">
+            <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-border/70 px-2.5 text-[0.6875rem] text-muted-foreground">
               <span>{label(current, current)}</span>
             </SelectTrigger>
             <SelectContent align="start" className="text-xs">

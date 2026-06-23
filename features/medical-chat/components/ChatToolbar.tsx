@@ -94,7 +94,7 @@ export function ChatToolbar({
             }
           />
           <label
-            className={`text-[10px] cursor-pointer select-none whitespace-nowrap hidden sm:inline ${
+            className={`text-[0.625rem] cursor-pointer select-none whitespace-nowrap hidden sm:inline ${
               autoIncludeContext ? 'text-primary font-medium' : 'text-muted-foreground'
             }`}
             onClick={() => setAutoIncludeContext(!autoIncludeContext)}
@@ -129,7 +129,7 @@ export function ChatToolbar({
                   <span className="flex w-full items-center justify-between gap-4">
                     <span className="truncate">{template.label}</span>
                     {template.shortcut ? (
-                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground/80">
+                      <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground/80">
                         /{template.shortcut}
                       </span>
                     ) : null}

@@ -118,7 +118,7 @@ export function DataSelectionTab({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-[11px] ${allConsumersInSync ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}>
+          <span className={`text-[0.6875rem] ${allConsumersInSync ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}>
             {allConsumersInSync ? ds.inSync : ds.customized}
           </span>
           {!allConsumersInSync && (
@@ -199,7 +199,7 @@ export function DataSelectionTab({
                   <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
                   {groupTitles[group.labelKey] ?? group.fallback}
                 </span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-[0.6875rem] text-muted-foreground">
                   {selectedCount} / {items.length} {ds.selectedCountLabel ?? ''}
                 </span>
               </CollapsibleTrigger>
@@ -235,7 +235,7 @@ export function DataSelectionTab({
                             />
                           )}
                           {/* Always show the count, including 0 (so "no data" is explicit) */}
-                          <span className="text-[11px] tabular-nums text-muted-foreground">{item.count}</span>
+                          <span className="text-[0.6875rem] tabular-nums text-muted-foreground">{item.count}</span>
                         </div>
                       </div>
                       {item.id === 'documents' && isSelected && (

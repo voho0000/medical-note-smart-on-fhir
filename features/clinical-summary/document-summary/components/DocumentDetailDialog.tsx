@@ -97,7 +97,7 @@ export function DocumentDetailDialog({
             {entry.isIps && (
               <span
                 title={strings.ipsBadgeTooltip}
-                className="inline-flex shrink-0 items-center rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-700"
+                className="inline-flex shrink-0 items-center rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0 text-[0.625rem] font-medium text-indigo-700"
               >
                 {strings.ipsBadge}
               </span>
@@ -105,7 +105,7 @@ export function DocumentDetailDialog({
             {entry.isDischargeSummary && entry.typeLabel !== strings.dischargeBadge && (
               <span
                 title={strings.dischargeBadgeTooltip}
-                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700"
+                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[0.625rem] font-medium text-emerald-700"
               >
                 {strings.dischargeBadge}
               </span>

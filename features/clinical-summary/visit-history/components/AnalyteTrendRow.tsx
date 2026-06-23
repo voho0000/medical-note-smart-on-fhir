@@ -117,7 +117,7 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
           {series.title}
         </span>
         {isFoldable && (
-          <span className="inline-flex items-center rounded-full bg-muted/70 px-1.5 py-0 text-[10px] tabular-nums text-muted-foreground shrink-0">
+          <span className="inline-flex items-center rounded-full bg-muted/70 px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground shrink-0">
             {series.values.length}
           </span>
         )}
@@ -130,7 +130,7 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
           {trend.primary}
         </span>
         {trend.flag && (
-          <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[10px] font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+          <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
             ⚠ {trend.flag}
           </span>
         )}
@@ -171,12 +171,12 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
                   {v.value}
                 </span>
                 {v.interpretationLabel && v.interpretationStyle && (
-                  <span className={cn("inline-flex items-center rounded-full px-1 text-[10px]", v.interpretationStyle)}>
+                  <span className={cn("inline-flex items-center rounded-full px-1 text-[0.625rem]", v.interpretationStyle)}>
                     {v.interpretationLabel}
                   </span>
                 )}
                 {v.referenceText && (
-                  <span className="text-muted-foreground/80 text-[10px]">{v.referenceText}</span>
+                  <span className="text-muted-foreground/80 text-[0.625rem]">{v.referenceText}</span>
                 )}
               </div>
             )

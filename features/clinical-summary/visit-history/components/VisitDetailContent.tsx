@@ -108,7 +108,7 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
           collapseThreshold={COLLAPSE_THRESHOLDS.tests}
           rightBadges={
             abnormalCount > 0 ? (
-              <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[10px] font-medium text-red-700 normal-case">
+              <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 normal-case">
                 {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
               </span>
             ) : undefined
@@ -117,7 +117,7 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
           <div className="space-y-3 mt-2">
             {details.testGroups.map((group, gi) => (
               <div key={group.categoryId ?? `other-${gi}`} className="space-y-1">
-                <div className="px-0.5 text-[11px] font-medium text-muted-foreground/80">
+                <div className="px-0.5 text-[0.6875rem] font-medium text-muted-foreground/80">
                   {group.categoryId ? categoryLabel(group.categoryId) : categoryLabel('other')}
                 </div>
                 {details.isMultiDay && group.testSeries.length > 0 ? (

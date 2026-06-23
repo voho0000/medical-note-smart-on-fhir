@@ -19,7 +19,7 @@ export function IpsSectionPreview({ section }: { section: IpsCompositionSection 
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{section.title}</div>
-          {loinc && <div className="text-[11px] text-muted-foreground">LOINC {loinc}</div>}
+          {loinc && <div className="text-[0.6875rem] text-muted-foreground">LOINC {loinc}</div>}
         </div>
         <Badge variant="secondary" className="shrink-0">
           {count}

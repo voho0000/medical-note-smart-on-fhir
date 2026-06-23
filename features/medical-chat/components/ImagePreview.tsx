@@ -43,7 +43,7 @@ export function ImagePreview({ images, onRemove, disabled }: ImagePreviewProps) 
               <X className="h-3 w-3" />
             </button>
           )}
-          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] px-1 py-0.5 truncate">
+          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[0.625rem] px-1 py-0.5 truncate">
             {image.file.name}
           </div>
         </div>

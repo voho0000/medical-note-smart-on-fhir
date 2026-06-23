@@ -138,7 +138,7 @@ export function IpsBundlePreview({ bundle, validation }: IpsBundlePreviewProps) 
           </div>
         </button>
         {showJson && (
-          <pre className="max-h-80 overflow-auto border-t bg-muted/30 px-3 py-2 text-[11px] leading-relaxed">
+          <pre className="max-h-80 overflow-auto border-t bg-muted/30 px-3 py-2 text-[0.6875rem] leading-relaxed">
             {json}
           </pre>
         )}

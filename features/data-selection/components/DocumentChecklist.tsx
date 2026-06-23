@@ -26,7 +26,7 @@ export function DocumentChecklist({ clinicalData }: { clinicalData: ClinicalData
   )
 
   if (docs.length === 0) {
-    return <p className="text-[11px] text-muted-foreground">{ds.documentsEmpty ?? '此病人無文件'}</p>
+    return <p className="text-[0.6875rem] text-muted-foreground">{ds.documentsEmpty ?? '此病人無文件'}</p>
   }
 
   const toggle = (id: string) => {
@@ -51,7 +51,7 @@ export function DocumentChecklist({ clinicalData }: { clinicalData: ClinicalData
             key={m.id}
             type="button"
             onClick={() => setDocumentMode(m.id)}
-            className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+            className={`rounded px-2 py-0.5 text-[0.6875rem] font-medium transition-colors ${
               documentMode === m.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -78,12 +78,12 @@ export function DocumentChecklist({ clinicalData }: { clinicalData: ClinicalData
                 <span className="flex items-center gap-1.5">
                   <span className={`truncate ${checked ? '' : 'text-muted-foreground'}`}>{d.title}</span>
                   {d.isDischargeSummary && (
-                    <span className="shrink-0 rounded-full bg-amber-100 px-1.5 text-[10px] text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                    <span className="shrink-0 rounded-full bg-amber-100 px-1.5 text-[0.625rem] text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
                       {ds.dischargeBadge ?? '出院病摘'}
                     </span>
                   )}
                 </span>
-                {date && <span className="block text-[10px] text-muted-foreground">{date}</span>}
+                {date && <span className="block text-[0.625rem] text-muted-foreground">{date}</span>}
               </span>
             </label>
           )

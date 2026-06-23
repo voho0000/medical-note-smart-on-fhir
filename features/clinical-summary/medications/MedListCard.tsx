@@ -147,7 +147,7 @@ export function MedListCard() {
               )}
             >
               {c.label}
-              <span className="rounded-full bg-muted/70 px-1 py-0 text-[10px] tabular-nums text-muted-foreground">
+              <span className="rounded-full bg-muted/70 px-1 py-0 text-[0.625rem] tabular-nums text-muted-foreground">
                 {c.count}
               </span>
             </TabsTrigger>
@@ -226,7 +226,7 @@ export function MedListCard() {
               from a MedicationStatement (typical IPS dataset). Mixed lists
               fall through to the per-row chip rendered inside MedicationItem. */}
           {sourceMix === 'statement-only' && (
-            <div className="flex items-start gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+            <div className="flex items-start gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-[0.6875rem] text-muted-foreground">
               <Info className="h-3.5 w-3.5 shrink-0 mt-[1px]" aria-hidden />
               <span>{sourceHintStatement}</span>
             </div>

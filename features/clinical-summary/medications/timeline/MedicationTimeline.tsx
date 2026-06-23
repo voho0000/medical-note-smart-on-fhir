@@ -95,22 +95,37 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
       </div>
 
       {/* ── Summary line ────────────────────────────────────────────── */}
+      {/* The chronic / acute counts carry their own colour swatch (matching the
+          bar colours), so a separate 慢箋/急性 legend below would just repeat the
+          text — only the 今日 key remains in the legend. */}
       <div className="text-xs text-muted-foreground">
         {data.totalDrugs > 0 ? (
           <>
             {data.totalDrugs} {mt.timelineDrugCount ?? 'drugs'} ·{' '}
-            <span className="text-violet-700">
+            <span className="inline-flex items-center gap-1 align-middle text-violet-700">
+              <span className="inline-block h-2 w-3 rounded-sm bg-violet-400 border border-violet-600" />
               {data.chronicCount} {mt.chronic ?? '慢箋'}
             </span>{' '}
             ·{' '}
-            <span className="text-slate-700">
+            <span className="inline-flex items-center gap-1 align-middle text-slate-700">
+              <span className="inline-block h-2 w-3 rounded-sm bg-slate-300 border border-slate-600" />
               {data.acuteCount} {mt.timelineAcute ?? 'acute'}
+            </span>{' '}
+            ·{' '}
+            {/* 今日 (red dashed line) key inline on the same row, not a separate
+                legend line below. */}
+            <span className="inline-flex items-center gap-1 align-middle">
+              <span className="inline-block h-px w-3 border-t border-dashed border-red-500" />
+              {mt.timelineToday ?? 'Today'}
             </span>
           </>
         ) : (
           mt.timelineEmpty ?? '此時段內無用藥紀錄'
         )}
       </div>
+
+      {/* Legend is folded into the summary row above (慢箋/急性 swatches on the
+          counts, 今日 key inline) — no separate legend line. */}
 
       {/* ── Timeline SVG ─────────────────────────────────────────────── */}
       <div ref={containerRef} className="w-full overflow-hidden rounded-md border bg-background">
@@ -127,22 +142,6 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
             {mt.timelineEmpty ?? '此時段內無用藥紀錄'}
           </div>
         )}
-      </div>
-
-      {/* ── Legend ──────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-3 rounded-sm bg-violet-400 border border-violet-600" />
-          {mt.chronic ?? '慢箋'}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-3 rounded-sm bg-slate-300 border border-slate-600" />
-          {mt.timelineAcute ?? 'Acute'}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-px w-3 border-t border-dashed border-red-500" />
-          {mt.timelineToday ?? 'Today'}
-        </span>
       </div>
     </div>
   )
