@@ -60,10 +60,6 @@ export function DataSelectionTab({
     activePreset,
     resetToDefaults,
     setEditedClinicalContext,
-    editingConsumer,
-    setEditingConsumer,
-    syncEditingToAll,
-    allConsumersInSync,
   } = useDataSelection()
   const [mounted, setMounted] = useState(false)
   const [openGroups, setOpenGroups] = useState<Set<string>>(DEFAULT_OPEN)
@@ -88,89 +84,53 @@ export function DataSelectionTab({
     setEditedClinicalContext(null)
   }
 
-  const CONSUMER_LABELS: Record<'chat' | 'insights' | 'ips', string> = {
-    chat: ds.consumerChat ?? '對話',
-    insights: ds.consumerInsights ?? '洞察',
-    ips: ds.consumerIps ?? 'IPS',
-  }
-
   return (
     <div className="space-y-3">
-      {/* Which consumer you're editing (對話 / 洞察 / IPS) */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{ds.editConsumer ?? '編輯對象'}</span>
-          <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
-            {(['chat', 'insights', 'ips'] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setEditingConsumer(c)}
-                className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                  editingConsumer === c
-                    ? ACTIVE_SEGMENT
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {CONSUMER_LABELS[c]}
-              </button>
-            ))}
+      {/* Templates — one-tap fill, then tweak the single selection freely. */}
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">{ds.applyTemplate ?? '套用範本'}</span>
+            <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+              {([
+                { id: 'general', label: ds.presetGeneral ?? '通用' },
+                { id: 'newPatient', label: ds.presetNewPatient ?? '初診' },
+                { id: 'followUp', label: ds.presetFollowUp ?? '追蹤' },
+              ] as const).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => handleApplyPreset(id)}
+                  aria-pressed={activePreset === id}
+                  className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                    activePreset === id
+                      ? ACTIVE_SEGMENT
+                      : 'text-muted-foreground hover:bg-background hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-[0.6875rem] ${allConsumersInSync ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}>
-            {allConsumersInSync ? ds.inSync : ds.customized}
-          </span>
-          {!allConsumersInSync && (
-            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={syncEditingToAll}>
-              {ds.syncToAll}
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onToggleAll(!allSelected)}>
+              {allSelected ? ds.deselectAll : ds.selectAll}
             </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Scenario presets + bulk actions */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{ds.preset ?? '情境'}</span>
-          <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
-            {([
-              { id: 'general', label: ds.presetGeneral ?? '通用' },
-              { id: 'newPatient', label: ds.presetNewPatient ?? '初診' },
-              { id: 'followUp', label: ds.presetFollowUp ?? '追蹤' },
-            ] as const).map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => handleApplyPreset(id)}
-                aria-pressed={activePreset === id}
-                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
-                  activePreset === id
-                    ? ACTIVE_SEGMENT
-                    : 'text-muted-foreground hover:bg-background hover:text-foreground'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => {
+                resetToDefaults()
+                setEditedClinicalContext(null)
+              }}
+            >
+              {ds.resetToDefault}
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onToggleAll(!allSelected)}>
-            {allSelected ? ds.deselectAll : ds.selectAll}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => {
-              resetToDefaults()
-              setEditedClinicalContext(null)
-            }}
-          >
-            {ds.resetToDefault}
-          </Button>
-        </div>
+        <p className="mt-1 text-[0.6875rem] text-muted-foreground">{ds.applyTemplateHint ?? '點一下填入起點，之後可自由調整'}</p>
       </div>
 
       {/* Accordion sections — one per left-panel tab */}

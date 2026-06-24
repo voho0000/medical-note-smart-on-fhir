@@ -42,6 +42,7 @@ export interface DataSelection {
 export interface DataFilters {
   // Problem list
   problemListStatus: 'active' | 'all'
+  problemListTimeRange: TimeRange
 
   // Encounters / visits
   encounterTimeRange: TimeRange

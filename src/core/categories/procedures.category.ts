@@ -31,16 +31,6 @@ export const proceduresCategory: DataCategory<Procedure> = {
   
   filters: [
     {
-      key: 'procedureVersion',
-      type: 'select',
-      label: 'Procedure Version',
-      options: [
-        { value: 'latest', label: 'Latest Only' },
-        { value: 'all', label: 'All Procedures' }
-      ],
-      defaultValue: 'latest'
-    },
-    {
       key: 'procedureTimeRange',
       type: 'select',
       label: 'Time Range',

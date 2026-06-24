@@ -3,41 +3,10 @@ import {
   DEFAULT_DATA_FILTERS,
   DATA_SELECTION_PRESETS,
   resolveActivePreset,
-  switchPreset,
   STORAGE_KEYS
 } from '@/src/shared/constants/data-selection.constants'
 
 describe('data-selection.constants', () => {
-  describe('switchPreset — per-preset memory (tab-like)', () => {
-    const start = {
-      selection: { ...DEFAULT_DATA_SELECTION },
-      filters: { ...DEFAULT_DATA_FILTERS },
-      activePreset: 'general' as const,
-      presetMemory: {},
-    }
-
-    it('switching to a never-visited preset applies its factory config + remembers the one you left', () => {
-      const s = switchPreset(start, 'followUp')
-      expect(s.activePreset).toBe('followUp')
-      expect(s.selection).toEqual(DATA_SELECTION_PRESETS.followUp.selection)
-      expect(s.presetMemory.general).toEqual({ selection: start.selection, filters: start.filters })
-    })
-
-    it('remembers each scenario tweak across a round-trip', () => {
-      const customized = { ...start, selection: { ...start.selection, encounters: false } }
-      const toFollow = switchPreset(customized, 'followUp')
-      const back = switchPreset(toFollow, 'general')
-      expect(back.activePreset).toBe('general')
-      expect(back.selection.encounters).toBe(false) // the tweak survived
-    })
-
-    it('switching to the already-active preset never wipes current tweaks', () => {
-      const customized = { ...start, selection: { ...start.selection, encounters: false } }
-      const same = switchPreset(customized, 'general')
-      expect(same.selection.encounters).toBe(false)
-    })
-  })
-
   describe('resolveActivePreset — always exactly one of 通用/初診/追蹤', () => {
     it('the general baseline (= default) resolves to general', () => {
       expect(resolveActivePreset(DEFAULT_DATA_SELECTION, DEFAULT_DATA_FILTERS)).toBe('general')
@@ -105,15 +74,16 @@ describe('data-selection.constants', () => {
       expect(DEFAULT_DATA_FILTERS.problemListStatus).toBe('active')
       expect(DEFAULT_DATA_FILTERS.medicationStatus).toBe('active')
       expect(DEFAULT_DATA_FILTERS.medicationChronic).toBe('all')
-      expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('6m')
       expect(DEFAULT_DATA_FILTERS.labReportVersion).toBe('all')
       expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBe('6m')
       expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.imagingReportTimeRange).toBe('1y')
       expect(DEFAULT_DATA_FILTERS.vitalSignsVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.vitalSignsTimeRange).toBe('all')
-      expect(DEFAULT_DATA_FILTERS.procedureVersion).toBe('latest')
+      expect(DEFAULT_DATA_FILTERS.procedureVersion).toBe('all')
       expect(DEFAULT_DATA_FILTERS.procedureTimeRange).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.problemListTimeRange).toBe('all')
       expect(DEFAULT_DATA_FILTERS.immunizationTimeRange).toBe('all')
     })
   })

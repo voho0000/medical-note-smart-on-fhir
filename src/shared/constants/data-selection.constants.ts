@@ -39,15 +39,19 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
 
 export const DEFAULT_DATA_FILTERS: DataFilters = {
   problemListStatus: 'active',
+  // Problem list defaults to all time (a problem list is the standing set of
+  // active problems, not a recent-events window); the range is offered so it can
+  // be narrowed when desired.
+  problemListTimeRange: 'all',
   // Visits default to the last 6 months (初診 snapshot). The hook still falls
   // back to older visits when none fall inside the range, so stable/elderly
   // patients aren't left with an empty visit history.
   encounterTimeRange: '6m',
   medicationStatus: 'active',
   medicationChronic: 'all',
-  // Med refill cycles span many months; keep all so chronic context is preserved.
-  // The hook dedups by drug name so this no longer bloats output.
-  medicationTimeRange: 'all',
+  // Meds default to the last 6 months; the hook dedups by drug name so chronic
+  // refills still collapse to one current row.
+  medicationTimeRange: '6m',
   // Labs default to the FULL trend ('all') so the AI sees trajectories
   // (Cr 1.2 → 1.5 → 2.0 = worsening), bounded by the 6-month window.
   labReportVersion: 'all',
@@ -59,7 +63,9 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // elderly / stable patients still surfaces.
   vitalSignsVersion: 'latest',
   vitalSignsTimeRange: 'all',
-  procedureVersion: 'latest',
+  // Procedures: no latest/all dedup filter (removed from the UI) — show every
+  // procedure within the time range.
+  procedureVersion: 'all',
   procedureTimeRange: 'all',
   // Orphan observations: dedup to latest-per-analyte by default, all time.
   observationVersion: 'latest',
@@ -143,43 +149,11 @@ export const DATA_SELECTION_PRESETS: Record<PresetId, DataSelectionPreset> = {
   },
 }
 
-// Per-preset memory: each scenario (通用/初診/追蹤) remembers the user's tweaks
-// like a tab. `activePreset` is which one you're on; `presetMemory` holds the
-// remembered selection/filters for presets you've left.
-export interface PresetMemory {
-  selection: DataSelection
-  filters: DataFilters
-}
-export interface PresetSwitchState {
-  selection: DataSelection
-  filters: DataFilters
-  activePreset: PresetId
-  presetMemory: Partial<Record<PresetId, PresetMemory>>
-}
-
-/**
- * Switch to `target`: snapshot the current active preset's state into memory,
- * then restore `target`'s remembered state — or its factory default if you've
- * never customized it. Switching to the SAME preset is a no-op restore (so a
- * stray click never wipes your tweaks).
- */
-export function switchPreset(state: PresetSwitchState, target: PresetId): PresetSwitchState {
-  const presetMemory = {
-    ...state.presetMemory,
-    [state.activePreset]: { selection: state.selection, filters: state.filters },
-  }
-  const remembered = presetMemory[target]
-  const restored: PresetMemory = remembered ?? {
-    selection: { ...DATA_SELECTION_PRESETS[target].selection },
-    filters: { ...DATA_SELECTION_PRESETS[target].filters },
-  }
-  return {
-    activePreset: target,
-    selection: { ...restored.selection },
-    filters: { ...restored.filters },
-    presetMemory,
-  }
-}
+// Templates are stateless one-tap fills: applying one loads its factory
+// selection+filters as a starting point (the `documents` toggle is sticky and
+// preserved by the caller). There's no per-preset memory — the active highlight
+// is DERIVED from the current selection via resolveActivePreset below, so it
+// always reflects the live state rather than a remembered tab.
 
 // Which scenario a selection+filters reflect. 初診/追蹤 require an EXACT match
 // (compared only over each preset's own keys, so vestigial keys in older stored

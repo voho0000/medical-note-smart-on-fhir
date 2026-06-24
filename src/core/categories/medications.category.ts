@@ -80,7 +80,9 @@ export const medicationsCategory: DataCategory<MedicationRequest> = {
         { value: '1y', label: 'Last Year' },
         { value: 'all', label: 'All Time' }
       ],
-      defaultValue: 'all'
+      // Default to the last 6 months — long med histories otherwise flood the
+      // AI context with stopped/old prescriptions; the user can widen to 全部.
+      defaultValue: '6m'
     }
   ],
 

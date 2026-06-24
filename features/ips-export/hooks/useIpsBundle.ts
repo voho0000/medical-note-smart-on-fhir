@@ -57,6 +57,8 @@ export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBun
       immunizations: s.immunizations,
       procedures: s.procedures,
       results: s.results,
+      resultsLab: s.resultsLab,
+      resultsImaging: s.resultsImaging,
       vitalSigns: s.vitalSigns,
       medicalDevices: s.medicalDevices,
       planOfCare: s.planOfCare,

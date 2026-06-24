@@ -72,8 +72,9 @@ export default function IpsExportFeature() {
           <FileOutput className="h-5 w-5 text-emerald-600" />
           <h2 className="text-base font-semibold">{x.title}</h2>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{x.description}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{x.resourceCountLabel.replace('{count}', String(resourceCount))}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {x.description} · {x.resourceCountLabel.replace('{count}', String(resourceCount))}
+        </p>
       </div>
 
       <IpsExportActions

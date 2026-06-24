@@ -404,19 +404,38 @@ describe('buildIpsBundle — populated data', () => {
     expect(div).toContain('O positive')
   })
 
-  it('shows an attachment indicator for an image-only report (no conclusion/members)', () => {
+  it('omits text-less (image-only) reports but keeps text reports', () => {
     const data = emptyCollection()
     data.diagnosticReports = [
       {
-        id: 'dr-xray',
-        code: { text: '胸部X光' },
+        id: 'dr-img',
+        code: { text: '胸部X光' }, // image-only — no conclusion/members
         effectiveDateTime: '2026-06-01',
-        presentedForm: [{ title: 'Chest X-ray', contentType: 'image/jpeg', _imageRef: 'blob-1' }],
+        presentedForm: [{ title: 'Chest X-ray frame 1', contentType: 'image/jpeg', _imageRef: 'blob-1' }],
+      },
+      {
+        id: 'dr-lab',
+        code: { text: '血液報告' },
+        effectiveDateTime: '2026-06-02',
+        conclusion: 'Normal',
       },
     ]
     const div = sectionByLoinc(buildIpsBundle({ patient: PATIENT, data }), IPS_SECTION.results.loinc)?.text?.div ?? ''
-    expect(div).toContain('Attachment')
-    expect(div).toContain('Chest X-ray')
+    expect(div).toContain('血液報告') // text report kept
+    expect(div).toContain('Normal')
+    expect(div).not.toContain('胸部X光') // image-only report omitted entirely
+    expect(div).not.toMatch(/attachment/i)
+    expect(div).not.toContain('frame')
+  })
+
+  it('orders the results narrative newest-first', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      { id: 'old', code: { text: 'OlderReport' }, effectiveDateTime: '2026-02-18', conclusion: 'older' },
+      { id: 'new', code: { text: 'NewerReport' }, effectiveDateTime: '2026-06-15', conclusion: 'newer' },
+    ]
+    const div = sectionByLoinc(buildIpsBundle({ patient: PATIENT, data }), IPS_SECTION.results.loinc)?.text?.div ?? ''
+    expect(div.indexOf('NewerReport')).toBeLessThan(div.indexOf('OlderReport'))
   })
 
   it('renders a coded conclusion (conclusionCode) when there is no free-text conclusion', () => {

@@ -87,7 +87,9 @@ interface SafetyPrefsStore {
   modelId: string
   setModelId: (id: string) => void
 }
-const useSafetyPrefsStore = create<SafetyPrefsStore>()(
+// Exported so the first-run onboarding can set the auto-scan preference WITHOUT
+// mounting the full useSafetyAlerts hook (which carries the auto-scan effect).
+export const useSafetyPrefsStore = create<SafetyPrefsStore>()(
   persist(
     (set) => ({
       autoScan: false,

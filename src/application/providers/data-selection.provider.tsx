@@ -17,11 +17,10 @@ import { StorageService } from '@/src/shared/utils/storage.utils'
 import {
   DEFAULT_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
+  DATA_SELECTION_PRESETS,
   STORAGE_KEYS,
-  switchPreset,
   resolveActivePreset,
   type PresetId,
-  type PresetMemory,
 } from '@/src/shared/constants/data-selection.constants'
 import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-context.entity'
 import type { DocumentMode } from '@/src/core/utils/clinical-documents.utils'
@@ -31,15 +30,14 @@ ensureCategoriesInitialized()
 
 type DataType = keyof DataSelection
 export type DataConsumer = 'chat' | 'insights' | 'ips'
-const CONSUMERS: DataConsumer[] = ['chat', 'insights', 'ips']
+// The 資料選擇 panel drives the "working" AI — chat + insights — as ONE selection,
+// always broadcast to both. IPS is configured independently on its own tab
+// (per-consumer setters below), so it no longer rides along with the panel.
+const MAIN_TARGETS: DataConsumer[] = ['chat', 'insights']
 
 export interface ConsumerProfile {
   selection: DataSelection
   filters: DataFilters
-  /** Which scenario tab is active; its tweaks live in selection/filters above. */
-  activePreset: PresetId
-  /** Remembered selection/filters for the OTHER (non-active) scenarios. */
-  presetMemory: Partial<Record<PresetId, PresetMemory>>
   supplementaryNotes: string
   editedClinicalContext: string | null
   /** Documents are picked per-document, not via scalar filters. */
@@ -48,17 +46,13 @@ export interface ConsumerProfile {
 }
 
 interface DataSelectionContextValue {
-  /** Which consumer the data-selection UI is currently editing */
-  editingConsumer: DataConsumer
-  setEditingConsumer: (consumer: DataConsumer) => void
-
-  // ── Editing-consumer convenience (the 資料選擇 UI binds to these) ──────────
+  // ── 資料選擇 panel convenience — these edit the MAIN target (chat + insights) ──
   selectedData: DataSelection
   setSelectedData: (next: DataSelection) => void
   updateSelection: (dataType: DataType, isSelected: boolean) => void
   resetToDefaults: () => void
   applyPreset: (presetId: PresetId) => void
-  /** Which scenario tab the editing consumer is on (always one of the three). */
+  /** Which template the current selection matches (derived; catch-all = 通用). */
   activePreset: PresetId
   filters: DataFilters
   setFilters: (next: DataFilters) => void
@@ -68,21 +62,19 @@ interface DataSelectionContextValue {
   editedClinicalContext: string | null
   setEditedClinicalContext: (context: string | null) => void
 
-  // Documents (per-document selection on the editing consumer)
+  // Documents (per-document selection on the main target)
   documentMode: DocumentMode
   documentIds: string[]
   setDocumentMode: (mode: DocumentMode) => void
   setDocumentIds: (ids: string[]) => void
 
-  /** Copy the editing consumer's whole profile to the other two */
-  syncEditingToAll: () => void
-  /** True when all three consumers currently share an identical profile */
-  allConsumersInSync: boolean
-
-  // ── Per-consumer accessors (the real consumers read these) ────────────────
+  // ── Per-consumer accessors — the real consumers read these; the IPS tab uses
+  //    the *For setters to edit ONLY the 'ips' profile, decoupled from the panel.
   getProfile: (consumer: DataConsumer) => ConsumerProfile
   setNotesFor: (consumer: DataConsumer, notes: string) => void
   setEditedContextFor: (consumer: DataConsumer, context: string | null) => void
+  updateSelectionFor: (consumer: DataConsumer, dataType: DataType, value: boolean) => void
+  setFiltersFor: (consumer: DataConsumer, next: DataFilters) => void
 }
 
 const DataSelectionContext = createContext<DataSelectionContextValue | null>(null)
@@ -93,17 +85,10 @@ function isObject(x: unknown): x is Record<string, unknown> {
   return !!x && typeof x === 'object'
 }
 
-const VALID_PRESETS: PresetId[] = ['general', 'newPatient', 'followUp']
-function isPresetId(x: unknown): x is PresetId {
-  return typeof x === 'string' && (VALID_PRESETS as string[]).includes(x)
-}
-
 function makeDefaultProfile(): ConsumerProfile {
   return {
     selection: { ...DEFAULT_DATA_SELECTION },
     filters: { ...DEFAULT_DATA_FILTERS },
-    activePreset: 'general',
-    presetMemory: {},
     supplementaryNotes: '',
     editedClinicalContext: null,
     documentMode: 'latestAdmission',
@@ -126,11 +111,9 @@ export function coerceProfile(saved: Partial<ConsumerProfile> | undefined): Cons
   return {
     selection,
     filters,
-    // Old profiles have no activePreset — derive it from the saved selection so
-    // the highlight matches what they have; their current state becomes that
-    // scenario's remembered state on the next switch.
-    activePreset: isPresetId(saved.activePreset) ? saved.activePreset : resolveActivePreset(selection, filters),
-    presetMemory: isObject(saved.presetMemory) ? (saved.presetMemory as Partial<Record<PresetId, PresetMemory>>) : {},
+    // activePreset/presetMemory are no longer stored — the active-template
+    // highlight is derived live from selection/filters. Any such keys on an old
+    // stored profile are simply ignored here.
     supplementaryNotes: typeof saved.supplementaryNotes === 'string' ? saved.supplementaryNotes : '',
     editedClinicalContext: typeof saved.editedClinicalContext === 'string' ? saved.editedClinicalContext : null,
     documentMode: mode === 'all' || mode === 'custom' || mode === 'latestAdmission' ? mode : 'latestAdmission',
@@ -149,13 +132,8 @@ function getInitialProfiles(): ProfilesState {
   }
 }
 
-function profilesEqual(a: ConsumerProfile, b: ConsumerProfile): boolean {
-  return JSON.stringify({ s: a.selection, f: a.filters }) === JSON.stringify({ s: b.selection, f: b.filters })
-}
-
 export function DataSelectionProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<ProfilesState>(getInitialProfiles)
-  const [editingConsumer, setEditingConsumer] = useState<DataConsumer>('chat')
 
   useEffect(() => {
     storage.set(STORAGE_KEYS.DATA_PROFILES, profiles)
@@ -168,75 +146,80 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const current = profiles[editingConsumer]
+  // Patch the MAIN target (chat + insights) together. The patch may be a value or
+  // a per-consumer fn (so a template load can read each profile's own state).
+  const patchTargets = useCallback(
+    (patch: Partial<ConsumerProfile> | ((p: ConsumerProfile) => Partial<ConsumerProfile>)) => {
+      setProfiles((prev) => {
+        const out = { ...prev }
+        for (const c of MAIN_TARGETS) {
+          out[c] = { ...prev[c], ...(typeof patch === 'function' ? patch(prev[c]) : patch) }
+        }
+        return out
+      })
+    },
+    [],
+  )
+
+  // The panel displays the 對話 profile as the shared base (chat === insights,
+  // since both are always edited together).
+  const current = profiles.chat
 
   const setSelectedData = useCallback(
-    (next: DataSelection) => patchProfile(editingConsumer, { selection: next }),
-    [editingConsumer, patchProfile],
+    (next: DataSelection) => patchTargets({ selection: next }),
+    [patchTargets],
   )
 
   const updateSelection = useCallback(
     (dataType: DataType, isSelected: boolean) =>
-      setProfiles((prev) => ({
-        ...prev,
-        [editingConsumer]: {
-          ...prev[editingConsumer],
-          selection: { ...prev[editingConsumer].selection, [dataType]: isSelected },
-        },
-      })),
-    [editingConsumer],
+      patchTargets((p) => ({ selection: { ...p.selection, [dataType]: isSelected } })),
+    [patchTargets],
   )
 
   const setFilters = useCallback(
-    (next: DataFilters) => patchProfile(editingConsumer, { filters: next }),
-    [editingConsumer, patchProfile],
+    (next: DataFilters) => patchTargets({ filters: next }),
+    [patchTargets],
   )
 
-  // Full reset: back to the 通用 factory baseline and forget all per-preset tweaks.
+  // Full reset: back to the 通用 factory baseline.
   const resetToDefaults = useCallback(
-    () => patchProfile(editingConsumer, {
+    () => patchTargets({
       selection: { ...DEFAULT_DATA_SELECTION },
       filters: { ...DEFAULT_DATA_FILTERS },
-      activePreset: 'general',
-      presetMemory: {},
     }),
-    [editingConsumer, patchProfile],
+    [patchTargets],
   )
 
-  // Switch scenario tab: snapshot the current preset's tweaks, restore the
-  // target's remembered tweaks (or its factory default the first time).
+  // Apply a template (one-tap fill): load the preset's factory selection+filters
+  // as a starting point. `documents` is a sticky setting (orthogonal to presets),
+  // so the user's picked documents survive the template load.
   const applyPreset = useCallback(
-    (presetId: PresetId) => {
-      setProfiles((prev) => {
-        const cur = prev[editingConsumer]
-        const next = switchPreset(
-          { selection: cur.selection, filters: cur.filters, activePreset: cur.activePreset, presetMemory: cur.presetMemory },
-          presetId,
-        )
-        return { ...prev, [editingConsumer]: { ...cur, ...next } }
-      })
-    },
-    [editingConsumer],
+    (presetId: PresetId) =>
+      patchTargets((cur) => ({
+        selection: { ...DATA_SELECTION_PRESETS[presetId].selection, documents: cur.selection.documents },
+        filters: { ...DATA_SELECTION_PRESETS[presetId].filters },
+      })),
+    [patchTargets],
   )
 
   const setSupplementaryNotes = useCallback(
-    (notes: string) => patchProfile(editingConsumer, { supplementaryNotes: notes }),
-    [editingConsumer, patchProfile],
+    (notes: string) => patchTargets({ supplementaryNotes: notes }),
+    [patchTargets],
   )
 
   const setEditedClinicalContext = useCallback(
-    (context: string | null) => patchProfile(editingConsumer, { editedClinicalContext: context }),
-    [editingConsumer, patchProfile],
+    (context: string | null) => patchTargets({ editedClinicalContext: context }),
+    [patchTargets],
   )
 
   const setDocumentMode = useCallback(
-    (mode: DocumentMode) => patchProfile(editingConsumer, { documentMode: mode }),
-    [editingConsumer, patchProfile],
+    (mode: DocumentMode) => patchTargets({ documentMode: mode }),
+    [patchTargets],
   )
 
   const setDocumentIds = useCallback(
-    (ids: string[]) => patchProfile(editingConsumer, { documentIds: ids }),
-    [editingConsumer, patchProfile],
+    (ids: string[]) => patchTargets({ documentIds: ids }),
+    [patchTargets],
   )
 
   const setNotesFor = useCallback(
@@ -249,42 +232,34 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
     [patchProfile],
   )
 
-  const syncEditingToAll = useCallback(() => {
-    setProfiles((prev) => {
-      const src = prev[editingConsumer]
-      const clone = (): ConsumerProfile => ({
-        selection: { ...src.selection },
-        filters: { ...src.filters },
-        activePreset: src.activePreset,
-        presetMemory: { ...src.presetMemory },
-        supplementaryNotes: src.supplementaryNotes,
-        editedClinicalContext: src.editedClinicalContext,
-        documentMode: src.documentMode,
-        documentIds: [...src.documentIds],
-      })
-      return { chat: clone(), insights: clone(), ips: clone() }
-    })
-  }, [editingConsumer])
-
-  // getProfile must be stable yet read fresh state — back it with a ref-free
-  // closure over the latest profiles via functional access.
-  const getProfile = useCallback((consumer: DataConsumer): ConsumerProfile => profiles[consumer], [profiles])
-
-  const allConsumersInSync = useMemo(
-    () => CONSUMERS.every((c) => profilesEqual(profiles[c], profiles.chat)),
-    [profiles],
+  // Per-consumer editing — used by the IPS tab to edit ONLY the 'ips' profile,
+  // independent of the panel (which drives chat + insights).
+  const updateSelectionFor = useCallback(
+    (consumer: DataConsumer, dataType: DataType, value: boolean) =>
+      setProfiles((prev) => ({
+        ...prev,
+        [consumer]: { ...prev[consumer], selection: { ...prev[consumer].selection, [dataType]: value } },
+      })),
+    [],
   )
+
+  const setFiltersFor = useCallback(
+    (consumer: DataConsumer, next: DataFilters) => patchProfile(consumer, { filters: next }),
+    [patchProfile],
+  )
+
+  const getProfile = useCallback((consumer: DataConsumer): ConsumerProfile => profiles[consumer], [profiles])
 
   const value = useMemo<DataSelectionContextValue>(
     () => ({
-      editingConsumer,
-      setEditingConsumer,
       selectedData: current.selection,
       setSelectedData,
       updateSelection,
       resetToDefaults,
       applyPreset,
-      activePreset: current.activePreset,
+      // Derived live (no stored tab) — the highlighted template always reflects
+      // the current selection; hand-tuning falls back to 通用 (catch-all).
+      activePreset: resolveActivePreset(current.selection, current.filters),
       filters: current.filters,
       setFilters,
       isAnySelected: Object.values(current.selection).some(Boolean),
@@ -296,16 +271,16 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       documentIds: current.documentIds,
       setDocumentMode,
       setDocumentIds,
-      syncEditingToAll,
-      allConsumersInSync,
       getProfile,
       setNotesFor,
       setEditedContextFor,
+      updateSelectionFor,
+      setFiltersFor,
     }),
     [
-      editingConsumer, current, setSelectedData, updateSelection, resetToDefaults, applyPreset,
+      current, setSelectedData, updateSelection, resetToDefaults, applyPreset,
       setFilters, setSupplementaryNotes, setEditedClinicalContext, setDocumentMode, setDocumentIds,
-      syncEditingToAll, allConsumersInSync, getProfile, setNotesFor, setEditedContextFor,
+      getProfile, setNotesFor, setEditedContextFor, updateSelectionFor, setFiltersFor,
     ],
   )
 

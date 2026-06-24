@@ -18,6 +18,7 @@ import type {
   ProcedureEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import { conceptLabel, conceptLabelEn, escapeHtml, formatDate, resultLabel } from './ips-helpers'
+import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
 
@@ -30,13 +31,20 @@ export function emptyNarrative(message: string): string {
   return wrap(`<p>${escapeHtml(message)}</p>`)
 }
 
-function table(headers: string[], rows: string[][]): string {
+/** Table HTML without the XHTML wrapper div — for composing multiple tables
+ *  (e.g. the lab/imaging sub-groups in Results) under a single wrap(). */
+function rawTable(headers: string[], rows: string[][]): string {
   if (!rows.length) return ''
   const thead = `<thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>`
   const tbody = `<tbody>${rows
     .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`)
     .join('')}</tbody>`
-  return wrap(`<table>${thead}${tbody}</table>`)
+  return `<table>${thead}${tbody}</table>`
+}
+
+function table(headers: string[], rows: string[][]): string {
+  const t = rawTable(headers, rows)
+  return t ? wrap(t) : ''
 }
 
 function dash(v: string): string {
@@ -172,13 +180,6 @@ function conclusionCodeText(raw: unknown): string {
     .join('; ')
 }
 
-/** Short, language-neutral indicator for report attachments (never inlined). */
-function attachmentText(forms: DiagnosticReportEntity['presentedForm']): string {
-  if (!forms?.length) return ''
-  const labels = forms.map((f) => f.title || f.contentType).filter(Boolean)
-  return labels.length ? `Attachment: ${labels.join(', ')}` : `Attachment (${forms.length})`
-}
-
 /**
  * Diagnostic Results narrative.
  *
@@ -197,59 +198,77 @@ function attachmentText(forms: DiagnosticReportEntity['presentedForm']): string 
 export function narrativeResults(
   diagnosticReports: DiagnosticReportEntity[],
   labObservations: ObservationEntity[],
+  labLabel = 'Laboratory',
+  imagingLabel = 'Imaging & studies',
 ): string {
-  const rows: string[][] = []
-  for (const o of labObservations) {
-    rows.push([
-      dash(resultLabel(o.code)),
-      dash(observationValueText(o)),
-      dash(formatDate(o.effectiveDateTime)),
-    ])
-  }
-  for (const dr of diagnosticReports) {
+  const headers = ['Result', 'Value / Conclusion', 'Date']
+
+  // Rows for one report — covers every presentable TEXT channel (see doc above).
+  // Attachments (images / scanned forms) are NOT surfaced: the IPS never embeds
+  // them (presentedForm is stripped in mapResults). A report with no text at all
+  // (e.g. image-only) yields NO rows and is omitted entirely.
+  const reportRows = (dr: DiagnosticReportEntity): string[][] => {
+    const out: string[][] = []
     const reportLabel = dash(resultLabel(dr.code))
     const reportDate = dash(formatDate(dr.effectiveDateTime))
-    let emitted = false
 
     const conclusion = dr.conclusion?.trim()
-    if (conclusion) {
-      rows.push([reportLabel, conclusion, reportDate])
-      emitted = true
-    }
+    if (conclusion) out.push([reportLabel, conclusion, reportDate])
 
     const codeText = conclusionCodeText(dr.conclusionCode)
-    if (codeText) {
-      rows.push([reportLabel, codeText, reportDate])
-      emitted = true
-    }
+    if (codeText) out.push([reportLabel, codeText, reportDate])
 
     for (const o of dr._observations ?? []) {
-      rows.push([
+      out.push([
         dash(resultLabel(o.code) || resultLabel(dr.code)),
         dash(observationValueText(o)),
         dash(formatDate(o.effectiveDateTime) || formatDate(dr.effectiveDateTime)),
       ])
-      emitted = true
-    }
-
-    const attachment = attachmentText(dr.presentedForm)
-    if (attachment) {
-      rows.push([reportLabel, attachment, reportDate])
-      emitted = true
     }
 
     const noteText = (dr.note ?? []).map((n) => n.text?.trim()).filter(Boolean).join('; ')
-    if (noteText) {
-      rows.push([reportLabel, noteText, reportDate])
-      emitted = true
-    }
+    if (noteText) out.push([reportLabel, noteText, reportDate])
 
-    if (!emitted) {
-      // Genuinely empty report (ordered but no result yet, no text, no media).
-      rows.push([reportLabel, '-', reportDate])
-    }
+    return out
   }
-  return table(['Result', 'Value / Conclusion', 'Date'], rows)
+
+  // One sortable entry per study / orphan observation, so each study's rows stay
+  // together and we can order the whole reading newest-first. Lab tests (incl.
+  // orphan single observations) group together, imaging / studies group together.
+  // The export stays ONE standard Results section (LOINC 30954-2) — this only
+  // structures its human-readable narrative.
+  type Entry = { date: string; group: 'lab' | 'imaging'; rows: string[][] }
+  const entries: Entry[] = []
+  for (const o of labObservations) {
+    entries.push({
+      date: o.effectiveDateTime || '',
+      group: 'lab',
+      rows: [[dash(resultLabel(o.code)), dash(observationValueText(o)), dash(formatDate(o.effectiveDateTime))]],
+    })
+  }
+  for (const dr of diagnosticReports) {
+    const rows = reportRows(dr)
+    if (!rows.length) continue // text-less report (e.g. image-only) → omitted
+    entries.push({
+      date: dr.effectiveDateTime || '',
+      group: inferGroupFromCategory(dr.category) === 'imaging' ? 'imaging' : 'lab',
+      rows,
+    })
+  }
+  entries.sort((a, b) => b.date.localeCompare(a.date)) // newest first
+
+  const labRows = entries.filter((e) => e.group === 'lab').flatMap((e) => e.rows)
+  const imagingRows = entries.filter((e) => e.group === 'imaging').flatMap((e) => e.rows)
+
+  // Two labeled groups only when both kinds are present; otherwise a plain table.
+  if (labRows.length && imagingRows.length) {
+    return wrap(
+      `<p><strong>${escapeHtml(labLabel)}</strong></p>${rawTable(headers, labRows)}` +
+        `<p><strong>${escapeHtml(imagingLabel)}</strong></p>${rawTable(headers, imagingRows)}`,
+    )
+  }
+  const all = [...labRows, ...imagingRows]
+  return all.length ? wrap(rawTable(headers, all)) : ''
 }
 
 export function narrativeDevices(devices: DeviceEntity[]): string {

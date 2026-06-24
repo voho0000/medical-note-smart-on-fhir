@@ -20,6 +20,7 @@ const makeSelection = (value: boolean): DataSelection => ({
 
 const makeFilters = (range: TimeRange = 'all'): DataFilters => ({
   problemListStatus: 'active',
+  problemListTimeRange: 'all',
   encounterTimeRange: range,
   medicationStatus: 'active',
   medicationChronic: 'all',

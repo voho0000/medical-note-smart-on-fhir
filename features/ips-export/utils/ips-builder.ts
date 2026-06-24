@@ -58,6 +58,9 @@ export interface IpsSectionLabels {
   immunizations: string
   procedures: string
   results: string
+  /** Sub-group headers inside the Results narrative (lab vs imaging). */
+  resultsLab: string
+  resultsImaging: string
   vitalSigns: string
   medicalDevices: string
   planOfCare: string
@@ -74,6 +77,8 @@ export const DEFAULT_SECTION_LABELS: IpsSectionLabels = {
   immunizations: 'Immunizations',
   procedures: 'History of Procedures',
   results: 'Diagnostic Results',
+  resultsLab: 'Laboratory',
+  resultsImaging: 'Imaging & studies',
   vitalSigns: 'Vital Signs',
   medicalDevices: 'Medical Devices',
   planOfCare: 'Plan of Care',
@@ -199,7 +204,7 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
           IPS_SECTION.results.loinc,
           labels.results,
           mapResults(data.diagnosticReports, resultObservations, patientRef),
-          narrativeResults(data.diagnosticReports, resultObservations),
+          narrativeResults(data.diagnosticReports, resultObservations, labels.resultsLab, labels.resultsImaging),
         )
       : null,
     data.vitalSigns.length

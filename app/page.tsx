@@ -5,7 +5,7 @@ import { AppProviders } from "@/src/application/providers/app-providers"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { LanguageSwitcher } from "@/src/shared/components/LanguageSwitcher"
 import { AudienceSwitcher } from "@/src/shared/components/AudienceSwitcher"
-import { AudienceOnboardingDialog } from "@/src/shared/components/AudienceOnboardingDialog"
+import { FirstRunOnboardingDialog } from "./_components/FirstRunOnboardingDialog"
 import { HeaderOverflowMenu } from "@/src/shared/components/HeaderOverflowMenu"
 import { ImportBundleButton } from "@/features/import-bundle/ImportBundleButton"
 import { HeaderAuthButton } from "@/features/auth"
@@ -302,7 +302,7 @@ function PageContent() {
       </>
       )}
 
-      <AudienceOnboardingDialog />
+      <FirstRunOnboardingDialog />
     </div>
   )
 }

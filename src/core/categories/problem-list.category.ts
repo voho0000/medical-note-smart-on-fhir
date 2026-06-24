@@ -3,6 +3,12 @@
 // encounter-bound diagnoses).
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Condition } from '@/src/shared/types/fhir.types'
+import { isWithinTimeRange } from '../utils/date-filter.utils'
+
+const withinProblemRange = (conditions: Condition[], range: string): Condition[] =>
+  range === 'all'
+    ? conditions
+    : conditions.filter((c) => isWithinTimeRange((c as { recordedDate?: string }).recordedDate, range))
 
 function isProblemListItem(cond: any): boolean {
   const categories = cond?.category
@@ -41,6 +47,21 @@ export const problemListCategory: DataCategory<Condition> = {
         { value: 'all', label: 'All Problems' }
       ],
       defaultValue: 'active'
+    },
+    {
+      key: 'problemListTimeRange',
+      type: 'select',
+      label: 'Time Range',
+      options: [
+        { value: '1m', label: 'Last Month' },
+        { value: '3m', label: 'Last 3 Months' },
+        { value: '6m', label: 'Last 6 Months' },
+        { value: '1y', label: 'Last Year' },
+        { value: '3y', label: 'Last 3 Years' },
+        { value: '5y', label: 'Last 5 Years' },
+        { value: 'all', label: 'All Time' }
+      ],
+      defaultValue: 'all'
     }
   ],
 
@@ -50,18 +71,17 @@ export const problemListCategory: DataCategory<Condition> = {
     (clinicalData?.conditions || []).filter(isProblemListItem),
 
   getCount: (data, filters) => {
-    if ((filters?.problemListStatus ?? 'active') === 'active') {
-      return data.filter(isActiveCondition).length
-    }
-    return data.length
+    const byStatus = (filters?.problemListStatus ?? 'active') === 'active' ? data.filter(isActiveCondition) : data
+    return withinProblemRange(byStatus, (filters?.problemListTimeRange as string) ?? 'all').length
   },
 
   getContextSection: (data, filters): ClinicalContextSection | null => {
     if (data.length === 0) return null
 
-    const filtered = (filters?.problemListStatus ?? 'active') === 'active'
+    const byStatus = (filters?.problemListStatus ?? 'active') === 'active'
       ? data.filter(isActiveCondition)
       : data
+    const filtered = withinProblemRange(byStatus, (filters?.problemListTimeRange as string) ?? 'all')
 
     if (filtered.length === 0) return null
 

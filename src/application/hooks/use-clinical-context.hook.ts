@@ -34,10 +34,10 @@ export { ClinicalContextSection }
 
 export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextReturn {
   const ds = useDataSelection()
-  // Each consumer (chat / insights / ips) reads its own profile. When no
-  // consumer is given (the data-selection preview), follow whichever consumer
-  // the user is currently editing.
-  const activeConsumer = consumer ?? ds.editingConsumer
+  // Each consumer (chat / insights / ips) reads its own profile. The data-selection
+  // panel drives chat + insights together, so the preview (no consumer given)
+  // follows the 對話 base.
+  const activeConsumer: DataConsumer = consumer ?? 'chat'
   const profile = ds.getProfile(activeConsumer)
   const selectedData = profile.selection
   const filters = profile.filters

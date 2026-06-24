@@ -95,6 +95,7 @@ describe('GenerateClinicalContextUseCase', () => {
     },
     filters: {
       problemListStatus: 'all',
+      problemListTimeRange: 'all',
       encounterTimeRange: 'all',
       medicationStatus: 'all',
       medicationChronic: 'all',

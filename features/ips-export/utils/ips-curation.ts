@@ -164,6 +164,7 @@ function curateConditions(
   data: ClinicalDataCollection,
   selection: DataSelection,
   filters: DataFilters,
+  now: Date,
 ): ConditionEntity[] {
   if (!selection.problemList) return []
   const problemItems = data.conditions.filter(isProblemListItem)
@@ -171,7 +172,8 @@ function curateConditions(
   // Fall back to all conditions when the source doesn't tag problem-list-item
   // (e.g. non-bridge FHIR) so the IPS-required Problem List section isn't empty.
   const base = problemItems.length > 0 ? problemItems : data.conditions
-  const filtered = filters.problemListStatus === 'active' ? base.filter(isActiveCondition) : base
+  const byStatus = filters.problemListStatus === 'active' ? base.filter(isActiveCondition) : base
+  const filtered = withinRange(byStatus, filters.problemListTimeRange, now, (c) => c.recordedDate)
   return annotateConditionsWithSct(filtered)
 }
 
@@ -274,9 +276,10 @@ function curateObservations(
   filters: DataFilters,
   now: Date,
 ): ObservationEntity[] {
-  // Orphan / standalone lab observations. No dedicated time filter exists for
-  // these, so reuse the lab-report window to keep them from bloating Results.
-  if (!selection.observations) return []
+  // Orphan / standalone lab observations ride WITH the lab Results section (no
+  // separate toggle) — so they're in iff that section is, and gone when it's
+  // toggled off. They reuse the lab-report time window so they don't bloat it.
+  if (!selection.labReports) return []
   // The data layer puts EVERY Observation here — including ones already nested
   // under a DiagnosticReport (`_observations`) and vital-sign observations.
   // Keep only the true orphans so the Results section doesn't show a value row
@@ -356,7 +359,7 @@ export function curateForIps(input: CurateForIpsInput): ClinicalDataCollection {
   const now = input.now ?? new Date()
   return {
     ...data,
-    conditions: curateConditions(data, selection, filters),
+    conditions: curateConditions(data, selection, filters, now),
     medications: curateMedications(data, selection, filters, now),
     allergies: selection.allergies ? data.allergies : [],
     immunizations: curateImmunizations(data, selection, filters, now),
