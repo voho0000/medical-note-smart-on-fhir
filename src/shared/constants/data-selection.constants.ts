@@ -4,11 +4,11 @@
 
 import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-context.entity'
 
-// ── 通用 (general) — the everyday default profile ───────────────────────────
-// A broad-but-bounded snapshot for routine use: the full problem/med/allergy
-// picture + recent labs/imaging, time-bounded so the AI context stays complete
-// without drowning in noise. This is the seed for new profiles and the catch-all
-// preset (shown whenever a profile isn't an exact 初診/追蹤 match).
+// ── 初診 (new patient) — the default profile ────────────────────────────────
+// A broad-but-bounded first-look snapshot: the full problem/med/allergy picture
+// + recent lab trends/imaging, time-bounded so the AI context stays complete
+// without drowning in noise. This is the seed for new profiles and for the
+// user's Custom template slot.
 export const DEFAULT_DATA_SELECTION: DataSelection = {
   // Patient group
   patientInfo: true,
@@ -25,7 +25,7 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
   labReports: true,
   imagingReports: true,
   procedures: true,
-  observations: false,     // Orphan catch-all — low signal, off to cut noise
+  observations: false,     // Legacy hidden field; standalone results fold into labReports
 
   // Medication group
   medications: true,
@@ -67,7 +67,7 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // procedure within the time range.
   procedureVersion: 'all',
   procedureTimeRange: 'all',
-  // Orphan observations: dedup to latest-per-analyte by default, all time.
+  // Legacy hidden observation filters retained for saved-profile compatibility.
   observationVersion: 'latest',
   observationTimeRange: 'all',
   immunizationTimeRange: 'all',
@@ -106,12 +106,8 @@ const FOLLOW_UP_FILTERS: DataFilters = {
 }
 
 // ── 初診 (new patient) — comprehensive first-visit profile ───────────────────
-// Everything in 通用 PLUS the full free-text documents (discharge summaries) and
-// the orphan/other observations — i.e. dig into the complete record when meeting
-// a patient for the first time. Time ranges inherit 通用's bounds.
 const NEW_PATIENT_SELECTION: DataSelection = {
   ...DEFAULT_DATA_SELECTION,
-  observations: true, // pull in 其他觀察 (orphan labs/measurements)
   // documents是 sticky 設定（不受 preset 控制），所以不在這裡開關。
 }
 
@@ -119,22 +115,22 @@ const NEW_PATIENT_FILTERS: DataFilters = {
   ...DEFAULT_DATA_FILTERS,
 }
 
-export type PresetId = 'general' | 'newPatient' | 'followUp'
+export type BuiltInPresetId = 'newPatient' | 'followUp'
+export type PresetId = BuiltInPresetId | 'custom'
 
 export interface DataSelectionPreset {
-  id: PresetId
+  id: BuiltInPresetId
   labelKey: string
   selection: DataSelection
   filters: DataFilters
 }
 
-export const DATA_SELECTION_PRESETS: Record<PresetId, DataSelectionPreset> = {
-  general: {
-    id: 'general',
-    labelKey: 'dataSelection.presetGeneral',
-    selection: DEFAULT_DATA_SELECTION,
-    filters: DEFAULT_DATA_FILTERS,
-  },
+export interface DataSelectionTemplate {
+  selection: DataSelection
+  filters: DataFilters
+}
+
+export const DATA_SELECTION_PRESETS: Record<BuiltInPresetId, DataSelectionPreset> = {
   newPatient: {
     id: 'newPatient',
     labelKey: 'dataSelection.presetNewPatient',
@@ -149,39 +145,38 @@ export const DATA_SELECTION_PRESETS: Record<PresetId, DataSelectionPreset> = {
   },
 }
 
-// Templates are stateless one-tap fills: applying one loads its factory
-// selection+filters as a starting point (the `documents` toggle is sticky and
-// preserved by the caller). There's no per-preset memory — the active highlight
-// is DERIVED from the current selection via resolveActivePreset below, so it
-// always reflects the live state rather than a remembered tab.
+export const CUSTOM_TEMPLATE_DEFAULT: DataSelectionTemplate = {
+  selection: NEW_PATIENT_SELECTION,
+  filters: NEW_PATIENT_FILTERS,
+}
 
-// Which scenario a selection+filters reflect. 初診/追蹤 require an EXACT match
-// (compared only over each preset's own keys, so vestigial keys in older stored
-// profiles don't break it); 通用 (general) is the catch-all, returned for the
-// baseline AND any hand-tuned state — so exactly one preset is always active.
+// Fallback only, used when migrating old storage that predates the explicit
+// active-template state. Runtime activePreset is stored in the provider.
 export function resolveActivePreset(selection: DataSelection, filters: DataFilters): PresetId {
   const sel = selection as unknown as Record<string, unknown>
   const fil = filters as unknown as Record<string, unknown>
-  const matches = (id: 'newPatient' | 'followUp'): boolean => {
+  const matches = (id: BuiltInPresetId): boolean => {
     const preset = DATA_SELECTION_PRESETS[id]
     const pSel = preset.selection as unknown as Record<string, unknown>
     const pFil = preset.filters as unknown as Record<string, unknown>
     return (
-      // `documents` is a sticky setting (orthogonal to presets), so it doesn't
-      // affect which scenario is active.
-      Object.keys(pSel).filter((k) => k !== 'documents').every((k) => sel[k] === pSel[k]) &&
+      // `documents` is sticky and `observations` is a hidden legacy key, so
+      // neither should affect template migration/highlighting.
+      Object.keys(pSel).filter((k) => k !== 'documents' && k !== 'observations').every((k) => sel[k] === pSel[k]) &&
       Object.keys(pFil).every((k) => fil[k] === pFil[k])
     )
   }
   if (matches('followUp')) return 'followUp'
   if (matches('newPatient')) return 'newPatient'
-  return 'general'
+  return 'custom'
 }
 
 export const STORAGE_KEYS = {
   DATA_SELECTION: 'clinicalDataSelection',
   DATA_FILTERS: 'clinicalDataFilters',
   DATA_PROFILES: 'clinicalDataProfiles',
+  DATA_ACTIVE_PRESET: 'clinicalDataActivePreset',
+  DATA_CUSTOM_PRESET: 'clinicalDataCustomPreset',
   MODEL_SELECTION: 'clinical-note:model',
   API_KEY: 'clinical-note:openai-key',
   GEMINI_KEY: 'clinical-note:gemini-key',

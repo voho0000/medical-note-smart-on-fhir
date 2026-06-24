@@ -5,8 +5,6 @@ import {
   Braces,
   Check,
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   Code2,
   Copy,
   Download,
@@ -93,7 +91,6 @@ export function IpsExportPreview({
   const x = t.ipsExport
   const [format, setFormat] = useState<PreviewFormat>('markdown')
   const [markdownView, setMarkdownView] = useState<MarkdownView>('rendered')
-  const [showMetadata, setShowMetadata] = useState(false)
   const [showChecks, setShowChecks] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const printSourceRef = useRef<HTMLDivElement>(null)
@@ -340,35 +337,18 @@ export function IpsExportPreview({
             <div ref={printSourceRef} className="hidden">
               <MarkdownRenderer content={markdownParts.body} />
             </div>
-            {markdownParts.metadata && (
-              <div className="rounded-md border bg-muted/20">
-                <button
-                  type="button"
-                  onClick={() => setShowMetadata((v) => !v)}
-                  className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs font-medium text-muted-foreground"
-                >
-                  {showMetadata ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  {x.metadata}
-                </button>
-                {showMetadata && (
-                  <pre className="border-t px-3 py-2 text-[0.6875rem] leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                    {markdownParts.metadata}
-                  </pre>
-                )}
-              </div>
-            )}
             {markdownView === 'rendered' ? (
               <div className={`relative ${isExpanded ? 'min-h-0 flex-1' : ''}`}>
                 {expandButton(isExpanded)}
-                <div className={`${isExpanded ? 'h-full' : 'max-h-[34rem]'} overflow-auto rounded-md border bg-background px-4 py-3 pr-12 text-sm [&_table]:w-max [&_table]:text-left [&_td]:border-t [&_td]:border-border/60 [&_td]:py-1.5 [&_td]:pr-6 [&_th]:whitespace-nowrap [&_th]:py-1.5 [&_th]:pr-6 [&_th]:font-medium [&_th]:text-muted-foreground`}>
+                <div className={`${isExpanded ? 'h-full overflow-auto' : 'overflow-x-auto'} rounded-md border bg-background px-4 py-3 pr-12 text-sm [&_table]:w-max [&_table]:text-left [&_td]:border-t [&_td]:border-border/60 [&_td]:py-1.5 [&_td]:pr-6 [&_th]:whitespace-nowrap [&_th]:py-1.5 [&_th]:pr-6 [&_th]:font-medium [&_th]:text-muted-foreground`}>
                   <MarkdownRenderer content={markdownParts.body} />
                 </div>
               </div>
             ) : (
               <div className={`relative ${isExpanded ? 'min-h-0 flex-1' : ''}`}>
                 {expandButton(isExpanded)}
-                <pre className={`${isExpanded ? 'h-full' : 'max-h-[34rem]'} overflow-auto rounded-md border bg-muted/30 px-3 py-2 pr-12 text-[0.6875rem] leading-relaxed whitespace-pre-wrap`}>
-                  {markdown}
+                <pre className={`${isExpanded ? 'h-full overflow-auto' : 'overflow-x-auto'} rounded-md border bg-muted/30 px-3 py-2 pr-12 text-[0.6875rem] leading-relaxed whitespace-pre-wrap`}>
+                  {markdownParts.body}
                 </pre>
               </div>
             )}
@@ -377,7 +357,7 @@ export function IpsExportPreview({
         <TabsContent value="json" className={isExpanded ? 'mt-0 flex min-h-0 flex-1 flex-col' : 'mt-0'}>
           <div className={`relative ${isExpanded ? 'min-h-0 flex-1' : ''}`}>
             {expandButton(isExpanded)}
-            <pre className={`${isExpanded ? 'h-full' : 'max-h-[34rem]'} overflow-auto rounded-md border bg-muted/30 px-3 py-2 pr-12 text-[0.6875rem] leading-relaxed`}>
+            <pre className={`${isExpanded ? 'h-full overflow-auto' : 'overflow-x-auto'} rounded-md border bg-muted/30 px-3 py-2 pr-12 text-[0.6875rem] leading-relaxed`}>
               {json}
             </pre>
           </div>

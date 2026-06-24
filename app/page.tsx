@@ -79,7 +79,7 @@ function PageContent() {
           title={t.header.expandHeader}
           className="group shrink-0 border-b bg-white/80 backdrop-blur-md shadow-sm flex items-center justify-center gap-1.5 py-1 text-muted-foreground hover:bg-blue-50/60 hover:text-blue-600 transition-colors"
         >
-          <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg`} alt="" className="h-4 w-4 object-contain opacity-70" />
+          <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="" className="h-4 w-4 object-contain opacity-70" />
           <ChevronDown className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
         </button>
       ) : (
@@ -87,7 +87,7 @@ function PageContent() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl overflow-hidden">
-              <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg`} alt="App Icon" className="h-full w-full object-contain" />
+              <img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`} alt="App Icon" className="h-full w-full object-contain" />
             </div>
             <h1 className="text-base sm:text-lg md:text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{t.header.title}</h1>
           </div>

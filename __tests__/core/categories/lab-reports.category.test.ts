@@ -58,4 +58,19 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(items.some((i) => i.startsWith('CRP'))).toBe(true)
     expect(items.some((i) => i.includes('No growth'))).toBe(true)
   })
+
+  it('folds legacy other standalone observations into lab reports', () => {
+    const extracted = labReportsCategory.extractData({
+      diagnosticReports: [],
+      observations: [
+        { id: 'other-1', code: { text: 'Free-text finding' }, valueString: 'present', effectiveDateTime: '2026-05-12' },
+        { id: 'vital-1', code: { text: 'Heart rate' }, valueQuantity: { value: 70, unit: '/min' }, effectiveDateTime: '2026-05-12' },
+      ],
+      vitalSigns: [
+        { id: 'vital-1', code: { text: 'Heart rate' }, valueQuantity: { value: 70, unit: '/min' }, effectiveDateTime: '2026-05-12' },
+      ],
+    } as any) as any[]
+
+    expect(extracted.map((item) => item.id)).toEqual(['other-1'])
+  })
 })

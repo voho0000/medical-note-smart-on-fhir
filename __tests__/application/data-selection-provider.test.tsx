@@ -21,10 +21,11 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
 
   it('applyPreset (template fill) loads chat + insights, not ips', () => {
     const { result } = setup()
-    // 初診 (newPatient) turns 其他觀察 (observations) ON.
-    act(() => result.current.applyPreset('newPatient'))
-    expect(result.current.getProfile('chat').selection.observations).toBe(true)
-    expect(result.current.getProfile('insights').selection.observations).toBe(true)
+    act(() => result.current.applyPreset('followUp'))
+    expect(result.current.activePreset).toBe('followUp')
+    expect(result.current.getProfile('chat').selection.medicalDevices).toBe(false)
+    expect(result.current.getProfile('insights').selection.medicalDevices).toBe(false)
+    expect(result.current.getProfile('chat').filters.labReportTimeRange).toBe('3m')
     expect(result.current.getProfile('ips').selection.observations).toBe(false) // untouched
   })
 
@@ -44,12 +45,38 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
     expect(result.current.getProfile('chat').filters.labReportTimeRange).toBe('6m') // default, untouched
   })
 
-  it('activePreset is derived from the live selection (catch-all = general)', () => {
+  it('defaults to 初診 and keeps the selected mode while the user tweaks it', () => {
     const { result } = setup()
-    expect(result.current.activePreset).toBe('general') // default baseline
-    act(() => result.current.applyPreset('newPatient'))
     expect(result.current.activePreset).toBe('newPatient')
-    act(() => result.current.updateSelection('problemList', false)) // hand-tune off the preset
-    expect(result.current.activePreset).toBe('general') // falls back
+    act(() => result.current.updateSelection('problemList', false))
+    expect(result.current.activePreset).toBe('newPatient')
+    expect(result.current.getProfile('chat').selection.problemList).toBe(false)
+  })
+
+  it('custom starts from 初診 and auto-saves edits made in custom mode', () => {
+    const { result } = setup()
+    act(() => result.current.applyPreset('custom'))
+    expect(result.current.activePreset).toBe('custom')
+    expect(result.current.getProfile('chat').selection.problemList).toBe(true)
+
+    act(() => result.current.updateSelection('problemList', false))
+    expect(result.current.getProfile('chat').selection.problemList).toBe(false)
+
+    act(() => result.current.applyPreset('followUp'))
+    expect(result.current.getProfile('chat').selection.problemList).toBe(true)
+
+    act(() => result.current.applyPreset('custom'))
+    expect(result.current.getProfile('chat').selection.problemList).toBe(false)
+  })
+
+  it('resetToDefaults restores the currently selected mode baseline', () => {
+    const { result } = setup()
+    act(() => result.current.applyPreset('followUp'))
+    act(() => result.current.updateSelection('medicalDevices', true))
+    expect(result.current.getProfile('chat').selection.medicalDevices).toBe(true)
+
+    act(() => result.current.resetToDefaults())
+    expect(result.current.activePreset).toBe('followUp')
+    expect(result.current.getProfile('chat').selection.medicalDevices).toBe(false)
   })
 })

@@ -90,11 +90,6 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     return dataCategoryRegistry.getCategoryContext('imagingReports', clinicalData, filters)
   }, [selectedData.imagingReports, clinicalData, filters])
 
-  const orphanObservationsSection = useMemo(() => {
-    if (!selectedData.observations || !clinicalData) return null
-    return dataCategoryRegistry.getCategoryContext('observations', clinicalData, filters)
-  }, [selectedData.observations, clinicalData, filters])
-
   const advanceDirectivesSection = useMemo(() => {
     if (!selectedData.advanceDirectives || !clinicalData) return null
     return dataCategoryRegistry.getCategoryContext('advanceDirectives', clinicalData, filters)
@@ -152,7 +147,6 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     pushRegistrySection(sections, labReportsSection)
     pushRegistrySection(sections, imagingReportsSection)
     if (proceduresSection) sections.push(proceduresSection)
-    pushRegistrySection(sections, orphanObservationsSection)
 
     // Medication group
     if (medicationsSection) sections.push(medicationsSection)
@@ -174,7 +168,6 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     labReportsSection,
     imagingReportsSection,
     proceduresSection,
-    orphanObservationsSection,
     medicationsSection,
     allergiesSection,
     immunizationsSection,

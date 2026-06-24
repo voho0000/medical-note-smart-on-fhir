@@ -93,9 +93,9 @@ export function DataSelectionTab({
             <span className="text-xs text-muted-foreground">{ds.applyTemplate ?? '套用範本'}</span>
             <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
               {([
-                { id: 'general', label: ds.presetGeneral ?? '通用' },
                 { id: 'newPatient', label: ds.presetNewPatient ?? '初診' },
                 { id: 'followUp', label: ds.presetFollowUp ?? '追蹤' },
+                { id: 'custom', label: ds.presetCustom ?? '自訂' },
               ] as const).map(({ id, label }) => (
                 <button
                   key={id}
@@ -126,7 +126,7 @@ export function DataSelectionTab({
                 setEditedClinicalContext(null)
               }}
             >
-              {ds.resetToDefault}
+              {ds.restorePresetDefaults ?? ds.resetToDefault}
             </Button>
           </div>
         </div>

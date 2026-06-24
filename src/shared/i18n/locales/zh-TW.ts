@@ -146,7 +146,7 @@ export const zhTW = {
       fail: '結構檢查發現問題',
     },
     sections: {
-      problemList: '當前問題',
+      problemList: '問題清單',
       allergies: '過敏與不耐',
       medications: '用藥摘要',
       immunizations: '疫苗接種',
@@ -648,6 +648,8 @@ export const zhTW = {
     presetGeneral: '通用',
     presetNewPatient: '初診',
     presetFollowUp: '追蹤',
+    presetCustom: '自訂',
+    restorePresetDefaults: '恢復預設',
     selectedCountLabel: '已選',
     timeRange: '時間範圍',
     version: '版本',

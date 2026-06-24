@@ -4,6 +4,7 @@ import {
   isVitalObservation,
   selectLabOrphanObservations,
   selectOtherObservations,
+  selectStandaloneResultObservations,
 } from '@/src/core/utils/observation-selectors'
 import type {
   ClinicalDataCollection,
@@ -125,6 +126,10 @@ describe('observation-selectors (SSOT)', () => {
 
     it('selectLabOrphanObservations keeps only the genuinely standalone lab', () => {
       expect(selectLabOrphanObservations(data).map((o) => o.id)).toEqual(['lab-orphan'])
+    })
+
+    it('selectStandaloneResultObservations folds non-vital, non-imaging leftovers into results', () => {
+      expect(selectStandaloneResultObservations(data).map((o) => o.id)).toEqual(['lab-orphan', 'other-1'])
     })
 
     it('selectOtherObservations keeps only the non-lab/imaging/vital leftover', () => {

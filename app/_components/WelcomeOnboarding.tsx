@@ -112,7 +112,7 @@ export function WelcomeOnboarding() {
       <div className="w-full max-w-2xl text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden">
           <img
-            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg`}
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/icon.svg?v=3`}
             alt="App Icon"
             className="h-full w-full object-contain"
           />

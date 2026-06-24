@@ -1,15 +1,16 @@
 import {
   DEFAULT_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
+  CUSTOM_TEMPLATE_DEFAULT,
   DATA_SELECTION_PRESETS,
   resolveActivePreset,
   STORAGE_KEYS
 } from '@/src/shared/constants/data-selection.constants'
 
 describe('data-selection.constants', () => {
-  describe('resolveActivePreset — always exactly one of 通用/初診/追蹤', () => {
-    it('the general baseline (= default) resolves to general', () => {
-      expect(resolveActivePreset(DEFAULT_DATA_SELECTION, DEFAULT_DATA_FILTERS)).toBe('general')
+  describe('resolveActivePreset — migration fallback for 初診/追蹤/自訂', () => {
+    it('the default baseline resolves to 初診', () => {
+      expect(resolveActivePreset(DEFAULT_DATA_SELECTION, DEFAULT_DATA_FILTERS)).toBe('newPatient')
     })
 
     it('an exact 初診 profile resolves to newPatient', () => {
@@ -22,23 +23,22 @@ describe('data-selection.constants', () => {
       expect(resolveActivePreset(p.selection, p.filters)).toBe('followUp')
     })
 
-    it('a hand-tuned profile falls back to general (never null)', () => {
+    it('a hand-tuned profile falls back to custom (never null)', () => {
       const tuned = { ...DEFAULT_DATA_SELECTION, immunizations: false } // off the baseline
-      expect(resolveActivePreset(tuned, DEFAULT_DATA_FILTERS)).toBe('general')
+      expect(resolveActivePreset(tuned, DEFAULT_DATA_FILTERS)).toBe('custom')
     })
 
-    it('初診 is distinct from the general baseline (其他觀察 on)', () => {
-      expect(DATA_SELECTION_PRESETS.newPatient.selection.observations).toBe(true)
+    it('custom initially mirrors 初診', () => {
+      expect(CUSTOM_TEMPLATE_DEFAULT.selection).toEqual(DATA_SELECTION_PRESETS.newPatient.selection)
+      expect(CUSTOM_TEMPLATE_DEFAULT.filters).toEqual(DATA_SELECTION_PRESETS.newPatient.filters)
       expect(DEFAULT_DATA_SELECTION.observations).toBe(false)
     })
 
-    it('the documents toggle is sticky — it does NOT change the active preset', () => {
+    it('sticky/legacy toggles do NOT change the active preset fallback', () => {
       const p = DATA_SELECTION_PRESETS.newPatient
-      // 初診 with documents either way still resolves to newPatient
       expect(resolveActivePreset({ ...p.selection, documents: true }, p.filters)).toBe('newPatient')
       expect(resolveActivePreset({ ...p.selection, documents: false }, p.filters)).toBe('newPatient')
-      // general baseline with documents on still resolves to general
-      expect(resolveActivePreset({ ...DEFAULT_DATA_SELECTION, documents: true }, DEFAULT_DATA_FILTERS)).toBe('general')
+      expect(resolveActivePreset({ ...p.selection, observations: true }, p.filters)).toBe('newPatient')
     })
   })
   describe('DEFAULT_DATA_SELECTION', () => {

@@ -28,7 +28,7 @@ export interface DataSelection {
   labReports: boolean
   imagingReports: boolean
   procedures: boolean
-  observations: boolean // orphan observations (not vitals, not lab, not imaging)
+  observations: boolean // legacy hidden field; standalone results fold into labReports
 
   // Medication group
   medications: boolean

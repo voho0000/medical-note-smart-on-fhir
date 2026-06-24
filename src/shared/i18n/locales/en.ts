@@ -644,6 +644,8 @@ export const en = {
     presetGeneral: 'General',
     presetNewPatient: 'New patient',
     presetFollowUp: 'Follow-up',
+    presetCustom: 'Custom',
+    restorePresetDefaults: 'Restore default',
     selectedCountLabel: 'selected',
     timeRange: 'Time range',
     version: 'Version',

@@ -88,6 +88,25 @@ describe('buildIpsMarkdown', () => {
     expect(md).toContain('| 2024-03-01 | 99 |')
   })
 
+  it('renders patient identifier systems as labels instead of clickable namespace URLs', () => {
+    const md = buildIpsMarkdown({
+      patient: {
+        ...PATIENT,
+        identifier: [
+          {
+            system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id',
+            value: 'A123456789',
+          },
+        ],
+      },
+      data: emptyCollection(),
+      generatedAt: new Date('2026-06-24T00:00:00Z'),
+    })
+
+    expect(md).toContain('- Identifiers: National ID: A123456789')
+    expect(md).not.toContain('https://twcore.mohw.gov.tw/IdentifierSystem/national-id')
+  })
+
   it('marks confirmed AI-inferred problems without asking an LLM to rewrite them', () => {
     const data = emptyCollection()
     data.conditions = [

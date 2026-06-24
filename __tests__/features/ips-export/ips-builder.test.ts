@@ -67,6 +67,44 @@ describe('buildIpsBundle — structure', () => {
     expect(patient.birthDate).toBe('1980-01-15')
   })
 
+  it('preserves Patient identifiers in the IPS Patient resource', () => {
+    const bundle = buildIpsBundle({
+      patient: {
+        ...PATIENT,
+        identifier: [
+          {
+            use: 'official',
+            system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id',
+            value: 'A123456789',
+            type: {
+              coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'NI' }],
+            },
+          },
+        ],
+      },
+      data: emptyCollection(),
+    })
+    const patient = bundle.entry[1].resource as FhirResource & {
+      identifier?: Array<{
+        use?: string
+        system?: string
+        value?: string
+        type?: { coding?: Array<{ system?: string; code?: string }> }
+      }>
+    }
+
+    expect(patient.identifier).toEqual([
+      {
+        use: 'official',
+        system: 'https://twcore.mohw.gov.tw/IdentifierSystem/national-id',
+        value: 'A123456789',
+        type: {
+          coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0203', code: 'NI' }],
+        },
+      },
+    ])
+  })
+
   it('always includes the three required sections, even when empty', () => {
     const bundle = buildIpsBundle({ patient: PATIENT, data: emptyCollection() })
     const problems = sectionByLoinc(bundle, IPS_SECTION.problemList.loinc)

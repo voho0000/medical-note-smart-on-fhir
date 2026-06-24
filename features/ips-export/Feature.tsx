@@ -84,17 +84,6 @@ export default function IpsExportFeature() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <FileOutput className="h-5 w-5 text-emerald-600" />
-        <h2 className="text-base font-semibold">{x.title}</h2>
-        <InfoHint side="right" contentClassName="max-w-sm">
-          {x.help}
-        </InfoHint>
-        <span className="text-xs text-muted-foreground">
-          {x.resourceCountLabel.replace('{count}', String(resourceCount))}
-        </span>
-      </div>
-
       <Tabs defaultValue="scope" className="space-y-3">
         <TabsList className="grid h-9 w-full grid-cols-2">
           <TabsTrigger value="scope">{x.scopeTab}</TabsTrigger>
@@ -102,6 +91,17 @@ export default function IpsExportFeature() {
         </TabsList>
 
         <TabsContent value="scope" className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <FileOutput className="h-5 w-5 text-emerald-600" />
+            <h2 className="text-base font-semibold">{x.title}</h2>
+            <InfoHint side="right" contentClassName="max-w-sm">
+              {x.help}
+            </InfoHint>
+            <span className="text-xs text-muted-foreground">
+              {x.resourceCountLabel.replace('{count}', String(resourceCount))}
+            </span>
+          </div>
+
           <IpsInferenceControls
             llmEnabled={llmEnabled}
             onToggleLlm={setLlmEnabled}

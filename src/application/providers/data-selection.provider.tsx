@@ -17,10 +17,13 @@ import { StorageService } from '@/src/shared/utils/storage.utils'
 import {
   DEFAULT_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
+  CUSTOM_TEMPLATE_DEFAULT,
   DATA_SELECTION_PRESETS,
   STORAGE_KEYS,
   resolveActivePreset,
   type PresetId,
+  type BuiltInPresetId,
+  type DataSelectionTemplate,
 } from '@/src/shared/constants/data-selection.constants'
 import type { DataSelection, DataFilters } from '@/src/core/entities/clinical-context.entity'
 import type { DocumentMode } from '@/src/core/utils/clinical-documents.utils'
@@ -52,7 +55,7 @@ interface DataSelectionContextValue {
   updateSelection: (dataType: DataType, isSelected: boolean) => void
   resetToDefaults: () => void
   applyPreset: (presetId: PresetId) => void
-  /** Which template the current selection matches (derived; catch-all = 通用). */
+  /** Selected template mode for the main Data Selection panel. */
   activePreset: PresetId
   filters: DataFilters
   setFilters: (next: DataFilters) => void
@@ -85,6 +88,21 @@ function isObject(x: unknown): x is Record<string, unknown> {
   return !!x && typeof x === 'object'
 }
 
+function isPresetId(x: unknown): x is PresetId {
+  return x === 'newPatient' || x === 'followUp' || x === 'custom'
+}
+
+function isBuiltInPresetId(x: PresetId): x is BuiltInPresetId {
+  return x === 'newPatient' || x === 'followUp'
+}
+
+function cloneTemplate(template: DataSelectionTemplate): DataSelectionTemplate {
+  return {
+    selection: { ...template.selection },
+    filters: { ...template.filters },
+  }
+}
+
 function makeDefaultProfile(): ConsumerProfile {
   return {
     selection: { ...DEFAULT_DATA_SELECTION },
@@ -93,6 +111,15 @@ function makeDefaultProfile(): ConsumerProfile {
     editedClinicalContext: null,
     documentMode: 'latestAdmission',
     documentIds: [],
+  }
+}
+
+function coerceTemplate(saved: Partial<DataSelectionTemplate> | null | undefined): DataSelectionTemplate {
+  const base = cloneTemplate(CUSTOM_TEMPLATE_DEFAULT)
+  if (!saved) return base
+  return {
+    selection: { ...base.selection, ...(isObject(saved.selection) ? saved.selection : {}) } as DataSelection,
+    filters: { ...base.filters, ...(isObject(saved.filters) ? saved.filters : {}) } as DataFilters,
   }
 }
 
@@ -132,12 +159,33 @@ function getInitialProfiles(): ProfilesState {
   }
 }
 
+function getInitialCustomTemplate(): DataSelectionTemplate {
+  return coerceTemplate(storage.get<Partial<DataSelectionTemplate>>(STORAGE_KEYS.DATA_CUSTOM_PRESET))
+}
+
+function getInitialActivePreset(): PresetId {
+  const saved = storage.get<unknown>(STORAGE_KEYS.DATA_ACTIVE_PRESET)
+  if (isPresetId(saved)) return saved
+  const profiles = getInitialProfiles()
+  return resolveActivePreset(profiles.chat.selection, profiles.chat.filters)
+}
+
 export function DataSelectionProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<ProfilesState>(getInitialProfiles)
+  const [activePreset, setActivePreset] = useState<PresetId>(getInitialActivePreset)
+  const [customTemplate, setCustomTemplate] = useState<DataSelectionTemplate>(getInitialCustomTemplate)
 
   useEffect(() => {
     storage.set(STORAGE_KEYS.DATA_PROFILES, profiles)
   }, [profiles])
+
+  useEffect(() => {
+    storage.set(STORAGE_KEYS.DATA_ACTIVE_PRESET, activePreset)
+  }, [activePreset])
+
+  useEffect(() => {
+    storage.set(STORAGE_KEYS.DATA_CUSTOM_PRESET, customTemplate)
+  }, [customTemplate])
 
   const patchProfile = useCallback(
     (consumer: DataConsumer, patch: Partial<ConsumerProfile>) => {
@@ -166,40 +214,72 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
   const current = profiles.chat
 
   const setSelectedData = useCallback(
-    (next: DataSelection) => patchTargets({ selection: next }),
-    [patchTargets],
+    (next: DataSelection) => {
+      patchTargets({ selection: next })
+      if (activePreset === 'custom') {
+        setCustomTemplate((prev) => ({ ...prev, selection: { ...next } }))
+      }
+    },
+    [activePreset, patchTargets],
   )
 
   const updateSelection = useCallback(
-    (dataType: DataType, isSelected: boolean) =>
-      patchTargets((p) => ({ selection: { ...p.selection, [dataType]: isSelected } })),
-    [patchTargets],
+    (dataType: DataType, isSelected: boolean) => {
+      patchTargets((p) => ({ selection: { ...p.selection, [dataType]: isSelected } }))
+      if (activePreset === 'custom') {
+        setCustomTemplate((prev) => ({ ...prev, selection: { ...prev.selection, [dataType]: isSelected } }))
+      }
+    },
+    [activePreset, patchTargets],
   )
 
   const setFilters = useCallback(
-    (next: DataFilters) => patchTargets({ filters: next }),
-    [patchTargets],
+    (next: DataFilters) => {
+      patchTargets({ filters: next })
+      if (activePreset === 'custom') {
+        setCustomTemplate((prev) => ({ ...prev, filters: { ...next } }))
+      }
+    },
+    [activePreset, patchTargets],
   )
 
-  // Full reset: back to the 通用 factory baseline.
-  const resetToDefaults = useCallback(
-    () => patchTargets({
-      selection: { ...DEFAULT_DATA_SELECTION },
-      filters: { ...DEFAULT_DATA_FILTERS },
-    }),
-    [patchTargets],
+  const templateForPreset = useCallback(
+    (presetId: PresetId): DataSelectionTemplate =>
+      isBuiltInPresetId(presetId)
+        ? DATA_SELECTION_PRESETS[presetId]
+        : customTemplate,
+    [customTemplate],
   )
+
+  // Reset the currently selected template mode back to its factory baseline.
+  const resetToDefaults = useCallback(() => {
+    const template = activePreset === 'custom'
+      ? CUSTOM_TEMPLATE_DEFAULT
+      : DATA_SELECTION_PRESETS[activePreset]
+
+    if (activePreset === 'custom') {
+      setCustomTemplate(cloneTemplate(CUSTOM_TEMPLATE_DEFAULT))
+    }
+
+    patchTargets({
+      selection: { ...template.selection },
+      filters: { ...template.filters },
+    })
+  }, [activePreset, patchTargets])
 
   // Apply a template (one-tap fill): load the preset's factory selection+filters
-  // as a starting point. `documents` is a sticky setting (orthogonal to presets),
-  // so the user's picked documents survive the template load.
+  // as a starting point. `documents` is sticky, so the user's picked documents
+  // survive switching between 初診 / 追蹤 / 自訂.
   const applyPreset = useCallback(
-    (presetId: PresetId) =>
+    (presetId: PresetId) => {
+      const template = templateForPreset(presetId)
+      setActivePreset(presetId)
       patchTargets((cur) => ({
-        selection: { ...DATA_SELECTION_PRESETS[presetId].selection, documents: cur.selection.documents },
-        filters: { ...DATA_SELECTION_PRESETS[presetId].filters },
-      })),
-    [patchTargets],
+        selection: { ...template.selection, documents: cur.selection.documents },
+        filters: { ...template.filters },
+      }))
+    },
+    [patchTargets, templateForPreset],
   )
 
   const setSupplementaryNotes = useCallback(
@@ -257,9 +337,7 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       updateSelection,
       resetToDefaults,
       applyPreset,
-      // Derived live (no stored tab) — the highlighted template always reflects
-      // the current selection; hand-tuning falls back to 通用 (catch-all).
-      activePreset: resolveActivePreset(current.selection, current.filters),
+      activePreset,
       filters: current.filters,
       setFilters,
       isAnySelected: Object.values(current.selection).some(Boolean),
@@ -278,7 +356,7 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       setFiltersFor,
     }),
     [
-      current, setSelectedData, updateSelection, resetToDefaults, applyPreset,
+      current, setSelectedData, updateSelection, resetToDefaults, applyPreset, activePreset,
       setFilters, setSupplementaryNotes, setEditedClinicalContext, setDocumentMode, setDocumentIds,
       getProfile, setNotesFor, setEditedContextFor, updateSelectionFor, setFiltersFor,
     ],

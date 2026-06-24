@@ -1,7 +1,7 @@
 // Data Categories Index
 // Register all categories here
 
-import { registerDataCategory } from '../registry/data-category.registry'
+import { dataCategoryRegistry, registerDataCategory } from '../registry/data-category.registry'
 import { patientInfoCategory } from './patient-info.category'
 import { vitalSignsCategory } from './vital-signs.category'
 import { problemListCategory } from './problem-list.category'
@@ -9,7 +9,6 @@ import { encountersCategory } from './encounters.category'
 import { labReportsCategory } from './lab-reports.category'
 import { imagingReportsCategory } from './imaging-reports.category'
 import { proceduresCategory } from './procedures.category'
-import { observationsCategory } from './observations.category'
 import { medicationsCategory } from './medications.category'
 import { allergiesCategory } from './allergies.category'
 import { immunizationsCategory } from './immunizations.category'
@@ -19,6 +18,10 @@ import { carePlansCategory } from './care-plan.category'
 import { documentsCategory } from './composition.category'
 
 export function initializeCategories(): void {
+  // Legacy catch-all "Other Observations" is no longer a user-facing category.
+  // Standalone result observations are folded into Lab Reports instead.
+  dataCategoryRegistry.unregister('observations')
+
   // Patient group
   registerDataCategory(patientInfoCategory)
   registerDataCategory(vitalSignsCategory)
@@ -34,7 +37,6 @@ export function initializeCategories(): void {
   registerDataCategory(labReportsCategory)
   registerDataCategory(imagingReportsCategory)
   registerDataCategory(proceduresCategory)
-  registerDataCategory(observationsCategory)
 
   // Medication group
   registerDataCategory(medicationsCategory)
@@ -53,7 +55,6 @@ export {
   labReportsCategory,
   imagingReportsCategory,
   proceduresCategory,
-  observationsCategory,
   medicationsCategory,
   allergiesCategory,
   immunizationsCategory,

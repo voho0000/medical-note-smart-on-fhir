@@ -152,11 +152,52 @@ function codingSummary(
   return out.join('; ')
 }
 
+function humanizeIdentifierKey(value: string): string {
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\bid\b/gi, 'ID')
+    .replace(/\b\w/g, (m) => m.toUpperCase())
+}
+
+function identifierTypeCodeLabel(code?: string): string {
+  const c = clean(code).toUpperCase()
+  if (c === 'NI') return 'National ID'
+  if (c === 'MR') return 'Medical record number'
+  if (c === 'PPN' || c === 'PP') return 'Passport number'
+  return clean(code)
+}
+
+function identifierSystemLabel(system?: string): string {
+  const raw = clean(system)
+  if (!raw) return ''
+  const s = raw.toLowerCase()
+  if (s.includes('national-id')) return 'National ID'
+  if (s.includes('medical-record')) return 'Medical record number'
+  if (s.includes('passport')) return 'Passport number'
+  if (s.includes('nhi')) return 'NHI number'
+
+  try {
+    const url = new URL(raw)
+    const lastPath = url.pathname.split('/').filter(Boolean).pop()
+    return humanizeIdentifierKey(lastPath || url.hostname)
+  } catch {
+    return raw
+  }
+}
+
+function patientIdentifierLabel(id: NonNullable<PatientEntity['identifier']>[number]): string {
+  const typeText = clean(id.type?.text)
+  if (typeText) return typeText
+  const typeCode = identifierTypeCodeLabel(id.type?.coding?.[0]?.code)
+  if (typeCode) return typeCode
+  return identifierSystemLabel(id.system) || 'Identifier'
+}
+
 function patientIdentifiers(patient: PatientEntity | null): string {
   const ids = patient?.identifier ?? []
   return ids
     .map((id) => {
-      const label = id.type?.text || id.type?.coding?.[0]?.code || id.system || 'Identifier'
+      const label = patientIdentifierLabel(id)
       return id.value ? `${label}: ${id.value}` : ''
     })
     .filter(Boolean)

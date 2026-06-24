@@ -131,6 +131,32 @@ function referenceRangeFields(o: Pick<ObservationEntity, 'referenceRange'>): Rec
 // Patient
 // ---------------------------------------------------------------------------
 
+function patientIdentifiers(patient: PatientEntity | null): Array<Record<string, unknown>> | undefined {
+  const identifiers = (patient?.identifier ?? [])
+    .map((id) => {
+      const coding = (id.type?.coding ?? [])
+        .filter((c) => c?.system || c?.code)
+        .map((c) => ({
+          ...(c.system ? { system: c.system } : {}),
+          ...(c.code ? { code: c.code } : {}),
+        }))
+      const typeText = id.type?.text?.trim()
+      const type: Record<string, unknown> = {}
+      if (coding.length) type.coding = coding
+      if (typeText) type.text = typeText
+
+      const out: Record<string, unknown> = {}
+      if (id.system) out.system = id.system
+      if (id.value) out.value = id.value
+      if (Object.keys(type).length) out.type = type
+      if (!out.system && !out.value && !out.type) return undefined
+      if (id.use) out.use = id.use
+      return out
+    })
+    .filter((id): id is Record<string, unknown> => Boolean(id))
+  return identifiers.length ? identifiers : undefined
+}
+
 export function buildPatient(patient: PatientEntity | null): { entry: IpsBundleEntry; reference: string } {
   const name = patient?.name?.[0]
   // Carry whatever the source had — text (TW Core/IPS local-script name),
@@ -146,11 +172,13 @@ export function buildPatient(patient: PatientEntity | null): { entry: IpsBundleE
           },
         ]
       : [{ text: getPatientDisplayName(patient) }]
+  const identifiers = patientIdentifiers(patient)
 
   const resource: FhirResource = {
     resourceType: 'Patient',
     meta: { profile: [IPS_PROFILES.patient] },
     name: nameArray,
+    ...(identifiers ? { identifier: identifiers } : {}),
     ...(patient?.gender ? { gender: patient.gender } : {}),
     ...(patient?.birthDate ? { birthDate: formatDate(patient.birthDate) } : {}),
   }

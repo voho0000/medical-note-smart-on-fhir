@@ -5,7 +5,7 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
-import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
+import { selectStandaloneResultObservations } from '@/src/core/utils/observation-selectors'
 import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 
@@ -135,8 +135,8 @@ export const labReportsCategory: DataCategory<LabData> = {
     const labReports = reports.filter((report: DiagnosticReport) =>
       inferGroupFromCategory(report.category) === 'lab'
     )
-    const standaloneLabObs = selectLabOrphanObservations(clinicalData)
-    return [...labReports, ...standaloneLabObs] as unknown as LabData[]
+    const standaloneResultObs = selectStandaloneResultObservations(clinicalData)
+    return [...labReports, ...standaloneResultObs] as unknown as LabData[]
   },
 
   // 最新 → distinct analytes (one latest value each); 全部 → every reading. So
