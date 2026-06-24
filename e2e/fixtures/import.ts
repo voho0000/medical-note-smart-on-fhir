@@ -19,12 +19,15 @@ export const LOCAL_BUNDLE = process.env.E2E_LOCAL_BUNDLE
 export async function importBundle(page: Page, bundlePath: string = LOCAL_BUNDLE || SYNTHETIC_BUNDLE) {
   // Preset prefs BEFORE the app boots so first-load is deterministic:
   // - zh-TW locale (tests assert Chinese strings)
-  // - medical audience, already "selected" → skips the onboarding dialog,
-  //   which otherwise aria-hides the whole page (getByRole then sees nothing).
+  // - medical audience, already "selected"
+  // - first-run onboarding marked complete → the onboarding stepper (which fires
+  //   on first data load and overlays the whole app) never appears, so clicks
+  //   aren't intercepted by its modal overlay.
   await page.addInitScript(() => {
     localStorage.setItem('medical-note-locale', 'zh-TW')
     localStorage.setItem('medical-note-audience', 'medical')
     localStorage.setItem('medical-note-audience-selected', '1')
+    localStorage.setItem('medical-note-onboarding-v1', '1')
   })
   await page.goto('/')
   // The import button renders in both the header and the welcome screen; both
