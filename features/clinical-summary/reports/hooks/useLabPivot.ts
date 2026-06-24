@@ -229,136 +229,138 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
   return { mapKey, testKey, displayName }
 }
 
-export function useLabPivot(observations: any[]): Record<string, LabPivot> {
-  return useMemo(() => {
-    const result: Record<string, LabPivot> = {}
+export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
+  const result: Record<string, LabPivot> = {}
 
-    // Initialize each category container
-    for (const cat of LAB_CATEGORIES) {
-      result[cat.id] = { category: cat, dates: [], rows: [] }
-    }
+  // Initialize each category container
+  for (const cat of LAB_CATEGORIES) {
+    result[cat.id] = { category: cat, dates: [], rows: [] }
+  }
 
-    // Group observations by category
-    const buckets: Record<string, any[]> = {}
-    for (const cat of LAB_CATEGORIES) buckets[cat.id] = []
+  // Group observations by category
+  const buckets: Record<string, any[]> = {}
+  for (const cat of LAB_CATEGORIES) buckets[cat.id] = []
 
-    for (const obs of observations) {
-      const cat = categorizeObservation(obs)
-      if (!cat) continue
-      buckets[cat.id].push(obs)
-    }
+  for (const obs of observations) {
+    const cat = categorizeObservation(obs)
+    if (!cat) continue
+    buckets[cat.id].push(obs)
+  }
 
-    // For each category, build the pivot. Don't early-return on empty obsList —
-    // categories with pinnedColumns should still surface their standard headers
-    // even when the patient has no data for any test in that category.
-    for (const cat of LAB_CATEGORIES) {
-      const obsList = buckets[cat.id]
+  // For each category, build the pivot. Don't early-return on empty obsList —
+  // categories with pinnedColumns should still surface their standard headers
+  // even when the patient has no data for any test in that category.
+  for (const cat of LAB_CATEGORIES) {
+    const obsList = buckets[cat.id]
 
-      const dateSet = new Set<string>()
-      const testMap = new Map<string, LabRow>()
-      const unitCount = new Map<string, Map<string, number>>()
+    const dateSet = new Set<string>()
+    const testMap = new Map<string, LabRow>()
+    const unitCount = new Map<string, Map<string, number>>()
 
-      for (const obs of obsList) {
-        const date = dateKey(obs.effectiveDateTime)
-        if (!date) continue
-        dateSet.add(date)
+    for (const obs of obsList) {
+      const date = dateKey(obs.effectiveDateTime)
+      if (!date) continue
+      dateSet.add(date)
 
-        const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
-        const fv = formatValue(obs)
-        const { value, unit, numericValue, interpretationCode, hasFhirRefRange } = fv
-        let { isAbnormal } = fv
+      const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
+      const fv = formatValue(obs)
+      const { value, unit, numericValue, interpretationCode, hasFhirRefRange } = fv
+      let { isAbnormal } = fv
 
-        // Layer B: hardcoded reference ranges — only when FHIR provided no usable
-        // numeric range (hasFhirRefRange=false). Skipped when FHIR has bounds so
-        // institution-specific ranges are respected over our generic fallback.
-        if (!isAbnormal && !hasFhirRefRange && numericValue !== undefined) {
-          const range = HARDCODED_REF_RANGES[testKey]
-          if (range) {
-            if (range.low !== undefined && numericValue < range.low) isAbnormal = true
-            if (range.high !== undefined && numericValue > range.high) isAbnormal = true
-          }
+      // Layer B: hardcoded reference ranges — only when FHIR provided no usable
+      // numeric range (hasFhirRefRange=false). Skipped when FHIR has bounds so
+      // institution-specific ranges are respected over our generic fallback.
+      if (!isAbnormal && !hasFhirRefRange && numericValue !== undefined) {
+        const range = HARDCODED_REF_RANGES[testKey]
+        if (range) {
+          if (range.low !== undefined && numericValue < range.low) isAbnormal = true
+          if (range.high !== undefined && numericValue > range.high) isAbnormal = true
         }
+      }
 
-        if (!testMap.has(mapKey)) {
-          testMap.set(mapKey, { mapKey, testKey, displayName, values: new Map() })
-          unitCount.set(mapKey, new Map())
-        } else {
-          // Prefer the shorter display name (cleaner labels)
-          const row = testMap.get(mapKey)!
-          if (displayName.length < row.displayName.length) {
-            row.displayName = displayName
-          }
-        }
+      if (!testMap.has(mapKey)) {
+        testMap.set(mapKey, { mapKey, testKey, displayName, values: new Map() })
+        unitCount.set(mapKey, new Map())
+      } else {
+        // Prefer the shorter display name (cleaner labels)
         const row = testMap.get(mapKey)!
-        const cell: LabCell = {
-          value,
-          unit,
-          isAbnormal,
-          interpretationCode,
-          effectiveDateTime: obs.effectiveDateTime,
-        }
-        // If multiple observations on same day, keep the last one (could be revised result)
-        row.values.set(date, cell)
-        if (unit) {
-          const ucMap = unitCount.get(mapKey)!
-          ucMap.set(unit, (ucMap.get(unit) || 0) + 1)
+        if (displayName.length < row.displayName.length) {
+          row.displayName = displayName
         }
       }
-
-      // Pick most common unit per row
-      for (const [mk, ucMap] of unitCount.entries()) {
-        let bestUnit: string | undefined
-        let bestCount = 0
-        for (const [u, c] of ucMap.entries()) {
-          if (c > bestCount) {
-            bestCount = c
-            bestUnit = u
-          }
-        }
-        const row = testMap.get(mk)
-        if (row) row.unit = bestUnit
+      const row = testMap.get(mapKey)!
+      const cell: LabCell = {
+        value,
+        unit,
+        isAbnormal,
+        interpretationCode,
+        effectiveDateTime: obs.effectiveDateTime,
       }
-
-      // Inject stub rows for pinned columns not present in patient data.
-      // Must check by testKey (not mapKey) since mapKey may include NHI prefix.
-      if (cat.pinnedColumns) {
-        const existingTestKeys = new Set([...testMap.values()].map(r => r.testKey))
-        for (const pinKey of cat.pinnedColumns) {
-          if (!existingTestKeys.has(pinKey)) {
-            testMap.set(pinKey, { mapKey: pinKey, testKey: pinKey, displayName: pinKey, values: new Map() })
-          }
-        }
+      // If multiple observations on same day, keep the last one (could be revised result)
+      row.values.set(date, cell)
+      if (unit) {
+        const ucMap = unitCount.get(mapKey)!
+        ucMap.set(unit, (ucMap.get(unit) || 0) + 1)
       }
-
-      // Assign subgroupId to each row (matches against category.subgroups[].members)
-      if (cat.subgroups) {
-        const memberToGroup = new Map<string, string>()
-        for (const sg of cat.subgroups) {
-          for (const m of sg.members) {
-            memberToGroup.set(m.toUpperCase(), sg.id)
-          }
-        }
-        for (const row of testMap.values()) {
-          row.subgroupId = memberToGroup.get(row.testKey)
-        }
-      }
-
-      const dates = [...dateSet].sort((a, b) => b.localeCompare(a))  // newest first
-      const cmp = compareTestsByPreferred(cat)
-
-      // Sort by subgroup index first, then by preferredOrder within subgroup
-      const sgOrder = new Map<string, number>()
-      cat.subgroups?.forEach((sg, i) => sgOrder.set(sg.id, i))
-      const rows = [...testMap.values()].sort((a, b) => {
-        const ai = a.subgroupId ? sgOrder.get(a.subgroupId) ?? 999 : 999
-        const bi = b.subgroupId ? sgOrder.get(b.subgroupId) ?? 999 : 999
-        if (ai !== bi) return ai - bi
-        return cmp(a.testKey, b.testKey)
-      })
-
-      result[cat.id] = { category: cat, dates, rows }
     }
 
-    return result
-  }, [observations])
+    // Pick most common unit per row
+    for (const [mk, ucMap] of unitCount.entries()) {
+      let bestUnit: string | undefined
+      let bestCount = 0
+      for (const [u, c] of ucMap.entries()) {
+        if (c > bestCount) {
+          bestCount = c
+          bestUnit = u
+        }
+      }
+      const row = testMap.get(mk)
+      if (row) row.unit = bestUnit
+    }
+
+    // Inject stub rows for pinned columns not present in patient data.
+    // Must check by testKey (not mapKey) since mapKey may include NHI prefix.
+    if (cat.pinnedColumns) {
+      const existingTestKeys = new Set([...testMap.values()].map(r => r.testKey))
+      for (const pinKey of cat.pinnedColumns) {
+        if (!existingTestKeys.has(pinKey)) {
+          testMap.set(pinKey, { mapKey: pinKey, testKey: pinKey, displayName: pinKey, values: new Map() })
+        }
+      }
+    }
+
+    // Assign subgroupId to each row (matches against category.subgroups[].members)
+    if (cat.subgroups) {
+      const memberToGroup = new Map<string, string>()
+      for (const sg of cat.subgroups) {
+        for (const m of sg.members) {
+          memberToGroup.set(m.toUpperCase(), sg.id)
+        }
+      }
+      for (const row of testMap.values()) {
+        row.subgroupId = memberToGroup.get(row.testKey)
+      }
+    }
+
+    const dates = [...dateSet].sort((a, b) => b.localeCompare(a))  // newest first
+    const cmp = compareTestsByPreferred(cat)
+
+    // Sort by subgroup index first, then by preferredOrder within subgroup
+    const sgOrder = new Map<string, number>()
+    cat.subgroups?.forEach((sg, i) => sgOrder.set(sg.id, i))
+    const rows = [...testMap.values()].sort((a, b) => {
+      const ai = a.subgroupId ? sgOrder.get(a.subgroupId) ?? 999 : 999
+      const bi = b.subgroupId ? sgOrder.get(b.subgroupId) ?? 999 : 999
+      if (ai !== bi) return ai - bi
+      return cmp(a.testKey, b.testKey)
+    })
+
+    result[cat.id] = { category: cat, dates, rows }
+  }
+
+  return result
+}
+
+export function useLabPivot(observations: any[]): Record<string, LabPivot> {
+  return useMemo(() => buildLabPivots(observations), [observations])
 }

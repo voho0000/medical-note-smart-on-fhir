@@ -9,10 +9,14 @@ import { buildIpsBundle, type IpsSectionLabels } from '../utils/ips-builder'
 import { curateForIps } from '../utils/ips-curation'
 import { validateIpsBundle, type ValidationResult } from '../utils/ips-lite-validator'
 import type { IpsBundle } from '../utils/ips-types'
-import type { ConditionEntity } from '@/src/core/entities/clinical-data.entity'
+import type { ClinicalDataCollection, ConditionEntity } from '@/src/core/entities/clinical-data.entity'
+import type { PatientEntity } from '@/src/core/entities/patient.entity'
 
 export interface UseIpsBundleResult {
   bundle: IpsBundle | null
+  curatedData: ClinicalDataCollection | null
+  patient: PatientEntity | null
+  labels: Partial<IpsSectionLabels>
   validation: ValidationResult | null
   isLoading: boolean
   error: Error | null
@@ -59,6 +63,9 @@ export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBun
       results: s.results,
       resultsLab: s.resultsLab,
       resultsImaging: s.resultsImaging,
+      cumulativeCategories: (t.reports as any)?.cumulativeCategories,
+      cumulativeSubgroups: (t.reports as any)?.cumulativeSubgroups,
+      medicationTable: t.ipsExport?.tableLabels?.medication,
       vitalSigns: s.vitalSigns,
       medicalDevices: s.medicalDevices,
       planOfCare: s.planOfCare,
@@ -67,16 +74,19 @@ export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBun
     }
   }, [t])
 
-  const bundle = useMemo<IpsBundle | null>(() => {
+  const curatedData = useMemo<ClinicalDataCollection | null>(() => {
     if (!curated) return null
     // Merge confirmed inferred problems into the Problem List. When the caller
     // passes none, this is the same object shape as before (empty spread).
-    const merged =
-      extraConditions.length > 0
-        ? { ...curated, conditions: [...curated.conditions, ...extraConditions] }
-        : curated
-    return buildIpsBundle({ patient: patient ?? null, data: merged, labels })
-  }, [curated, patient, labels, extraConditions])
+    return extraConditions.length > 0
+      ? { ...curated, conditions: [...curated.conditions, ...extraConditions] }
+      : curated
+  }, [curated, extraConditions])
+
+  const bundle = useMemo<IpsBundle | null>(() => {
+    if (!curatedData) return null
+    return buildIpsBundle({ patient: patient ?? null, data: curatedData, labels })
+  }, [curatedData, patient, labels])
 
   const validation = useMemo<ValidationResult | null>(
     () => (bundle ? validateIpsBundle(bundle) : null),
@@ -88,6 +98,9 @@ export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBun
 
   return {
     bundle,
+    curatedData,
+    patient: patient ?? null,
+    labels,
     validation,
     isLoading: dataLoading || patientLoading,
     error: (error as Error | null) ?? null,

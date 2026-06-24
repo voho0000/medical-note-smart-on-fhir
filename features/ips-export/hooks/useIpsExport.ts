@@ -6,15 +6,23 @@ import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
 import { dateStampForFilename } from '../utils/ips-helpers'
 import type { IpsBundle } from '../utils/ips-types'
 
+export type IpsExportFormat = 'json' | 'markdown'
+
 export interface UseIpsExportResult {
   /** Trigger a browser download of the IPS Bundle as a .json file. */
-  download: (bundle: IpsBundle) => void
+  downloadJson: (bundle: IpsBundle) => void
+  /** Trigger a browser download of the deterministic Markdown companion file. */
+  downloadMarkdown: (markdown: string) => void
   /** Copy the pretty-printed IPS Bundle JSON to the clipboard. */
-  copy: (bundle: IpsBundle) => Promise<void>
-  /** True briefly after a successful copy (for UI feedback). */
-  copied: boolean
+  copyJson: (bundle: IpsBundle) => Promise<void>
+  /** Copy the deterministic Markdown companion file to the clipboard. */
+  copyMarkdown: (markdown: string) => Promise<void>
+  /** Format copied most recently, briefly set after a successful copy. */
+  copiedFormat: IpsExportFormat | null
   /** Set when the last copy failed (e.g. clipboard unavailable). */
   copyError: string | null
+  jsonFilename: string
+  markdownFilename: string
 }
 
 function sanitizeForFilename(name: string): string {
@@ -23,46 +31,84 @@ function sanitizeForFilename(name: string): string {
 
 export function useIpsExport(): UseIpsExportResult {
   const { data: patient } = usePatientQuery()
-  const [copied, setCopied] = useState(false)
+  const [copiedFormat, setCopiedFormat] = useState<IpsExportFormat | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
 
-  const filename = useCallback(() => {
+  const filename = useCallback((extension: 'json' | 'md') => {
     const name = sanitizeForFilename(getPatientDisplayName(patient ?? null))
-    return `IPS_${name}_${dateStampForFilename()}.json`
+    return `IPS_${name}_${dateStampForFilename()}.${extension}`
   }, [patient])
 
-  const download = useCallback(
-    (bundle: IpsBundle) => {
-      const json = JSON.stringify(bundle, null, 2)
-      const blob = new Blob([json], { type: 'application/fhir+json' })
+  const jsonFilename = filename('json')
+  const markdownFilename = filename('md')
+
+  const downloadText = useCallback(
+    (text: string, file: string, type: string) => {
+      const blob = new Blob([text], { type })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = filename()
+      a.download = file
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       // Revoke on the next tick so the download has a chance to start.
       setTimeout(() => URL.revokeObjectURL(url), 0)
     },
-    [filename],
+    [],
   )
 
-  const copy = useCallback(async (bundle: IpsBundle) => {
+  const downloadJson = useCallback(
+    (bundle: IpsBundle) => {
+      downloadText(JSON.stringify(bundle, null, 2), filename('json'), 'application/fhir+json')
+    },
+    [downloadText, filename],
+  )
+
+  const downloadMarkdown = useCallback(
+    (markdown: string) => {
+      downloadText(markdown, filename('md'), 'text/markdown;charset=utf-8')
+    },
+    [downloadText, filename],
+  )
+
+  const copyText = useCallback(async (text: string, format: IpsExportFormat) => {
     setCopyError(null)
-    const json = JSON.stringify(bundle, null, 2)
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(json)
+        await navigator.clipboard.writeText(text)
       } else {
         throw new Error('Clipboard API unavailable')
       }
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedFormat(format)
+      setTimeout(() => setCopiedFormat(null), 2000)
     } catch (err) {
       setCopyError(err instanceof Error ? err.message : 'Copy failed')
     }
   }, [])
 
-  return { download, copy, copied, copyError }
+  const copyJson = useCallback(
+    async (bundle: IpsBundle) => {
+      await copyText(JSON.stringify(bundle, null, 2), 'json')
+    },
+    [copyText],
+  )
+
+  const copyMarkdown = useCallback(
+    async (markdown: string) => {
+      await copyText(markdown, 'markdown')
+    },
+    [copyText],
+  )
+
+  return {
+    downloadJson,
+    downloadMarkdown,
+    copyJson,
+    copyMarkdown,
+    copiedFormat,
+    copyError,
+    jsonFilename,
+    markdownFilename,
+  }
 }

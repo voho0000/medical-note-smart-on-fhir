@@ -219,6 +219,29 @@ describe('buildIpsBundle — populated data', () => {
     expect(absent.extension?.[0]?.valueCode).toBe('unknown')
   })
 
+  it('does not export medication supply text as dosage directions', () => {
+    const data = {
+      ...emptyCollection(),
+      medications: [
+        {
+          id: 'eye-drop',
+          medicationCodeableConcept: { text: 'PATEAR EYE LOTIONS "PATRON"' },
+          status: 'active',
+          authoredOn: '2026-06-23',
+          dosageInstruction: [{ text: '給藥總量 1，給藥日數 28 天（平均每日 0.04）' }],
+        },
+      ],
+    }
+    const bundle = buildIpsBundle({ patient: PATIENT, data })
+    const medication = bundle.entry
+      .map((e) => e.resource)
+      .find((r) => r.resourceType === 'MedicationStatement' && (r.medicationCodeableConcept as { text?: string })?.text === 'PATEAR EYE LOTIONS "PATRON"')!
+
+    expect(medication.dosage).toBeUndefined()
+    expect(JSON.stringify(medication)).not.toContain('平均每日')
+    expect(JSON.stringify(medication)).not.toContain('0.04')
+  })
+
   it('links DiagnosticReport.result to observations that exist in the Bundle', () => {
     const bundle = buildIpsBundle({ patient: PATIENT, data: populated() })
     const fullUrls = new Set(bundle.entry.map((e) => e.fullUrl))
@@ -371,6 +394,36 @@ describe('buildIpsBundle — populated data', () => {
     // via DiagnosticReport.result.
     const dr = bundle.entry.find((e) => e.resource.resourceType === 'DiagnosticReport')!.resource
     expect((dr.result as Array<{ reference?: string }>)?.length).toBe(1)
+  })
+
+  it('adds a group title before multi-row DiagnosticReport narratives', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      {
+        id: 'chem-panel',
+        code: { text: '生化檢查' },
+        effectiveDateTime: '2026-06-15',
+        _observations: [
+          {
+            id: 'bun',
+            code: { text: 'BUN' },
+            valueQuantity: { value: 23.7, unit: 'mg/dL' },
+            effectiveDateTime: '2026-06-15',
+          },
+          {
+            id: 'crea',
+            code: { text: 'CREA' },
+            valueQuantity: { value: 1.93, unit: 'mg/dL' },
+            effectiveDateTime: '2026-06-15',
+          },
+        ],
+      },
+    ]
+
+    const div = sectionByLoinc(buildIpsBundle({ patient: PATIENT, data }), IPS_SECTION.results.loinc)?.text?.div ?? ''
+    expect(div).toContain('<p><strong>2026-06-15 - 生化檢查</strong></p>')
+    expect(div.indexOf('2026-06-15 - 生化檢查')).toBeLessThan(div.indexOf('BUN'))
+    expect(div).toContain('CREA')
   })
 
   // --- Diagnostic-results channel matrix -----------------------------------

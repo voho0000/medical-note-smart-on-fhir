@@ -61,6 +61,17 @@ export interface IpsSectionLabels {
   /** Sub-group headers inside the Results narrative (lab vs imaging). */
   resultsLab: string
   resultsImaging: string
+  /** Cumulative lab category labels used by Markdown/PDF companion exports. */
+  cumulativeCategories: Record<string, string>
+  cumulativeSubgroups: Record<string, string>
+  medicationTable: {
+    medication: string
+    status: string
+    directions: string
+    supply: string
+    date: string
+    code: string
+  }
   vitalSigns: string
   medicalDevices: string
   planOfCare: string
@@ -79,6 +90,47 @@ export const DEFAULT_SECTION_LABELS: IpsSectionLabels = {
   results: 'Diagnostic Results',
   resultsLab: 'Laboratory',
   resultsImaging: 'Imaging & studies',
+  cumulativeCategories: {
+    cbc: 'CBC',
+    coag: 'Coag',
+    chem: 'Biochem',
+    endocrine: 'Endo',
+    lipid: 'Lipids',
+    glucose: 'Sugar',
+    hep: 'HBV/HCV',
+    tumor: 'Tumor',
+    urine: 'Urine',
+    other: 'Other',
+  },
+  cumulativeSubgroups: {
+    counts: 'Counts',
+    indices: 'RBC Indices',
+    diff: 'Differential',
+    renal: 'Renal',
+    electrolyte: 'Electrolytes',
+    liver: 'Liver',
+    cardiac: 'Cardiac',
+    inflam: 'Inflammation',
+    iron: 'Iron Studies',
+    thyroid: 'Thyroid',
+    parathy: 'Parathyroid',
+    adrenal: 'Adrenal',
+    sexhorm: 'Sex Hormones',
+    pancreas: 'Pancreas',
+    pituitary: 'Pituitary/GH',
+    physical: 'Physical',
+    chemical: 'Chemistry',
+    micro: 'Microscopy',
+    ratio: 'Spot Ratios',
+  },
+  medicationTable: {
+    medication: 'Medication',
+    status: 'Status',
+    directions: 'Directions',
+    supply: 'Supply',
+    date: 'Date',
+    code: 'Code',
+  },
   vitalSigns: 'Vital Signs',
   medicalDevices: 'Medical Devices',
   planOfCare: 'Plan of Care',
@@ -176,7 +228,7 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
       IPS_SECTION.medications.loinc,
       labels.medications,
       mapMedications(data.medications, patientRef),
-      narrativeMedications(data.medications),
+      narrativeMedications(data.medications, labels.medicationTable),
       { emptyReason: { coding: [ABSENT.noKnownMedications] }, emptyNarrativeText: labels.noInformation },
     ),
   )

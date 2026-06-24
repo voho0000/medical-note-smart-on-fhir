@@ -214,6 +214,10 @@ export const TEST_ALIASES: Record<string, string> = {
   'Appearance': 'TURBIDITY', 'APPEARANCE': 'TURBIDITY',
   // ACR vs UACR — same albumin/creatinine ratio test.
   'UACR': 'ACR',
+  'ALB/CR RATIO': 'ACR', 'ALB/CREATININE RATIO': 'ACR',
+  'MICROALBUMIN/CREATININE RATIO': 'ACR', 'MICROALBUMIN CREATININE RATIO': 'ACR',
+  '微白蛋白/肌酐酸比值': 'ACR', '微白蛋白/肌酸酐比值': 'ACR',
+  '白蛋白/肌酐酸比值': 'ACR', '白蛋白/肌酸酐比值': 'ACR',
   // Glucose urine
   '尿糖': 'GLUCOSE',
   // Nitrite / 亞硝酸鹽
@@ -403,6 +407,7 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   '5802-4':  'NITRITE',       // Nitrite [Presence] in Urine by Test strip
   '5794-3':  'OCCULT',        // Hemoglobin [Presence] in Urine by Test strip (occult blood)
   '5799-2':  'LE',            // Leukocyte esterase [Presence] in Urine by Test strip
+  '14959-1': 'ACR',           // Microalbumin/Creatinine Ratio in Urine
   // Sediment microscopy (System "Urine sed"). WBC/RBC use the per-HPF keys so
   // urine sediment counts stay distinct from CBC blood WBC/RBC.
   '5787-7':  'EPITH',         // Epithelial cells [#/area] in Urine sediment by Microscopy HPF

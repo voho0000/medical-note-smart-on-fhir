@@ -13,7 +13,7 @@
 // We intentionally use display-text aliases (not LOINC mappings) so that
 // bridge mis-tags — e.g. a band-form row tagged with LOINC 770-8 — stay
 // in their own column and remain visible as bridge bugs.
-import { canonicalTestKeyFromString, getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
+import { canonicalKeyFromLoinc, canonicalTestKeyFromString, getAnalyteLabel } from '@/src/shared/utils/lab-normalize'
 
 describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
   describe('CBC differential cells', () => {
@@ -58,6 +58,32 @@ describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
       ['乳酸', 'LACTATE'],
     ])('%s → %s', (input, expected) => {
       expect(canonicalTestKeyFromString(input)).toBe(expected)
+    })
+  })
+
+  describe('Urine albumin/creatinine ratio aliases', () => {
+    it.each([
+      ['微白蛋白/肌酐酸比值', 'ACR'],
+      ['微白蛋白/肌酸酐比值', 'ACR'],
+      ['白蛋白/肌酐酸比值', 'ACR'],
+      ['白蛋白/肌酸酐比值', 'ACR'],
+    ])('%s → %s', (input, expected) => {
+      expect(canonicalTestKeyFromString(input)).toBe(expected)
+    })
+
+    it('LOINC 14959-1 resolves to ACR independent of display text', () => {
+      expect(canonicalKeyFromLoinc({
+        code: {
+          text: 'Unexpected source label',
+          coding: [{ system: 'http://loinc.org', code: '14959-1' }],
+        },
+      })).toBe('ACR')
+      expect(getAnalyteLabel({
+        code: {
+          text: 'Unexpected source label',
+          coding: [{ system: 'http://loinc.org', code: '14959-1' }],
+        },
+      })).toBe('ACR')
     })
   })
 

@@ -29,6 +29,7 @@ import type {
 } from './ips-types'
 import { INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
 import { formatDate, makeEntry } from './ips-helpers'
+import { medicationDirectionsForFhir } from './medication-display'
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -214,9 +215,8 @@ const VALID_MED_STATEMENT_STATUS = [
 
 export function mapMedications(medications: MedicationEntity[], patientRef: string): SectionMapResult {
   const entries = medications.map((m) => {
-    const dosage = m.dosageInstruction
-      ?.map((d) => (d.text ? { text: d.text } : undefined))
-      .filter(Boolean)
+    const directions = medicationDirectionsForFhir(m)
+    const dosage = directions ? [{ text: directions }] : undefined
 
     const resource: FhirResource = {
       resourceType: 'MedicationStatement',
@@ -226,7 +226,7 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
         toCodeableConcept(m.medicationCodeableConcept, 'Unknown medication') ?? { text: 'Unknown medication' },
       subject: { reference: patientRef },
       ...requiredDateTime('effectiveDateTime', m.authoredOn),
-      ...(dosage && dosage.length ? { dosage } : {}),
+      ...(dosage ? { dosage } : {}),
     }
     return makeEntry(resource).entry
   })

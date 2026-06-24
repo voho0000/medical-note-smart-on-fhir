@@ -1,9 +1,9 @@
 // Per-section XHTML narrative (Composition.section.text.div) generators.
 //
-// IPS narratives are human-readable, language-neutral interchange artifacts.
-// We keep table HEADERS in English (portable) and fill CELLS with the data's
-// own display text (which may be Chinese from 健保存摺). All dynamic content is
-// HTML-escaped. The div is wrapped in the required XHTML namespace.
+// IPS narratives are human-readable interchange artifacts. Table headers use
+// the active export labels, while cells keep the data's own display text (which
+// may be Chinese from 健保存摺). All dynamic content is HTML-escaped. The div is
+// wrapped in the required XHTML namespace.
 
 import type {
   AllergyEntity,
@@ -19,6 +19,8 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import { conceptLabel, conceptLabelEn, escapeHtml, formatDate, resultLabel } from './ips-helpers'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
+import { medicationDisplayParts } from './medication-display'
+import type { IpsSectionLabels } from './ips-builder'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
 
@@ -116,19 +118,23 @@ export function narrativeAllergies(allergies: AllergyEntity[]): string {
   return table(['Allergen', 'Status', 'Criticality', 'Reaction', 'Recorded'], rows)
 }
 
-export function narrativeMedications(medications: MedicationEntity[]): string {
+export function narrativeMedications(
+  medications: MedicationEntity[],
+  labels: IpsSectionLabels['medicationTable'],
+): string {
   const rows = medications.map((m) => {
-    const dosage = (m.dosageInstruction ?? []).map((d) => d.text || '').filter(Boolean).join('; ')
+    const dosage = medicationDisplayParts(m)
     return [
       // Prefer the English coding[].display (bridge canonical); fall back to
       // text so non-bridge sources are carried over faithfully.
       dash(conceptLabelEn(m.medicationCodeableConcept)),
       dash(m.status || ''),
-      dash(dosage),
+      dash(dosage.directions),
+      dash(dosage.supply),
       dash(formatDate(m.authoredOn)),
     ]
   })
-  return table(['Medication', 'Status', 'Dosage', 'Date'], rows)
+  return table([labels.medication, labels.status, labels.directions, labels.supply, labels.date], rows)
 }
 
 export function narrativeProblemList(conditions: ConditionEntity[]): string {
@@ -237,7 +243,7 @@ export function narrativeResults(
   // orphan single observations) group together, imaging / studies group together.
   // The export stays ONE standard Results section (LOINC 30954-2) — this only
   // structures its human-readable narrative.
-  type Entry = { date: string; group: 'lab' | 'imaging'; rows: string[][] }
+  type Entry = { date: string; group: 'lab' | 'imaging'; rows: string[][]; title?: string }
   const entries: Entry[] = []
   for (const o of labObservations) {
     entries.push({
@@ -249,26 +255,53 @@ export function narrativeResults(
   for (const dr of diagnosticReports) {
     const rows = reportRows(dr)
     if (!rows.length) continue // text-less report (e.g. image-only) → omitted
+    const reportLabel = dash(resultLabel(dr.code))
+    const reportDate = dash(formatDate(dr.effectiveDateTime))
     entries.push({
       date: dr.effectiveDateTime || '',
       group: inferGroupFromCategory(dr.category) === 'imaging' ? 'imaging' : 'lab',
       rows,
+      title: rows.length > 1 ? [reportDate, reportLabel].filter((x) => x && x !== '-').join(' - ') : undefined,
     })
   }
   entries.sort((a, b) => b.date.localeCompare(a.date)) // newest first
 
-  const labRows = entries.filter((e) => e.group === 'lab').flatMap((e) => e.rows)
-  const imagingRows = entries.filter((e) => e.group === 'imaging').flatMap((e) => e.rows)
+  const labEntries = entries.filter((e) => e.group === 'lab')
+  const imagingEntries = entries.filter((e) => e.group === 'imaging')
+
+  const renderEntries = (groupEntries: Entry[]): string => {
+    let html = ''
+    let compactRows: string[][] = []
+    const flushCompactRows = () => {
+      if (!compactRows.length) return
+      html += rawTable(headers, compactRows)
+      compactRows = []
+    }
+
+    for (const entry of groupEntries) {
+      if (!entry.title) {
+        compactRows.push(...entry.rows)
+        continue
+      }
+      flushCompactRows()
+      html += `<p><strong>${escapeHtml(entry.title)}</strong></p>${rawTable(headers, entry.rows)}`
+    }
+    flushCompactRows()
+    return html
+  }
+
+  const labHtml = renderEntries(labEntries)
+  const imagingHtml = renderEntries(imagingEntries)
 
   // Two labeled groups only when both kinds are present; otherwise a plain table.
-  if (labRows.length && imagingRows.length) {
+  if (labHtml && imagingHtml) {
     return wrap(
-      `<p><strong>${escapeHtml(labLabel)}</strong></p>${rawTable(headers, labRows)}` +
-        `<p><strong>${escapeHtml(imagingLabel)}</strong></p>${rawTable(headers, imagingRows)}`,
+      `<p><strong>${escapeHtml(labLabel)}</strong></p>${labHtml}` +
+        `<p><strong>${escapeHtml(imagingLabel)}</strong></p>${imagingHtml}`,
     )
   }
-  const all = [...labRows, ...imagingRows]
-  return all.length ? wrap(rawTable(headers, all)) : ''
+  const all = labHtml || imagingHtml
+  return all ? wrap(all) : ''
 }
 
 export function narrativeDevices(devices: DeviceEntity[]): string {

@@ -265,11 +265,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
       'MALB', 'MALB(U)',
       'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'CREA',
       'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR',
+      '微白蛋白/肌酐酸比值', '微白蛋白/肌酸酐比值',
     ],
     // Note: SUGAR is NOT in urine codes — some clinics report blood glucose as
     // "Sugar". Urine dipstick sugar is detected via the qualitative-value
     // heuristic (Negative/+/++/etc.) earlier in categorizeObservation.
-    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'MUCUS', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR', 'MALB', 'MALB(U)', 'LE'],
+    codes: ['COLOR', 'TRANS', 'TRANSPARENT', 'TURBIDITY', 'APPEARANCE', 'GRAVIT', 'GRAVITY', 'SP.GRAVITY', 'PROTEIN', 'PROT', 'KETON', 'KETONE', 'UROBI', 'UROBILINOGEN', 'NITRIT', 'NITRITE', 'OCCULT', 'OCCULT BLOOD', 'BLOOD', 'EPITH', 'EPITH CELL', 'EPITHELIAL CELL', 'WBCPUS', 'WBC/HPF', 'RBC/HPF', 'CAST1', 'CAST2', 'CAST3', 'CRYS1', 'CRYS2', 'CRYS3', 'CASTS', 'CRYSTAL', 'BACTERIA', 'MUCUS', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR', '微白蛋白/肌酐酸比值', '微白蛋白/肌酸酐比值', '白蛋白/肌酐酸比值', '白蛋白/肌酸酐比值', 'MALB', 'MALB(U)', 'LE'],
     // 2026-05-29 additions (verified at loinc.org): 5792-7 Urine glucose,
     // 5818-0 Urobilinogen urine, 5770-3 Bilirubin urine, 14957-5 Microalbumin
     // urine, 14959-1 Microalbumin/Creatinine ratio. These were previously
