@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { ShieldAlert, ScanSearch, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useSafetyAlerts } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
 import { SafetyAlertCard } from "./components/SafetyAlertCard"
@@ -14,6 +15,11 @@ import { SafetyModelPicker } from "./components/SafetyModelPicker"
 // The MODEL, however, is user-selectable (independent of the chat model).
 export function SafetyAlertsPanel() {
   const { t } = useLanguage()
+  const { audience } = useAudience()
+  // Patient audience gets the friendlier "健康提醒" wording; clinicians keep the
+  // clinical "安全警示" labels. Patient keys override the base set.
+  const safety = t.safetyAlerts
+  const sa = audience === 'patient' ? { ...safety, ...safety.patient } : safety
   const { result, isScanning, error, hasPatient, autoScan, setAutoScan, model, setModel, scan } = useSafetyAlerts()
 
   return (
@@ -22,23 +28,23 @@ export function SafetyAlertsPanel() {
           scan/re-scan (top-right). Wraps on narrow widths so nothing clips. */}
       <div className="flex flex-wrap items-center gap-2">
         <ShieldAlert className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-        <h2 className="text-base font-semibold text-foreground">{t.safetyAlerts.title}</h2>
+        <h2 className="text-base font-semibold text-foreground">{sa.title}</h2>
         <span className="rounded-md bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 text-[0.6875rem] font-medium text-blue-700 dark:text-blue-300">
-          {t.safetyAlerts.proactiveBadge}
+          {sa.proactiveBadge}
         </span>
         <div className="ml-auto flex items-center gap-3">
           <SafetyModelPicker model={model} onSelectModel={setModel} />
           <label
             className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
-            title={t.safetyAlerts.autoScanTooltip}
+            title={sa.autoScanTooltip}
           >
             <Switch checked={autoScan} onCheckedChange={setAutoScan} className="scale-90" />
-            {t.safetyAlerts.autoScan}
+            {sa.autoScan}
           </label>
           {hasPatient && !isScanning ? (
             <Button onClick={() => scan()} size="sm" variant="outline" className="gap-1.5">
               {result ? <RefreshCw className="h-4 w-4" /> : <ScanSearch className="h-4 w-4" />}
-              {result ? t.safetyAlerts.rescan : t.safetyAlerts.scanButton}
+              {result ? sa.rescan : sa.scanButton}
             </Button>
           ) : null}
         </div>
@@ -46,12 +52,12 @@ export function SafetyAlertsPanel() {
 
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
-          {t.safetyAlerts.emptyNoPatient}
+          {sa.emptyNoPatient}
         </div>
       ) : isScanning ? (
         <div className="py-10 flex flex-col items-center gap-3">
-          <StreamingIndicator label={t.safetyAlerts.scanning} />
-          <p className="text-xs text-muted-foreground/70">{t.safetyAlerts.scanningHint}</p>
+          <StreamingIndicator label={sa.scanning} />
+          <p className="text-xs text-muted-foreground/70">{sa.scanningHint}</p>
         </div>
       ) : (
         <>
@@ -59,24 +65,24 @@ export function SafetyAlertsPanel() {
           {result ? (
             result.alerts.length > 0 ? (
               <p className="text-sm text-muted-foreground">
-                {t.safetyAlerts.foundSummary
+                {sa.foundSummary
                   .replace("{scanned}", String(result.scannedCount))
                   .replace("{count}", String(result.alerts.length))}
               </p>
             ) : (
               <div className="flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-950/40 px-3 py-2 text-sm text-green-700 dark:text-green-300">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {t.safetyAlerts.emptyNoRisk}
+                {sa.emptyNoRisk}
               </div>
             )
           ) : (
-            <p className="text-sm text-muted-foreground">{t.safetyAlerts.scanIntro}</p>
+            <p className="text-sm text-muted-foreground">{sa.scanIntro}</p>
           )}
 
           {error ? (
             <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              {error === "PARSE_FAILED" ? t.safetyAlerts.parseError : error}
+              {error === "PARSE_FAILED" ? sa.parseError : error}
             </div>
           ) : null}
 
@@ -92,7 +98,7 @@ export function SafetyAlertsPanel() {
           {/* AI disclaimer — pure-AI output, clinician must verify */}
           {result && result.alerts.length > 0 ? (
             <p className="pt-1 text-[0.6875rem] leading-relaxed text-muted-foreground/70">
-              {t.safetyAlerts.disclaimer}
+              {sa.disclaimer}
             </p>
           ) : null}
         </>

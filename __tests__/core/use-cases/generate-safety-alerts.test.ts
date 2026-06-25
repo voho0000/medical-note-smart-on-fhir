@@ -19,6 +19,17 @@ describe('GenerateSafetyAlertsUseCase', () => {
       const msgs = generateSafetyAlertsUseCase.buildMessages({ clinicalContext: 'x', locale: 'en' })
       expect(msgs[0].content).toContain('English')
     })
+
+    it('defaults to the clinician prompt and switches to the patient prompt by audience', () => {
+      const medical = generateSafetyAlertsUseCase.buildMessages({ clinicalContext: 'x', locale: 'en' })
+      const patient = generateSafetyAlertsUseCase.buildMessages({ clinicalContext: 'x', locale: 'en', audience: 'patient' })
+      // Clinician (default) speaks to healthcare professionals; patient version
+      // is layperson-facing and must forbid self-directed medication changes.
+      expect(medical[0].content).toContain('healthcare professionals')
+      expect(patient[0].content).toContain('layperson')
+      expect(patient[0].content).toMatch(/NEVER tell the patient to start, stop, or change/i)
+      expect(patient[0].content).not.toContain('healthcare professionals')
+    })
   })
 
   describe('parseScanResult', () => {

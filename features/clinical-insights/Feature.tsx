@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAllApiKeys, useModel } from "@/src/application/stores/ai-config.store"
@@ -53,6 +54,10 @@ const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
+  const { audience } = useAudience()
+  // Patient audience sees the friendlier "健康提醒" labels for the locked tab.
+  const safetyTabLabel = audience === 'patient' ? t.safetyAlerts.patient.tabLabel : t.tabs.safetyAlerts
+  const safetyTabTitle = audience === 'patient' ? t.safetyAlerts.patient.title : t.safetyAlerts.title
   const { panels: configPanels } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext('insights')
@@ -280,11 +285,11 @@ export default function ClinicalInsightsFeature() {
                 {/* Locked safety-alerts tab — pinned FIRST, fixed prompt + fixed UI */}
                 <TabsTrigger
                   value={SAFETY_TAB_ID}
-                  title={t.safetyAlerts.title}
+                  title={safetyTabTitle}
                   className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.insight} min-w-0 flex items-center justify-center gap-1`}
                 >
                   <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{t.tabs.safetyAlerts}</span>
+                  <span className="truncate">{safetyTabLabel}</span>
                 </TabsTrigger>
                 {panelEntries.map((panel) => (
                   <TabsTrigger

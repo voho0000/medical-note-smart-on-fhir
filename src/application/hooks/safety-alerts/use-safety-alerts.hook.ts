@@ -12,6 +12,7 @@ import { useClinicalContext } from '@/src/application/hooks/use-clinical-context
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { getUserErrorMessage } from '@/src/core/errors'
 import {
@@ -110,8 +111,13 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
 
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
 
+  const { audience } = useAudience()
   const patientId = patient?.id ?? ''
-  const result = useSafetyAlertsStore((s) => (patientId ? s.byPatient[patientId] : undefined))
+  // Cache scope = patient + audience. The medical (安全警示) and patient (健康提醒)
+  // scans are different outputs, so each is cached & scanned independently;
+  // switching audience swaps to the matching version (or generates it).
+  const scanKey = patientId ? `${patientId}::${audience}` : ''
+  const result = useSafetyAlertsStore((s) => (scanKey ? s.byPatient[scanKey] : undefined))
   const setResult = useSafetyAlertsStore((s) => s.setResult)
   const clearResult = useSafetyAlertsStore((s) => s.clear)
   const autoScan = useSafetyPrefsStore((s) => s.autoScan)
@@ -135,13 +141,13 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     return gateModel(modelId, hasProviderKey, SAFETY_ALERTS_MODEL_ID)
   }, [modelId, apiKey, geminiKey, claudeKey])
 
-  // Clear a stale error when the patient changes (error is component state).
+  // Clear a stale error when the patient or audience changes.
   useEffect(() => {
     setError(null)
-  }, [patientId])
+  }, [scanKey])
 
   const scan = useCallback(async () => {
-    if (!patientId || isScanning) return
+    if (!scanKey || isScanning) return
     setIsScanning(true)
     setError(null)
     try {
@@ -149,6 +155,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
       const messages = generateSafetyAlertsUseCase.buildMessages({
         clinicalContext,
         locale: locale === 'zh-TW' ? 'zh-TW' : 'en',
+        audience: audience === 'patient' ? 'patient' : 'medical',
       })
 
       let full = ''
@@ -164,15 +171,15 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
         setError('PARSE_FAILED')
         return
       }
-      setResult(patientId, parsed)
+      setResult(scanKey, parsed)
       // Persist so a refresh reuses it instead of re-scanning (re-billing).
-      void saveEncryptedCache(safetyCacheKey(patientId), parsed)
+      void saveEncryptedCache(safetyCacheKey(scanKey), parsed)
     } catch (err) {
       setError(getUserErrorMessage(err))
     } finally {
       setIsScanning(false)
     }
-  }, [patientId, isScanning, getFullClinicalContext, locale, ai, setResult, resolvedModelId])
+  }, [scanKey, isScanning, getFullClinicalContext, locale, audience, ai, setResult, resolvedModelId])
 
   // Restore a persisted scan on (re)load before auto-scan can fire, so a refresh
   // on the same patient reuses the cached result instead of re-billing. The
@@ -180,21 +187,21 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   // cache when it's empty (i.e. after a page reload). Reads the store
   // imperatively (not via a dep) so this stays correct under StrictMode's
   // double-invoke — each mount independently resolves to `hydratedPatient`.
-  const [hydratedPatient, setHydratedPatient] = useState<string | null>(null)
+  const [hydratedScan, setHydratedScan] = useState<string | null>(null)
   useEffect(() => {
-    if (!patientId) return
-    if (useSafetyAlertsStore.getState().byPatient[patientId]) {
-      setHydratedPatient(patientId)
+    if (!scanKey) return
+    if (useSafetyAlertsStore.getState().byPatient[scanKey]) {
+      setHydratedScan(scanKey)
       return
     }
     let cancelled = false
-    void loadEncryptedCache<SafetyScanResult>(safetyCacheKey(patientId), SAFETY_CACHE_MAX_AGE_MS).then((cached) => {
+    void loadEncryptedCache<SafetyScanResult>(safetyCacheKey(scanKey), SAFETY_CACHE_MAX_AGE_MS).then((cached) => {
       if (cancelled) return
-      if (cached) setResult(patientId, cached)
-      setHydratedPatient(patientId)
+      if (cached) setResult(scanKey, cached)
+      setHydratedScan(scanKey)
     })
     return () => { cancelled = true }
-  }, [patientId, setResult])
+  }, [scanKey, setResult])
 
   // Auto-scan: fire once per patient when enabled and there's no result — but
   // only AFTER cache hydration has settled, so a refresh doesn't race the
@@ -202,24 +209,24 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   // in a loop; the user re-scans manually.
   const autoTriggeredRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!autoScan || authLoading || !patientId || isScanning || result) return
-    if (hydratedPatient !== patientId) return
-    if (autoTriggeredRef.current === patientId) return
-    autoTriggeredRef.current = patientId
+    if (!autoScan || authLoading || !scanKey || isScanning || result) return
+    if (hydratedScan !== scanKey) return
+    if (autoTriggeredRef.current === scanKey) return
+    autoTriggeredRef.current = scanKey
     void scan()
-  }, [autoScan, authLoading, patientId, isScanning, result, hydratedPatient, scan])
+  }, [autoScan, authLoading, scanKey, isScanning, result, hydratedScan, scan])
 
   // Changing the model invalidates the cached scan (it was produced by the old
   // model) and re-arms auto-scan, so "重新掃描" / auto-scan re-runs on the new
   // model instead of showing a stale result.
   const setModel = useCallback((id: string) => {
     setModelId(id)
-    if (patientId) {
-      clearResult(patientId)
-      removeEncryptedCache(safetyCacheKey(patientId))
+    if (scanKey) {
+      clearResult(scanKey)
+      removeEncryptedCache(safetyCacheKey(scanKey))
     }
     autoTriggeredRef.current = null
-  }, [setModelId, patientId, clearResult])
+  }, [setModelId, scanKey, clearResult])
 
   return {
     result,

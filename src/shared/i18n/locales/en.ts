@@ -69,6 +69,20 @@ export const en = {
     autoScanTooltip: 'Scan once automatically when a patient loads (result is cached, not re-run)',
     modelLabel: 'Model',
     modelTooltip: 'Choose the AI model for the safety scan (independent of the chat model)',
+    // Patient-audience overrides — reframed from clinical "safety alerts" to
+    // friendly "health reminders" (plain language, follow-up + lifestyle).
+    patient: {
+      tabLabel: 'Health tips',
+      title: 'Health reminders',
+      proactiveBadge: 'AI health tips',
+      scanIntro: 'AI reviews your current labs, medicines and diagnoses and gathers points worth noting and discussing with your doctor or pharmacist.',
+      scanButton: 'Get health reminders',
+      rescan: 'Refresh',
+      scanning: 'AI is reviewing…',
+      foundSummary: 'Reviewed {scanned} records and gathered {count} health reminder(s):',
+      emptyNoRisk: 'Nothing in particular to flag right now.',
+      disclaimer: 'AI-generated for your reference; always confirm health and medication decisions with your own doctor or pharmacist.',
+    },
   },
 
   ipsExport: {

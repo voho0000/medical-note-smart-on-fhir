@@ -71,6 +71,20 @@ export const zhTW = {
     autoScanTooltip: '載入病人後自動掃描一次（結果會快取，不重複跑）',
     modelLabel: '模型',
     modelTooltip: '選擇安全掃描使用的 AI 模型（與聊天模型獨立）',
+    // Patient-audience overrides — reframed from clinical "safety alerts" to
+    // friendly "health reminders" (plain language, follow-up + lifestyle).
+    patient: {
+      tabLabel: '健康提醒',
+      title: '健康提醒',
+      proactiveBadge: 'AI 健康提醒',
+      scanIntro: '由 AI 看過你目前的檢驗、用藥與診斷，整理出值得留意、可以跟醫師或藥師討論的健康提醒。',
+      scanButton: '產生健康提醒',
+      rescan: '重新整理',
+      scanning: 'AI 整理中…',
+      foundSummary: '看了 {scanned} 筆資料，整理出 {count} 項健康提醒：',
+      emptyNoRisk: '目前沒有特別需要注意的事項。',
+      disclaimer: '由 AI 整理，僅供參考；實際健康與用藥決定請以您的醫師或藥師為準。',
+    },
   },
 
   ipsExport: {
