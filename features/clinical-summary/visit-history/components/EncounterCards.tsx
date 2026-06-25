@@ -124,7 +124,10 @@ export function ProcedureRow({ procedure }: { procedure: EncounterProcedure }) {
         </div>
         <div className="flex flex-col items-end gap-1 text-right">
           {procedure.performed && <span className="text-xs text-muted-foreground">{formatDateTime(procedure.performed, locale)}</span>}
-          {procedure.performer && <span className="text-xs text-muted-foreground">{t.visitHistory.performer} {procedure.performer}</span>}
+          {/* Procedure.performer.actor is the operating institution (健保存摺
+              sends the 醫事機構, never an individual physician), so use the
+              facility label — matching the reports 處置 detail. */}
+          {procedure.performer && <span className="text-xs text-muted-foreground">{t.procedures.performer} {procedure.performer}</span>}
           {procedure.status && (
             <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs capitalize border-purple-200 bg-purple-50 text-purple-700">
               {procedure.status}
