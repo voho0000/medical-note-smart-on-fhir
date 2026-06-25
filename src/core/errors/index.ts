@@ -29,6 +29,14 @@ interface ErrorMapping {
 }
 
 const ERROR_MAPPINGS: ErrorMapping[] = [
+  // Guest/anonymous proxy session couldn't be obtained CLIENT-side (no Firebase
+  // ID token) — most often iOS storage/ITP, private mode, or a stale cached
+  // build. Distinct from the server "sign-in required" 401 below so the message
+  // can point at the real fix (refresh / own key). Must come first to win.
+  {
+    pattern: /proxy session unavailable/i,
+    message: '🔐 訪客連線失敗 - 取不到免費額度的連線權杖（常見於手機隱私／無痕設定或舊版快取）。請重新整理頁面；若仍不行，請改用自己的 API Key 或登入。'
+  },
   // Proxy auth / quota (the Firebase Functions respond with these)
   {
     pattern: /sign-?in required|invalid or expired session/i,

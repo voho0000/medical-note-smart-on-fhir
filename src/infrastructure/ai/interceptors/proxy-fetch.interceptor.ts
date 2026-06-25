@@ -35,10 +35,19 @@ export class ProxyFetchInterceptor {
       }
 
       // Proxy requires a signed-in user (audit A6): Authorization now carries
-      // the Firebase ID token in place of the deleted provider key
+      // the Firebase ID token in place of the deleted provider key.
       const idToken = await getProxyIdToken()
       if (idToken) {
         headers.set('Authorization', `Bearer ${idToken}`)
+      } else {
+        // No session token even after waiting for the guest session to come up.
+        // Sending the request anyway 401s ambiguously (or hangs mid-stream),
+        // which on iOS surfaced as a silent "思考中" spinner. Fail fast with a
+        // mappable message instead. This path is never reached when the user
+        // supplies their own API key — that bypasses the proxy entirely.
+        throw new Error(
+          'proxy session unavailable: could not obtain a guest sign-in token (sign-in required)'
+        )
       }
 
       let body = init?.body

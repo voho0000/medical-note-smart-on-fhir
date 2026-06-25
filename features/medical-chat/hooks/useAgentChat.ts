@@ -232,9 +232,14 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             const chunkAny = chunk as any
             const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
             toolResults.push({ toolName: chunk.toolName, result })
+          } else if (chunk.type === 'error') {
+            // A failed request (proxy 401 / no guest token / network) arrives as
+            // an error chunk, NOT a throw. Unhandled it was silently ignored and
+            // the agent hung on "思考中" — propagate so the catch surfaces it.
+            throw (chunk as { error?: unknown }).error ?? new Error('AI stream error')
           }
         }
-        
+
         // Ensure final content is displayed after main stream
         if (accumulatedContent.length > 0) {
           setChatMessages((prev) =>
@@ -338,6 +343,8 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
               const chunkAny = chunk as any
               const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
               followUpToolResults.push({ toolName: chunk.toolName, result })
+            } else if (chunk.type === 'error') {
+              throw (chunk as { error?: unknown }).error ?? new Error('AI stream error')
             }
           }
           
@@ -387,9 +394,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
                 setChatMessages((prev) =>
                   prev.map((m) => m.id === assistantMessageId ? { ...m, content: finalContent } : m)
                 )
+              } else if (chunk.type === 'error') {
+                throw (chunk as { error?: unknown }).error ?? new Error('AI stream error')
               }
             }
-            
+
             followUpContent = finalContent
           }
           
