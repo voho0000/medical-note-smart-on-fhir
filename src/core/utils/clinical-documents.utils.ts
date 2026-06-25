@@ -77,8 +77,18 @@ function decodeBase64(data?: string): string {
   }
 }
 
+// Decoding + HTML-stripping a discharge summary is expensive, and
+// listClinicalDocuments is invoked MANY times per UI interaction (several
+// consumers × React re-renders × StrictMode double-invoke). Cache the derived
+// text per document id so each document is decoded at most once per session,
+// regardless of how often it gets re-listed — this is what keeps the
+// data-selection checkbox responsive on patients with many discharge summaries.
+const decodedTextCache = new Map<string, string>()
+
 function compositionText(c: CompositionEntity): string {
-  return (c.section ?? [])
+  const key = c.id ? `c:${c.id}` : null
+  if (key) { const hit = decodedTextCache.get(key); if (hit !== undefined) return hit }
+  const result = (c.section ?? [])
     .map((s) => {
       const t = s.text?.div ? stripHtmlToText(s.text.div) : ''
       if (!t) return ''
@@ -86,17 +96,25 @@ function compositionText(c: CompositionEntity): string {
     })
     .filter(Boolean)
     .join('\n\n')
+  if (key) decodedTextCache.set(key, result)
+  return result
 }
 
 function documentReferenceText(d: DocumentReferenceEntity): string {
+  const key = d.id ? `d:${d.id}` : null
+  if (key) { const hit = decodedTextCache.get(key); if (hit !== undefined) return hit }
   const att = d.content?.[0]?.attachment
   const ct = att?.contentType?.toLowerCase() ?? ''
+  let result: string
   // Discharge summaries ride in attachment.data as base64 text/html.
   if (att?.data && (ct.includes('html') || ct.includes('text') || ct.includes('xml') || !ct)) {
     const decoded = decodeBase64(att.data)
-    if (decoded.trim()) return stripHtmlToText(decoded)
+    result = decoded.trim() ? stripHtmlToText(decoded) : (d.description || att?.title || '')
+  } else {
+    result = d.description || att?.title || ''
   }
-  return d.description || att?.title || ''
+  if (key) decodedTextCache.set(key, result)
+  return result
 }
 
 /** All documents (Composition + DocumentReference), newest-first. */
@@ -104,16 +122,21 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
   if (!data) return []
   const out: ClinicalDocumentRef[] = []
   for (const c of data.compositions ?? []) {
+    let textCache: string | undefined
     out.push({
       id: c.id,
       date: c.date,
       title: c.title || c.type?.text || c.type?.coding?.[0]?.display || 'Document',
       isDischargeSummary: hasDischargeLoinc(c.type?.coding),
-      text: compositionText(c),
+      // Lazy: decode/HTML-strip is heavy and ONLY the AI-context formatter reads
+      // it (for SELECTED docs). The checklist + count badges must not trigger it,
+      // or every render re-decodes all documents — the data-selection lag.
+      get text() { return (textCache ??= compositionText(c)) },
     })
   }
   for (const d of data.documentReferences ?? []) {
     const att = d.content?.[0]?.attachment
+    let textCache: string | undefined
     out.push({
       id: d.id,
       // Prefer the encounter period start (admission date) over
@@ -125,7 +148,7 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
       date: d.context?.period?.start ?? d.date,
       title: d.type?.text || d.type?.coding?.[0]?.display || att?.title || 'Document',
       isDischargeSummary: hasDischargeLoinc(d.type?.coding),
-      text: documentReferenceText(d),
+      get text() { return (textCache ??= documentReferenceText(d)) },
     })
   }
   return out.sort((a, b) => (b.date || '').localeCompare(a.date || ''))

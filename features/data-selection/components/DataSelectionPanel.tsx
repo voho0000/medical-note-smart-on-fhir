@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -37,6 +38,12 @@ export function DataSelectionPanel({
     resetClinicalContextToDefault
   } = useClinicalContext()
 
+  // Build the (potentially huge) context preview ONLY while the preview tab is
+  // open. Otherwise getFormattedClinicalContext() — which formats every section,
+  // incl. all meds/labs/documents — ran on every render and lagged each
+  // checkbox toggle by seconds on large patients.
+  const [activeTab, setActiveTab] = useState('selection')
+
   const { filterKey, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
   const dataCategories = useDataCategories(clinicalData, filterKey, filters)
 
@@ -48,7 +55,7 @@ export function DataSelectionPanel({
   })
 
   return (
-    <Tabs defaultValue="selection" className="w-full space-y-4">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
       <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50">
         <TabsTrigger value="selection" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>{t.dataSelection.title}</TabsTrigger>
         <TabsTrigger value="preview" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>{t.common.preview}</TabsTrigger>
@@ -72,7 +79,7 @@ export function DataSelectionPanel({
           onSupplementaryNotesChange={setSupplementaryNotes}
           editedClinicalContext={editedClinicalContext}
           onEditedClinicalContextChange={setEditedClinicalContext}
-          formattedClinicalContext={getFormattedClinicalContext()}
+          formattedClinicalContext={activeTab === 'preview' ? getFormattedClinicalContext() : ''}
           onReset={resetClinicalContextToDefault}
         />
       </TabsContent>

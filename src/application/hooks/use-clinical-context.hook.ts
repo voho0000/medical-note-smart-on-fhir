@@ -105,17 +105,26 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     return dataCategoryRegistry.getCategoryContext('carePlans', clinicalData, filters)
   }, [selectedData.carePlans, clinicalData, filters])
 
+  // Decode + HTML-strip every document ONCE per clinicalData load. This is the
+  // expensive step (base64 + regex strip per discharge summary). Keeping it out
+  // of the per-selection memo below means ticking a document checkbox — which
+  // changes documentIds and re-renders the live context preview — no longer
+  // re-decodes all documents, which lagged the checkbox by several seconds.
+  // clinicalData is the full ClinicalDataCollection at runtime (carries
+  // compositions + documentReferences); the hook's local type omits them.
+  const allDocuments = useMemo(
+    () =>
+      clinicalData && selectedData.documents
+        ? listClinicalDocuments(clinicalData as unknown as Parameters<typeof listClinicalDocuments>[0])
+        : [],
+    [clinicalData, selectedData.documents],
+  )
+
   const documentsSection = useMemo(() => {
     if (!selectedData.documents || !clinicalData) return null
-    const docs = resolveSelectedDocuments(
-      // clinicalData is the full ClinicalDataCollection at runtime (carries
-      // compositions + documentReferences); the hook's local type omits them.
-      listClinicalDocuments(clinicalData as unknown as Parameters<typeof listClinicalDocuments>[0]),
-      profile.documentMode,
-      profile.documentIds,
-    )
+    const docs = resolveSelectedDocuments(allDocuments, profile.documentMode, profile.documentIds)
     return formatDocumentsSection(docs)
-  }, [selectedData.documents, clinicalData, profile.documentMode, profile.documentIds])
+  }, [selectedData.documents, clinicalData, allDocuments, profile.documentMode, profile.documentIds])
 
   const pushRegistrySection = useCallback(
     (
