@@ -4,11 +4,10 @@
 // choice with the auto-safety-insights opt-in and a sign-in / guest step.
 //
 // Step list is built dynamically and frozen when the flow opens:
-//   • welcome + audience  — only for brand-new users (no audience chosen yet)
+//   • welcome + audience  — always (the audience choice shapes the whole UI)
 //   • autoScan            — always (the main new question)
 //   • signIn              — only when not signed in
-// So returning users who already picked an audience just get the new question(s)
-// once, gated on the versioned `medical-note-onboarding-v1` flag.
+// Shown once per browser, gated on the versioned `medical-note-onboarding-v1` flag.
 "use client"
 
 import { useEffect, useState } from 'react'
@@ -30,7 +29,7 @@ export function FirstRunOnboardingDialog() {
   const ob = t.onboarding
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const { completed, markComplete } = useOnboarding()
-  const { setAudience, hasSelected } = useAudience()
+  const { setAudience } = useAudience()
   const { user } = useAuth()
   const autoScan = useSafetyPrefsStore((s) => s.autoScan)
   const setAutoScan = useSafetyPrefsStore((s) => s.setAutoScan)
@@ -42,19 +41,17 @@ export function FirstRunOnboardingDialog() {
   const [stepIndex, setStepIndex] = useState(0)
   const [showAuth, setShowAuth] = useState(false)
 
-  // Freeze the step list when the flow first opens — selecting an audience mid-
-  // flow flips `hasSelected`, which would otherwise shrink the array and break
-  // the index.
+  // Freeze the step list when the flow first opens. The audience choice is
+  // always asked first (it shapes the entire UI), even for returning users.
   useEffect(() => {
     if (open && steps === null) {
-      const s: StepId[] = []
-      if (!hasSelected) s.push('welcome', 'audience')
+      const s: StepId[] = ['welcome', 'audience']
       s.push('autoScan')
       if (!user) s.push('signIn')
       setSteps(s)
       setStepIndex(0)
     }
-  }, [open, steps, hasSelected, user])
+  }, [open, steps, user])
 
   // AuthDialog is always rendered so a 登入 choice (which closes this flow first)
   // can still surface it afterwards.
