@@ -1094,8 +1094,7 @@ export const en = {
   welcome: {
     title: 'Welcome to MediPrisma',
     description: 'Import your health data to get started, or launch from a hospital system via SMART-on-FHIR.',
-    importCta: 'Tap the button to import your data',
-    dragHint: 'or drag a .json file onto this screen',
+    dragHint: 'Tip: you can also drag a .json file anywhere on this screen to import.',
     dropHere: 'Release to import',
     localTitle: 'Import from your device',
     localDesc: 'Download your health data (.json file) from 健保存摺 or another source — once imported, it stays on this device only.',
@@ -1103,7 +1102,7 @@ export const en = {
     demoDesc: 'Load a de-identified sample patient (adapted from a real 健保存摺 export, with a discharge summary and images) — explore without importing anything.',
     smartTitle: 'Hospital launch (SMART-on-FHIR)',
     smartDesc: 'If you opened this app from a hospital\'s electronic health record via SMART-on-FHIR, patient data loads automatically — no manual import needed.',
-    privacyNote: 'Your health data stays on this device — we never receive a copy.',
+    privacyNote: 'Your health data stays in your browser on this device.',
   },
 
   auth: (() => {
