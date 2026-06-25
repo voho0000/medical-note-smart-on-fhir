@@ -7,10 +7,9 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 function basePrefix(): string {
-  const repoBase = "/medical-note-smart-on-fhir"
-  return typeof window !== "undefined" && window.location.pathname.startsWith(`${repoBase}/`)
-    ? repoBase
-    : ""
+  // Injected at build time per deploy target (see next.config.ts):
+  // "" in dev, "/medical-note-smart-on-fhir" on GH Pages, "/app" on mediprisma.tw.
+  return (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "")
 }
 
 export default function SmartCallbackPage() {

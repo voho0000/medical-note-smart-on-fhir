@@ -10,10 +10,10 @@ export default function SmartLaunchPage() {
       const iss = url.searchParams.get("iss") || undefined
       const launch = url.searchParams.get("launch") || undefined
 
-      // 🔒 最穩：直接看 pathname 是否在 repo 子路徑底下
-      const repoBase = "/medical-note-smart-on-fhir"
-      const onRepoBase = window.location.pathname.startsWith(`${repoBase}/`)
-      const prefix = onRepoBase ? repoBase : "" // 本機(或根域名)為空字串
+      // Base path is injected at build time (NEXT_PUBLIC_BASE_PATH): "" in dev,
+      // "/medical-note-smart-on-fhir" on GH Pages, "/app" on the mediprisma.tw
+      // mirror — so redirectUri matches wherever this bundle is served.
+      const prefix = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "")
 
       const baseUrl = `${window.location.origin}${prefix}`.replace(/\/+$/, "")
       const redirectUri = `${baseUrl}/smart/callback` // 無結尾斜線（和 Pages 設定一致）

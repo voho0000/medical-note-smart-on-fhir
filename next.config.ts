@@ -3,7 +3,18 @@ import path from "path";
 
 const isGhPages = process.env.GITHUB_PAGES === "true";
 
-const basePath = isGhPages ? "/medical-note-smart-on-fhir" : "";
+// Optional second static-export target: the official mirror at
+// mediprisma.tw/app. Set DEPLOY_BASE_PATH=/app to build that artifact.
+// Any non-empty value turns on the same static export + basePath wiring
+// that GitHub Pages uses, just under a different subpath.
+const deployBasePath = process.env.DEPLOY_BASE_PATH || "";
+const isStaticExport = isGhPages || deployBasePath !== "";
+
+const basePath = deployBasePath
+  ? deployBasePath
+  : isGhPages
+    ? "/medical-note-smart-on-fhir"
+    : "";
 
 // Detect when running inside a Claude Code worktree
 // (e.g. .claude/worktrees/<branch>/). Worktrees don't have their own
@@ -16,7 +27,7 @@ const nextConfig: NextConfig = {
   // (and on Vercel) we want the full Next.js server so dynamic API routes
   // like /api/feedback work. Without this gate, `output: "export"` forces
   // every route to be statically renderable, which breaks API routes.
-  ...(isGhPages ? { output: "export" as const } : {}),
+  ...(isStaticExport ? { output: "export" as const } : {}),
   images: { unoptimized: true },
   // 避免 Next 往上層亂抓 lockfile（雲端同步/家目錄）
   // worktree mode: point at main project where node_modules lives
@@ -28,8 +39,8 @@ const nextConfig: NextConfig = {
         },
       }
     : {}),
-  // 只有 GH Pages 才設定 basePath / assetPrefix
-  ...(isGhPages
+  // Static-export targets (GH Pages, mediprisma /app) need basePath / assetPrefix
+  ...(isStaticExport
     ? {
         basePath: basePath,
         assetPrefix: `${basePath}/`,
