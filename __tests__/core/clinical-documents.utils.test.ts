@@ -49,6 +49,33 @@ describe('clinical-documents.utils', () => {
     expect(docs.find((d) => d.id === 'ips')!.text).toContain('HTN')
   })
 
+  it('uses the encounter period start, not the clustered DocumentReference.date', () => {
+    // The NHI bridge sets `date` to a shared registration timestamp (so it
+    // clusters), while context.period.start is the real, distinct admission.
+    const docs = listClinicalDocuments({
+      documentReferences: [
+        {
+          id: 'p1',
+          date: '2024-08-02',
+          context: { period: { start: '2024-08-29', end: '2024-08-30' } },
+          type: { coding: [{ code: '18842-5' }] },
+          content: [{ attachment: { contentType: 'text/html', data: btoa('<p>x</p>') } }],
+        },
+        {
+          id: 'p2',
+          date: '2024-08-02',
+          context: { period: { start: '2024-08-07', end: '2024-08-08' } },
+          type: { coding: [{ code: '18842-5' }] },
+          content: [{ attachment: { contentType: 'text/html', data: btoa('<p>y</p>') } }],
+        },
+      ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    expect(docs.find((d) => d.id === 'p1')!.date).toBe('2024-08-29')
+    // Distinct period dates → correct newest-first order (no clustering).
+    expect(docs.map((d) => d.id)).toEqual(['p1', 'p2'])
+  })
+
   describe('resolveSelectedDocuments', () => {
     const docs = listClinicalDocuments(data)
 

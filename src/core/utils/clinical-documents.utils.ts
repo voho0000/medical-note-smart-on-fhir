@@ -116,7 +116,13 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
     const att = d.content?.[0]?.attachment
     out.push({
       id: d.id,
-      date: d.date,
+      // Prefer the encounter period start (admission date) over
+      // DocumentReference.date: the NHI 健保存摺 bridge sets `date` to a
+      // registration timestamp that is often shared across a batch (so it
+      // clusters — e.g. many docs all showing the same day) and doesn't match
+      // the real admission shown in the 文件 panel. The period is the meaningful,
+      // distinct date and keeps both views consistent.
+      date: d.context?.period?.start ?? d.date,
       title: d.type?.text || d.type?.coding?.[0]?.display || att?.title || 'Document',
       isDischargeSummary: hasDischargeLoinc(d.type?.coding),
       text: documentReferenceText(d),

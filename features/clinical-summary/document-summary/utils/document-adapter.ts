@@ -190,7 +190,11 @@ export function documentReferenceToEntry(
 
   return {
     id: docRef.id || `documentReference-${docRef.date ?? Math.random()}`,
-    date: docRef.date ?? period?.start ?? '',
+    // Sort by the admission date (period.start) first: the NHI bridge's
+    // DocumentReference.date is a registration timestamp that clusters across a
+    // batch, so sorting on it groups unrelated admissions. The period is the
+    // distinct, meaningful date and keeps this list in step with data-selection.
+    date: period?.start ?? docRef.date ?? '',
     typeLabel,
     typeCode,
     sourceKind: 'documentReference',
