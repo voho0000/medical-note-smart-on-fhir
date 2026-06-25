@@ -669,7 +669,9 @@ function deviceRows(rows: DeviceEntity[]): string[][] {
 
 function carePlanRows(rows: CarePlanEntity[]): string[][] {
   return rows.map((cp) => [
-    cp.title || cp.description || '',
+    // title is optional (0..1); fall back to `category` so SMART-sandbox /
+    // Synthea plans (no title) still show a name instead of an empty cell.
+    cp.title || conceptLabel(cp.category?.[0]) || cp.description || 'Care plan',
     cp.status || '',
     formatDate(cp.period?.start) || formatDate(cp.created),
     cp.description || (cp.activity ?? []).map((a) => a.detail?.description || '').filter(Boolean).join('; '),

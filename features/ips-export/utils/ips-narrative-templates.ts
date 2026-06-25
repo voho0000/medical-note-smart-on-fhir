@@ -315,7 +315,10 @@ export function narrativeDevices(devices: DeviceEntity[]): string {
 
 export function narrativeCarePlans(carePlans: CarePlanEntity[]): string {
   const rows = carePlans.map((cp) => [
-    dash(cp.title || cp.description || ''),
+    // CarePlan.title is optional (0..1); many sources (e.g. Synthea / SMART
+    // sandbox) carry the plan name in `category` instead. Fall back through the
+    // same chain the 照護計畫 panel uses so the IPS narrative isn't a bare "-".
+    dash(cp.title || conceptLabel(cp.category?.[0]) || cp.description || 'Care plan'),
     dash(cp.status || ''),
     dash(formatDate(cp.period?.start) || formatDate(cp.created)),
   ])
