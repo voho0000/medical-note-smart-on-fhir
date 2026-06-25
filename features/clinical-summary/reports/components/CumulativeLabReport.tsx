@@ -162,7 +162,12 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
           )}
           {pivot.dates.map((date, dateIdx) => (
             <tr key={date} className={dateIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-              <td className="sticky left-0 z-10 bg-inherit border-r px-2 py-1 font-medium whitespace-nowrap">
+              {/* The sticky date column MUST be opaque — the row's bg-muted/20
+                  zebra tint is semi-transparent, so the previous bg-inherit let
+                  the value columns scroll through and overlap the dates. A solid
+                  opaque bg-background frozen column fixes it (the faint zebra
+                  difference vs the cell is imperceptible). */}
+              <td className="sticky left-0 z-10 bg-background border-r px-2 py-1 font-medium whitespace-nowrap">
                 {formatDateLabel(date)}
               </td>
               {flatTests.map((test) => {
