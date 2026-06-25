@@ -22,7 +22,7 @@ import {
 } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
   getModelDefinition,
-  getBaseModelIdForProvider,
+  gateModel,
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import {
@@ -36,29 +36,6 @@ import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 // session key, purged after 12h or when the session can't decrypt it.
 const SAFETY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const safetyCacheKey = (patientId: string) => aiResultCacheKey('safety', patientId)
-
-// Resolve the model the scan actually runs on, in priority order:
-//   1. `window.__safetyModelId` — an E2E test seam (never set in prod) so the
-//      scan can reuse the OpenAI mock-stream fixture.
-//   2. the user's chosen model (persisted), key-gated: if it's a premium model
-//      whose provider key is missing, fall back to that provider's free base
-//      model so an (auto-)scan can't dead-end on a stranded premium pick.
-//   3. the default fast model (Gemini Flash-Lite).
-function gateModel(
-  modelId: string,
-  keys: { apiKey: string | null; geminiKey: string | null; claudeKey: string | null },
-): string {
-  const def = getModelDefinition(modelId)
-  if (!def) return SAFETY_ALERTS_MODEL_ID
-  if (def.requiresUserKey) {
-    const key =
-      def.provider === 'openai' ? keys.apiKey :
-      def.provider === 'gemini' ? keys.geminiKey :
-      keys.claudeKey
-    if (!key) return getBaseModelIdForProvider(def.provider) ?? SAFETY_ALERTS_MODEL_ID
-  }
-  return modelId
-}
 
 interface SafetyAlertsStore {
   byPatient: Record<string, SafetyScanResult>
@@ -145,13 +122,17 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Effective model: test seam → user pref (key-gated) → default.
+  // Effective model: test seam → user pref (key-gated → free base) → default.
   const resolvedModelId = useMemo(() => {
     if (typeof window !== 'undefined') {
       const override = (window as { __safetyModelId?: string }).__safetyModelId
       if (typeof override === 'string' && override) return override
     }
-    return gateModel(modelId, { apiKey, geminiKey, claudeKey })
+    const def = getModelDefinition(modelId)
+    const hasProviderKey = def
+      ? def.provider === 'openai' ? !!apiKey : def.provider === 'gemini' ? !!geminiKey : !!claudeKey
+      : false
+    return gateModel(modelId, hasProviderKey, SAFETY_ALERTS_MODEL_ID)
   }, [modelId, apiKey, geminiKey, claudeKey])
 
   // Clear a stale error when the patient changes (error is component state).

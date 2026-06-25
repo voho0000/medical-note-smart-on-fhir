@@ -9,7 +9,7 @@
 
 import { streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { getModelDefinition, gateModel } from "@/src/shared/constants/ai-models.constants"
 import { aiProviderFactory } from "../factories/ai-provider.factory"
 import { withIdleTimeout, resolveStreamIdleTimeoutMs } from "./stream-idle-timeout"
 
@@ -23,9 +23,15 @@ export interface StreamConfig {
 
 export class AiSdkStreamAdapter {
   async stream(config: StreamConfig): Promise<void> {
-    const useProxy = this.shouldUseProxy(config.apiKey, config.model)
+    // Central safety net: every AI feature streams through here. If the picked
+    // model needs the user's own key but none was supplied, downgrade to the
+    // provider's free, proxy-eligible base model so the call rides the proxy
+    // instead of dead-ending on a missing key (e.g. a model that used to be free
+    // and became key-gated). No caller can bypass this.
+    const modelId = gateModel(config.model, !!config.apiKey)
+    const useProxy = this.shouldUseProxy(config.apiKey, modelId)
     const { model } = aiProviderFactory.create({
-      modelId: config.model,
+      modelId,
       apiKey: config.apiKey ?? undefined,
       useProxy,
     })

@@ -11,7 +11,10 @@
 import { useState, useCallback } from "react"
 
 export function useAgentMode() {
-  const [isAgentMode, setIsAgentMode] = useState(false)
+  // Default ON: deep mode (literature search + FHIR tools) is the primary value
+  // of the assistant, so every new session/conversation starts in it. A model
+  // with disableAgentMode flips it off automatically (see MedicalChat effect).
+  const [isAgentMode, setIsAgentMode] = useState(true)
   const [showApiKeyWarning, setShowApiKeyWarning] = useState(false)
 
   const enableAgentMode = useCallback(() => {

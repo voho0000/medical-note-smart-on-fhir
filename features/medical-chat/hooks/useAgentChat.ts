@@ -399,12 +399,31 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             followUpTimeoutId = null
           }
           
+          // Literature search can also happen in the follow-up round (e.g. the
+          // model runs a FHIR query first, then searchMedicalLiterature). Merge
+          // citations from BOTH rounds so the Sources list survives regardless of
+          // which round produced them — previously follow-up citations were
+          // dropped and the answer rendered with no sources.
+          const followUpCitations = processAgentStreamUseCase.buildToolResultsSummary(
+            followUpToolResults,
+            {
+              queryResult: t.agent.queryResult,
+              queryFailed: t.agent.queryFailed,
+              noData: t.agent.noData,
+              noDataFound: t.agent.noDataFound,
+              foundRecords: t.agent.foundRecords,
+            }
+          ).citations
+          const allLiteratureCitations = [
+            ...new Set([...literatureCitations, ...followUpCitations]),
+          ]
+
           // Process citations BEFORE updating UI
           let finalDisplayContent = followUpContent
-          if (literatureCitations.length > 0) {
+          if (allLiteratureCitations.length > 0) {
             const { processedContent } = processAgentStreamUseCase.processCitations({
               content: followUpContent,
-              citations: literatureCitations,
+              citations: allLiteratureCitations,
             })
             finalDisplayContent = processedContent
           }

@@ -13,69 +13,16 @@ export class PerplexityService {
     citations?: string[]
     error?: string
   }> {
-    // If no API key provided, use Firebase Proxy
-    if (!apiKey) {
-      return this.searchViaProxy(query, searchDepth)
-    }
-
-    try {
-      // Select model based on search depth
-      // Updated model names as of 2024 - see https://docs.perplexity.ai/guides/model-cards
-      const model = searchDepth === 'advanced' 
-        ? 'sonar-pro'  // More comprehensive but more expensive
-        : 'sonar'      // Fast and cost-effective
-
-      const response = await fetch('https://api.perplexity.ai/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a medical literature search assistant. Provide accurate, evidence-based medical information with citations from authoritative medical sources including: PubMed, NIH, Cochrane Library, NEJM, The Lancet, JAMA, BMJ, UpToDate, WHO, CDC, FDA, Mayo Clinic, and other peer-reviewed medical journals and clinical guidelines. IMPORTANT: In your "Sources" section at the end, ONLY list the URLs that you directly cited with reference numbers [1][2][3] etc. in your response. Do not list additional URLs that you searched but did not cite.'
-            },
-            {
-              role: 'user',
-              content: query
-            }
-          ],
-          max_tokens: 1500,
-          temperature: 0.2,
-          top_p: 0.9,
-          // Note: return_citations is not supported in Chat Completions API
-          // Citations are automatically included in the response
-        }),
-      })
-
-      if (!response.ok) {
-        return {
-          success: false,
-          content: '',
-          error: `Perplexity API error: ${response.status} ${response.statusText}`
-        }
-      }
-
-      const data = await response.json()
-      const content = data.choices?.[0]?.message?.content || ''
-      // Citations can be in multiple places depending on API version
-      const citations = data.citations || data.choices?.[0]?.message?.citations || []
-
-      return {
-        success: true,
-        content,
-        citations,
-      }
-    } catch (error) {
-      return {
-        success: false,
-        content: '',
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
-      }
-    }
+    // Every call goes through the owner's Firebase proxy. Browser-direct calls
+    // to api.perplexity.ai are blocked at Perplexity's CDN (Cloudflare
+    // bot-mitigation) — even though the API itself returns
+    // `Access-Control-Allow-Origin: *`, a real browser request gets challenged
+    // and the response carries no CORS header, so a client-side fetch fails with
+    // an opaque CORS/connection error. The proxy runs server-side (no CDN
+    // challenge). When the user supplied their own key we forward it so the
+    // proxy bills THAT key and skips the daily quota; otherwise the proxy uses
+    // the server key under the per-uid quota.
+    return this.searchViaProxy(query, searchDepth, apiKey)
   }
 
   /**
@@ -84,7 +31,8 @@ export class PerplexityService {
    */
   private async searchViaProxy(
     query: string,
-    searchDepth: 'basic' | 'advanced'
+    searchDepth: 'basic' | 'advanced',
+    userKey: string | null = null,
   ): Promise<{
     success: boolean
     content: string
@@ -92,7 +40,7 @@ export class PerplexityService {
     error?: string
   }> {
     const proxyUrl = process.env.NEXT_PUBLIC_PERPLEXITY_PROXY_URL
-    
+
     if (!proxyUrl) {
       return {
         success: false,
@@ -111,23 +59,30 @@ export class PerplexityService {
         },
         body: JSON.stringify({
           query,
-          searchDepth
+          searchDepth,
+          // Forward the user's own key (BYO) so the proxy bills it and skips the
+          // daily quota. Omitted entirely when absent → proxy uses server key.
+          ...(userKey ? { perplexityKey: userKey } : {}),
         })
       })
 
-      if (!response.ok) {
+      const data = await response.json().catch(() => null)
+
+      // The proxy returns the real upstream reason in `error` even on non-2xx
+      // (e.g. "Perplexity API error: Invalid API key…" for a bad BYO key, or a
+      // quota-exceeded message). Surface THAT instead of a generic status so the
+      // user/agent learns the actual cause rather than failing silently.
+      if (!response.ok || !data || data.success === false) {
         return {
           success: false,
           content: '',
-          error: `Proxy error: ${response.status} ${response.statusText}`
+          error: (data && data.error) || `Proxy error: ${response.status} ${response.statusText}`,
         }
       }
 
-      const data = await response.json()
-      
       // Try different possible response structures
       const result = data.result || data.data || data
-      
+
       return {
         success: true,
         content: result.content || '',

@@ -15,9 +15,12 @@ export const INTERNAL_MODELS = [
   { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini" as const },
 ] as const satisfies readonly ModelDefinition[]
 
-// User-selectable models. Per provider, the FIRST entry is the cheapest tier
-// and the only one routable through the owner-funded proxy; the stronger
-// three require the user's own key.
+// User-selectable models. Within each provider, an entry WITHOUT
+// `requiresUserKey` is free — routable through the owner-funded proxy; entries
+// flagged `requiresUserKey` need the user's own key. The first entry is always
+// proxy-eligible and acts as the provider's free base (getBaseModelIdForProvider).
+// Gemini intentionally exposes two free tiers (Flash-Lite + Flash Preview); the
+// proxy's own allowlist (functions: ALLOWED_GEMINI_MODEL_IDS) must match.
 export const GPT_MODELS = [
   { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai" },
   { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "openai", requiresUserKey: true },
@@ -27,7 +30,7 @@ export const GPT_MODELS = [
 
 export const GEMINI_MODELS = [
   { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini" },
-  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", provider: "gemini", requiresUserKey: true },
+  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", provider: "gemini" },
   { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", provider: "gemini", requiresUserKey: true },
   { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", provider: "gemini", requiresUserKey: true },
 ] as const satisfies readonly ModelDefinition[]
@@ -86,4 +89,27 @@ const PROVIDER_MODELS: Record<ModelProvider, readonly ModelDefinition[]> = {
 
 export function getBaseModelIdForProvider(provider: ModelProvider): string | undefined {
   return PROVIDER_MODELS[provider].find((m) => !m.requiresUserKey && !m.disabled)?.id
+}
+
+/**
+ * Resolve the model an AI call should ACTUALLY run on. If the picked model needs
+ * the user's own key (`requiresUserKey`) but no key for its provider is present,
+ * downgrade to that provider's free, proxy-eligible base model — so a stranded
+ * premium pick never dead-ends with "API key is missing". This covers a model
+ * that USED to be free but became key-gated (a lineup change), and a default the
+ * user simply has no key for. Unknown ids fall back to `fallback`.
+ *
+ * `hasProviderKey` is whether the user has a key for THIS model's provider.
+ */
+export function gateModel(
+  modelId: string,
+  hasProviderKey: boolean,
+  fallback: string = DEFAULT_MODEL_ID,
+): string {
+  const def = getModelDefinition(modelId)
+  if (!def) return fallback
+  if (def.requiresUserKey && !hasProviderKey) {
+    return getBaseModelIdForProvider(def.provider) ?? fallback
+  }
+  return modelId
 }

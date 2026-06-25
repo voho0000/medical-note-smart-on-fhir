@@ -184,6 +184,8 @@ export default function MedicalChat() {
   // to history, so we persist + start fresh silently; signed-out / temp-mode
   // chats would be lost, so confirm first.
   const handleNewConversation = useCallback(async () => {
+    // Every new conversation starts in deep mode (the assistant's primary mode).
+    agentMode.enableAgentMode()
     if (chatMessages.length === 0) {
       chat.handleReset()
       return
@@ -199,12 +201,13 @@ export default function MedicalChat() {
       return
     }
     setShowNewChatConfirm(true)
-  }, [chatMessages.length, user, isTemporaryMode, forceSave, chat, t])
+  }, [chatMessages.length, user, isTemporaryMode, forceSave, chat, t, agentMode])
 
   const confirmNewConversation = useCallback(() => {
     setShowNewChatConfirm(false)
+    agentMode.enableAgentMode()
     chat.handleReset()
-  }, [chat])
+  }, [chat, agentMode])
   
   // Voice recording with callback to insert transcript into input
   const handleTranscriptReady = useCallback((text: string) => {

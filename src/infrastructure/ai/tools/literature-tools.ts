@@ -14,7 +14,7 @@ export function createLiteratureTools(perplexityKey: string | null, isUserAuthen
   // If no key is provided, it will use Firebase Proxy (if user is authenticated)
   return {
     searchMedicalLiterature: tool({
-      description: 'Search medical literature, clinical guidelines, and evidence-based medical information from authoritative sources (PubMed, NIH, WHO, medical journals). Use this for: treatment guidelines, drug information, disease mechanisms, clinical trials, latest research findings, and evidence-based recommendations. Returns synthesized information with citations.',
+      description: 'Search medical literature, clinical guidelines, and evidence-based medical information from authoritative sources (PubMed, NIH, WHO, medical journals). Use this for: treatment guidelines, drug information, disease mechanisms, clinical trials, latest research findings, and evidence-based recommendations. Returns synthesized information together with source URLs. IMPORTANT: whenever you use this tool, you MUST cite those source URLs as links in your answer to the user — even if the user did not explicitly ask for sources.',
       inputSchema: literatureSearchSchema,
       execute: async ({ query, searchDepth = 'basic' }: z.infer<typeof literatureSearchSchema>) => {
         // Check if user has access to Perplexity (either via API key or authenticated for proxy)
@@ -38,7 +38,15 @@ export function createLiteratureTools(perplexityKey: string | null, isUserAuthen
           if (!result.success) {
             return {
               success: false,
-              content: `Failed to search medical literature: ${result.error}`,
+              // Make the failure explicit so the model does NOT silently fall
+              // back to its training data (which looks like a working answer but
+              // isn't a real literature search). It must tell the user the
+              // search failed and why.
+              content:
+                `⚠️ The medical literature search could not be completed (reason: ${result.error}). ` +
+                'Do NOT answer from your own training data and do NOT fabricate any citations or sources. ' +
+                'Tell the user that live literature search is temporarily unavailable and state the reason. ' +
+                'If it looks like an API key or quota problem, suggest they check their Perplexity API key and remaining credit in Settings.',
               source: 'Perplexity AI',
             }
           }
