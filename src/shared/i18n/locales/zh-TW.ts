@@ -969,7 +969,7 @@ export const zhTW = {
     thinking: '思考中...',
     organizingResults: '正在整理查詢結果...',
     noTextGenerated: 'AI 執行了查詢但沒有生成回應。請重新嘗試或換個方式提問。',
-    apiKeyRequired: '⚠️ 深入模式需要 API Key\n\n深入模式（AI Agent）需要直接與 AI 服務商通訊以使用工具查詢功能，目前無法透過 Firebase Proxy 運作。\n\n請在「設定」頁面中設定您的 OpenAI 或 Gemini API Key，或改用「一般模式」。',
+    apiKeyRequired: '⚠️ 深入模式目前無法使用\n\n深入模式（AI Agent）需要登入帳號（含訪客免費額度）以使用 Firebase Proxy，或在「設定」頁面中設定您的 OpenAI、Gemini 或 Claude API Key。\n\n請登入後重試，或改用「一般模式」。',
     geminiRequiresApiKey: 'Gemini 模型在深入模式需要 API Key。請在「設定」中新增 Gemini API Key，或切換至 OpenAI 模型。',
     toolNames: {
       queryPatientInfo: '查詢病人基本資料',
@@ -1049,7 +1049,7 @@ export const zhTW = {
     deepMode: '深入',
     normalMode: '一般',
     agentModeDescription: 'AI 可自動查詢 FHIR 資料',
-    apiKeyWarningTitle: '深入模式需要 API Key',
+    apiKeyWarningTitle: '深入模式需要登入或 API Key',
     apiKeyWarningMessage: '請登入或在「設定」頁面中設定您的 API Key，或改用一般模式。',
     loginLink: '登入',
     deepModeFeaturesTitle: '深入模式額外功能：',

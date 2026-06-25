@@ -62,7 +62,7 @@ import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
-  const { user } = useAuth()
+  const { user, isAnonymous, loading: authLoading } = useAuth()
   const model = useModel()
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
@@ -229,27 +229,34 @@ export default function MedicalChat() {
   // API key validation
   const { hasApiKey } = useApiKeyValidation(model, openAiKey, geminiKey)
 
-  // Show/hide warning based on API key status and login status
-  // Logged-in users can use Firebase Proxy, so they don't need API key
+  // Show/hide warning based on API key status and login status.
+  // Deep mode runs through the Firebase proxy for ANY session — a real account
+  // OR an anonymous free-tier visitor (small Perplexity/chat quota) — or with
+  // the user's own API key. Anonymous visitors have `user === null` by design
+  // (login-gated features stay gated), so a plain `!user` check wrongly blocks
+  // them; include `isAnonymous`. Only warn once auth has resolved and there is
+  // genuinely no path (which means anonymous sign-in itself is unavailable).
   const apiKeyAvailable = hasApiKey()
+  const canUseDeepMode = apiKeyAvailable || !!user || isAnonymous
   useEffect(() => {
-    if (isAgentMode && !apiKeyAvailable && !user) {
+    if (isAgentMode && !canUseDeepMode && !authLoading) {
       agentMode.showWarning()
     } else {
       agentMode.hideWarning()
     }
-  }, [isAgentMode, apiKeyAvailable, user, agentMode])
+  }, [isAgentMode, canUseDeepMode, authLoading, agentMode])
 
   // Handle agent mode toggle with API key check
   const handleAgentModeToggle = useCallback((enabled: boolean) => {
-    // Show warning only if no API key AND not logged in (logged-in users can use proxy)
-    if (enabled && !hasApiKey() && !user) {
+    // Show warning only when there's no deep-mode path at all (no key, no real
+    // account, no anonymous session — see canUseDeepMode above).
+    if (enabled && !canUseDeepMode) {
       agentMode.showWarning()
     } else {
       agentMode.hideWarning()
     }
     agentMode.setIsAgentMode(enabled)
-  }, [hasApiKey, user, agentMode])
+  }, [canUseDeepMode, agentMode])
 
   // Clear images after sending message
   const clearImagesAfterSend = useCallback(() => {
@@ -529,7 +536,7 @@ export default function MedicalChat() {
             onStopGeneration={() => chat.stopGeneration()}
             voice={voice}
             images={imageUpload}
-            disabled={isAgentMode && !hasApiKey() && !user}
+            disabled={isAgentMode && !canUseDeepMode}
           />
         </div>
       </CardFooter>
