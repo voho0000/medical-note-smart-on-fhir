@@ -41,7 +41,7 @@ import { InsightPanel } from './components/InsightPanel'
 import { ApiKeyWarning } from './components/ApiKeyWarning'
 import { TabManagementToolbar } from './components/TabManagementToolbar'
 import { SafetyAlertsPanel } from '@/features/proactive-safety-alerts/SafetyAlertsPanel'
-import { ShieldAlert } from 'lucide-react'
+import { ShieldAlert, Maximize2, Minimize2 } from 'lucide-react'
 import type { ResponseEntry } from './types'
 
 // A fixed, LOCKED tab living alongside the user's editable insight tabs:
@@ -58,6 +58,8 @@ export default function ClinicalInsightsFeature() {
   // Patient audience sees the friendlier "健康提醒" labels for the locked tab.
   const safetyTabLabel = audience === 'patient' ? t.safetyAlerts.patient.tabLabel : t.tabs.safetyAlerts
   const safetyTabTitle = audience === 'patient' ? t.safetyAlerts.patient.title : t.safetyAlerts.title
+  // Maximize the panel into a fullscreen overlay (same pattern as the chat panel).
+  const [isExpanded, setIsExpanded] = useState(false)
   const { panels: configPanels } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext('insights')
@@ -272,7 +274,19 @@ export default function ClinicalInsightsFeature() {
 
 
   return (
-    <ScrollArea className="h-full pr-3">
+    <div className={isExpanded ? "fixed inset-0 z-50 flex flex-col bg-background/95 p-3 backdrop-blur-sm sm:p-6" : "h-full"}>
+      {isExpanded && (
+        <button
+          type="button"
+          onClick={() => setIsExpanded(false)}
+          title={t.common.minimize}
+          aria-label={t.common.minimize}
+          className="absolute right-3 top-3 z-10 rounded-full bg-muted/80 p-2 text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Minimize2 className="h-5 w-5" />
+        </button>
+      )}
+      <ScrollArea className={isExpanded ? "mx-auto h-full w-full max-w-5xl" : "h-full pr-3"}>
       <div className="space-y-4">
         {!canGenerate && <ApiKeyWarning />}
         {/* Safety Alerts is always present (locked first tab), so the tab block
@@ -310,6 +324,16 @@ export default function ClinicalInsightsFeature() {
                   onPromptChange={(prompt) => handlePromptChange(activeTabId, prompt)}
                 />
               )}
+              {/* Maximize — pop the insights panel into a fullscreen overlay. */}
+              <button
+                type="button"
+                onClick={() => setIsExpanded(true)}
+                title={t.common.maximize}
+                aria-label={t.common.maximize}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
             </div>
             <TabsContent value={SAFETY_TAB_ID} className="mt-0">
               <SafetyAlertsPanel />
@@ -352,5 +376,6 @@ export default function ClinicalInsightsFeature() {
         )}
       </div>
     </ScrollArea>
+    </div>
   )
 }
