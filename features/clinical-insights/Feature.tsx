@@ -60,7 +60,7 @@ export default function ClinicalInsightsFeature() {
   const safetyTabTitle = audience === 'patient' ? t.safetyAlerts.patient.title : t.safetyAlerts.title
   // Maximize the panel into a fullscreen overlay (same pattern as the chat panel).
   const [isExpanded, setIsExpanded] = useState(false)
-  const { panels: configPanels } = useClinicalInsightsConfig()
+  const { panels: configPanels, updatePanelAndSave } = useClinicalInsightsConfig()
   const { apiKey: openAiKey, geminiKey } = useAllApiKeys()
   const { getFullClinicalContext } = useClinicalContext('insights')
   const { isLoading: clinicalDataLoading, error: clinicalDataError } = useClinicalData()
@@ -245,10 +245,12 @@ export default function ClinicalInsightsFeature() {
           modelMetadata: responseEntry.metadata ?? null,
           fallbackModelId: model,
           autoGenerate: panel.autoGenerate ?? false,
+          onToggleAutoGenerate: (value: boolean) =>
+            updatePanelAndSave(panel.id, { autoGenerate: value }),
         },
       }
     })
-  }, [canGenerate, hasData, handlePromptChange, handleResponseChange, clearResponse, model, panelStatus, panels, prompts, responses, runPanel, stopPanel])
+  }, [canGenerate, hasData, handlePromptChange, handleResponseChange, clearResponse, model, panelStatus, panels, prompts, responses, runPanel, stopPanel, updatePanelAndSave])
 
   // If FHIR data failed to load, show error and disable the feature
   if (clinicalDataError) {

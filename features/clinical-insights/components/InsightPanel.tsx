@@ -31,6 +31,8 @@ export function InsightPanel({
   onClearResponse,
   isEdited,
   fallbackModelId,
+  autoGenerate,
+  onToggleAutoGenerate,
   isEditMode = false,
 }: InsightPanelProps) {
   const { t } = useLanguage()
@@ -107,6 +109,8 @@ export function InsightPanel({
           isLoading={isLoading}
           canGenerate={canGenerate}
           hasData={hasData}
+          autoGenerate={autoGenerate}
+          onToggleAutoGenerate={onToggleAutoGenerate}
           onClearResponse={onClearResponse}
           onRegenerate={onRegenerate}
           onStopGeneration={onStopGeneration}

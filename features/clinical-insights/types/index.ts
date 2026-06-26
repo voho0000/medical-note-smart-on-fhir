@@ -33,5 +33,7 @@ export interface InsightPanelProps {
   modelMetadata: QueryMetadata | null
   fallbackModelId: string
   autoGenerate?: boolean
+  /** Toggle this panel's auto-generate-on-load setting (persists per config). */
+  onToggleAutoGenerate?: (value: boolean) => void
   isEditMode?: boolean
 }

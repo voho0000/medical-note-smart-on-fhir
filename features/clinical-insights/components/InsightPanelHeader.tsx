@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { CardHeader, CardTitle } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
   TooltipContent,
@@ -22,6 +23,8 @@ interface InsightPanelHeaderProps {
   isLoading: boolean
   canGenerate: boolean
   hasData: boolean
+  autoGenerate?: boolean
+  onToggleAutoGenerate?: (value: boolean) => void
   onClearResponse: () => void
   onRegenerate: () => void
   onStopGeneration: () => void
@@ -34,6 +37,8 @@ export function InsightPanelHeader({
   isLoading,
   canGenerate,
   hasData,
+  autoGenerate,
+  onToggleAutoGenerate,
   onClearResponse,
   onRegenerate,
   onStopGeneration,
@@ -62,7 +67,7 @@ export function InsightPanelHeader({
           {t.clinicalInsights.model} {modelInfo.label} ({modelInfo.provider})
         </p>
       </div>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         {response && !isLoading && (
           <TooltipProvider>
             <Tooltip>
@@ -101,6 +106,27 @@ export function InsightPanelHeader({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+        )}
+        {onToggleAutoGenerate && (
+          <div className="flex items-center gap-1.5 mr-0.5">
+            <Switch
+              checked={!!autoGenerate}
+              onCheckedChange={onToggleAutoGenerate}
+              aria-label={t.clinicalInsights.autoGenerate}
+            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap cursor-help">
+                    {t.clinicalInsights.autoGenerate}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">{t.clinicalInsights.autoGenerateTooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         )}
         {isLoading ? (
           <Button
