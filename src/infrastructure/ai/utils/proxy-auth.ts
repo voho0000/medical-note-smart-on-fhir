@@ -5,8 +5,13 @@
 // quota per uid. Returns null when signed out — the proxy then responds 401
 // and the UI surfaces a sign-in prompt.
 
+// Type-only import — erased at compile time. A VALUE import from 'firebase/auth'
+// here would execute the SDK at module load, which references the Fetch API
+// `Response` global that jest's jsdom env lacks ("ReferenceError: Response is
+// not defined"), breaking every test suite that transitively imports this file.
+// We use the `auth.onAuthStateChanged` INSTANCE method below instead, so no
+// runtime firebase/auth import is needed.
 import type { Auth, User } from 'firebase/auth'
-import { onAuthStateChanged } from 'firebase/auth'
 
 // Max time to wait for the (possibly anonymous) Firebase session to come up
 // before giving up on a token. The auth provider mints an anonymous session
@@ -38,7 +43,9 @@ async function waitForFirebaseUser(auth: Auth): Promise<User | null> {
       resolve(u)
     }
     const timer = setTimeout(() => finish(auth.currentUser), AUTH_WAIT_MS)
-    const unsubscribe = onAuthStateChanged(auth, (u) => { if (u) finish(u) })
+    // Instance method (not the standalone import) — keeps firebase/auth out of
+    // the module's runtime import graph (see the type-only import note above).
+    const unsubscribe = auth.onAuthStateChanged((u) => { if (u) finish(u) })
   })
 }
 

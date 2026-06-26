@@ -61,6 +61,15 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
     pattern: /timeout|timed out/i,
     message: '⏰ 請求逾時 - 請檢查網路連線或稍後再試'
   },
+  // iOS Safari/WebKit's text for a fetch blocked/failed at the network layer
+  // (desktop Chrome says "Failed to fetch"). On iPhone this is almost always a
+  // content blocker, "Prevent Cross-Site Tracking", or Private Browsing blocking
+  // the cross-origin call to the proxy / Google token endpoint. Keep it ABOVE
+  // the generic network rule so the message can name the real cause.
+  {
+    pattern: /load failed/i,
+    message: '🌐 連線被擋下 - 在 iPhone 上常見於「無痕瀏覽」、「防止跨網站追蹤」或內容封鎖器擋住了連線。請改用一般視窗、把本站加入追蹤保護例外或關閉封鎖器後重試，或在「設定」改用自己的 API Key。'
+  },
   // Network errors
   {
     pattern: /network error|failed to fetch|fetch failed/i,
