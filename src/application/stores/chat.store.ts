@@ -35,7 +35,9 @@ export const useChatStore = create<ChatState>()(
   persist(
     (set) => ({
       messages: [],
-      autoIncludeContext: true, // Default to true (auto-include)
+      // Mode-derived at runtime (MedicalChat syncs it to !isAgentMode). Seeded
+      // off to match the default mode (deep), avoiding a first-render flash.
+      autoIncludeContext: false,
       isTemporaryMode: false,
 
       setMessages: (messages) => {

@@ -12,6 +12,7 @@ import {
   useIsTemporaryMode,
   useSetIsTemporaryMode,
   useSetChatMessages,
+  useSetAutoIncludeContext,
 } from "@/src/application/stores/chat.store"
 import { useSetCurrentSessionId } from "@/src/application/stores/chat-history.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -87,6 +88,16 @@ export default function MedicalChat() {
       agentMode.setIsAgentMode(false)
     }
   }, [isAgentModeDisabled, isAgentMode, agentMode])
+
+  // "病歷自動載入" default follows the mode: deep mode pulls records on demand
+  // via tools, so it starts with auto-include OFF (leaner context); normal mode
+  // can't query, so it starts ON. Re-syncs on every mode change (incl. initial
+  // mount + the model-driven auto-disable above); the user can still flip the
+  // toggle manually within a mode — that holds until the next mode change.
+  const setAutoIncludeContext = useSetAutoIncludeContext()
+  useEffect(() => {
+    setAutoIncludeContext(!isAgentMode)
+  }, [isAgentMode, setAutoIncludeContext])
   
   // Expand/collapse state (independent UI state)
   const expandable = useExpandable()
