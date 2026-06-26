@@ -36,8 +36,18 @@ export function FontSizeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as FontSize | null
     if (stored && stored in FONT_SIZE_PX) {
+      // An explicit user choice always wins, on any device.
       setFontSizeState(stored)
       apply(stored)
+      return
+    }
+    // No saved preference: on a phone-width viewport (<768, the app's md split),
+    // default to the smallest size so dense clinical tables/cards fit without
+    // horizontal scroll. NOT persisted — it's a per-device default re-evaluated
+    // each load, so the same account on a desktop still gets the 16px base.
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setFontSizeState("xs")
+      apply("xs")
     }
   }, [])
 
