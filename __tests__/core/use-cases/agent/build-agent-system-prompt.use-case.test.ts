@@ -34,6 +34,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
     },
     importantNote: 'Important',
     icdCodeCaveat: 'ICD caveat',
+    groundingSelfCheck: 'Grounding self-check',
     anonymizationNote: 'Anonymized note',
     literatureKeywords: 'Literature keywords',
     usageGuidelines: 'Guidelines',

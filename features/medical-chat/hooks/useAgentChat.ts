@@ -2,7 +2,6 @@
 "use client"
 
 import { useState, useCallback, useRef, useMemo } from "react"
-import { streamText, stepCountIs } from "ai"
 import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
@@ -17,9 +16,8 @@ import { useAuth } from "@/src/application/providers/auth.provider"
 import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
-import { processAgentStreamUseCase } from "@/src/core/use-cases/agent/process-agent-stream.use-case"
-import { getToolDisplayName } from "@/src/shared/constants/agent-tool-names.constants"
-import { withIdleTimeout, resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
+import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
+import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
@@ -84,7 +82,6 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       // error if a stream stalls (same anti-hang guard as normal mode). Idle-
       // based, so legitimate long tool runs that keep emitting events are fine.
       const idleMs = resolveStreamIdleTimeoutMs()
-      const onStreamIdle = () => abortControllerRef.current?.abort()
 
       try {
         const provider = getModelDefinition(modelId)?.provider ?? "openai"
@@ -142,327 +139,98 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           ...newMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         ]
 
-        // Stream with tools. stopWhen enables the AI SDK's NATIVE multi-step
-        // loop: after a tool call the SDK feeds the result back to the model
-        // automatically and continues, up to N steps. Without it (v6 default
-        // is a single step) the run dead-ends whenever the model narrates a
-        // preamble *and* calls a tool in the same step — which Claude does
-        // ("讓我先查詢…") but GPT/Gemini usually don't, hence the manual
-        // follow-up below only papered over the latter.
-        const result = await streamText({
+        // UI rendering for the headless agent core's events. The orchestration
+        // (the three streamText rounds, tool handling, follow-up/synthesis,
+        // citation processing) now lives in runDeepModeAgent so the eval harness
+        // shares it; the only thing left here is mapping events → setChatMessages,
+        // including the 100ms throttle that keeps high-frequency text deltas from
+        // blocking the main thread.
+        const UPDATE_INTERVAL = 100
+        let lastUpdateTime = 0
+        let timeoutId: NodeJS.Timeout | null = null
+        let latestContent = ""
+        const setContent = (content: string) =>
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId ? { ...m, content } : m)
+          )
+        const clearPending = () => {
+          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null }
+        }
+        const appendState = (state: string, extra?: Partial<ChatMessage>) => {
+          clearPending()
+          setChatMessages((prev) =>
+            prev.map((m) => m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: state,
+                  agentStates: [...(m.agentStates || []), { state, timestamp: Date.now() }],
+                  ...extra,
+                }
+              : m)
+          )
+        }
+
+        const onEvent = (event: AgentRunEvent) => {
+          switch (event.type) {
+            case 'content': {
+              if (!hasReceivedChunkRef.current && onInputClear) {
+                hasReceivedChunkRef.current = true
+                onInputClear()
+              }
+              latestContent = event.content
+              const now = Date.now()
+              if (now - lastUpdateTime >= UPDATE_INTERVAL) {
+                lastUpdateTime = now
+                setContent(latestContent)
+              } else if (!timeoutId) {
+                timeoutId = setTimeout(() => {
+                  lastUpdateTime = Date.now()
+                  setContent(latestContent)
+                  timeoutId = null
+                }, UPDATE_INTERVAL - (now - lastUpdateTime))
+              }
+              break
+            }
+            case 'status':
+              appendState(event.state)
+              break
+            case 'tool-call':
+              appendState(event.state, { toolCalls: event.toolCalls })
+              break
+            case 'final':
+              clearPending()
+              setChatMessages((prev) =>
+                prev.map((m) => m.id === assistantMessageId
+                  ? { ...m, content: event.content, toolCalls: event.toolCalls.length > 0 ? event.toolCalls : undefined }
+                  : m)
+              )
+              break
+            case 'tool-result':
+              break
+          }
+        }
+
+        await runDeepModeAgent({
           model,
           messages: apiMessages,
           tools,
-          stopWhen: stepCountIs(10),
-          abortSignal: abortControllerRef.current.signal,
-          onStepFinish: ({ toolCalls }) => {
-            if (toolCalls && toolCalls.length > 0) {
-              const toolNames = toolCalls
-                .map(tc => getToolDisplayName(tc?.toolName || '', t.agent.toolNames))
-                .join('、')
-              
-              const newState = `🔍 ${toolNames}...`
-              setChatMessages((prev) =>
-                prev.map((m) => m.id === assistantMessageId 
-                  ? { 
-                      ...m, 
-                      content: newState,
-                      agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }]
-                    } 
-                  : m)
-              )
-            }
+          idleMs,
+          abortController: abortControllerRef.current,
+          onEvent,
+          translations: {
+            organizingResults: t.agent.organizingResults,
+            queriedFhirData: t.agent.queriedFhirData,
+            answerQuestion: t.agent.answerQuestion,
+            answerQuestionCitationsHint: (t.agent as any).answerQuestionCitationsHint,
+            synthesizeResults: t.agent.synthesizeResults,
+            queryResult: t.agent.queryResult,
+            queryFailed: t.agent.queryFailed,
+            noData: t.agent.noData,
+            noDataFound: t.agent.noDataFound,
+            foundRecords: t.agent.foundRecords,
+            toolNames: t.agent.toolNames,
           },
         })
-
-        let accumulatedContent = ""
-        const toolResults: Array<{ toolName: string; result: unknown }> = []
-        const usedToolNames: string[] = [] // Track which tools were called
-        let lastUpdateTime = 0
-        let timeoutId: NodeJS.Timeout | null = null
-        const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
-
-        // Process stream chunks (idle-watchdog guarded)
-        for await (const chunk of withIdleTimeout(result.fullStream, idleMs, onStreamIdle)) {
-          if (chunk.type === 'text-delta') {
-            accumulatedContent += chunk.text
-
-            if (!hasReceivedChunkRef.current && onInputClear) {
-              hasReceivedChunkRef.current = true
-              onInputClear()
-            }
-
-            // Throttle updates to prevent main thread blocking
-            const now = Date.now()
-            if (now - lastUpdateTime >= UPDATE_INTERVAL) {
-              lastUpdateTime = now
-              setChatMessages((prev) =>
-                prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
-              )
-            } else if (!timeoutId) {
-              timeoutId = setTimeout(() => {
-                lastUpdateTime = Date.now()
-                setChatMessages((prev) =>
-                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent } : m)
-                )
-                timeoutId = null
-              }, UPDATE_INTERVAL - (now - lastUpdateTime))
-            }
-          } else if (chunk.type === 'tool-call') {
-            const displayName = getToolDisplayName(chunk.toolName, t.agent.toolNames)
-            const newState = `🔍 ${displayName}...`
-            
-            // Track tool name
-            if (!usedToolNames.includes(chunk.toolName)) {
-              usedToolNames.push(chunk.toolName)
-            }
-            
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId 
-                ? { 
-                    ...m, 
-                    content: newState,
-                    agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }],
-                    toolCalls: usedToolNames
-                  } 
-                : m)
-            )
-          } else if (chunk.type === 'tool-result') {
-            // Collect tool results - handle both 'result' and 'output' properties
-            const chunkAny = chunk as any
-            const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
-            toolResults.push({ toolName: chunk.toolName, result })
-          } else if (chunk.type === 'error') {
-            // A failed request (proxy 401 / no guest token / network) arrives as
-            // an error chunk, NOT a throw. Unhandled it was silently ignored and
-            // the agent hung on "思考中" — propagate so the catch surfaces it.
-            throw (chunk as { error?: unknown }).error ?? new Error('AI stream error')
-          }
-        }
-
-        // Ensure final content is displayed after main stream
-        if (accumulatedContent.length > 0) {
-          setChatMessages((prev) =>
-            prev.map((m) => m.id === assistantMessageId ? { ...m, content: accumulatedContent, toolCalls: usedToolNames.length > 0 ? usedToolNames : undefined } : m)
-          )
-        }
-        
-        // Handle follow-up if there are tool results but no text
-        if (toolResults.length > 0 && accumulatedContent.length === 0) {
-          const organizingState = `📝 ${t.agent.organizingResults}`
-          setChatMessages((prev) =>
-            prev.map((m) => m.id === assistantMessageId 
-              ? { 
-                  ...m, 
-                  content: organizingState,
-                  agentStates: [...(m.agentStates || []), { state: organizingState, timestamp: Date.now() }]
-                } 
-              : m)
-          )
-          
-          // Build tool results summary using use case
-          const { summary: toolResultsSummary, citations: literatureCitations } = 
-            processAgentStreamUseCase.buildToolResultsSummary(toolResults, {
-              queryResult: t.agent.queryResult,
-              queryFailed: t.agent.queryFailed,
-              noData: t.agent.noData,
-              noDataFound: t.agent.noDataFound,
-              foundRecords: t.agent.foundRecords,
-            })
-          
-          const originalQuestion = newMessages[newMessages.length - 1]?.content || trimmed
-          // Only inject the citation-preservation hint when literature search
-          // actually produced numbered references. Without this gate the LLM
-          // hallucinates [1][2] tags for plain FHIR results.
-          const answerQuestionText = literatureCitations.length > 0
-            ? t.agent.answerQuestion + ((t.agent as any).answerQuestionCitationsHint ?? '')
-            : t.agent.answerQuestion
-          const followUpMessages = processAgentStreamUseCase.buildFollowUpMessages(
-            apiMessages,
-            toolResultsSummary,
-            originalQuestion,
-            {
-              queriedFhirData: t.agent.queriedFhirData,
-              answerQuestion: answerQuestionText,
-            }
-          )
-          
-          const followUpResult = await streamText({
-            model,
-            messages: followUpMessages,
-            tools, // Allow AI to call more tools in follow-up (e.g., searchMedicalLiterature after FHIR query)
-            abortSignal: abortControllerRef.current?.signal,
-          })
-          
-          let followUpContent = ""
-          const followUpToolResults: Array<{ toolName: string; result: unknown }> = []
-          let followUpLastUpdateTime = 0
-          let followUpTimeoutId: NodeJS.Timeout | null = null
-          
-          for await (const chunk of withIdleTimeout(followUpResult.fullStream, idleMs, onStreamIdle)) {
-            if (chunk.type === 'text-delta') {
-              followUpContent += chunk.text
-              
-              // Throttle follow-up updates too
-              const now = Date.now()
-              if (now - followUpLastUpdateTime >= UPDATE_INTERVAL) {
-                followUpLastUpdateTime = now
-                setChatMessages((prev) =>
-                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
-                )
-              } else if (!followUpTimeoutId) {
-                followUpTimeoutId = setTimeout(() => {
-                  followUpLastUpdateTime = Date.now()
-                  setChatMessages((prev) =>
-                    prev.map((m) => m.id === assistantMessageId ? { ...m, content: followUpContent } : m)
-                  )
-                  followUpTimeoutId = null
-                }, UPDATE_INTERVAL - (now - followUpLastUpdateTime))
-              }
-            } else if (chunk.type === 'tool-call') {
-              const displayName = getToolDisplayName(chunk.toolName, t.agent.toolNames)
-              const newState = `🔍 ${displayName}...`
-              
-              // Track tool name
-              if (!usedToolNames.includes(chunk.toolName)) {
-                usedToolNames.push(chunk.toolName)
-              }
-              
-              setChatMessages((prev) =>
-                prev.map((m) => m.id === assistantMessageId 
-                  ? { 
-                      ...m, 
-                      content: newState,
-                      agentStates: [...(m.agentStates || []), { state: newState, timestamp: Date.now() }],
-                      toolCalls: usedToolNames
-                    } 
-                  : m)
-              )
-            } else if (chunk.type === 'tool-result') {
-              // Collect tool results from follow-up
-              const chunkAny = chunk as any
-              const result = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
-              followUpToolResults.push({ toolName: chunk.toolName, result })
-            } else if (chunk.type === 'error') {
-              throw (chunk as { error?: unknown }).error ?? new Error('AI stream error')
-            }
-          }
-          
-          // If follow-up had tool results but no text, force AI to generate response
-          if (followUpToolResults.length > 0 && followUpContent.length === 0) {
-            const finalOrgState = `📝 ${t.agent.organizingResults}`
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId 
-                ? { 
-                    ...m, 
-                    content: finalOrgState,
-                    agentStates: [...(m.agentStates || []), { state: finalOrgState, timestamp: Date.now() }]
-                  } 
-                : m)
-            )
-            
-            // Build summary from follow-up tool results
-            const { summary: finalToolSummary } = 
-              processAgentStreamUseCase.buildToolResultsSummary(followUpToolResults, {
-                queryResult: t.agent.queryResult,
-                queryFailed: t.agent.queryFailed,
-                noData: t.agent.noData,
-                noDataFound: t.agent.noDataFound,
-                foundRecords: t.agent.foundRecords,
-              })
-            
-            // Force AI to generate final response with all tool results
-            const finalMessages = [
-              ...followUpMessages,
-              {
-                role: 'user' as const,
-                content: `${finalToolSummary}\n\n${t.agent.synthesizeResults}`
-              }
-            ]
-            
-            const finalResult = await streamText({
-              model,
-              messages: finalMessages,
-              abortSignal: abortControllerRef.current?.signal,
-            })
-            
-            let finalContent = ""
-            for await (const chunk of withIdleTimeout(finalResult.fullStream, idleMs, onStreamIdle)) {
-              if (chunk.type === 'text-delta') {
-                finalContent += chunk.text
-                // Show streaming content in real-time
-                setChatMessages((prev) =>
-                  prev.map((m) => m.id === assistantMessageId ? { ...m, content: finalContent } : m)
-                )
-              } else if (chunk.type === 'error') {
-                throw (chunk as { error?: unknown }).error ?? new Error('AI stream error')
-              }
-            }
-
-            followUpContent = finalContent
-          }
-          
-          // Clear any pending timeouts to prevent them from overwriting our final content
-          if (followUpTimeoutId) {
-            clearTimeout(followUpTimeoutId)
-            followUpTimeoutId = null
-          }
-          
-          // Literature search can also happen in the follow-up round (e.g. the
-          // model runs a FHIR query first, then searchMedicalLiterature). Merge
-          // citations from BOTH rounds so the Sources list survives regardless of
-          // which round produced them — previously follow-up citations were
-          // dropped and the answer rendered with no sources.
-          const followUpCitations = processAgentStreamUseCase.buildToolResultsSummary(
-            followUpToolResults,
-            {
-              queryResult: t.agent.queryResult,
-              queryFailed: t.agent.queryFailed,
-              noData: t.agent.noData,
-              noDataFound: t.agent.noDataFound,
-              foundRecords: t.agent.foundRecords,
-            }
-          ).citations
-          const allLiteratureCitations = [
-            ...new Set([...literatureCitations, ...followUpCitations]),
-          ]
-
-          // Process citations BEFORE updating UI
-          let finalDisplayContent = followUpContent
-          if (allLiteratureCitations.length > 0) {
-            const { processedContent } = processAgentStreamUseCase.processCitations({
-              content: followUpContent,
-              citations: allLiteratureCitations,
-            })
-            finalDisplayContent = processedContent
-          }
-          
-          // Update UI once with final processed content
-          setChatMessages((prev) =>
-            prev.map((m) => m.id === assistantMessageId ? { ...m, content: finalDisplayContent, toolCalls: usedToolNames.length > 0 ? usedToolNames : undefined } : m)
-          )
-        } else if (toolResults.length > 0 && accumulatedContent.length > 0) {
-          // AI generated response directly with tool calls - process citations
-          const { citations: literatureCitations } = 
-            processAgentStreamUseCase.buildToolResultsSummary(toolResults, {
-              queryResult: t.agent.queryResult,
-              queryFailed: t.agent.queryFailed,
-              noData: t.agent.noData,
-              noDataFound: t.agent.noDataFound,
-              foundRecords: t.agent.foundRecords,
-            })
-          
-          if (literatureCitations.length > 0) {
-            const { processedContent } = processAgentStreamUseCase.processCitations({
-              content: accumulatedContent,
-              citations: literatureCitations,
-            })
-            
-            setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: processedContent } : m)
-            )
-          }
-        }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return
         

@@ -46,6 +46,7 @@ export interface BuildAgentSystemPromptInput {
     }
     importantNote: string
     icdCodeCaveat: string
+    groundingSelfCheck: string
     anonymizationNote: string
     usageGuidelines: string
     prioritizeClinicalData: string
@@ -159,8 +160,10 @@ ${usageGuidelines}
 - ${t.indicateNoRecords}
 ${hasPerplexityKey ? `\n${t.literatureKeywords}` : ''}
 
-${hasClinicalData ? t.helpWithClinicalData : t.helpWithTools}`
-    
+${hasClinicalData ? t.helpWithClinicalData : t.helpWithTools}
+
+${t.groundingSelfCheck}`
+
     return finalPrompt
   }
 }
