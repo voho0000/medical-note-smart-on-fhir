@@ -9,7 +9,7 @@
  * TransformStream which jsdom doesn't expose.
  */
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
-import { sampleDataSource } from './fixtures'
+import { sampleDataSource, samplePatient, sampleCollection } from './fixtures'
 
 const tools = createFhirTools(sampleDataSource)
 
@@ -323,6 +323,130 @@ describe('createFhirTools (unified)', () => {
     it('matches Chinese substrings too', async () => {
       const r = await call('searchObservationByName', { query: 'Body Height' })
       expect(r.count).toBe(1)
+    })
+  })
+
+  describe('searchObservationByName — LOINC aliasing (stale-value-as-latest fix)', () => {
+    // Real demo-bundle gotcha: one analyte is stored under DIFFERENT display
+    // names across dates while sharing a single LOINC. eGFR's recent values sit
+    // under text "Estimated GFR"; the oldest under "eGFR". CRP's latest sits
+    // under one Chinese alias, older ones under another. Grouping by display
+    // text splits the series and lets a stale value be returned as "latest";
+    // grouping by LOINC keeps one dated series so the most-recent wins.
+    const LOINC = 'http://loinc.org'
+    const o = (id: string, text: string, code: string, value: number, date: string) =>
+      ({
+        id,
+        code: {
+          text,
+          coding: [{ system: LOINC, code, display: 'Glomerular filtration rate (MDRD)' }],
+        },
+        category: [{ coding: [{ code: 'laboratory' }] }],
+        valueQuantity: { value, unit: 'mL/min/1.73m2' },
+        effectiveDateTime: `${date}T00:00:00+08:00`,
+        status: 'final',
+      }) as any
+    const crp = (id: string, text: string, value: number, date: string) =>
+      ({
+        id,
+        code: {
+          text,
+          coding: [{ system: LOINC, code: '1988-5', display: 'C reactive protein [Mass/volume] in Serum or Plasma' }],
+        },
+        category: [{ coding: [{ code: 'laboratory' }] }],
+        valueQuantity: { value, unit: 'mg/dL' },
+        effectiveDateTime: `${date}T00:00:00+08:00`,
+        status: 'final',
+      }) as any
+
+    const aliasTools = createFhirTools(() => ({
+      patient: samplePatient,
+      collection: {
+        ...sampleCollection,
+        observations: [
+          // eGFR — recent three under "Estimated GFR", oldest under "eGFR"
+          o('egfr-1', 'Estimated GFR', '33914-3', 32, '2026-06-02'),
+          o('egfr-2', 'Estimated GFR', '33914-3', 33, '2026-05-25'),
+          o('egfr-3', 'Estimated GFR', '33914-3', 35, '2026-01-14'),
+          o('egfr-4', 'eGFR', '33914-3', 36.3, '2025-12-09'),
+          // CRP — latest under one Chinese alias, older under another
+          crp('crp-1', 'C反應性蛋白試驗 -  免疫比濁法', 0.76, '2026-05-25'),
+          crp('crp-2', 'C反應蛋白', 0.26, '2026-01-14'),
+          crp('crp-3', 'C反應蛋白', 2.65, '2025-05-20'),
+        ],
+        vitalSigns: [],
+      },
+    }))
+    const aCall = (args: any) => (aliasTools.searchObservationByName as any).execute(args)
+
+    it('query "eGFR" returns the true latest (32) even though latest text is "Estimated GFR"', async () => {
+      const r = await aCall({ query: 'eGFR' })
+      expect(r.count).toBe(1) // one analyte, not split by display text
+      expect(r.data[0].value).toBe(32)
+      expect(r.data[0].effectiveDateTime.startsWith('2026-06-02')).toBe(true)
+    })
+
+    it('query "eGFR" does NOT return the stale 36.3 as latest', async () => {
+      const r = await aCall({ query: 'eGFR' })
+      expect(r.data[0].value).not.toBe(36.3)
+    })
+
+    it('withTrend collapses both display names into one date-sorted series', async () => {
+      const r = await aCall({ query: 'eGFR', withTrend: true })
+      expect(r.count).toBe(4)
+      expect(r.data.map((d: any) => d.value)).toEqual([32, 33, 35, 36.3])
+    })
+
+    it('matching a coding.display synonym still resolves the analyte ("GFR")', async () => {
+      const r = await aCall({ query: 'GFR' })
+      expect(r.count).toBe(1)
+      expect(r.data[0].value).toBe(32)
+    })
+
+    it('CRP: English synonym finds latest (0.76) despite Chinese-only text', async () => {
+      const r = await aCall({ query: 'C reactive protein' })
+      expect(r.count).toBe(1)
+      expect(r.data[0].value).toBe(0.76)
+    })
+
+    it('CRP: two Chinese aliases collapse into one series, latest first', async () => {
+      const r = await aCall({ query: 'C反應蛋白', withTrend: true })
+      expect(r.data.map((d: any) => d.value)).toEqual([0.76, 0.26, 2.65])
+    })
+
+    it('distinct LOINCs do NOT merge: CRP search excludes eGFR', async () => {
+      const r = await aCall({ query: 'C reactive protein', withTrend: true })
+      expect(r.data.every((d: any) => d.unit === 'mg/dL')).toBe(true)
+    })
+
+    it('mixed coding: an uncoded entry inherits a same-text sibling LOINC (real "PT" case)', async () => {
+      const mixedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          observations: [
+            // newest entry has NO LOINC, older one does — same text "PT"
+            {
+              id: 'pt-new',
+              code: { text: 'PT' },
+              category: [{ coding: [{ code: 'laboratory' }] }],
+              valueQuantity: { value: 11.2, unit: 'sec' },
+              effectiveDateTime: '2026-06-02T00:00:00+08:00',
+            },
+            {
+              id: 'pt-old',
+              code: { text: 'PT', coding: [{ system: 'http://loinc.org', code: '5902-2', display: 'Prothrombin time' }] },
+              category: [{ coding: [{ code: 'laboratory' }] }],
+              valueQuantity: { value: 13.5, unit: 'sec' },
+              effectiveDateTime: '2026-01-14T00:00:00+08:00',
+            },
+          ] as any,
+          vitalSigns: [],
+        },
+      }))
+      const r = await (mixedTools.searchObservationByName as any).execute({ query: 'PT', withTrend: true })
+      expect(r.count).toBe(2) // one analyte, both dates in one series
+      expect(r.data[0].value).toBe(11.2) // newest first, not split off
     })
   })
 

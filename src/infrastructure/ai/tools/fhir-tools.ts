@@ -56,6 +56,10 @@ function pickName(concept: any): string | undefined {
   return concept?.text || concept?.coding?.[0]?.display
 }
 
+function loincOf(concept: any): string | undefined {
+  return (concept?.coding ?? []).find((c: any) => /loinc/i.test(c.system || ''))?.code
+}
+
 function notFoundMessage(noun: string, dateFrom?: string, dateTo?: string): string {
   if (dateFrom || dateTo) {
     return `在指定時間範圍內（${dateFrom || '開始'} 至 ${dateTo || '現在'}）沒有找到${noun}`
@@ -584,23 +588,54 @@ export function createFhirTools(getData: () => AgentDataSource) {
           return true
         })
 
-        let matches = unique.filter((o: any) => matchSubstring(pickName(o.code), query))
+        // Grouping key = LOINC code so one analyte stored under different display
+        // names (e.g. "eGFR" vs "Estimated GFR", both LOINC 33914-3) collapses
+        // into a single dated series instead of splitting — which would let a
+        // stale value be returned as "latest". Real data also mixes coded and
+        // uncoded entries of the same analyte (e.g. PT: one with LOINC, one
+        // without), so an uncoded entry inherits the LOINC of a same-text sibling.
+        const textToLoinc = new Map<string, string>()
+        for (const o of unique) {
+          const loinc = loincOf(o.code)
+          const text = o.code?.text
+          if (loinc && text && !textToLoinc.has(text)) textToLoinc.set(text, loinc)
+        }
+        const codeKey = (concept: any): string =>
+          loincOf(concept) ||
+          (concept?.text && textToLoinc.get(concept.text)) ||
+          concept?.coding?.[0]?.code ||
+          pickName(concept) ||
+          'Unknown'
+
+        // Seed match: the query may hit any display name OR coding display, not
+        // just the canonical text.
+        const nameMatches = (o: any): boolean => {
+          const c = o.code || {}
+          const names = [c.text, ...((c.coding || []).map((x: any) => x.display))]
+          return names.some((n: string | undefined) => matchSubstring(n, query))
+        }
+        const seedKeys = new Set(unique.filter(nameMatches).map((o: any) => codeKey(o.code)))
+        // Expand to every observation sharing a matched LOINC, so display aliases
+        // (e.g. "eGFR" vs "Estimated GFR") come along as one series.
+        let matches = unique.filter((o: any) => seedKeys.has(codeKey(o.code)))
         matches = matches.sort((a, b) => (b.effectiveDateTime || '').localeCompare(a.effectiveDateTime || ''))
 
-        // Group by code name → keep N most recent per name
+        // Group by LOINC code → keep N most recent per analyte
         const perCodeLimit = withTrend ? 10 : 1
         const byCode = new Map<string, any[]>()
         for (const o of matches) {
-          const name = pickName(o.code) || 'Unknown'
-          const arr = byCode.get(name) ?? []
+          const k = codeKey(o.code)
+          const arr = byCode.get(k) ?? []
           if (arr.length < perCodeLimit) {
             arr.push(o)
-            byCode.set(name, arr)
+            byCode.set(k, arr)
           }
         }
 
         const flat: any[] = []
-        for (const [name, items] of byCode) {
+        for (const [, items] of byCode) {
+          // Canonical display = the most-recent entry's name (matches found at top).
+          const name = pickName(items[0].code) || 'Unknown'
           for (const o of items) flat.push({ name, obs: o })
         }
         const capped = applyLimit(flat, limit, 50)
