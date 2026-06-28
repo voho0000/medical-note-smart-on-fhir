@@ -54,3 +54,7 @@ next-env.d.ts
 
 # build-gh.mjs temp stash (left behind if a GH Pages build is interrupted)
 .api-stash-gh-build/
+
+# loop-engineering working files — verdict output + per-iteration goal
+/.loop/
+/scripts/loop/goal.md
