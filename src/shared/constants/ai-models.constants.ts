@@ -47,7 +47,7 @@ export type GeminiModelId = (typeof GEMINI_MODELS)[number]["id"]
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]["id"]
 export type ModelId = GptModelId | GeminiModelId | ClaudeModelId
 
-export const DEFAULT_MODEL_ID: GeminiModelId = "gemini-3.1-flash-lite"
+export const DEFAULT_MODEL_ID: GeminiModelId = "gemini-3-flash-preview"
 
 export const GPT_MODEL_IDS = new Set<GptModelId>(GPT_MODELS.map((model) => model.id))
 export const GEMINI_MODEL_IDS = new Set<GeminiModelId>(GEMINI_MODELS.map((model) => model.id))
