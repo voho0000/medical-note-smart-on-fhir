@@ -11,6 +11,8 @@
 //  No denylist / exclusion regex needed — unrecognised tests simply fall
 //  through to `return null`.
 
+import { FHIR_SYSTEM_FRAGMENTS } from '@/src/shared/constants/fhir-systems.constants'
+
 export interface LabSubgroup {
   /** Stable id — matches a key under t.reports.cumulativeSubgroups for display. */
   id: string
@@ -320,6 +322,57 @@ function isQualitativeResult(obs: any): boolean {
   return !!v && QUALITATIVE_RE.test(v)
 }
 
+// ── NHI 醫令章節閘 (name-collision gate) ──────────────────────────────────
+// The 08 section is 血液學檢查 (hematology + coagulation, NHI 08001–08134, per
+// the 健保給付標準 — verified against NHI-FHIR-Bridge's NHI↔LOINC table). CBC
+// differential names like "Neutrophil" / "嗜中性白血球" collide with non-blood
+// microscopy rows — e.g. 13006C 細菌顯微鏡檢查 reports pus cells as "Neutrophil
+// 1+(>25/LPF)" with NO LOINC and NO specimen, which the name-based passes below
+// would otherwise mis-route into the blood CBC NEU column. Pass 1 already blocks
+// non-blood SPECIMENS; this blocks non-blood NHI CODES so a NAME match into
+// cbc/coag is rejected when the obs carries an NHI code from another section.
+// LOINC matches (Pass 2) are deliberately NOT gated — bridge LOINC is the
+// authoritative identifier and its errors must stay visible (no-masking policy).
+// Each cleanly-single-section category → the NHI 醫令 section prefix(es) it
+// legitimately comes from. Only categories with a CLEAN section boundary are
+// listed:
+//   • cbc / coag → 08  血液學檢查 (08001–08134; verified vs 健保給付標準)
+//   • urine      → 06  尿液一般 / 尿生化檢查
+// chem is deliberately ABSENT: its inflammation markers span sections (CRP & PCT
+// are 12 免疫, ESR is 08), so a 09-only gate would wrongly drop them. Sections
+// confirmed empirically against NHI-FHIR-Bridge's NHI↔LOINC table
+// (06 尿, 07 糞便, 08 血液/凝血, 09 生化, 11 血庫, 12 免疫/腫瘤, 13 微生物, 14 血清).
+const CATEGORY_NHI_SECTIONS: Record<string, string[]> = {
+  cbc: ['08'],
+  coag: ['08'],
+  urine: ['06'],
+}
+
+function nhiOrderCode(obs: any): string | null {
+  const codings: any[] = Array.isArray(obs?.code?.coding) ? obs.code.coding : []
+  for (const c of codings) {
+    const system = typeof c?.system === 'string' ? c.system : ''
+    if (system.includes(FHIR_SYSTEM_FRAGMENTS.NHI_MEDICAL_ORDER_CODE)) {
+      const code = typeof c?.code === 'string' ? c.code.trim().toUpperCase() : ''
+      if (code) return code
+    }
+  }
+  return null
+}
+
+// A NAME-based category match is rejected when the obs carries an NHI code from
+// a section incompatible with that category — so a 13xxx microbiology row can't
+// ride a CBC name into 血液 nor a "Bacteria" name into 尿液. obs WITHOUT an NHI
+// code fall through unchanged (most non-NHI FHIR data; specimen routing in Pass 1
+// handles those when a specimen is present). Categories absent from the map are
+// never gated.
+function nameMatchAllowedForCategory(cat: LabCategory, obs: any): boolean {
+  const sections = CATEGORY_NHI_SECTIONS[cat.id]
+  if (!sections) return true
+  const nhi = nhiOrderCode(obs)
+  return !nhi || sections.some((p) => nhi.startsWith(p))
+}
+
 export function categorizeObservation(obs: any): LabCategory | null {
   if (!obs) return null
 
@@ -387,7 +440,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
   for (const cat of LAB_CATEGORIES) {
     const codeSet = new Set(cat.codes.map(normalize))
     for (const candidate of exactCandidates) {
-      if (codeSet.has(candidate)) return cat
+      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return cat
     }
   }
 
@@ -405,7 +458,7 @@ export function categorizeObservation(obs: any): LabCategory | null {
   for (const cat of LAB_CATEGORIES) {
     const codeSet = new Set(cat.codes.map(normalize))
     for (const candidate of strippedDisplays) {
-      if (codeSet.has(candidate)) return cat
+      if (codeSet.has(candidate) && nameMatchAllowedForCategory(cat, obs)) return cat
     }
   }
 
@@ -419,8 +472,14 @@ export function categorizeObservation(obs: any): LabCategory | null {
   // ── Pass 6: qualitative-result fallback ────────────────────────────────
   // Dipstick-style results ("4+", "Negative", "trace") are typical of
   // urinalysis. Skip when specimen=Blood so qualitative blood results
-  // (ABO typing, antibody screens) don't get mis-routed.
-  if (!specimenSaysBlood && isQualitativeResult(obs)) {
+  // (ABO typing, antibody screens) don't get mis-routed. ALSO skip when the
+  // obs carries an NHI 醫令碼 — coded data's category comes from the code
+  // (LOINC / 08 section / …), not a value-shape guess. Without this a
+  // microbiology microscopy row like 13006C "Neutrophil 1+(>25/LPF)" — already
+  // blocked from CBC by the section gate above — would bounce into 尿液 on the
+  // leading "1+". Uncoded sandbox/orphan dipstick rows (no NHI code) still fall
+  // through here as before.
+  if (!specimenSaysBlood && !nhiOrderCode(obs) && isQualitativeResult(obs)) {
     return LAB_CATEGORIES.find((c) => c.id === 'urine') || null
   }
 

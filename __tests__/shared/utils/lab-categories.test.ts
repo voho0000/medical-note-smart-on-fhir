@@ -177,3 +177,67 @@ describe('categorizeObservation — cardiac markers', () => {
     }
   })
 })
+
+// ── NHI 醫令章節閘 (name-collision guard) ────────────────────────────────────
+// Bug (NHI-FHIR-Bridge report 2026-06-29): 13006C 排泄物/分泌物之細菌顯微鏡檢查
+// reports pus cells as "Neutrophil 1+(>25/LPF)" — NO LOINC, NO specimen — which
+// used to mis-group into the blood CBC 嗜中性白血球 column because the name
+// "Neutrophil" alias-resolves to NEU. The 08 (血液學) section gate keeps such a
+// row out of cbc/coag, and the NHI-aware qualitative fallback stops the "1+"
+// from then bouncing it into 尿液 — all without dropping legit CBC or uncoded data.
+describe('categorizeObservation — NHI section gate (name-collision guard)', () => {
+  const NHI = 'https://twcore.mohw.gov.tw/CodeSystem/nhi-medical-order-code'
+  const HIS = 'https://nhi-fhir-bridge.local/CodeSystem/his-local-lab'
+
+  // Mirrors how the bridge emits a no-LOINC NHI row: NHI medical-order code +
+  // his-local name in code.text, no LOINC, no specimen.
+  function nhiObs(
+    text: string,
+    nhiCode: string,
+    opts: { loinc?: string; valueString?: string; value?: number } = {},
+  ) {
+    const coding: any[] = []
+    if (opts.loinc) coding.push({ system: 'http://loinc.org', code: opts.loinc })
+    coding.push({ system: NHI, code: nhiCode, display: text })
+    coding.push({ system: HIS, code: text, display: text })
+    const obs: any = { code: { text, coding } }
+    if (opts.valueString !== undefined) obs.valueString = opts.valueString
+    if (opts.value !== undefined) obs.valueQuantity = { value: opts.value, unit: '%' }
+    return obs
+  }
+
+  it('microbiology "Neutrophil" (NHI 13006C, no LOINC/specimen, "1+(>25/LPF)") is excluded — not cbc, not urine', () => {
+    expect(categorizeObservation(nhiObs('Neutrophil', '13006C', { valueString: '1+(>25/LPF)' }))).toBeNull()
+  })
+
+  it.each(['08013C', '08011C', '08002C', '08003C', '08006C'])(
+    'CBC "Neutrophil" billed under NHI %s (08 血液學 section) still categorises as cbc',
+    (nhi) => {
+      expect(categorizeObservation(nhiObs('Neutrophil', nhi, { value: 48.9 }))?.id).toBe('cbc')
+    },
+  )
+
+  it('"Neutrophil" with NO NHI code (non-NHI FHIR / sandbox) still categorises as cbc via the name fallback', () => {
+    const obs = { code: { text: 'Neutrophil' }, valueQuantity: { value: 50, unit: '%' } }
+    expect(categorizeObservation(obs)?.id).toBe('cbc')
+  })
+
+  it('CBC LOINC wins over the section gate (LOINC is not gated — bridge LOINC errors stay visible)', () => {
+    // 57021-8 = CBC W Auto Diff panel (whitelisted in cbc.loincCodes); even with
+    // an off-section NHI code riding along, Pass-2 LOINC resolves it to cbc.
+    expect(categorizeObservation(nhiObs('Neutrophil', '13006C', { loinc: '57021-8', value: 50 }))?.id).toBe('cbc')
+  })
+
+  // ── Urine section gate (06) — same guard, "Bacteria" name collision ──────
+  it('urinalysis "Bacteria" (NHI 06012C) categorises as urine', () => {
+    expect(categorizeObservation(nhiObs('Bacteria', '06012C', { valueString: 'Few' }))?.id).toBe('urine')
+  })
+
+  it('microbiology "Bacteria" (NHI 13016B blood culture) does NOT ride into urine — excluded', () => {
+    expect(categorizeObservation(nhiObs('Bacteria', '13016B', { valueString: 'Many' }))).toBeNull()
+  })
+
+  it('"Bacteria" with no NHI code still categorises as urine via the name fallback', () => {
+    expect(categorizeObservation({ code: { text: 'Bacteria' }, valueString: 'Few' })?.id).toBe('urine')
+  })
+})
