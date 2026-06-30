@@ -17,6 +17,7 @@
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:emulated": "playwright test -c playwright.emulated.config.ts",
     "check:auth-domains": "node scripts/check-auth-domains.mjs",
     "loop:gate": "node scripts/loop/gate.mjs",
     "loop:dashboard": "node scripts/loop/dashboard.mjs",

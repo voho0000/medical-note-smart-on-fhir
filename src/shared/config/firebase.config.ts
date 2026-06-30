@@ -1,7 +1,12 @@
 // Firebase Configuration
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import { getAuth, type Auth } from 'firebase/auth'
-import { initializeFirestore, getFirestore, type Firestore } from 'firebase/firestore'
+import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth'
+import {
+  initializeFirestore,
+  getFirestore,
+  connectFirestoreEmulator,
+  type Firestore,
+} from 'firebase/firestore'
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -51,6 +56,19 @@ if (typeof window !== 'undefined') {
     // Already initialized (e.g. Fast Refresh re-evaluated this module) — reuse
     // the existing instance rather than throwing.
     db = getFirestore(app, 'mediprisma')
+  }
+
+  // E2E only: route auth + firestore to the local emulators so the full
+  // anonymous-sign-in -> ID-token -> proxy-auth chain (and the security rules)
+  // can be exercised without touching production. Gated by an explicit env flag
+  // so it can NEVER activate on a real deploy. See playwright.emulated.config.ts.
+  if (process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === '1') {
+    try {
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+      connectFirestoreEmulator(db, '127.0.0.1', 8080)
+    } catch {
+      // Already connected (Fast Refresh re-evaluated this module).
+    }
   }
 }
 
