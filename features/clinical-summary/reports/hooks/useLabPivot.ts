@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
 import { CANONICAL_KEYS, CANONICAL_DISPLAY, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
+import { normalizeCellConcUnit } from '@/src/shared/utils/unit-scale'
 
 export interface LabCell {
   value: string
@@ -289,18 +290,35 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
         }
       }
       const row = testMap.get(mapKey)!
+
+      // Cumulative-report-only unit normalisation: blood-count analytes (WBC/RBC/
+      // PLT) come through with the same unit at different scales (e.g. WBC "5 K/µL"
+      // vs raw "5600 /µL"), which makes a single column unreadable. Rescale to one
+      // canonical unit here. `isAbnormal` was already computed from the raw value
+      // vs the obs's own referenceRange above, so it stays correct. The raw
+      // row-by-row report uses a different path and is untouched.
+      let cellValue = value
+      let cellUnit = unit
+      if (numericValue !== undefined) {
+        const norm = normalizeCellConcUnit(testKey, numericValue, unit)
+        if (norm) {
+          cellValue = String(norm.value)
+          cellUnit = norm.unit
+        }
+      }
+
       const cell: LabCell = {
-        value,
-        unit,
+        value: cellValue,
+        unit: cellUnit,
         isAbnormal,
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
       }
       // If multiple observations on same day, keep the last one (could be revised result)
       row.values.set(date, cell)
-      if (unit) {
+      if (cellUnit) {
         const ucMap = unitCount.get(mapKey)!
-        ucMap.set(unit, (ucMap.get(unit) || 0) + 1)
+        ucMap.set(cellUnit, (ucMap.get(cellUnit) || 0) + 1)
       }
     }
 
