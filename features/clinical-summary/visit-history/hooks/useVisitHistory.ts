@@ -9,6 +9,9 @@ export interface VisitRecord {
   id: string
   type: VisitType
   date: string
+  /** Encounter.period.end — discharge date for inpatient stays; absent for
+   *  single-day visits and for inpatient records with no discharge data. */
+  endDate?: string
   location?: string
   institution?: string  // hospital / facility name used for filtering
   reason?: string
@@ -142,6 +145,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           id: encounter.id,
           type,
           date: encounter.period?.start || '',
+          endDate: encounter.period?.end || undefined,
           location,
           institution: institution || undefined,
           reason,

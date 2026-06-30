@@ -57,6 +57,17 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
   const hasDetails = visitHasDetails(details, documents)
   const isRightActive = rightDetail?.sourceId === visit.id
 
+  // Date label: a "住院日 ~ 出院日" range for inpatient stays that carry a
+  // discharge date (Encounter.period.end on a different day); otherwise the
+  // single visit date. Single-day visits and inpatient records with no
+  // discharge data keep showing just the one date.
+  const startLabel = formatDateUtil(visit.date, locale)
+  const showRange = !!visit.endDate && !!visit.date &&
+    visit.endDate.slice(0, 10) !== visit.date.slice(0, 10)
+  const dateLabel = showRange
+    ? `${startLabel} ~ ${formatDateUtil(visit.endDate as string, locale)}`
+    : startLabel
+
   // Open this visit's detail in the right pane (向右展開). Reuses the very same
   // VisitDetailContent that renders inline.
   const openInRightPane = (e: React.MouseEvent) => {
@@ -66,7 +77,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
       title: (
         <span className="flex items-center gap-1.5">
           {getTypeBadge(visit.type, t.visitHistory.badges)}
-          <span>{formatDateUtil(visit.date, locale)}</span>
+          <span>{dateLabel}</span>
           {visit.location && <span className="text-xs font-normal text-muted-foreground">· {visit.location}</span>}
         </span>
       ),
@@ -112,7 +123,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                 {visit.location}
               </span>
             )}
-            <span className="font-medium">{formatDateUtil(visit.date, locale)}</span>
+            <span className="font-medium">{dateLabel}</span>
             {visit.department && (
               <span className="text-xs text-muted-foreground">· {visit.department}</span>
             )}

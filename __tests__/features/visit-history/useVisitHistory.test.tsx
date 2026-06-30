@@ -154,5 +154,24 @@ describe('useVisitHistory — bridge bug regression locks', () => {
       ])
       expect(result.current).toHaveLength(0)
     })
+
+    it('captures Encounter.period.end as endDate (inpatient discharge date)', () => {
+      // After the bridge merges the IC-card admission + discharge records, the
+      // inpatient encounter carries period.end. The card renders a 住院~出院 range
+      // from it (VisitItem); here we lock that the hook surfaces endDate.
+      const { result } = render([
+        {
+          id: 'enc-imp-discharge',
+          status: 'finished',
+          class: { code: 'IMP' },
+          type: [{ text: '住院' }, { text: 'IC卡資料' }],
+          period: { start: '2026-06-16T00:00:00+08:00', end: '2026-06-22T00:00:00+08:00' },
+          serviceProvider: { display: '林口長庚' },
+        },
+      ])
+      expect(result.current[0].type).toBe('inpatient')
+      expect(result.current[0].date).toContain('2026-06-16')
+      expect(result.current[0].endDate).toContain('2026-06-22')
+    })
   })
 })
