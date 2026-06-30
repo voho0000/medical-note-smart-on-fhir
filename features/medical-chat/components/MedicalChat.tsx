@@ -32,9 +32,11 @@ import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
 import { ChatModeSelector } from "./ChatModeSelector"
 import { ChatInputArea } from "./ChatInputArea"
+import { SuggestionChips } from "./SuggestionChips"
 import { ExpandedOverlay } from '@/src/shared/components/ExpandedOverlay'
 import { useStreamingChat } from "../hooks/useStreamingChat"
 import { useAgentChat } from "../hooks/useAgentChat"
+import { useFollowupSuggestions } from "../hooks/useFollowupSuggestions"
 import { useVoiceRecording } from "../hooks/useVoiceRecording"
 import { useTemplateSelector } from "../hooks/useTemplateSelector"
 import { useChatInput } from "../hooks/useChatInput"
@@ -171,6 +173,13 @@ export default function MedicalChat() {
   const normalChat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
   const agentChat = useAgentChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
   const chat = isAgentMode ? agentChat : normalChat
+
+  // "Next step" suggestion chips, generated after each answer completes.
+  const {
+    suggestions: followupSuggestions,
+    generate: generateFollowups,
+    clear: clearFollowups,
+  } = useFollowupSuggestions()
   
   // Ensure chat.messages is always an array
   const chatMessages = Array.isArray(chat.messages) ? chat.messages : []
@@ -275,8 +284,11 @@ export default function MedicalChat() {
   }, [imageUpload])
 
   // Handlers
-  const handleSend = useCallback(async () => {
-    const trimmed = input.input.trim()
+  const handleSend = useCallback(async (overrideText?: string) => {
+    // A suggestion chip passes its prompt as overrideText; clear the chips on
+    // any send so they don't linger across the new exchange.
+    clearFollowups()
+    const trimmed = (typeof overrideText === "string" ? overrideText : input.input).trim()
     const hasImages = imageUpload.images.length > 0
     
     // Require either text or images
@@ -333,7 +345,33 @@ export default function MedicalChat() {
     // Wait for AI response to complete
     await sendPromise
     // Stage 2: AI response completion will trigger another forceSave to update with full conversation
-  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight, forceSave])
+  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups])
+
+  // Generate "next step" chips when an assistant answer finishes streaming.
+  // Guarded by the assistant message id so it fires once per answer; clears when
+  // the conversation is emptied. Fails closed inside the hook.
+  const lastSuggestedIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (chat.isLoading) return
+    if (chatMessages.length === 0) {
+      lastSuggestedIdRef.current = null
+      clearFollowups()
+      return
+    }
+    const last = chatMessages[chatMessages.length - 1]
+    const content = (last?.content || "").trim()
+    if (!last || last.role !== "assistant" || !content) return
+    // Skip the thinking placeholder and surfaced errors.
+    if (content.startsWith("🤔") || content.startsWith("❌")) return
+    if (lastSuggestedIdRef.current === last.id) return
+    // The reader's own questions this session feed implicit personalisation; the
+    // last one is the current question (buildMessages filters it out of "recent").
+    const userMessages = chatMessages.filter((m) => m.role === "user").map((m) => m.content)
+    const lastUser = userMessages[userMessages.length - 1]
+    if (!lastUser) return
+    lastSuggestedIdRef.current = last.id
+    generateFollowups(lastUser, content, { recentUserMessages: userMessages, isDeepMode: isAgentMode })
+  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups, isAgentMode])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
@@ -474,7 +512,18 @@ export default function MedicalChat() {
             </div>
           </div>
         )}
-        <ChatMessageList messages={chatMessages} isLoading={chat.isLoading} />
+        <ChatMessageList
+          messages={chatMessages}
+          isLoading={chat.isLoading}
+          scrollSignal={followupSuggestions.length}
+          afterMessages={
+            <SuggestionChips
+              suggestions={followupSuggestions}
+              onPick={(p) => handleSend(p)}
+              disabled={chat.isLoading}
+            />
+          }
+        />
       </CardContent>
 
       <CardFooter className="flex flex-col gap-2 border-t px-3 sm:px-6 !pt-2 pb-2 shrink-0">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, memo } from "react"
+import { useEffect, useRef, memo, type ReactNode } from "react"
 import { toast } from "sonner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/src/shared/utils/cn.utils"
@@ -18,6 +18,12 @@ import { Check, Copy, Sparkles } from "lucide-react"
 interface ChatMessageListProps {
   messages: ChatMessage[]
   isLoading: boolean
+  /** Rendered at the very bottom of the thread, under the last message (e.g. the
+   *  follow-up suggestion chips) — so it scrolls with the conversation like ChatGPT. */
+  afterMessages?: ReactNode
+  /** Bump to re-trigger the auto-scroll when `afterMessages` content appears/changes
+   *  (the [messages] effect alone won't fire, since messages didn't change). */
+  scrollSignal?: number
 }
 
 function getModelDisplayName(modelId?: string): string {
@@ -170,7 +176,7 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
          prevProps.message.agentStates?.length === nextProps.message.agentStates?.length
 })
 
-export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
+export function ChatMessageList({ messages, isLoading, afterMessages, scrollSignal }: ChatMessageListProps) {
   const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const prevMessagesLengthRef = useRef(0)
@@ -196,7 +202,7 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
         clearTimeout(scrollTimeoutRef.current)
       }
     }
-  }, [messages])
+  }, [messages, scrollSignal])
 
   // Track message count for other purposes
   useEffect(() => {
@@ -225,6 +231,7 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
         {isLoading ? (
           <StreamingIndicator label={t.common.loading} />
         ) : null}
+        {afterMessages}
         <div ref={messagesEndRef} />
       </div>
     </ScrollArea>
