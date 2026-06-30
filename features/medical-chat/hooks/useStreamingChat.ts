@@ -5,6 +5,8 @@ import { useState, useCallback, useRef } from "react"
 import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
+import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
+import { gateModelForKeys } from "@/src/shared/constants/ai-models.constants"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { truncateToContextWindow, getTokenStats, selectMessagesToSend } from "@/src/shared/utils/context-window-manager"
 import { addMessagePair } from "@/src/shared/utils/chat-message.utils"
@@ -19,6 +21,7 @@ export function useStreamingChat(
   const setChatMessages = useSetChatMessages()
   const {} = useLanguage()
   const ai = useUnifiedAi()
+  const { apiKey: openAiKey, geminiKey, claudeKey } = useAllApiKeys()
   const [error, setError] = useState<Error | null>(null)
   const hasReceivedChunkRef = useRef(false)
 
@@ -28,11 +31,18 @@ export function useStreamingChat(
       const trimmed = input.trim()
       if (!trimmed && (!images || images.length === 0)) return
 
+      // Same graceful-degradation gate as deep mode / the stream adapter: when the
+      // picked model needs a key we don't have, it actually runs on the free
+      // default. Resolve that here so the badge AND the context-window math reflect
+      // the model that truly runs — otherwise normal mode shows e.g. "Opus" while
+      // really streaming the free model, and sizes the window to the wrong model.
+      const effectiveModelId = gateModelForKeys(modelId, { openAiKey, geminiKey, claudeKey })
+
       // Create user message and assistant placeholder
       const { messages: newMessages, assistantMessageId } = addMessagePair(
         chatMessages,
         trimmed,
-        modelId,
+        effectiveModelId,
         "", // Empty initial content
         images,
         undefined // agentStates
@@ -55,13 +65,13 @@ export function useStreamingChat(
           return { role: m.role, content }
         })
         
-        const stats = getTokenStats(messagesForTokenCount, { modelId, systemPrompt })
-        
+        const stats = getTokenStats(messagesForTokenCount, { modelId: effectiveModelId, systemPrompt })
+
         // Truncate to fit context window
-        const truncatedMessages = truncateToContextWindow(messagesForTokenCount, { 
-          modelId, 
+        const truncatedMessages = truncateToContextWindow(messagesForTokenCount, {
+          modelId: effectiveModelId,
           systemPrompt,
-          maxResponseTokens: 4000 
+          maxResponseTokens: 4000
         })
 
         // Build final messages for API - pass full message objects with images
@@ -86,7 +96,7 @@ export function useStreamingChat(
         const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
         
         await ai.stream(apiMessages, {
-          modelId,
+          modelId: effectiveModelId,
           onChunk: (content: string) => {
             // Clear input on first chunk (streaming started successfully)
             if (!hasReceivedChunkRef.current && onInputClear) {
@@ -142,7 +152,7 @@ export function useStreamingChat(
         )
       }
     },
-    [chatMessages, modelId, setChatMessages, systemPrompt, ai, onInputClear, onStreamComplete]
+    [chatMessages, modelId, openAiKey, geminiKey, claudeKey, setChatMessages, systemPrompt, ai, onInputClear, onStreamComplete]
   )
 
   const handleReset = useCallback(() => {

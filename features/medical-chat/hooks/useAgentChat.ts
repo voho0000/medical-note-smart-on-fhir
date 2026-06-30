@@ -14,7 +14,7 @@ import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-clie
 import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { getModelDefinition, gateModelForKeys } from "@/src/shared/constants/ai-models.constants"
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
 import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
@@ -56,6 +56,12 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const trimmed = input.trim()
       if (!trimmed && (!images || images.length === 0)) return
 
+      // Graceful degradation: if the picked model needs a user key we don't have,
+      // run on the free default instead of dead-ending with an error. Normal mode
+      // gates the same way inside the ai-sdk-stream adapter; deep mode runs its
+      // own streamText loop (runDeepModeAgent), so it must gate here too.
+      const effectiveModelId = gateModelForKeys(modelId, { openAiKey, geminiKey, claudeKey })
+
       // Create user message with images
       const userMessage = createUserMessage(trimmed, images)
       const newMessages = [...chatMessages, userMessage]
@@ -71,7 +77,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         role: "assistant",
         content: thinkingMessage,
         timestamp: Date.now(),
-        modelId,
+        modelId: effectiveModelId,
         agentStates: [initialState],
       }])
 
@@ -84,7 +90,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const idleMs = resolveStreamIdleTimeoutMs()
 
       try {
-        const provider = getModelDefinition(modelId)?.provider ?? "openai"
+        const provider = getModelDefinition(effectiveModelId)?.provider ?? "openai"
         const apiKey =
           provider === 'gemini' ? geminiKey :
           provider === 'claude' ? claudeKey :
@@ -103,7 +109,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         // a Firebase token (real or anonymous)
         const useProxy = !apiKey && hasProxyAccess
         if (useProxy) {
-          const validation = aiProviderFactory.validateProxyAvailability(modelId)
+          const validation = aiProviderFactory.validateProxyAvailability(effectiveModelId)
           if (!validation.available) {
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId ? { ...m, content: validation.error || t.agent.apiKeyRequired } : m)
@@ -115,7 +121,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
         // Create AI provider using factory
         const { model } = aiProviderFactory.create({
-          modelId,
+          modelId: effectiveModelId,
           apiKey: apiKey || undefined,
           useProxy,
         })

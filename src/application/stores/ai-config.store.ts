@@ -15,7 +15,7 @@ import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { encrypt, decrypt } from '@/src/shared/utils/crypto.utils'
 import { isUsableApiKey, sanitizeApiKey } from '@/src/shared/utils/api-key.utils'
-import { DEFAULT_MODEL_ID, isModelId, getModelDefinition, getBaseModelIdForProvider } from '@/src/shared/constants/ai-models.constants'
+import { DEFAULT_MODEL_ID, isModelId, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 
 type StorageType = 'localStorage' | 'sessionStorage'
 
@@ -97,8 +97,10 @@ const saveEncryptedKey = async (storageType: StorageType, key: string, value: st
 }
 
 // When the selected model needs a user key for its provider and that key is
-// now gone, drop back to the provider's free base model. Prevents the "picked a
-// premium model, then deleted the API key → generation errors" trap, and covers
+// now gone, drop back to the free default model (DEFAULT_MODEL_ID) — same target
+// as the runtime gateModel, so the user always lands on one predictable free
+// model. Prevents the "picked a premium model, then deleted the API key →
+// generation errors" trap, and covers
 // every removal path (settings clear button, logout/clearAllKeys, …) in one
 // place. Returns the fallback model id, or null if no change is needed.
 const modelFallbackForMissingKey = (state: {
@@ -114,7 +116,7 @@ const modelFallbackForMissingKey = (state: {
     def.provider === 'gemini' ? state.geminiKey :
     state.claudeKey
   if (key) return null
-  const fallback = getBaseModelIdForProvider(def.provider) ?? DEFAULT_MODEL_ID
+  const fallback = DEFAULT_MODEL_ID
   return fallback === state.model ? null : fallback
 }
 

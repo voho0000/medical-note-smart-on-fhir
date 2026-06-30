@@ -1,4 +1,5 @@
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
+import { DEFAULT_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 
 // Mock crypto utils
 jest.mock('@/src/shared/utils/crypto.utils', () => ({
@@ -153,29 +154,29 @@ describe('ai-config.store', () => {
       expect(useAiConfigStore.getState().model).toBe('gpt-4')
     })
 
-    it('downgrades a premium model to the free base on logout', () => {
+    it('downgrades a premium model to the free default on logout', () => {
       const { setClaudeKey, setModel, clearAllKeys } = useAiConfigStore.getState()
 
       setClaudeKey('claude-key')
       setModel('claude-sonnet-4-6') // requires user key
       clearAllKeys()
 
-      expect(useAiConfigStore.getState().model).toBe('claude-haiku-4-5-20251001')
+      expect(useAiConfigStore.getState().model).toBe(DEFAULT_MODEL_ID)
     })
   })
 
   describe('auto-downgrade when a key is removed', () => {
-    it('drops a premium OpenAI model to the free base when its key is cleared', () => {
+    it('drops a premium OpenAI model to the free default when its key is cleared', () => {
       const { setApiKey, setModel } = useAiConfigStore.getState()
 
       setApiKey('openai-key')
       setModel('gpt-5.5') // requires user key
       setApiKey(null)
 
-      expect(useAiConfigStore.getState().model).toBe('gpt-5.4-nano')
+      expect(useAiConfigStore.getState().model).toBe(DEFAULT_MODEL_ID)
     })
 
-    it('drops a premium Gemini model to the free base when its key is cleared', () => {
+    it('drops a premium Gemini model to the free default when its key is cleared', () => {
       // Regression: the old per-handler logic missed this case when a proxy existed
       const { setGeminiKey, setModel } = useAiConfigStore.getState()
 
@@ -183,17 +184,17 @@ describe('ai-config.store', () => {
       setModel('gemini-3.5-flash') // requires user key
       setGeminiKey(null)
 
-      expect(useAiConfigStore.getState().model).toBe('gemini-3.1-flash-lite')
+      expect(useAiConfigStore.getState().model).toBe(DEFAULT_MODEL_ID)
     })
 
-    it('drops a premium Claude model to the free base when its key is cleared', () => {
+    it('drops a premium Claude model to the free default when its key is cleared', () => {
       const { setClaudeKey, setModel } = useAiConfigStore.getState()
 
       setClaudeKey('claude-key')
       setModel('claude-sonnet-4-6')
       setClaudeKey(null)
 
-      expect(useAiConfigStore.getState().model).toBe('claude-haiku-4-5-20251001')
+      expect(useAiConfigStore.getState().model).toBe(DEFAULT_MODEL_ID)
     })
 
     it('leaves a free base model untouched when its key is cleared', () => {

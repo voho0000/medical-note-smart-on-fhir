@@ -94,10 +94,12 @@ export function getBaseModelIdForProvider(provider: ModelProvider): string | und
 /**
  * Resolve the model an AI call should ACTUALLY run on. If the picked model needs
  * the user's own key (`requiresUserKey`) but no key for its provider is present,
- * downgrade to that provider's free, proxy-eligible base model — so a stranded
- * premium pick never dead-ends with "API key is missing". This covers a model
- * that USED to be free but became key-gated (a lineup change), and a default the
- * user simply has no key for. Unknown ids fall back to `fallback`.
+ * downgrade to the free, proxy-eligible default model (`fallback`, defaulting to
+ * DEFAULT_MODEL_ID) — so a stranded premium pick never dead-ends with "API key is
+ * missing". This covers a model that USED to be free but became key-gated (a
+ * lineup change), and a default the user simply has no key for. Unknown ids fall
+ * back to `fallback` too. Callers that want a different landing model (e.g. a
+ * background helper pinned to a cheaper tier) pass their own `fallback`.
  *
  * `hasProviderKey` is whether the user has a key for THIS model's provider.
  */
@@ -109,7 +111,28 @@ export function gateModel(
   const def = getModelDefinition(modelId)
   if (!def) return fallback
   if (def.requiresUserKey && !hasProviderKey) {
-    return getBaseModelIdForProvider(def.provider) ?? fallback
+    return fallback
   }
   return modelId
+}
+
+/**
+ * Convenience wrapper over {@link gateModel} for callers that hold the user's
+ * three provider keys rather than a single "has a key for this provider" bool —
+ * e.g. the deep-mode agent path (useAgentChat), which runs its own streamText
+ * loop and so can't lean on the ai-sdk-stream adapter's gate. Picks the key for
+ * THIS model's provider, then gates. A key for a different provider never keeps a
+ * stranded pick alive (an Opus pick needs a Claude key, not a Gemini one).
+ */
+export function gateModelForKeys(
+  modelId: string,
+  keys: { openAiKey?: string | null; geminiKey?: string | null; claudeKey?: string | null },
+  fallback: string = DEFAULT_MODEL_ID,
+): string {
+  const provider = getModelDefinition(modelId)?.provider ?? 'openai'
+  const key =
+    provider === 'gemini' ? keys.geminiKey :
+    provider === 'claude' ? keys.claudeKey :
+    keys.openAiKey
+  return gateModel(modelId, !!key, fallback)
 }
