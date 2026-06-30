@@ -1,0 +1,82 @@
+# CI for MediPrisma (SMART app side).
+#
+# Three independent checks run on every push to master and on every PR:
+#   1. typecheck — catches type drift before deploy
+#   2. test — runs the Jest suite with --ci flag so any flaky tests fail
+#             clearly instead of retrying silently
+#   3. build — full Next static-export build, smoke-tests that the app
+#              still compiles end-to-end with all GH-Pages env wiring
+#
+# gh-pages.yml's `build` job depends on this workflow passing first
+# (`needs: ci`), so a red test blocks deploy. Solo-dev master pushes
+# without PRs are the default flow here, so gating on push is what
+# actually protects production.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch: {}
+
+# Cancel in-flight runs when a newer commit is pushed to the same branch —
+# saves CI minutes when iterating quickly.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        # Errors only — warnings are the tracked burn-down backlog
+        # (react-hooks compiler rules, unused vars). Boundary rules
+        # (core/shared/infrastructure layering) fail as errors.
+        run: npm run lint
+
+      - name: Unit tests
+        # `--testPathIgnorePatterns="worktrees"` keeps jest from picking up
+        # the copies of these tests living under `.claude/worktrees/<branch>/`
+        # when developers have Claude Code worktrees checked out locally.
+        # All other suites are gated by CI — any new test failure blocks
+        # the deploy job below.
+        run: npm test -- --ci --passWithNoTests --testPathIgnorePatterns="worktrees"
+
+      - name: Build (smoke test)
+        # Same env as the deploy build — catches any GH-Pages-specific
+        # config issues (basePath, env wiring) before we attempt deploy.
+        # Secrets are inherited from repo settings; failure here means the
+        # deploy build would also fail.
+        env:
+          GITHUB_PAGES: "true"
+          NEXT_PUBLIC_BASE_PATH: "/medical-note-smart-on-fhir"
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
+          NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
+          NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
+          NEXT_PUBLIC_CLAUDE_URL: ${{ secrets.NEXT_PUBLIC_CLAUDE_URL }}
+          NEXT_PUBLIC_PROXY_KEY: ${{ secrets.NEXT_PUBLIC_PROXY_KEY }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
+          NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
+        run: npm run build:gh

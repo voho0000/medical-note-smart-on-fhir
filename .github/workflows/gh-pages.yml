@@ -1,0 +1,67 @@
+name: Deploy to GitHub Pages
+# Triggered only after CI succeeds — no separate `push` trigger, so a
+# failing test/typecheck/build blocks deploy. The `workflow_dispatch`
+# trigger stays for manual re-deploy if needed.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # workflow_run fires on BOTH success and failure of the upstream CI
+    # workflow. Skip the deploy unless CI actually passed — otherwise a
+    # failed CI run would still trigger an empty deploy.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build static export for GH Pages
+        run: npm run build:gh
+        env:
+          GITHUB_PAGES: "true"
+          NEXT_PUBLIC_BASE_PATH: "/medical-note-smart-on-fhir"
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"   # 👈 disable lightningcss in CI
+          NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
+          NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
+          NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
+          NEXT_PUBLIC_CLAUDE_URL: ${{ secrets.NEXT_PUBLIC_CLAUDE_URL }}
+          NEXT_PUBLIC_PROXY_KEY: ${{ secrets.NEXT_PUBLIC_PROXY_KEY }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
+          NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,27 @@
+name: Auth domains guard
+
+# Catches the "a deploy domain dropped out of Firebase's Authorized domains →
+# Google sign-in silently broke" outage class WITHOUT waiting for a user to
+# report it (which is how 2026-06-30's mediprisma.tw break was found). Reads the
+# project's authorizedDomains via the PUBLIC web API key (no service account) and
+# fails if a production domain is missing. A red run emails the repo owner via
+# GitHub's default workflow-failure notifications.
+on:
+  schedule:
+    - cron: '17 1 * * *'   # daily ~01:17 UTC — catches config drift within a day
+  push:
+    branches: [master]     # immediate post-deploy re-validation (cheap, ~2s)
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # No install: the script uses only Node's built-in global fetch.
+      - run: node scripts/check-auth-domains.mjs
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}

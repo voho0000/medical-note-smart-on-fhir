@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>醫析 MediPrisma 系統架構圖</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans TC', 'Inter', sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    color: #e2e8f0;
+  }
+
+  .container {
+    width: 1200px;
+    max-width: 100%;
+  }
+
+  /* Language Toggle */
+  .lang-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    display: flex;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  .lang-btn {
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: transparent;
+    color: #94a3b8;
+    font-family: inherit;
+  }
+
+  .lang-btn.active {
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+    color: #fff;
+  }
+
+  .lang-btn:hover:not(.active) {
+    background: #334155;
+    color: #e2e8f0;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .header .brand {
+    font-size: 14px;
+    font-weight: 500;
+    color: #60a5fa;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .header h1 {
+    font-size: 36px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa, #60a5fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+
+  .header .subtitle {
+    font-size: 16px;
+    color: #94a3b8;
+    font-weight: 300;
+  }
+
+  /* Flow section */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    position: relative;
+  }
+
+  /* Arrow between rows */
+  .arrow-down {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  .arrow-down svg {
+    filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.4));
+  }
+
+  /* Cards */
+  .card {
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  }
+
+  .card .card-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+
+  .card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .card p {
+    font-size: 13px;
+    line-height: 1.6;
+    opacity: 0.85;
+  }
+
+  .card .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    margin-top: 10px;
+    font-weight: 500;
+  }
+
+  /* Step number */
+  .step-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  /* === Color Themes === */
+  .card.user {
+    background: linear-gradient(135deg, #1e3a5f, #1e40af20);
+    border: 1px solid #3b82f640;
+    flex: 1;
+  }
+  .card.user h3 { color: #93c5fd; }
+  .card.user .tag { background: #3b82f630; color: #93c5fd; }
+  .card.user .step-badge { background: #3b82f6; color: #fff; }
+
+  .card.auth {
+    background: linear-gradient(135deg, #3b1f6e, #7c3aed20);
+    border: 1px solid #8b5cf640;
+    flex: 1;
+  }
+  .card.auth h3 { color: #c4b5fd; }
+  .card.auth .tag { background: #7c3aed30; color: #c4b5fd; }
+  .card.auth .step-badge { background: #8b5cf6; color: #fff; }
+
+  .card.ai {
+    background: linear-gradient(135deg, #134e4a, #14b8a620);
+    border: 1px solid #2dd4bf40;
+    flex: 1;
+  }
+  .card.ai h3 { color: #5eead4; }
+  .card.ai .tag { background: #14b8a630; color: #5eead4; }
+  .card.ai .step-badge { background: #14b8a6; color: #fff; }
+
+  .card.output {
+    background: linear-gradient(135deg, #14532d, #22c55e20);
+    border: 1px solid #22c55e40;
+    flex: 1;
+  }
+  .card.output h3 { color: #86efac; }
+  .card.output .tag { background: #22c55e30; color: #86efac; }
+  .card.output .step-badge { background: #22c55e; color: #1e293b; }
+
+  /* Section label */
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-left: 4px;
+  }
+
+  .section-label.blue { color: #60a5fa; }
+  .section-label.purple { color: #a78bfa; }
+  .section-label.teal { color: #2dd4bf; }
+  .section-label.green { color: #4ade80; }
+
+  /* Feature list inside card */
+  .feature-list {
+    list-style: none;
+    margin-top: 8px;
+  }
+
+  .feature-list li {
+    font-size: 12px;
+    padding: 3px 0;
+    opacity: 0.8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .feature-list li::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid #334155;
+  }
+
+  .footer .tech-stack {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .footer .tech-tag {
+    font-size: 11px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #94a3b8;
+  }
+
+  .footer .credit {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #475569;
+  }
+
+  .row-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+  }
+
+  .row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .row-1 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* i18n: hide inactive language */
+  [data-lang="en"] { display: none; }
+  body.lang-en [data-lang="en"] { display: block; }
+  body.lang-en [data-lang="zh"] { display: none; }
+  /* For inline elements like span tags */
+  span[data-lang="en"], li[data-lang="en"] { display: none; }
+  body.lang-en span[data-lang="en"], body.lang-en li[data-lang="en"] { display: inline-block; }
+  body.lang-en span[data-lang="zh"], body.lang-en li[data-lang="zh"] { display: none; }
+  /* For list items */
+  body.lang-en li[data-lang="en"] { display: flex; }
+  li[data-lang="en"] { display: none; }
+</style>
+</head>
+<body>
+<!-- Language Toggle -->
+<div class="lang-toggle">
+  <button class="lang-btn active" id="btn-zh" onclick="setLang('zh')">中文</button>
+  <button class="lang-btn" id="btn-en" onclick="setLang('en')">English</button>
+</div>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">SMART on FHIR Clinical Assistant</div>
+    <h1 data-lang="zh">醫析 MediPrisma 系統架構</h1>
+    <h1 data-lang="en">MediPrisma System Architecture</h1>
+    <div class="subtitle" data-lang="zh">整合 AI Agent、語音轉錄與雲端同步的新世代臨床文件助理</div>
+    <div class="subtitle" data-lang="en">Next-generation clinical documentation assistant with AI Agent, voice transcription &amp; cloud sync</div>
+  </div>
+
+  <div class="flow">
+
+    <!-- STEP 1: User Input -->
+    <div class="section-label blue" data-lang="zh">STEP 1 &mdash; 使用者輸入</div>
+    <div class="section-label blue" data-lang="en">STEP 1 &mdash; USER INPUT</div>
+    <div class="row-3">
+      <div class="card user">
+        <span class="step-badge">1a</span>
+        <div class="card-icon">🎤</div>
+        <h3 data-lang="zh">語音輸入</h3>
+        <h3 data-lang="en">Voice Input</h3>
+        <p data-lang="zh">透過 Whisper 模型將語音即時轉錄為文字，支援中英文臨床口述</p>
+        <p data-lang="en">Real-time speech-to-text via Whisper model, supporting bilingual clinical dictation</p>
+        <span class="tag">Voice-to-Text</span>
+      </div>
+      <div class="card user">
+        <span class="step-badge">1b</span>
+        <div class="card-icon">📝</div>
+        <h3 data-lang="zh">文字輸入 / 範本</h3>
+        <h3 data-lang="en">Text Input / Templates</h3>
+        <p data-lang="zh">直接輸入問題或從提示詞範本庫選用社群共享的常用臨床範本</p>
+        <p data-lang="en">Type queries directly or select from the community-shared prompt template gallery</p>
+        <span class="tag">Prompt Gallery</span>
+      </div>
+      <div class="card user">
+        <span class="step-badge">1c</span>
+        <div class="card-icon">🔄</div>
+        <h3 data-lang="zh">歷史對話</h3>
+        <h3 data-lang="en">Chat History</h3>
+        <p data-lang="zh">從 Firestore 雲端載入過往對話紀錄，依病人分類，跨裝置同步</p>
+        <p data-lang="en">Load past conversations from Firestore cloud, organized by patient, synced across devices</p>
+        <span class="tag">Cloud Sync</span>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow-down">
+      <svg width="24" height="40" viewBox="0 0 24 40">
+        <path d="M12 0 L12 32 M4 24 L12 34 L20 24" stroke="#60a5fa" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- STEP 2: SMART on FHIR Auth -->
+    <div class="section-label purple" data-lang="zh">STEP 2 &mdash; SMART on FHIR 安全認證</div>
+    <div class="section-label purple" data-lang="en">STEP 2 &mdash; SMART on FHIR AUTHENTICATION</div>
+    <div class="row-1">
+      <div class="card auth">
+        <span class="step-badge">2</span>
+        <div class="card-icon">🔐</div>
+        <h3>SMART on FHIR OAuth 2.0 + PKCE</h3>
+        <p data-lang="zh">安全連接醫院電子病歷系統，取得授權後即時擷取病人完整臨床資料</p>
+        <p data-lang="en">Securely connect to hospital EHR systems and retrieve complete patient clinical data upon authorization</p>
+        <ul class="feature-list">
+          <li data-lang="zh">OAuth 2.0 授權碼流程 + PKCE 加密驗證</li>
+          <li data-lang="en">OAuth 2.0 authorization code flow + PKCE verification</li>
+          <li data-lang="zh">自動取得病人 Condition / Medication / Observation / Encounter 等 FHIR 資源</li>
+          <li data-lang="en">Auto-retrieve patient Condition / Medication / Observation / Encounter FHIR resources</li>
+          <li data-lang="zh">符合 HL7 FHIR R4 國際互通標準</li>
+          <li data-lang="en">Compliant with HL7 FHIR R4 international interoperability standard</li>
+        </ul>
+        <span class="tag">HL7 FHIR R4</span>
+        <span class="tag" style="margin-left:6px;">OAuth 2.0</span>
+        <span class="tag" style="margin-left:6px;">PKCE</span>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow-down">
+      <svg width="24" height="40" viewBox="0 0 24 40">
+        <path d="M12 0 L12 32 M4 24 L12 34 L20 24" stroke="#8b5cf6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- STEP 3: AI Processing -->
+    <div class="section-label teal" data-lang="zh">STEP 3 &mdash; AI 智慧處理引擎</div>
+    <div class="section-label teal" data-lang="en">STEP 3 &mdash; AI PROCESSING ENGINE</div>
+    <div class="row-2">
+      <div class="card ai">
+        <span class="step-badge">3a</span>
+        <div class="card-icon">💬</div>
+        <h3 data-lang="zh">一般模式 Chat</h3>
+        <h3 data-lang="en">Normal Mode Chat</h3>
+        <p data-lang="zh">標準 AI 對話，使用病人摘要作為上下文，串流式回應</p>
+        <p data-lang="en">Standard AI conversation using patient summary as context with streaming responses</p>
+        <ul class="feature-list">
+          <li data-lang="zh">GPT-5 / Gemini 3 多模型支援</li>
+          <li data-lang="en">Multi-model support: GPT-5 / Gemini 3</li>
+          <li data-lang="zh">病人資料自動注入 System Prompt</li>
+          <li data-lang="en">Patient data auto-injected into system prompt</li>
+          <li data-lang="zh">即時串流回應</li>
+          <li data-lang="en">Real-time streaming responses</li>
+        </ul>
+        <span class="tag">Streaming Chat</span>
+      </div>
+      <div class="card ai">
+        <span class="step-badge">3b</span>
+        <div class="card-icon">🤖</div>
+        <h3 data-lang="zh">深度模式 AI Agent</h3>
+        <h3 data-lang="en">Deep Mode AI Agent</h3>
+        <p data-lang="zh">AI 自主決定查詢策略，透過 Tool Calling 即時調用 8 種 FHIR 工具 + 醫學文獻搜尋</p>
+        <p data-lang="en">AI autonomously decides query strategy, invoking 8 FHIR tools + medical literature search via Tool Calling</p>
+        <ul class="feature-list">
+          <li data-lang="zh">客戶端 Tool Calling 架構</li>
+          <li data-lang="en">Client-side Tool Calling architecture</li>
+          <li data-lang="zh">8 種 FHIR 資源查詢工具</li>
+          <li data-lang="en">8 FHIR resource query tools</li>
+          <li data-lang="zh">Perplexity 醫學文獻即時搜尋</li>
+          <li data-lang="en">Perplexity medical literature real-time search</li>
+          <li data-lang="zh">AI 自動分析需求並調用對應工具</li>
+          <li data-lang="en">AI automatically analyzes needs and invokes corresponding tools</li>
+        </ul>
+        <span class="tag">AI Agent</span>
+        <span class="tag" style="margin-left:6px;">Tool Calling</span>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow-down">
+      <svg width="24" height="40" viewBox="0 0 24 40">
+        <path d="M12 0 L12 32 M4 24 L12 34 L20 24" stroke="#2dd4bf" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- STEP 4: Output -->
+    <div class="section-label green" data-lang="zh">STEP 4 &mdash; 智慧輸出</div>
+    <div class="section-label green" data-lang="en">STEP 4 &mdash; INTELLIGENT OUTPUT</div>
+    <div class="row-3">
+      <div class="card output">
+        <span class="step-badge">4a</span>
+        <div class="card-icon">💬</div>
+        <h3 data-lang="zh">AI 對話回應</h3>
+        <h3 data-lang="en">AI Chat Response</h3>
+        <p data-lang="zh">根據臨床資料與使用者問題，即時串流生成回應，支援 Markdown 格式顯示</p>
+        <p data-lang="en">Stream real-time responses based on clinical data and user queries, rendered in Markdown</p>
+        <span class="tag">Streaming Response</span>
+      </div>
+      <div class="card output">
+        <span class="step-badge">4b</span>
+        <div class="card-icon">💡</div>
+        <h3 data-lang="zh">臨床洞察面板</h3>
+        <h3 data-lang="en">Clinical Insights Panel</h3>
+        <p data-lang="zh">可自訂的洞察面板，內建 Safety Flag、What's Changed 等範本，使用者可自行新增或修改</p>
+        <p data-lang="en">Customizable insight panels with built-in templates like Safety Flag &amp; What's Changed; users can add or modify panels</p>
+        <span class="tag">Customizable Insights</span>
+      </div>
+      <div class="card output">
+        <span class="step-badge">4c</span>
+        <div class="card-icon">💾</div>
+        <h3 data-lang="zh">雲端儲存 & 同步</h3>
+        <h3 data-lang="en">Cloud Storage &amp; Sync</h3>
+        <p data-lang="zh">對話自動儲存至 Firebase，依病人分類管理，支援跨裝置存取歷史紀錄</p>
+        <p data-lang="en">Conversations auto-saved to Firebase, organized by patient, accessible across devices</p>
+        <span class="tag">Firestore</span>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="tech-stack">
+        <span class="tech-tag">Next.js 16</span>
+        <span class="tech-tag">React 19</span>
+        <span class="tech-tag">TypeScript</span>
+        <span class="tech-tag">Tailwind CSS 4</span>
+        <span class="tech-tag">Vercel AI SDK</span>
+        <span class="tech-tag">Firebase</span>
+        <span class="tech-tag">fhirclient.js</span>
+        <span class="tech-tag">shadcn/ui</span>
+        <span class="tech-tag">Zustand</span>
+      </div>
+      <div class="credit" data-lang="zh">醫析 MediPrisma &copy; 2025 &mdash; SMART on FHIR 臨床文件助理 &mdash; Open Source</div>
+      <div class="credit" data-lang="en">MediPrisma &copy; 2025 &mdash; SMART on FHIR Clinical Documentation Assistant &mdash; Open Source</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function setLang(lang) {
+  document.body.className = lang === 'en' ? 'lang-en' : '';
+  document.getElementById('btn-zh').classList.toggle('active', lang === 'zh');
+  document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+  document.documentElement.lang = lang === 'en' ? 'en' : 'zh-TW';
+  localStorage.setItem('mediprisma-lang', lang);
+}
+
+// Restore saved language preference
+const savedLang = localStorage.getItem('mediprisma-lang');
+if (savedLang === 'en') setLang('en');
+</script>
+</body>
+</html>

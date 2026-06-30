@@ -1,0 +1,110 @@
+name: Sync app to mediprisma.tw/app
+
+# Keeps https://mediprisma.tw/app in lockstep with the GitHub Pages deploy.
+# After CI passes on master, build the static export with basePath /app — using
+# the SAME NEXT_PUBLIC_* secrets as the gh-pages build, so the mirror is feature-
+# identical (AI, Firebase, etc.) — then push it into the docs site repo
+# (voho0000/mediprisma-site) at static/app/. That push triggers Cloudflare Pages
+# to redeploy mediprisma.tw/app automatically.
+#
+# One-time setup required: add a secret DOCS_REPO_TOKEN to THIS repo
+# (Settings → Secrets and variables → Actions) — a GitHub token that can push to
+# voho0000/mediprisma-site (fine-grained PAT with Contents: Read and write on
+# that repo, or a classic PAT with `repo` scope). Until it is set, this workflow
+# skips gracefully (green run with a warning).
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-mediprisma-app
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Only run when CI actually succeeded (workflow_run fires on failure too),
+    # or when triggered manually.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Require DOCS_REPO_TOKEN (skip gracefully if missing)
+        env:
+          TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::DOCS_REPO_TOKEN not set — skipping /app sync. Add it in Settings → Secrets and variables → Actions to enable auto-sync."
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Checkout app
+        if: ${{ env.SKIP != 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: ${{ env.SKIP != 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install deps
+        if: ${{ env.SKIP != 'true' }}
+        run: npm ci
+
+      - name: Build static export for /app (basePath /app, same env as gh-pages)
+        if: ${{ env.SKIP != 'true' }}
+        run: npm run build:mediprisma
+        env:
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
+          NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
+          NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}
+          NEXT_PUBLIC_CLAUDE_URL: ${{ secrets.NEXT_PUBLIC_CLAUDE_URL }}
+          NEXT_PUBLIC_PROXY_KEY: ${{ secrets.NEXT_PUBLIC_PROXY_KEY }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
+          NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
+
+      - name: Checkout docs site (mediprisma-site)
+        if: ${{ env.SKIP != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: voho0000/mediprisma-site
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs-site
+          ref: main
+
+      - name: Copy build into docs static/app
+        if: ${{ env.SKIP != 'true' }}
+        run: |
+          rm -rf docs-site/static/app
+          mkdir -p docs-site/static/app
+          cp -r out/. docs-site/static/app/
+
+      - name: Commit & push if changed
+        if: ${{ env.SKIP != 'true' }}
+        working-directory: docs-site
+        run: |
+          git config user.name "mediprisma-app-sync[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/app
+          if git diff --cached --quiet; then
+            echo "No changes in /app build — nothing to sync."
+            exit 0
+          fi
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          git commit -m "chore: sync /app from medical-note-smart-on-fhir@${SHA:0:7}"
+          git push origin main

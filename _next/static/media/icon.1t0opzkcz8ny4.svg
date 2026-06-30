@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">MediPrisma prism icon</title>
+  <defs>
+    <linearGradient id="facetTopLeft" x1="60" y1="24" x2="145" y2="176" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c7edf5"/>
+      <stop offset="1" stop-color="#7fc2d8"/>
+    </linearGradient>
+    <linearGradient id="facetTopRight" x1="128" y1="14" x2="214" y2="166" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8fc7dd"/>
+      <stop offset="1" stop-color="#3f86b2"/>
+    </linearGradient>
+    <linearGradient id="facetBottomLeft" x1="18" y1="156" x2="128" y2="244" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3d95b7"/>
+      <stop offset="1" stop-color="#23688f"/>
+    </linearGradient>
+    <linearGradient id="facetBottomRight" x1="128" y1="158" x2="238" y2="244" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#245f95"/>
+      <stop offset="1" stop-color="#123e6f"/>
+    </linearGradient>
+    <filter id="prismShadow" x="-24%" y="-24%" width="148%" height="156%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#0b3550" flood-opacity="0.42"/>
+    </filter>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <ellipse cx="128" cy="158" rx="108" ry="113" fill="#9be2eb" opacity="0.22" filter="url(#softGlow)"/>
+  <g filter="url(#prismShadow)">
+    <path d="M128 11 18 160 128 160Z" fill="url(#facetTopLeft)"/>
+    <path d="M128 11 128 160 238 160Z" fill="url(#facetTopRight)"/>
+    <path d="M18 160 128 160 128 245Z" fill="url(#facetBottomLeft)"/>
+    <path d="M128 160 238 160 128 245Z" fill="url(#facetBottomRight)"/>
+  </g>
+  <path d="M128 11 238 160 128 245 18 160Z" fill="none" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M128 11V245M18 160H238" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.78"/>
+  <path d="M64 141 113 48" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.72"/>
+  <path d="M75 160 184 69" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+</svg>
