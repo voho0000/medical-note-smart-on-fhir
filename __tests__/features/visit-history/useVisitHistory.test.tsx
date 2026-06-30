@@ -125,4 +125,34 @@ describe('useVisitHistory — bridge bug regression locks', () => {
       expect(result.current[0].type).toBe('pharmacy')
     })
   })
+
+  describe('encounter status filter (IC-card inpatient = "unknown")', () => {
+    // NHI 健保存摺 IC-card inpatient stays have no discharge date, so the bridge
+    // marks them status="unknown". The visit history previously allow-listed only
+    // finished/in-progress/arrived, silently dropping these real admissions
+    // (bridge bug report 2026-06-29: 4 住院 showed as 2). They must now appear.
+    it('keeps an "unknown"-status IC-card inpatient stay (no discharge date)', () => {
+      const { result } = render([
+        {
+          id: 'enc-ic-imp',
+          status: 'unknown',
+          class: { code: 'IMP' },
+          type: [{ text: '住院' }, { text: 'IC卡資料' }],
+          period: { start: '2026-06-16T00:00:00+08:00', end: null },
+          serviceProvider: { display: '林口長庚' },
+        },
+      ])
+      expect(result.current).toHaveLength(1)
+      expect(result.current[0].type).toBe('inpatient')
+      expect(result.current[0].status).toBe('unknown')
+    })
+
+    it('still drops voided records (cancelled / entered-in-error)', () => {
+      const { result } = render([
+        { id: 'c1', status: 'cancelled', class: { code: 'AMB' }, type: [{ text: '門診' }], period: { start: '2026-06-01T00:00:00+08:00' } },
+        { id: 'c2', status: 'entered-in-error', class: { code: 'IMP' }, type: [{ text: '住院' }], period: { start: '2026-06-02T00:00:00+08:00' } },
+      ])
+      expect(result.current).toHaveLength(0)
+    })
+  })
 })

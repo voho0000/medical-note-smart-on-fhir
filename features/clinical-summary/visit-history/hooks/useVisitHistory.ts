@@ -28,7 +28,15 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
     return encounters
       .filter((encounter: any) => {
         const status = encounter.status
-        return status === 'finished' || status === 'in-progress' || status === 'arrived'
+        // 'unknown' is included: NHI 健保存摺 IC-card inpatient stays have no
+        // discharge date, so the bridge faithfully marks them status="unknown"
+        // (an outpatient IC-card visit is "finished" the day it happens, but an
+        // admission with no end can't be declared finished). They're still real
+        // admissions — without this the visit history dropped them (4 住院 showed
+        // as only 2). We still exclude voided/not-yet-happened records
+        // (cancelled / entered-in-error / planned) by omission.
+        return status === 'finished' || status === 'in-progress' ||
+               status === 'arrived' || status === 'unknown'
       })
       .map((encounter: any) => {
         let type: VisitType = 'other'
