@@ -41,7 +41,17 @@ const COMPONENTS: Components = {
 // every already-completed block above it.
 const MarkdownBlock = memo(function MarkdownBlock({ content }: { content: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+    // Hardening: don't render images from markdown. Markdown/model output can
+    // carry remote <img> URLs that the browser auto-fetches on render — an
+    // unwanted outbound request from an app that holds patient data. The app's
+    // real medical images render via dedicated (blob:) components, not markdown,
+    // so there is no usability loss.
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={COMPONENTS}
+      disallowedElements={['img']}
+      unwrapDisallowed
+    >
       {content}
     </ReactMarkdown>
   )
