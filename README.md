@@ -14,13 +14,14 @@
 
 - **臨床摘要**：病人資訊、就診紀錄、報告（含**累積報告**：檢驗數值跨時間表格化）、用藥、文件，從 FHIR 自動整理。
 - **AI 協助**：
-  - **筆記對話**（一般模式）：互動式 AI 助理，可插入選定的臨床資料、起草病歷章節；輸入 `/` 即可快速套用提示模板。
+  - **筆記對話**（一般模式）：互動式 AI 助理，可插入選定的臨床資料、起草病歷章節；輸入 `/` 即可快速套用提示模板；每次回答後提供可點選的追問建議。
   - **深入模式（AI Agent）**：以客戶端 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）＋醫學文獻搜尋（Perplexity）。
-  - **臨床洞察**：自動生成摘要，並內建**主動用藥安全警示**（純 AI、結構化卡片，固定置於最前且不可改寫提示）。
+  - **臨床洞察**：自動生成摘要，並內建**主動用藥安全警示**（純 AI、結構化卡片，固定置於最前且不可改寫提示）；民眾受眾則轉為白話的**健康提醒**版本。
   - **語音口述**：Whisper 轉錄。
 - **資料選擇**：挑選要餵給 AI 的資料範圍（門診／檢驗／用藥…），多種預設與每用途記憶。
 - **IPS 匯出**：International Patient Summary。
 - **提示範本庫**：社群共享的提示範本。
+- **雙受眾**：首次使用會詢問身分（醫事人員／民眾），介面與 AI 輸出（含安全警示）依受眾調整。
 - **多語言（中／英）、深色模式、響應式**。
 
 ## 資料來源（三種）
@@ -48,8 +49,8 @@
 
 | 類別 | 模型 |
 |------|------|
-| 免費內建（免金鑰，經代理） | **Gemini 3.1 Flash-Lite（預設）**、GPT-5.4 Nano、Claude Haiku 4.5 |
-| 進階（需自備金鑰） | GPT-5.4 Mini／GPT-5.4／GPT-5.5；Gemini 3 Flash Preview／Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
+| 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、Claude Haiku 4.5 |
+| 進階（需自備金鑰） | GPT-5.4 Mini／GPT-5.4／GPT-5.5；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
 
 醫學文獻搜尋使用 Perplexity（深入模式）。
 
@@ -176,13 +177,14 @@ A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHI
 
 - **Clinical summary**: patient info, visits, reports (including a **cumulative lab report** — values tabulated across dates), medications, documents — assembled from FHIR.
 - **AI**:
-  - **Note Chat** (normal): interactive assistant; insert selected clinical data, draft note sections; type `/` to quickly apply a prompt template.
+  - **Note Chat** (normal): interactive assistant; insert selected clinical data, draft note sections; type `/` to quickly apply a prompt template; tappable follow-up suggestions after each answer.
   - **Deep Mode (AI Agent)**: client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters) + medical-literature search (Perplexity).
-  - **Clinical Insights**: auto-generated summaries, with a built-in **proactive medication-safety scanner** (pure-AI, structured cards, pinned first and prompt-locked).
+  - **Clinical Insights**: auto-generated summaries, with a built-in **proactive medication-safety scanner** (pure-AI, structured cards, pinned first and prompt-locked); for the patient audience it becomes a plain-language **health-reminder** version.
   - **Voice dictation**: Whisper transcription.
 - **Data Selection**: choose which data to feed the AI, with presets and per-consumer memory.
 - **IPS export**: International Patient Summary.
 - **Prompt Gallery**: community-shared prompt templates.
+- **Two audiences**: first run asks whether you're a clinician or a patient (醫事人員／民眾); the UI and AI output (including safety alerts) adapt.
 - **Bilingual (EN/中文), dark mode, responsive.**
 
 ## Data sources
@@ -210,8 +212,8 @@ Without your own key, requests go through a Firebase Functions proxy (daily free
 
 | Tier | Models |
 |------|--------|
-| Free, built-in (no key, via proxy) | **Gemini 3.1 Flash-Lite (default)**, GPT-5.4 Nano, Claude Haiku 4.5 |
-| Advanced (your own key) | GPT-5.4 Mini / GPT-5.4 / GPT-5.5; Gemini 3 Flash Preview / Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
+| Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, Claude Haiku 4.5 |
+| Advanced (your own key) | GPT-5.4 Mini / GPT-5.4 / GPT-5.5; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
 
 Literature search uses Perplexity (Deep Mode).
 
