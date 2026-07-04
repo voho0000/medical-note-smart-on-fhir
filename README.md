@@ -154,6 +154,10 @@ Clean Architecture 分層：
 - [docs/SECURITY.md](./docs/SECURITY.md) ／ [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) — 安全與隱私
 - [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir) — 後端 Functions / Rules / 部署
 
+## 作者與聯絡
+
+**臺北榮總醫療人工智慧發展中心 郭宜欣醫師**。任何回饋歡迎來信 <voho0000@gmail.com>。
+
 ## 授權與支援
 
 本專案以 **Apache License 2.0** 授權（見 [LICENSE](LICENSE)）。問題請開 GitHub Issue，或用 app 內的「回報問題」。
@@ -280,6 +284,10 @@ Pluggable via registries:
 
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md), [docs/AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md), [docs/MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md), [docs/PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md), [docs/FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md), [docs/FEATURES.md](./docs/FEATURES.md), [docs/SECURITY.md](./docs/SECURITY.md), [PRIVACY_POLICY.md](./PRIVACY_POLICY.md)
 - Backend: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
+
+## Author & contact
+
+**Dr. Yi-Hsin Kuo (郭宜欣), Medical Artificial Intelligence Development Center, Taipei Veterans General Hospital**. Feedback is welcome at <voho0000@gmail.com>.
 
 ## License & support
 
