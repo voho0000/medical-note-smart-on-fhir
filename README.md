@@ -19,6 +19,7 @@
   - **臨床洞察**：自動生成摘要，並內建**主動用藥安全警示**（純 AI、結構化卡片，固定置於最前且不可改寫提示）；民眾受眾則轉為白話的**健康提醒**版本。
   - **語音口述**：Whisper 轉錄。
 - **資料選擇**：挑選要餵給 AI 的資料範圍（門診／檢驗／用藥…），多種預設與每用途記憶。
+- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、50+ 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製到病歷。
 - **IPS 匯出**：International Patient Summary。
 - **提示範本庫**：社群共享的提示範本。
 - **雙受眾**：首次使用會詢問身分（醫事人員／民眾），介面與 AI 輸出（含安全警示）依受眾調整。
@@ -142,7 +143,7 @@ Clean Architecture 分層：
 功能以 registry 可插拔：
 
 - **左側面板** `src/shared/config/feature-registry.ts` — 5 個分頁：病人資訊／就診紀錄／報告／用藥／文件。
-- **右側面板** `src/shared/config/right-panel-registry.ts` — 5 個功能：筆記對話／資料選擇／臨床洞察／IPS／設定。
+- **右側面板** `src/shared/config/right-panel-registry.ts` — 6 個功能：筆記對話／資料選擇／臨床洞察／IPS／醫療計算機／設定。
 
 ## 文件
 
@@ -182,6 +183,7 @@ A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHI
   - **Clinical Insights**: auto-generated summaries, with a built-in **proactive medication-safety scanner** (pure-AI, structured cards, pinned first and prompt-locked); for the patient audience it becomes a plain-language **health-reminder** version.
   - **Voice dictation**: Whisper transcription.
 - **Data Selection**: choose which data to feed the AI, with presets and per-consumer memory.
+- **Medical Calculator**: MDCalc-style clinical scores/formulas (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65… — 50+ across 10 categories) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy to the note.
 - **IPS export**: International Patient Summary.
 - **Prompt Gallery**: community-shared prompt templates.
 - **Two audiences**: first run asks whether you're a clinician or a patient (醫事人員／民眾); the UI and AI output (including safety alerts) adapt.
@@ -280,7 +282,7 @@ Infrastructure    src/infrastructure/
 Pluggable via registries:
 
 - **Left panel** `src/shared/config/feature-registry.ts` — 5 tabs: Patient / Visits / Reports / Medications / Documents.
-- **Right panel** `src/shared/config/right-panel-registry.ts` — 5 features: Note Chat / Data Selection / Clinical Insights / IPS / Settings.
+- **Right panel** `src/shared/config/right-panel-registry.ts` — 6 features: Note Chat / Data Selection / Clinical Insights / IPS / Medical Calculator / Settings.
 
 ## Docs
 

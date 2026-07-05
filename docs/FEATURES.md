@@ -210,6 +210,28 @@ import {
 
 ---
 
+### 9. Medical Calculator（醫療計算機）
+**Entry Point:** `@/features/medical-calculator`
+
+```typescript
+import MedicalCalculatorFeature from '@/features/medical-calculator/Feature'
+
+// Usage（右側面板分頁）
+<MedicalCalculatorFeature />
+```
+
+**功能**：
+- MDCalc 風格的臨床計算工具／評分量表，共 10 類、50+ 個（腎、肝、GI、電解質、心血管、肺、血液、神經、精神、一般）
+- **自動帶入病人數值**：檢驗值依 canonical／LOINC／檢體（`Observation.specimen`）解析後自動填入，顯示原始單位並在維度相符時自動換算（僅在真正無法換算時顯示 ⚠）
+- 每個計算機附「適用時機（When to Use）」與「注意事項（Pearls/Pitfalls）」，結果含風險分層與處置建議
+- 我的最愛、最近使用、依受眾（醫療／民眾）與科別／用途篩選、搜尋
+- 民眾可自填的量表（PHQ-9、GDS-15、Epworth…）
+- 結果可一鍵複製成病歷可貼上的一行摘要
+
+**資料驅動架構**：`calculators/`（依類別分檔，每個 `CalculatorDef` 帶純函式 `compute`）＋純模組 `list-logic.ts`／`format.ts`／`autofill-compute.ts`（`resolveInput` 為自動帶入的唯一真相來源），154 個單元測試。新增一個計算機＝新增一筆 `CalculatorDef`（＋ `CALC_TAGS`／`CALC_INFO`）。
+
+---
+
 ## 🔗 依賴規則
 
 ### Features 可以依賴：
