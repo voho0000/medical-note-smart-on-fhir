@@ -46,6 +46,7 @@ export const en = {
     clinicalInsights: 'Clinical Insights',
     safetyAlerts: 'Safety',
     ipsExport: 'IPS',
+    medicalCalculator: 'Calculator',
     settings: 'Settings',
   },
   safetyAlerts: {

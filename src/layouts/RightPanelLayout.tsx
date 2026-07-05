@@ -20,6 +20,7 @@ import MedicalChatFeature from "@/features/medical-chat/Feature"
 import { DataSelectionFeature } from "@/features/data-selection/Feature"
 import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
 import IpsExportFeature from "@/features/ips-export/Feature"
+import MedicalCalculatorFeature from "@/features/medical-calculator/Feature"
 import SettingsFeature from "@/features/settings/Feature"
 
 // ============================================================================
@@ -39,6 +40,7 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'data-selection': DataSelectionFeature,
   'clinical-insights': ClinicalInsightsFeature,
   'ips-export': IpsExportFeature,
+  'medical-calculator': MedicalCalculatorFeature,
   'settings': SettingsFeature,
 }
 
@@ -153,7 +155,10 @@ function RightPanelContentInner() {
       onValueChange={setActiveTab}
       className="h-full flex flex-col"
     >
-      <TabsList className="w-full grid grid-cols-5 gap-1 h-12 shrink-0 bg-muted/50 p-1 border">
+      <TabsList
+        className="w-full grid gap-1 h-12 shrink-0 bg-muted/50 p-1 border"
+        style={{ gridTemplateColumns: `repeat(${features.length}, minmax(0, 1fr))` }}
+      >
         {features.map(feature => {
           const theme = getTabTheme(feature.id)
           const Icon = theme.icon

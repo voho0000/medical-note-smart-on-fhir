@@ -1,0 +1,180 @@
+// Medical Calculator — shared types
+//
+// A calculator is a pure data definition: a list of inputs (each optionally
+// auto-filled from the patient's FHIR data) plus a pure `compute` function.
+// Keeping calculators data-driven means adding a new one is a single entry in
+// calculators.ts — no new components, no wiring.
+
+/** Bilingual label. Rendered via `tr(locale, …)` in components. */
+export interface L {
+  en: string
+  zh: string
+}
+
+export type CalcCategory = 'renal' | 'hepatic' | 'electrolyte' | 'cardiac' | 'pulmonary' | 'gi' | 'heme' | 'neuro' | 'mental' | 'general'
+
+/**
+ * Who a calculator is appropriate for.
+ *  - 'medical' (default): clinician tool — hidden in patient audience mode.
+ *  - 'patient': patient self-report (e.g. GDS-15) — shown in patient mode.
+ *  - 'both': appropriate for either audience (e.g. BMI).
+ * Patient mode shows only 'patient' + 'both'; medical mode shows everything.
+ */
+export type CalcAudience = 'medical' | 'patient' | 'both'
+
+/** MDCalc-style purpose tag shown on each calculator card. */
+export type Purpose =
+  | 'diagnosis'
+  | 'prognosis'
+  | 'formula'
+  | 'treatment'
+  | 'severity'
+  | 'screening'
+  | 'risk'
+
+export const PURPOSE_LABELS: Record<Purpose, L> = {
+  diagnosis: { en: 'Diagnosis', zh: '診斷' },
+  prognosis: { en: 'Prognosis', zh: '預後' },
+  formula: { en: 'Formula', zh: '公式' },
+  treatment: { en: 'Treatment', zh: '治療' },
+  severity: { en: 'Severity', zh: '嚴重度' },
+  screening: { en: 'Screening', zh: '篩檢' },
+  risk: { en: 'Risk', zh: '風險' },
+}
+
+/** Measurement family used to auto-convert an auto-filled value into the
+ *  calculator's expected unit. See units.ts. */
+export type ConvertDim =
+  | 'electrolyte'
+  | 'creatinine'
+  | 'bilirubin'
+  | 'calcium'
+  | 'glucose'
+  | 'albumin'
+  | 'enzyme'
+  | 'platelets'
+  | 'wbc'
+  | 'bun'
+  | 'cholesterol'
+  | 'triglyceride'
+  | 'ethanol'
+  | 'weight'
+  | 'height'
+
+/**
+ * Where an input's initial value comes from, if any. Resolved by
+ * useLabAutofill against the current patient's observations / demographics.
+ *  - lab:   canonical analyte keys (from lab-normalize), first match wins.
+ *  - vital: LOINC codes for a vital sign (weight/height live outside the
+ *           canonical lab map, so they're matched by LOINC directly).
+ *  - age / sex: patient demographics.
+ */
+export type AutofillSource =
+  | { kind: 'lab'; keys: string[] }
+  | { kind: 'vital'; loinc: string[] }
+  /** Match an observation directly by LOINC code — used for analytes with no
+   *  canonical key (e.g. ABG arterial codes, osmolality). */
+  | { kind: 'labLoinc'; loinc: string[] }
+  /** Match by canonical analyte key AND specimen (blood vs urine). Bridge
+   *  populates `Observation.specimen.display` = "Blood"/"Urine" (authoritative,
+   *  confirmed 2026-07-04); falls back to `loinc` when specimen is absent. Used
+   *  for urine/serum paired analytes (FENa: serum vs urine Na/Cr). */
+  | { kind: 'labSpecimen'; keys: string[]; loinc?: string[]; specimen: 'blood' | 'urine' }
+  | { kind: 'age' }
+  | { kind: 'sex' }
+
+export interface NumberInput {
+  key: string
+  type: 'number'
+  label: L
+  /** Expected/base unit the formula assumes (also the conversion target). */
+  unit?: string
+  /** Measurement family for auto unit conversion of the filled value. */
+  dimension?: ConvertDim
+  /** Standard adult reference range, shown as the empty-field placeholder
+   *  (MDCalc-style), in the expected unit. */
+  normalRange?: { low: number; high: number }
+  /** Value to prefill when there is no auto-fill source/hit (e.g. an assay's
+   *  upper limit of normal). */
+  defaultValue?: string
+  source?: AutofillSource
+  /** Optional — inputs are prefilled but never required to compute; the
+   *  compute fn returns null until it has what it needs. */
+  optional?: boolean
+}
+
+export interface SelectOption {
+  value: string
+  label: L
+  points?: number
+}
+
+export interface SelectInput {
+  key: string
+  type: 'select'
+  label: L
+  options: SelectOption[]
+  source?: AutofillSource
+  defaultValue?: string
+}
+
+export type CalcInput = NumberInput | SelectInput
+
+export type Severity = 'normal' | 'low' | 'moderate' | 'high'
+
+export interface CalcResult {
+  /** Formatted primary value, e.g. "72" or "Class B". */
+  value: string
+  unit?: string
+  /** Short interpretation line — the risk category / headline, e.g.
+   *  "Low risk" or "CKD stage G2". */
+  interpretation?: L
+  severity?: Severity
+  /** Secondary rows shown under the main value — use for a risk-stratification
+   *  breakdown (e.g. "2-day stroke risk" → "1.0%") or derived sub-values. */
+  extra?: { label: L; value: string }[]
+  /** Clinical guidance / what-to-do / caveats, shown as a highlighted note
+   *  under the result (MDCalc "Next Steps"-style). Keep to 1–3 sentences. */
+  notes?: L
+}
+
+export type CalcValues = Record<string, string>
+
+export interface CalculatorDef {
+  id: string
+  name: L
+  category: CalcCategory
+  /** Audience targeting; defaults to 'medical' (clinician-only) when omitted. */
+  audience?: CalcAudience
+  blurb?: L
+  inputs: CalcInput[]
+  /** Pure. Returns null when required inputs are missing/invalid. */
+  compute: (values: CalcValues) => CalcResult | null
+  /** Formula citation, shown at the bottom of the detail view. */
+  reference?: string
+}
+
+export const CATEGORY_LABELS: Record<CalcCategory, L> = {
+  renal: { en: 'Renal', zh: '腎臟' },
+  hepatic: { en: 'Hepatic', zh: '肝膽' },
+  electrolyte: { en: 'Electrolyte', zh: '電解質' },
+  cardiac: { en: 'Cardiac', zh: '心臟' },
+  pulmonary: { en: 'Pulmonary / Infection', zh: '肺部 / 感染' },
+  gi: { en: 'Gastrointestinal', zh: '腸胃' },
+  heme: { en: 'Hematology', zh: '血液' },
+  neuro: { en: 'Neurology', zh: '神經' },
+  mental: { en: 'Mental Health', zh: '精神 / 心理' },
+  general: { en: 'General', zh: '一般' },
+}
+
+export function tr(locale: string, l: L): string {
+  return locale === 'zh-TW' ? l.zh : l.en
+}
+
+/** The OTHER language's string, for bilingual display. Empty when both
+ *  languages are identical (e.g. "eGFR (CKD-EPI 2021)") so it isn't repeated. */
+export function trAlt(locale: string, l: L): string {
+  const primary = locale === 'zh-TW' ? l.zh : l.en
+  const other = locale === 'zh-TW' ? l.en : l.zh
+  return other === primary ? '' : other
+}

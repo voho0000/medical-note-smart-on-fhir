@@ -1,0 +1,114 @@
+// Locks the "inline card result" gating/safety behavior added in the audit
+// pass: only fully data-driven calculators may show a bare result on the
+// list card (never one built from a clinical-judgment default), the result
+// carries a staleness date, and a throwing compute() degrades to null
+// instead of crashing the list.
+import { isFullyAutofillable, computeAutofilledResult } from '@/features/medical-calculator/autofill-compute'
+import { CALCULATORS } from '@/features/medical-calculator/calculators'
+import type { CalculatorDef } from '@/features/medical-calculator/types'
+import type { Autofill, AutofillValue } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
+
+function fakeAutofill(values: Record<string, AutofillValue>, sex?: string): Autofill {
+  return {
+    sex,
+    resolve: (source) => {
+      if (!source) return undefined
+      if (source.kind === 'age') return values.age
+      if (source.kind === 'sex') return undefined
+      if (source.kind === 'lab' || source.kind === 'labSpecimen') {
+        for (const k of source.keys) if (values[k]) return values[k]
+      }
+      if (source.kind === 'vital' || source.kind === 'labLoinc') {
+        for (const code of source.loinc) if (values[code]) return values[code]
+      }
+      return undefined
+    },
+  }
+}
+
+describe('isFullyAutofillable — real registry classification lock', () => {
+  it('BMI is fully autofillable (weight + height are both vital sources)', () => {
+    const bmi = CALCULATORS.find((c) => c.id === 'bmi')!
+    expect(isFullyAutofillable(bmi)).toBe(true)
+  })
+
+  it('MELD-Na is NOT fully autofillable (dialysis select has no data source)', () => {
+    const meldNa = CALCULATORS.find((c) => c.id === 'meld-na')!
+    expect(isFullyAutofillable(meldNa)).toBe(false)
+  })
+
+  it('CHA2DS2-VASc is NOT fully autofillable (comorbidity selects are clinical judgment)', () => {
+    const cha = CALCULATORS.find((c) => c.id === 'cha2ds2-vasc')!
+    expect(isFullyAutofillable(cha)).toBe(false)
+  })
+
+  it('GDS-15 (a questionnaire) is NOT fully autofillable', () => {
+    const gds = CALCULATORS.find((c) => c.id === 'gds-15')!
+    expect(isFullyAutofillable(gds)).toBe(false)
+  })
+})
+
+describe('computeAutofilledResult', () => {
+  it('returns null for a calculator that is not fully autofillable', () => {
+    const meldNa = CALCULATORS.find((c) => c.id === 'meld-na')!
+    expect(computeAutofilledResult(meldNa, fakeAutofill({}))).toBeNull()
+  })
+
+  it('returns the result + the OLDEST source date among its inputs (staleness signal)', () => {
+    const calc: CalculatorDef = {
+      id: 'fake-two-input',
+      name: { en: 'Fake', zh: 'Fake' },
+      category: 'general',
+      inputs: [
+        { key: 'a', type: 'number', label: { en: 'A', zh: 'A' }, source: { kind: 'lab', keys: ['A'] } },
+        { key: 'b', type: 'number', label: { en: 'B', zh: 'B' }, source: { kind: 'lab', keys: ['B'] } },
+      ],
+      compute: (v) => ({ value: String(Number(v.a) + Number(v.b)) }),
+    }
+    const autofill = fakeAutofill({
+      A: { value: 1, unit: '', date: '2026-01-01T00:00:00Z' },
+      B: { value: 2, unit: '', date: '2026-06-01T00:00:00Z' },
+    })
+    const r = computeAutofilledResult(calc, autofill)
+    expect(r).not.toBeNull()
+    expect(r!.result.value).toBe('3')
+    expect(r!.asOf).toBe('2026-01-01T00:00:00Z') // the older of the two dates
+  })
+
+  it('asOf is null when no input carries a date (age-only calc)', () => {
+    const calc: CalculatorDef = {
+      id: 'fake-age-only',
+      name: { en: 'Fake', zh: 'Fake' },
+      category: 'general',
+      inputs: [{ key: 'age', type: 'number', label: { en: 'Age', zh: 'Age' }, source: { kind: 'age' } }],
+      compute: (v) => ({ value: v.age }),
+    }
+    const r = computeAutofilledResult(calc, fakeAutofill({ age: { value: 70, unit: 'y', date: '' } }))
+    expect(r!.asOf).toBeNull()
+  })
+
+  it('a throwing compute() is caught and returns null instead of propagating', () => {
+    const calc: CalculatorDef = {
+      id: 'fake-throws',
+      name: { en: 'Fake', zh: 'Fake' },
+      category: 'general',
+      inputs: [{ key: 'a', type: 'number', label: { en: 'A', zh: 'A' }, source: { kind: 'lab', keys: ['A'] } }],
+      compute: () => { throw new Error('boom') },
+    }
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    const r = computeAutofilledResult(calc, fakeAutofill({ A: { value: 1, unit: '', date: '' } }))
+    expect(r).toBeNull()
+    spy.mockRestore()
+  })
+
+  it('returns null when compute() returns null (missing/invalid data)', () => {
+    const calc: CalculatorDef = {
+      id: 'fake-returns-null',
+      name: { en: 'Fake', zh: 'Fake' },
+      category: 'general',
+      inputs: [{ key: 'a', type: 'number', label: { en: 'A', zh: 'A' }, source: { kind: 'lab', keys: ['A'] } }],
+      compute: () => null,
+    }
+    expect(computeAutofilledResult(calc, fakeAutofill({ A: { value: 1, unit: '', date: '' } }))).toBeNull()
+  })
+})

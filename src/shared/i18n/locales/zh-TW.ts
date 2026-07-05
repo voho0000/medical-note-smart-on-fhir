@@ -48,6 +48,7 @@ export const zhTW = {
     clinicalInsights: '臨床洞察',
     safetyAlerts: '安全警示',
     ipsExport: 'IPS',
+    medicalCalculator: '計算機',
     settings: '設定',
   },
   safetyAlerts: {

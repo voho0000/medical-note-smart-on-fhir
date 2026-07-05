@@ -22,6 +22,7 @@ import {
   Cpu,
   ListChecks,
   FileOutput,
+  Calculator,
   type LucideIcon
 } from 'lucide-react'
 
@@ -150,6 +151,11 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
   'ips-export': {
     id: 'ips-export',
     icon: FileOutput,
+    colorKey: 'clinical',
+  },
+  'medical-calculator': {
+    id: 'medical-calculator',
+    icon: Calculator,
     colorKey: 'clinical',
   },
   'settings': {

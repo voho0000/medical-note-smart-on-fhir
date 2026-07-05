@@ -1,0 +1,239 @@
+import type { CalculatorDef, L } from '../types'
+import { n, round, SEX_INPUT, AGE_INPUT, yesNoQuestionnaire, scoredQuestionnaire, ynItem } from './_shared'
+
+export const CARDIAC: CalculatorDef[] = [
+  // ── CHA₂DS₂-VASc ────────────────────────────────────────────────────────
+    {
+      id: 'cha2ds2-vasc',
+      name: { en: 'CHA₂DS₂-VASc Score', zh: 'CHA₂DS₂-VASc 分數' },
+      category: 'cardiac',
+      blurb: { en: 'Stroke risk in atrial fibrillation.', zh: '心房顫動之中風風險。' },
+      inputs: [
+        AGE_INPUT,
+        SEX_INPUT,
+        { key: 'chf', type: 'select', label: { en: 'CHF / LV dysfunction', zh: '心衰竭／左心室功能不良' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'htn', type: 'select', label: { en: 'Hypertension', zh: '高血壓' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'stroke', type: 'select', label: { en: 'Prior stroke / TIA / thromboembolism', zh: '曾中風／TIA／血栓栓塞' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'vascular', type: 'select', label: { en: 'Vascular disease', zh: '血管疾病' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+      ],
+      compute: (v) => {
+        const age = n(v, 'age')
+        if (age === undefined) return null
+        let s = 0
+        if (age >= 75) s += 2
+        else if (age >= 65) s += 1
+        if (v.sex === 'female') s += 1
+        if (v.chf === 'yes') s += 1
+        if (v.htn === 'yes') s += 1
+        if (v.dm === 'yes') s += 1
+        if (v.stroke === 'yes') s += 2
+        if (v.vascular === 'yes') s += 1
+        // Adjusted annual ischemic stroke rate (%) by score — Friberg 2012
+        // (n=170 291), the table MDCalc reports. Verified 2026-07-04.
+        const risk = ['0.2', '0.6', '2.2', '3.2', '4.8', '7.2', '9.7', '11.2', '10.8', '12.2'][Math.min(s, 9)]
+        let cat: L; let severity: 'normal' | 'moderate' | 'high'
+        if (s === 0) { cat = { en: 'Low risk', zh: '低風險' }; severity = 'normal' }
+        else if (s === 1) { cat = { en: 'Low–moderate risk', zh: '低至中度風險' }; severity = 'moderate' }
+        else { cat = { en: 'High risk', zh: '高風險' }; severity = 'high' }
+        return {
+          value: String(s),
+          interpretation: cat,
+          severity,
+          extra: [{ label: { en: 'Adjusted annual ischemic stroke rate', zh: '校正後每年缺血性中風率' }, value: `${risk}%` }],
+          notes: s >= 2
+            ? { en: 'Oral anticoagulation is generally recommended (men ≥ 2, women ≥ 3). Weigh against bleeding risk (see HAS-BLED).', zh: '一般建議口服抗凝（男性 ≥ 2、女性 ≥ 3）。需與出血風險權衡（參見 HAS-BLED）。' }
+            : s === 1
+              ? { en: 'Anticoagulation may be considered (men) — shared decision-making. Women scoring 1 for sex alone are low risk.', zh: '可考慮抗凝（男性）— 共同決策。女性若僅因性別得 1 分屬低風險。' }
+              : { en: 'No antithrombotic therapy needed; reassess as risk factors change.', zh: '不需抗栓治療;危險因子改變時再評估。' },
+        }
+      },
+      reference: 'Lip GYH, et al. Chest 2010 (score); Friberg L, et al. Eur Heart J 2012 (risk rates). Age ≥75 & prior stroke = 2 pts each.',
+    },
+
+  // ── Mean arterial pressure ──────────────────────────────────────────────
+    {
+      id: 'map',
+      name: { en: 'Mean Arterial Pressure (MAP)', zh: '平均動脈壓 (MAP)' },
+      category: 'cardiac',
+      blurb: { en: '(SBP + 2×DBP) / 3.', zh: '(收縮壓 + 2×舒張壓) / 3。' },
+      inputs: [
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 } },
+        { key: 'dbp', type: 'number', label: { en: 'Diastolic BP', zh: '舒張壓' }, unit: 'mmHg', normalRange: { low: 60, high: 80 } },
+      ],
+      compute: (v) => {
+        const sbp = n(v, 'sbp'); const dbp = n(v, 'dbp')
+        if (sbp === undefined || dbp === undefined) return null
+        const map = (sbp + 2 * dbp) / 3
+        const val = round(map)
+        let severity: 'normal' | 'moderate' | 'high' = 'normal'
+        let interp: L
+        if (val < 65) { severity = 'high'; interp = { en: '< 65 — organ perfusion at risk', zh: '< 65 — 器官灌流不足風險' } }
+        else if (val > 100) { severity = 'moderate'; interp = { en: '> 100 — elevated', zh: '> 100 — 偏高' } }
+        else interp = { en: '65–100 — adequate perfusion', zh: '65–100 — 灌流足夠' }
+        return { value: String(val), unit: 'mmHg', interpretation: interp, severity }
+      },
+      reference: 'MAP = (SBP + 2 × DBP) / 3. Target ≥ 65 mmHg for organ perfusion.',
+    },
+
+  // ── HAS-BLED (major bleeding risk on anticoagulation) ───────────────────
+    yesNoQuestionnaire({
+      id: 'has-bled',
+      name: { en: 'HAS-BLED Score', zh: 'HAS-BLED 出血風險分數' },
+      category: 'cardiac',
+      audience: 'medical',
+      blurb: { en: 'Major bleeding risk on anticoagulation.', zh: '抗凝治療之重大出血風險。' },
+      items: [
+        { key: 'htn', scoreOn: 'yes', label: { en: 'Hypertension (uncontrolled, SBP > 160)', zh: '高血壓（未控制，收縮壓 > 160）' } },
+        { key: 'renal', scoreOn: 'yes', label: { en: 'Abnormal renal function (dialysis/transplant/Cr > 2.26 mg/dL)', zh: '腎功能異常（洗腎／移植／Cr > 2.26 mg/dL）' } },
+        { key: 'liver', scoreOn: 'yes', label: { en: 'Abnormal liver function (cirrhosis / bili > 2× / AST-ALT-ALP > 3×)', zh: '肝功能異常（肝硬化／膽紅素 > 2 倍／AST-ALT-ALP > 3 倍）' } },
+        { key: 'stroke', scoreOn: 'yes', label: { en: 'Stroke history', zh: '中風病史' } },
+        { key: 'bleeding', scoreOn: 'yes', label: { en: 'Bleeding history or predisposition', zh: '出血病史或體質' } },
+        { key: 'inr', scoreOn: 'yes', label: { en: 'Labile INR (unstable / TTR < 60%)', zh: 'INR 不穩定（TTR < 60%）' } },
+        { key: 'elderly', scoreOn: 'yes', label: { en: 'Elderly (age > 65)', zh: '年長（年齡 > 65）' } },
+        { key: 'drugs', scoreOn: 'yes', label: { en: 'Drugs (antiplatelet / NSAID)', zh: '併用藥物（抗血小板／NSAID）' } },
+        { key: 'alcohol', scoreOn: 'yes', label: { en: 'Alcohol (≥ 8 drinks/week)', zh: '飲酒（每週 ≥ 8 份）' } },
+      ],
+      interpret: (score) => {
+        let interp: L; let severity: 'normal' | 'moderate' | 'high'
+        if (score <= 1) { interp = { en: 'Low bleeding risk', zh: '低出血風險' }; severity = 'normal' }
+        else if (score === 2) { interp = { en: 'Moderate bleeding risk', zh: '中度出血風險' }; severity = 'moderate' }
+        else { interp = { en: '≥ 3 — high bleeding risk; caution & regular review', zh: '≥ 3 — 高出血風險；謹慎並定期評估' }; severity = 'high' }
+        return { value: `${score} / 9`, interpretation: interp, severity }
+      },
+      reference: 'Pisters R, et al. Chest 2010. ≥ 3 indicates high risk — not a contraindication to anticoagulation.',
+    }),
+
+  // ── Corrected QT (QTc) ──────────────────────────────────────────────────
+    {
+      id: 'qtc',
+      name: { en: 'Corrected QT (QTc)', zh: '校正 QT (QTc)' },
+      category: 'cardiac',
+      audience: 'medical',
+      blurb: { en: 'Bazett & Fridericia correction.', zh: 'Bazett 與 Fridericia 校正。' },
+      inputs: [
+        { key: 'qt', type: 'number', label: { en: 'QT interval', zh: 'QT 間期' }, unit: 'ms', normalRange: { low: 350, high: 450 } },
+        { key: 'hr', type: 'number', label: { en: 'Heart rate', zh: '心率' }, unit: 'bpm', normalRange: { low: 60, high: 100 } },
+      ],
+      compute: (v) => {
+        const qt = n(v, 'qt'); const hr = n(v, 'hr')
+        if (qt === undefined || hr === undefined || hr <= 0) return null
+        const rr = 60 / hr
+        const bazett = qt / Math.sqrt(rr)
+        const frid = qt / Math.cbrt(rr)
+        const val = round(bazett)
+        let interp: L; let severity: 'normal' | 'moderate' | 'high'
+        if (val > 500) { interp = { en: '> 500 ms — high torsades risk', zh: '> 500 ms — 高度尖端扭轉風險' }; severity = 'high' }
+        else if (val >= 450) { interp = { en: '450–500 ms — prolonged', zh: '450–500 ms — 延長' }; severity = 'moderate' }
+        else { interp = { en: '< 450 ms — normal', zh: '< 450 ms — 正常' }; severity = 'normal' }
+        return { value: String(val), unit: 'ms', interpretation: interp, severity, extra: [{ label: { en: 'Fridericia QTc', zh: 'Fridericia QTc' }, value: `${round(frid)} ms` }] }
+      },
+      reference: 'Bazett QTc = QT / √RR; Fridericia = QT / ∛RR (RR seconds = 60/HR).',
+    },
+
+  // ── HEART Score ─────────────────────────────────────────────────────────
+    {
+      id: 'heart',
+      name: { en: 'HEART Score (Chest Pain)', zh: 'HEART 分數（胸痛）' },
+      category: 'cardiac',
+      audience: 'medical',
+      blurb: { en: '6-week MACE risk in chest pain.', zh: '胸痛 6 週主要心臟事件風險。' },
+      inputs: [
+        { key: 'history', type: 'select', label: { en: 'History', zh: '病史' }, defaultValue: '0', options: [
+          { value: '0', label: { en: 'Slightly suspicious (0)', zh: '稍可疑 (0)' } },
+          { value: '1', label: { en: 'Moderately suspicious (1)', zh: '中度可疑 (1)' } },
+          { value: '2', label: { en: 'Highly suspicious (2)', zh: '高度可疑 (2)' } },
+        ] },
+        { key: 'ecg', type: 'select', label: { en: 'ECG', zh: '心電圖' }, defaultValue: '0', options: [
+          { value: '0', label: { en: 'Normal (0)', zh: '正常 (0)' } },
+          { value: '1', label: { en: 'Non-specific repolarization (1)', zh: '非特異性再極化 (1)' } },
+          { value: '2', label: { en: 'Significant ST deviation (2)', zh: '顯著 ST 偏移 (2)' } },
+        ] },
+        AGE_INPUT,
+        { key: 'risk', type: 'select', label: { en: 'Risk factors', zh: '危險因子' }, defaultValue: '0', options: [
+          { value: '0', label: { en: 'None (0)', zh: '無 (0)' } },
+          { value: '1', label: { en: '1–2 risk factors (1)', zh: '1–2 項 (1)' } },
+          { value: '2', label: { en: '≥ 3 or known atherosclerosis (2)', zh: '≥ 3 項或已知動脈硬化 (2)' } },
+        ] },
+        { key: 'trop', type: 'select', label: { en: 'Troponin', zh: '心肌旋轉素' }, defaultValue: '0', options: [
+          { value: '0', label: { en: '≤ normal limit (0)', zh: '≤ 正常上限 (0)' } },
+          { value: '1', label: { en: '1–3× normal (1)', zh: '1–3 倍 (1)' } },
+          { value: '2', label: { en: '> 3× normal (2)', zh: '> 3 倍 (2)' } },
+        ] },
+      ],
+      compute: (v) => {
+        const age = n(v, 'age')
+        if (age === undefined) return null
+        const agePts = age >= 65 ? 2 : age >= 45 ? 1 : 0
+        const s = Number(v.history || 0) + Number(v.ecg || 0) + agePts + Number(v.risk || 0) + Number(v.trop || 0)
+        let interp: L; let severity: 'normal' | 'moderate' | 'high'
+        let mace: string; let note: L
+        if (s <= 3) { interp = { en: 'Low risk', zh: '低風險' }; severity = 'normal'; mace = '0.9–1.7%'; note = { en: 'Low 6-week MACE — early discharge with outpatient follow-up is often reasonable.', zh: '6 週主要心臟事件風險低 — 通常可早期出院並門診追蹤。' } }
+        else if (s <= 6) { interp = { en: 'Moderate risk', zh: '中度風險' }; severity = 'moderate'; mace = '12–16.6%'; note = { en: 'Admit for observation and further cardiac workup.', zh: '建議住院觀察並進一步心臟檢查。' } }
+        else { interp = { en: 'High risk', zh: '高風險' }; severity = 'high'; mace = '50–65%'; note = { en: 'High MACE — early invasive strategy is generally warranted.', zh: '主要心臟事件風險高 — 一般建議早期侵入性處置。' } }
+        return {
+          value: `${s} / 10`,
+          interpretation: interp,
+          severity,
+          extra: [{ label: { en: '6-week MACE risk', zh: '6 週主要心臟事件風險' }, value: mace }],
+          notes: note,
+        }
+      },
+      reference: 'Six AJ, et al. 2008; Backus BE, et al. 2013. MACE by tier: 0–3 ≈0.9–1.7%, 4–6 ≈12–16.6%, 7–10 ≈50–65%.',
+    },
+
+  // ── Wells' Criteria for DVT ─────────────────────────────────────────────
+    scoredQuestionnaire({
+      id: 'wells-dvt',
+      name: { en: "Wells' Criteria for DVT", zh: 'Wells DVT 準則' },
+      category: 'cardiac',
+      audience: 'medical',
+      blurb: { en: 'Pre-test probability of DVT.', zh: '深部靜脈栓塞前測機率。' },
+      items: [
+        ynItem('cancer', { en: 'Active cancer (treatment within 6 mo)', zh: '活動性癌症（6 個月內治療）' }, 1),
+        ynItem('paralysis', { en: 'Paralysis/paresis or recent leg immobilization', zh: '下肢癱瘓或近期固定' }, 1),
+        ynItem('bedridden', { en: 'Bedridden ≥ 3 days or major surgery within 12 wk', zh: '臥床 ≥ 3 天或 12 週內大手術' }, 1),
+        ynItem('tenderness', { en: 'Localized tenderness along deep veins', zh: '深靜脈走向局部壓痛' }, 1),
+        ynItem('swollenleg', { en: 'Entire leg swollen', zh: '整條腿腫脹' }, 1),
+        ynItem('calf', { en: 'Calf swelling > 3 cm vs other leg', zh: '小腿較對側腫 > 3 cm' }, 1),
+        ynItem('edema', { en: 'Pitting edema (symptomatic leg)', zh: '患肢凹陷性水腫' }, 1),
+        ynItem('collateral', { en: 'Collateral superficial veins (non-varicose)', zh: '側枝表淺靜脈（非靜脈曲張）' }, 1),
+        ynItem('priordvt', { en: 'Previously documented DVT', zh: '曾確診 DVT' }, 1),
+        ynItem('altdx', { en: 'Alternative diagnosis at least as likely', zh: '其他診斷同樣或更可能' }, -2),
+      ],
+      interpret: (s) => {
+        let interp: L; let severity: 'normal' | 'moderate' | 'high'
+        if (s <= 0) { interp = { en: 'DVT unlikely (≤ 0)', zh: '不太可能 DVT（≤ 0）' }; severity = 'normal' }
+        else if (s <= 2) { interp = { en: 'Moderate (1–2)', zh: '中度（1–2）' }; severity = 'moderate' }
+        else { interp = { en: 'DVT likely (≥ 3)', zh: '可能 DVT（≥ 3）' }; severity = 'high' }
+        return { value: String(s), interpretation: interp, severity }
+      },
+      reference: 'Wells PS, et al. 2003. "Likely" (≥ 2) → imaging; otherwise D-dimer.',
+    }),
+
+  // ── Wells' Criteria for PE ──────────────────────────────────────────────
+    scoredQuestionnaire({
+      id: 'wells-pe',
+      name: { en: "Wells' Criteria for PE", zh: 'Wells PE 準則' },
+      category: 'cardiac',
+      audience: 'medical',
+      blurb: { en: 'Pre-test probability of PE.', zh: '肺栓塞前測機率。' },
+      items: [
+        ynItem('dvt', { en: 'Clinical signs of DVT', zh: 'DVT 臨床徵象' }, 3),
+        ynItem('altdx', { en: 'PE is the #1 or equally likely diagnosis', zh: 'PE 為最可能或同等可能診斷' }, 3),
+        ynItem('hr', { en: 'Heart rate > 100', zh: '心率 > 100' }, 1.5),
+        ynItem('immob', { en: 'Immobilization ≥ 3 days or surgery within 4 wk', zh: '固定 ≥ 3 天或 4 週內手術' }, 1.5),
+        ynItem('prior', { en: 'Previous PE / DVT', zh: '曾有 PE / DVT' }, 1.5),
+        ynItem('hemoptysis', { en: 'Hemoptysis', zh: '咳血' }, 1),
+        ynItem('cancer', { en: 'Malignancy (treatment within 6 mo)', zh: '惡性腫瘤（6 個月內治療）' }, 1),
+      ],
+      interpret: (s) => {
+        let interp: L; let severity: 'normal' | 'moderate' | 'high'
+        if (s < 2) { interp = { en: 'Low (< 2)', zh: '低（< 2）' }; severity = 'normal' }
+        else if (s <= 6) { interp = { en: 'Moderate (2–6)', zh: '中度（2–6）' }; severity = 'moderate' }
+        else { interp = { en: 'High (> 6)', zh: '高（> 6）' }; severity = 'high' }
+        return { value: String(s), interpretation: interp, severity }
+      },
+      reference: 'Wells PS, et al. 2000. Two-tier: ≤ 4 PE unlikely, > 4 likely.',
+    }),
+]
