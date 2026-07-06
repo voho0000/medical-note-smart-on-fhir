@@ -27,26 +27,26 @@ type Audience = 'medical' | 'patient'
 
 export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResult> = {
   medical: {
-    headline: '94歲男性，慢性腎臟病第4期合併青光眼、攝護腺增生等多重慢性病，近期肺炎治療後追蹤中。',
+    headline: '94歲男性，慢性腎臟病第3b期合併青光眼、攝護腺增生等多重慢性病，近期肺炎治療後追蹤中。',
     summary: [
       { text: '94歲男性，長期由多家院所共同照護。腎功能持續下降，最近一次', emphasis: false, sources: [] },
       { text: 'eGFR 32', emphasis: true, sources: ['L7'] },
-      { text: '（2026-06-02；前值33→32），相當於', emphasis: false, sources: [] },
-      { text: 'CKD 第4期', emphasis: true, sources: ['K1'] },
-      { text: '，2024年起已納入Pre-ESRD照護計畫，並持續使用碳酸氫鈉與SGLT2抑制劑。', emphasis: false, sources: ['M9', 'M15'] },
+      { text: '（2026-06-02；35→33→32），相當於', emphasis: false, sources: [] },
+      { text: 'CKD 第3b期', emphasis: true, sources: ['K1'] },
+      { text: '且趨近第4期，2024年起已納入Pre-ESRD照護計畫，近期用藥包含碳酸氫鈉與SGLT2抑制劑。', emphasis: false, sources: ['M9', 'M15'] },
       { text: '近一個月因', emphasis: false, sources: [] },
       { text: '肺炎', emphasis: true, sources: ['E3'] },
-      { text: '於長青醫院門診治療（6/2胸部X光、口服藥物），5月底曾以虛弱、慢性咳嗽就診，需追蹤吸收情形。', emphasis: false, sources: ['L1', 'E4', 'E5'] },
+      { text: '於長青醫院門診治療（6/2胸部X光、口服藥物），5月底至6月初曾以虛弱、慢性咳嗽就診，需追蹤吸收情形。', emphasis: false, sources: ['L1', 'E4', 'E5'] },
       { text: '右眼原發性隅角開放性青光眼以', emphasis: false, sources: [] },
-      { text: '四種眼藥水', emphasis: true, sources: ['M1', 'M2', 'M3', 'M4'] },
-      { text: '控制，定期於嘉恩醫院眼科追蹤。', emphasis: false, sources: ['E1'] },
+      { text: '三種降眼壓眼藥水', emphasis: true, sources: ['M2', 'M3', 'M4'] },
+      { text: '控制（另用人工淚液），定期於嘉恩醫院眼科追蹤。', emphasis: false, sources: ['M1', 'E1'] },
       { text: '另有良性攝護腺增生（藥局長期調劑）、甲狀腺機能低下（TSH 14.7，補充中）與高尿酸血症。', emphasis: false, sources: ['E6', 'M20', 'M13', 'M14'] },
       { text: '2026年初曾兩度因譫妄就診，目前仍使用抗膽鹼藥物', emphasis: false, sources: ['E10', 'E11'] },
       { text: '得舒妥', emphasis: true, sources: ['M19'] },
       { text: '，於高齡病人需特別留意。心臟方面有主動脈瓣疾患於門診追蹤，2020年曾因心絞痛住院。', emphasis: false, sources: ['E8', 'E18'] },
     ],
     problems: [
-      { label: '慢性腎臟病（第4期）', basis: '照護計畫＋檢驗追蹤', kind: 'careplan', sources: ['K1', 'K2', 'L7'] },
+      { label: '慢性腎臟病（第3b期）', basis: '照護計畫＋檢驗追蹤', kind: 'careplan', sources: ['K1', 'K2', 'L7'] },
       { label: '原發性隅角開放性青光眼', basis: '多次眼科就診及用藥', kind: 'diagnosis', sources: ['E1', 'E7', 'M1'] },
       { label: '良性攝護腺增生', basis: '藥局調劑', kind: 'medication', sources: ['E6', 'M20'] },
       { label: '甲狀腺機能低下', basis: '長期補充甲狀腺素', kind: 'medication', sources: ['M13', 'M27'] },
@@ -64,9 +64,9 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
         sources: ['M15', 'M29', 'M19', 'E10'],
       },
       {
-        text: '持續追蹤腎功能與體液狀態，評估SGLT2抑制劑於CKD第4期之劑量與適應症。',
+        text: '持續追蹤腎功能與體液狀態，評估SGLT2抑制劑於CKD第3b期之劑量與適應症。',
         urgency: 'high',
-        rationale: 'eGFR 32 mL/min/1.73m2（2026-06-02），前值33→32持續下降。',
+        rationale: 'eGFR 35→33→32 mL/min/1.73m2 持續下降（2026-01-14至06-02），已趨近第4期。',
         sources: ['L7', 'M15', 'K1'],
       },
       {
@@ -114,8 +114,8 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
       { text: '在長青醫院治療，之前也有咳嗽和容易疲倦的情況，請記得回診讓醫師確認恢復狀況。', emphasis: false, sources: ['E4', 'E5', 'L1'] },
       { text: '眼睛方面，您的', emphasis: false, sources: [] },
       { text: '青光眼', emphasis: true, sources: ['E1'] },
-      { text: '目前用四種眼藥水控制，請按時點藥並定期回眼科檢查。', emphasis: false, sources: ['M1', 'M2', 'M3', 'M4'] },
-      { text: '另外您有攝護腺肥大（在藥局領藥）、甲狀腺功能偏低（正在補充藥物）和尿酸偏高，這些都有持續用藥，情況穩定。', emphasis: false, sources: ['E6', 'M20', 'M13', 'M14'] },
+      { text: '目前用三種降眼壓眼藥水控制，另有一支人工淚液，請按時點藥並定期回眼科檢查。', emphasis: false, sources: ['M2', 'M3', 'M4', 'M1'] },
+      { text: '另外您有攝護腺肥大（在藥局領藥）、甲狀腺功能偏低（正在補充藥物）和尿酸偏高，這些都有持續用藥追蹤。', emphasis: false, sources: ['E6', 'M20', 'M13', 'M14'] },
       { text: '年初您曾有兩次因為突然意識混亂就醫，家人可以多留意類似情況，若再發生請盡快就醫。', emphasis: false, sources: ['E10', 'E11'] },
     ],
     problems: [
@@ -172,9 +172,9 @@ export const demoSafetyScanSnapshots: Record<Audience, SafetyScanResultInput> = 
     alerts: [
       {
         severity: 'high',
-        title: 'SGLT2抑制劑於CKD第4期使用',
+        title: 'SGLT2抑制劑於CKD第3b期使用',
         detail:
-          '病人eGFR 32 mL/min/1.73m2（2026-06-02），仍長期調劑福適佳（dapagliflozin）10mg；高齡合併腎功能不佳時需留意脫水、低血壓與腎功能惡化。',
+          '病人eGFR 32 mL/min/1.73m2（2026-06-02，趨近第4期），長期調劑福適佳（dapagliflozin）10mg；高齡合併腎功能不佳時需留意脫水、低血壓與腎功能惡化。',
         evidence: [
           'Estimated GFR: 32 mL/min/1.73m2（2026-06-02）',
           '福適佳膜衣錠10毫克（2026-06-02 調劑）',
@@ -197,7 +197,7 @@ export const demoSafetyScanSnapshots: Record<Audience, SafetyScanResultInput> = 
         severity: 'medium',
         title: '醫院與藥局重複調劑同成分慢性用藥',
         detail:
-          '福適佳、福避痛、葉酸、便通樂等同成分藥品近期同時於長青醫院與向陽藥局調劑，領藥時間相近，需確認病人實際服用份量以避免重複。',
+          '福適佳、福避痛、葉酸、便通樂等同成分藥品近期先後於向陽藥局（4月底）與長青醫院（6月初）調劑，需確認病人實際服用情形以避免重複。',
         evidence: [],
         sources: ['M15', 'M29', 'M14', 'M28', 'M12', 'M26'],
         category: 'duplicate',
