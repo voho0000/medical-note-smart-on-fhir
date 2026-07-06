@@ -40,12 +40,13 @@ export function AdvanceDirectivesCard() {
 
   const items = useMemo(() => {
     const list = Array.isArray(consents) ? consents : []
-    return list.map((c) => {
+    return list.map((c, i) => {
       const type = c.provision?.type
       const deny = type === 'deny'
       const provisionLabel = type === 'deny' ? tt.deny : type === 'permit' ? tt.permit : tt.unknown
       return {
-        id: c.id || `consent-${c.dateTime ?? Math.random()}`,
+        // Stable fallback (dateTime, else index) — never Math.random.
+        id: c.id || `consent-${c.dateTime ?? `idx-${i}`}`,
         label: getConsentLabel(c),
         deny,
         provisionLabel,
@@ -63,7 +64,7 @@ export function AdvanceDirectivesCard() {
       isEmpty={items.length === 0}
       emptyMessage={tt.noData}
     >
-      <div className="flex flex-wrap gap-2">
+      <div className="flex max-h-[18rem] flex-wrap gap-2 overflow-y-auto scrollbar-thin-persistent pr-1">
         {items.map((it) => (
           <span
             key={it.id}

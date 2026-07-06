@@ -17,15 +17,15 @@ interface MedicationItemProps {
   sourceChipStatementTooltip?: string
 }
 
-function getStatusBadge(medication: MedicationRow) {
+function getStatusBadge(medication: MedicationRow, mt: any) {
   if (medication.isInactive) {
-    return { label: medication.status === 'active' ? 'ended' : medication.status, variant: 'secondary' as const }
+    return { label: medication.status === 'active' ? (mt.statusEnded ?? 'ended') : medication.status, variant: 'secondary' as const }
   }
   if (medication.daysRemaining !== undefined) {
     if (medication.daysRemaining <= 0) {
-      return { label: 'ending today', variant: 'outline' as const }
+      return { label: mt.statusEndingToday ?? 'ending today', variant: 'outline' as const }
     }
-    return { label: `${medication.daysRemaining}d left`, variant: 'default' as const }
+    return { label: (mt.daysLeft ?? '{n}d left').replace('{n}', String(medication.daysRemaining)), variant: 'default' as const }
   }
   return { label: medication.status, variant: 'default' as const }
 }
@@ -50,8 +50,8 @@ export function MedicationItem({
 }: MedicationItemProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
-  const badge = getStatusBadge(medication)
   const mt = (t.medications as any)
+  const badge = getStatusBadge(medication, mt)
   const isMedical = audience === 'medical'
   const showStatementChip =
     showSourceChip && medication.sourceResourceType === 'MedicationStatement'
@@ -70,7 +70,7 @@ export function MedicationItem({
   if (startShort || endShort) {
     let dateLabel: string
     if (medication.isInactive && endShort) {
-      dateLabel = `ended ${endShort}`
+      dateLabel = `${mt.endedPrefix ?? 'ended'} ${endShort}`
     } else if (startShort && endShort) {
       dateLabel = `${startShort} → ${endShort}`
     } else if (startShort) {
@@ -125,7 +125,7 @@ export function MedicationItem({
           {medication.category && (
             <span
               title={medication.category}
-              className="inline-flex shrink-0 max-w-[10rem] items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-700 truncate"
+              className="inline-flex shrink-0 max-w-[10rem] items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-700 truncate dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
             >
               {medication.category}
             </span>
@@ -133,7 +133,7 @@ export function MedicationItem({
           {medication.isChronic && (
             <span
               title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-              className="inline-flex shrink-0 items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700"
+              className="inline-flex shrink-0 items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-300"
             >
               {mt.chronic ?? '慢箋'}
             </span>
@@ -141,7 +141,7 @@ export function MedicationItem({
           {showStatementChip && (
             <span
               title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}
-              className="inline-flex shrink-0 items-center rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0 text-[0.625rem] font-medium text-sky-700"
+              className="inline-flex shrink-0 items-center rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0 text-[0.625rem] font-medium text-sky-700 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300"
             >
               {sourceChipStatementLabel ?? '目前服用'}
             </span>

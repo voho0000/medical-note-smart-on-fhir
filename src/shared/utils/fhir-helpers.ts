@@ -26,12 +26,29 @@ export function formatQuantity(q?: Quantity): string {
 }
 
 /**
- * Format a date string to locale string
+ * Format a date string to locale string.
+ *
+ * FHIR `date` / `dateTime` may be partial (YYYY, YYYY-MM) — those must NOT be
+ * padded into a full date, which would invent a day/month precision the source
+ * never claimed. A bare `YYYY-MM-DD` is also parsed by `new Date()` as UTC
+ * midnight, so `toLocaleDateString()` can render the previous day in negative
+ * timezones; format date-only values on the local calendar to avoid that shift.
  */
 export function formatDate(d?: string): string {
   if (!d) return ""
+  const m = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/.exec(d.trim())
+  if (m) {
+    const [, year, month, day] = m
+    if (!month) return year                 // year only  → "2023"
+    if (!day) return `${year}-${month}`     // year-month → "2023-05"
+    // Full calendar date — build from parts (no timezone conversion).
+    const dt = new Date(Number(year), Number(month) - 1, Number(day))
+    return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString()
+  }
+  // dateTime / instant (carries a time + offset) — safe to parse directly.
   try {
-    return new Date(d).toLocaleDateString()
+    const dt = new Date(d)
+    return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString()
   } catch {
     return d
   }

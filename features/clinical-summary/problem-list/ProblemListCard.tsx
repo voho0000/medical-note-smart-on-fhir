@@ -81,7 +81,13 @@ export function ProblemListCard() {
           ))}
         </div>
         {rows.length > 0 ? (
-          <DiagnosisList diagnoses={rows} isLoading={false} error={null} />
+          // Cap the visible height so a long problem list (e.g. 50+ 重大傷病)
+          // scrolls internally instead of pushing every card below it far down
+          // the panel's single outer scroll. Matches the AI-summary problem
+          // card's max-h + overflow pattern.
+          <div className="max-h-[32rem] overflow-y-auto scrollbar-thin-persistent pr-1">
+            <DiagnosisList diagnoses={rows} isLoading={false} error={null} />
+          </div>
         ) : (
           <p className="py-2 text-xs text-muted-foreground">{tt.filterNone || 'No items for this filter'}</p>
         )}

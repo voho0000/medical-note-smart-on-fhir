@@ -46,8 +46,10 @@ export function DevicesCard() {
 
   const items = useMemo(() => {
     const list = Array.isArray(devices) ? devices : []
-    return list.map((d) => ({
-      id: d.id || `device-${Math.random()}`,
+    return list.map((d, i) => ({
+      // Stable index fallback — a Math.random() key would remount every row on
+      // each render (lost scroll/focus, wasted work).
+      id: d.id || `device-${i}`,
       name: getDeviceName(d),
       status: d.status,
       statusLabel:
@@ -68,7 +70,7 @@ export function DevicesCard() {
       isEmpty={items.length === 0}
       emptyMessage={tt.noData}
     >
-      <ul className="space-y-2">
+      <ul className="max-h-[26rem] space-y-2 overflow-y-auto scrollbar-thin-persistent pr-1">
         {items.map((it) => (
           <li key={it.id} className="rounded-md border border-border/60 p-2.5 text-sm">
             <div className="flex items-center justify-between gap-2">

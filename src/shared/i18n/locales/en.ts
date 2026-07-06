@@ -367,6 +367,26 @@ export const en = {
     filterNone: 'No items for this filter',
   },
 
+  // Diagnosis status badges (FHIR Condition.clinicalStatus / verificationStatus)
+  diagnosisStatus: {
+    clinical: {
+      active: 'Active',
+      recurrence: 'Recurrence',
+      relapse: 'Relapse',
+      inactive: 'Inactive',
+      remission: 'Remission',
+      resolved: 'Resolved',
+    },
+    verification: {
+      confirmed: 'Confirmed',
+      unconfirmed: 'Unconfirmed',
+      provisional: 'Provisional',
+      differential: 'Differential',
+      refuted: 'Refuted',
+      'entered-in-error': 'Entered in error',
+    },
+  },
+
   advanceDirectives: {
     title: 'Advance Directives',
     noData: 'No advance directives on record.',
@@ -441,6 +461,25 @@ export const en = {
     // (e.g. an imported IPS bundle). Bridge data never triggers these.
     sourceHintStatement: 'List sourced from an imported document — flagged as the medications the patient is currently taking (MedicationStatement).',
     sourceChipStatement: 'Currently taking',
+    // MedicationList section headings + medication history
+    currentlyInUse: 'Currently in use',
+    history: 'Medication History',
+    historyStopped: 'stopped',
+    prescriptions: 'prescriptions',
+    doseLabel: 'Dose',
+    frequencyLabel: 'Frequency',
+    routeLabel: 'Route',
+    durationLabel: 'Duration',
+    durationDaysUnit: 'days',
+    noDetail: 'No detailed information available',
+    // MedicationItem status badges
+    statusEnded: 'ended',
+    statusEndingToday: 'ending today',
+    daysLeft: '{n}d left',
+    endedPrefix: 'ended',
+    // Injectable sub-group inside the medication history
+    injectablesHeader: 'Injectable / infusion meds',
+    injectablesTooltip: 'Grouped by administration route (IV/IM/SC injection) — typically inpatient or acute-phase dosing, shown separately from regular oral medications. Note: route-based, not a definitive inpatient flag.',
   },
 
   // ── Document Summary (IPS / discharge summary Composition narratives) ───
@@ -527,6 +566,7 @@ export const en = {
 
   reports: {
     title: 'Diagnostic Reports',
+    otherSubgroup: 'Other',
     latest: 'Latest Versions Only',
     allVersions: 'All Versions',
     timeRange: 'Time Range',
@@ -864,6 +904,7 @@ export const en = {
     clearFilters: 'Clear all filters',
     resultCount: 'Match',
     totalCount: 'Total',
+    showMore: 'Show more',
   },
 
   settings: {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Search, AlertCircle, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -50,6 +50,11 @@ export function VisitHistoryCard() {
   const [contentFlags, setContentFlags] = useState<Set<ContentFlag>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>('date-desc')
+  // Progressive render: a full 健保存摺 can carry hundreds of encounters, and
+  // rendering every VisitItem at once floods the DOM. Show a bounded window and
+  // let the user page in more. (Filters/search usually narrow it below the cap.)
+  const VISIT_PAGE_SIZE = 25
+  const [visibleCount, setVisibleCount] = useState(VISIT_PAGE_SIZE)
 
   // ── Data derivation ────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
@@ -187,6 +192,15 @@ export function VisitHistoryCard() {
 
     return [...result].sort(cmp)
   }, [visitHistory, typeFilter, institutionFilter, contentFlags, searchQuery, sortMode, visitStats, docsByEncounter])
+
+  // Reset the render window whenever the filtered set changes shape, so a new
+  // filter/search always starts from the top of a fresh page.
+  useEffect(() => {
+    setVisibleCount(VISIT_PAGE_SIZE)
+  }, [typeFilter, institutionFilter, contentFlags, searchQuery, sortMode])
+
+  const visibleVisits = filteredVisits.slice(0, visibleCount)
+  const remainingVisits = filteredVisits.length - visibleVisits.length
 
   // ── Handlers ──────────────────────────────────────────────────────────
   const handleFilterChange = (f: VisitTypeFilter) => {
@@ -374,7 +388,7 @@ export function VisitHistoryCard() {
               // filters visually separated from the list now that the standalone
               // count row (which carried that divider) is gone.
               <div className="space-y-2 border-t pt-2">
-                {filteredVisits.map((visit) => (
+                {visibleVisits.map((visit) => (
                   <VisitItem
                     key={visit.id}
                     visit={visit}
@@ -389,6 +403,15 @@ export function VisitHistoryCard() {
                     })}
                   />
                 ))}
+                {remainingVisits > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((c) => c + VISIT_PAGE_SIZE)}
+                    className="w-full rounded-md border border-dashed py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    {(vt.showMore ?? '顯示更多')} ({remainingVisits})
+                  </button>
+                )}
               </div>
             )}
           </div>

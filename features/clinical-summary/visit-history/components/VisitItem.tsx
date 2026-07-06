@@ -125,7 +125,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
           <div className="flex flex-1 items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
             {visit.location && (
-              <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+              <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 {visit.location}
               </span>
             )}

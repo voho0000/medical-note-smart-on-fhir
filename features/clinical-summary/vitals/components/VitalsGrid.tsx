@@ -50,7 +50,7 @@ export function VitalsGrid({ vitals, isLoading, error }: VitalsGridProps) {
   const { t } = useLanguage()
 
   if (isLoading) {
-    return <div className="text-sm text-muted-foreground">Loading vitals…</div>
+    return <div className="text-sm text-muted-foreground">{t.common.loading}</div>
   }
 
   if (error) {

@@ -120,7 +120,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
                     colSpan={g.tests.length}
                     className="bg-muted/70 backdrop-blur border-b border-l p-1 text-center text-[0.6875rem] font-bold tracking-wide text-muted-foreground"
                   >
-                    Other
+                    {(t.reports as any).otherSubgroup ?? 'Other'}
                   </th>
                 )
               )}

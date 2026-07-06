@@ -33,7 +33,7 @@ export function DiagnosisItem({ diagnosis }: DiagnosisItemProps) {
         {diagnosis.categories?.map((c, i) => (
           <span
             key={i}
-            className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 ring-1 ring-gray-200"
+            className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground ring-1 ring-border"
           >
             {c}
           </span>

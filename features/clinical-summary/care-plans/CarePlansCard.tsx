@@ -88,14 +88,16 @@ export function CarePlansCard() {
 
   const items = useMemo(() => {
     const list = Array.isArray(carePlans) ? carePlans : []
-    return list.map((cp) => {
+    return list.map((cp, i) => {
       const start = cp.period?.start ? formatDate(cp.period.start) : ''
       const end = cp.period?.end ? formatDate(cp.period.end) : ''
       const range = start || end ? `${start}${start || end ? ' – ' : ''}${end}` : ''
       const title = getCarePlanTitle(cp)
       const description = cp.description?.trim() || ''
       return {
-        id: cp.id || `careplan-${cp.created ?? Math.random()}`,
+        // Stable fallback (created date, else list index) — never Math.random,
+        // which would remount the row every render.
+        id: cp.id || `careplan-${cp.created ?? `idx-${i}`}`,
         title,
         // Free-text programme description (verbatim). Suppressed when it's
         // already serving as the title — getCarePlanTitle falls back to the
@@ -121,7 +123,7 @@ export function CarePlansCard() {
       isEmpty={items.length === 0}
       emptyMessage={tt.noData}
     >
-      <ul className="space-y-3">
+      <ul className="max-h-[32rem] space-y-3 overflow-y-auto scrollbar-thin-persistent pr-1">
         {items.map((it) => (
           <CarePlanListItem key={it.id} it={it} />
         ))}

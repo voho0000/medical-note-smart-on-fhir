@@ -1,4 +1,7 @@
 // Diagnosis List Component
+"use client"
+
+import { useLanguage } from "@/src/application/providers/language.provider"
 import type { DiagnosisRow } from '../types'
 import { DiagnosisItem } from './DiagnosisItem'
 
@@ -9,16 +12,18 @@ interface DiagnosisListProps {
 }
 
 export function DiagnosisList({ diagnoses, isLoading, error }: DiagnosisListProps) {
+  const { t } = useLanguage()
+
   if (isLoading) {
-    return <div className="text-sm text-muted-foreground">Loading diagnoses…</div>
+    return <div className="text-sm text-muted-foreground">{t.common.loading}</div>
   }
-  
+
   if (error) {
     return <div className="text-sm text-red-600">{String(error)}</div>
   }
-  
+
   if (diagnoses.length === 0) {
-    return <div className="text-sm text-muted-foreground">No active diagnoses.</div>
+    return <div className="text-sm text-muted-foreground">{(t as any).problemList?.noData ?? t.conditions.noData}</div>
   }
 
   return (

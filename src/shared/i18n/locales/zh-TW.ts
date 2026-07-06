@@ -369,6 +369,26 @@ export const zhTW = {
     filterNone: '目前篩選下沒有項目',
   },
 
+  // 診斷狀態徽章（FHIR Condition.clinicalStatus / verificationStatus）
+  diagnosisStatus: {
+    clinical: {
+      active: '進行中',
+      recurrence: '復發',
+      relapse: '再發',
+      inactive: '非活動',
+      remission: '緩解',
+      resolved: '已解決',
+    },
+    verification: {
+      confirmed: '已確診',
+      unconfirmed: '未確認',
+      provisional: '暫定',
+      differential: '鑑別診斷',
+      refuted: '已排除',
+      'entered-in-error': '錯誤輸入',
+    },
+  },
+
   advanceDirectives: {
     title: '預立醫療決定',
     noData: '無預立醫療決定註記。',
@@ -443,6 +463,25 @@ export const zhTW = {
     // (e.g. an imported IPS bundle). Bridge data never triggers these.
     sourceHintStatement: '此清單來自匯入文件，標示為病人目前服用中的藥物（MedicationStatement）。',
     sourceChipStatement: '目前服用',
+    // MedicationList 區塊標題與歷史用藥
+    currentlyInUse: '使用中',
+    history: '用藥歷史',
+    historyStopped: '已停用',
+    prescriptions: '筆處方',
+    doseLabel: '劑量',
+    frequencyLabel: '頻次',
+    routeLabel: '途徑',
+    durationLabel: '天數',
+    durationDaysUnit: '天',
+    noDetail: '無詳細資訊',
+    // MedicationItem 狀態徽章
+    statusEnded: '已結束',
+    statusEndingToday: '今日到期',
+    daysLeft: '剩 {n} 天',
+    endedPrefix: '結束於',
+    // 用藥歷史內的注射劑分流子區塊
+    injectablesHeader: '注射／點滴用藥',
+    injectablesTooltip: '依給藥途徑（靜脈／肌肉／皮下注射）分出，多為住院或急性期給藥，與口服常規用藥分開顯示。注意：此為途徑判斷，不代表一定為住院。',
   },
 
   // ── Document Summary（IPS／出院病摘等 Composition narrative） ────────────
@@ -530,6 +569,7 @@ export const zhTW = {
 
   reports: {
     title: '診斷報告',
+    otherSubgroup: '其他',
     latest: '僅最新版本',
     allVersions: '所有版本',
     timeRange: '時間範圍',
@@ -867,6 +907,7 @@ export const zhTW = {
     clearFilters: '清除所有篩選',
     resultCount: '符合',
     totalCount: '共',
+    showMore: '顯示更多',
   },
 
   settings: {
