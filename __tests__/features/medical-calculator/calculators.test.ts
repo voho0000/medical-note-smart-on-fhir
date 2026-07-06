@@ -1,4 +1,4 @@
-import { CALCULATORS, getCalcInfo } from '@/features/medical-calculator/calculators'
+import { CALCULATORS, getCalcInfo, CALC_SCORING, getCalcScoring } from '@/features/medical-calculator/calculators'
 import type { CalcValues } from '@/features/medical-calculator/types'
 
 function run(id: string, values: CalcValues) {
@@ -68,6 +68,38 @@ describe('Anion gap', () => {
   it('albumin correction adds an extra row', () => {
     const r = run('anion-gap', { na: '140', cl: '100', hco3: '24', alb: '2' })
     expect(r!.extra?.[0]?.value).toBe('21 mmol/L')
+  })
+  // Boundary coefficients for AG + 2.5 × (4.0 − alb) — guards the constant
+  // against accidental edits in refactors.
+  it('severe hypoalbuminemia (alb 1.0) → +7.5 correction', () => {
+    const r = run('anion-gap', { na: '140', cl: '100', hco3: '24', alb: '1.0' })
+    expect(r!.extra?.[0]?.value).toBe('23.5 mmol/L')
+  })
+  it('high albumin (alb 5.0) → −2.5 correction', () => {
+    const r = run('anion-gap', { na: '140', cl: '100', hco3: '24', alb: '5.0' })
+    expect(r!.extra?.[0]?.value).toBe('13.5 mmol/L')
+  })
+  it('alb exactly 4.0 → zero correction', () => {
+    const r = run('anion-gap', { na: '140', cl: '100', hco3: '24', alb: '4.0' })
+    expect(r!.extra?.[0]?.value).toBe('16 mmol/L')
+  })
+})
+
+describe('LDL (Friedewald)', () => {
+  it('TC 200 / HDL 50 / TG 150 → 120', () => {
+    const r = run('ldl-friedewald', { tc: '200', hdl: '50', tg: '150' })
+    expect(r!.value).toBe('120')
+    expect(r!.severity).toBe('normal')
+  })
+  it('TG 399 (just below the cutoff) still computes', () => {
+    const r = run('ldl-friedewald', { tc: '200', hdl: '50', tg: '399' })
+    expect(Number(r!.value)).toBeCloseTo(70, 0)
+  })
+  it('TG ≥ 400 is rejected (Friedewald constraint)', () => {
+    const r = run('ldl-friedewald', { tc: '200', hdl: '50', tg: '400' })
+    expect(r!.value).toBe('—')
+    expect(r!.interpretation!.en).toContain('Friedewald invalid')
+    expect(r!.severity).toBe('moderate')
   })
 })
 
@@ -712,6 +744,184 @@ describe('CHA2DS2-VASc risk table (audit-verified Friberg 2012)', () => {
     const r = run('cha2ds2-vasc', { age: '65', sex: 'male', chf: 'yes', htn: 'no', dm: 'no', stroke: 'no', vascular: 'no' })
     expect(r!.value).toBe('2')
     expect(r!.extra?.[0]?.value).toBe('2.2%')
+  })
+})
+
+describe('Liver-cancer (HCC) risk — REACH-B / 健保存摺', () => {
+  it('55–59 male, ALT 50, HBeAg+ → 14 pts, 30–50% band, high', () => {
+    // sex M=2, age 55–59=5, ALT≥45=3, HBeAg+=4 = 14
+    const r = run('hcc-risk-reveal', { sex: 'male', age: '57', alt: '50', hbeag: 'pos' })
+    expect(r!.value).toBe('14 / 15')
+    expect(r!.severity).toBe('high')
+    expect(r!.extra?.[0]?.value).toBe('30–50%')
+  })
+  it('young female, normal ALT, HBeAg− → 0 pts, <1%, normal', () => {
+    const r = run('hcc-risk-reveal', { sex: 'female', age: '30', alt: '10', hbeag: 'neg' })
+    expect(r!.value).toBe('0 / 15')
+    expect(r!.severity).toBe('normal')
+    expect(r!.extra?.[0]?.value).toBe('< 1%')
+  })
+  it('max score 15 → ~65%', () => {
+    // sex M=2, age ≥60=6, ALT≥45=3, HBeAg+=4 = 15
+    const r = run('hcc-risk-reveal', { sex: 'male', age: '65', alt: '80', hbeag: 'pos' })
+    expect(r!.value).toBe('15 / 15')
+    expect(r!.extra?.[0]?.value).toBe('~65%')
+  })
+  it('age-60 band and ALT 15–44 band (male 60, ALT 20, HBeAg−) → 9 pts, 1–10%', () => {
+    // M=2, age≥60=6, ALT 15–44=1, HBeAg−=0 = 9
+    const r = run('hcc-risk-reveal', { sex: 'male', age: '60', alt: '20', hbeag: 'neg' })
+    expect(r!.value).toBe('9 / 15')
+    expect(r!.severity).toBe('moderate')
+    expect(r!.extra?.[0]?.value).toBe('1–10%')
+  })
+  it('returns null until HBeAg is answered', () => {
+    expect(run('hcc-risk-reveal', { sex: 'male', age: '57', alt: '50', hbeag: '' })).toBeNull()
+  })
+})
+
+describe('CKD prognosis / follow-up (KDIGO 健保存摺)', () => {
+  it('eGFR 50 (G3a) + ACR 50 (A2) → orange / moderate', () => {
+    const r = run('ckd-kdigo-risk', { egfr: '50', acr: '50' })
+    expect(r!.value).toBe('G3a · A2')
+    expect(r!.severity).toBe('moderate')
+    expect(r!.interpretation!.en).toContain('orange')
+  })
+  it('eGFR 10 (G5) + ACR 10 (A1) → deep-red ESRD / high', () => {
+    const r = run('ckd-kdigo-risk', { egfr: '10', acr: '10' })
+    expect(r!.value).toBe('G5 · A1')
+    expect(r!.severity).toBe('high')
+    expect(r!.interpretation!.en).toContain('ESRD')
+    expect(r!.notes!.zh).toContain('每年至少 4 次')
+  })
+  it('G4 + A3 is the deep-red ESRD cell (≥4×/yr)', () => {
+    const r = run('ckd-kdigo-risk', { egfr: '20', acr: '400' })
+    expect(r!.value).toBe('G4 · A3')
+    expect(r!.interpretation!.en).toContain('ESRD')
+  })
+  it('eGFR 100 (G1) + ACR 10 (A1) → green / normal', () => {
+    const r = run('ckd-kdigo-risk', { egfr: '100', acr: '10' })
+    expect(r!.value).toBe('G1 · A1')
+    expect(r!.severity).toBe('normal')
+  })
+  it('PCR fallback: eGFR 40 (G3b) + PCR 600 (A3) → red / high', () => {
+    const r = run('ckd-kdigo-risk', { egfr: '40', pcr: '600' })
+    expect(r!.value).toBe('G3b · A3')
+    expect(r!.severity).toBe('high')
+  })
+  it('ACR >300 boundary is A3 (400 → A3, 300 → A2)', () => {
+    expect(run('ckd-kdigo-risk', { egfr: '70', acr: '400' })!.value).toBe('G2 · A3')
+    expect(run('ckd-kdigo-risk', { egfr: '70', acr: '300' })!.value).toBe('G2 · A2')
+  })
+  it('eGFR alone prompts for albuminuria (no ACR/PCR)', () => {
+    const r = run('ckd-kdigo-risk', { egfr: '50' })
+    expect(r!.value).toBe('G3a')
+    expect(r!.interpretation!.en).toContain('Enter ACR or PCR')
+  })
+  it('returns null without eGFR', () => {
+    expect(run('ckd-kdigo-risk', { acr: '50' })).toBeNull()
+  })
+})
+
+describe('WHO 2019 CVD 10-year risk', () => {
+  it('male 60, chol 232 mg/dL (6.0 mmol/L), SBP 120, no DM/smoke → ~6.0%, moderate band', () => {
+    const r = run('who-cvd-2019', { sex: 'male', age: '60', sbp: '120', chol: '232', dm: 'no', smk: 'no' })
+    expect(Number(r!.value)).toBeCloseTo(6.0, 1)
+    expect(r!.unit).toBe('%')
+    expect(r!.severity).toBe('low') // 5–<10% band
+  })
+  it('female 60, same inputs → lower risk than male (~2.2%), low band', () => {
+    const m = run('who-cvd-2019', { sex: 'male', age: '60', sbp: '120', chol: '232', dm: 'no', smk: 'no' })
+    const f = run('who-cvd-2019', { sex: 'female', age: '60', sbp: '120', chol: '232', dm: 'no', smk: 'no' })
+    expect(Number(f!.value)).toBeLessThan(Number(m!.value))
+    expect(Number(f!.value)).toBeCloseTo(2.2, 1)
+    expect(f!.severity).toBe('normal') // <5%
+  })
+  it('high-risk 70yo male, chol 270.7 (7.0), SBP 160, DM + smoker → ~46.9%, high', () => {
+    const r = run('who-cvd-2019', { sex: 'male', age: '70', sbp: '160', chol: '270.7', dm: 'yes', smk: 'yes' })
+    expect(Number(r!.value)).toBeCloseTo(46.9, 0)
+    expect(r!.severity).toBe('high')
+  })
+  it('mg/dL → mmol/L conversion: chol 232 ≈ 6.0 mmol/L (centered → S0-only risk)', () => {
+    // at all-centered inputs L=0, so p = 1-(S0mi*S0stroke) for males = 1-0.954*0.9849
+    const r = run('who-cvd-2019', { sex: 'male', age: '60', sbp: '120', chol: '232.02', dm: 'no', smk: 'no' })
+    expect(Number(r!.value)).toBeCloseTo((1 - 0.954 * 0.9849) * 100, 1)
+  })
+  it('flags extrapolation outside 40–80 y in the notes', () => {
+    const r = run('who-cvd-2019', { sex: 'male', age: '85', sbp: '120', chol: '232', dm: 'no', smk: 'no' })
+    expect(r!.notes!.en).toContain('extrapolation')
+  })
+  it('returns null until diabetes and smoking are answered', () => {
+    expect(run('who-cvd-2019', { sex: 'male', age: '60', sbp: '120', chol: '200', dm: '', smk: '' })).toBeNull()
+    expect(run('who-cvd-2019', { sex: 'male', age: '60', sbp: '120', chol: '200', dm: 'no', smk: '' })).toBeNull()
+  })
+})
+
+describe('CALC_SCORING (計算說明 breakdown)', () => {
+  const okL = (l?: { en: string; zh: string }) => !!(l && l.en.trim() && l.zh.trim())
+
+  it('EVERY calculator has a scoring entry', () => {
+    const missing = CALCULATORS.filter((c) => !getCalcScoring(c.id)).map((c) => c.id)
+    expect(missing).toEqual([])
+  })
+
+  it('every scoring entry keys a real calc, has formula or factors, and is bilingual', () => {
+    for (const id of Object.keys(CALC_SCORING)) {
+      expect(CALCULATORS.some((c) => c.id === id)).toBe(true)
+      const s = getCalcScoring(id)!
+      // must carry SOMETHING renderable
+      expect(!!s.formula || !!(s.factors && s.factors.length) || !!s.grid).toBe(true)
+      if (s.grid) {
+        const g = s.grid
+        expect(g.rows.length).toBeGreaterThan(0)
+        expect(g.cols.length).toBeGreaterThan(0)
+        // cells must be a full rows × cols matrix, all bilingual with a colour
+        expect(g.cells.length).toBe(g.rows.length)
+        for (const row of g.cells) {
+          expect(row.length).toBe(g.cols.length)
+          for (const cell of row) {
+            expect(okL(cell.text)).toBe(true)
+            expect(['green', 'yellow', 'orange', 'red', 'deepred']).toContain(cell.color)
+          }
+        }
+        for (const sr of g.colSubRows ?? []) expect(sr.cells.length).toBe(g.cols.length)
+      }
+      if (s.formula) expect(okL(s.formula)).toBe(true)
+      for (const f of s.factors ?? []) {
+        expect(okL(f.label)).toBe(true)
+        expect(f.options.length).toBeGreaterThan(0)
+        for (const o of f.options) expect(okL(o.label)).toBe(true)
+      }
+      if (s.outcome) {
+        expect(okL(s.outcome.scoreHeader)).toBe(true)
+        expect(okL(s.outcome.outcomeHeader)).toBe(true)
+        for (const r of s.outcome.rows) {
+          expect(typeof r.score).toBe('string')
+          expect(okL(r.outcome)).toBe(true)
+        }
+      }
+      if (s.note) expect(okL(s.note)).toBe(true)
+    }
+  })
+
+  it('HCC scoring: max points sum to 15 and the outcome table covers it', () => {
+    const s = getCalcScoring('hcc-risk-reveal')!
+    const maxPoints = s.factors!.reduce(
+      (sum, f) => sum + Math.max(...f.options.map((o) => Number(o.points))),
+      0,
+    )
+    expect(maxPoints).toBe(15)
+    // the max-score branch of compute (15 → ~65%) matches the table's last row
+    expect(s.outcome!.rows[s.outcome!.rows.length - 1]).toEqual({ score: '15', outcome: { en: '65%', zh: '65%' } })
+  })
+
+  it('HCC scoring points match the compute for a worked case (male 57, ALT 50, HBeAg+)', () => {
+    // sex M=2, age 55–59=5, ALT≥45=3, HBeAg+=4 = 14 → detail rubric agrees
+    const s = getCalcScoring('hcc-risk-reveal')!
+    const male = s.factors![0].options.find((o) => o.label.en === 'Male')!.points
+    const age = s.factors![1].options.find((o) => o.label.en === '55–59 y')!.points
+    const alt = s.factors![2].options.find((o) => o.label.en === '≥ 45')!.points
+    const hbeag = s.factors![3].options.find((o) => o.label.en === 'Positive')!.points
+    expect(Number(male) + Number(age) + Number(alt) + Number(hbeag)).toBe(14)
   })
 })
 

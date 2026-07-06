@@ -7,7 +7,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, ChevronRight, Calculator, Star, Clock } from "lucide-react"
+import { Search, ChevronRight, Calculator, Star, Clock, Users } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -111,6 +111,14 @@ export default function MedicalCalculatorFeature() {
           <Clock className="h-3 w-3" />
           {zh ? "最近" : "Recent"}
         </FilterChip>
+        {/* In patient mode every calculator is already patient-appropriate, so
+            the chip only helps a clinician spot hand-off tools (medical mode). */}
+        {audience === "medical" && (
+          <FilterChip active={filter === "patient"} onClick={() => setFilter("patient")}>
+            <Users className="h-3 w-3" />
+            {zh ? "民眾可填" : "Patient-fillable"}
+          </FilterChip>
+        )}
         {specialties.map((cat) => (
           <FilterChip key={cat} active={filter === cat} onClick={() => setFilter(cat)}>
             {tr(locale, CATEGORY_LABELS[cat])}

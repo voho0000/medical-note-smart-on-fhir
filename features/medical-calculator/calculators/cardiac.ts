@@ -1,6 +1,44 @@
 import type { CalculatorDef, L } from '../types'
 import { n, round, SEX_INPUT, AGE_INPUT, yesNoQuestionnaire, scoredQuestionnaire, ynItem } from './_shared'
 
+// ── WHO 2019 laboratory-based CVD risk model ────────────────────────────────
+// Two sex-specific Cox sub-models (MI/CHD + stroke), each 1 − S0^exp(L), then
+// combined assuming independence: p = 1 − (1−p_mi)(1−p_stroke). Coefficients
+// (β = log HR) and centering transcribed from the WHO 2019 supplementary
+// appendix Table 1.6 (Kaptoge S, et al. Lancet Glob Health 2019;7:e1332),
+// verified against the paper's published hazard ratios. S0 is the pooled
+// (un-recalibrated) core-model baseline survival — WHO publishes no closed-form
+// East-Asia regional S0, so this is the core model, NOT Taiwan-recalibrated and
+// NOT the official NHI 健保 algorithm. Units: age yr, chol mmol/L, sbp mmHg.
+const WHO_CENTRE = { age: 60, chol: 6, sbp: 120 }
+const WHO_BETA = {
+  male: {
+    mi: { age: 0.0719227, chol: 0.2284944, sbp: 0.0132183, dm: 0.6410114, smk: 0.5638109, cholAge: -0.0045806, sbpAge: -0.0001576, dmAge: -0.0124966, smkAge: -0.0182545 },
+    stroke: { age: 0.0986578, chol: 0.0295260, sbp: 0.0222629, dm: 0.6268712, smk: 0.4981217, cholAge: 0.0014200, sbpAge: -0.0004147, dmAge: -0.0263020, smkAge: -0.0150561 },
+  },
+  female: {
+    mi: { age: 0.1020713, chol: 0.2050377, sbp: 0.0158230, dm: 1.0703580, smk: 1.0532230, cholAge: -0.0051932, sbpAge: -0.0001378, dmAge: -0.0234174, smkAge: -0.0332666 },
+    stroke: { age: 0.1056632, chol: 0.0257782, sbp: 0.0206278, dm: 0.8581998, smk: 0.7443627, cholAge: -0.0021387, sbpAge: -0.0004897, dmAge: -0.0209826, smkAge: -0.0200822 },
+  },
+} as const
+const WHO_S0 = {
+  male: { mi: 0.9540, stroke: 0.9849 },
+  female: { mi: 0.9890, stroke: 0.9890 },
+} as const
+interface WhoBeta { age: number; chol: number; sbp: number; dm: number; smk: number; cholAge: number; sbpAge: number; dmAge: number; smkAge: number }
+function whoLinPred(b: WhoBeta, age: number, chol: number, sbp: number, dm: number, smk: number): number {
+  const a = age - WHO_CENTRE.age, c = chol - WHO_CENTRE.chol, s = sbp - WHO_CENTRE.sbp
+  return b.age * a + b.chol * c + b.sbp * s + b.dm * dm + b.smk * smk
+    + b.cholAge * a * c + b.sbpAge * a * s + b.dmAge * a * dm + b.smkAge * a * smk
+}
+/** WHO 2019 lab-based 10-year total-CVD probability. chol in mmol/L. */
+function who2019Cvd(sex: 'male' | 'female', age: number, chol: number, sbp: number, dm: number, smk: number): number {
+  const b = WHO_BETA[sex], s0 = WHO_S0[sex]
+  const pMi = 1 - Math.pow(s0.mi, Math.exp(whoLinPred(b.mi, age, chol, sbp, dm, smk)))
+  const pStroke = 1 - Math.pow(s0.stroke, Math.exp(whoLinPred(b.stroke, age, chol, sbp, dm, smk)))
+  return 1 - (1 - pMi) * (1 - pStroke)
+}
+
 export const CARDIAC: CalculatorDef[] = [
   // ── CHA₂DS₂-VASc ────────────────────────────────────────────────────────
     {
@@ -236,4 +274,66 @@ export const CARDIAC: CalculatorDef[] = [
       },
       reference: 'Wells PS, et al. 2000. Two-tier: ≤ 4 PE unlikely, > 4 likely.',
     }),
+
+  // ── 10-year CVD risk — WHO 2019 (laboratory-based) ──────────────────────
+    {
+      id: 'who-cvd-2019',
+      name: { en: 'CVD 10-year Risk (WHO 2019)', zh: '心血管疾病10年風險 (WHO 2019)' },
+      category: 'cardiac',
+      audience: 'both',
+      blurb: {
+        en: '10-yr fatal+non-fatal CVD risk (WHO lab-based model; not the NHI algorithm).',
+        zh: '未來10年心血管疾病風險（WHO 實驗室版；非健保署演算法）。',
+      },
+      inputs: [
+        SEX_INPUT,
+        AGE_INPUT,
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'] } },
+        { key: 'chol', type: 'number', label: { en: 'Total cholesterol', zh: '總膽固醇' }, unit: 'mg/dL', dimension: 'cholesterol', normalRange: { low: 125, high: 200 }, source: { kind: 'lab', keys: ['CHOL'] } },
+        {
+          key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: '',
+          options: [
+            { value: 'no', label: { en: 'No', zh: '無' } },
+            { value: 'yes', label: { en: 'Yes', zh: '有' } },
+          ],
+        },
+        {
+          key: 'smk', type: 'select', label: { en: 'Current smoker', zh: '目前吸菸' }, defaultValue: '',
+          options: [
+            { value: 'no', label: { en: 'No', zh: '無' } },
+            { value: 'yes', label: { en: 'Yes', zh: '有' } },
+          ],
+        },
+      ],
+      compute: (v) => {
+        const age = n(v, 'age'); const sbp = n(v, 'sbp'); const cholMg = n(v, 'chol')
+        if (age === undefined || sbp === undefined || cholMg === undefined) return null
+        if (v.dm !== 'yes' && v.dm !== 'no') return null
+        if (v.smk !== 'yes' && v.smk !== 'no') return null
+        if (age <= 0 || sbp <= 0 || cholMg <= 0) return null
+        const sex: 'male' | 'female' = v.sex === 'female' ? 'female' : 'male'
+        const chol = cholMg / 38.67 // mg/dL → mmol/L
+        const dm = v.dm === 'yes' ? 1 : 0; const smk = v.smk === 'yes' ? 1 : 0
+        const p = who2019Cvd(sex, age, chol, sbp, dm, smk)
+        const pct = round(p * 100, 1)
+        let interp: L; let severity: 'normal' | 'low' | 'moderate' | 'high'
+        if (p < 0.05) { interp = { en: 'Low risk (< 5%)', zh: '低風險（< 5%）' }; severity = 'normal' }
+        else if (p < 0.10) { interp = { en: 'Moderate risk (5–<10%)', zh: '中度風險（5–<10%）' }; severity = 'low' }
+        else if (p < 0.20) { interp = { en: 'High risk (10–<20%)', zh: '高風險（10–<20%）' }; severity = 'moderate' }
+        else if (p < 0.30) { interp = { en: 'Very high risk (20–<30%)', zh: '極高風險（20–<30%）' }; severity = 'high' }
+        else { interp = { en: 'Critical risk (≥ 30%)', zh: '極高風險（≥ 30%）' }; severity = 'high' }
+        const outOfRange = age < 40 || age > 80
+        return {
+          value: String(pct),
+          unit: '%',
+          interpretation: interp,
+          severity,
+          notes: {
+            en: `${outOfRange ? 'Age is outside the model’s validated 40–80 y range — result is an extrapolation. ' : ''}WHO 2019 core model, NOT recalibrated for Taiwan and NOT the official NHI 健保 algorithm — for reference/comparison only.`,
+            zh: `${outOfRange ? '年齡超出模型驗證範圍（40–80 歲），此結果為外推。' : ''}WHO 2019 核心模型，未經台灣區域校正、亦非健保署官方演算法，僅供參考比較。`,
+          },
+        }
+      },
+      reference: 'WHO CVD Risk Chart Working Group / Kaptoge S, et al. Lancet Glob Health 2019;7:e1332 (laboratory-based). Two Cox sub-models (MI + stroke) combined; pooled (un-recalibrated) baseline survival — not region-specific. Valid age 40–80. Total cholesterol converted mg/dL ÷ 38.67. Not the NHI 健保 model.',
+    },
 ]

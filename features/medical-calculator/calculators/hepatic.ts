@@ -271,4 +271,65 @@ export const HEPATIC: CalculatorDef[] = [
       },
       reference: "Maddrey WC, et al. 1978. DF = 4.6 × (PT − control) + bilirubin. ≥ 32 = severe.",
     },
+
+  // ── Liver-cancer (HCC) risk — REACH-B / REVEAL-HBV, NHI 健保存摺 version ───
+    // Patient-facing risk score from Taiwan's 健保存摺 (health record app).
+    // Simplified 4-factor REACH-B (sex, age, ALT, HBeAg) — the published
+    // REACH-B/REVEAL-HBV score also uses serum HBV DNA, which the NHI version
+    // drops. Points and 10-year-risk bands are transcribed verbatim from the
+    // official 健保存摺 「計算說明」 table.
+    {
+      id: 'hcc-risk-reveal',
+      name: { en: 'Liver Cancer (HCC) Risk — Chronic Hepatitis B', zh: '肝癌風險評估（慢性B型肝炎）' },
+      category: 'hepatic',
+      audience: 'both',
+      blurb: {
+        en: '10-year HCC risk in chronic hepatitis B (NHI simplified REACH-B).',
+        zh: '慢性B型肝炎患者未來10年肝癌風險（健保存摺簡化版 REACH-B）。',
+      },
+      inputs: [
+        SEX_INPUT,
+        AGE_INPUT,
+        { key: 'alt', type: 'number', label: { en: 'S-GPT / ALT', zh: 'S-GPT / ALT' }, unit: 'U/L', dimension: 'enzyme', normalRange: { low: 7, high: 56 }, source: { kind: 'lab', keys: ['ALT'] } },
+        {
+          key: 'hbeag', type: 'select', label: { en: 'Hepatitis B e antigen (HBeAg)', zh: 'B型肝炎e抗原 (HBeAg)' },
+          defaultValue: '',
+          options: [
+            { value: 'neg', label: { en: 'Negative', zh: '陰性' } },
+            { value: 'pos', label: { en: 'Positive', zh: '陽性' } },
+          ],
+        },
+      ],
+      compute: (v) => {
+        const age = n(v, 'age'); const alt = n(v, 'alt'); const hbeag = v.hbeag
+        if (age === undefined || alt === undefined || (hbeag !== 'pos' && hbeag !== 'neg')) return null
+        if (age < 0 || alt < 0) return null
+        // Sex: female 0, male 2
+        const sexPts = v.sex === 'female' ? 0 : 2
+        // Age bands: <35:0, 35–39:1, 40–44:2, 45–49:3, 50–54:4, 55–59:5, ≥60:6
+        const agePts = age >= 60 ? 6 : age >= 55 ? 5 : age >= 50 ? 4 : age >= 45 ? 3 : age >= 40 ? 2 : age >= 35 ? 1 : 0
+        // ALT: <15:0, 15–44:1, ≥45:3
+        const altPts = alt >= 45 ? 3 : alt >= 15 ? 1 : 0
+        // HBeAg: negative 0, positive 4
+        const hbePts = hbeag === 'pos' ? 4 : 0
+        const score = sexPts + agePts + altPts + hbePts
+        let interp: L; let severity: 'normal' | 'moderate' | 'high'; let risk: string
+        if (score <= 4) { interp = { en: 'Low risk', zh: '風險較低' }; severity = 'normal'; risk = '< 1%' }
+        else if (score <= 9) { interp = { en: 'Increased risk', zh: '風險上升' }; severity = 'moderate'; risk = '1–10%' }
+        else if (score <= 12) { interp = { en: 'High risk', zh: '高風險' }; severity = 'high'; risk = '10–25%' }
+        else if (score <= 14) { interp = { en: 'Very high risk', zh: '極高風險' }; severity = 'high'; risk = '30–50%' }
+        else { interp = { en: 'Extremely high risk', zh: '極高風險' }; severity = 'high'; risk = '~65%' }
+        return {
+          value: `${score} / 15`,
+          interpretation: interp,
+          severity,
+          extra: [{ label: { en: '10-year HCC risk', zh: '未來10年肝癌發生機率' }, value: risk }],
+          notes: {
+            en: 'A risk estimate for chronic hepatitis B carriers, not a diagnosis. Does NOT apply to cirrhosis, HCV/HDV/HIV co-infection, prior HCC, or a sudden ALT rise ≥2×. Antiviral therapy may lower risk; smoking, diabetes, alcohol, or family history may raise it. All chronic HBV carriers — regardless of score — need regular follow-up.',
+            zh: '此為慢性B型肝炎帶原者之風險估算，非診斷。不適用於肝硬化、合併C肝/D肝/HIV、肝癌病史或ALT突然上升≥兩倍者。抗病毒治療可能降低風險；抽菸、糖尿病、酗酒或家族史可能提高風險。所有慢性B肝帶原者無論風險高低，都需定期就醫追蹤。',
+          },
+        }
+      },
+      reference: 'Yang HI, Chen CJ, et al. REACH-B, Lancet Oncol 2011 (REVEAL-HBV cohort). NHI 健保存摺 uses a simplified 4-factor version (sex/age/ALT/HBeAg, without serum HBV DNA). For non-HBV or cirrhotic patients it may overestimate risk.',
+    },
 ]

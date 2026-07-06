@@ -153,4 +153,107 @@ export const RENAL: CalculatorDef[] = [
       },
       reference: 'FEUrea = (UUrea × PCr) / (BUN × UCr) × 100. < 35% prerenal; reliable despite diuretics.',
     },
+
+  // ── CKD prognosis / follow-up — KDIGO 2012 heat map (NHI 健保存摺) ─────────
+    // Patient-facing CKD risk & follow-up tool from Taiwan's 健保存摺, built on
+    // the KDIGO 2012 GFR×albuminuria grid. Risk colour = KDIGO 4-colour
+    // prognosis map; follow-up frequency + the 5th 深紅色 (ESRD) band = KDIGO's
+    // "frequency of monitoring" grid (1/1/2/3/≥4 per year). Boundaries,
+    // 18-cell colours and per-cell frequencies verified against the KDIGO 2013
+    // Summary of Recommendation Statements.
+    {
+      id: 'ckd-kdigo-risk',
+      name: { en: 'CKD Prognosis / Follow-up (KDIGO)', zh: '慢性腎臟病預後與追蹤 (KDIGO)' },
+      category: 'renal',
+      audience: 'both',
+      blurb: {
+        en: 'CKD risk category & recommended follow-up from eGFR + albuminuria.',
+        zh: '由 eGFR 與白蛋白尿分期評估慢性腎臟病風險與建議追蹤頻率。',
+      },
+      inputs: [
+        { key: 'egfr', type: 'number', label: { en: 'eGFR', zh: '腎絲球過濾率 (eGFR)' }, unit: 'mL/min/1.73m²', normalRange: { low: 90, high: 120 }, source: { kind: 'lab', keys: ['EGFR', 'EGFR(EPI)', 'EGFR(M)'] } },
+        { key: 'acr', type: 'number', label: { en: 'Urine albumin/creatinine ratio (ACR)', zh: '尿液白蛋白/肌酸酐比值 (ACR)' }, unit: 'mg/g', optional: true, source: { kind: 'labSpecimen', keys: ['ACR'], loinc: ['9318-7', '14959-1'], specimen: 'urine' } },
+        { key: 'pcr', type: 'number', label: { en: 'Urine protein/creatinine ratio (PCR)', zh: '尿液蛋白/肌酸酐比值 (PCR)' }, unit: 'mg/g', optional: true, source: { kind: 'labLoinc', loinc: ['2890-2'] } },
+      ],
+      compute: (v) => {
+        const egfr = n(v, 'egfr'); const acr = n(v, 'acr'); const pcr = n(v, 'pcr')
+        if (egfr === undefined || egfr < 0) return null
+        const gfrLabels = ['G1', 'G2', 'G3a', 'G3b', 'G4', 'G5']
+        const gfrRanges = ['≥90', '60–89', '45–59', '30–44', '15–29', '<15']
+        const g = egfr >= 90 ? 0 : egfr >= 60 ? 1 : egfr >= 45 ? 2 : egfr >= 30 ? 3 : egfr >= 15 ? 4 : 5
+        const gfrRow: { label: L; value: string } = { label: { en: 'GFR category', zh: '腎功能分期' }, value: `${gfrLabels[g]} (${gfrRanges[g]} mL/min/1.73m²)` }
+
+        // Albuminuria index from ACR (preferred) or PCR fallback (mg/g).
+        let a: number; let albDesc: string
+        if (acr !== undefined && acr >= 0) {
+          a = acr < 30 ? 0 : acr > 300 ? 2 : 1
+          albDesc = `A${a + 1} (ACR ${['<30', '30–300', '>300'][a]} mg/g)`
+        } else if (pcr !== undefined && pcr >= 0) {
+          a = pcr < 150 ? 0 : pcr >= 500 ? 2 : 1
+          albDesc = `A${a + 1} (PCR ${['<150', '150–500', '≥500'][a]} mg/g)`
+        } else {
+          // eGFR alone — stage the kidney function, prompt for albuminuria.
+          const sev: 'normal' | 'moderate' | 'high' = g <= 1 ? 'normal' : g <= 3 ? 'moderate' : 'high'
+          return {
+            value: gfrLabels[g],
+            interpretation: { en: 'Enter ACR or PCR for full risk staging', zh: '請輸入 ACR 或 PCR 以完整評估風險' },
+            severity: sev,
+            extra: [gfrRow],
+          }
+        }
+
+        // KDIGO 4-colour prognosis grid (0 green / 1 yellow / 2 orange / 3 red).
+        const prognosis = [
+          [0, 1, 2], // G1
+          [0, 1, 2], // G2
+          [1, 2, 3], // G3a
+          [2, 3, 3], // G3b
+          [3, 3, 3], // G4
+          [3, 3, 3], // G5
+        ]
+        // KDIGO monitoring frequency (times/year); 4 = ≥4× = Taiwan 深紅色 (ESRD).
+        const followup = [
+          [1, 1, 2],
+          [1, 1, 2],
+          [1, 2, 3],
+          [2, 3, 3],
+          [3, 3, 4],
+          [4, 4, 4],
+        ]
+        const freq = followup[g][a]
+        const color = freq === 4 ? 4 : prognosis[g][a] // 4 = deep-red / ESRD
+        const band: L = [
+          { en: 'Low risk (green)', zh: '低風險（綠色）' },
+          { en: 'Moderately increased risk (yellow)', zh: '風險中度增加（黃色 · 初期）' },
+          { en: 'High risk (orange)', zh: '高風險（橙色 · 觀察期）' },
+          { en: 'Very high risk (red)', zh: '極高風險（紅色 · 警戒期）' },
+          { en: 'Kidney failure — ESRD (deep red)', zh: '末期腎病（深紅色）' },
+        ][color]
+        const severity: 'normal' | 'low' | 'moderate' | 'high' = color === 0 ? 'normal' : color === 1 ? 'low' : color === 2 ? 'moderate' : 'high'
+        const freqText: L = freq === 1
+          ? { en: 'once a year', zh: '每年 1 次' }
+          : freq === 2
+            ? { en: 'twice a year', zh: '每年 2 次' }
+            : freq === 3
+              ? { en: '3 times a year', zh: '每年 3 次' }
+              : { en: 'at least 4 times a year', zh: '每年至少 4 次' }
+        const caveat: L = color === 0
+          ? { en: 'Green with no other markers of kidney damage is not necessarily CKD. ACR assumed in mg/g.', zh: '綠色且無其他腎臟損傷指標者未必為慢性腎臟病。ACR 以 mg/g 計。' }
+          : { en: 'ACR assumed in mg/g; ACR/PCR–stage relationships are approximate.', zh: 'ACR 以 mg/g 計；ACR／PCR 對應分期為近似值。' }
+        return {
+          value: `${gfrLabels[g]} · A${a + 1}`,
+          interpretation: band,
+          severity,
+          extra: [
+            gfrRow,
+            { label: { en: 'Albuminuria', zh: '白蛋白尿分期' }, value: albDesc },
+          ],
+          notes: {
+            en: `Suggested follow-up: ${freqText.en}. ${caveat.en} A guide only — discuss management with your doctor.`,
+            zh: `建議追蹤頻率：${freqText.zh}。${caveat.zh}此為參考建議，實際處置請與醫師討論。`,
+          },
+        }
+      },
+      reference: 'KDIGO 2012 CKD guideline (GFR G1–G5 × albuminuria A1–A3). ACR: A1 <30 / A2 30–300 / A3 >300 mg/g; PCR: A1 <150 / A2 150–500 / A3 ≥500 mg/g. Follow-up (×/yr) and the 5th ESRD band from KDIGO\'s monitoring-frequency grid; as used in Taiwan NHI 健保存摺.',
+    },
 ]

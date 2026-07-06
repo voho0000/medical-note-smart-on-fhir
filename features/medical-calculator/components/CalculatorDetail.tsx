@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback } from "react"
-import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Star, Users, Lightbulb, Copy, Check } from "lucide-react"
+import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -16,7 +16,8 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import type { CalculatorDef, CalcValues, Severity } from "../types"
 import { tr, trAlt } from "../types"
 import { useLabAutofill, type Autofill } from "../hooks/use-lab-autofill.hook"
-import { getCalcInfo } from "../calculators"
+import { getCalcInfo, getCalcScoring } from "../calculators"
+import type { CalcScoring, ScoringGrid, GridColor } from "../calculators"
 import { formatNum, resolveInput } from "../autofill-compute"
 import { resultToClipboardText, isImplausible } from "../format"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
@@ -125,6 +126,7 @@ export function CalculatorDetail({
   const result = useMemo(() => safeCompute(calc, values), [calc, values])
   const hasAnyAutofill = Object.keys(filled).length > 0
   const info = getCalcInfo(calc.id)
+  const scoring = getCalcScoring(calc.id)
   const { copied, copy } = useCopyToClipboard()
 
   const zh = locale === "zh-TW"
@@ -316,6 +318,10 @@ export function CalculatorDetail({
         </div>
       )}
 
+      {/* 計算說明 / Scoring — collapsible per-factor points table (only when
+          authored; default collapsed so it doesn't dominate the panel). */}
+      {scoring && <ScoringDetails scoring={scoring} locale={locale} />}
+
       {calc.reference && (
         <p className="border-t pt-3 text-[11px] leading-relaxed text-muted-foreground">
           {calc.reference}
@@ -326,6 +332,137 @@ export function CalculatorDetail({
           ? "⚠ 計算結果僅供臨床參考，數值以病人最近一次檢驗自動帶入，請務必核對單位與臨床情境後判斷。"
           : "⚠ For clinical reference only. Values are auto-filled from the most recent result — verify units and context before acting."}
       </p>
+    </div>
+  )
+}
+
+/** Collapsible "計算說明 / Scoring" — the per-factor points table plus the
+ *  score→outcome mapping, for calculators whose points are hidden behind banded
+ *  numeric inputs (e.g. the HCC risk score). Native <details> = no extra state. */
+function ScoringDetails({ scoring, locale }: { scoring: CalcScoring; locale: string }) {
+  const zh = locale === "zh-TW"
+  return (
+    <details className="group rounded-md border">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-foreground/80 [&::-webkit-details-marker]:hidden">
+        <Table2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        {zh ? "計算說明" : "Scoring"}
+        <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="space-y-3 border-t px-3 py-2.5">
+        {scoring.formula && (
+          <div className="rounded border bg-muted/40 px-2 py-1.5 text-xs leading-relaxed">
+            <div className="mb-0.5 text-[11px] font-semibold text-muted-foreground">{zh ? "公式" : "Formula"}</div>
+            <div className="whitespace-pre-wrap font-mono text-[11px]">{tr(locale, scoring.formula)}</div>
+          </div>
+        )}
+        {scoring.grid && <ScoringGridView grid={scoring.grid} locale={locale} />}
+        {(scoring.factors ?? []).map((f, i) => (
+          <div key={i}>
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">{tr(locale, f.label)}</div>
+            <div className="overflow-hidden rounded border">
+              {f.options.map((o, j) => (
+                <div
+                  key={j}
+                  className={`flex items-center justify-between gap-3 px-2 py-1 text-xs ${j % 2 ? "bg-muted/40" : ""}`}
+                >
+                  <span className="min-w-0 truncate">{tr(locale, o.label)}</span>
+                  <span className="shrink-0 font-medium tabular-nums">{o.points}{zh ? " 分" : " pt"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {scoring.outcome && (
+          <div>
+            <div className="overflow-hidden rounded border">
+              <div className="flex items-center justify-between gap-3 bg-muted/60 px-2 py-1 text-[11px] font-semibold">
+                <span>{tr(locale, scoring.outcome.scoreHeader)}</span>
+                <span>{tr(locale, scoring.outcome.outcomeHeader)}</span>
+              </div>
+              {scoring.outcome.rows.map((r, i) => (
+                <div key={i} className={`flex items-center justify-between gap-3 px-2 py-1 text-xs ${i % 2 ? "bg-muted/40" : ""}`}>
+                  <span className="shrink-0 tabular-nums">{r.score}</span>
+                  <span className="text-right font-medium">{tr(locale, r.outcome)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {scoring.note && (
+          <p className="text-[10px] leading-relaxed text-muted-foreground">{tr(locale, scoring.note)}</p>
+        )}
+      </div>
+    </details>
+  )
+}
+
+// KDIGO-style heat-map colours. Fixed (standard clinical colour code), so they
+// read the same in light and dark mode.
+const GRID_CELL_COLOR: Record<GridColor, string> = {
+  green: "bg-green-500 text-white",
+  yellow: "bg-yellow-300 text-black",
+  orange: "bg-orange-400 text-black",
+  red: "bg-red-500 text-white",
+  deepred: "bg-red-800 text-white",
+}
+
+/** Renders a colour-coded matrix (e.g. the KDIGO GFR × albuminuria heat map).
+ *  Scrolls horizontally on narrow panels rather than overflowing. */
+function ScoringGridView({ grid, locale }: { grid: ScoringGrid; locale: string }) {
+  const nCols = grid.cols.length
+  return (
+    <div>
+      {grid.caption && (
+        <div className="mb-1 text-[11px] font-semibold text-muted-foreground">{tr(locale, grid.caption)}</div>
+      )}
+      {grid.colAxis && (
+        <div className="mb-0.5 text-center text-[10px] font-medium text-muted-foreground">{tr(locale, grid.colAxis)}</div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-center text-[11px]">
+          <thead>
+            <tr>
+              <th className="border bg-muted/60 px-1.5 py-1 text-left align-bottom text-[9px] font-medium leading-tight text-muted-foreground">
+                {grid.rowAxis ? tr(locale, grid.rowAxis) : ""}
+              </th>
+              {grid.cols.map((c, i) => (
+                <th key={i} className="border bg-muted/60 px-1.5 py-1 font-semibold">
+                  <div>{tr(locale, c.label)}</div>
+                  {c.sub && <div className="text-[9px] font-normal text-muted-foreground">{tr(locale, c.sub)}</div>}
+                </th>
+              ))}
+            </tr>
+            {(grid.colSubRows ?? []).map((sr, i) => (
+              <tr key={`sr-${i}`}>
+                <th className="border bg-muted/30 px-1.5 py-0.5 text-left text-[9px] font-medium text-muted-foreground">{tr(locale, sr.label)}</th>
+                {sr.cells.map((cell, j) => (
+                  <td key={j} className="border bg-muted/20 px-1.5 py-0.5 text-[9px] text-muted-foreground">{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {grid.rows.map((r, ri) => (
+              <tr key={ri}>
+                <th className="border bg-muted/40 px-1.5 py-1 text-left text-[10px] font-medium leading-tight">
+                  <div>{tr(locale, r.label)}</div>
+                  {r.sub && <div className="text-[9px] font-normal text-muted-foreground">{tr(locale, r.sub)}</div>}
+                </th>
+                {(grid.cells[ri] ?? []).slice(0, nCols).map((cell, ci) => (
+                  <td key={ci} className={`border px-1.5 py-1.5 font-bold ${GRID_CELL_COLOR[cell.color]}`}>
+                    {tr(locale, cell.text)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {grid.legend && (
+        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{tr(locale, grid.legend)}</p>
+      )}
     </div>
   )
 }

@@ -85,4 +85,26 @@ describe('buildCalcList', () => {
     expect(ids).toContain('fena')
     expect(ids).not.toContain('bmi')
   })
+
+  it('"patient" filter keeps only patient-fillable calcs, grouped across specialties', () => {
+    const list = buildCalcList({ ...base, filter: 'patient' })
+    expect(list.mode).toBe('grouped')
+    const items = list.grouped.flatMap((g) => g.items)
+    expect(items.length).toBeGreaterThan(0)
+    // every shown calc is patient/both
+    expect(items.every((c) => c.audience === 'patient' || c.audience === 'both')).toBe(true)
+    const ids = items.map((c) => c.id)
+    expect(ids).toContain('gds-15')
+    expect(ids).toContain('bmi')
+    expect(ids).not.toContain('fena') // medical-only
+    // spans more than one specialty (mental, general, …)
+    expect(list.grouped.length).toBeGreaterThan(1)
+  })
+
+  it('"patient" filter still honours the search query', () => {
+    const list = buildCalcList({ ...base, filter: 'patient', query: 'PHQ' })
+    const ids = list.grouped.flatMap((g) => g.items.map((c) => c.id))
+    expect(ids).toContain('phq-9')
+    expect(ids).not.toContain('gds-15')
+  })
 })

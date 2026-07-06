@@ -10,8 +10,14 @@ export const CATEGORY_ORDER: CalcCategory[] = [
   'renal', 'hepatic', 'gi', 'electrolyte', 'cardiac', 'pulmonary', 'heme', 'neuro', 'mental', 'general',
 ]
 
-export type SpecialFilter = 'all' | 'favorites' | 'recent'
+export type SpecialFilter = 'all' | 'favorites' | 'recent' | 'patient'
 export type CalcFilter = CalcCategory | SpecialFilter
+
+/** A calculator a patient can self-complete (audience 'patient' or 'both') —
+ *  e.g. a questionnaire (GDS-15/PHQ-9) or a lay risk score. */
+export function isPatientFillable(c: CalculatorDef): boolean {
+  return c.audience === 'patient' || c.audience === 'both'
+}
 
 /** Patient mode shows only patient-appropriate calculators; medical shows all. */
 export function forAudience(calcs: CalculatorDef[], audience: 'medical' | 'patient'): CalculatorDef[] {
@@ -72,7 +78,12 @@ export function buildCalcList(opts: {
     return { mode: 'flat', flat, grouped: [] }
   }
 
-  const filtered = calcs.filter((c) => (filter === 'all' || c.category === filter) && match(c))
+  const patientOnly = filter === 'patient'
+  const filtered = calcs.filter((c) =>
+    (filter === 'all' || patientOnly || c.category === filter) &&
+    (!patientOnly || isPatientFillable(c)) &&
+    match(c),
+  )
   const grouped = CATEGORY_ORDER
     .map((cat) => ({ cat, items: filtered.filter((c) => c.category === cat) }))
     .filter((g) => g.items.length > 0)

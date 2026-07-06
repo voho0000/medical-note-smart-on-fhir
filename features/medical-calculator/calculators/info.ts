@@ -37,6 +37,18 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Current (2023–) UNOS liver allocation score, ages ≥12 y.', zh: '現行（2023 年起）UNOS 肝臟分配分數，≥12 歲。' },
     caveats: { en: 'Not for acute liver failure. INR affected by anticoagulants.', zh: '不適用於急性肝衰竭。INR 受抗凝劑影響。' },
   },
+  'hcc-risk-reveal': {
+    useWhen: { en: 'Estimating 10-year liver-cancer risk in a chronic hepatitis B carrier — a patient-facing risk stratifier (as used in Taiwan NHI 健保存摺).', zh: '估算慢性B型肝炎帶原者未來10年肝癌風險 — 民眾可自用的風險分層工具（同健保存摺）。' },
+    caveats: { en: 'Only ~80% accurate and validated in chronic HBV; overestimates in non-HBV patients. Does NOT apply to cirrhosis, HCV/HDV/HIV co-infection, prior HCC, or a sudden ALT rise ≥2×. A screen, not a diagnosis — all HBV carriers need regular follow-up regardless of score.', zh: '準確度約8成、僅驗證於慢性B肝；非B肝患者會高估。不適用於肝硬化、合併C肝/D肝/HIV、肝癌病史或ALT突升≥兩倍者。為風險評估非診斷 — 所有B肝帶原者無論分數高低都需定期追蹤。' },
+  },
+  'ckd-kdigo-risk': {
+    useWhen: { en: 'Staging CKD prognosis and setting follow-up frequency once eGFR and albuminuria (ACR or PCR) are known; a patient-facing risk & monitoring guide (as in Taiwan NHI 健保存摺).', zh: '已知 eGFR 與白蛋白尿（ACR 或 PCR）時，評估慢性腎臟病預後風險與追蹤頻率；民眾可自用的風險與追蹤指引（同健保存摺）。' },
+    caveats: { en: 'Assumes ACR in mg/g and steady-state eGFR (unreliable in AKI). ACR↔PCR–to-stage relationships are approximate. Green with no other kidney-damage markers is not CKD. A guide, not a diagnosis — discuss management with a clinician.', zh: 'ACR 以 mg/g 計、假設 eGFR 穩定（急性腎損傷時不準）。ACR／PCR 對應分期為近似值。綠色且無其他腎損傷指標未必為慢性腎臟病。此為參考非診斷 — 處置請與醫師討論。' },
+  },
+  'who-cvd-2019': {
+    useWhen: { en: 'Primary-prevention 10-year CVD risk in adults aged 40–80 without known cardiovascular disease; a patient-facing estimate.', zh: '40–80 歲、無已知心血管疾病成人之10年心血管疾病風險（初級預防）；民眾可自用的估算。' },
+    caveats: { en: 'This is the WHO 2019 model, NOT Taiwan\'s official NHI 健保 algorithm (whose coefficients are unpublished) — numbers may differ from 健保存摺. Uses the pooled, un-recalibrated baseline (not East-Asia-specific). Total cholesterol taken in mg/dL and converted to mmol/L. Not for people with established CVD; validated for ages 40–80. A screen, not a diagnosis.', zh: '此為 WHO 2019 模型，非健保署官方演算法（其係數未公開）— 數值可能與健保存摺不同。採用未經區域校正的合併基準（非東亞專屬）。總膽固醇以 mg/dL 輸入並換算為 mmol/L。不適用於已有心血管疾病者；驗證範圍為 40–80 歲。為風險評估非診斷。' },
+  },
   'child-pugh': {
     useWhen: { en: 'Cirrhosis severity, surgical risk, and prognosis.', zh: '肝硬化嚴重度、手術風險與預後。' },
     caveats: { en: 'Ascites and encephalopathy grading is subjective; less objective than MELD. Not for acute liver failure.', zh: '腹水與肝腦病變分級較主觀；客觀性不如 MELD。不適用於急性肝衰竭。' },
