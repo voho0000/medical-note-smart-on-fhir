@@ -3,9 +3,9 @@
 // list card (never one built from a clinical-judgment default), the result
 // carries a staleness date, and a throwing compute() degrades to null
 // instead of crashing the list.
-import { isFullyAutofillable, computeAutofilledResult } from '@/features/medical-calculator/autofill-compute'
+import { isFullyAutofillable, computeAutofilledResult, resolveInput } from '@/features/medical-calculator/autofill-compute'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
-import type { CalculatorDef } from '@/features/medical-calculator/types'
+import type { CalculatorDef, CalcInput } from '@/features/medical-calculator/types'
 import type { Autofill, AutofillValue } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
 
 function fakeAutofill(values: Record<string, AutofillValue>, sex?: string): Autofill {
@@ -25,6 +25,40 @@ function fakeAutofill(values: Record<string, AutofillValue>, sex?: string): Auto
     },
   }
 }
+
+describe('resolveInput — unit-dimension safety gate for name matches', () => {
+  const naInput: CalcInput = {
+    key: 'na', type: 'number', label: { en: 'Sodium', zh: '鈉' },
+    unit: 'mmol/L', dimension: 'electrolyte', source: { kind: 'lab', keys: ['NA'] },
+  }
+  const val = (unit: string, viaLoinc?: boolean): AutofillValue => ({ value: 141, unit, date: '2020-01-01', viaLoinc })
+
+  it('rejects a NAME-matched value whose unit is dimension-incompatible', () => {
+    // matched only by display name (viaLoinc:false), unit mg/dL is not an
+    // electrolyte unit → probably a different analyte → do not fill
+    const r = resolveInput(naInput, fakeAutofill({ NA: val('mg/dL', false) }))
+    expect(r.filled).toBe(false)
+    expect(r.value).toBe('')
+  })
+
+  it('accepts a name-matched value when the unit fits the dimension', () => {
+    const r = resolveInput(naInput, fakeAutofill({ NA: val('mmol/L', false) }))
+    expect(r.filled).toBe(true)
+    expect(r.value).toBe('141')
+  })
+
+  it('does NOT reject a LOINC-matched value with an odd unit (trusted identity → ⚠ only)', () => {
+    const r = resolveInput(naInput, fakeAutofill({ NA: val('mg/dL', true) }))
+    expect(r.filled).toBe(true)
+    expect(r.value).toBe('141')
+    expect(r.unconvertible).toBe(true)
+  })
+
+  it('treats an untagged value (viaLoinc undefined) as trusted (no reject)', () => {
+    const r = resolveInput(naInput, fakeAutofill({ NA: val('mg/dL') }))
+    expect(r.filled).toBe(true)
+  })
+})
 
 describe('isFullyAutofillable — real registry classification lock', () => {
   it('BMI is fully autofillable (weight + height are both vital sources)', () => {

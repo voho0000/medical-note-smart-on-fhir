@@ -288,7 +288,7 @@ export const CARDIAC: CalculatorDef[] = [
       inputs: [
         SEX_INPUT,
         AGE_INPUT,
-        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'] } },
+        { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 }, source: { kind: 'vital', loinc: ['8480-6'], vital: 'sbp' } },
         { key: 'chol', type: 'number', label: { en: 'Total cholesterol', zh: '總膽固醇' }, unit: 'mg/dL', dimension: 'cholesterol', normalRange: { low: 125, high: 200 }, source: { kind: 'lab', keys: ['CHOL'] } },
         {
           key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: '',

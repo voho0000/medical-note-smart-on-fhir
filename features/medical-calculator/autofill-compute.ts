@@ -50,6 +50,19 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
   const hit = autofill.resolve(input.source)
   if (!hit) return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
 
+  // Safety gate: a value matched only by display name (viaLoinc === false) whose
+  // unit is incompatible with the input's expected dimension is probably a
+  // different analyte — don't autofill it. LOINC-matched values (trusted
+  // identity) are never rejected here; a genuine unit mismatch there still
+  // surfaces as the ⚠ badge below.
+  if (hit.viaLoinc === false && input.dimension && hit.unit) {
+    const compatible = convertToBase(hit.value, hit.unit, input.dimension) != null
+    const sameUnit = normUnit(hit.unit) === normUnit(expected)
+    if (!compatible && !sameUnit) {
+      return { ...EMPTY, value: input.defaultValue ?? '', displayUnit: expected }
+    }
+  }
+
   const conv = convertToBase(hit.value, hit.unit, input.dimension)
   if (conv && conv.changed) {
     // Genuine numeric conversion — the box now holds an expected-unit value.

@@ -120,7 +120,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
       blurb: { en: 'Water deficit in hypernatremia.', zh: '高血鈉之缺水量估算。' },
       inputs: [
         { key: 'na', type: 'number', label: { en: 'Sodium', zh: '鈉' }, unit: 'mmol/L', dimension: 'electrolyte', normalRange: { low: 136, high: 145 }, source: { kind: 'lab', keys: ['NA'] } },
-        { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC } },
+        { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
         SEX_INPUT,
       ],
       compute: (v) => {

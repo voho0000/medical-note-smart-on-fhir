@@ -69,9 +69,15 @@ export type ConvertDim =
  *           canonical lab map, so they're matched by LOINC directly).
  *  - age / sex: patient demographics.
  */
+/** Vital signs live outside the canonical lab map; a `vital` source is matched
+ *  by LOINC first, then (fallback) by display-name for imports that omit LOINC. */
+export type VitalKind = 'sbp' | 'weight' | 'height'
+
 export type AutofillSource =
   | { kind: 'lab'; keys: string[] }
-  | { kind: 'vital'; loinc: string[] }
+  /** `vital` optionally carries a semantic id enabling a display-name fallback
+   *  (for FHIR that omits the vital's LOINC); the name match is unit-gated. */
+  | { kind: 'vital'; loinc: string[]; vital?: VitalKind }
   /** Match an observation directly by LOINC code — used for analytes with no
    *  canonical key (e.g. ABG arterial codes, osmolality). */
   | { kind: 'labLoinc'; loinc: string[] }

@@ -11,14 +11,18 @@
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
-import { getAnalyteCanonicalKey } from '@/src/shared/utils/lab-normalize'
-import type { AutofillSource } from '../types'
+import { getAnalyteCanonicalKey, canonicalKeyFromLoinc } from '@/src/shared/utils/lab-normalize'
+import type { AutofillSource, VitalKind } from '../types'
 
 export interface AutofillValue {
   value: number
   unit: string
   /** effectiveDateTime of the source observation (ISO), for the "from <date>" hint. */
   date: string
+  /** True when the analyte identity came from a LOINC code (trusted); false when
+   *  it was matched only by display name/text (fuzzier — the unit-dimension
+   *  safety gate in resolveInput applies). Absent = trusted (LOINC/vital/demo). */
+  viaLoinc?: boolean
 }
 
 export interface Autofill {
@@ -28,7 +32,7 @@ export interface Autofill {
 
 /** Minimal shape of an observation (or one of its components) we read. */
 interface CodeHolder {
-  code?: { coding?: Array<{ code?: string }> }
+  code?: { text?: string; coding?: Array<{ code?: string; display?: string }> }
   valueQuantity?: { value?: number; unit?: string }
 }
 interface ObsLike extends CodeHolder {
@@ -74,6 +78,25 @@ function urineCreatinineToGL(value: number, unit: string): number | undefined {
   }
 }
 
+/** Classify a vital by display name/text ONLY — a fallback for FHIR that omits
+ *  the vital's LOINC (LOINC-matched vitals already resolve via byLoinc). */
+function classifyVitalByName(holder: CodeHolder): VitalKind | undefined {
+  const text = (holder.code?.text || holder.code?.coding?.[0]?.display || '').toLowerCase()
+  if (!text) return undefined
+  if (/systolic|收縮壓/.test(text)) return 'sbp'
+  if (/body\s*weight|體重|^weight$/.test(text)) return 'weight'
+  if (/body\s*height|身高|^height$/.test(text)) return 'height'
+  return undefined
+}
+/** Unit-dimension safety gate for a NAME-matched vital: only accept a value
+ *  whose unit fits the vital, so a mislabelled row can't be mis-filled. */
+function unitOkForVital(kind: VitalKind, unit: string): boolean {
+  const u = unit.toLowerCase().replace(/[\s[\]]/g, '')
+  if (kind === 'weight') return /^(kg|g|lb|lbs)$/.test(u)
+  if (kind === 'height') return /^(cm|m|in|inch|")$/.test(u)
+  return /^mmhg$/.test(u) // sbp
+}
+
 /**
  * Pure autofill-index builder — indexes each observation (and, for panels like
  * blood pressure, each `component`) by canonical analyte key, by LOINC code, and
@@ -88,6 +111,8 @@ export function buildAutofill(
   const byLoinc: Record<string, AutofillValue> = {}
   // Keyed by `${specimen}|${canonicalKey}` (e.g. "blood|NA", "urine|CREA").
   const bySpecimen: Record<string, AutofillValue> = {}
+  // Vitals matched by display name (fallback when LOINC is absent).
+  const byVital: Partial<Record<VitalKind, AutofillValue>> = {}
   // Components for deriving urine ACR when it isn't reported as a plain number.
   const microAlb: AutofillValue[] = [] // urine microalbumin (14957-5 / MALB)
   const urineCrea: AutofillValue[] = [] // urine creatinine (2161-8 / CREA+urine)
@@ -95,7 +120,10 @@ export function buildAutofill(
   const index = (holder: CodeHolder, specimenDisplay: string | undefined, date: string) => {
     const value = holder.valueQuantity?.value
     if (typeof value !== 'number' || !Number.isFinite(value)) return
-    const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date }
+    // Provenance: was the analyte identity established by a LOINC code (trusted)
+    // or only by display name (fuzzier)? Drives the resolveInput safety gate.
+    const viaLoinc = canonicalKeyFromLoinc(holder) != null
+    const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date, viaLoinc }
     const key = getAnalyteCanonicalKey(holder)
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
     const spec = normSpecimen(specimenDisplay)
@@ -106,6 +134,9 @@ export function buildAutofill(
     for (const c of holder.code?.coding ?? []) {
       if (c?.code) byLoinc[c.code] = keepLatest(byLoinc[c.code], entry)
     }
+    // Vital display-name fallback (only accept when the unit fits the vital).
+    const vk = classifyVitalByName(holder)
+    if (vk && unitOkForVital(vk, entry.unit)) byVital[vk] = keepLatest(byVital[vk], entry)
   }
 
   for (const obs of observations) {
@@ -146,7 +177,7 @@ export function buildAutofill(
         const creGL = urineCreatinineToGL(c.value, c.unit)
         if (creGL === undefined || creGL <= 0) continue
         const acr = Math.round((albMgL / creGL) * 10) / 10
-        const cand: AutofillValue = { value: acr, unit: 'mg/g', date: a.date }
+        const cand: AutofillValue = { value: acr, unit: 'mg/g', date: a.date, viaLoinc: true }
         if (!best || cand.date > best.date) best = cand
       }
     }
@@ -182,6 +213,13 @@ export function buildAutofill(
         }
         return undefined
       case 'vital':
+        // LOINC first (trusted); then a display-name fallback for FHIR that
+        // omits the vital's LOINC (already unit-gated at index time).
+        for (const code of source.loinc) {
+          if (byLoinc[code]) return byLoinc[code]
+        }
+        if (source.vital && byVital[source.vital]) return byVital[source.vital]
+        return undefined
       case 'labLoinc':
         for (const code of source.loinc) {
           if (byLoinc[code]) return byLoinc[code]

@@ -68,9 +68,9 @@ export const GENERAL: CalculatorDef[] = [
       category: 'general',
       blurb: { en: 'Devine IBW + adjusted BW for dosing.', zh: 'Devine 理想體重 + 校正體重（劑量用）。' },
       inputs: [
-        { key: 'height', type: 'number', label: { en: 'Height', zh: '身高' }, unit: 'cm', dimension: 'height', source: { kind: 'vital', loinc: HEIGHT_LOINC } },
+        { key: 'height', type: 'number', label: { en: 'Height', zh: '身高' }, unit: 'cm', dimension: 'height', source: { kind: 'vital', loinc: HEIGHT_LOINC, vital: 'height' } },
         SEX_INPUT,
-        { key: 'weight', type: 'number', label: { en: 'Actual weight (for adjusted)', zh: '實際體重（校正用）' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC } },
+        { key: 'weight', type: 'number', label: { en: 'Actual weight (for adjusted)', zh: '實際體重（校正用）' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
       ],
       compute: (v) => {
         const ht = n(v, 'height'); const female = v.sex === 'female'; const wt = n(v, 'weight')
@@ -98,8 +98,8 @@ export const GENERAL: CalculatorDef[] = [
       audience: 'both',
       blurb: { en: 'Weight-for-height; Taiwan MOHW cutoffs.', zh: '體重身高比；採衛福部標準。' },
       inputs: [
-        { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC } },
-        { key: 'height', type: 'number', label: { en: 'Height', zh: '身高' }, unit: 'cm', dimension: 'height', source: { kind: 'vital', loinc: HEIGHT_LOINC } },
+        { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
+        { key: 'height', type: 'number', label: { en: 'Height', zh: '身高' }, unit: 'cm', dimension: 'height', source: { kind: 'vital', loinc: HEIGHT_LOINC, vital: 'height' } },
       ],
       compute: (v) => {
         const wt = n(v, 'weight'); const ht = n(v, 'height')

@@ -15,6 +15,12 @@ const labLoinc = (code: string, value: number, unit: string, date: string, speci
   valueQuantity: { value, unit },
   ...(specimen ? { specimen: { display: specimen } } : {}),
 })
+// An observation identified by display name/text ONLY (no LOINC coding).
+const named = (text: string, value: number, unit: string, date: string) => ({
+  effectiveDateTime: date,
+  code: { text },
+  valueQuantity: { value, unit },
+})
 
 describe('buildAutofill — panel components (blood pressure)', () => {
   it('resolves systolic BP from a BP-panel component via vital LOINC 8480-6', () => {
@@ -53,6 +59,31 @@ describe('buildAutofill — ACR / PCR by LOINC', () => {
   it('PCR resolves via LOINC 2890-2', () => {
     const af = buildAutofill([labLoinc('2890-2', 600, 'mg/g', '2020-01-01')], {})
     expect(af.resolve({ kind: 'labLoinc', loinc: ['2890-2'] })?.value).toBe(600)
+  })
+})
+
+describe('buildAutofill — vital display-name fallback (no LOINC)', () => {
+  const sbp = { kind: 'vital' as const, loinc: ['8480-6'], vital: 'sbp' as const }
+  const weight = { kind: 'vital' as const, loinc: ['29463-7'], vital: 'weight' as const }
+  const height = { kind: 'vital' as const, loinc: ['8302-2'], vital: 'height' as const }
+
+  it('systolic BP resolves by name (中文 收縮壓 / English) when LOINC is absent', () => {
+    expect(buildAutofill([named('收縮壓', 135, 'mmHg', '2020-01-01')], {}).resolve(sbp)?.value).toBe(135)
+    expect(buildAutofill([named('Systolic blood pressure', 128, 'mmHg', '2020-01-01')], {}).resolve(sbp)?.value).toBe(128)
+  })
+  it('weight (體重) and height (身高) resolve by name', () => {
+    expect(buildAutofill([named('體重', 70, 'kg', '2020-01-01')], {}).resolve(weight)?.value).toBe(70)
+    expect(buildAutofill([named('身高', 168, 'cm', '2020-01-01')], {}).resolve(height)?.value).toBe(168)
+  })
+  it('a LOINC-coded vital still wins over a name match', () => {
+    const af = buildAutofill([labLoinc('8480-6', 150, 'mmHg', '2021-01-01')], {})
+    expect(af.resolve(sbp)?.value).toBe(150)
+  })
+  it('UNIT GATE: a name-matched vital with the wrong unit is NOT taken', () => {
+    // "體重" reported in mmHg (mislabelled) must not become a weight
+    expect(buildAutofill([named('體重', 70, 'mmHg', '2020-01-01')], {}).resolve(weight)).toBeUndefined()
+    // "收縮壓" in kg must not become an SBP
+    expect(buildAutofill([named('收縮壓', 70, 'kg', '2020-01-01')], {}).resolve(sbp)).toBeUndefined()
   })
 })
 
