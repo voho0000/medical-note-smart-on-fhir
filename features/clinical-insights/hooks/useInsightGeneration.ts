@@ -23,6 +23,7 @@ interface UseInsightGenerationProps {
 interface UseInsightGenerationReturn {
   runPanel: (panelId: string, options?: { force?: boolean }) => Promise<void>
   stopPanel: (panelId: string) => void
+  stopAll: () => void
   responses: Record<string, ResponseEntry>
   panelStatus: Record<string, PanelStatus>
   setResponses: React.Dispatch<React.SetStateAction<Record<string, ResponseEntry>>>
@@ -51,8 +52,11 @@ export function useInsightGeneration({
       if (!panel) return
 
       const prompt = prompts[panelId] ?? panel.prompt
-      const responseEntry = responses[panelId]
-      
+      // Read through the store, NOT the subscribed `responses` — with it in the
+      // dependency array this callback (and every memo built on it) was rebuilt
+      // on each streamed chunk, re-rendering all panels while one streamed.
+      const responseEntry = useInsightResponsesStore.getState().responses[panelId]
+
       // Skip if already edited (unless forced)
       if (!force && responseEntry?.isEdited) {
         return
@@ -73,6 +77,15 @@ export function useInsightGeneration({
 
       const messages = generateInsight.buildMessages(input)
 
+      // The responses store + ai instance survive patient switches (module
+      // store, forceMounted tab), but panel ids are stable across patients — a
+      // stream still running when the patient changes would write the OLD
+      // patient's text into the NEW patient's panel (and it would then be
+      // persisted into the new patient's cache). Remember who this run belongs
+      // to and drop every write once the owner changes.
+      const owner = useInsightResponsesStore.getState().ownerPatientId
+      const ownerChanged = () => useInsightResponsesStore.getState().ownerPatientId !== owner
+
       // State management: Set loading state
       setCurrentPanelId(panelId)
       setResponses((prev) => ({
@@ -89,6 +102,7 @@ export function useInsightGeneration({
         await ai.stream(messages, {
           modelId: model,
           onChunk: (chunk) => {
+            if (ownerChanged()) return
             // State management: Update response during streaming
             setResponses((prev) => ({
               ...prev,
@@ -100,9 +114,10 @@ export function useInsightGeneration({
             }))
           },
           onComplete: (fullText) => {
+            if (ownerChanged()) return
             // Use Use Case to build metadata
             const metadata = generateInsight.buildMetadata(model)
-            
+
             // State management: Final update
             setResponses((prev) => ({
               ...prev,
@@ -116,45 +131,56 @@ export function useInsightGeneration({
         })
         
         // State management: Clear loading state
-        setPanelStatus((prev) => ({
-          ...prev,
-          [panelId]: { isLoading: false, error: null },
-        }))
+        if (!ownerChanged()) {
+          setPanelStatus((prev) => ({
+            ...prev,
+            [panelId]: { isLoading: false, error: null },
+          }))
+        }
       } catch (error) {
         const errorMessage = getUserErrorMessage(error)
         console.error(`Failed to generate insight for ${panel.title}:`, errorMessage, error)
-        
+
         // State management: Set error state
-        setPanelStatus((prev) => ({
-          ...prev,
-          [panelId]: {
-            isLoading: false,
-            error: new Error(errorMessage),
-          },
-        }))
+        if (!ownerChanged()) {
+          setPanelStatus((prev) => ({
+            ...prev,
+            [panelId]: {
+              isLoading: false,
+              error: new Error(errorMessage),
+            },
+          }))
+        }
       } finally {
         setCurrentPanelId(null)
       }
     },
-    [context, panels, prompts, responses, model, ai, generateInsight, setResponses, setPanelStatus],
+    [context, panels, prompts, model, ai, generateInsight, setResponses, setPanelStatus],
   )
 
   const stopPanel = useCallback(
     (panelId: string) => {
       // Stop streaming using unified AI
       ai.stop()
-      
+
       // Update panel status to not loading
       setPanelStatus((prev) => ({
         ...prev,
         [panelId]: { isLoading: false, error: null },
       }))
-      
+
       // Clear current panel ID
       setCurrentPanelId(null)
     },
     [ai, setPanelStatus]
   )
 
-  return { runPanel, stopPanel, responses, panelStatus, setResponses }
+  // Abort every in-flight stream (patient switch: their output must not reach
+  // the next patient's panels, and the tokens are wasted anyway).
+  const stopAll = useCallback(() => {
+    ai.stop()
+    setCurrentPanelId(null)
+  }, [ai])
+
+  return { runPanel, stopPanel, stopAll, responses, panelStatus, setResponses }
 }

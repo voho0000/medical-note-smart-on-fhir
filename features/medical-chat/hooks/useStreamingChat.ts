@@ -10,6 +10,7 @@ import { gateModelForKeys } from "@/src/shared/constants/ai-models.constants"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { truncateToContextWindow, getTokenStats, selectMessagesToSend } from "@/src/shared/utils/context-window-manager"
 import { addMessagePair } from "@/src/shared/utils/chat-message.utils"
+import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
 
 export function useStreamingChat(
   systemPrompt: string, 
@@ -51,6 +52,15 @@ export function useStreamingChat(
 
       setError(null)
 
+      // Throttle state for streamed updates. Declared OUTSIDE the try so the
+      // catch/finally can clear a still-pending timer — otherwise, after an
+      // error the leftover timer fired ~100ms later and overwrote the ❌ error
+      // message with the partial stream content.
+      let latestContent = ""
+      let lastUpdateTime = 0
+      let timeoutId: NodeJS.Timeout | null = null
+      const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
+
       try {
         // Prepare messages (exclude the empty assistant placeholder)
         const userMessages = newMessages
@@ -90,11 +100,6 @@ export function useStreamingChat(
         ]
 
         // Stream response with throttled updates to prevent main thread blocking
-        let latestContent = ""
-        let lastUpdateTime = 0
-        let timeoutId: NodeJS.Timeout | null = null
-        const UPDATE_INTERVAL = 100 // Update every 100ms to prevent blocking
-        
         await ai.stream(apiMessages, {
           modelId: effectiveModelId,
           onChunk: (content: string) => {
@@ -142,14 +147,20 @@ export function useStreamingChat(
         }
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return
-        
+
         const errorMessage = getUserErrorMessage(error)
         const errorObj = new Error(errorMessage)
         setError(errorObj)
-        
+
         setChatMessages((prev) =>
           prev.map((m) => m.id === assistantMessageId ? { ...m, content: `❌ ${errorMessage}` } : m)
         )
+      } finally {
+        // Kill any still-pending throttled update (abort, error, or completion).
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
       }
     },
     [chatMessages, modelId, openAiKey, geminiKey, claudeKey, setChatMessages, systemPrompt, ai, onInputClear, onStreamComplete]
@@ -159,8 +170,7 @@ export function useStreamingChat(
     ai.stop()
     setChatMessages([])
     // Clear current session ID to start a new conversation
-    const { setCurrentSessionId } = require('@/src/application/stores/chat-history.store').useChatHistoryStore.getState()
-    setCurrentSessionId(null)
+    useChatHistoryStore.getState().setCurrentSessionId(null)
   }, [setChatMessages, ai])
 
   const stopGeneration = useCallback(() => {

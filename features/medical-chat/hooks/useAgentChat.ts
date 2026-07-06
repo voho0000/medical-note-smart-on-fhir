@@ -18,6 +18,7 @@ import { getModelDefinition, gateModelForKeys } from "@/src/shared/constants/ai-
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
 import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
+import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
@@ -83,11 +84,25 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
       setIsLoading(true)
       setError(null)
-      abortControllerRef.current = new AbortController()
+      // Keep a local handle: the ref is nulled in `finally`, but late events /
+      // pending timers still need to check THIS run's abort state.
+      const abortController = new AbortController()
+      abortControllerRef.current = abortController
       // Idle watchdog for every agent stream below: abort + surface a timeout
       // error if a stream stalls (same anti-hang guard as normal mode). Idle-
       // based, so legitimate long tool runs that keep emitting events are fine.
       const idleMs = resolveStreamIdleTimeoutMs()
+
+      // Throttle state, declared OUTSIDE the try so catch/finally can clear a
+      // still-pending timer — a leftover timer otherwise fired after abort or
+      // error and overwrote the reset/❌ message with stale stream content.
+      const UPDATE_INTERVAL = 100
+      let lastUpdateTime = 0
+      let timeoutId: NodeJS.Timeout | null = null
+      let latestContent = ""
+      const clearPending = () => {
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null }
+      }
 
       try {
         const provider = getModelDefinition(effectiveModelId)?.provider ?? "openai"
@@ -151,16 +166,13 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         // shares it; the only thing left here is mapping events → setChatMessages,
         // including the 100ms throttle that keeps high-frequency text deltas from
         // blocking the main thread.
-        const UPDATE_INTERVAL = 100
-        let lastUpdateTime = 0
-        let timeoutId: NodeJS.Timeout | null = null
-        let latestContent = ""
-        const setContent = (content: string) =>
+        const setContent = (content: string) => {
+          // A throttled timer can fire just after the user aborts — don't let
+          // it resurrect content (e.g. over a cleared chat or reset message).
+          if (abortController.signal.aborted) return
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId ? { ...m, content } : m)
           )
-        const clearPending = () => {
-          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null }
         }
         const appendState = (state: string, extra?: Partial<ChatMessage>) => {
           clearPending()
@@ -177,6 +189,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
 
         const onEvent = (event: AgentRunEvent) => {
+          // After abort (stop button, reset, patient/bundle switch) the agent
+          // core may still flush queued events — dropping them here prevents a
+          // brief flash of the previous context's content in the UI.
+          if (abortController.signal.aborted) return
           switch (event.type) {
             case 'content': {
               if (!hasReceivedChunkRef.current && onInputClear) {
@@ -221,7 +237,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           messages: apiMessages,
           tools,
           idleMs,
-          abortController: abortControllerRef.current,
+          abortController,
           onEvent,
           translations: {
             organizingResults: t.agent.organizingResults,
@@ -247,9 +263,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           prev.map((m) => m.id === assistantMessageId ? { ...m, content: `❌ ${errorMessage}` } : m)
         )
       } finally {
+        clearPending()
         setIsLoading(false)
         abortControllerRef.current = null
-        
+
         // Trigger save after agent completes
         if (onStreamComplete) {
           try {
@@ -266,8 +283,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const handleReset = useCallback(() => {
     abortControllerRef.current?.abort()
     setChatMessages([])
-    const { setCurrentSessionId } = require('@/src/application/stores/chat-history.store').useChatHistoryStore.getState()
-    setCurrentSessionId(null)
+    useChatHistoryStore.getState().setCurrentSessionId(null)
   }, [setChatMessages])
 
   const stopGeneration = useCallback(() => {

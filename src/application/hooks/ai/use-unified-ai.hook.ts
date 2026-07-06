@@ -40,7 +40,12 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
   const defaultModel = useModel()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  // A Set, not a single ref: one hook instance can have several streams in
+  // flight (e.g. insights auto-generating multiple panels). With a single ref,
+  // a newer stream overwrote the older one's controller — and the older
+  // stream's `finally` then nulled the newer one's — so stop() silently missed
+  // streams. stop() must abort ALL of them.
+  const abortControllersRef = useRef<Set<AbortController>>(new Set())
 
   // Cache AI service instance to avoid recreating on every call
   const aiService = useMemo(
@@ -98,7 +103,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
     async (messages: AiMessage[], streamOptions?: StreamOptions): Promise<string> => {
       setIsLoading(true)
       setError(null)
-      abortControllerRef.current = new AbortController()
+      const abortController = new AbortController()
+      abortControllersRef.current.add(abortController)
 
       const modelId = streamOptions?.modelId || options.defaultModel || defaultModel
       const provider = getModelDefinition(modelId)?.provider ?? 'openai'
@@ -114,7 +120,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           messages,
           model: modelId,
           apiKey,
-          signal: abortControllerRef.current.signal,
+          signal: abortController.signal,
           onChunk: (chunk: string) => {
             fullText = chunk
             streamOptions?.onChunk?.(chunk)
@@ -135,17 +141,18 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         throw err
       } finally {
         setIsLoading(false)
-        abortControllerRef.current = null
+        abortControllersRef.current.delete(abortController)
       }
     },
     [streamOrchestrator, openAiKey, geminiKey, claudeKey, defaultModel, options]
   )
 
   /**
-   * Stop streaming
+   * Stop streaming — aborts every in-flight stream started by this hook instance.
    */
   const stop = useCallback(() => {
-    abortControllerRef.current?.abort()
+    for (const controller of abortControllersRef.current) controller.abort()
+    abortControllersRef.current.clear()
     setIsLoading(false)
   }, [])
 

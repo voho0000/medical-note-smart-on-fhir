@@ -62,6 +62,7 @@ import type { SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { AuthDialog } from "@/features/auth"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { isQuotaExceededError } from "@/src/core/errors"
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -568,6 +569,31 @@ export default function MedicalChat() {
                       </span>
                     ) : part
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {isQuotaExceededError(chat.error) && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+              <div className="flex-1 text-amber-800 dark:text-amber-200">
+                <div className="font-medium mb-1">{t.medicalChat.quotaBannerTitle}</div>
+                <div className="text-amber-700 dark:text-amber-300">
+                  {(!user || isAnonymous)
+                    ? t.medicalChat.quotaBannerMessageAnon.split(t.medicalChat.loginLink).map((part, index, array) => (
+                        index < array.length - 1 ? (
+                          <span key={index}>
+                            {part}
+                            <button
+                              onClick={() => setShowAuthDialog(true)}
+                              className="underline hover:text-amber-900 dark:hover:text-amber-100 font-medium"
+                            >
+                              {t.medicalChat.loginLink}
+                            </button>
+                          </span>
+                        ) : part
+                      ))
+                    : t.medicalChat.quotaBannerMessageUser}
                 </div>
               </div>
             </div>

@@ -6,7 +6,7 @@
  * Much simpler and more performant than client-side processing
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 
 export interface ImageFile {
@@ -33,6 +33,17 @@ export function useImageUpload() {
     isProcessing: false,
     error: null
   })
+
+  // Revoke outstanding object URLs on unmount — remove/clear already revoke,
+  // but images still attached when the component goes away otherwise leak
+  // until page unload (noticeable on mobile after several photos).
+  const imagesRef = useRef<ImageFile[]>([])
+  imagesRef.current = state.images
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach(img => URL.revokeObjectURL(img.preview))
+    }
+  }, [])
 
   const validateFile = (file: File): { error: string | null; warning: string | null } => {
     if (!ALLOWED_TYPES.includes(file.type)) {

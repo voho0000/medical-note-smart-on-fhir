@@ -98,25 +98,45 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
 ]
 
 /**
- * Extract user-friendly message from any error
- * Enhanced with detailed error mapping
+ * Build a richer haystack to match against: the AI SDK's APICallError carries
+ * the real signal in statusCode / responseBody, NOT always in .message (a
+ * proxy 401 frequently has an empty .message — which previously produced an
+ * empty error box). The proxy's 401 body contains the "sign-in required" text
+ * that the first mapping matches, so include responseBody too.
  */
-export function getUserErrorMessage(error: unknown): string {
+function buildErrorHaystack(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
-
-  // Build a richer haystack to match against: the AI SDK's APICallError carries
-  // the real signal in statusCode / responseBody, NOT always in .message (a
-  // proxy 401 frequently has an empty .message — which previously produced an
-  // empty error box). The proxy's 401 body contains the "sign-in required" text
-  // that the first mapping matches, so include responseBody too.
   const e = error as { statusCode?: unknown; status?: unknown; responseBody?: unknown; name?: unknown } | null
-  const haystack = [
+  return [
     message,
     e?.statusCode != null ? `status ${e.statusCode}` : '',
     e?.status != null ? `status ${e.status}` : '',
     typeof e?.responseBody === 'string' ? e.responseBody : '',
     typeof e?.name === 'string' ? e.name : '',
   ].filter(Boolean).join(' ')
+}
+
+/**
+ * The proxy's daily-quota 403 — matched against BOTH the raw server text and
+ * the already-mapped Chinese message, so it works on the original error and on
+ * the `new Error(getUserErrorMessage(err))` the chat hooks store in state.
+ * The chat UI uses this to show a persistent quota banner with a sign-in CTA
+ * instead of only an ❌ line inside the conversation.
+ */
+const QUOTA_EXCEEDED_PATTERN = /daily quota exceeded|今日內建額度已用完/i
+
+export function isQuotaExceededError(error: unknown): boolean {
+  if (!error) return false
+  return QUOTA_EXCEEDED_PATTERN.test(buildErrorHaystack(error))
+}
+
+/**
+ * Extract user-friendly message from any error
+ * Enhanced with detailed error mapping
+ */
+export function getUserErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const haystack = buildErrorHaystack(error)
 
   // Chinese pattern table FIRST — typed AiError/FhirError getUserMessage()
   // strings are English, so checking isBaseError before the table used to
