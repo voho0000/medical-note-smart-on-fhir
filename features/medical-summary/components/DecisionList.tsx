@@ -83,7 +83,6 @@ export function DecisionList({
                   typeLabel={typeLabel}
                   unverifiedLabel={unverifiedLabel}
                   onNavigate={onNavigate}
-                  className="ml-0.5 text-[0.6rem]"
                 />
               </p>
             </div>
