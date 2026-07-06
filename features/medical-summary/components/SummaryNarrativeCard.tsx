@@ -38,7 +38,7 @@ export function SummaryNarrativeCard({
   const byKey = new Map(result.sourceIndex.map((s) => [s.key, s]))
 
   return (
-    <div className="rounded-xl border border-border border-l-4 border-l-violet-500 bg-card p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
       <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
         {title}
         {updating ? <Loader2 className="h-3 w-3 animate-spin text-violet-500" /> : null}

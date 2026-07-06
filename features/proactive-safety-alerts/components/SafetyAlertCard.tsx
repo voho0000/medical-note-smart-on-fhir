@@ -15,10 +15,12 @@ const SEVERITY_BADGE: Record<SafetySeverity, string> = {
   low: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
 }
 
-// An AI claim must be auditable at a glance, so on a fully-shown card evidence
-// is ALWAYS visible (small muted print). Long lists truncate with a plain-text
-// "…等 n 筆" note — a stated cap, not a collapsed section: the full data lives
-// in the left panel anyway.
+// An AI claim must be auditable at a glance. When the alert cites source keys,
+// the navigable citation pill next to 依據 IS the audit trail (click → left
+// panel resource) and the plain-text evidence list is redundant noise — so it
+// only renders as a FALLBACK for alerts with no citable sources (不遮蔽: the
+// trail never disappears entirely). Long fallback lists truncate with a
+// plain-text "…等 n 筆" note.
 const EVIDENCE_VISIBLE_MAX = 5
 
 // Density tiers keep a large alert set from burying the sections below it:
@@ -51,7 +53,7 @@ function EvidenceList({
         {label}
         {sourcesEl}
       </p>
-      {evidence.length > 0 ? (
+      {!sourcesEl && evidence.length > 0 ? (
         <ul className="mt-0.5 ml-1 space-y-0.5">
           {visible.map((e, i) => (
             <li key={i} className="text-xs text-muted-foreground/80 break-words">• {e}</li>
@@ -98,7 +100,8 @@ export function SafetyAlertCard({
   if (density === "compact") {
     // A collapsible row — the whole header toggles detail + evidence. The
     // recommendation (the actionable line) stays visible even when collapsed.
-    const hasMore = !!alert.detail || (alert.evidence?.length ?? 0) > 0
+    const hasMore =
+      !!alert.detail || (alert.evidence?.length ?? 0) > 0 || (alert.sources?.length ?? 0) > 0
     return (
       <div className="border-b border-border last:border-b-0 py-2">
         <button

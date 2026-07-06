@@ -307,7 +307,7 @@ export default function MedicalSummaryFeature() {
                   updating={isGenerating}
                 />
               ) : isGenerating ? (
-                <div className="rounded-xl border border-border border-l-4 border-l-violet-500 bg-card p-4">
+                <div className="rounded-xl border border-border bg-card p-4">
                   <h3 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">
                     {ms.narrativeTitle}
                   </h3>
