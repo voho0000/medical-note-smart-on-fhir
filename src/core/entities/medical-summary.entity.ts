@@ -93,8 +93,11 @@ export const MedicalSummaryAiResultSchema = z.object({
   // loses its conclusion, so only truly degenerate outputs should hit it.
   summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
-  decisions: z.array(SummaryDecisionSchema).default([]).transform((a) => a.slice(0, 10)),
-  timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 16)),
+  decisions: z.array(SummaryDecisionSchema).default([]).transform((a) => a.slice(0, 16)),
+  // Patient complexity varies too much for an editorial cap — the prompt asks
+  // the model to scale its picks to the case and the UI folds/scrolls any
+  // count, so 50 exists purely to stop a degenerate (looping) reply.
+  timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
 })
 export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema>
 

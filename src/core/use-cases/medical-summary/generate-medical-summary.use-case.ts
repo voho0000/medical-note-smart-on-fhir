@@ -336,7 +336,9 @@ const SHARED_RULES =
   'Do NOT wrap key phrases in 「」 quotes as a substitute for highlighting — split them out instead. ' +
   'Example: instead of ONE segment {"text": "近期診斷為「肺炎」伴隨咳嗽。"}, output THREE: ' +
   '[{"text": "近期診斷為", "emphasis": false, "sources": []}, {"text": "肺炎", "emphasis": true, "sources": ["E3"]}, {"text": "伴隨咳嗽。", "emphasis": false, "sources": []}]. ' +
-  'For the timeline, pick the 5–12 most significant events by catalog key; the app supplies date and hospital, you supply only the label. ' +
+  'For the timeline, pick the clinically significant events by catalog key, scaled to the case: ' +
+  'a simple patient may need only ~5, a complex multi-year multi-hospital course may justify 20+. ' +
+  'Curate — the full record list is already visible elsewhere; the app supplies date and hospital, you supply only the label. ' +
   'For "problems", infer the patient\'s ACTIVE problem list by SYNTHESISING across ALL data — not just claim diagnosis codes: ' +
   'coded diagnoses, ABNORMAL LAB patterns (e.g. repeatedly low Hb → 貧血), DISPENSED MEDICATIONS that imply a condition ' +
   '(e.g. glaucoma eye drops → 青光眼, BPH drugs like Harnalidge/Detrusitol → 良性攝護腺增生), care plans, and discharge summaries. ' +

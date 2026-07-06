@@ -40,7 +40,9 @@ export type SafetyAlertInput = z.infer<typeof SafetyAlertSchema>
 
 export const SafetyScanResultSchema = z.object({
   scannedCount: z.number().int().nonnegative().optional().default(0),
-  alerts: z.array(SafetyAlertSchema).default([]).transform((a) => a.slice(0, 20)),
+  // Runaway guard only — the prompt has no alert quota (an empty array is a
+  // valid result), so the clamp sits well above any genuine scan.
+  alerts: z.array(SafetyAlertSchema).default([]).transform((a) => a.slice(0, 30)),
 })
 export type SafetyScanResultInput = z.infer<typeof SafetyScanResultSchema>
 
