@@ -12,10 +12,10 @@ const RightPanelContext = createContext<RightPanelContextType | undefined>(undef
 
 // `defaultTab` is optional now — promoted to app-level provider in v0.4.0
 // so the header can navigate to Settings sub-tabs. AppProviders doesn't
-// know the feature registry; fall back to 'medical-chat' (the first
-// feature) when no explicit default is passed. RightPanelLayout can
-// still override if its registry-derived default ever differs.
-export function RightPanelProvider({ children, defaultTab = 'medical-chat' }: { children: ReactNode; defaultTab?: string }) {
+// know the feature registry; the default is 'medical-summary' (open the
+// patient → see the AI briefing). If that feature is unplugged in the
+// registry, RightPanelLayout falls back to the first enabled feature.
+export function RightPanelProvider({ children, defaultTab = 'medical-summary' }: { children: ReactNode; defaultTab?: string }) {
   const [activeTab, setActiveTabState] = useState(defaultTab)
   const [settingsTab, setSettingsTab] = useState('ai')
 

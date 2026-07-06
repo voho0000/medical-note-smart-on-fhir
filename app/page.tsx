@@ -19,6 +19,7 @@ import { RightPanelFeature } from "@/src/layouts/RightPanelLayout"
 import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layout.hook"
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
+import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useEffect, useState } from "react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown } from "lucide-react"
@@ -39,10 +40,24 @@ function PageContent() {
   // Below 768 = phone tab switcher. Keep this in sync with the md: classes below.
   const { mobileView, setMobileView, isLargeScreen } = useResponsiveView<'left' | 'right'>('left', 768)
 
+  const navPending = useResourceNavigationStore((s) => s.pending)
+  const navSeq = useResourceNavigationStore((s) => s.seq)
+
   // Panel collapse (lg only): collapse either side to give the other full width.
   // null = normal resizable split. Kept in-session (not persisted) to avoid the
   // SSR/localStorage hydration mismatch class of bugs.
   const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
+
+  // Resource navigation (cited source clicked in the Medical Summary tab): the
+  // target lives in the LEFT panel, so make sure it's visible BEFORE its
+  // tab/anchor react to the same request — flip the phone single-column view to
+  // 臨床摘要, and on desktop un-collapse the left panel if it was hidden (the
+  // anchor can't scroll into a display:none column).
+  useEffect(() => {
+    if (!navPending) return
+    setMobileView('left')
+    setCollapsed((c) => (c === 'left' ? null : c))
+  }, [navPending, navSeq, setMobileView])
 
   // Header collapse: tuck the title/toolbar away into a slim strip so the
   // panels get the full viewport height. In-session only (same hydration

@@ -25,6 +25,10 @@ export const SafetyAlertSchema = z.object({
   title: z.string().min(1).max(80),
   detail: z.string().min(1).max(400),
   evidence: z.array(z.string()).max(10).optional().default([]),
+  // Source-list keys (e.g. "L3", "M2") for the bundle records this alert is
+  // based on — resolved app-side to clickable citations that navigate the left
+  // panel to the raw FHIR resource (parity with the summary/decision cards).
+  sources: z.array(z.string()).max(10).optional().default([]),
   category: z.string().optional(),
   recommendation: z.string().max(400).optional(),
 })
@@ -50,4 +54,15 @@ export interface SafetyScanResult {
 export function normaliseCategory(raw?: string): SafetyCategory {
   const c = (raw ?? '').toLowerCase().trim()
   return (SAFETY_CATEGORIES as readonly string[]).includes(c) ? (c as SafetyCategory) : 'other'
+}
+
+/** Sort rank so the UI can order high → medium → low deterministically,
+ *  independent of the order the model happened to emit. */
+export const SEVERITY_RANK: Record<SafetySeverity, number> = { high: 0, medium: 1, low: 2 }
+
+/** Count alerts by severity — drives the section-nav breakdown and tiering. */
+export function countBySeverity(alerts: SafetyAlert[]): Record<SafetySeverity, number> {
+  const counts: Record<SafetySeverity, number> = { high: 0, medium: 0, low: 0 }
+  for (const a of alerts) counts[a.severity] += 1
+  return counts
 }

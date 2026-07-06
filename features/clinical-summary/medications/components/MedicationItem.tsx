@@ -4,6 +4,7 @@
 import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
+import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import type { MedicationRow } from '../types'
 
 interface MedicationItemProps {
@@ -103,8 +104,15 @@ export function MedicationItem({
     )
   }
 
+  // Resource-navigation anchor — catalog cites MedicationRequest OR
+  // MedicationStatement, so this row answers to both.
+  const anchorRef = useResourceAnchor(
+    ['MedicationRequest', 'MedicationStatement'],
+    medication.id,
+  )
+
   return (
-    <div className="rounded-md border px-2.5 py-1 leading-tight">
+    <div ref={anchorRef} className="rounded-md border px-2.5 py-1 leading-tight">
       {/* ── Line 1 ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">

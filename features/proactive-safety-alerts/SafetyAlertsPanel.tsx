@@ -1,54 +1,55 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
-import { ShieldAlert, ScanSearch, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
+import { useMemo, type ReactNode } from "react"
+import { CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
-import { useSafetyAlerts } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
+import { SEVERITY_RANK, type SafetyScanResult } from "@/src/core/entities/safety-alert.entity"
 import { SafetyAlertCard } from "./components/SafetyAlertCard"
-import { SafetyModelPicker } from "./components/SafetyModelPicker"
 
-// Locked sub-tab inside Clinical Insights: pure-AI scan → fixed structured cards.
-// No editable prompt (it lives in the core use-case) — fixed output + fixed UI.
-// The MODEL, however, is user-selectable (independent of the chat model).
-export function SafetyAlertsPanel() {
+// Presentational safety-alerts section for the Medical Summary tab. Scan
+// state + controls (model / auto / trigger) are owned by the parent so the
+// whole tab has ONE set of AI controls — this component only renders the
+// section title, scan summary and the tiered alert cards.
+interface SafetyAlertsPanelProps {
+  result: SafetyScanResult | undefined
+  isScanning: boolean
+  error: string | null
+  hasPatient: boolean
+  /** Renders an alert's cited source keys as a navigable citation (owned by
+   *  the parent, which holds the catalog resolver + navigation). */
+  renderSources?: (keys: string[]) => ReactNode
+  /** Retries ONLY the safety scan (the summary call may have succeeded). */
+  onRetry?: () => void
+  retryLabel?: string
+}
+
+export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, renderSources, onRetry, retryLabel }: SafetyAlertsPanelProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
   // Patient audience gets the friendlier "健康提醒" wording; clinicians keep the
   // clinical "安全警示" labels. Patient keys override the base set.
   const safety = t.safetyAlerts
   const sa = audience === 'patient' ? { ...safety, ...safety.patient } : safety
-  const { result, isScanning, error, hasPatient, autoScan, setAutoScan, model, setModel, scan } = useSafetyAlerts()
+
+  // Severity-sorted tiers: high stays a full card, medium collapses to a
+  // compact expandable row, and the (often long) low tier folds entirely
+  // behind a counted toggle so a big scan doesn't bury the sections below.
+  const { high, medium, low } = useMemo(() => {
+    const sorted = [...(result?.alerts ?? [])].sort(
+      (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity],
+    )
+    return {
+      high: sorted.filter((a) => a.severity === "high"),
+      medium: sorted.filter((a) => a.severity === "medium"),
+      low: sorted.filter((a) => a.severity === "low"),
+    }
+  }, [result])
 
   return (
-    <div className="space-y-3 py-1">
-      {/* Header: title + proactive badge (left); model picker + auto-scan +
-          scan/re-scan (top-right). Wraps on narrow widths so nothing clips. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <ShieldAlert className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-        <h2 className="text-base font-semibold text-foreground">{sa.title}</h2>
-        <span className="rounded-md bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 text-[0.6875rem] font-medium text-blue-700 dark:text-blue-300">
-          {sa.proactiveBadge}
-        </span>
-        <div className="ml-auto flex items-center gap-3">
-          <SafetyModelPicker model={model} onSelectModel={setModel} />
-          <label
-            className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
-            title={sa.autoScanTooltip}
-          >
-            <Switch checked={autoScan} onCheckedChange={setAutoScan} className="scale-90" />
-            {sa.autoScan}
-          </label>
-          {hasPatient && !isScanning ? (
-            <Button onClick={() => scan()} size="sm" variant="outline" className="gap-1.5">
-              {result ? <RefreshCw className="h-4 w-4" /> : <ScanSearch className="h-4 w-4" />}
-              {result ? sa.rescan : sa.scanButton}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">{sa.title}</h3>
 
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
@@ -82,15 +83,35 @@ export function SafetyAlertsPanel() {
           {error ? (
             <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              {error === "PARSE_FAILED" ? sa.parseError : error}
+              <span className="min-w-0 flex-1">{error === "PARSE_FAILED" ? sa.parseError : error}</span>
+              {onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="flex shrink-0 items-center gap-1 rounded-md border border-red-200 dark:border-red-800 px-2 py-1 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  {retryLabel}
+                </button>
+              ) : null}
             </div>
           ) : null}
 
-          {/* Alert cards */}
+          {/* Tiered alert cards: high (full) → medium (compact) → low (folded).
+              Caps at 30rem then scrolls so a big scan never dominates the
+              column — the section title + summary line stay fixed above. */}
           {result && result.alerts.length > 0 ? (
-            <div className="rounded-xl border border-border bg-card px-4 py-1">
-              {result.alerts.map((alert) => (
-                <SafetyAlertCard key={alert.id} alert={alert} />
+            <div className="max-h-[30rem] overflow-y-auto scrollbar-thin-persistent rounded-xl border border-border bg-card px-4 py-1">
+              {high.map((alert) => (
+                <SafetyAlertCard key={alert.id} alert={alert} density="full" renderSources={renderSources} />
+              ))}
+              {medium.map((alert) => (
+                <SafetyAlertCard key={alert.id} alert={alert} density="compact" renderSources={renderSources} />
+              ))}
+              {/* Low-risk alerts are shown inline (no toggle) — the card's
+                  30rem height cap + scroll handles a long list. */}
+              {low.map((alert) => (
+                <SafetyAlertCard key={alert.id} alert={alert} density="compact" renderSources={renderSources} />
               ))}
             </div>
           ) : null}

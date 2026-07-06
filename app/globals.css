@@ -172,3 +172,18 @@
 .scrollbar-thin-persistent::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Resource navigation flash — applied by useResourceAnchor when a cited
+   source lands on its card in the left panel. Violet ring that fades. */
+@keyframes resource-flash-fade {
+  0%, 55% {
+    box-shadow: 0 0 0 2px rgb(167 139 250), 0 0 0 6px rgb(167 139 250 / 0.25);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent, 0 0 0 6px transparent;
+  }
+}
+.resource-flash {
+  animation: resource-flash-fade 2s ease-out forwards;
+  border-radius: 8px;
+}

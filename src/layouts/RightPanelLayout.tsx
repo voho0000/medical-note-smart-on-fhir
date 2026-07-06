@@ -3,6 +3,7 @@
 "use client"
 
 import { ComponentType, ReactNode } from "react"
+import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -14,14 +15,45 @@ import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 
 // ============================================================================
-// FEATURE COMPONENTS - Import your feature components here
+// FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
+// all seven landing in the initial bundle. forceMounted tabs still fetch their
+// chunk on panel mount (in parallel); the rest only when first opened.
 // ============================================================================
-import MedicalChatFeature from "@/features/medical-chat/Feature"
-import { DataSelectionFeature } from "@/features/data-selection/Feature"
-import ClinicalInsightsFeature from "@/features/clinical-insights/Feature"
-import IpsExportFeature from "@/features/ips-export/Feature"
-import MedicalCalculatorFeature from "@/features/medical-calculator/Feature"
-import SettingsFeature from "@/features/settings/Feature"
+const FeatureLoading = () => (
+  <div className="flex h-24 items-center justify-center text-sm text-muted-foreground animate-pulse">
+    …
+  </div>
+)
+// next/dynamic options are statically analyzed — they MUST be inline object
+// literals (a shared `const opts` breaks the build), hence the repetition.
+const MedicalSummaryFeature = dynamic(() => import("@/features/medical-summary/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
+const MedicalChatFeature = dynamic(() => import("@/features/medical-chat/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
+const DataSelectionFeature = dynamic(
+  () => import("@/features/data-selection/Feature").then((m) => m.DataSelectionFeature),
+  { ssr: false, loading: FeatureLoading },
+)
+const ClinicalInsightsFeature = dynamic(() => import("@/features/clinical-insights/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
+const IpsExportFeature = dynamic(() => import("@/features/ips-export/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
+const MedicalCalculatorFeature = dynamic(() => import("@/features/medical-calculator/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
+const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
 
 // ============================================================================
 // PROVIDERS - Import providers needed by features
@@ -36,6 +68,7 @@ import { ChatTemplatesProvider } from "@/src/application/providers/chat-template
 // Contributors: Add your feature component here
 // ============================================================================
 const FEATURE_COMPONENTS: Record<string, ComponentType> = {
+  'medical-summary': MedicalSummaryFeature,
   'medical-chat': MedicalChatFeature,
   'data-selection': DataSelectionFeature,
   'clinical-insights': ClinicalInsightsFeature,
@@ -138,6 +171,13 @@ function RightPanelContentInner() {
   const features = getEnabledRightPanelFeatures()
   const { activeTab, setActiveTab } = useRightPanel()
 
+  // Pluggability guard: the provider's default (or a stale selection) may
+  // point at a feature that has been unplugged in the registry — fall back
+  // to the first enabled feature instead of rendering an empty panel.
+  const effectiveTab = features.some(f => f.id === activeTab)
+    ? activeTab
+    : features[0]?.id ?? activeTab
+
   // Helper to get tab label (supports i18n)
   const getTabLabel = (feature: RightPanelFeatureConfig): string => {
     const key = feature.tabLabel as keyof typeof t.tabs
@@ -150,8 +190,8 @@ function RightPanelContentInner() {
   }
 
   return (
-    <Tabs 
-      value={activeTab} 
+    <Tabs
+      value={effectiveTab}
       onValueChange={setActiveTab}
       className="h-full flex flex-col"
     >
@@ -170,7 +210,11 @@ function RightPanelContentInner() {
               className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="truncate" title={getTabLabel(feature)}>{getTabLabel(feature)}</span>
+              {/* Below sm the 7-way grid leaves ~50px per tab — a 2-3 char
+                  truncated label is noise, so go icon-only (title + aria-label
+                  keep the name reachable). */}
+              <span className="truncate hidden sm:inline" title={getTabLabel(feature)}>{getTabLabel(feature)}</span>
+              <span className="sr-only sm:hidden">{getTabLabel(feature)}</span>
             </TabsTrigger>
           )
         })}

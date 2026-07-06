@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useAudience } from "@/src/application/providers/audience.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAllApiKeys, useModel } from "@/src/application/stores/ai-config.store"
@@ -40,13 +39,11 @@ import { useAutoGenerate } from './hooks/useAutoGenerate'
 import { InsightPanel } from './components/InsightPanel'
 import { ApiKeyWarning } from './components/ApiKeyWarning'
 import { TabManagementToolbar } from './components/TabManagementToolbar'
-import { SafetyAlertsPanel } from '@/features/proactive-safety-alerts/SafetyAlertsPanel'
-import { ShieldAlert, Maximize2, Minimize2 } from 'lucide-react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import type { ResponseEntry } from './types'
 
-// A fixed, LOCKED tab living alongside the user's editable insight tabs:
-// no prompt editing, fixed structured output + UI (its own scan + cards).
-const SAFETY_TAB_ID = '__safety-alerts__'
+// Safety Alerts moved to the Medical Summary tab (v0.25.0) — Clinical Insights
+// is a pure user-editable workbench again; no locked tab here anymore.
 
 // Cached insight responses share the bundle's 12h lifecycle (encrypted, session-
 // scoped) so a refresh reuses them but they never outlive the chart.
@@ -54,10 +51,6 @@ const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
 export default function ClinicalInsightsFeature() {
   const { t } = useLanguage()
-  const { audience } = useAudience()
-  // Patient audience sees the friendlier "健康提醒" labels for the locked tab.
-  const safetyTabLabel = audience === 'patient' ? t.safetyAlerts.patient.tabLabel : t.tabs.safetyAlerts
-  const safetyTabTitle = audience === 'patient' ? t.safetyAlerts.patient.title : t.safetyAlerts.title
   // Maximize the panel into a fullscreen overlay (same pattern as the chat panel).
   const [isExpanded, setIsExpanded] = useState(false)
   const { panels: configPanels, updatePanelAndSave } = useClinicalInsightsConfig()
@@ -87,7 +80,7 @@ export default function ClinicalInsightsFeature() {
   const resetForPatient = useInsightResponsesStore((s) => s.resetForPatient)
 
   // Single Source of Truth: All state owned by useInsightGeneration
-  const { runPanel, stopPanel, responses, panelStatus, setResponses } = useInsightGeneration({
+  const { runPanel, stopPanel, stopAll, responses, panelStatus, setResponses } = useInsightGeneration({
     panels,
     prompts,
     context,
@@ -117,8 +110,14 @@ export default function ClinicalInsightsFeature() {
   // every remount, otherwise output would be wiped each time the user leaves and
   // returns to this tab. The store tracks the owning patient id.
   useEffect(() => {
+    // Mirror resetForPatient's "genuinely changed" condition: when the new
+    // bundle replaces a previous owner, abort that owner's in-flight streams
+    // BEFORE clearing — otherwise they keep streaming the old patient's text
+    // into the new patient's panels (runPanel's owner guard is the backstop).
+    const owner = useInsightResponsesStore.getState().ownerPatientId
+    if (patientId && owner && owner !== patientId) stopAll()
     resetForPatient(patientId)
-  }, [patientId, resetForPatient])
+  }, [patientId, resetForPatient, stopAll])
 
   // Update context when it changes (without resetting responses)
   useEffect(() => {
@@ -203,13 +202,12 @@ export default function ClinicalInsightsFeature() {
     responses,
   })
 
-  // Safety Alerts is the pinned, locked FIRST tab and the default selection.
+  // Default to the first editable tab; fall back there when the active tab
+  // is deleted.
   useEffect(() => {
-    if (!activeTabId) {
-      setActiveTabId(SAFETY_TAB_ID)
-    } else if (activeTabId !== SAFETY_TAB_ID && !panels.find(p => p.id === activeTabId)) {
-      // active editable tab was deleted → fall back to Safety
-      setActiveTabId(SAFETY_TAB_ID)
+    if (panels.length === 0) return
+    if (!activeTabId || !panels.find(p => p.id === activeTabId)) {
+      setActiveTabId(panels[0].id)
     }
   }, [panels, activeTabId])
 
@@ -291,22 +289,11 @@ export default function ClinicalInsightsFeature() {
       <ScrollArea className={isExpanded ? "mx-auto h-full w-full max-w-5xl" : "h-full pr-3"}>
       <div className="space-y-4">
         {!canGenerate && <ApiKeyWarning />}
-        {/* Safety Alerts is always present (locked first tab), so the tab block
-            always renders — even if the user deletes all editable insight tabs. */}
-        {(
+        {panelEntries.length > 0 && (
           <>
             <Tabs value={activeTabId} onValueChange={setActiveTabId} className="space-y-4">
             <div className="flex items-center gap-2">
-              <TabsList className="grid flex-1 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length + 1}, minmax(0, 1fr))` }}>
-                {/* Locked safety-alerts tab — pinned FIRST, fixed prompt + fixed UI */}
-                <TabsTrigger
-                  value={SAFETY_TAB_ID}
-                  title={safetyTabTitle}
-                  className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.insight} min-w-0 flex items-center justify-center gap-1`}
-                >
-                  <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{safetyTabLabel}</span>
-                </TabsTrigger>
+              <TabsList className="grid flex-1 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md" style={{ gridTemplateColumns: `repeat(${panelEntries.length}, minmax(0, 1fr))` }}>
                 {panelEntries.map((panel) => (
                   <TabsTrigger
                     key={panel.id}
@@ -317,15 +304,13 @@ export default function ClinicalInsightsFeature() {
                   </TabsTrigger>
                 ))}
               </TabsList>
-              {activeTabId !== SAFETY_TAB_ID && (
-                <TabManagementToolbar
-                  currentTabId={activeTabId}
-                  onTabChange={setActiveTabId}
-                  currentPrompt={prompts[activeTabId] ?? panels.find(p => p.id === activeTabId)?.prompt ?? ''}
-                  currentTitle={panels.find(p => p.id === activeTabId)?.title ?? ''}
-                  onPromptChange={(prompt) => handlePromptChange(activeTabId, prompt)}
-                />
-              )}
+              <TabManagementToolbar
+                currentTabId={activeTabId}
+                onTabChange={setActiveTabId}
+                currentPrompt={prompts[activeTabId] ?? panels.find(p => p.id === activeTabId)?.prompt ?? ''}
+                currentTitle={panels.find(p => p.id === activeTabId)?.title ?? ''}
+                onPromptChange={(prompt) => handlePromptChange(activeTabId, prompt)}
+              />
               {/* Maximize — pop the insights panel into a fullscreen overlay. */}
               <button
                 type="button"
@@ -337,9 +322,6 @@ export default function ClinicalInsightsFeature() {
                 <Maximize2 className="h-4 w-4" />
               </button>
             </div>
-            <TabsContent value={SAFETY_TAB_ID} className="mt-0">
-              <SafetyAlertsPanel />
-            </TabsContent>
             {panelEntries.map((panel) => (
               <TabsContent key={panel.id} value={panel.id} className="mt-0">
                 <InsightPanel {...panel.props} />

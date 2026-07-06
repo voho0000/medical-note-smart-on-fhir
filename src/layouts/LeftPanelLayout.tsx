@@ -2,11 +2,16 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
+import { useEffect, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
+import {
+  useResourceNavigationStore,
+  leftTabForResourceType,
+} from "@/src/application/stores/resource-navigation.store"
 import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 
 // ============================================================================
@@ -43,6 +48,22 @@ export default function ClinicalSummaryFeature() {
   const tabs = getEnabledTabs()
   const defaultTab = tabs[0]?.id || 'patient'
 
+  // Controlled (was uncontrolled defaultValue) so resource navigation — a
+  // cited source clicked in the Medical Summary tab — can switch to the tab
+  // owning that resource type before its anchor scroll-flashes the card.
+  const [activeTab, setActiveTab] = useState(defaultTab)
+  const pending = useResourceNavigationStore((s) => s.pending)
+  const seq = useResourceNavigationStore((s) => s.seq)
+  useEffect(() => {
+    if (!pending) return
+    const target = leftTabForResourceType(pending.resourceType)
+    if (target && tabs.some((tab) => tab.id === target)) {
+      setActiveTab(target)
+      clearDetail() // same contract as a manual tab switch
+    }
+    // seq re-fires this even when navigating to the same target twice.
+  }, [pending, seq, tabs, clearDetail])
+
   // Helper to get tab label (supports i18n)
   const getTabLabel = (tab: TabConfig): string => {
     const key = tab.labelKey as keyof typeof t.tabs
@@ -57,11 +78,14 @@ export default function ClinicalSummaryFeature() {
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
       <Tabs
-        defaultValue={defaultTab}
+        value={activeTab}
         // Switching the left clinical tab dismisses any right-pane detail
         // (向右展開) opened from the previous tab — the detail is tied to that
         // tab's content, so navigating away retracts it back to the AI panel.
-        onValueChange={() => clearDetail()}
+        onValueChange={(value) => {
+          setActiveTab(value)
+          clearDetail()
+        }}
         className="flex h-full flex-col"
       >
         {/* Grid columns are driven by the registered tab count so adding /

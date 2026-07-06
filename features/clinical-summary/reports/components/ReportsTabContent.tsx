@@ -10,7 +10,7 @@
 // internally. Outside fullscreen mode we cap it at ~60vh so a single huge
 // tab doesn't push everything below the fold; in fullscreen the cap is
 // lifted via `fullHeight`.
-import { memo, useState } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { TabsContent } from "@/components/ui/tabs"
 import type { Row } from '../types'
@@ -36,6 +36,12 @@ interface ReportsTabContentProps {
   searchActive?: boolean
   /** Active search query — forwarded to ReportRow to highlight title matches. */
   query?: string
+  /** Resource navigation: Row.id to scroll to. Virtualizer-driven (off-screen
+   *  rows aren't mounted, so a per-row anchor can't work here); the row is
+   *  also auto-expanded and flashed. */
+  scrollToId?: string | null
+  /** Bump to re-trigger the scroll for the same id. */
+  scrollNonce?: number
 }
 
 // Stable fallback so referential equality holds when no expand list is
@@ -48,8 +54,14 @@ const EMPTY_OPEN_IDS: string[] = []
 // any drift as soon as rows are in the DOM.
 const ESTIMATED_ROW_HEIGHT = 72
 
-function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, defaultOpenIds, searchActive, query }: ReportsTabContentProps) {
-  const openIds = defaultOpenIds ?? EMPTY_OPEN_IDS
+function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce }: ReportsTabContentProps) {
+  // The navigation target opens like a search hit — the user asked to SEE
+  // this report, not to find its collapsed shell.
+  const openIds = useMemo(() => {
+    const base = defaultOpenIds ?? EMPTY_OPEN_IDS
+    if (!scrollToId) return base
+    return base.includes(scrollToId) ? base : [...base, scrollToId]
+  }, [defaultOpenIds, scrollToId])
   // Callback-ref-into-state pattern: when the scroll div attaches, React
   // calls setScrollEl with the element. That triggers a re-render whose
   // useVirtualizer call reads the now-non-null element and measures
@@ -74,6 +86,25 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, de
 
   const items = virtualizer.getVirtualItems()
   const totalSize = virtualizer.getTotalSize()
+
+  // Resource navigation: drive the virtualizer to the target row, then flash
+  // it once mounted. setTimeout (not rAF — frozen in background tabs) gives
+  // the virtualizer a beat to mount the scrolled-to row.
+  useEffect(() => {
+    if (!scrollToId || !scrollEl) return
+    const index = rows.findIndex((r) => r.id === scrollToId)
+    if (index < 0) return
+    virtualizer.scrollToIndex(index, { align: 'center' })
+    const timer = setTimeout(() => {
+      const el = scrollEl.querySelector(`[data-row-id="${CSS.escape(scrollToId)}"]`)
+      if (el) {
+        el.classList.add('resource-flash')
+        setTimeout(() => el.classList.remove('resource-flash'), 2000)
+      }
+    }, 200)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- virtualizer is a fresh object each render
+  }, [scrollToId, scrollNonce, scrollEl, rows])
 
   return (
     <TabsContent
@@ -124,6 +155,7 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, de
                   // honouring accordion expansion / wrapping.
                   ref={virtualizer.measureElement}
                   data-index={virtualRow.index}
+                  data-row-id={row.id}
                   style={{
                     position: 'absolute',
                     top: 0,

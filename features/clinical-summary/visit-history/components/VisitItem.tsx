@@ -10,6 +10,7 @@ import type { VisitRecord } from "../hooks/useVisitHistory"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
+import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 import { cn } from "@/src/shared/utils/cn.utils"
 
@@ -85,8 +86,13 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
     })
   }
 
+  // Resource-navigation anchor: a cited Encounter in the Medical Summary tab
+  // scroll-flashes this card.
+  const anchorRef = useResourceAnchor('Encounter', visit.id)
+
   return (
     <div
+      ref={anchorRef}
       className={cn(
         "rounded-lg border transition-colors",
         // 向右展開 active: tint the whole row so it's clear which visit the

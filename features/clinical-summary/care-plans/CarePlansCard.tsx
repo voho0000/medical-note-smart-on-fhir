@@ -15,8 +15,20 @@ import { Building2 } from 'lucide-react'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
+import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import { getCodeableConceptText, formatDate } from "@/src/shared/utils/fhir-helpers"
 import type { CarePlanEntity } from "@/src/core/entities/clinical-data.entity"
+
+interface CarePlanItem {
+  id: string
+  title: string
+  description: string
+  institution: string
+  status?: string
+  statusText: string
+  range: string
+  activities: string[]
+}
 
 function getCarePlanTitle(cp: CarePlanEntity): string {
   if (cp.title && cp.title.trim()) return cp.title.trim()
@@ -111,38 +123,47 @@ export function CarePlansCard() {
     >
       <ul className="space-y-3">
         {items.map((it) => (
-          <li key={it.id} className="rounded-md border border-border/60 p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{it.title}</span>
-              <span
-                className={
-                  "shrink-0 rounded-full px-2 py-0.5 text-xs " +
-                  (STATUS_CHIP[it.status || ''] || "bg-muted text-muted-foreground")
-                }
-              >
-                {it.statusText}
-              </span>
-            </div>
-            {it.range && <div className="mt-0.5 text-xs text-muted-foreground">{it.range}</div>}
-            {it.institution && (
-              <div className="mt-1 flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
-                <Building2 className="h-3 w-3 shrink-0" />
-                <span>{it.institution}</span>
-              </div>
-            )}
-            {it.description && (
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{it.description}</p>
-            )}
-            {it.activities.length > 0 && (
-              <ul className="mt-1.5 space-y-0.5 border-l-2 border-border/50 pl-3">
-                {it.activities.map((a, i) => (
-                  <li key={i} className="text-xs text-muted-foreground">{a}</li>
-                ))}
-              </ul>
-            )}
-          </li>
+          <CarePlanListItem key={it.id} it={it} />
         ))}
       </ul>
     </FeatureCard>
+  )
+}
+
+// One care plan — extracted so it can hold a resource-navigation anchor: a
+// cited "依據:照護計畫" in the Medical Summary scroll-flashes this row.
+function CarePlanListItem({ it }: { it: CarePlanItem }) {
+  const anchorRef = useResourceAnchor<HTMLLIElement>('CarePlan', it.id)
+  return (
+    <li ref={anchorRef} className="rounded-md border border-border/60 p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{it.title}</span>
+        <span
+          className={
+            "shrink-0 rounded-full px-2 py-0.5 text-xs " +
+            (STATUS_CHIP[it.status || ''] || "bg-muted text-muted-foreground")
+          }
+        >
+          {it.statusText}
+        </span>
+      </div>
+      {it.range && <div className="mt-0.5 text-xs text-muted-foreground">{it.range}</div>}
+      {it.institution && (
+        <div className="mt-1 flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
+          <Building2 className="h-3 w-3 shrink-0" />
+          <span>{it.institution}</span>
+        </div>
+      )}
+      {it.description && (
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{it.description}</p>
+      )}
+      {it.activities.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5 border-l-2 border-border/50 pl-3">
+          {it.activities.map((a, i) => (
+            <li key={i} className="text-xs text-muted-foreground">{a}</li>
+          ))}
+        </ul>
+      )}
+    </li>
   )
 }

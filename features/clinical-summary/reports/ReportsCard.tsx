@@ -1,7 +1,7 @@
 // Refactored ReportsCard Component
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button"
 import { Menu, Maximize2, Minimize2, Search, X, Loader2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { dateSearchTokens } from "@/src/shared/utils/date.utils"
 import { useReportsData } from './hooks/useReportsData'
@@ -110,6 +111,13 @@ export function ReportsCard() {
   }, [seenIds, procedureObsIds])
   
   const orphanRows = useOrphanObservations(observations, allSeenIds)
+
+  // ── Resource navigation (cited DiagnosticReport/Observation in the
+  // Medical Summary tab) ────────────────────────────────────────────────
+  // Rows are virtualised AND live behind sub-tabs, so this card claims the
+  // navigation itself: pick the sub-tab containing the row, then hand the
+  // row id to ReportsTabContent which scrolls/expands/flashes it.
+  const [navTarget, setNavTarget] = useState<{ id: string; tab: string; nonce: number } | null>(null)
 
   const rows: Row[] = useMemo(() => {
     const all: Row[] = [...reportRows, ...orphanRows, ...procedureRows] as Row[]
@@ -232,6 +240,31 @@ export function ReportsCard() {
       config.rows.length > 0
     )
   }, [groupedRows, t])
+
+  // Claim DiagnosticReport / Observation navigations. Row.id is the DR id;
+  // orphan-observation rows carry the obs id, so match either directly or
+  // via a member observation. Runs before the early returns below so hook
+  // order stays stable across loading states.
+  const navPending = useResourceNavigationStore((s) => s.pending)
+  const navSeq = useResourceNavigationStore((s) => s.seq)
+  const consumeNav = useResourceNavigationStore((s) => s.consume)
+  useEffect(() => {
+    if (!navPending) return
+    if (!['DiagnosticReport', 'Observation'].includes(navPending.resourceType)) return
+    const hit = rows.find(
+      (r) => r.id === navPending.resourceId || r.obs.some((o) => o?.id === navPending.resourceId),
+    )
+    if (!hit) return // unclaimed → the generic fallback toast explains
+    const tab = tabConfigs.find((c) => !c.isCumulative && c.rows.some((r) => r.id === hit.id))
+    if (!tab) return
+    consumeNav()
+    setSearchQuery('')
+    // Direct state set (not handleTabChange) — its rAF phase never fires in
+    // backgrounded tabs, and there's no click to give spinner feedback for.
+    setActiveTab(tab.value)
+    setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
+    setNavTarget({ id: hit.id, tab: tab.value, nonce: navSeq })
+  }, [navPending, navSeq, rows, tabConfigs, consumeNav])
 
   if (isLoading) {
     return (
@@ -399,6 +432,8 @@ export function ReportsCard() {
             defaultOpenIds={expandedRowIds}
             searchActive={!!searchQuery.trim()}
             query={searchQuery}
+            scrollToId={navTarget?.tab === tab.value ? navTarget.id : null}
+            scrollNonce={navTarget?.nonce}
           />
         )
       })}

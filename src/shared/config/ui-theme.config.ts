@@ -103,6 +103,24 @@ export const UI_COLORS = {
     },
   },
   
+  // Medical Summary / 醫療摘要 - Teal (distinct from insight violet)
+  summary: {
+    light: {
+      bg: 'bg-teal-100',
+      text: 'text-teal-700',
+      border: 'border-l-teal-500',
+      activeBg: 'bg-teal-100',
+      activeText: 'text-teal-700',
+    },
+    dark: {
+      bg: 'dark:bg-teal-900/50',
+      text: 'dark:text-teal-300',
+      border: 'border-l-teal-500',
+      activeBg: 'dark:bg-teal-900/50',
+      activeText: 'dark:text-teal-300',
+    },
+  },
+
   // Settings / 設定 - Slate/Gray
   settings: {
     light: {
@@ -133,6 +151,11 @@ export interface TabThemeConfig {
 }
 
 export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
+  'medical-summary': {
+    id: 'medical-summary',
+    icon: ClipboardList,
+    colorKey: 'summary',
+  },
   'medical-chat': {
     id: 'medical-chat',
     icon: MessageSquare,
@@ -228,6 +251,7 @@ export const FEATURE_CARD_THEMES: Record<string, { icon: LucideIcon; colorKey: k
  * Dark mode: subtle backgrounds with ring borders
  */
 export const TAB_ACTIVE_CLASSES = {
+  summary: 'data-[state=active]:bg-teal-100 data-[state=active]:text-teal-700 dark:data-[state=active]:bg-teal-500/10 dark:data-[state=active]:text-teal-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-teal-500/30',
   chat: 'data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 dark:data-[state=active]:bg-blue-500/10 dark:data-[state=active]:text-blue-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-blue-500/30',
   insight: 'data-[state=active]:bg-violet-100 data-[state=active]:text-violet-700 dark:data-[state=active]:bg-violet-500/10 dark:data-[state=active]:text-violet-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-violet-500/30',
   selection: 'data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700 dark:data-[state=active]:bg-amber-500/10 dark:data-[state=active]:text-amber-400 dark:data-[state=active]:ring-1 dark:data-[state=active]:ring-amber-500/30',
@@ -239,6 +263,7 @@ export const TAB_ACTIVE_CLASSES = {
  * Card left border classes - use these directly in Card components
  */
 export const CARD_BORDER_CLASSES = {
+  summary: 'border-l-4 border-l-teal-500',
   chat: 'border-l-4 border-l-blue-500',
   insight: 'border-l-4 border-l-violet-500',
   selection: 'border-l-4 border-l-amber-500',
@@ -250,6 +275,7 @@ export const CARD_BORDER_CLASSES = {
  * Badge classes for different panel types
  */
 export const BADGE_CLASSES = {
+  summary: 'bg-teal-200 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400 border-0',
   chat: 'bg-blue-200 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 border-0',
   insight: 'bg-violet-200 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400 border-0',
   selection: 'bg-amber-200 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400 border-0',

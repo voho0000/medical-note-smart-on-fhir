@@ -5,7 +5,8 @@
 //
 // Step list is built dynamically and frozen when the flow opens:
 //   • welcome + audience  — always (the audience choice shapes the whole UI)
-//   • autoScan            — always (the main new question)
+//   • autoScan            — always; ONE choice that drives BOTH auto-AI prefs
+//                           (medical-summary auto-generate + safety auto-scan)
 //   • signIn              — only when not signed in
 // Shown once per browser, gated on the versioned `medical-note-onboarding-v1` flag.
 "use client"
@@ -13,12 +14,13 @@
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Stethoscope, User, ShieldCheck, Sparkles, LogIn, Lock } from 'lucide-react'
+import { Stethoscope, User, Sparkles, LogIn, Lock } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useSafetyPrefsStore } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
+import { useSummaryPrefsStore } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { useOnboarding } from '@/src/application/hooks/onboarding/use-onboarding.hook'
 import { AuthDialog } from '@/features/auth/components/AuthDialog'
 
@@ -31,8 +33,18 @@ export function FirstRunOnboardingDialog() {
   const { completed, markComplete } = useOnboarding()
   const { setAudience } = useAudience()
   const { user } = useAuth()
+  // One onboarding choice drives both auto-AI prefs; each remains individually
+  // toggleable later from the Medical Summary tab's switches.
   const autoScan = useSafetyPrefsStore((s) => s.autoScan)
   const setAutoScan = useSafetyPrefsStore((s) => s.setAutoScan)
+  const autoSummary = useSummaryPrefsStore((s) => s.autoGenerate)
+  const setAutoSummary = useSummaryPrefsStore((s) => s.setAutoGenerate)
+  const autoAiOn = autoScan && autoSummary
+  const autoAiOff = !autoScan && !autoSummary
+  const setAutoAi = (value: boolean) => {
+    setAutoScan(value)
+    setAutoSummary(value)
+  }
 
   const dataLoaded = !!patient && !patientLoading && !patientError
   const open = dataLoaded && !completed
@@ -144,18 +156,22 @@ export function FirstRunOnboardingDialog() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-amber-600" />
+                  <Sparkles className="h-5 w-5 text-teal-600" />
                   {ob.autoScanTitle}
                 </DialogTitle>
                 <DialogDescription>{ob.autoScanBody}</DialogDescription>
               </DialogHeader>
+              <p className="flex items-start gap-1.5 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                <span>{ob.autoScanPrivacyNote}</span>
+              </p>
               <div className="grid gap-3 pt-1 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setAutoScan(true)}
-                  aria-pressed={autoScan}
+                  onClick={() => setAutoAi(true)}
+                  aria-pressed={autoAiOn}
                   className={`flex flex-col items-start gap-1.5 rounded-lg border-2 p-4 text-left transition-colors focus:outline-none ${
-                    autoScan ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                    autoAiOn ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
                   }`}
                 >
                   <div className="font-semibold">{ob.autoScanOnLabel}</div>
@@ -163,10 +179,10 @@ export function FirstRunOnboardingDialog() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAutoScan(false)}
-                  aria-pressed={!autoScan}
+                  onClick={() => setAutoAi(false)}
+                  aria-pressed={autoAiOff}
                   className={`flex flex-col items-start gap-1.5 rounded-lg border-2 p-4 text-left transition-colors focus:outline-none ${
-                    !autoScan ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                    autoAiOff ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
                   }`}
                 >
                   <div className="font-semibold">{ob.autoScanOffLabel}</div>

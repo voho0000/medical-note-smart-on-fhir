@@ -1,4 +1,7 @@
 // Diagnosis Item Component
+"use client"
+
+import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
 import type { DiagnosisRow } from '../types'
 import { StatusBadge } from './StatusBadge'
 
@@ -7,8 +10,12 @@ interface DiagnosisItemProps {
 }
 
 export function DiagnosisItem({ diagnosis }: DiagnosisItemProps) {
+  // Resource-navigation anchor: a cited Condition in the Medical Summary tab
+  // scroll-flashes this row.
+  const anchorRef = useResourceAnchor<HTMLLIElement>('Condition', diagnosis.id)
+
   return (
-    <li className="rounded-md border p-3 hover:bg-muted/30 transition-colors">
+    <li ref={anchorRef} className="rounded-md border p-3 hover:bg-muted/30 transition-colors">
       <div className="flex items-baseline justify-between gap-2">
         <div className="font-medium text-foreground">{diagnosis.title}</div>
         {diagnosis.when && (
@@ -24,8 +31,8 @@ export function DiagnosisItem({ diagnosis }: DiagnosisItemProps) {
           <StatusBadge status={diagnosis.verification} type="verification" />
         )}
         {diagnosis.categories?.map((c, i) => (
-          <span 
-            key={i} 
+          <span
+            key={i}
             className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 ring-1 ring-gray-200"
           >
             {c}

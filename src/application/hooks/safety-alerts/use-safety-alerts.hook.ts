@@ -9,6 +9,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
+import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -30,7 +31,12 @@ import {
   generateSafetyAlertsUseCase,
   SAFETY_ALERTS_MODEL_ID,
 } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
-import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
+import {
+  getSourceCatalog,
+  type SummaryCatalogInput,
+} from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
+import type { SafetyScanResult, SafetySeverity } from '@/src/core/entities/safety-alert.entity'
 
 // Persist a completed scan per-patient so a page reload reuses it instead of
 // re-billing the model. Same lifecycle as the bundle: encrypted with the tab
@@ -70,7 +76,10 @@ interface SafetyPrefsStore {
 export const useSafetyPrefsStore = create<SafetyPrefsStore>()(
   persist(
     (set) => ({
-      autoScan: false,
+      // Default ON to match medical-summary autoGenerate: the Medical Summary
+      // tab shows ONE "自動產生" toggle governing both, so their defaults must
+      // agree or the toggle would read ON while the scan silently stays manual.
+      autoScan: true,
       setAutoScan: (value) => set({ autoScan: value }),
       modelId: SAFETY_ALERTS_MODEL_ID,
       setModelId: (id) => set({ modelId: id }),
@@ -97,11 +106,15 @@ export interface UseSafetyAlertsReturn {
   model: string
   setModel: (id: string) => void
   scan: () => Promise<void>
+  /** Resolve a source-list key an alert cited (e.g. "L3") to its bundle
+   *  record, for click-to-navigate citations. undefined = unknown/hallucinated. */
+  resolveSource: (key: string) => SummarySourceCatalogEntry | undefined
 }
 
 export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const { patient } = usePatient()
   const { getFullClinicalContext } = useClinicalContext('insights')
+  const clinicalData = useClinicalData() as unknown as SummaryCatalogInput | null
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
   // Auth must be resolved before the proxy call carries a Firebase token —
@@ -128,6 +141,22 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Deterministic citable-record catalog (same builder the summary uses). Fed
+  // to the prompt so alerts can cite keys, and kept as a lookup so the UI can
+  // resolve those keys into click-to-navigate citations.
+  const catalog = useMemo(
+    () => (clinicalData ? getSourceCatalog(clinicalData) : []),
+    [clinicalData],
+  )
+  const catalogByKey = useMemo(
+    () => new Map(catalog.map((c) => [c.key, c])),
+    [catalog],
+  )
+  const resolveSource = useCallback(
+    (key: string) => catalogByKey.get(key.trim()),
+    [catalogByKey],
+  )
+
   // Effective model: test seam → user pref (key-gated → free base) → default.
   const resolvedModelId = useMemo(() => {
     if (typeof window !== 'undefined') {
@@ -146,8 +175,14 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     setError(null)
   }, [scanKey])
 
+  // Bumped by setModel to invalidate an in-flight scan: its stream came from
+  // the OLD model, so its output must be neither shown nor cached as the new
+  // model's result (setModel clears the cache precisely to force a re-scan).
+  const scanGenRef = useRef(0)
+
   const scan = useCallback(async () => {
     if (!scanKey || isScanning) return
+    const gen = scanGenRef.current
     setIsScanning(true)
     setError(null)
     try {
@@ -156,6 +191,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
         clinicalContext,
         locale: locale === 'zh-TW' ? 'zh-TW' : 'en',
         audience: audience === 'patient' ? 'patient' : 'medical',
+        catalog,
       })
 
       let full = ''
@@ -166,20 +202,28 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
         },
       })
 
+      // Model changed mid-scan — discard silently; the re-armed auto-scan (or
+      // a manual re-scan) runs on the new model.
+      if (gen !== scanGenRef.current) return
+
       const parsed = generateSafetyAlertsUseCase.parseScanResult(full)
       if (!parsed) {
         setError('PARSE_FAILED')
         return
       }
-      setResult(scanKey, parsed)
+      // "掃描 N 筆" must be a deterministic app-side count, not the model's
+      // self-reported number (which varied 30/54/68 across runs on the same
+      // patient) — use the record count we actually put in the SOURCE LIST.
+      const result = { ...parsed, scannedCount: catalog.length }
+      setResult(scanKey, result)
       // Persist so a refresh reuses it instead of re-scanning (re-billing).
-      void saveEncryptedCache(safetyCacheKey(scanKey), parsed)
+      void saveEncryptedCache(safetyCacheKey(scanKey), result)
     } catch (err) {
-      setError(getUserErrorMessage(err))
+      if (gen === scanGenRef.current) setError(getUserErrorMessage(err))
     } finally {
       setIsScanning(false)
     }
-  }, [scanKey, isScanning, getFullClinicalContext, locale, audience, ai, setResult, resolvedModelId])
+  }, [scanKey, isScanning, getFullClinicalContext, locale, audience, catalog, ai, setResult, resolvedModelId])
 
   // Restore a persisted scan on (re)load before auto-scan can fire, so a refresh
   // on the same patient reuses the cached result instead of re-billing. The
@@ -220,13 +264,18 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   // model) and re-arms auto-scan, so "重新掃描" / auto-scan re-runs on the new
   // model instead of showing a stale result.
   const setModel = useCallback((id: string) => {
+    // Invalidate + abort any scan still streaming on the old model BEFORE
+    // clearing the cache — otherwise its result landed after the clear and was
+    // displayed (and persisted) as if the new model produced it.
+    scanGenRef.current += 1
+    ai.stop()
     setModelId(id)
     if (scanKey) {
       clearResult(scanKey)
       removeEncryptedCache(safetyCacheKey(scanKey))
     }
     autoTriggeredRef.current = null
-  }, [setModelId, scanKey, clearResult])
+  }, [setModelId, scanKey, clearResult, ai])
 
   return {
     result,
@@ -238,5 +287,12 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     model: modelId,
     setModel,
     scan,
+    resolveSource,
   }
+}
+
+/** Severity breakdown shape for the section-nav chip (owned by the Medical
+ *  Summary tab, which computes it from the single useSafetyAlerts result). */
+export interface SafetyAlertCounts extends Record<SafetySeverity, number> {
+  total: number
 }

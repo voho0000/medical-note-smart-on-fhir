@@ -7,6 +7,10 @@ import {
   normaliseCategory,
   type SafetyScanResult,
 } from '@/src/core/entities/safety-alert.entity'
+// Shared, deterministic "citable records from the bundle" catalog — the same
+// one the medical-summary use-case builds. Reused here so safety-alert evidence
+// can cite bundle records the app resolves into click-to-navigate citations.
+import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 
 // Gemini Flash-Lite won the head-to-head eval (clean JSON, caught all risk
 // categories, fast, cheap, 900K context for big bundles) — pin it so this
@@ -19,8 +23,14 @@ const SCHEMA_HINT =
   '"title": "<short title>", ' +
   '"detail": "<one sentence, MUST cite the actual value>", ' +
   '"evidence": ["<triggering data item>"], ' +
+  '"sources": ["<SOURCE LIST key(s) like L3 for the records this alert is based on>"], ' +
   '"category": "renal|bleeding|critical-lab|duplicate|allergy|monitoring|other", ' +
   '"recommendation": "<optional next step>"}]}'
+
+// Appended to both prompts: how to cite the SOURCE LIST in "sources".
+const SOURCE_RULE =
+  ' In "sources", list the SOURCE LIST key(s) (e.g. "L3", "M2") for the records this alert is based on; ' +
+  'use ONLY keys that appear in the SOURCE LIST, and omit any you cannot match. This is separate from "evidence" (which stays human-readable).'
 
 // Healthcare-professional version: clinical risk language (eGFR, dosing
 // thresholds, monitoring gaps).
@@ -35,7 +45,8 @@ const SYSTEM_MEDICAL =
   'Do NOT fabricate values — use only values present in the data, and put the triggering items in "evidence". ' +
   'If there are no risks, return an empty "alerts" array. ' +
   'Order alerts by severity (high first). ' +
-  'Keep each title under ~12 words and each detail to one concise sentence.'
+  'Keep each title under ~12 words and each detail to one concise sentence.' +
+  SOURCE_RULE
 
 // Patient version: same underlying analysis, but reframed as plain-language,
 // actionable health reminders — what to follow up on, WHICH kind of doctor to
@@ -57,13 +68,17 @@ const SYSTEM_PATIENT =
   'Do not alarm: these are things to discuss and habits to consider, not diagnoses. ' +
   'Do NOT fabricate values — use only values present in the data, and put the triggering items in "evidence". ' +
   'If there is nothing worth noting, return an empty "alerts" array. ' +
-  'Order by importance (most important first). Keep each title short and each detail to one concise sentence.'
+  'Order by importance (most important first). Keep each title short and each detail to one concise sentence.' +
+  SOURCE_RULE
 
 export interface GenerateSafetyAlertsInput {
   clinicalContext: string
   locale: 'en' | 'zh-TW'
   /** Tailors the prompt: clinician-facing risks vs patient-facing reminders. */
   audience?: 'medical' | 'patient'
+  /** Citable bundle records; appended as a SOURCE LIST the model cites in
+   *  each alert's "sources". Omit/empty → no source citation (evidence only). */
+  catalog?: SummarySourceCatalogEntry[]
 }
 
 export class GenerateSafetyAlertsUseCase {
@@ -73,11 +88,22 @@ export class GenerateSafetyAlertsUseCase {
       input.locale === 'zh-TW'
         ? '\n\nWrite every "title", "detail", "evidence" and "recommendation" value in Traditional Chinese (繁體中文).'
         : '\n\nWrite all values in English.'
+    const catalogBlock =
+      input.catalog && input.catalog.length > 0
+        ? '\n\nSOURCE LIST (cite these keys in "sources"):\n' +
+          input.catalog
+            .map((c) =>
+              `[${c.key}] ${[c.resourceType, c.date ?? '?', c.organization ?? '', c.display]
+                .filter(Boolean)
+                .join(' | ')}`,
+            )
+            .join('\n')
+        : ''
     return [
       { role: 'system', content: system + lang },
       {
         role: 'user',
-        content: `Patient clinical data:\n${input.clinicalContext}`,
+        content: `Patient clinical data:\n${input.clinicalContext}${catalogBlock}`,
       },
     ]
   }
