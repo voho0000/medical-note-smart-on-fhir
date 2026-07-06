@@ -92,7 +92,16 @@ describe('FHIR Helpers', () => {
     })
 
     it('should return original string for invalid date', () => {
-      expect(formatDate('not-a-date')).toBe('Invalid Date')
+      // Unparseable input is echoed back verbatim rather than the confusing
+      // JS artifact "Invalid Date".
+      expect(formatDate('not-a-date')).toBe('not-a-date')
+    })
+
+    it('should return partial dates as-is (year / year-month)', () => {
+      // FHIR `date` allows YYYY and YYYY-MM precision — render at the given
+      // precision instead of fabricating a day.
+      expect(formatDate('2024')).toBe('2024')
+      expect(formatDate('2024-01')).toBe('2024-01')
     })
 
     it('should handle ISO date format', () => {
