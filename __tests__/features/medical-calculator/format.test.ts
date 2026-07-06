@@ -1,4 +1,4 @@
-import { resultToClipboardText, isImplausible, coherenceSpan } from '@/features/medical-calculator/format'
+import { resultToClipboardText, resultToFullClipboardText, isImplausible, coherenceSpan } from '@/features/medical-calculator/format'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalculatorDef, CalcResult } from '@/features/medical-calculator/types'
 
@@ -26,6 +26,26 @@ describe('resultToClipboardText', () => {
   it('includes the unit and omits an absent interpretation/extras', () => {
     const result: CalcResult = { value: '32', unit: 'mL/min/1.73m²' }
     expect(resultToClipboardText(calc, result, 'en')).toBe('MELD-Na Score: 32 mL/min/1.73m²')
+  })
+})
+
+describe('resultToFullClipboardText', () => {
+  it('appends filled input rows with units and source, after the one-line result', () => {
+    const result: CalcResult = { value: '52', unit: 'mL/min/1.73m²', interpretation: { en: 'G3a', zh: 'G3a' } }
+    const text = resultToFullClipboardText(calc, result, 'zh-TW', [
+      { label: '肌酸酐', value: '1.4', unit: 'mg/dL', source: '2026-06-02 · Creatinine' },
+      { label: '年齡', value: '70', unit: 'y' },
+      { label: '未填', value: '' },
+    ])
+    expect(text).toContain('MELD-Na 分數: 52 mL/min/1.73m² — G3a')
+    expect(text).toContain('依據：')
+    expect(text).toContain('• 肌酸酐: 1.4 mg/dL（2026-06-02 · Creatinine）')
+    expect(text).toContain('• 年齡: 70 y')
+    expect(text).not.toContain('未填') // empty-value rows are dropped
+  })
+  it('omits the inputs block entirely when nothing is filled', () => {
+    const result: CalcResult = { value: '52' }
+    expect(resultToFullClipboardText(calc, result, 'en', [{ label: 'x', value: '' }])).toBe('MELD-Na Score: 52')
   })
 })
 

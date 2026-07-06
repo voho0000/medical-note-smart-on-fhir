@@ -62,6 +62,37 @@ describe('buildAutofill — ACR / PCR by LOINC', () => {
   })
 })
 
+describe('buildAutofill — source-report provenance capture', () => {
+  it('captures testName, LOINC, facility and obsId on the resolved value', () => {
+    const obs = {
+      id: 'obs-123',
+      effectiveDateTime: '2026-06-02',
+      code: { text: '肌酸酐 Creatinine', coding: [{ code: '2160-0', system: 'http://loinc.org', display: 'Creatinine' }] },
+      valueQuantity: { value: 1.4, unit: 'mg/dL' },
+      performer: [{ display: '臺北榮總' }],
+    }
+    const hit = buildAutofill([obs as never], {}).resolve({ kind: 'lab', keys: ['CREA'] })
+    expect(hit?.value).toBe(1.4)
+    expect(hit?.testName).toBe('肌酸酐 Creatinine')
+    expect(hit?.loinc).toBe('2160-0')
+    expect(hit?.facility).toBe('臺北榮總')
+    expect(hit?.obsId).toBe('obs-123')
+  })
+  it('panel components inherit the parent obs id + facility, keep their own LOINC', () => {
+    const bp = {
+      id: 'bp-1', effectiveDateTime: '2026-06-02',
+      code: { coding: [{ code: '85354-9', system: 'http://loinc.org' }] },
+      performer: [{ display: 'Clinic A' }],
+      component: [{ code: { text: 'Systolic', coding: [{ code: '8480-6', system: 'http://loinc.org' }] }, valueQuantity: { value: 130, unit: 'mmHg' } }],
+    }
+    const hit = buildAutofill([bp as never], {}).resolve({ kind: 'vital', loinc: ['8480-6'], vital: 'sbp' })
+    expect(hit?.value).toBe(130)
+    expect(hit?.obsId).toBe('bp-1')
+    expect(hit?.facility).toBe('Clinic A')
+    expect(hit?.loinc).toBe('8480-6')
+  })
+})
+
 describe('buildAutofill — vital display-name fallback (no LOINC)', () => {
   const sbp = { kind: 'vital' as const, loinc: ['8480-6'], vital: 'sbp' as const }
   const weight = { kind: 'vital' as const, loinc: ['29463-7'], vital: 'weight' as const }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback } from "react"
-import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2 } from "lucide-react"
+import { ArrowLeft, RotateCw, Sparkles, AlertTriangle, Star, Users, Lightbulb, Copy, Check, ChevronDown, Table2, ExternalLink } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -19,8 +19,9 @@ import { useLabAutofill, type Autofill } from "../hooks/use-lab-autofill.hook"
 import { getCalcInfo, getCalcScoring } from "../calculators"
 import type { CalcScoring, ScoringGrid, GridColor } from "../calculators"
 import { formatNum, resolveInput } from "../autofill-compute"
-import { resultToClipboardText, isImplausible, coherenceSpan } from "../format"
+import { resultToClipboardText, resultToFullClipboardText, isImplausible, coherenceSpan, type ClipboardInputRow } from "../format"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
+import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 
 const SEVERITY_STYLES: Record<Severity, string> = {
   normal: "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300",
@@ -51,6 +52,8 @@ interface FilledInfo {
   origValue: number
   /** True when the source unit differs and could NOT be converted → real ⚠. */
   unconvertible: boolean
+  /** Source-report provenance (test name / LOINC / facility / obs id). */
+  source?: { testName?: string; loinc?: string; facility?: string; obsId?: string }
 }
 
 /** Seed a calculator's inputs from patient data. Delegates the per-input
@@ -73,7 +76,7 @@ function seed(calc: CalculatorDef, autofill: Autofill): {
     if (input.type === "number") units[input.key] = r.displayUnit
     if (r.filled) {
       filled[input.key] = {
-        date: r.date, sourceUnit: r.sourceUnit, changed: r.changed, origValue: r.origValue, unconvertible: r.unconvertible,
+        date: r.date, sourceUnit: r.sourceUnit, changed: r.changed, origValue: r.origValue, unconvertible: r.unconvertible, source: r.source,
       }
     }
   }
@@ -138,6 +141,37 @@ export function CalculatorDetail({
 
   const zh = locale === "zh-TW"
 
+  // Jump to the source report in the left panel (reuses the shared nav store
+  // that medical-summary's citations use — switches to the reports tab and
+  // flashes the report row the value came from).
+  const jumpToSource = useCallback((src: FilledInfo["source"], label: string, date: string) => {
+    if (!src?.obsId) return
+    useResourceNavigationStore.getState().navigate({
+      resourceType: "Observation",
+      resourceId: src.obsId,
+      display: src.testName || label,
+      date: date || undefined,
+    })
+  }, [])
+
+  // Detailed clipboard export: the result + each input's value/unit and (when
+  // auto-filled) its source date + report name — for an auditable note.
+  const buildFullCopy = useCallback((): string => {
+    if (!result) return ""
+    const rows: ClipboardInputRow[] = calc.inputs.map((inp) => {
+      const raw = values[inp.key] ?? ""
+      let value = raw
+      if (inp.type === "select" && raw !== "") {
+        value = tr(locale, inp.options.find((o) => o.value === raw)?.label ?? { en: raw, zh: raw })
+      }
+      const unit = inp.type === "number" ? (displayUnits[inp.key] || inp.unit) : undefined
+      const f = filled[inp.key]
+      const src = [f?.date ? f.date.slice(0, 10) : "", f?.source?.testName ?? ""].filter(Boolean).join(" · ")
+      return { label: tr(locale, inp.label), value, unit, source: src || undefined }
+    })
+    return resultToFullClipboardText(calc, result, locale, rows)
+  }, [calc, result, values, displayUnits, filled, locale])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -201,20 +235,31 @@ export function CalculatorDetail({
       {/* Result — compact so it doesn't dominate the panel. */}
       <div className={`relative rounded-lg border border-l-4 px-3 py-2.5 ${result?.severity ? SEVERITY_STYLES[result.severity] : "border-l-muted"}`}>
         {result && (
-          <button
-            type="button"
-            onClick={() => copy(resultToClipboardText(calc, result, locale))}
-            title={zh ? "複製結果（可貼入病歷）" : "Copy result (paste into note)"}
-            aria-label={zh ? "複製結果" : "Copy result"}
-            className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium opacity-70 transition-colors hover:bg-current/10 hover:opacity-100"
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            <span>{copied ? (zh ? "已複製" : "Copied") : (zh ? "複製" : "Copy")}</span>
-          </button>
+          <div className="absolute right-2 top-2 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => copy(resultToClipboardText(calc, result, locale))}
+              title={zh ? "複製結果（一行，可貼入病歷）" : "Copy result (one line)"}
+              aria-label={zh ? "複製結果" : "Copy result"}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium opacity-70 transition-colors hover:bg-current/10 hover:opacity-100"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              <span>{copied ? (zh ? "已複製" : "Copied") : (zh ? "複製" : "Copy")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => copy(buildFullCopy())}
+              title={zh ? "複製結果＋依據與來源（多行）" : "Copy result + inputs & sources (multi-line)"}
+              aria-label={zh ? "複製含依據" : "Copy with inputs"}
+              className="inline-flex items-center rounded-md px-1.5 py-1 text-[11px] font-medium opacity-70 transition-colors hover:bg-current/10 hover:opacity-100"
+            >
+              {zh ? "含依據" : "Full"}
+            </button>
+          </div>
         )}
         {result ? (
           <div className="space-y-0.5">
-            <div className="flex items-baseline gap-1.5 pr-16">
+            <div className="flex items-baseline gap-1.5 pr-28">
               <span className="text-2xl font-bold leading-none tabular-nums">{result.value}</span>
               {result.unit && <span className="text-xs font-medium opacity-80">{result.unit}</span>}
             </div>
@@ -320,6 +365,28 @@ export function CalculatorDetail({
                     </p>
                   )}
                 </>
+              )}
+
+              {/* Source-report provenance: test name / LOINC / facility + a link
+                  back to the original report in the left panel. */}
+              {fill?.source && (fill.source.testName || fill.source.loinc || fill.source.facility || fill.source.obsId) && (
+                <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] leading-tight text-muted-foreground">
+                  <span className="font-medium">{zh ? "來源" : "Source"}:</span>
+                  {fill.source.testName && <span className="truncate max-w-[45%]">{fill.source.testName}</span>}
+                  {fill.source.loinc && <span>· LOINC {fill.source.loinc}</span>}
+                  {fill.source.facility && <span className="truncate max-w-[35%]">· {fill.source.facility}</span>}
+                  {fill.source.obsId && (
+                    <button
+                      type="button"
+                      onClick={() => jumpToSource(fill.source, tr(locale, input.label), fill.date)}
+                      className="inline-flex items-center gap-0.5 text-sky-600 hover:underline dark:text-sky-400"
+                      title={zh ? "在左側報告中定位此數值" : "Locate this value in the left-panel report"}
+                    >
+                      <ExternalLink className="h-2.5 w-2.5" />
+                      {zh ? "查看原報告" : "View report"}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )

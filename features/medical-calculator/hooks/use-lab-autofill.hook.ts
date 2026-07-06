@@ -23,6 +23,11 @@ export interface AutofillValue {
    *  it was matched only by display name/text (fuzzier — the unit-dimension
    *  safety gate in resolveInput applies). Absent = trusted (LOINC/vital/demo). */
   viaLoinc?: boolean
+  /** Source-report provenance (for the "來源" line + jump-to-report). */
+  testName?: string // the source report's test name (code.text / coding display)
+  loinc?: string // the LOINC code that identified it (if any)
+  facility?: string // performing lab / institution (performer[0].display)
+  obsId?: string // FHIR Observation.id, for navigating to the source report
 }
 
 export interface Autofill {
@@ -32,13 +37,26 @@ export interface Autofill {
 
 /** Minimal shape of an observation (or one of its components) we read. */
 interface CodeHolder {
-  code?: { text?: string; coding?: Array<{ code?: string; display?: string }> }
+  code?: { text?: string; coding?: Array<{ code?: string; display?: string; system?: string }> }
   valueQuantity?: { value?: number; unit?: string }
 }
 interface ObsLike extends CodeHolder {
+  id?: string
   effectiveDateTime?: string
   specimen?: { display?: string }
+  performer?: Array<{ display?: string }>
   component?: CodeHolder[]
+}
+
+/** Source-report provenance carried by an obs down to its components. */
+interface ObsMeta { obsId?: string; facility?: string }
+
+/** Pull the display name + LOINC code off a code holder (obs or component). */
+function readCodeProvenance(holder: CodeHolder): { testName?: string; loinc?: string } {
+  const codings = holder.code?.coding ?? []
+  const loinc = codings.find((c) => /loinc/i.test(c.system ?? ''))?.code ?? codings.find((c) => c?.code)?.code
+  const testName = holder.code?.text || codings.find((c) => c.display)?.display || undefined
+  return { testName, loinc }
 }
 
 /** Keep the latest (by effectiveDateTime) of two candidates. */
@@ -117,13 +135,14 @@ export function buildAutofill(
   const microAlb: AutofillValue[] = [] // urine microalbumin (14957-5 / MALB)
   const urineCrea: AutofillValue[] = [] // urine creatinine (2161-8 / CREA+urine)
 
-  const index = (holder: CodeHolder, specimenDisplay: string | undefined, date: string) => {
+  const index = (holder: CodeHolder, specimenDisplay: string | undefined, date: string, meta: ObsMeta) => {
     const value = holder.valueQuantity?.value
     if (typeof value !== 'number' || !Number.isFinite(value)) return
     // Provenance: was the analyte identity established by a LOINC code (trusted)
     // or only by display name (fuzzier)? Drives the resolveInput safety gate.
     const viaLoinc = canonicalKeyFromLoinc(holder) != null
-    const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date, viaLoinc }
+    const { testName, loinc } = readCodeProvenance(holder)
+    const entry: AutofillValue = { value, unit: holder.valueQuantity?.unit ?? '', date, viaLoinc, testName, loinc, obsId: meta.obsId, facility: meta.facility }
     const key = getAnalyteCanonicalKey(holder)
     if (key) byCanonical[key] = keepLatest(byCanonical[key], entry)
     const spec = normSpecimen(specimenDisplay)
@@ -141,10 +160,11 @@ export function buildAutofill(
 
   for (const obs of observations) {
     const date = obs.effectiveDateTime ?? ''
-    index(obs, obs.specimen?.display, date)
+    const meta: ObsMeta = { obsId: obs.id, facility: obs.performer?.find((p) => p?.display)?.display }
+    index(obs, obs.specimen?.display, date, meta)
     // Panel components (e.g. BP systolic 8480-6 / diastolic 8462-4) carry their
     // value in component[].valueQuantity, not the top-level obs.
-    for (const comp of obs.component ?? []) index(comp, obs.specimen?.display, date)
+    for (const comp of obs.component ?? []) index(comp, obs.specimen?.display, date, meta)
 
     // Collect the two components an ACR can be derived from (see below).
     const v = obs.valueQuantity?.value

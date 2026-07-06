@@ -33,6 +33,8 @@ export interface ResolvedInput {
   origValue: number
   /** True when the source unit differs and could NOT be converted → real ⚠. */
   unconvertible: boolean
+  /** Source-report provenance for the "來源" line (only set when filled). */
+  source?: { testName?: string; loinc?: string; facility?: string; obsId?: string }
 }
 
 const EMPTY: ResolvedInput = {
@@ -66,15 +68,16 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
     }
   }
 
+  const prov = { testName: hit.testName, loinc: hit.loinc, facility: hit.facility, obsId: hit.obsId }
   const conv = convertToBase(hit.value, hit.unit, input.dimension)
   if (conv && conv.changed) {
     // Genuine numeric conversion — the box now holds an expected-unit value.
-    return { value: formatNum(conv.value), date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: expected, changed: true, origValue: hit.value, unconvertible: false }
+    return { value: formatNum(conv.value), date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: expected, changed: true, origValue: hit.value, unconvertible: false, source: prov }
   }
   if (conv) {
     // Equivalent unit (factor 1) — keep the source value AND show the source
     // unit, since that's what the chart actually reported.
-    return { value: formatNum(hit.value), date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: hit.unit || expected, changed: false, origValue: hit.value, unconvertible: false }
+    return { value: formatNum(hit.value), date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: hit.unit || expected, changed: false, origValue: hit.value, unconvertible: false, source: prov }
   }
   // No conversion rule — keep the raw value and show its real unit; flag it
   // only when the units genuinely differ (never cry wolf on a unitless input
@@ -82,7 +85,7 @@ export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInpu
   const sameUnit = normUnit(hit.unit) === normUnit(expected)
   return {
     value: formatNum(hit.value), date: hit.date, filled: true, sourceUnit: hit.unit, displayUnit: hit.unit || expected,
-    changed: false, origValue: hit.value, unconvertible: !sameUnit && !!hit.unit && !!input.unit,
+    changed: false, origValue: hit.value, unconvertible: !sameUnit && !!hit.unit && !!input.unit, source: prov,
   }
 }
 

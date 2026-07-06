@@ -16,6 +16,39 @@ export function resultToClipboardText(calc: CalculatorDef, result: CalcResult, l
   return text
 }
 
+/** One input row for the detailed clipboard export. */
+export interface ClipboardInputRow {
+  label: string
+  value: string
+  unit?: string
+  /** e.g. "2026-06-02 · Creatinine" — date + source test name. */
+  source?: string
+}
+
+/**
+ * A fuller note export: the one-line result PLUS the inputs it was computed
+ * from, each with its value/unit and (when auto-filled) its source date/report.
+ * For an auditable note ("eGFR 52 … based on Creatinine 1.4 mg/dL from 2026-06-02").
+ */
+export function resultToFullClipboardText(
+  calc: CalculatorDef,
+  result: CalcResult,
+  locale: string,
+  rows: ClipboardInputRow[],
+): string {
+  const lines = [resultToClipboardText(calc, result, locale)]
+  const filled = rows.filter((r) => r.value !== '')
+  if (filled.length) {
+    lines.push(locale === 'zh-TW' ? '依據：' : 'Inputs:')
+    for (const r of filled) {
+      const unit = r.unit ? ` ${r.unit}` : ''
+      const src = r.source ? `（${r.source}）` : ''
+      lines.push(`  • ${r.label}: ${r.value}${unit}${src}`)
+    }
+  }
+  return lines.join('\n')
+}
+
 /**
  * A generic, per-field outlier check: flags a manually-entered value that's far
  * outside the field's reference range (>5× the range's width beyond either
