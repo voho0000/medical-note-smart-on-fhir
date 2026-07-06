@@ -41,6 +41,10 @@ import type {
   MedicalSummaryResult,
   SummaryCoverageStats,
 } from '@/src/core/entities/medical-summary.entity'
+import {
+  DEMO_PATIENT_ID,
+  demoMedicalSummarySnapshots,
+} from '@/src/infrastructure/demo/demo-ai-snapshots'
 
 const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 // v2: bumped when the result shape gained `problems` — ignore older-shape
@@ -228,9 +232,29 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     return () => { cancelled = true }
   }, [scanKey, setResult])
 
+  const autoTriggeredRef = useRef<string | null>(null)
+
+  // Demo bundle: seed the pre-generated snapshot instead of burning an AI call
+  // on data whose answer is a constant. Runs through the SAME parse → finalize
+  // pipeline as a live reply, so citations verify against the real catalog.
+  // Scope: demo patient + zh-TW + default model + nothing cached. Declared
+  // BEFORE the auto-generate effect and marks autoTriggeredRef first, so the
+  // same commit can't also fire a live generation. Regenerate / model switch
+  // still run live (generate() is direct; setModel clears result + re-arms).
+  useEffect(() => {
+    if (!scanKey || result || hydrated !== scanKey) return
+    if (patientId !== DEMO_PATIENT_ID || locale !== 'zh-TW') return
+    if (modelId !== MEDICAL_SUMMARY_MODEL_ID) return
+    if (!dataReady || catalog.length === 0) return
+    const snapshot = demoMedicalSummarySnapshots[audience === 'patient' ? 'patient' : 'medical']
+    const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
+    if (!parsed) return
+    autoTriggeredRef.current = scanKey
+    setResult(scanKey, generateMedicalSummaryUseCase.finalizeResult(parsed, catalog))
+  }, [scanKey, result, hydrated, patientId, locale, modelId, dataReady, catalog, audience, setResult])
+
   // Auto-generate once per patient+audience after hydration; a failed attempt
   // is NOT retried in a loop — the user regenerates manually.
-  const autoTriggeredRef = useRef<string | null>(null)
   useEffect(() => {
     if (!autoGenerate || authLoading) return
     if (!scanKey || isGenerating || result || !dataReady) return

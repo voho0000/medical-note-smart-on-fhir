@@ -37,6 +37,10 @@ import {
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import type { SafetyScanResult, SafetySeverity } from '@/src/core/entities/safety-alert.entity'
+import {
+  DEMO_PATIENT_ID,
+  demoSafetyScanSnapshots,
+} from '@/src/infrastructure/demo/demo-ai-snapshots'
 
 // Persist a completed scan per-patient so a page reload reuses it instead of
 // re-billing the model. Same lifecycle as the bundle: encrypted with the tab
@@ -247,11 +251,29 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     return () => { cancelled = true }
   }, [scanKey, setResult])
 
+  const autoTriggeredRef = useRef<string | null>(null)
+
+  // Demo bundle: seed the pre-generated scan snapshot instead of burning an AI
+  // call (see use-medical-summary.hook.ts — same rules: demo patient + zh-TW +
+  // default model + nothing cached; snapshot goes through the same
+  // parseScanResult validation as a live reply; re-scan / model switch stay live).
+  useEffect(() => {
+    if (!scanKey || result || hydratedScan !== scanKey) return
+    if (patientId !== DEMO_PATIENT_ID || locale !== 'zh-TW') return
+    if (modelId !== SAFETY_ALERTS_MODEL_ID) return
+    if (catalog.length === 0) return
+    const snapshot = demoSafetyScanSnapshots[audience === 'patient' ? 'patient' : 'medical']
+    const parsed = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(snapshot))
+    if (!parsed) return
+    autoTriggeredRef.current = scanKey
+    // Same deterministic count rule as a live scan (see scan() above).
+    setResult(scanKey, { ...parsed, scannedCount: catalog.length })
+  }, [scanKey, result, hydratedScan, patientId, locale, modelId, catalog, audience, setResult])
+
   // Auto-scan: fire once per patient when enabled and there's no result — but
   // only AFTER cache hydration has settled, so a refresh doesn't race the
   // restore and re-bill. The ref guard means a failed auto-scan is NOT retried
   // in a loop; the user re-scans manually.
-  const autoTriggeredRef = useRef<string | null>(null)
   useEffect(() => {
     if (!autoScan || authLoading || !scanKey || isScanning || result) return
     if (hydratedScan !== scanKey) return
