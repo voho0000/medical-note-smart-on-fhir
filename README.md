@@ -13,14 +13,15 @@
 ## 這個 app 做什麼
 
 - **臨床摘要**：病人資訊、就診紀錄、報告（含**累積報告**：檢驗數值跨時間表格化）、用藥、文件，從 FHIR 自動整理。
+- **醫療摘要**（開啟病人後的預設分頁）：**零點擊 AI 簡報**——跨院病程摘要（關鍵片語標示＋可點擊的來源引用，逐筆對回 FHIR 資源，查無來源標「未驗證」）、主動用藥安全警示（依嚴重度分級呈現）、需要決定的事、跨院時間軸（日期與院所一律取自原始資料，AI 只做策展）與資料涵蓋卡（純計算，提醒健康存摺涵蓋邊界）；醫療人員版／民眾版各自生成，結果快取 12 小時。
 - **AI 協助**：
   - **筆記對話**（一般模式）：互動式 AI 助理，可插入選定的臨床資料、起草病歷章節；輸入 `/` 即可快速套用提示模板；每次回答後提供可點選的追問建議。
   - **深入模式（AI Agent）**：以客戶端 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）＋醫學文獻搜尋（Perplexity）。
-  - **臨床洞察**：自動生成摘要，並內建**主動用藥安全警示**（純 AI、結構化卡片，固定置於最前且不可改寫提示）；民眾受眾則轉為白話的**健康提醒**版本。
+  - **臨床洞察**：自訂提示詞的並行分析工作台——每個標籤一個提示詞，載入病人後可自動生成、結果可手動編輯（主動用藥安全警示已移至**醫療摘要**內嵌呈現；民眾受眾為白話的**健康提醒**版本）。
   - **語音口述**：Whisper 轉錄。
 - **資料選擇**：挑選要餵給 AI 的資料範圍（門診／檢驗／用藥…），多種預設與每用途記憶。
 - **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、50+ 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製到病歷。
-- **IPS 匯出**：International Patient Summary。
+- **匯出（IPS）**：組出 International Patient Summary FHIR 文件，附可直接複製的 Markdown 預覽與 AI 問題清單推論（逐項確認後才納入）。
 - **提示範本庫**：社群共享的提示範本。
 - **雙受眾**：首次使用會詢問身分（醫事人員／民眾），介面與 AI 輸出（含安全警示）依受眾調整。
 - **多語言（中／英）、深色模式、響應式**。
@@ -46,7 +47,7 @@
 
 ## AI 模型
 
-不需自備金鑰時，請求會經由 Firebase Functions 代理（有每日免費額度，登入可提高、訪客較低）。也可在**設定**填自己的金鑰直接呼叫。
+不需自備金鑰時，請求會經由 Firebase Functions 代理（有每日免費額度，登入可提高、訪客較低）。也可在**設定**填自己的金鑰直接呼叫。**模型在各 AI 功能內就地選擇**（對話工具列、洞察工具列、醫療摘要標頭，各自記憶）；付費模型未提供金鑰時自動以免費模型執行並如實顯示。
 
 | 類別 | 模型 |
 |------|------|
@@ -143,7 +144,7 @@ Clean Architecture 分層：
 功能以 registry 可插拔：
 
 - **左側面板** `src/shared/config/feature-registry.ts` — 5 個分頁：病人資訊／就診紀錄／報告／用藥／文件。
-- **右側面板** `src/shared/config/right-panel-registry.ts` — 6 個功能：筆記對話／資料選擇／臨床洞察／IPS／醫療計算機／設定。
+- **右側面板** `src/shared/config/right-panel-registry.ts` — 7 個功能：醫療摘要／筆記對話／資料選擇／臨床洞察／匯出（IPS）／醫療計算機／設定；低頻分頁預設收合於「更多」選單，使用者可在選單內自訂哪些常駐。
 
 ## 文件
 
@@ -177,14 +178,15 @@ A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHI
 ## What it does
 
 - **Clinical summary**: patient info, visits, reports (including a **cumulative lab report** — values tabulated across dates), medications, documents — assembled from FHIR.
+- **Medical Summary** (the default tab after loading a patient): a **zero-click AI briefing** — cross-hospital course narrative (key-phrase highlights + clickable source citations verified against the FHIR bundle, unverifiable ones flagged), proactive medication-safety alerts (severity-tiered), pending decisions, a cross-hospital timeline (dates/facilities always taken from the source data, AI only curates) and a deterministic data-coverage card (a reminder of the NHI record's boundary); generated per audience (clinician/patient) and cached for 12 h.
 - **AI**:
   - **Note Chat** (normal): interactive assistant; insert selected clinical data, draft note sections; type `/` to quickly apply a prompt template; tappable follow-up suggestions after each answer.
   - **Deep Mode (AI Agent)**: client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters) + medical-literature search (Perplexity).
-  - **Clinical Insights**: auto-generated summaries, with a built-in **proactive medication-safety scanner** (pure-AI, structured cards, pinned first and prompt-locked); for the patient audience it becomes a plain-language **health-reminder** version.
+  - **Clinical Insights**: a parallel analysis workbench with custom prompts — one prompt per tab, auto-generated on patient load, results editable (the proactive safety scanner moved into **Medical Summary**; the patient audience gets a plain-language **health-reminder** version).
   - **Voice dictation**: Whisper transcription.
 - **Data Selection**: choose which data to feed the AI, with presets and per-consumer memory.
 - **Medical Calculator**: MDCalc-style clinical scores/formulas (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65… — 50+ across 10 categories) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy to the note.
-- **IPS export**: International Patient Summary.
+- **Export (IPS)**: builds an International Patient Summary FHIR document, with a copy-ready Markdown preview and AI problem-list inference (each suggestion confirmed before inclusion).
 - **Prompt Gallery**: community-shared prompt templates.
 - **Two audiences**: first run asks whether you're a clinician or a patient (醫事人員／民眾); the UI and AI output (including safety alerts) adapt.
 - **Bilingual (EN/中文), dark mode, responsive.**
@@ -210,7 +212,7 @@ A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHI
 
 ## AI models
 
-Without your own key, requests go through a Firebase Functions proxy (daily free quota — higher signed in, lower for guests). Or add your own key in **Settings** to call providers directly.
+Without your own key, requests go through a Firebase Functions proxy (daily free quota — higher signed in, lower for guests). Or add your own key in **Settings** to call providers directly. **Models are picked inside each AI feature** (chat toolbar, insights toolbar, medical-summary header — each remembered separately); a premium pick without its key transparently runs — and displays — as the free model.
 
 | Tier | Models |
 |------|--------|
@@ -282,7 +284,7 @@ Infrastructure    src/infrastructure/
 Pluggable via registries:
 
 - **Left panel** `src/shared/config/feature-registry.ts` — 5 tabs: Patient / Visits / Reports / Medications / Documents.
-- **Right panel** `src/shared/config/right-panel-registry.ts` — 6 features: Note Chat / Data Selection / Clinical Insights / IPS / Medical Calculator / Settings.
+- **Right panel** `src/shared/config/right-panel-registry.ts` — 7 features: Medical Summary / Note Chat / Data Selection / Clinical Insights / Export (IPS) / Medical Calculator / Settings; low-frequency tabs collapse into a "More" menu by default, and users can customize which tabs stay pinned.
 
 ## Docs
 

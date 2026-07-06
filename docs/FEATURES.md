@@ -111,11 +111,11 @@ import { ClinicalInsightsFeature } from '@/features/clinical-insights'
 ```
 
 **功能**：
-- AI 生成臨床摘要
-- 可自訂洞察標籤
-- 主動安全警示（Safety Alerts）— 純 AI、結構化卡片，固定置於最前、提示不可改寫
-- 變化摘要（What's Changed）
-- 臨床快照（Clinical Snapshot）
+- 自訂提示詞的並行 AI 分析工作台（每個標籤一個提示詞，載入病人後可自動生成）
+- 洞察標籤可新增、重新命名、調整提示詞；回應可手動編輯（重新生成前會確認）
+- 內建範本：變化摘要（What's Changed）、臨床快照（Clinical Snapshot）
+
+> 主動安全警示（Safety Alerts）已於 v0.26 移至「醫療摘要」分頁內嵌呈現（見第 10 節）；臨床洞察回歸純自訂工作台。
 
 ---
 
@@ -168,7 +168,7 @@ import { SettingsFeature } from '@/features/settings'
 ```
 
 **功能**：
-- AI 偏好設定（模型選擇、API 金鑰）
+- AI 偏好設定（API 金鑰、金鑰持久化）——模型改在各 AI 功能內就地選擇（共用 `src/shared/components/ModelPicker`，各功能偏好獨立記憶）
 - 提示範本管理
 - 臨床洞察標籤自訂
 - 外觀設定（深色/亮色模式）
@@ -229,6 +229,31 @@ import MedicalCalculatorFeature from '@/features/medical-calculator/Feature'
 - 結果可一鍵複製成病歷可貼上的一行摘要
 
 **資料驅動架構**：`calculators/`（依類別分檔，每個 `CalculatorDef` 帶純函式 `compute`）＋純模組 `list-logic.ts`／`format.ts`／`autofill-compute.ts`（`resolveInput` 為自動帶入的唯一真相來源），154 個單元測試。新增一個計算機＝新增一筆 `CalculatorDef`（＋ `CALC_TAGS`／`CALC_INFO`）。
+
+---
+
+### 10. Medical Summary（醫療摘要）
+**Entry Point:** `@/features/medical-summary/Feature`
+
+```typescript
+import MedicalSummaryFeature from '@/features/medical-summary/Feature'
+
+// Usage（右側面板第一個分頁，開啟病人後的預設分頁）
+<MedicalSummaryFeature />
+```
+
+**功能**：
+- **零點擊 AI 簡報**：載入病人後自動產生（onboarding 可關閉），單頁縱向流——重點閱讀零點擊，稽核才互動
+- **跨院病程摘要**：3–5 句敘事、關鍵片語 highlight、Perplexity 式引用藥丸；引用逐筆對 FHIR bundle 驗證，查無來源標「未驗證」（琥珀色、不可點），已驗證來源可點擊導航至左側面板對應卡片並閃爍定位
+- **用藥安全警示（內嵌）**：`features/proactive-safety-alerts` 的 `SafetyAlertsPanel` 以 embedded 模式內嵌；依嚴重度分級密度——高風險完整卡（證據常駐）、中風險緊湊列（點擊展開）、低風險整批收合一行
+- **需要決定的事**：附緊急度（高／中／低）與依據來源
+- **跨院時間軸**：App 端確定性抽取事件骨架（日期、院所、住院／急診／門診由 `Encounter.class` 判別），AI 只做策展與一句話標籤——零幻覺日期與院所；預設顯示最近 8 筆，較早收合
+- **資料涵蓋卡**：純計算（零 AI）——日期範圍、院所數、各資源計數＋健康存摺涵蓋邊界聲明（自費不含、上傳時間差）
+- **區塊導覽列**：敘事卡下方的警示／待決／時間軸計數 chip（色碼嚴重度），點擊平滑捲至區塊
+- **雙受眾**：醫療人員版／民眾版跟隨全域 audience，各自生成與快取；民眾版有語氣護欄與免責文案
+- **快取與韌性**：encrypted-session-cache 12 小時（key 含 audience）；Zod schema 驗證，壞 JSON 自動靜默重試一次
+
+**架構重點**：2 個 AI 呼叫（既有 Safety scan＋一個 Summary structured call）＋1 個純計算（涵蓋卡）；區塊獨立進場（涵蓋卡秒出 → 警示 → 摘要）。設計文件：[BRIEFING-PANEL-DESIGN-2026-07-04.md](./BRIEFING-PANEL-DESIGN-2026-07-04.md)。
 
 ---
 
@@ -306,21 +331,33 @@ export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
 
 ### 右側 Panel（AI 功能）
 
-**Registry 配置**：`src/shared/config/right-panel-registry.ts`
+**Registry 配置**：`src/shared/config/right-panel-registry.ts`（元件不在 registry 內——由 `RightPanelLayout` 的 `FEATURE_COMPONENTS` 依 id 對映並 lazy-load）
 
 ```typescript
-export const RIGHT_PANEL_FEATURES: FeatureConfig[] = [
+export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
   {
-    id: 'medical-chat',
-    name: 'Medical Chat',
-    tabLabel: 'medicalChat',
-    component: () => null,
+    id: 'medical-summary',
+    name: 'Medical Summary',
+    tabLabel: 'medicalSummary',   // i18n key（t.tabs）
     order: 0,
     enabled: true,
+    forceMount: true,             // 切換分頁時保留狀態
   },
-  // ...
+  {
+    id: 'data-selection',
+    // ...
+    pinned: false,                // 預設收合於「更多」選單
+  },
+  {
+    id: 'settings',
+    // ...
+    pinLocked: true,              // 永遠常駐、不可被使用者收合
+    iconOnly: true,               // 只顯示 icon（齒輪）
+  },
 ]
 ```
+
+**分頁常駐與收合**：`pinned: false` 的功能預設收在 tab 列的「更多」下拉選單；使用者可在選單內「自訂常駐分頁」逐一 pin／unpin，覆寫值持久化於 `right-panel-tabs` store（localStorage）。`pinLocked` 的功能（設定）永遠顯示在最右端。
 
 ---
 
