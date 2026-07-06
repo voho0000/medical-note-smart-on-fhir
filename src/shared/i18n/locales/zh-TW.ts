@@ -48,9 +48,12 @@ export const zhTW = {
     clinicalInsights: '臨床洞察',
     safetyAlerts: '安全警示',
     medicalSummary: '醫療摘要',
-    ipsExport: 'IPS',
+    ipsExport: '匯出',
     medicalCalculator: '計算機',
     settings: '設定',
+    // Right-panel overflow menu (tabs collapsed out of the tab bar)
+    more: '更多',
+    managePinned: '自訂常駐分頁',
   },
   safetyAlerts: {
     title: '主動安全警示',
@@ -570,6 +573,13 @@ export const zhTW = {
   reports: {
     title: '診斷報告',
     otherSubgroup: '其他',
+    // 檢驗依採檢日合併（LabDayGroupCard＋檢視切換）
+    labViewLabel: '檢驗檢視',
+    byCollectionDay: '依採檢日',
+    byCollectionDayTooltip: '健保存摺同一天、同院所的單項報告合併為一張檢驗單（僅顯示層合併，原始報告內容不變）',
+    flatList: '單項列表',
+    labDayCount: '{n} 項檢驗',
+    abnormalCount: '{n} 異常',
     latest: '僅最新版本',
     allVersions: '所有版本',
     timeRange: '時間範圍',

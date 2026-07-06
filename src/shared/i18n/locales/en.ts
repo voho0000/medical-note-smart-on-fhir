@@ -46,9 +46,12 @@ export const en = {
     clinicalInsights: 'Clinical Insights',
     safetyAlerts: 'Safety',
     medicalSummary: 'Summary',
-    ipsExport: 'IPS',
+    ipsExport: 'Export',
     medicalCalculator: 'Calculator',
     settings: 'Settings',
+    // Right-panel overflow menu (tabs collapsed out of the tab bar)
+    more: 'More',
+    managePinned: 'Customize tabs',
   },
   safetyAlerts: {
     title: 'Proactive Safety Alerts',
@@ -567,6 +570,13 @@ export const en = {
   reports: {
     title: 'Diagnostic Reports',
     otherSubgroup: 'Other',
+    // Lab collection-day grouping (LabDayGroupCard + view toggle)
+    labViewLabel: 'Lab view',
+    byCollectionDay: 'By collection day',
+    byCollectionDayTooltip: 'Single-item NHI reports from the same day and institution fold into one lab-sheet card (display-level only; the source reports are unchanged)',
+    flatList: 'Flat list',
+    labDayCount: '{n} tests',
+    abnormalCount: '{n} abnormal',
     latest: 'Latest Versions Only',
     allVersions: 'All Versions',
     timeRange: 'Time Range',

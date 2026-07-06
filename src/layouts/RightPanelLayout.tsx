@@ -4,10 +4,23 @@
 
 import { ComponentType, ReactNode } from "react"
 import dynamic from "next/dynamic"
+import { MoreHorizontal, SlidersHorizontal } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
+import { useRightPanelTabsStore, isFeaturePinned } from "@/src/application/stores/right-panel-tabs.store"
 import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 // RightPanelProvider moved to AppProviders (app-level) in v0.4.0 so the
 // header's overflow menu can navigate to right-panel tabs (e.g. open
@@ -170,6 +183,8 @@ function RightPanelContentInner() {
   const { t } = useLanguage()
   const features = getEnabledRightPanelFeatures()
   const { activeTab, setActiveTab } = useRightPanel()
+  const pinOverrides = useRightPanelTabsStore((s) => s.pinOverrides)
+  const setPinned = useRightPanelTabsStore((s) => s.setPinned)
 
   // Pluggability guard: the provider's default (or a stale selection) may
   // point at a feature that has been unplugged in the registry — fall back
@@ -177,6 +192,17 @@ function RightPanelContentInner() {
   const effectiveTab = features.some(f => f.id === activeTab)
     ? activeTab
     : features[0]?.id ?? activeTab
+
+  // Tab-bar grouping is purely registry-driven (no feature ids here):
+  // [pinned…] [temp trigger for an active overflow tab?] [more ▾] [pinLocked…]
+  const lockedFeatures = features.filter(f => f.pinLocked)
+  const unlockedFeatures = features.filter(f => !f.pinLocked)
+  const pinnedFeatures = unlockedFeatures.filter(f => isFeaturePinned(f, pinOverrides))
+  const overflowFeatures = unlockedFeatures.filter(f => !isFeaturePinned(f, pinOverrides))
+  // An overflow feature can become active (menu click, or external
+  // setActiveTab e.g. from the header) — give it a temporary real trigger so
+  // the Radix active state has a visible anchor.
+  const activeOverflowFeature = overflowFeatures.find(f => f.id === effectiveTab)
 
   // Helper to get tab label (supports i18n)
   const getTabLabel = (feature: RightPanelFeatureConfig): string => {
@@ -189,6 +215,44 @@ function RightPanelContentInner() {
     return RIGHT_PANEL_TAB_THEMES[featureId] || RIGHT_PANEL_TAB_THEMES['settings']
   }
 
+  const renderTrigger = (feature: RightPanelFeatureConfig) => {
+    const theme = getTabTheme(feature.id)
+    const Icon = theme.icon
+    const activeClasses = TAB_ACTIVE_CLASSES[theme.colorKey] || TAB_ACTIVE_CLASSES.settings
+    const label = getTabLabel(feature)
+    return (
+      <TabsTrigger
+        key={feature.id}
+        value={feature.id}
+        className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
+        title={label}
+        aria-label={label}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {/* Below sm the multi-way grid leaves ~50px per tab — a 2-3 char
+            truncated label is noise, so go icon-only (title + aria-label
+            keep the name reachable). iconOnly features skip the label at
+            every width. */}
+        {!feature.iconOnly && (
+          <span className="truncate hidden sm:inline">{label}</span>
+        )}
+      </TabsTrigger>
+    )
+  }
+
+  const renderMenuItemContent = (feature: RightPanelFeatureConfig) => {
+    const Icon = getTabTheme(feature.id).icon
+    return (
+      <>
+        <Icon className="h-4 w-4 shrink-0" />
+        {getTabLabel(feature)}
+      </>
+    )
+  }
+
+  const columnCount =
+    pinnedFeatures.length + (activeOverflowFeature ? 1 : 0) + 1 + lockedFeatures.length
+
   return (
     <Tabs
       value={effectiveTab}
@@ -197,33 +261,59 @@ function RightPanelContentInner() {
     >
       <TabsList
         className="w-full grid gap-1 h-12 shrink-0 bg-muted/50 p-1 border"
-        style={{ gridTemplateColumns: `repeat(${features.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
-        {features.map(feature => {
-          const theme = getTabTheme(feature.id)
-          const Icon = theme.icon
-          const activeClasses = TAB_ACTIVE_CLASSES[theme.colorKey] || TAB_ACTIVE_CLASSES.settings
-          return (
-            <TabsTrigger 
-              key={feature.id}
-              value={feature.id} 
-              className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {/* Below sm the 7-way grid leaves ~50px per tab — a 2-3 char
-                  truncated label is noise, so go icon-only (title + aria-label
-                  keep the name reachable). */}
-              <span className="truncate hidden sm:inline" title={getTabLabel(feature)}>{getTabLabel(feature)}</span>
-              <span className="sr-only sm:hidden">{getTabLabel(feature)}</span>
-            </TabsTrigger>
-          )
-        })}
+        {pinnedFeatures.map(renderTrigger)}
+        {activeOverflowFeature && renderTrigger(activeOverflowFeature)}
+        {/* "More" is a menu, not a TabsTrigger — always rendered because the
+            pin-management submenu lives here even when overflow is empty. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="text-sm font-medium min-w-0 flex items-center justify-center gap-1.5 rounded-lg text-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground/90 transition-colors data-[state=open]:bg-background data-[state=open]:text-foreground dark:data-[state=open]:bg-card"
+            title={t.tabs.more}
+            aria-label={t.tabs.more}
+          >
+            <MoreHorizontal className="h-4 w-4 shrink-0" />
+            <span className="truncate hidden sm:inline">{t.tabs.more}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {overflowFeatures.map(feature => (
+              <DropdownMenuItem
+                key={feature.id}
+                onSelect={() => setActiveTab(feature.id)}
+              >
+                {renderMenuItemContent(feature)}
+              </DropdownMenuItem>
+            ))}
+            {overflowFeatures.length > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                {t.tabs.managePinned}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {unlockedFeatures.map(feature => (
+                  <DropdownMenuCheckboxItem
+                    key={feature.id}
+                    checked={isFeaturePinned(feature, pinOverrides)}
+                    onCheckedChange={(checked) => setPinned(feature.id, checked === true)}
+                    // Keep the menu open while toggling several pins in a row
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {renderMenuItemContent(feature)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {lockedFeatures.map(renderTrigger)}
       </TabsList>
-      
+
       {features.map(feature => (
-        <TabsContent 
+        <TabsContent
           key={feature.id}
-          value={feature.id} 
+          value={feature.id}
           className={feature.contentClassName || 'flex-1 mt-1'}
           forceMount={feature.forceMount ? true : undefined}
         >

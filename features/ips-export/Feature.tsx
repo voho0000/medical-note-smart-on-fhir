@@ -84,11 +84,28 @@ export default function IpsExportFeature() {
 
   return (
     <div className="space-y-3">
-      <Tabs defaultValue="scope" className="space-y-3">
+      {/* Preview first & default: the copyable markdown/JSON preview is the
+          high-frequency use; scope tuning is the occasional one. */}
+      <Tabs defaultValue="preview" className="space-y-3">
         <TabsList className="grid h-9 w-full grid-cols-2">
-          <TabsTrigger value="scope">{x.scopeTab}</TabsTrigger>
           <TabsTrigger value="preview">{x.previewTab}</TabsTrigger>
+          <TabsTrigger value="scope">{x.scopeTab}</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="preview">
+          <IpsExportPreview
+            bundle={bundle}
+            markdown={markdown}
+            validation={validation}
+            copiedFormat={copiedFormat}
+            copyError={copyError}
+            markdownFilename={markdownFilename}
+            onDownloadJson={() => downloadJson(bundle)}
+            onDownloadMarkdown={() => downloadMarkdown(markdown)}
+            onCopyJson={() => copyJson(bundle)}
+            onCopyMarkdown={() => copyMarkdown(markdown)}
+          />
+        </TabsContent>
 
         <TabsContent value="scope" className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -122,21 +139,6 @@ export default function IpsExportFeature() {
           )}
 
           <IpsDataScopePanel bundle={bundle} />
-        </TabsContent>
-
-        <TabsContent value="preview">
-          <IpsExportPreview
-            bundle={bundle}
-            markdown={markdown}
-            validation={validation}
-            copiedFormat={copiedFormat}
-            copyError={copyError}
-            markdownFilename={markdownFilename}
-            onDownloadJson={() => downloadJson(bundle)}
-            onDownloadMarkdown={() => downloadMarkdown(markdown)}
-            onCopyJson={() => copyJson(bundle)}
-            onCopyMarkdown={() => copyMarkdown(markdown)}
-          />
         </TabsContent>
       </Tabs>
     </div>

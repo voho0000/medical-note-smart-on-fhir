@@ -10,6 +10,20 @@ export interface RightPanelFeatureConfig {
   order: number
   /** Whether this feature is enabled */
   enabled: boolean
+  /**
+   * Default tab-bar placement (default true). false = starts in the "more"
+   * overflow menu. Users can override per feature via the right-panel-tabs
+   * store ("customize pinned tabs" in the more menu).
+   */
+  pinned?: boolean
+  /**
+   * Always pinned: rendered after the "more" menu and excluded from the
+   * customize list (user overrides are ignored). Used by settings so the
+   * pin-management entry point can never hide itself.
+   */
+  pinLocked?: boolean
+  /** Render the tab trigger icon-only at every width (name kept in title/aria). */
+  iconOnly?: boolean
   /** Optional: force mount the tab content (useful for chat to preserve state) */
   forceMount?: boolean
   /** Optional: custom wrapper className for the tab content */
@@ -54,19 +68,25 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     contentClassName: 'flex-1 overflow-hidden mt-1',
   },
   {
+    // Configuration-type feature (per-consumer data scopes) — set up once,
+    // rarely touched mid-consult, so it defaults to the overflow menu.
     id: 'data-selection',
     name: 'Data Selection',
     tabLabel: 'dataSelection',
     order: 2,
     enabled: true,
+    pinned: false,
     contentClassName: 'flex-1 mt-1',
   },
   {
+    // Custom-prompt workbench; its recurring-analysis role is being absorbed
+    // by medical-summary, so it defaults to the overflow menu.
     id: 'clinical-insights',
     name: 'Clinical Insights',
     tabLabel: 'clinicalInsights',
     order: 3,
     enabled: true,
+    pinned: false,
     forceMount: true,
     contentClassName: 'flex-1 mt-1',
   },
@@ -74,7 +94,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     id: 'ips-export',
     name: 'IPS Export',
     tabLabel: 'ipsExport',
-    order: 4,
+    order: 5,
     enabled: true,
     // AI-inferred suggestions + per-item confirmations are expensive (LLM call)
     // and clinically reviewed state — they must survive tab switches.
@@ -86,16 +106,20 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     id: 'medical-calculator',
     name: 'Medical Calculator',
     tabLabel: 'medicalCalculator',
-    order: 5,
+    order: 4,
     enabled: true,
     contentClassName: 'flex-1 mt-1',
   },
   {
+    // Gear tab: always the right-most trigger (after the "more" menu), never
+    // hideable — it stays reachable no matter how tabs are customized.
     id: 'settings',
     name: 'Settings',
     tabLabel: 'settings',
     order: 6,
     enabled: true,
+    pinLocked: true,
+    iconOnly: true,
     contentClassName: 'flex-1 mt-1',
   },
 ]
