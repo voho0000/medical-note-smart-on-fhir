@@ -20,23 +20,27 @@ export type SafetyCategory = (typeof SAFETY_CATEGORIES)[number]
 
 // Lenient on category (the model may emit something off-list → coerce to
 // 'other') but strict on severity (drives the badge colour).
+// Size caps CLAMP (slice/truncate) instead of rejecting — verbose models
+// (Claude Haiku) exceed them with good content, and one oversize field must
+// not void a whole safety scan (see medical-summary.entity.ts, 2026-07).
+const trimTo = (max: number) => (s: string) => (s.length > max ? s.slice(0, max) : s)
 export const SafetyAlertSchema = z.object({
   severity: z.enum(SAFETY_SEVERITIES),
-  title: z.string().min(1).max(80),
-  detail: z.string().min(1).max(400),
-  evidence: z.array(z.string()).max(10).optional().default([]),
+  title: z.string().min(1).transform(trimTo(80)),
+  detail: z.string().min(1).transform(trimTo(400)),
+  evidence: z.array(z.string()).optional().default([]).transform((a) => a.slice(0, 10)),
   // Source-list keys (e.g. "L3", "M2") for the bundle records this alert is
   // based on — resolved app-side to clickable citations that navigate the left
   // panel to the raw FHIR resource (parity with the summary/decision cards).
-  sources: z.array(z.string()).max(10).optional().default([]),
+  sources: z.array(z.string()).optional().default([]).transform((a) => a.slice(0, 10)),
   category: z.string().optional(),
-  recommendation: z.string().max(400).optional(),
+  recommendation: z.string().transform(trimTo(400)).optional(),
 })
 export type SafetyAlertInput = z.infer<typeof SafetyAlertSchema>
 
 export const SafetyScanResultSchema = z.object({
   scannedCount: z.number().int().nonnegative().optional().default(0),
-  alerts: z.array(SafetyAlertSchema).max(20).default([]),
+  alerts: z.array(SafetyAlertSchema).default([]).transform((a) => a.slice(0, 20)),
 })
 export type SafetyScanResultInput = z.infer<typeof SafetyScanResultSchema>
 

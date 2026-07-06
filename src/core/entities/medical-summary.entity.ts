@@ -35,28 +35,39 @@ export type ProblemKind = (typeof PROBLEM_KINDS)[number]
 
 // ---------------------------------------------------------------------------
 // AI output schema (validated with Zod; malformed replies are rejected)
+//
+// Size caps CLAMP (slice/truncate), they never reject: verbose models (Claude
+// Haiku especially) routinely exceed them with perfectly good content — a
+// 27-segment narrative, 8 cited keys, an 85-char basis — and rejecting the
+// whole reply for that made Haiku's parse-failure rate near-total (2026-07).
+// Wrong TYPES and missing required fields still reject; oversize just trims.
 // ---------------------------------------------------------------------------
+
+const clampedText = (max: number) =>
+  z.string().min(1).transform((s) => (s.length > max ? s.slice(0, max) : s))
+const clampedKeys = (max: number) =>
+  z.array(z.string()).optional().default([]).transform((a) => a.slice(0, max))
 
 // One narrative segment. `emphasis` segments render as highlights; `sources`
 // hold catalog keys (e.g. "E1") — never free-text citations.
 export const SummarySegmentSchema = z.object({
-  text: z.string().min(1).max(400),
+  text: clampedText(400),
   emphasis: z.boolean().optional().default(false),
-  sources: z.array(z.string()).max(6).optional().default([]),
+  sources: clampedKeys(6),
 })
 
 export const SummaryDecisionSchema = z.object({
-  text: z.string().min(1).max(400),
+  text: clampedText(400),
   urgency: z.enum(SUMMARY_URGENCIES),
-  rationale: z.string().max(400).optional(),
-  sources: z.array(z.string()).max(6).optional().default([]),
+  rationale: z.string().transform((s) => (s.length > 400 ? s.slice(0, 400) : s)).optional(),
+  sources: clampedKeys(6),
 })
 
 // Timeline pick: the model only CHOOSES an event (by catalog key) and labels
 // it. Lenient on category (off-list → coerced) like safety-alert categories.
 export const TimelinePickSchema = z.object({
   ref: z.string().min(1),
-  label: z.string().min(1).max(200),
+  label: clampedText(200),
   category: z.string().optional(),
 })
 
@@ -67,20 +78,23 @@ export const TimelinePickSchema = z.object({
 // (N18 / N18.3 / N18.9 for the same patient) and unverifiable codes must not
 // look authoritative. The problem NAME + navigable sources are the product.
 export const SummaryProblemSchema = z.object({
-  label: z.string().min(1).max(120),
+  label: clampedText(120),
   /** Short human-readable basis, e.g. "5 次檢驗異常" / "藥局調劑". */
-  basis: z.string().max(80).optional(),
+  basis: z.string().transform((s) => (s.length > 80 ? s.slice(0, 80) : s)).optional(),
   /** What kind of evidence — drives the badge (off-list → 'other'). */
   kind: z.string().optional(),
-  sources: z.array(z.string()).max(6).optional().default([]),
+  sources: clampedKeys(6),
 })
 
 export const MedicalSummaryAiResultSchema = z.object({
-  headline: z.string().min(1).max(240),
-  summary: z.array(SummarySegmentSchema).min(1).max(16),
-  problems: z.array(SummaryProblemSchema).max(20).default([]),
-  decisions: z.array(SummaryDecisionSchema).max(10).default([]),
-  timeline: z.array(TimelinePickSchema).max(16).default([]),
+  headline: clampedText(240),
+  // Segment clamp is deliberately roomy (32, prompt asks for far fewer): it is
+  // a runaway-output guard, not a style enforcer — trimming a narrative's tail
+  // loses its conclusion, so only truly degenerate outputs should hit it.
+  summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
+  problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
+  decisions: z.array(SummaryDecisionSchema).default([]).transform((a) => a.slice(0, 10)),
+  timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 16)),
 })
 export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema>
 

@@ -166,6 +166,30 @@ describe('parseResult', () => {
     expect(useCase.parseResult('{"headline": "x"}')).toBeNull() // missing summary
   })
 
+  // Regression (2026-07): Claude Haiku's verbose-but-valid outputs — 27
+  // narrative segments, 8 cited keys, an oversize basis — were rejected
+  // wholesale by hard schema maxes, making its parse-failure rate near-total.
+  // Size overflows must CLAMP, not reject.
+  it('clamps oversize-but-valid replies instead of rejecting them', () => {
+    const reply = JSON.stringify({
+      headline: 'x'.repeat(300),
+      summary: Array.from({ length: 27 }, (_, i) => ({
+        text: `段落${i}。`,
+        emphasis: false,
+        sources: i === 0 ? ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'] : [],
+      })),
+      problems: [{ label: '慢性腎臟病', basis: 'b'.repeat(100), kind: 'careplan', sources: [] }],
+      decisions: [],
+      timeline: [],
+    })
+    const parsed = useCase.parseResult(reply)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.headline).toHaveLength(240)
+    expect(parsed!.summary).toHaveLength(27) // roomy runaway guard is 32
+    expect(parsed!.summary[0].sources).toHaveLength(6)
+    expect(parsed!.problems[0].basis).toHaveLength(80)
+  })
+
   // Diagnostic logging: transient Flash-Lite parse failures must leave a
   // truncated head of the raw reply in the console, never fail silently.
   describe('failure diagnostics', () => {

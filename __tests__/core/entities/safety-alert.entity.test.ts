@@ -1,5 +1,6 @@
 import {
   SEVERITY_RANK,
+  SafetyAlertSchema,
   countBySeverity,
   normaliseCategory,
   type SafetyAlert,
@@ -38,6 +39,30 @@ describe('countBySeverity', () => {
 
   it('returns all-zero for an empty list', () => {
     expect(countBySeverity([])).toEqual({ high: 0, medium: 0, low: 0 })
+  })
+})
+
+describe('SafetyAlertSchema clamping', () => {
+  // Regression (2026-07): size overflows from verbose models must clamp, not
+  // void the whole scan (same rule as the medical-summary schema).
+  it('clamps oversize title/detail/sources instead of rejecting', () => {
+    const parsed = SafetyAlertSchema.safeParse({
+      severity: 'high',
+      title: 't'.repeat(100),
+      detail: 'd'.repeat(500),
+      sources: Array.from({ length: 12 }, (_, i) => `M${i + 1}`),
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.title).toHaveLength(80)
+      expect(parsed.data.detail).toHaveLength(400)
+      expect(parsed.data.sources).toHaveLength(10)
+    }
+  })
+
+  it('still rejects wrong types and missing required fields', () => {
+    expect(SafetyAlertSchema.safeParse({ severity: 'urgent', title: 'x', detail: 'y' }).success).toBe(false)
+    expect(SafetyAlertSchema.safeParse({ severity: 'high', detail: 'y' }).success).toBe(false)
   })
 })
 

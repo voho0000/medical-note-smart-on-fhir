@@ -423,7 +423,15 @@ export class GenerateMedicalSummaryUseCase {
       return fail('invalid JSON')
     }
     const parsed = MedicalSummaryAiResultSchema.safeParse(raw)
-    return parsed.success ? parsed.data : fail('schema mismatch')
+    if (parsed.success) return parsed.data
+    // Zod paths/codes carry no PHI — safe to log in prod, and without them a
+    // "schema mismatch" is undiagnosable (2026-07: Haiku's verbose outputs
+    // failed here for weeks before anyone could say WHICH rule broke).
+    const issues = parsed.error.issues
+      .slice(0, 8)
+      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('; ')
+    return fail(`schema mismatch — ${issues}`)
   }
 
   /**
