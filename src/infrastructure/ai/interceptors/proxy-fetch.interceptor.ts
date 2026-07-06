@@ -5,6 +5,7 @@
 
 import { openAIRequestTransformer } from '../transformers/openai-request.transformer'
 import { getProxyIdToken } from '../utils/proxy-auth'
+import { getAppCheckToken } from '../utils/app-check'
 
 export interface ProxyFetchConfig {
   proxyUrl: string
@@ -48,6 +49,14 @@ export class ProxyFetchInterceptor {
         throw new Error(
           'proxy session unavailable: could not obtain a guest sign-in token (sign-in required)'
         )
+      }
+
+      // App Check attestation (anti-abuse). Best-effort: when App Check isn't
+      // configured (local dev / emulator) this is null and the header is omitted;
+      // the proxy runs log-only until enforcement is switched on server-side.
+      const appCheckToken = await getAppCheckToken()
+      if (appCheckToken) {
+        headers.set('X-Firebase-AppCheck', appCheckToken)
       }
 
       let body = init?.body

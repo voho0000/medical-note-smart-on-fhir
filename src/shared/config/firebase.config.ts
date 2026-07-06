@@ -7,6 +7,11 @@ import {
   connectFirestoreEmulator,
   type Firestore,
 } from 'firebase/firestore'
+import {
+  initializeAppCheck,
+  ReCaptchaV3Provider,
+  type AppCheck,
+} from 'firebase/app-check'
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -23,6 +28,7 @@ const firebaseConfig = {
 let app: FirebaseApp
 let auth: Auth
 let db: Firestore
+let appCheck: AppCheck | undefined
 
 if (typeof window !== 'undefined') {
   // Client-side initialization
@@ -70,6 +76,32 @@ if (typeof window !== 'undefined') {
       // Already connected (Fast Refresh re-evaluated this module).
     }
   }
+
+  // App Check (anti-abuse): attests that proxy requests come from the genuine
+  // app via reCAPTCHA v3, so the owner-funded AI proxy can't be driven by raw
+  // scripts minting throwaway anonymous sessions. The token is attached to proxy
+  // requests in the proxy-fetch interceptor and verified in the Cloud Functions.
+  //
+  // Skipped under the emulator (e2e) and when no site key is configured (local
+  // dev without App Check) so neither path breaks. For headless/dev runs set
+  // NEXT_PUBLIC_APPCHECK_DEBUG to a debug token registered in the Firebase
+  // console (gated so production always uses real reCAPTCHA attestation).
+  const appCheckSiteKey = process.env.NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY
+  if (process.env.NEXT_PUBLIC_FIREBASE_EMULATOR !== '1' && appCheckSiteKey) {
+    const debugToken = process.env.NEXT_PUBLIC_APPCHECK_DEBUG
+    if (debugToken) {
+      ;(self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+        debugToken
+    }
+    try {
+      appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(appCheckSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      })
+    } catch {
+      // Already initialized (Fast Refresh re-evaluated this module).
+    }
+  }
 }
 
-export { app, auth, db }
+export { app, auth, db, appCheck }
