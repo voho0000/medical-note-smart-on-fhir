@@ -557,7 +557,9 @@ export interface ImmunizationEntity {
     }
   }>
   note?: Array<{ text?: string }>
-  manufacturer?: { display?: string }
+  // FHIR R4: Reference(Organization) — display is the common case, but a
+  // bridge may send only `reference`; keep both so consumers can fall back.
+  manufacturer?: { display?: string; reference?: string }
   lotNumber?: string
   // Multi-hospital support
   sourceSystem?: string

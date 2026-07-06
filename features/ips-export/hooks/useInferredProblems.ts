@@ -80,7 +80,9 @@ export function useInferredProblems(): UseInferredProblemsResult {
   // implicit reset. The loaded patient's identity is the reset signal instead:
   // without it, confirmed AI problems from one patient could silently merge
   // into the next imported patient's export.
-  const patientId = patient?.id ?? null
+  // Patient.id is technically optional in FHIR — fall back to the first
+  // identifier value so two id-less bundles still register as a change.
+  const patientId = patient?.id ?? patient?.identifier?.[0]?.value ?? null
   const lastPatientIdRef = useRef(patientId)
   useEffect(() => {
     if (lastPatientIdRef.current === patientId) return

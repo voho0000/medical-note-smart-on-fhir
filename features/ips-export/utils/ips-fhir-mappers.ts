@@ -334,7 +334,14 @@ export function mapImmunizations(immunizations: ImmunizationEntity[], patientRef
       patient: { reference: patientRef },
       ...requiredDateTime('occurrenceDateTime', im.occurrenceDateTime),
       ...(im.lotNumber ? { lotNumber: im.lotNumber } : {}),
-      ...(im.manufacturer?.display ? { manufacturer: { display: im.manufacturer.display } } : {}),
+      // Reference(Organization): prefer display; fall back to the raw
+      // reference rather than silently dropping the manufacturer when a
+      // bridge sends only `reference` (FHIR allows either).
+      ...(im.manufacturer?.display
+        ? { manufacturer: { display: im.manufacturer.display } }
+        : im.manufacturer?.reference
+          ? { manufacturer: { reference: im.manufacturer.reference } }
+          : {}),
       ...(im.note?.length ? { note: im.note.filter((n) => n.text).map((n) => ({ text: n.text })) } : {}),
     }
     return makeEntry(resource).entry
