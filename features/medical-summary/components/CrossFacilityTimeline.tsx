@@ -98,16 +98,20 @@ export function CrossFacilityTimeline({
     <div className="rounded-xl border border-border bg-card p-4">
       <h3 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">{title}</h3>
       {/* Events cap at 30rem then scroll (title stays fixed); the timeline
-          dots sit at x≥0 so the scroll box never clips them. */}
-      <div className="max-h-[30rem] overflow-y-auto scrollbar-thin-persistent">
+          dots sit at x≥0 so the scroll box never clips them. @container: when
+          the card spans the full panel width (timeline sits BELOW the 2-col
+          split), each event compacts to a single line — date · tag · hospital
+          · label — instead of stacking the label and leaving the right half
+          empty. Narrow cards keep the two-line stack. */}
+      <div className="@container max-h-[30rem] overflow-y-auto scrollbar-thin-persistent">
       <ul className="ml-1 space-y-0 border-l-2 border-border pl-4">
         {visible.map((event) => {
           const encClass = event.category === "encounter" ? event.encounterClass : undefined
           const style = encClass ? ENCOUNTER_CLASS_STYLES[encClass] : CATEGORY_STYLES[event.category]
           const pillLabel = encClass ? encounterClassLabel(encClass) : categoryLabel(event.category)
           const inner = (
-            <>
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="@min-[30rem]:flex @min-[30rem]:items-baseline @min-[30rem]:gap-2.5">
+              <div className="flex flex-wrap items-center gap-1.5 @min-[30rem]:w-[17rem] @min-[30rem]:shrink-0">
                 <span className="text-xs font-bold tabular-nums text-foreground/80">{event.date}</span>
                 <span className={cn("rounded px-1.5 py-px text-[0.65rem] font-semibold", style.pill)}>
                   {pillLabel}
@@ -121,11 +125,13 @@ export function CrossFacilityTimeline({
                   <ArrowUpRight className="h-3 w-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100" />
                 ) : null}
               </div>
-              <p className="mt-0.5 text-sm leading-snug text-foreground">{event.label}</p>
-            </>
+              <p className="mt-0.5 min-w-0 text-sm leading-snug text-foreground @min-[30rem]:mt-0 @min-[30rem]:flex-1">
+                {event.label}
+              </p>
+            </div>
           )
           return (
-            <li key={`${event.key}-${event.date}`} className="relative pb-4 last:pb-0">
+            <li key={`${event.key}-${event.date}`} className="relative pb-4 last:pb-0 @min-[30rem]:pb-2.5">
               <span
                 className={cn(
                   "absolute -left-[21.5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card",

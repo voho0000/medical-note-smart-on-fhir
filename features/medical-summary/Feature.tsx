@@ -362,26 +362,33 @@ export default function MedicalSummaryFeature() {
                       onNavigate={navigateToResource}
                     />
                   </div>
-                  <div ref={timelineRef} className="scroll-mt-2">
-                    <CrossFacilityTimeline
-                      result={result}
-                      title={ms.timelineTitle}
-                      categoryLabel={categoryLabel}
-                      encounterClassLabel={encounterClassLabel}
-                      onNavigate={navigateToResource}
-                      earlierLabel={ms.timelineShowEarlier}
-                      collapseLabel={ms.timelineShowLess}
-                      droppedNote={
-                        result.droppedTimelineCount > 0
-                          ? ms.timelineDropped.replace("{count}", String(result.droppedTimelineCount))
-                          : null
-                      }
-                    />
-                  </div>
                 </>
               ) : null}
             </div>
           </div>
+
+          {/* Timeline — full width BELOW the split: each event is a horizontal
+              strip (date · class tag · hospital · label) that wraps into 2–3
+              lines at half width, so it benefits from span more than any other
+              card. Reading order keeps it last either way. */}
+          {result ? (
+            <div ref={timelineRef} className="scroll-mt-2">
+              <CrossFacilityTimeline
+                result={result}
+                title={ms.timelineTitle}
+                categoryLabel={categoryLabel}
+                encounterClassLabel={encounterClassLabel}
+                onNavigate={navigateToResource}
+                earlierLabel={ms.timelineShowEarlier}
+                collapseLabel={ms.timelineShowLess}
+                droppedNote={
+                  result.droppedTimelineCount > 0
+                    ? ms.timelineDropped.replace("{count}", String(result.droppedTimelineCount))
+                    : null
+                }
+              />
+            </div>
+          ) : null}
 
           {/* 5. Coverage — deterministic, always visible once data is loaded */}
           {coverage ? (
