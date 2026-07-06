@@ -53,6 +53,14 @@ const HARDCODED_REF_RANGES: Record<string, { low?: number; high?: number }> = {
   // Generic glucose (random/post-meal) and finger sugar are context-dependent.
   'GLUCOSE-AC': { low: 70, high: 100 },    // mg/dL (fasting)
   HBA1C:      {             high: 5.7 },   // %
+  // NOTE: blood-gas analytes (PH/PCO2/PO2/HCO3/BE/SO2/FIO2) intentionally have
+  // NO hardcoded range. Their cumulative-report column mixes arterial, venous
+  // and capillary specimens (see lab-categories 'bloodgas'), whose normal
+  // ranges differ materially — esp. pO2 (arterial ~80–100 vs venous ~40) and
+  // O2 sat (~95–100 vs ~70). A single hardcoded range would false-flag the
+  // other specimen, so colouring relies solely on each obs's own FHIR
+  // referenceRange (which is specimen-correct). PH is doubly unsafe here — its
+  // testKey is shared with urinalysis pH.
 }
 
 // Exported for unit-test access; the cumulative-report cell colouring

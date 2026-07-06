@@ -425,6 +425,52 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   // same 06012C panel). 24356-8 is deliberately left UNMAPPED — it is genuinely
   // a panel code and must never resolve to a single analyte.
   // See memory/feedback_no_masking_bridge_bugs.md.
+
+  // ── Blood gas (ABG / VBG / CBG) ───────────────────────────
+  // ARTERIAL, VENOUS and CAPILLARY specimen variants of each analyte all map to
+  // the SAME canonical key so they collapse into ONE column in the cumulative
+  // report — the clinician distinguishes arterial vs venous by reading the
+  // O2 saturation / pO2 themselves (a single pO2/SO2 column, not pO2 + pO2(V)).
+  // Because a column now mixes specimens, blood-gas analytes carry NO hardcoded
+  // reference range (see useLabPivot.HARDCODED_REF_RANGES) — abnormal colouring
+  // comes only from each obs's own specimen-correct FHIR referenceRange.
+  // Every code verified at loinc.org (2026-07-06) against the official gas
+  // panels 24336-0 (Arterial) and 24339-4 (Venous). 'SO2' is used (not 'SAO2')
+  // to stay specimen-neutral.
+  // 2744-1/2746-6/2745-8 share canonical 'PH' with urine 5803-2 — safe, because
+  // each routes to its own category bucket by LOINC before the pivot groups by
+  // key.
+  // pH
+  '2744-1': 'PH',             // pH of Arterial blood
+  '2746-6': 'PH',             // pH of Venous blood
+  '2745-8': 'PH',             // pH of Capillary blood
+  // pCO2
+  '2019-8': 'PCO2',           // Carbon dioxide [Partial pressure] in Arterial blood
+  '2021-4': 'PCO2',           // Carbon dioxide [Partial pressure] in Venous blood
+  '2020-6': 'PCO2',           // Carbon dioxide [Partial pressure] in Capillary blood
+  // pO2
+  '2703-7': 'PO2',            // Oxygen [Partial pressure] in Arterial blood
+  '2705-2': 'PO2',            // Oxygen [Partial pressure] in Venous blood
+  '2704-5': 'PO2',            // Oxygen [Partial pressure] in Capillary blood
+  // Bicarbonate (actual)
+  '1960-4':  'HCO3',          // Bicarbonate [Moles/volume] in Arterial blood
+  '14627-4': 'HCO3',          // Bicarbonate [Moles/volume] in Venous blood
+  // Base excess
+  '1925-7': 'BE',             // Base excess in Arterial blood by calculation
+  '1927-3': 'BE',             // Base excess in Venous blood by calculation
+  // Oxygen saturation (specimen-neutral canonical SO2)
+  '2708-6': 'SO2',            // Oxygen saturation in Arterial blood
+  '2711-0': 'SO2',            // Oxygen saturation in Venous blood
+  // Generic "Blood" (unspecified vessel) gas codes — analysers / bridges that
+  // don't tag the vessel emit these. verified loinc.org 2026-07-06.
+  '11558-4': 'PH',            // pH of Blood
+  '11557-6': 'PCO2',          // Carbon dioxide [Partial pressure] in Blood
+  '11556-8': 'PO2',           // Oxygen [Partial pressure] in Blood
+  '1959-6':  'HCO3',          // Bicarbonate [Moles/volume] in Blood
+  '11555-0': 'BE',            // Base excess in Blood by calculation (SBE)
+  '20564-1': 'SO2',           // Oxygen saturation in Blood (functional; NOT calculated 2713-6)
+  // FiO2 — inhaled oxygen concentration (ventilator setting; no specimen)
+  '3150-0': 'FIO2',
 }
 
 // Set of every canonical analyte key the pivot is willing to render as a
@@ -495,6 +541,16 @@ export const CANONICAL_DISPLAY: Record<string, string> = {
   'IGM': 'IgM',
   'NT-PROBNP': 'NT-proBNP',
   'HBA1C': 'HbA1c',
+  // Arterial blood gas — clinical mixed-case / subscript conventions so the
+  // all-uppercase canonical keys don't read as typos in the column header.
+  'PH': 'pH',
+  'PCO2': 'pCO₂',
+  'PO2': 'pO₂',
+  'HCO3': 'HCO₃⁻',
+  // Specimen-neutral: one O2-saturation column holds both arterial (SaO2) and
+  // venous (SvO2) values, so the header stays 'SO₂'.
+  'SO2': 'SO₂',
+  'FIO2': 'FiO₂',
 }
 
 /**

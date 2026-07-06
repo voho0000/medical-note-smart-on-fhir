@@ -6,7 +6,14 @@
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
 import { useMemo, useState } from "react"
+import { ChevronDown } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
@@ -212,15 +219,43 @@ export function CumulativeLabReport({ observations, fullHeight = false, activeCa
       .filter((p) => !!p)
   }, [pivots])
 
-  const [internalActiveId, setInternalActiveId] = useState<string>(() => nonEmpty[0]?.category.id || 'cbc')
+  // Split into always-visible categories and hiddenByDefault ones (blood gas,
+  // and future extra groups), which surface only after the user picks them from
+  // the 「查看更多」 dropdown. A Set of revealed ids (rather than a single boolean)
+  // so multiple hidden groups can each be added independently — the dropdown is
+  // a picker, not an all-or-nothing toggle.
+  const visibleCats = useMemo(() => nonEmpty.filter((p) => !p.category.hiddenByDefault), [nonEmpty])
+  const hiddenCats = useMemo(() => nonEmpty.filter((p) => p.category.hiddenByDefault), [nonEmpty])
+
+  const [internalActiveId, setInternalActiveId] = useState<string>(() => visibleCats[0]?.category.id || nonEmpty[0]?.category.id || 'cbc')
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set())
   // Prefer the parent-controlled id (survives the fullscreen remount) when it
   // points at a category that still has data; otherwise use internal state.
   const activeId = (activeCategoryId && nonEmpty.some((p) => p.category.id === activeCategoryId))
     ? activeCategoryId
     : internalActiveId
+
+  // A hidden category is "shown" once the user picked it (revealedIds) or it's
+  // the active tab (e.g. a fullscreen remount restored a blood-gas selection —
+  // Radix renders nothing for a value with no matching trigger/content).
+  const isHiddenShown = (id: string) => revealedIds.has(id) || id === activeId
+  const shownHidden = hiddenCats.filter((p) => isHiddenShown(p.category.id))
+  const shownCats = [...visibleCats, ...shownHidden]
+  // Hidden groups not yet surfaced → the dropdown's menu items. When empty, the
+  // 「查看更多」 button disappears (all extras are already tabs).
+  const pickableHidden = hiddenCats.filter((p) => !isHiddenShown(p.category.id))
+
   const setActiveId = (id: string) => {
     setInternalActiveId(id)
     onCategoryChange?.(id)
+  }
+  const revealCategory = (id: string) => {
+    setRevealedIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+    setActiveId(id)
   }
 
   if (nonEmpty.length === 0) {
@@ -235,7 +270,7 @@ export function CumulativeLabReport({ observations, fullHeight = false, activeCa
     <div className={fullHeight ? 'flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : 'space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
         <TabsList className="!flex !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
-          {nonEmpty.map((p) => {
+          {shownCats.map((p) => {
             const label = categoryLabels[p.category.id] || p.category.id
             return (
               <TabsTrigger
@@ -247,8 +282,40 @@ export function CumulativeLabReport({ observations, fullHeight = false, activeCa
               </TabsTrigger>
             )
           })}
+          {/* 「查看更多」 dropdown — a picker over hiddenByDefault groups (blood
+              gas, and future extra groups). Selecting an item reveals it as a
+              real tab and switches to it; the button hides once every extra is
+              already shown. A dropdown (not an all-or-nothing toggle) so more
+              cumulative-report groups can be added without cluttering the bar. */}
+          {pickableHidden.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="!flex-none !min-w-fit inline-flex items-center gap-0.5 text-xs h-7 px-2 whitespace-nowrap rounded-sm text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+                >
+                  {(t.reports as any).cumulativeShowMore || 'More'}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[8rem]">
+                {pickableHidden.map((p) => {
+                  const label = categoryLabels[p.category.id] || p.category.id
+                  return (
+                    <DropdownMenuItem
+                      key={p.category.id}
+                      onSelect={() => revealCategory(p.category.id)}
+                      className="text-xs"
+                    >
+                      {label} ({p.dates.length})
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </TabsList>
-        {nonEmpty.map((p) => (
+        {shownCats.map((p) => (
           <TabsContent
             key={p.category.id}
             value={p.category.id}

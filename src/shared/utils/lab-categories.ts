@@ -34,6 +34,12 @@ export interface LabCategory {
   subgroups?: LabSubgroup[]
   /** Test keys that always appear as columns even when the patient has no data for them */
   pinnedColumns?: string[]
+  /** When true this category is NOT shown as a sub-tab by default — it is
+   *  revealed only after the user clicks the 「查看更多」 chip in the cumulative
+   *  report. For panels ordered on a minority of (usually critically-ill)
+   *  patients (e.g. arterial blood gas) that would otherwise add a persistently
+   *  empty tab to routine outpatient labs. */
+  hiddenByDefault?: boolean
 }
 
 export const LAB_CATEGORIES: LabCategory[] = [
@@ -293,6 +299,53 @@ export const LAB_CATEGORIES: LabCategory[] = [
       { id: 'ratio',     members: ['MALB', 'MALB(U)', 'CREA', 'PROT(SPOT)', 'CALB(SPOT)', 'CR(SPOT)', 'PROT/CR RATIO', 'ALB/CR RATIO', 'ACR', 'UACR'] },
     ],
     pinnedColumns: ['COLOR', 'PH', 'GRAVIT', 'PROT', 'GLUCOSE', 'KETONE', 'BILI', 'UROBI', 'NITRITE', 'OCCULT'],
+  },
+  {
+    id: 'bloodgas',
+    // Blood gas (ABG / VBG / CBG). hiddenByDefault → surfaced only via the
+    // 「查看更多」 chip in the cumulative report; blood gas is ordered for a
+    // minority of (usually critically-ill) patients so it would otherwise add a
+    // near-always-empty tab to routine outpatient labs.
+    //
+    // MULTI-SPECIMEN, ONE COLUMN by design: arterial, venous AND capillary
+    // LOINCs for each analyte map to the same canonical key (see
+    // LOINC_TO_CANONICAL) so they collapse into a single pH / pCO2 / pO2 / SO2
+    // column — the clinician tells arterial from venous by reading the O2
+    // saturation / pO2 themselves, rather than the table splitting into
+    // pO2 + pO2(V). Because a column mixes specimens, blood-gas analytes carry
+    // NO hardcoded reference range (arterial vs venous ranges differ materially,
+    // esp. pO2 / SO2); colouring comes only from each obs's own FHIR
+    // referenceRange. All codes verified at loinc.org (2026-07-06) against the
+    // official gas panels 24336-0 (Arterial) and 24339-4 (Venous); 3150-0 FiO2
+    // is a ventilator setting with NO specimen, caught by the LOINC pass.
+    // Reading order: gas tensions → acid-base → oxygenation → FiO2 (context).
+    hiddenByDefault: true,
+    preferredOrder: ['PH', 'PCO2', 'PO2', 'HCO3', 'BE', 'SO2', 'FIO2'],
+    // Bare 'PH' is deliberately NOT in codes[] — it collides with urinalysis
+    // pH; blood-gas pH is resolved via LOINC (Pass 2) + blood specimen (Pass 1).
+    // Short codes stay specimen-neutral where possible, with a few arterial/
+    // venous text variants for bridges that ship short names without a LOINC.
+    codes: ['PCO2', 'PACO2', 'PVCO2', 'PO2', 'PAO2', 'PVO2', 'HCO3', 'BE', 'SO2', 'SAO2', 'SVO2', 'FIO2'],
+    loincCodes: [
+      // pH: arterial / venous / capillary
+      '2744-1', '2746-6', '2745-8',
+      // pCO2: arterial / venous / capillary
+      '2019-8', '2021-4', '2020-6',
+      // pO2: arterial / venous / capillary
+      '2703-7', '2705-2', '2704-5',
+      // Bicarbonate: arterial / venous
+      '1960-4', '14627-4',
+      // Base excess: arterial / venous
+      '1925-7', '1927-3',
+      // O2 saturation: arterial / venous
+      '2708-6', '2711-0',
+      // Generic "Blood" (unspecified vessel): pH / pCO2 / pO2 / bicarbonate /
+      // base excess / O2 saturation — verified loinc.org 2026-07-06.
+      '11558-4', '11557-6', '11556-8', '1959-6', '11555-0', '20564-1',
+      // FiO2
+      '3150-0',
+    ],
+    pinnedColumns: ['PH', 'PCO2', 'PO2', 'HCO3', 'BE', 'SO2', 'FIO2'],
   },
 ]
 

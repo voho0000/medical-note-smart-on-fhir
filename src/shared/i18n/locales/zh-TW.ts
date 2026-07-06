@@ -462,6 +462,8 @@ export const zhTW = {
       vitals: '生命徵象',
       procedures: '處置',
     },
+    cumulativeShowMore: '查看更多',
+    cumulativeShowLess: '收合',
     cumulativeCategories: {
       cbc: '血液',
       coag: '凝血',
@@ -472,6 +474,7 @@ export const zhTW = {
       hep: 'BC肝',
       tumor: '癌症',
       urine: '尿液',
+      bloodgas: '血氣',
       // 「其他」歸納未進入上述五大類的特殊檢驗（例如罕用的免疫學、
       // 微生物、自費項目）— 在就診紀錄詳情用，避免無分類檢驗緊接前
       // 一個分類渲染、被誤讀成同類。

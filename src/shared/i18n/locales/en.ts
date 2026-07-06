@@ -458,6 +458,8 @@ export const en = {
       vitals: 'Vitals',
       procedures: 'Procedures',
     },
+    cumulativeShowMore: 'More',
+    cumulativeShowLess: 'Less',
     cumulativeCategories: {
       cbc: 'CBC',
       coag: 'Coag',
@@ -468,6 +470,7 @@ export const en = {
       hep: 'HBV/HCV',
       tumor: 'Tumor',
       urine: 'Urine',
+      bloodgas: 'BG',
       // Catch-all for labs not in the five main panels — keeps
       // uncategorised results from rendering under the previous group's
       // header in the visit-history detail view.
