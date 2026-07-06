@@ -60,6 +60,10 @@ export type ConvertDim =
   | 'ethanol'
   | 'weight'
   | 'height'
+  | 'pressure'    // blood-gas partial pressures (mmHg ↔ kPa)
+  | 'osmolality'  // mOsm/kg ↔ Osm/kg
+  | 'hemoglobin'  // g/dL ↔ g/L ↔ mmol/L
+  | 'fio2'        // % ↔ fraction (21% ↔ 0.21)
 
 /**
  * Where an input's initial value comes from, if any. Resolved by

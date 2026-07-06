@@ -107,7 +107,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
         if (val < 275) { interp = { en: 'Low (< 275)', zh: '偏低（< 275）' }; severity = 'moderate' }
         else if (val <= 295) { interp = { en: 'Normal (275–295)', zh: '正常（275–295）' }; severity = 'normal' }
         else { interp = { en: 'High (> 295)', zh: '偏高（> 295）' }; severity = 'high' }
-        return { value: String(val), unit: 'mOsm/kg', interpretation: interp, severity }
+        return { value: String(val), unit: 'mOsm/kg', dimension: 'osmolality', interpretation: interp, severity }
       },
       reference: 'Calculated osmolality = 2×Na + glucose/18 + BUN/2.8. (Measured osmolality needed for osmolar gap.)',
     },
@@ -126,6 +126,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
       compute: (v) => {
         const na = n(v, 'na'); const wt = n(v, 'weight'); const female = v.sex === 'female'
         if (na === undefined || wt === undefined || wt <= 0) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         const tbw = wt * (female ? 0.5 : 0.6)
         const deficit = tbw * (na / 140 - 1)
         const val = round(deficit, 1)
@@ -203,8 +204,8 @@ export const ELECTROLYTE: CalculatorDef[] = [
       inputs: [
         { key: 'uK', type: 'number', label: { en: 'Urine potassium', zh: '尿液鉀' }, unit: 'mmol/L', dimension: 'electrolyte', source: { kind: 'labSpecimen', keys: ['K'], loinc: ['2828-2'], specimen: 'urine' } },
         { key: 'pK', type: 'number', label: { en: 'Serum potassium', zh: '血清鉀' }, unit: 'mmol/L', dimension: 'electrolyte', normalRange: { low: 3.5, high: 5.0 }, source: { kind: 'labSpecimen', keys: ['K'], loinc: ['2823-3'], specimen: 'blood' } },
-        { key: 'uOsm', type: 'number', label: { en: 'Urine osmolality', zh: '尿液滲透壓' }, unit: 'mOsm/kg', source: { kind: 'labLoinc', loinc: ['2695-5'] } },
-        { key: 'pOsm', type: 'number', label: { en: 'Serum osmolality', zh: '血清滲透壓' }, unit: 'mOsm/kg', normalRange: { low: 275, high: 295 }, source: { kind: 'labLoinc', loinc: ['2692-2'] } },
+        { key: 'uOsm', type: 'number', label: { en: 'Urine osmolality', zh: '尿液滲透壓' }, unit: 'mOsm/kg', dimension: 'osmolality', source: { kind: 'labLoinc', loinc: ['2695-5'] } },
+        { key: 'pOsm', type: 'number', label: { en: 'Serum osmolality', zh: '血清滲透壓' }, unit: 'mOsm/kg', dimension: 'osmolality', normalRange: { low: 275, high: 295 }, source: { kind: 'labLoinc', loinc: ['2692-2'] } },
       ],
       compute: (v) => {
         const uK = n(v, 'uK'); const pK = n(v, 'pK'); const uOsm = n(v, 'uOsm'); const pOsm = n(v, 'pOsm')
@@ -231,7 +232,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Screen for toxic alcohols.', zh: '毒性酒精中毒篩檢。' },
       inputs: [
-        { key: 'measured', type: 'number', label: { en: 'Measured osmolality', zh: '實測滲透壓' }, unit: 'mOsm/kg', normalRange: { low: 275, high: 295 }, source: { kind: 'labLoinc', loinc: ['2692-2'] } },
+        { key: 'measured', type: 'number', label: { en: 'Measured osmolality', zh: '實測滲透壓' }, unit: 'mOsm/kg', dimension: 'osmolality', normalRange: { low: 275, high: 295 }, source: { kind: 'labLoinc', loinc: ['2692-2'] } },
         { key: 'na', type: 'number', label: { en: 'Sodium', zh: '鈉' }, unit: 'mmol/L', dimension: 'electrolyte', normalRange: { low: 136, high: 145 }, source: { kind: 'lab', keys: ['NA'] } },
         { key: 'glucose', type: 'number', label: { en: 'Glucose', zh: '血糖' }, unit: 'mg/dL', dimension: 'glucose', normalRange: { low: 70, high: 100 }, source: { kind: 'lab', keys: ['GLUCOSE', 'GLUCOSE-AC'] } },
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
@@ -244,7 +245,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
         const gap = measured - calc
         const val = round(gap, 1)
         return {
-          value: String(val), unit: 'mOsm/kg',
+          value: String(val), unit: 'mOsm/kg', dimension: 'osmolality',
           interpretation: val > 10
             ? { en: '> 10 — elevated; consider toxic alcohols (methanol, ethylene glycol)', zh: '> 10 — 偏高；考慮毒性酒精（甲醇、乙二醇）' }
             : { en: '≤ 10 — normal', zh: '≤ 10 — 正常' },

@@ -167,7 +167,16 @@ export const SEX_INPUT = {
     { value: 'male', label: { en: 'Male', zh: '男' } },
     { value: 'female', label: { en: 'Female', zh: '女' } },
   ],
-  defaultValue: 'male',
+  // No default: when the patient's sex is unknown/other/absent the field stays
+  // blank and sex-dependent formulas refuse to compute (via requireSex) rather
+  // than silently assuming male.
+  defaultValue: '',
+}
+
+/** Sex-dependent formulas must not silently assume male when sex is missing.
+ *  Returns the confirmed sex, or null (→ compute returns null / no result). */
+export function requireSex(v: CalcValues): 'male' | 'female' | null {
+  return v.sex === 'male' || v.sex === 'female' ? v.sex : null
 }
 export const AGE_INPUT = {
   key: 'age',

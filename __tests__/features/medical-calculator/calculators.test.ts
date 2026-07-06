@@ -822,6 +822,25 @@ describe('CKD prognosis / follow-up (KDIGO 健保存摺)', () => {
   })
 })
 
+describe('sex is required — no silent male default', () => {
+  it('eGFR (CKD-EPI) returns null when sex is blank/unknown, computes when set', () => {
+    expect(run('egfr-ckd-epi-2021', { scr: '1.0', age: '60', sex: '' })).toBeNull()
+    expect(run('egfr-ckd-epi-2021', { scr: '1.0', age: '60', sex: 'other' })).toBeNull()
+    expect(run('egfr-ckd-epi-2021', { scr: '1.0', age: '60', sex: 'male' })).not.toBeNull()
+    expect(run('egfr-ckd-epi-2021', { scr: '1.0', age: '60', sex: 'female' })).not.toBeNull()
+  })
+  it('Cockcroft-Gault, MDRD, IBW, free-water, MELD-3, HCC, CHA2DS2-VASc, Glasgow-Blatchford all require sex', () => {
+    expect(run('crcl-cockcroft-gault', { scr: '1', age: '70', weight: '80', sex: '' })).toBeNull()
+    expect(run('egfr-mdrd', { scr: '1', age: '60', sex: '' })).toBeNull()
+    expect(run('ideal-body-weight', { height: '170', sex: '' })).toBeNull()
+    expect(run('free-water-deficit', { na: '150', weight: '70', sex: '' })).toBeNull()
+    expect(run('meld-3', { bili: '2', inr: '1.5', scr: '1.5', na: '135', alb: '3', sex: '' })).toBeNull()
+    expect(run('hcc-risk-reveal', { sex: '', age: '57', alt: '50', hbeag: 'pos' })).toBeNull()
+    expect(run('cha2ds2-vasc', { age: '70', sex: '' })).toBeNull()
+    expect(run('glasgow-blatchford', { bun: '30', hb: '11', sbp: '110', sex: '' })).toBeNull()
+  })
+})
+
 describe('WHO 2019 CVD 10-year risk', () => {
   it('male 60, chol 232 mg/dL (6.0 mmol/L), SBP 120, no DM/smoke → ~6.0%, moderate band', () => {
     const r = run('who-cvd-2019', { sex: 'male', age: '60', sbp: '120', chol: '232', dm: 'no', smk: 'no' })

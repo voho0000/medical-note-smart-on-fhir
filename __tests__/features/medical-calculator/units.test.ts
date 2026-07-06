@@ -29,6 +29,29 @@ describe('convertToBase', () => {
     expect(r!.value).toBeCloseTo(180.16, 1)
   })
 
+  it('converts blood-gas pressure kPa → mmHg', () => {
+    const r = convertToBase(12, 'kPa', 'pressure')
+    expect(r!.value).toBeCloseTo(90.0, 0) // 12 × 7.5006
+    expect(r!.changed).toBe(true)
+    expect(convertToBase(90, 'mmHg', 'pressure')!.changed).toBe(false)
+  })
+
+  it('converts hemoglobin g/L → g/dL (and mmol/L → g/dL)', () => {
+    expect(convertToBase(120, 'g/L', 'hemoglobin')!.value).toBeCloseTo(12.0, 1)
+    expect(convertToBase(8, 'mmol/L', 'hemoglobin')!.value).toBeCloseTo(12.89, 1) // 8 × 1.6113
+  })
+
+  it('converts osmolality Osm/kg → mOsm/kg (and mOsm/kg unchanged)', () => {
+    expect(convertToBase(0.29, 'Osm/kg', 'osmolality')!.value).toBeCloseTo(290, 0)
+    expect(convertToBase(290, 'mOsm/kg', 'osmolality')!.changed).toBe(false)
+  })
+
+  it('converts FiO₂ fraction → percent', () => {
+    expect(convertToBase(0.21, '1', 'fio2')!.value).toBeCloseTo(21, 0)
+    expect(convertToBase(0.4, 'fraction', 'fio2')!.value).toBeCloseTo(40, 0)
+    expect(convertToBase(21, '%', 'fio2')!.changed).toBe(false)
+  })
+
   it('converts calcium mmol/L → mg/dL', () => {
     const r = convertToBase(2.5, 'mmol/L', 'calcium')
     expect(r!.value).toBeCloseTo(10.02, 1)

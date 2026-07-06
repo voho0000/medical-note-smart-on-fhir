@@ -75,6 +75,7 @@ export const GENERAL: CalculatorDef[] = [
       compute: (v) => {
         const ht = n(v, 'height'); const female = v.sex === 'female'; const wt = n(v, 'weight')
         if (ht === undefined || ht <= 0) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         const inches = ht / 2.54
         const base = female ? 45.5 : 50
         const ibw = base + 2.3 * (inches - 60)

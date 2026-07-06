@@ -11,18 +11,19 @@ export const GI: CalculatorDef[] = [
       blurb: { en: 'Upper GI bleed risk / need for intervention.', zh: '上消化道出血風險／介入需求。' },
       inputs: [
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
-        { key: 'hb', type: 'number', label: { en: 'Hemoglobin', zh: '血色素' }, unit: 'g/dL', normalRange: { low: 12, high: 16 }, source: { kind: 'lab', keys: ['HB'] } },
+        { key: 'hb', type: 'number', label: { en: 'Hemoglobin', zh: '血色素' }, unit: 'g/dL', dimension: 'hemoglobin', normalRange: { low: 12, high: 16 }, source: { kind: 'lab', keys: ['HB'] } },
         { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 } },
         SEX_INPUT,
-        { key: 'hr', type: 'select', label: { en: 'Heart rate ≥ 100', zh: '心率 ≥ 100' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'melena', type: 'select', label: { en: 'Melena', zh: '黑便' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'syncope', type: 'select', label: { en: 'Syncope', zh: '昏厥' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'hepatic', type: 'select', label: { en: 'Hepatic disease', zh: '肝臟疾病' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'cardiac', type: 'select', label: { en: 'Cardiac failure', zh: '心臟衰竭' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'hr', type: 'select', label: { en: 'Heart rate ≥ 100', zh: '心率 ≥ 100' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'melena', type: 'select', label: { en: 'Melena', zh: '黑便' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'syncope', type: 'select', label: { en: 'Syncope', zh: '昏厥' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'hepatic', type: 'select', label: { en: 'Hepatic disease', zh: '肝臟疾病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'cardiac', type: 'select', label: { en: 'Cardiac failure', zh: '心臟衰竭' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const bun = n(v, 'bun'); const hb = n(v, 'hb'); const sbp = n(v, 'sbp')
         if (bun === undefined || hb === undefined || sbp === undefined) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex (sex-specific Hb bands)
         const female = v.sex === 'female'
         let s = 0
         // BUN (mg/dL)
@@ -56,9 +57,9 @@ export const GI: CalculatorDef[] = [
       inputs: [
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
         AGE_INPUT,
-        { key: 'mental', type: 'select', label: { en: 'Impaired mental status', zh: '意識改變' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'sirs', type: 'select', label: { en: 'SIRS (≥2 criteria)', zh: 'SIRS（≥2 項）' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'effusion', type: 'select', label: { en: 'Pleural effusion', zh: '肋膜積液' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'mental', type: 'select', label: { en: 'Impaired mental status', zh: '意識改變' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'sirs', type: 'select', label: { en: 'SIRS (≥2 criteria)', zh: 'SIRS（≥2 項）' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'effusion', type: 'select', label: { en: 'Pleural effusion', zh: '肋膜積液' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const bun = n(v, 'bun'); const age = n(v, 'age')
@@ -94,7 +95,7 @@ export const GI: CalculatorDef[] = [
         { key: 'hctFall', type: 'number', label: { en: 'Hct fall at 48h (%)', zh: '48 小時 Hct 下降 (%)' }, unit: '%', optional: true, defaultValue: '0' },
         { key: 'bunRise', type: 'number', label: { en: 'BUN rise at 48h (mg/dL)', zh: '48 小時 BUN 上升 (mg/dL)' }, unit: 'mg/dL', optional: true, defaultValue: '0' },
         { key: 'ca', type: 'number', label: { en: 'Calcium at 48h', zh: '48 小時血鈣' }, unit: 'mg/dL', dimension: 'calcium', normalRange: { low: 8.5, high: 10.5 }, optional: true, source: { kind: 'lab', keys: ['CA'] } },
-        { key: 'pao2', type: 'number', label: { en: 'PaO₂ at 48h', zh: '48 小時 PaO₂' }, unit: 'mmHg', optional: true, source: { kind: 'labLoinc', loinc: ['2703-7'] } },
+        { key: 'pao2', type: 'number', label: { en: 'PaO₂ at 48h', zh: '48 小時 PaO₂' }, unit: 'mmHg', dimension: 'pressure', optional: true, source: { kind: 'labLoinc', loinc: ['2703-7'] } },
         { key: 'baseDeficit', type: 'number', label: { en: 'Base deficit at 48h', zh: '48 小時鹼缺失' }, unit: 'mmol/L', optional: true, defaultValue: '0' },
         { key: 'fluid', type: 'number', label: { en: 'Fluid sequestration at 48h (L)', zh: '48 小時體液滯留 (L)' }, unit: 'L', optional: true, defaultValue: '0' },
       ],
@@ -136,7 +137,7 @@ export const GI: CalculatorDef[] = [
         { key: 'inr', type: 'number', label: { en: 'INR', zh: 'INR' }, normalRange: { low: 0.8, high: 1.1 }, source: { kind: 'lab', keys: ['INR'] } },
         { key: 'sbp', type: 'number', label: { en: 'Systolic BP', zh: '收縮壓' }, unit: 'mmHg', normalRange: { low: 90, high: 120 } },
         AGE_INPUT,
-        { key: 'mental', type: 'select', label: { en: 'Altered mental status', zh: '意識改變' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'mental', type: 'select', label: { en: 'Altered mental status', zh: '意識改變' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const alb = n(v, 'alb'); const inr = n(v, 'inr'); const sbp = n(v, 'sbp'); const age = n(v, 'age')

@@ -15,7 +15,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'na', type: 'number', label: { en: 'Sodium', zh: '鈉' }, unit: 'mmol/L', dimension: 'electrolyte', normalRange: { low: 136, high: 145 }, source: { kind: 'lab', keys: ['NA'] } },
         {
           key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' },
-          defaultValue: 'no',
+          defaultValue: '',
           options: [
             { value: 'no', label: { en: 'No', zh: '否' } },
             { value: 'yes', label: { en: 'Yes', zh: '是' } },
@@ -70,13 +70,14 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'alb', type: 'number', label: { en: 'Albumin', zh: '白蛋白' }, unit: 'g/dL', dimension: 'albumin', normalRange: { low: 3.5, high: 5.0 }, source: { kind: 'lab', keys: ['ALB'] } },
         SEX_INPUT,
         {
-          key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' }, defaultValue: 'no',
+          key: 'dialysis', type: 'select', label: { en: 'Dialysis ≥2× in past week', zh: '過去一週洗腎 ≥2 次' }, defaultValue: '',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
       ],
       compute: (v) => {
         const biliR = n(v, 'bili'); const inrR = n(v, 'inr'); const scrR = n(v, 'scr'); const naR = n(v, 'na'); const albR = n(v, 'alb')
         if ([biliR, inrR, scrR, naR, albR].some((x) => x === undefined)) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         const female = v.sex === 'female' ? 1 : 0
         const bili = Math.max(biliR!, 1)
         const inr = Math.max(inrR!, 1)
@@ -218,7 +219,7 @@ export const HEPATIC: CalculatorDef[] = [
         { key: 'weight', type: 'number', label: { en: 'Weight', zh: '體重' }, unit: 'kg', dimension: 'weight', source: { kind: 'vital', loinc: WEIGHT_LOINC, vital: 'weight' } },
         { key: 'height', type: 'number', label: { en: 'Height', zh: '身高' }, unit: 'cm', dimension: 'height', source: { kind: 'vital', loinc: HEIGHT_LOINC, vital: 'height' } },
         {
-          key: 'dm', type: 'select', label: { en: 'Impaired fasting glucose / diabetes', zh: '空腹血糖異常／糖尿病' }, defaultValue: 'no',
+          key: 'dm', type: 'select', label: { en: 'Impaired fasting glucose / diabetes', zh: '空腹血糖異常／糖尿病' }, defaultValue: '',
           options: [
             { value: 'no', label: { en: 'No', zh: '否' } },
             { value: 'yes', label: { en: 'Yes', zh: '是' } },
@@ -304,6 +305,7 @@ export const HEPATIC: CalculatorDef[] = [
         const age = n(v, 'age'); const alt = n(v, 'alt'); const hbeag = v.hbeag
         if (age === undefined || alt === undefined || (hbeag !== 'pos' && hbeag !== 'neg')) return null
         if (age < 0 || alt < 0) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         // Sex: female 0, male 2
         const sexPts = v.sex === 'female' ? 0 : 2
         // Age bands: <35:0, 35–39:1, 40–44:2, 45–49:3, 50–54:4, 55–59:5, ≥60:6

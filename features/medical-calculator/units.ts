@@ -63,6 +63,14 @@ const FACTORS: Record<ConvertDim, Record<string, number>> = {
   weight: { kg: 1, g: 0.001, lb: 0.453592, lbs: 0.453592 },
   // Height: base cm.
   height: { cm: 1, m: 100, in: 2.54, inch: 2.54, '"': 2.54 },
+  // Blood-gas partial pressure: base mmHg. 1 kPa = 7.500617 mmHg.
+  pressure: { mmhg: 1, 'mm[hg]': 1, kpa: 7.500617, 'k[pa]': 7.500617 },
+  // Osmolality: base mOsm/kg. 1 Osm/kg = 1000 mOsm/kg (mOsm/L ≈ mOsm/kg for plasma).
+  osmolality: { 'mosm/kg': 1, 'osm/kg': 1000, 'mosm/l': 1, 'osm/l': 1000, 'mosm/kgh2o': 1 },
+  // Hemoglobin: base g/dL. 1 g/L = 0.1 g/dL; 1 mmol/L = 1.6113 g/dL.
+  hemoglobin: { 'g/dl': 1, 'g/l': 0.1, 'mmol/l': 1.6113 },
+  // FiO₂: base %. A fraction (0.21) → percent (21%); unit "1" or "fraction".
+  fio2: { '%': 1, '1': 100, fraction: 100 },
 }
 
 export interface UnitConversion {

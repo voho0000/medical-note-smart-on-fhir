@@ -10,16 +10,16 @@ export const PULMONARY: CalculatorDef[] = [
       blurb: { en: 'Community-acquired pneumonia severity / disposition.', zh: '社區型肺炎嚴重度／處置建議。' },
       inputs: [
         {
-          key: 'confusion', type: 'select', label: { en: 'Confusion (new)', zh: '新發意識混亂' }, defaultValue: 'no',
+          key: 'confusion', type: 'select', label: { en: 'Confusion (new)', zh: '新發意識混亂' }, defaultValue: '',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         { key: 'bun', type: 'number', label: { en: 'BUN', zh: '尿素氮 (BUN)' }, unit: 'mg/dL', dimension: 'bun', normalRange: { low: 7, high: 20 }, source: { kind: 'lab', keys: ['BUN'] } },
         {
-          key: 'rr', type: 'select', label: { en: 'Respiratory rate ≥ 30/min', zh: '呼吸速率 ≥ 30/分' }, defaultValue: 'no',
+          key: 'rr', type: 'select', label: { en: 'Respiratory rate ≥ 30/min', zh: '呼吸速率 ≥ 30/分' }, defaultValue: '',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         {
-          key: 'bp', type: 'select', label: { en: 'SBP < 90 or DBP ≤ 60 mmHg', zh: '收縮壓 < 90 或舒張壓 ≤ 60 mmHg' }, defaultValue: 'no',
+          key: 'bp', type: 'select', label: { en: 'SBP < 90 or DBP ≤ 60 mmHg', zh: '收縮壓 < 90 或舒張壓 ≤ 60 mmHg' }, defaultValue: '',
           options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }],
         },
         AGE_INPUT,
@@ -113,9 +113,9 @@ export const PULMONARY: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Alveolar–arterial O₂ difference.', zh: '肺泡與動脈血氧差。' },
       inputs: [
-        { key: 'fio2', type: 'number', label: { en: 'FiO₂', zh: '吸入氧濃度 FiO₂' }, unit: '%', defaultValue: '21', source: { kind: 'labLoinc', loinc: ['3150-0'] } },
-        { key: 'paco2', type: 'number', label: { en: 'PaCO₂', zh: '動脈 PaCO₂' }, unit: 'mmHg', normalRange: { low: 35, high: 45 }, source: { kind: 'labLoinc', loinc: ['2019-8'] } },
-        { key: 'pao2', type: 'number', label: { en: 'PaO₂', zh: '動脈 PaO₂' }, unit: 'mmHg', normalRange: { low: 80, high: 100 }, source: { kind: 'labLoinc', loinc: ['2703-7'] } },
+        { key: 'fio2', type: 'number', label: { en: 'FiO₂', zh: '吸入氧濃度 FiO₂' }, unit: '%', dimension: 'fio2', defaultValue: '21', source: { kind: 'labLoinc', loinc: ['3150-0'] } },
+        { key: 'paco2', type: 'number', label: { en: 'PaCO₂', zh: '動脈 PaCO₂' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 35, high: 45 }, source: { kind: 'labLoinc', loinc: ['2019-8'] } },
+        { key: 'pao2', type: 'number', label: { en: 'PaO₂', zh: '動脈 PaO₂' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 80, high: 100 }, source: { kind: 'labLoinc', loinc: ['2703-7'] } },
         AGE_INPUT,
       ],
       compute: (v) => {
@@ -146,8 +146,8 @@ export const PULMONARY: CalculatorDef[] = [
       audience: 'medical',
       blurb: { en: 'Oxygenation / ARDS severity.', zh: '氧合狀態／ARDS 嚴重度。' },
       inputs: [
-        { key: 'pao2', type: 'number', label: { en: 'PaO₂', zh: '動脈 PaO₂' }, unit: 'mmHg', normalRange: { low: 80, high: 100 }, source: { kind: 'labLoinc', loinc: ['2703-7'] } },
-        { key: 'fio2', type: 'number', label: { en: 'FiO₂', zh: '吸入氧濃度 FiO₂' }, unit: '%', defaultValue: '21', source: { kind: 'labLoinc', loinc: ['3150-0'] } },
+        { key: 'pao2', type: 'number', label: { en: 'PaO₂', zh: '動脈 PaO₂' }, unit: 'mmHg', dimension: 'pressure', normalRange: { low: 80, high: 100 }, source: { kind: 'labLoinc', loinc: ['2703-7'] } },
+        { key: 'fio2', type: 'number', label: { en: 'FiO₂', zh: '吸入氧濃度 FiO₂' }, unit: '%', dimension: 'fio2', defaultValue: '21', source: { kind: 'labLoinc', loinc: ['3150-0'] } },
       ],
       compute: (v) => {
         const pao2 = n(v, 'pao2'); const fio2 = n(v, 'fio2')

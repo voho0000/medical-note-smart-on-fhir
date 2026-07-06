@@ -43,7 +43,10 @@ const EMPTY: ResolvedInput = {
  *  both seeding logics. */
 export function resolveInput(input: CalcInput, autofill: Autofill): ResolvedInput {
   if (input.type === 'select') {
-    if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex }
+    // Sex from patient demographics counts as data-backed (filled) so a
+    // sex-dependent formula can still be shown inline; a manual/clinical select
+    // stays unfilled (its default is not "from the patient").
+    if (input.source?.kind === 'sex' && autofill.sex) return { ...EMPTY, value: autofill.sex, filled: true }
     return { ...EMPTY, value: input.defaultValue ?? input.options[0]?.value ?? '' }
   }
   const expected = input.unit ?? ''
@@ -126,6 +129,12 @@ export function computeAutofilledResult(calc: CalculatorDef, autofill: Autofill)
       const resolved = resolveInput(inp, autofill)
       values[inp.key] = resolved.value
       if (resolved.date && (asOf === null || resolved.date < asOf)) asOf = resolved.date
+      // Every non-optional input that has a data source must have ACTUALLY
+      // resolved from the patient. If a sourced field fell back to its default
+      // (e.g. FiO₂ 21%, or sex when the patient's sex is unknown), the inline
+      // card would look auto-computed while resting on an assumption — suppress.
+      const isOptional = inp.type === 'number' && inp.optional
+      if (inp.source && !isOptional && !resolved.filled) return null
     }
     const result = calc.compute(values)
     return result ? { result, asOf } : null

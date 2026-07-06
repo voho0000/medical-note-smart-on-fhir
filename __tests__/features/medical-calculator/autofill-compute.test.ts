@@ -145,4 +145,28 @@ describe('computeAutofilledResult', () => {
     }
     expect(computeAutofilledResult(calc, fakeAutofill({ A: { value: 1, unit: '', date: '' } }))).toBeNull()
   })
+
+  it('suppresses the inline result when a sourced field falls back to its default (A-a gradient FiO₂ 21%)', () => {
+    const aa = CALCULATORS.find((c) => c.id === 'aa-gradient')!
+    const noFio2 = fakeAutofill({
+      '2019-8': { value: 40, unit: 'mmHg', date: '2026-01-01' }, // PaCO2
+      '2703-7': { value: 90, unit: 'mmHg', date: '2026-01-01' }, // PaO2
+      age: { value: 60, unit: 'y', date: '' },
+    })
+    expect(computeAutofilledResult(aa, noFio2)).toBeNull() // FiO₂ defaulted → not truly auto
+    const withFio2 = fakeAutofill({
+      '3150-0': { value: 21, unit: '%', date: '2026-01-01' },
+      '2019-8': { value: 40, unit: 'mmHg', date: '2026-01-01' },
+      '2703-7': { value: 90, unit: 'mmHg', date: '2026-01-01' },
+      age: { value: 60, unit: 'y', date: '' },
+    })
+    expect(computeAutofilledResult(aa, withFio2)).not.toBeNull()
+  })
+
+  it('suppresses the inline result for a sex-dependent calc when the patient sex is unknown', () => {
+    const egfr = CALCULATORS.find((c) => c.id === 'egfr-ckd-epi-2021')!
+    const data = { CREA: { value: 1, unit: 'mg/dL', date: '2026-01-01' }, age: { value: 60, unit: 'y', date: '' } }
+    expect(computeAutofilledResult(egfr, fakeAutofill(data))).toBeNull() // no sex
+    expect(computeAutofilledResult(egfr, fakeAutofill(data, 'male'))).not.toBeNull()
+  })
 })

@@ -19,6 +19,7 @@ export const RENAL: CalculatorDef[] = [
       compute: (v) => {
         const scr = n(v, 'scr'); const age = n(v, 'age'); const female = v.sex === 'female'
         if (scr === undefined || age === undefined || scr <= 0 || age <= 0) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         const k = female ? 0.7 : 0.9
         const a = female ? -0.241 : -0.302
         const r = scr / k
@@ -52,6 +53,7 @@ export const RENAL: CalculatorDef[] = [
       compute: (v) => {
         const scr = n(v, 'scr'); const age = n(v, 'age'); const female = v.sex === 'female'
         if (scr === undefined || age === undefined || scr <= 0 || age <= 0) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         let egfr = 175 * Math.pow(scr, -1.154) * Math.pow(age, -0.203)
         if (female) egfr *= 0.742
         const val = round(egfr)
@@ -81,6 +83,7 @@ export const RENAL: CalculatorDef[] = [
       compute: (v) => {
         const scr = n(v, 'scr'); const age = n(v, 'age'); const wt = n(v, 'weight'); const female = v.sex === 'female'
         if (scr === undefined || age === undefined || wt === undefined || scr <= 0 || age <= 0 || wt <= 0) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         const crcl = ((140 - age) * wt * (female ? 0.85 : 1)) / (72 * scr)
         const val = round(crcl)
         let severity: 'normal' | 'moderate' | 'high' = 'normal'

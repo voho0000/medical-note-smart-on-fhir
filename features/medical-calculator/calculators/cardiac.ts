@@ -49,15 +49,16 @@ export const CARDIAC: CalculatorDef[] = [
       inputs: [
         AGE_INPUT,
         SEX_INPUT,
-        { key: 'chf', type: 'select', label: { en: 'CHF / LV dysfunction', zh: '心衰竭／左心室功能不良' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'htn', type: 'select', label: { en: 'Hypertension', zh: '高血壓' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'stroke', type: 'select', label: { en: 'Prior stroke / TIA / thromboembolism', zh: '曾中風／TIA／血栓栓塞' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
-        { key: 'vascular', type: 'select', label: { en: 'Vascular disease', zh: '血管疾病' }, defaultValue: 'no', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'chf', type: 'select', label: { en: 'CHF / LV dysfunction', zh: '心衰竭／左心室功能不良' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'htn', type: 'select', label: { en: 'Hypertension', zh: '高血壓' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'dm', type: 'select', label: { en: 'Diabetes', zh: '糖尿病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'stroke', type: 'select', label: { en: 'Prior stroke / TIA / thromboembolism', zh: '曾中風／TIA／血栓栓塞' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
+        { key: 'vascular', type: 'select', label: { en: 'Vascular disease', zh: '血管疾病' }, defaultValue: '', options: [{ value: 'no', label: { en: 'No', zh: '否' } }, { value: 'yes', label: { en: 'Yes', zh: '是' } }] },
       ],
       compute: (v) => {
         const age = n(v, 'age')
         if (age === undefined) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         let s = 0
         if (age >= 75) s += 2
         else if (age >= 65) s += 1
@@ -311,6 +312,7 @@ export const CARDIAC: CalculatorDef[] = [
         if (v.dm !== 'yes' && v.dm !== 'no') return null
         if (v.smk !== 'yes' && v.smk !== 'no') return null
         if (age <= 0 || sbp <= 0 || cholMg <= 0) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null // require confirmed sex
         const sex: 'male' | 'female' = v.sex === 'female' ? 'female' : 'male'
         const chol = cholMg / 38.67 // mg/dL → mmol/L
         const dm = v.dm === 'yes' ? 1 : 0; const smk = v.smk === 'yes' ? 1 : 0
