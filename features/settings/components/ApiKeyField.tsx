@@ -1,18 +1,18 @@
-// Refactored Model and Key Settings Component
+// API-key settings. Model picking moved in-panel (shared ModelPicker in each
+// AI feature) — Settings now only manages provider keys + persistence.
 "use client"
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { InfoHint } from "@/src/shared/components/InfoHint"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
+import { useModelPrefsStore } from "@/src/application/stores/model-prefs.store"
+import { useSummaryPrefsStore } from "@/src/application/hooks/medical-summary/use-medical-summary.hook"
+import { useSafetyPrefsStore } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
 import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { cn } from "@/src/shared/utils/cn.utils"
 import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
-import { useModelSelection as useModelSelectionLogic } from '@/src/application/hooks/useModelSelection'
-import { ModelSelector } from './ModelSelector'
 import { ApiKeyInput } from './ApiKeyInput'
 import { AuthStatus } from '@/features/auth'
 
@@ -22,13 +22,10 @@ export function ModelAndKeySettings() {
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const perplexityKey = useAiConfigStore((state) => state.perplexityKey)
   const claudeKey = useAiConfigStore((state) => state.claudeKey)
-  const model = useAiConfigStore((state) => state.model)
   const setApiKey = useAiConfigStore((state) => state.setApiKey)
   const setGeminiKey = useAiConfigStore((state) => state.setGeminiKey)
   const setPerplexityKey = useAiConfigStore((state) => state.setPerplexityKey)
   const setClaudeKey = useAiConfigStore((state) => state.setClaudeKey)
-  const setModel = useAiConfigStore((state) => state.setModel)
-  const clearAllKeys = useAiConfigStore((state) => state.clearAllKeys)
   const storageType = useAiConfigStore((state) => state.storageType)
   const setStorageType = useAiConfigStore((state) => state.setStorageType)
   const [openAiValue, setOpenAiValue] = useState(apiKey)
@@ -52,35 +49,6 @@ export function ModelAndKeySettings() {
     setClaudeValue(claudeKey)
   }, [claudeKey])
 
-  const { gptModels, geminiModels, claudeModels, handleSelectModel, getModelStatus } = useModelSelectionLogic(
-    apiKey,
-    geminiKey,
-    claudeKey,
-    model,
-    setModel
-  )
-
-  // Show one provider's models at a time (was 12 cards stacked). The visible
-  // provider follows the currently-selected model, but the user can browse
-  // other providers without changing their selection.
-  const PROVIDER_TABS: Array<{ id: ModelProvider; label: string }> = [
-    { id: "openai", label: "GPT" },
-    { id: "gemini", label: "Gemini" },
-    { id: "claude", label: "Claude" },
-  ]
-  const selectedProvider = getModelDefinition(model)?.provider ?? "openai"
-  const [activeProvider, setActiveProvider] = useState<ModelProvider>(selectedProvider)
-  // Keep the visible tab in sync when the model changes elsewhere
-  useEffect(() => {
-    setActiveProvider(selectedProvider)
-  }, [selectedProvider])
-
-  const modelsByProvider: Record<ModelProvider, typeof gptModels> = {
-    openai: gptModels,
-    gemini: geminiModels,
-    claude: claudeModels,
-  }
-
   // Reject a non-empty value that isn't header-safe (e.g. pasted text/Chinese) —
   // it would crash the provider SDK's Headers construction. Returns true if bad.
   const rejectIfInvalidKey = (value: string | null | undefined): boolean => {
@@ -96,11 +64,23 @@ export function ModelAndKeySettings() {
     setApiKey(openAiValue.trim())
   }
 
-  // The store auto-downgrades a premium model back to the free base model when
-  // its key is removed (covers logout too); here we just notify the user.
+  // Model prefs live per feature now (chat / insights / medical-summary /
+  // safety-alerts) and are key-gated at read time — removing a key silently
+  // lands every stranded premium pick on that feature's free default. If any
+  // pref would be stranded by clearing this provider's key, tell the user.
   const notifyIfDowngraded = (provider: ModelProvider) => {
-    const def = getModelDefinition(model)
-    if (def?.provider === provider && def.requiresUserKey) {
+    const modelPrefs = useModelPrefsStore.getState().prefs
+    const prefsInUse = [
+      modelPrefs.chat,
+      modelPrefs.insights,
+      useSummaryPrefsStore.getState().modelId,
+      useSafetyPrefsStore.getState().modelId,
+    ]
+    const strandsAPick = prefsInUse.some((id) => {
+      const def = getModelDefinition(id)
+      return def?.provider === provider && def.requiresUserKey
+    })
+    if (strandsAPick) {
       toast.info(t.settings.modelDowngradedToFree)
     }
   }
@@ -145,50 +125,9 @@ export function ModelAndKeySettings() {
 
   return (
     <div className="space-y-6">
-      {/* Model Selection */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs uppercase text-muted-foreground">{t.settings.generationModel}</Label>
-          <InfoHint contentClassName="max-w-xs">
-            <p className="text-xs">{t.settings.modelProxyNote}</p>
-          </InfoHint>
-        </div>
-        <div className="space-y-3">
-          {/* Provider tabs */}
-          <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
-            {PROVIDER_TABS.map((tab) => {
-              const isActive = activeProvider === tab.id
-              const hasSelected = selectedProvider === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveProvider(tab.id)}
-                  className={cn(
-                    "relative rounded-md px-3 py-1.5 text-sm font-medium transition",
-                    isActive
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {tab.label}
-                  {/* dot marks the provider holding the active model */}
-                  {hasSelected && (
-                    <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          <ModelSelector
-            models={modelsByProvider[activeProvider]}
-            selectedModel={model}
-            onSelectModel={handleSelectModel}
-            getModelStatus={getModelStatus}
-          />
-        </div>
-      </div>
+      {/* Models are picked where they're used (chat / insights / summary
+          headers) — point users there instead of a global grid. */}
+      <p className="text-xs text-muted-foreground">{t.settings.modelsMovedNote}</p>
 
       {/* Authentication Status - Free Quota */}
       <AuthStatus />

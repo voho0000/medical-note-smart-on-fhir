@@ -36,6 +36,13 @@ export const zhTW = {
     expandHeader: '展開頁首列',
   },
 
+  // 共用就地模型選擇器（對話／洞察／醫療摘要標頭）
+  modelPicker: {
+    label: '模型',
+    chatTooltip: '此對話使用的 AI 模型（與其他功能獨立）',
+    insightsTooltip: '洞察生成使用的 AI 模型（與其他功能獨立）',
+  },
+
   tabs: {
     patient: '病人資訊',
     reports: '報告',
@@ -706,6 +713,7 @@ export const zhTW = {
     insertTemplate: '插入範本',
     manageTemplates: '管理範本',
     manageModels: '管理模型',
+    manageKeys: 'API 金鑰',
     settings: '設定',
     characters: '字元',
     cloudAiNotice: 'AI 為雲端服務（OpenAI / Gemini）· 請勿輸入高度敏感個資',
@@ -989,7 +997,8 @@ export const zhTW = {
     usingPersonalClaudeKey: '使用個人 Claude 金鑰',
     requiresClaudeKey: '需要個人 Claude API 金鑰',
     modelUnavailable: '暫不可用',
-    modelDowngradedToFree: '已刪除金鑰，已自動切換回免費基礎模型',
+    modelDowngradedToFree: '已刪除金鑰，選用該供應商付費模型的功能已自動改用免費模型',
+    modelsMovedNote: '模型改在各 AI 功能內選擇（對話工具列、洞察工具列、摘要標頭）；此頁管理解鎖付費模型的 API 金鑰。',
     invalidApiKey: 'API 金鑰格式不正確（含非 ASCII 字元），請確認貼上的是金鑰而非其他文字',
     requiresClaudeKeyOrProxy: '需要 Claude 金鑰或代理服務',
     willUsePersonalOpenAiKey: '將使用個人 OpenAI 金鑰',

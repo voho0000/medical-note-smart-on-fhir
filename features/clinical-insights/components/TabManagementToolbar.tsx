@@ -34,10 +34,6 @@ export function TabManagementToolbar({
   const [showGalleryDialog, setShowGalleryDialog] = useState(false)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
 
-  const handleManageModels = () => {
-    setActiveTab('settings', 'ai')
-  }
-
   const handleManageInsights = () => {
     setActiveTab('settings', 'insights')
   }
@@ -102,9 +98,8 @@ export function TabManagementToolbar({
           {t.promptGallery?.browseGallery || "瀏覽範本庫"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleManageModels}>
-          {t.clinicalInsights.manageModels || "管理模型"}
-        </DropdownMenuItem>
+        {/* Model picking moved in-panel (ModelPicker next to this toolbar);
+            Settings keeps only the API keys. */}
         <DropdownMenuItem onClick={handleManageInsights}>
           {t.clinicalInsights.manageTabs || "管理標籤"}
         </DropdownMenuItem>

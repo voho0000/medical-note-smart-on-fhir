@@ -34,6 +34,13 @@ export const en = {
     expandHeader: 'Expand header',
   },
 
+  // Shared in-panel model picker (chat / insights / medical-summary headers)
+  modelPicker: {
+    label: 'Model',
+    chatTooltip: 'Model for this chat (independent of other features)',
+    insightsTooltip: 'Model for insight generation (independent of other features)',
+  },
+
   tabs: {
     patient: 'Patient Info',
     reports: 'Reports',
@@ -703,6 +710,7 @@ export const en = {
     insertTemplate: 'Template',
     manageTemplates: 'Templates',
     manageModels: 'Models',
+    manageKeys: 'API keys',
     settings: 'Settings',
     characters: 'characters',
     cloudAiNotice: 'AI runs in the cloud (OpenAI / Gemini) · avoid entering highly sensitive personal data',
@@ -986,7 +994,8 @@ export const en = {
     usingPersonalClaudeKey: 'Using personal Claude key',
     requiresClaudeKey: 'Requires a personal Claude API key',
     modelUnavailable: 'Temporarily unavailable',
-    modelDowngradedToFree: 'API key removed — switched back to the free base model',
+    modelDowngradedToFree: 'API key removed — features that picked a premium model from this provider now run on their free default',
+    modelsMovedNote: 'Models are picked inside each AI feature (chat / insights / summary headers). This page manages the API keys that unlock premium models.',
     invalidApiKey: 'Invalid API key format (contains non-ASCII characters). Please check you pasted the key, not other text.',
     requiresClaudeKeyOrProxy: 'Requires a Claude key or proxy',
     willUsePersonalOpenAiKey: 'Will use personal OpenAI key',

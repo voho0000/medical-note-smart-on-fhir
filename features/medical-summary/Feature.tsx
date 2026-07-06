@@ -20,7 +20,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { toast } from "sonner"
 import { SafetyAlertsPanel } from "@/features/proactive-safety-alerts/SafetyAlertsPanel"
-import { SafetyModelPicker } from "@/features/proactive-safety-alerts/components/SafetyModelPicker"
+import { ModelPicker } from "@/src/shared/components/ModelPicker"
+import { MEDICAL_SUMMARY_MODEL_ID } from "@/src/core/use-cases/medical-summary/generate-medical-summary.use-case"
 import { useSafetyAlerts } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
 import { countBySeverity } from "@/src/core/entities/safety-alert.entity"
 import { SummaryNarrativeCard } from "./components/SummaryNarrativeCard"
@@ -225,7 +226,12 @@ export default function MedicalSummaryFeature() {
         <div className="ml-auto flex items-center gap-3">
           {/* ONE set of controls for the whole tab — each drives BOTH the
               summary generation and the safety scan. */}
-          <SafetyModelPicker model={model} onSelectModel={setModelBoth} />
+          <ModelPicker
+            modelId={model}
+            fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
+            onSelect={setModelBoth}
+            tooltip={t.safetyAlerts.modelTooltip}
+          />
           <label
             className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
             title={ms.autoGenerateTooltip}
@@ -233,9 +239,18 @@ export default function MedicalSummaryFeature() {
             <Switch checked={autoGenerate} onCheckedChange={setAutoBoth} className="scale-90" />
             {ms.autoGenerate}
           </label>
-          {hasPatient && dataReady && !isBusy ? (
-            <Button onClick={runBoth} size="sm" variant="outline" className="gap-1.5">
-              {hasAnyResult ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+          {hasPatient && dataReady ? (
+            // Stays mounted while busy (disabled, spinning icon, SAME label) —
+            // unmounting it shifted the picker/switch rightward on every
+            // regenerate click.
+            <Button onClick={runBoth} size="sm" variant="outline" className="gap-1.5" disabled={isBusy}>
+              {isBusy ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : hasAnyResult ? (
+                <RefreshCw className="h-4 w-4" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
               {hasAnyResult ? ms.regenerate : ms.generate}
             </Button>
           ) : null}

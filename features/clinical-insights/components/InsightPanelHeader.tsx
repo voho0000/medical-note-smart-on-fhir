@@ -1,5 +1,4 @@
 // Insight Panel Header Component
-import { useMemo } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,13 +11,13 @@ import {
 } from "@/components/ui/tooltip"
 import { Check, Copy, Square, Sparkles, Trash2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { useModelPref, useSetModelFor, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
+import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
 
 interface InsightPanelHeaderProps {
   title: string
-  fallbackModelId: string
   response: string
   isLoading: boolean
   canGenerate: boolean
@@ -32,7 +31,6 @@ interface InsightPanelHeaderProps {
 
 export function InsightPanelHeader({
   title,
-  fallbackModelId,
   response,
   isLoading,
   canGenerate,
@@ -45,27 +43,28 @@ export function InsightPanelHeader({
 }: InsightPanelHeaderProps) {
   const { t } = useLanguage()
   const { copied, copy } = useCopyToClipboard()
+  // All insight panels share ONE model pref — the picker lives here (in each
+  // card's header, where the model used to be displayed as static text)
+  // instead of the panel-tab row, so tabs keep their horizontal space.
+  const insightsModelPref = useModelPref('insights')
+  const setModelFor = useSetModelFor()
 
   const handleCopy = async () => {
     const ok = await copy(markdownToPlainText(response))
     if (!ok) toast.error(t.common.copyFailed)
   }
 
-  const modelInfo = useMemo(() => {
-    const definition = getModelDefinition(fallbackModelId)
-    return {
-      label: definition?.label ?? fallbackModelId,
-      provider: (definition?.provider ?? "openai").toUpperCase(),
-    }
-  }, [fallbackModelId])
-
   return (
     <CardHeader className="flex items-start justify-between gap-3 pb-2 pt-3">
-      <div className="space-y-1 flex-1">
+      <div className="space-y-1.5 flex-1">
         <CardTitle className="text-sm font-semibold leading-tight">{title}</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          {t.clinicalInsights.model} {modelInfo.label} ({modelInfo.provider})
-        </p>
+        <ModelPicker
+          modelId={insightsModelPref}
+          fallbackModelId={MODEL_PREF_DEFAULTS.insights}
+          onSelect={(id) => setModelFor('insights', id)}
+          tooltip={t.modelPicker.insightsTooltip}
+          align="start"
+        />
       </div>
       <div className="flex items-center gap-2">
         {response && !isLoading && (

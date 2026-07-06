@@ -1,13 +1,10 @@
 /**
  * AI Configuration Store (Zustand)
- * 
- * Consolidates API keys and model selection into a single store.
- * Replaces ApiKeyProvider and ModelSelectionProvider.
- * 
- * Benefits:
- * - No Provider nesting needed
- * - Better performance (granular subscriptions)
- * - Simpler code
+ *
+ * API keys + their persistence mode. Model selection moved OUT of this store:
+ * chat/insights prefs live in model-prefs.store, medical-summary and
+ * safety-alerts keep their own pref stores — each picked in-panel via the
+ * shared ModelPicker and key-gated at read time.
  */
 
 import { create } from 'zustand'
@@ -15,7 +12,6 @@ import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { encrypt, decrypt } from '@/src/shared/utils/crypto.utils'
 import { isUsableApiKey, sanitizeApiKey } from '@/src/shared/utils/api-key.utils'
-import { DEFAULT_MODEL_ID, isModelId, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 
 type StorageType = 'localStorage' | 'sessionStorage'
 
@@ -26,17 +22,13 @@ interface AiConfigState {
   perplexityKey: string | null
   claudeKey: string | null
   storageType: StorageType
-  
-  // Model Selection
-  model: string
-  
+
   // Actions
   setApiKey: (key: string | null) => void
   setGeminiKey: (key: string | null) => void
   setPerplexityKey: (key: string | null) => void
   setClaudeKey: (key: string | null) => void
   setStorageType: (type: StorageType) => void
-  setModel: (model: string) => void
   clearAllKeys: () => void
 }
 
@@ -46,7 +38,6 @@ const STORAGE_KEYS = {
   PERPLEXITY_API_KEY: 'perplexity_api_key',
   CLAUDE_API_KEY: 'claude_api_key',
   STORAGE_TYPE: 'api_key_storage_type',
-  MODEL: 'selected_model',
 }
 
 // Helper to get storage
@@ -96,30 +87,6 @@ const saveEncryptedKey = async (storageType: StorageType, key: string, value: st
   }
 }
 
-// When the selected model needs a user key for its provider and that key is
-// now gone, drop back to the free default model (DEFAULT_MODEL_ID) — same target
-// as the runtime gateModel, so the user always lands on one predictable free
-// model. Prevents the "picked a premium model, then deleted the API key →
-// generation errors" trap, and covers
-// every removal path (settings clear button, logout/clearAllKeys, …) in one
-// place. Returns the fallback model id, or null if no change is needed.
-const modelFallbackForMissingKey = (state: {
-  model: string
-  apiKey: string | null
-  geminiKey: string | null
-  claudeKey: string | null
-}): string | null => {
-  const def = getModelDefinition(state.model)
-  if (!def?.requiresUserKey) return null
-  const key =
-    def.provider === 'openai' ? state.apiKey :
-    def.provider === 'gemini' ? state.geminiKey :
-    state.claudeKey
-  if (key) return null
-  const fallback = DEFAULT_MODEL_ID
-  return fallback === state.model ? null : fallback
-}
-
 export const useAiConfigStore = create<AiConfigState>()(
   persist(
     (set, get) => ({
@@ -133,19 +100,15 @@ export const useAiConfigStore = create<AiConfigState>()(
       perplexityKey: null,
       claudeKey: null,
       storageType: 'sessionStorage',
-      model: DEFAULT_MODEL_ID,
-      
-      // Actions
+
+      // Actions. Removing a key needs no model bookkeeping here — every model
+      // pref is key-gated at read time (useEffectiveModel / resolvedModelId),
+      // so stranded premium picks land on the feature's free default.
       setApiKey: (key) => {
         const clean = sanitizeApiKey(key)
         set({ apiKey: clean })
         // Fire and forget - async save
         saveEncryptedKey(get().storageType, STORAGE_KEYS.OPENAI_API_KEY, clean).catch(console.error)
-        // Removing the key may strand a premium model — drop to the free tier
-        if (!clean) {
-          const fallback = modelFallbackForMissingKey(get())
-          if (fallback) set({ model: fallback })
-        }
       },
 
       setGeminiKey: (key) => {
@@ -153,10 +116,6 @@ export const useAiConfigStore = create<AiConfigState>()(
         set({ geminiKey: clean })
         // Fire and forget - async save
         saveEncryptedKey(get().storageType, STORAGE_KEYS.GEMINI_API_KEY, clean).catch(console.error)
-        if (!clean) {
-          const fallback = modelFallbackForMissingKey(get())
-          if (fallback) set({ model: fallback })
-        }
       },
 
       setPerplexityKey: (key) => {
@@ -171,10 +130,6 @@ export const useAiConfigStore = create<AiConfigState>()(
         set({ claudeKey: clean })
         // Fire and forget - async save
         saveEncryptedKey(get().storageType, STORAGE_KEYS.CLAUDE_API_KEY, clean).catch(console.error)
-        if (!clean) {
-          const fallback = modelFallbackForMissingKey(get())
-          if (fallback) set({ model: fallback })
-        }
       },
       
       setStorageType: (type) => {
@@ -205,10 +160,6 @@ export const useAiConfigStore = create<AiConfigState>()(
         }
       },
       
-      setModel: (model) => {
-        set({ model })
-      },
-      
       clearAllKeys: () => {
         const storageType = get().storageType
         set({ apiKey: null, geminiKey: null, perplexityKey: null, claudeKey: null })
@@ -218,24 +169,18 @@ export const useAiConfigStore = create<AiConfigState>()(
         storage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
         storage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
         storage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
-
-        // Logout strips all keys — drop a premium model back to the free tier
-        const fallback = modelFallbackForMissingKey(get())
-        if (fallback) set({ model: fallback })
       },
     }),
     {
       name: 'ai-config-storage',
-      partialize: (state) => ({ model: state.model }), // Only persist model in Zustand storage
+      // Keys are NOT persisted through Zustand (they're encrypted into their
+      // own storage entries by the actions above); nothing else needs to
+      // persist since the model moved to model-prefs. The middleware stays for
+      // onRehydrateStorage, which loads the encrypted keys + storage type.
+      partialize: () => ({}),
       onRehydrateStorage: () => async (state) => {
         if (!state || typeof window === 'undefined') return
 
-        // Model lineup changes between releases — a persisted id that no
-        // longer exists falls back to the default instead of dead-ending
-        if (!isModelId(state.model)) {
-          state.model = DEFAULT_MODEL_ID
-        }
-        
         // Load storage type preference. No saved preference: legacy users who
         // already have keys in localStorage keep that behavior (and we persist
         // the choice so it stays stable); fresh users default to sessionStorage
@@ -277,13 +222,11 @@ const selectApiKey = (state: AiConfigState) => state.apiKey
 const selectGeminiKey = (state: AiConfigState) => state.geminiKey
 const selectPerplexityKey = (state: AiConfigState) => state.perplexityKey
 const selectClaudeKey = (state: AiConfigState) => state.claudeKey
-const selectModel = (state: AiConfigState) => state.model
 
 export const useApiKey = () => useAiConfigStore(selectApiKey)
 export const useGeminiKey = () => useAiConfigStore(selectGeminiKey)
 export const usePerplexityKey = () => useAiConfigStore(selectPerplexityKey)
 export const useClaudeKey = () => useAiConfigStore(selectClaudeKey)
-export const useModel = () => useAiConfigStore(selectModel)
 
 // Use useShallow to prevent infinite loops from object reference changes
 export const useAllApiKeys = () => useAiConfigStore(

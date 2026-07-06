@@ -5,12 +5,12 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react'
-import { useAllApiKeys, useModel } from '@/src/application/stores/ai-config.store'
+import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { AiService } from '@/src/infrastructure/ai/services/ai.service'
 import { QueryAiUseCase } from '@/src/core/use-cases/ai/query-ai.use-case'
 import { StreamOrchestrator } from '@/src/infrastructure/ai/streaming/stream-orchestrator'
 import { getUserErrorMessage } from '@/src/core/errors'
-import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import { DEFAULT_MODEL_ID, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 
 interface UseUnifiedAiOptions {
@@ -37,7 +37,10 @@ interface StreamOptions extends QueryOptions {
  */
 export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
   const { apiKey: openAiKey, geminiKey, claudeKey } = useAllApiKeys()
-  const defaultModel = useModel()
+  // Callers with a model preference pass modelId explicitly (chat/insights/
+  // summary/safety); the rest (e.g. IPS problem inference) land on the free
+  // default. The former global picked-model no longer exists.
+  const defaultModel = DEFAULT_MODEL_ID
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // A Set, not a single ref: one hook instance can have several streams in

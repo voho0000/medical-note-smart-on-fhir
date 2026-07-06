@@ -30,7 +30,6 @@ export function InsightPanel({
   onResponseChange,
   onClearResponse,
   isEdited,
-  fallbackModelId,
   autoGenerate,
   onToggleAutoGenerate,
   isEditMode = false,
@@ -104,7 +103,6 @@ export function InsightPanel({
       <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.insight}`}>
         <InsightPanelHeader
           title={title}
-          fallbackModelId={fallbackModelId}
           response={response}
           isLoading={isLoading}
           canGenerate={canGenerate}

@@ -6,7 +6,9 @@ import { toast } from "sonner"
 import { AlertCircle, Maximize2, MessageSquareDashed, SquarePen, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
-import { useModel, useAiConfigStore } from "@/src/application/stores/ai-config.store"
+import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
+import { useEffectiveModel, useModelPref, useSetModelFor, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
+import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import {
   useChatStore,
   useIsTemporaryMode,
@@ -67,7 +69,11 @@ import { isQuotaExceededError } from "@/src/core/errors"
 export default function MedicalChat() {
   const { t } = useLanguage()
   const { user, isAnonymous, loading: authLoading } = useAuth()
-  const model = useModel()
+  // The chat's own persisted pick, already key-gated (what will actually run).
+  // Picked in-panel (header strip; toolbar in expanded mode), not in Settings.
+  const model = useEffectiveModel('chat')
+  const chatModelPref = useModelPref('chat')
+  const setModelFor = useSetModelFor()
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
@@ -461,14 +467,27 @@ export default function MedicalChat() {
               </button>
             )}
           </div>
+          {/* In normal flow (not absolutely centered): the right-side group
+              grew a model picker, and a centered overlay overlapped it at
+              typical panel widths. justify-between keeps this visually
+              near-center without ever colliding. */}
           <button
             onClick={() => setShowHeader(!showHeader)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors absolute left-1/2 -translate-x-1/2"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0 px-1 whitespace-nowrap"
             title={showHeader ? t.chat.hideHeader : t.chat.showHeader}
           >
             {showHeader ? `▲ ${t.chat.hideHeader}` : `▼ ${t.chat.showHeader}`}
           </button>
-          <div className="flex items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1">
+            {/* The toolbar above the input is already crowded — the model
+                picker lives here in the header strip instead. */}
+            <ModelPicker
+              modelId={chatModelPref}
+              fallbackModelId={MODEL_PREF_DEFAULTS.chat}
+              onSelect={(id) => setModelFor('chat', id)}
+              tooltip={t.modelPicker.chatTooltip}
+              agentModeActive={isAgentMode}
+            />
             <button
               onClick={handleNewConversation}
               className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/40 px-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
@@ -548,6 +567,8 @@ export default function MedicalChat() {
               hasTemplateContent={!!template.selectedTemplate?.content?.trim()}
               onOpenGallery={() => setShowPromptGallery(true)}
               isLoadingClinicalData={isLoadingClinicalData}
+              agentModeActive={isAgentMode}
+              showModelPicker={isExpanded}
             />
           </div>
           {showApiKeyWarning && (

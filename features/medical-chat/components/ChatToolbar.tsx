@@ -7,7 +7,9 @@ import { Switch } from "@/components/ui/switch"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAutoIncludeContext, useSetAutoIncludeContext } from "@/src/application/stores/chat.store"
-import { Plus, FileText, Settings, ChevronDown, Library, Sparkles } from "lucide-react"
+import { useModelPref, useSetModelFor, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
+import { ModelPicker } from "@/src/shared/components/ModelPicker"
+import { Plus, FileText, Settings, ChevronDown, Library, Sparkles, KeyRound } from "lucide-react"
 
 interface Template {
   id: string
@@ -25,6 +27,12 @@ interface ChatToolbarProps {
   hasTemplateContent: boolean
   onOpenGallery?: () => void
   isLoadingClinicalData?: boolean
+  /** Deep mode active: models flagged disableAgentMode are locked in the picker. */
+  agentModeActive?: boolean
+  /** The picker normally lives in the chat header strip (this toolbar is
+   *  cramped); the fullscreen overlay has no header strip, so only there
+   *  does the toolbar host it. */
+  showModelPicker?: boolean
 }
 
 export function ChatToolbar({
@@ -36,17 +44,22 @@ export function ChatToolbar({
   hasTemplateContent,
   onOpenGallery,
   isLoadingClinicalData = false,
+  agentModeActive = false,
+  showModelPicker = false,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
   const autoIncludeContext = useAutoIncludeContext()
   const setAutoIncludeContext = useSetAutoIncludeContext()
+  const chatModelPref = useModelPref('chat')
+  const setModelFor = useSetModelFor()
 
   const handleManageTemplates = () => {
     setActiveTab('settings', 'templates')
   }
 
-  const handleManageModels = () => {
+  // Models are picked in-panel now; Settings only holds the API keys.
+  const handleManageKeys = () => {
     setActiveTab('settings', 'ai')
   }
 
@@ -140,6 +153,17 @@ export function ChatToolbar({
           </Select>
         </div>
       ) : null}
+      {showModelPicker && (
+        <div className="h-9 sm:h-8 flex items-center">
+          <ModelPicker
+            modelId={chatModelPref}
+            fallbackModelId={MODEL_PREF_DEFAULTS.chat}
+            onSelect={(id) => setModelFor('chat', id)}
+            tooltip={t.modelPicker.chatTooltip}
+            agentModeActive={agentModeActive}
+          />
+        </div>
+      )}
       <div className="h-9 sm:h-8 flex items-center">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -156,9 +180,9 @@ export function ChatToolbar({
               {t.promptGallery.browseGallery}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={handleManageModels} className="gap-2 cursor-pointer">
-            <Settings className="h-3.5 w-3.5" />
-            {t.chat.manageModels || "管理模型"}
+          <DropdownMenuItem onClick={handleManageKeys} className="gap-2 cursor-pointer">
+            <KeyRound className="h-3.5 w-3.5" />
+            {t.chat.manageKeys || "API 金鑰"}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleManageTemplates} className="gap-2 cursor-pointer">
             <Settings className="h-3.5 w-3.5" />

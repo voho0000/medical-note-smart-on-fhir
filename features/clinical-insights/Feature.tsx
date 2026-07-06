@@ -19,7 +19,8 @@ import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { useAllApiKeys, useModel } from "@/src/application/stores/ai-config.store"
+import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
+import { useEffectiveModel } from "@/src/application/stores/model-prefs.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useClinicalInsightsConfig } from "@/src/application/providers/clinical-insights-config.provider"
@@ -61,7 +62,10 @@ export default function ClinicalInsightsFeature() {
   // too — it keys both the per-patient reset and the response cache.
   const { patient } = usePatient()
   const patientId = patient?.id ?? ''
-  const model = useModel()
+  // Insights' own persisted pick (picker lives in each panel card's header),
+  // key-gated to what will actually run — generation and metadata use this,
+  // so the record can never claim a premium model the call was downgraded off.
+  const model = useEffectiveModel('insights')
 
   const [context, setContext] = useState("")
   const [activeTabId, setActiveTabId] = useState<string>("")
@@ -241,7 +245,6 @@ export default function ClinicalInsightsFeature() {
           onClearResponse: () => clearResponse(panel.id),
           isEdited: responseEntry.isEdited,
           modelMetadata: responseEntry.metadata ?? null,
-          fallbackModelId: model,
           autoGenerate: panel.autoGenerate ?? false,
           onToggleAutoGenerate: (value: boolean) =>
             updatePanelAndSave(panel.id, { autoGenerate: value }),
@@ -304,6 +307,8 @@ export default function ClinicalInsightsFeature() {
                   </TabsTrigger>
                 ))}
               </TabsList>
+              {/* Model picker moved into each panel card's header (shared
+                  pref) — the tab row keeps its width for more tabs. */}
               <TabManagementToolbar
                 currentTabId={activeTabId}
                 onTabChange={setActiveTabId}
