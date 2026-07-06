@@ -107,4 +107,26 @@ describe('buildCalcList', () => {
     expect(ids).toContain('phq-9')
     expect(ids).not.toContain('gds-15')
   })
+
+  it('"relevant" returns a FLAT list of score>0 calcs, highest score first', () => {
+    const relevance = new Map<string, number>([
+      ['bmi', 2001],       // computable
+      ['meld-na', 1003],   // data-complete
+      ['fena', 0],         // no data → excluded
+    ])
+    const list = buildCalcList({ ...base, filter: 'relevant', relevance })
+    expect(list.mode).toBe('flat')
+    expect(list.flat.map((c) => c.id)).toEqual(['bmi', 'meld-na'])
+  })
+
+  it('"relevant" applies the search query and excludes zero-score calcs', () => {
+    const relevance = new Map<string, number>([['bmi', 2001], ['meld-na', 1003]])
+    const list = buildCalcList({ ...base, filter: 'relevant', relevance, query: 'MELD' })
+    expect(list.flat.map((c) => c.id)).toEqual(['meld-na'])
+  })
+
+  it('"relevant" with no relevance map yields an empty list', () => {
+    const list = buildCalcList({ ...base, filter: 'relevant' })
+    expect(list.flat).toEqual([])
+  })
 })

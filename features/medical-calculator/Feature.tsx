@@ -7,7 +7,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, ChevronRight, Calculator, Star, Clock, Users } from "lucide-react"
+import { Search, ChevronRight, Calculator, Star, Clock, Users, Stethoscope } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -17,7 +17,7 @@ import { CATEGORY_LABELS, PURPOSE_LABELS, tr, trAlt, type CalculatorDef, type Se
 import { CalculatorDetail } from "./components/CalculatorDetail"
 import { useLabAutofill } from "./hooks/use-lab-autofill.hook"
 import { useCalcFavorites, useCalcRecent } from "./hooks/use-calc-favorites.hook"
-import { computeAutofilledResult } from "./autofill-compute"
+import { computeAutofilledResult, relevanceScore } from "./autofill-compute"
 import { buildCalcList, forAudience as visibleForAudience, specialtiesPresent, type CalcFilter } from "./list-logic"
 
 // Severity → value text colour for the inline card result.
@@ -64,9 +64,17 @@ export default function MedicalCalculatorFeature() {
 
   const specialties = useMemo(() => specialtiesPresent(visible), [visible])
 
+  // Relevance for the "for this patient" view: how well the loaded data drives
+  // each calculator (recomputed when the patient's observations change).
+  const relevance = useMemo(
+    () => new Map(visible.map((c) => [c.id, relevanceScore(c, autofill)])),
+    [visible, autofill],
+  )
+  const relevantCount = useMemo(() => [...relevance.values()].filter((s) => s > 0).length, [relevance])
+
   const list = useMemo(
-    () => buildCalcList({ calcs: visible, filter, query, favorites, recent }),
-    [visible, filter, query, favorites, recent],
+    () => buildCalcList({ calcs: visible, filter, query, favorites, recent, relevance }),
+    [visible, filter, query, favorites, recent, relevance],
   )
   const flatList = list.mode === "flat" ? list.flat : null
   const grouped = list.grouped
@@ -103,6 +111,13 @@ export default function MedicalCalculatorFeature() {
         <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
           {zh ? "全部" : "All"}
         </FilterChip>
+        {/* "For this patient": calculators the loaded data can already drive. */}
+        {relevantCount > 0 && (
+          <FilterChip active={filter === "relevant"} onClick={() => setFilter("relevant")}>
+            <Stethoscope className="h-3 w-3" />
+            {zh ? `此病人 ${relevantCount}` : `For patient ${relevantCount}`}
+          </FilterChip>
+        )}
         <FilterChip active={filter === "favorites"} onClick={() => setFilter("favorites")}>
           <Star className="h-3 w-3" />
           {zh ? "常用" : "Favorites"}
@@ -131,7 +146,11 @@ export default function MedicalCalculatorFeature() {
           {flatList !== null
             ? filter === "favorites"
               ? (zh ? "尚無常用計算機 — 點卡片上的 ⭐ 加入。" : "No favorites yet — tap ⭐ on a calculator to add it.")
-              : (zh ? "尚無最近使用的計算機。" : "No recently used calculators yet.")
+              : filter === "recent"
+                ? (zh ? "尚無最近使用的計算機。" : "No recently used calculators yet.")
+                : filter === "relevant"
+                  ? (zh ? "目前載入的資料尚無法直接帶入任一計算機。" : "The loaded data can't drive any calculator yet.")
+                  : (zh ? "找不到符合的計算機。" : "No matching calculators.")
             : (zh ? "找不到符合的計算機。" : "No matching calculators.")}
         </div>
       ) : flatList !== null ? (

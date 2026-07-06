@@ -3,7 +3,7 @@
 // list card (never one built from a clinical-judgment default), the result
 // carries a staleness date, and a throwing compute() degrades to null
 // instead of crashing the list.
-import { isFullyAutofillable, computeAutofilledResult, resolveInput } from '@/features/medical-calculator/autofill-compute'
+import { isFullyAutofillable, computeAutofilledResult, resolveInput, calcReadiness, relevanceScore } from '@/features/medical-calculator/autofill-compute'
 import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalculatorDef, CalcInput } from '@/features/medical-calculator/types'
 import type { Autofill, AutofillValue } from '@/features/medical-calculator/hooks/use-lab-autofill.hook'
@@ -57,6 +57,47 @@ describe('resolveInput — unit-dimension safety gate for name matches', () => {
   it('treats an untagged value (viaLoinc undefined) as trusted (no reject)', () => {
     const r = resolveInput(naInput, fakeAutofill({ NA: val('mg/dL') }))
     expect(r.filled).toBe(true)
+  })
+})
+
+describe('calcReadiness / relevanceScore — "for this patient" ranking', () => {
+  const dv = (value: number, unit = ''): AutofillValue => ({ value, unit, date: '2020-01-01', viaLoinc: true })
+
+  it('eGFR with creatinine present is computable and ready (age/sex are demographics)', () => {
+    const egfr = CALCULATORS.find((c) => c.id === 'egfr-ckd-epi-2021')!
+    const af = fakeAutofill({ CREA: dv(1.0, 'mg/dL'), age: dv(60) }, 'male')
+    const r = calcReadiness(egfr, af)
+    expect(r.sourced).toBe(1) // only the creatinine lab counts, not age/sex
+    expect(r.filled).toBe(1)
+    expect(r.ready).toBe(true)
+    expect(r.computable).toBe(true)
+    expect(relevanceScore(egfr, af)).toBeGreaterThan(2000)
+  })
+
+  it('a calculator with no lab data for this patient scores 0 (hidden from the view)', () => {
+    const egfr = CALCULATORS.find((c) => c.id === 'egfr-ckd-epi-2021')!
+    const af = fakeAutofill({ age: dv(60) }, 'male') // no creatinine
+    expect(relevanceScore(egfr, af)).toBe(0)
+    expect(calcReadiness(egfr, af).ready).toBe(false)
+  })
+
+  it('questionnaires (no lab/vital sources) score 0', () => {
+    const gds = CALCULATORS.find((c) => c.id === 'gds-15')!
+    expect(relevanceScore(gds, fakeAutofill({}))).toBe(0)
+  })
+
+  it('computable ranks above data-complete-but-not-computable', () => {
+    // BMI (weight+height only → computable) vs MELD-Na (labs complete but has a
+    // dialysis select → not computable) — both data-present, BMI must outrank.
+    const af = fakeAutofill({
+      '29463-7': dv(70, 'kg'), '8302-2': dv(170, 'cm'),
+      'T.BILI': dv(1.0, 'mg/dL'), INR: dv(1.0), CREA: dv(1.0, 'mg/dL'), NA: dv(140, 'mmol/L'),
+    })
+    const bmi = CALCULATORS.find((c) => c.id === 'bmi')!
+    const meld = CALCULATORS.find((c) => c.id === 'meld-na')!
+    expect(relevanceScore(bmi, af)).toBeGreaterThan(relevanceScore(meld, af))
+    expect(calcReadiness(meld, af).ready).toBe(true) // all its labs are present…
+    expect(calcReadiness(meld, af).computable).toBe(false) // …but the dialysis select blocks auto-compute
   })
 })
 

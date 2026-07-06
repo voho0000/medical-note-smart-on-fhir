@@ -85,6 +85,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
         }
       },
       reference: 'AG = Na − (Cl + HCO₃). Albumin-corrected AG = AG + 2.5 × (4.0 − albumin).',
+      coherence: { keys: ['na', 'cl', 'hco3'], windowDays: 1 },
     },
 
   // ── Calculated serum osmolality ─────────────────────────────────────────
@@ -192,6 +193,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
         }
       },
       reference: 'UAG = UNa + UK − UCl. Negative → GI cause; positive → renal (RTA).',
+      coherence: { keys: ['uNa', 'uK', 'uCl'], windowDays: 1 },
     },
 
   // ── Transtubular potassium gradient ─────────────────────────────────────
@@ -222,6 +224,7 @@ export const ELECTROLYTE: CalculatorDef[] = [
         }
       },
       reference: 'TTKG = (UK × Posm) / (PK × Uosm). Valid only when Uosm > Posm and UNa > 25.',
+      coherence: { keys: ['uK', 'pK', 'uOsm', 'pOsm'], windowDays: 1 },
     },
 
   // ── Osmolar gap ─────────────────────────────────────────────────────────
@@ -254,5 +257,6 @@ export const ELECTROLYTE: CalculatorDef[] = [
         }
       },
       reference: 'Osmolar gap = measured − calculated (2×Na + glucose/18 + BUN/2.8 + ethanol/3.7). > 10 abnormal.',
+      coherence: { keys: ['measured', 'na', 'glucose', 'bun'], windowDays: 1 },
     },
 ]

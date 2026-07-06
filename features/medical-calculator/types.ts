@@ -162,6 +162,11 @@ export interface CalculatorDef {
   compute: (values: CalcValues) => CalcResult | null
   /** Formula citation, shown at the bottom of the detail view. */
   reference?: string
+  /** Temporal-coherence hint for multi-lab formulas: the listed input keys
+   *  should come from the same draw/day. When the auto-filled source dates span
+   *  more than `windowDays`, the detail view warns that the values may be from
+   *  different reports (e.g. FENa mixing today's urine with last month's serum). */
+  coherence?: { keys: string[]; windowDays: number }
 }
 
 export const CATEGORY_LABELS: Record<CalcCategory, L> = {

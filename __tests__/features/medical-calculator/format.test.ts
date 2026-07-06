@@ -1,4 +1,5 @@
-import { resultToClipboardText, isImplausible } from '@/features/medical-calculator/format'
+import { resultToClipboardText, isImplausible, coherenceSpan } from '@/features/medical-calculator/format'
+import { CALCULATORS } from '@/features/medical-calculator/calculators'
 import type { CalculatorDef, CalcResult } from '@/features/medical-calculator/types'
 
 const calc = {
@@ -46,5 +47,41 @@ describe('isImplausible', () => {
   it('flags a clearly-negative value below the extended low bound', () => {
     const age = { normalRange: { low: 40, high: 41 } } // span 1, ×5 = 5 → low bound min(0, 35)=0
     expect(isImplausible(age, '-3')).toBe(true) // −3 < 0
+  })
+})
+
+describe('coherenceSpan', () => {
+  it('returns null when dates are within the window', () => {
+    expect(coherenceSpan(['2020-01-01', '2020-01-01'], 1)).toBeNull()
+    expect(coherenceSpan(['2020-01-01', '2020-01-02'], 1)).toBeNull() // 1 day == window
+  })
+  it('flags a span beyond the window with earliest/latest', () => {
+    const r = coherenceSpan(['2020-01-10', '2020-01-01', '2020-01-05'], 1)
+    expect(r).toEqual({ spanDays: 9, earliest: '2020-01-01', latest: '2020-01-10' })
+  })
+  it('ignores missing dates and needs ≥ 2 to compare', () => {
+    expect(coherenceSpan([undefined, '2020-01-01'], 1)).toBeNull()
+    expect(coherenceSpan([undefined, undefined], 1)).toBeNull()
+  })
+  it('truncates datetime precision to the day', () => {
+    expect(coherenceSpan(['2020-01-01T23:00:00Z', '2020-01-01T01:00:00Z'], 0)).toBeNull() // same day
+  })
+})
+
+describe('coherence config integrity', () => {
+  it('every coherence.keys entry references a real input key', () => {
+    const bad: string[] = []
+    for (const c of CALCULATORS) {
+      if (!c.coherence) continue
+      const keys = new Set(c.inputs.map((i) => i.key))
+      for (const k of c.coherence.keys) if (!keys.has(k)) bad.push(`${c.id}:${k}`)
+    }
+    expect(bad).toEqual([])
+  })
+  it('the paired urine/serum + ABG calculators declare a coherence window', () => {
+    const withCoherence = new Set(CALCULATORS.filter((c) => c.coherence).map((c) => c.id))
+    for (const id of ['fena', 'feurea', 'anion-gap', 'osmolar-gap', 'ttkg', 'urine-anion-gap', 'aa-gradient', 'pf-ratio']) {
+      expect(withCoherence.has(id)).toBe(true)
+    }
   })
 })

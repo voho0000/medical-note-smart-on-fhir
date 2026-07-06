@@ -143,3 +143,49 @@ export function computeAutofilledResult(calc: CalculatorDef, autofill: Autofill)
     return null
   }
 }
+
+export interface Readiness {
+  /** Non-optional inputs that draw on patient data (lab/vital/age/sex). */
+  sourced: number
+  /** …of those, how many actually resolved from the patient. */
+  filled: number
+  /** Every data-backed input is present — the clinician only needs to add any
+   *  manual / clinical-judgment fields (if any). */
+  ready: boolean
+  /** Fully data-driven AND all present → an inline result is shown. */
+  computable: boolean
+}
+
+// Lab/vital sources only — the data a patient may actually lack. Age/sex are
+// demographics (always available, and `sex` never reports `filled`), so they
+// don't gate how "ready" a calculator is for the loaded patient.
+const LAB_VITAL_KINDS: AutofillSource['kind'][] = ['lab', 'labSpecimen', 'labLoinc', 'vital']
+
+/** How "ready to use for THIS patient" a calculator is, from the loaded data. */
+export function calcReadiness(calc: CalculatorDef, autofill: Autofill): Readiness {
+  let sourced = 0
+  let filled = 0
+  for (const inp of calc.inputs) {
+    const isData = !!inp.source && LAB_VITAL_KINDS.includes(inp.source.kind)
+    if (!isData) continue
+    if (inp.type === 'number' && inp.optional) continue
+    sourced += 1
+    if (resolveInput(inp, autofill).filled) filled += 1
+  }
+  return {
+    sourced,
+    filled,
+    ready: sourced > 0 && filled === sourced,
+    computable: computeAutofilledResult(calc, autofill) != null,
+  }
+}
+
+/** Relevance score for the "for this patient" view: fully-computable calculators
+ *  rank highest, then data-complete ones, then everything else (score 0, hidden
+ *  from that view). Higher `filled` breaks ties so richer matches float up. */
+export function relevanceScore(calc: CalculatorDef, autofill: Autofill): number {
+  const r = calcReadiness(calc, autofill)
+  if (r.computable) return 2000 + r.filled
+  if (r.ready) return 1000 + r.filled
+  return 0
+}

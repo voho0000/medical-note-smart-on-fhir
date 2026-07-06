@@ -136,6 +136,7 @@ export const PULMONARY: CalculatorDef[] = [
         return { value: String(val), unit: 'mmHg', interpretation: interp, severity, extra }
       },
       reference: 'PAO₂ = FiO₂ × (760 − 47) − PaCO₂/0.8; A-a = PAO₂ − PaO₂. Expected ≤ age/4 + 4.',
+      coherence: { keys: ['fio2', 'paco2', 'pao2'], windowDays: 1 },
     },
 
   // ── PaO₂/FiO₂ ratio ─────────────────────────────────────────────────────
@@ -162,5 +163,6 @@ export const PULMONARY: CalculatorDef[] = [
         return { value: String(val), unit: 'mmHg', interpretation: interp, severity }
       },
       reference: 'Berlin ARDS: ≤ 100 severe, ≤ 200 moderate, ≤ 300 mild (with PEEP ≥ 5).',
+      coherence: { keys: ['pao2', 'fio2'], windowDays: 1 },
     },
 ]

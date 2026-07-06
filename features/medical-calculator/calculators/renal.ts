@@ -128,6 +128,7 @@ export const RENAL: CalculatorDef[] = [
         return { value: String(val), unit: '%', interpretation: interp, severity }
       },
       reference: 'FENa = (UNa × PCr) / (PNa × UCr) × 100. < 1% prerenal; unreliable on diuretics → use FEUrea.',
+      coherence: { keys: ['uNa', 'pNa', 'uCr', 'pCr'], windowDays: 1 },
     },
 
   // ── FEUrea (fractional excretion of urea) ───────────────────────────────
@@ -155,6 +156,7 @@ export const RENAL: CalculatorDef[] = [
         return { value: String(val), unit: '%', interpretation: interp, severity }
       },
       reference: 'FEUrea = (UUrea × PCr) / (BUN × UCr) × 100. < 35% prerenal; reliable despite diuretics.',
+      coherence: { keys: ['uUrea', 'pBun', 'uCr', 'pCr'], windowDays: 1 },
     },
 
   // ── CKD prognosis / follow-up — KDIGO 2012 heat map (NHI 健保存摺) ─────────

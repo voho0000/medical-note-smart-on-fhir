@@ -19,7 +19,7 @@ import { useLabAutofill, type Autofill } from "../hooks/use-lab-autofill.hook"
 import { getCalcInfo, getCalcScoring } from "../calculators"
 import type { CalcScoring, ScoringGrid, GridColor } from "../calculators"
 import { formatNum, resolveInput } from "../autofill-compute"
-import { resultToClipboardText, isImplausible } from "../format"
+import { resultToClipboardText, isImplausible, coherenceSpan } from "../format"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 
 const SEVERITY_STYLES: Record<Severity, string> = {
@@ -127,6 +127,13 @@ export function CalculatorDetail({
   const hasAnyAutofill = Object.keys(filled).length > 0
   const info = getCalcInfo(calc.id)
   const scoring = getCalcScoring(calc.id)
+  // Warn when the auto-filled values that should share one draw/day actually
+  // span more than the calculator's coherence window (e.g. FENa mixing today's
+  // urine with an old serum). Only auto-filled fields carry a date.
+  const coherence = useMemo(
+    () => (calc.coherence ? coherenceSpan(calc.coherence.keys.map((k) => filled[k]?.date), calc.coherence.windowDays) : null),
+    [calc, filled],
+  )
   const { copied, copy } = useCopyToClipboard()
 
   const zh = locale === "zh-TW"
@@ -175,6 +182,18 @@ export function CalculatorDetail({
           <div className="min-w-0 text-xs leading-relaxed text-sky-900 dark:text-sky-200">
             <span className="font-semibold">{zh ? "適用時機　" : "When to use　"}</span>
             {tr(locale, info.useWhen)}
+          </div>
+        </div>
+      )}
+
+      {/* Temporal-coherence warning: auto-filled values span different reports. */}
+      {coherence && (
+        <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50/70 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+            {zh
+              ? `注意：自動帶入的數值來自相差 ${coherence.spanDays} 天的不同報告（${coherence.earliest} ～ ${coherence.latest}）。此公式應使用同一次／同日的檢驗，請確認一致性。`
+              : `Heads-up: the auto-filled values are from reports ${coherence.spanDays} days apart (${coherence.earliest} – ${coherence.latest}). This formula expects one same-day draw — verify they belong together.`}
           </div>
         </div>
       )}

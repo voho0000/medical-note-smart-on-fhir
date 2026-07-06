@@ -10,7 +10,7 @@ export const CATEGORY_ORDER: CalcCategory[] = [
   'renal', 'hepatic', 'gi', 'electrolyte', 'cardiac', 'pulmonary', 'heme', 'neuro', 'mental', 'general',
 ]
 
-export type SpecialFilter = 'all' | 'favorites' | 'recent' | 'patient'
+export type SpecialFilter = 'all' | 'favorites' | 'recent' | 'patient' | 'relevant'
 export type CalcFilter = CalcCategory | SpecialFilter
 
 /** A calculator a patient can self-complete (audience 'patient' or 'both') —
@@ -66,8 +66,10 @@ export function buildCalcList(opts: {
   query: string
   favorites: string[]
   recent: string[]
+  /** id → relevance score (from relevanceScore); required for the 'relevant' filter. */
+  relevance?: Map<string, number>
 }): CalcList {
-  const { calcs, filter, query, favorites, recent } = opts
+  const { calcs, filter, query, favorites, recent, relevance } = opts
   const match = makeMatcher(query)
 
   if (filter === 'favorites' || filter === 'recent') {
@@ -75,6 +77,14 @@ export function buildCalcList(opts: {
     const flat = ids
       .map((id) => calcs.find((c) => c.id === id))
       .filter((c): c is CalculatorDef => !!c && match(c))
+    return { mode: 'flat', flat, grouped: [] }
+  }
+
+  // "For this patient" — calculators the loaded data can drive, most-ready first.
+  if (filter === 'relevant') {
+    const flat = calcs
+      .filter((c) => (relevance?.get(c.id) ?? 0) > 0 && match(c))
+      .sort((a, b) => (relevance!.get(b.id)! - relevance!.get(a.id)!))
     return { mode: 'flat', flat, grouped: [] }
   }
 

@@ -33,3 +33,21 @@ export function isImplausible(input: Pick<NumberInput, 'normalRange'>, raw: stri
   const span = Math.max(high - low, 1e-6)
   return v < Math.min(0, low - span * 5) || v > high + span * 5
 }
+
+/**
+ * Temporal-coherence check for multi-lab formulas. Given the source dates (ISO,
+ * any precision) of the auto-filled inputs that should share a draw/day, returns
+ * the span (in whole days) and the earliest/latest date when it exceeds
+ * `windowDays` — otherwise null. Fewer than two dated inputs → null (nothing to
+ * compare). Used to warn that e.g. FENa may be mixing values from different
+ * reports rather than one paired urine+serum set.
+ */
+export function coherenceSpan(dates: (string | undefined)[], windowDays: number): { spanDays: number; earliest: string; latest: string } | null {
+  const days = dates.filter((d): d is string => !!d).map((d) => d.slice(0, 10))
+  if (days.length < 2) return null
+  const sorted = [...new Set(days)].sort()
+  const earliest = sorted[0]
+  const latest = sorted[sorted.length - 1]
+  const spanDays = Math.round((new Date(latest).getTime() - new Date(earliest).getTime()) / 86_400_000)
+  return spanDays > windowDays ? { spanDays, earliest, latest } : null
+}
