@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
 import { CANONICAL_KEYS, CANONICAL_DISPLAY, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
-import { normalizeCellConcUnit } from '@/src/shared/utils/unit-scale'
+import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 
 export interface LabCell {
   value: string
@@ -299,16 +299,16 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
       }
       const row = testMap.get(mapKey)!
 
-      // Cumulative-report-only unit normalisation: blood-count analytes (WBC/RBC/
-      // PLT) come through with the same unit at different scales (e.g. WBC "5 K/µL"
-      // vs raw "5600 /µL"), which makes a single column unreadable. Rescale to one
-      // canonical unit here. `isAbnormal` was already computed from the raw value
-      // vs the obs's own referenceRange above, so it stays correct. The raw
-      // row-by-row report uses a different path and is untouched.
+      // Cumulative-report-only unit normalisation: some analytes come through with
+      // the same unit at different scales across hospitals (WBC "5 K/µL" vs raw
+      // "5600 /µL"; CRP "0.5 mg/dL" vs "5 mg/L"), making a single column
+      // unreadable. Rescale to one canonical unit here. `isAbnormal` was already
+      // computed from the raw value vs the obs's own referenceRange above, so it
+      // stays correct. The raw row-by-row report uses a different path, untouched.
       let cellValue = value
       let cellUnit = unit
       if (numericValue !== undefined) {
-        const norm = normalizeCellConcUnit(testKey, numericValue, unit)
+        const norm = normalizeAnalyteUnit(testKey, numericValue, unit)
         if (norm) {
           cellValue = String(norm.value)
           cellUnit = norm.unit
