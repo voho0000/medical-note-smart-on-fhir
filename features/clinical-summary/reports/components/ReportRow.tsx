@@ -18,6 +18,7 @@ import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
+import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 // Circular at module level (LabDayGroupCard nests ReportRow for its members)
 // but safe: `export function ReportRow` is hoisted, and the reference is only
 // dereferenced at render time, long after both modules finish initialising.
@@ -66,7 +67,7 @@ function formatImageBytes(size?: number): string {
  *  node is snapshotted into the right-detail context and rendered apart from the
  *  originating ReportRow, so it can't share the row's local state. Falls back to
  *  a single natural-scroll column when only text OR only images are present. */
-function ReportImagingDetail({ text, images, title }: { text: string; images: ReportImage[]; title: string }) {
+function ReportImagingDetail({ text, images, title, reportId }: { text: string; images: ReportImage[]; title: string; reportId?: string }) {
   const { t } = useLanguage()
   const tt = (t as any).reports?.image
   const hasText = text.length > 0
@@ -161,6 +162,19 @@ function ReportImagingDetail({ text, images, title }: { text: string; images: Re
     </div>
   ) : null
 
+  // 「AI 翻譯解讀」in the docked (向右展開) view — manual mode: shows the result
+  // already generated inline (shared per-reportId cache) or a trigger button, so
+  // docking a report to read it never auto-spends an AI call. Sits above the
+  // original text so a 民眾 sees the AI result first.
+  const interpretBlock = reportId && hasText ? (
+    <ReportInterpretationPanel
+      reportId={reportId}
+      reportText={text}
+      reportTitle={title}
+      autoGenerate={false}
+    />
+  ) : null
+
   // Source caveat — 健保存摺 carries at most 10 preview JPEGs per exam (no
   // DICOM). It's an IMAGE caveat, so it renders inside the image region (above
   // the images, below the splitter) — not above the text report.
@@ -222,7 +236,7 @@ function ReportImagingDetail({ text, images, title }: { text: string; images: Re
           ref={textRef}
           className="scrollbar-thin-persistent shrink-0 overflow-y-auto pr-1"
           style={topPct === null ? { maxHeight: '40%' } : { height: `${topPct}%` }}
-        >{textBlock}</div>
+        >{interpretBlock}{textBlock}</div>
         {/* Draggable splitter — defaults to sitting right under the text (auto),
             so a short report leaves no blank gap; drag up/down (or focus + ↑/↓)
             to rebalance when both text and image are long enough to scroll. */}
@@ -270,6 +284,7 @@ function ReportImagingDetail({ text, images, title }: { text: string; images: Re
   }
   return (
     <>
+      {interpretBlock}
       {textBlock}
       {noticeBlock}
       {imageBlock}
@@ -381,6 +396,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // this expanded — previously only accordion panels respected defaultOpen.
   const [textExpanded, setTextExpanded] = useState(() => defaultOpen.includes(row.id))
   const [copied, setCopied] = useState(false)
+  // 「AI 翻譯解讀」panel — opened per report on demand (民眾 feature). Host owns the
+  // open state; the panel below self-generates on first open.
+  const [interpretOpen, setInterpretOpen] = useState(false)
   // 向右展開 — single long reports (imaging / ECG / pathology narratives) can be
   // pushed to the right pane so the long text reads beside the rest of the list.
   // Lab panels / 累積報告 are deliberately excluded (handled below in the
@@ -548,7 +566,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
           // key per report so the splitter ratio (and lightbox state) reset to
           // the content-aware default on each open instead of React reusing the
           // instance and carrying a previous report's dragged ratio over.
-          node: <ReportImagingDetail key={reportSourceId} text={fullText} images={images ?? []} title={row.title} />,
+          node: <ReportImagingDetail key={reportSourceId} text={fullText} images={images ?? []} title={row.title} reportId={reportSourceId} />,
         })
       }
       return (
@@ -598,25 +616,56 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 {row.isPossibleDuplicate && (
                   <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
                 )}
+                {/* 「AI 翻譯解讀」— only when there's narrative text to work on.
+                    Hidden while this report is docked to the right pane, which
+                    owns the AI card there (no duplicate left card / orphan
+                    button); it returns when the right pane is closed.
+                    stopPropagation so opening it doesn't also toggle the
+                    accordion (the header row is itself a toggle button). */}
+                {hasText && !isReportRightActive && (
+                  <ReportInterpretationButton
+                    active={interpretOpen}
+                    onToggle={(e) => {
+                      e.stopPropagation()
+                      setInterpretOpen((v) => !v)
+                    }}
+                  />
+                )}
                 {/* 向右展開 — full report text + images in the right pane
                     (desktop only; no side-by-side room on phones). Sits beside
                     the ▼ chevron (向下展開) so the user picks per report. Shown
                     whenever there's text OR images to dock. */}
                 {(hasText || hasImages) && (
-                  <button
-                    type="button"
-                    onClick={openReportRight}
-                    title={isReportRightActive ? '已在右側面板展開' : (hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文')}
-                    aria-label={hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文'}
-                    className={cn(
-                      'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 transition-colors',
-                      isReportRightActive
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-                    )}
-                  >
-                    <PanelRight className="h-3.5 w-3.5" />
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={openReportRight}
+                        aria-label={hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文'}
+                        className={cn(
+                          // A real, self-evident button (visible border + fill) —
+                          // the old transparent ghost icon read as non-interactive
+                          // and first-time users missed it. Neutral grey so it
+                          // stays secondary to the primary-blue 「AI 翻譯解讀」button.
+                          'hidden md:inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors',
+                          isReportRightActive
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border bg-muted/40 text-muted-foreground hover:border-foreground/30 hover:bg-muted hover:text-foreground',
+                        )}
+                      >
+                        <PanelRight className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    {/* Radix tooltip (not the native title) so the icon-only
+                        button explains itself on hover, quickly and styled. */}
+                    <TooltipContent>
+                      {isReportRightActive
+                        ? '已在右側面板展開'
+                        : hasImages
+                          ? '在右側面板展開報告與影像'
+                          : '在右側面板展開全文'}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
                 {hasText && (
                   <ChevronDown
@@ -628,6 +677,19 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 )}
               </div>
             </div>
+            {/* 「AI 翻譯解讀」panel — rendered ABOVE the original report text so a
+                民眾 who only reads the AI result sees it immediately without
+                scrolling past the English narrative. The original stays below
+                for anyone who wants to compare. Auto-generates on open. Hidden
+                while docked to the right pane (which shows the same card there),
+                so the result isn't duplicated. */}
+            {hasText && interpretOpen && !isReportRightActive && (
+              <ReportInterpretationPanel
+                reportId={`report:${row.id}`}
+                reportText={fullText}
+                reportTitle={row.title}
+              />
+            )}
             {hasText && (
               textExpanded ? (
                 <FormattedReportText text={fullText} className="text-xs leading-relaxed text-foreground/80" />

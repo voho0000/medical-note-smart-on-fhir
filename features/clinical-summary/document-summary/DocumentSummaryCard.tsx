@@ -20,11 +20,15 @@
 // or once the bridge ships discharge summaries.
 "use client"
 
+import { useMemo, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Building2, Info, PanelRight } from 'lucide-react'
 import { FeatureCard } from '@/src/shared/components'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
+import { stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
+import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
+import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
 import { HtmlDocumentRenderer, HtmlDocumentBody } from './components/HtmlDocumentRenderer'
@@ -125,6 +129,29 @@ function DocumentEntryCard({
   const dateStr = formatDate(entry.date)
   const periodStr = formatPeriod(entry.period)
 
+  // 「AI 翻譯解讀」— on-demand per document (民眾 feature). Plain-text extraction
+  // reuses the same strip-HTML path the clinical-context builder uses, so the
+  // model gets the readable document text (not sanitised HTML / base64).
+  const [interpretOpen, setInterpretOpen] = useState(false)
+  const docPlainText = useMemo(() => {
+    if (entry.sourceKind === 'composition' && entry.composition) {
+      return (entry.composition.section ?? [])
+        .map((s) => {
+          const t = s.text?.div ? stripHtmlToText(s.text.div) : ''
+          if (!t) return ''
+          return s.title ? `${s.title}:\n${t}` : t
+        })
+        .filter(Boolean)
+        .join('\n\n')
+    }
+    if (entry.attachment?.data) {
+      const decoded = decodeBase64Utf8(entry.attachment.data)
+      return decoded ? stripHtmlToText(decoded) : ''
+    }
+    return ''
+  }, [entry])
+  const canInterpret = docPlainText.trim().length > 0
+
   // 向右展開 — dock the full document (the same content the maximize dialog
   // shows) in the right pane to read it beside the list.
   const { detail: rightDetail, toggleDetail } = useRightDetail()
@@ -146,6 +173,17 @@ function DocumentEntryCard({
       ),
       node: (
         <div key={sourceId} className="scrollbar-thin-persistent h-full overflow-y-auto pr-1">
+          {/* 「AI 翻譯解讀」in the docked view — manual mode (shares the inline
+              per-reportId cache), above the document body so a 民眾 sees the AI
+              result first without scrolling. */}
+          {canInterpret && (
+            <ReportInterpretationPanel
+              reportId={sourceId}
+              reportText={docPlainText}
+              reportTitle={entry.typeLabel}
+              autoGenerate={false}
+            />
+          )}
           {entry.sourceKind === 'composition' && entry.composition ? (
             <CompositionRenderer
               composition={entry.composition}
@@ -240,6 +278,18 @@ function DocumentEntryCard({
               {dateStr}
             </span>
           )}
+          {/* 「AI 翻譯解讀」— shown for any document with extractable text.
+              Hidden while docked to the right pane (which owns the AI card
+              there), so there's no duplicate left card / orphan button. */}
+          {canInterpret && !isRightActive && (
+            <ReportInterpretationButton
+              active={interpretOpen}
+              onToggle={(e) => {
+                e.stopPropagation()
+                setInterpretOpen((v) => !v)
+              }}
+            />
+          )}
           {/* IPS compositions have per-section accordions (no single 文件內容
               chevron), so their 向右展開 button lives here in the header.
               Discharge summaries get it on the 文件內容 bar instead (below). */}
@@ -290,6 +340,19 @@ function DocumentEntryCard({
           {entry.institution && periodStr && <span className="select-none">·</span>}
           {periodStr && <span className="tabular-nums">{periodStr}</span>}
         </div>
+      )}
+
+      {/* 「AI 翻譯解讀」panel — rendered ABOVE the document body so a 民眾 who
+          only reads the AI result sees it immediately instead of having to
+          scroll past (or expand) the original document. Auto-generates on open.
+          Hidden while docked to the right pane (which shows the same card
+          there), so the result isn't duplicated. */}
+      {canInterpret && interpretOpen && !isRightActive && (
+        <ReportInterpretationPanel
+          reportId={`doc:${entry.id}`}
+          reportText={docPlainText}
+          reportTitle={entry.typeLabel}
+        />
       )}
 
       {/* Source-specific renderer. Composition → per-section accordion,

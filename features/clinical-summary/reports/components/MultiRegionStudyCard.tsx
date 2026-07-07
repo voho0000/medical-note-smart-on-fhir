@@ -29,6 +29,7 @@ import { cn } from '@/src/shared/utils/cn.utils'
 import type { Row } from '../types'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
+import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 
 interface MultiRegionStudyCardProps {
   row: Row
@@ -248,17 +249,29 @@ function NarrativeSubCard({
   reportLabel: string
 }) {
   const [expanded, setExpanded] = useState(false)
+  // 「AI 翻譯解讀」opens independently of the text expander — a 民眾 can read the
+  // AI result without first expanding the English narrative.
+  const [interpretOpen, setInterpretOpen] = useState(false)
   const text = getNarrativeText(row)
   const bodyPart = inferBodyPart(text)
   const firstLine = text.split(/\r?\n/).find((s) => s.trim().length > 0) || text
+  const hasText = text.trim().length > 0
+  const toggle = () => setExpanded((v) => !v)
 
   return (
     <div className="rounded-md border border-border bg-background shadow-sm">
-      {/* Sub-card header — number + body-part hint or label */}
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full px-2.5 py-1.5 text-left flex items-start gap-2 hover:bg-muted/40 transition-colors"
+      {/* Sub-card header — number + body-part hint or label. A div-role=button
+          (not <button>) so the 「AI 翻譯解讀」button can nest without an invalid
+          button-in-button. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={toggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() }
+        }}
+        aria-expanded={expanded}
+        className="w-full cursor-pointer px-2.5 py-1.5 text-left flex items-start gap-2 hover:bg-muted/40 transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded-md"
       >
         <span className="text-amber-700 font-semibold text-sm shrink-0 select-none tabular-nums">
           {circled(index)}
@@ -278,10 +291,30 @@ function NarrativeSubCard({
             </div>
           )}
         </div>
-        <span className={cn('text-xs text-muted-foreground shrink-0 select-none', expanded && 'rotate-180')}>
+        {hasText && (
+          <ReportInterpretationButton
+            active={interpretOpen}
+            onToggle={(e) => {
+              e.stopPropagation()
+              setInterpretOpen((v) => !v)
+            }}
+          />
+        )}
+        <span className={cn('text-xs text-muted-foreground shrink-0 select-none mt-0.5', expanded && 'rotate-180')}>
           ▾
         </span>
-      </button>
+      </div>
+      {/* 「AI 翻譯解讀」panel — above the original narrative so a 民眾 sees the AI
+          result first. Shown whenever opened, independent of the text expander. */}
+      {hasText && interpretOpen && (
+        <div className="px-2.5">
+          <ReportInterpretationPanel
+            reportId={`report:${row.id}`}
+            reportText={text}
+            reportTitle={bodyPart || undefined}
+          />
+        </div>
+      )}
       {/* Expanded full report body */}
       {expanded && (
         <div className="px-2.5 pb-2.5 pt-0.5 text-xs border-t border-border/40">
