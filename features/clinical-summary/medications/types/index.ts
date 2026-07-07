@@ -58,6 +58,12 @@ export interface MedicationRow {
   icdText?: string
   /** Total number of refills of this drug across the loaded dataset. */
   refillCount: number
+  /** Number of EARLIER still-active fills of this same drug from the SAME
+   *  institution merged into this row (慢箋 early refill overlap — one
+   *  continuing prescription, not duplicate therapy). Cross-institution
+   *  same-drug rows are never merged: that's a duplicate-therapy signal
+   *  that must stay visible. Set by useGroupedMedications. */
+  overlapCount?: number
   /** First (earliest) refill date for this drug, formatted. */
   firstRefillDate?: string
   /** Originating FHIR resource type. Bridge data is always undefined or

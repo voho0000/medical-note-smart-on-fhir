@@ -27,10 +27,71 @@ const SCHEMA_HINT =
   '"category": "renal|bleeding|critical-lab|duplicate|allergy|monitoring|other", ' +
   '"recommendation": "<optional next step>"}]}'
 
+// Appended to both prompts. "high" only stays useful if it's RARE — over-
+// rating common, usually-appropriate geriatric prescribing (e.g. an
+// anticholinergic BPH/OAB drug in an older man, which is near-universal and
+// usually necessary) as high-risk trains clinicians to ignore every alert
+// (alert fatigue) and buries the genuinely dangerous ones (user report
+// 2026-07-07).
+const SEVERITY_RULE =
+  ' Severity standard — the ONLY test for "high" is TIME-TO-HARM, not how serious the topic sounds: ' +
+  'mark "high" ONLY when, if the clinician does NOTHING, a SPECIFIC serious harm (organ damage, hospitalisation, a life-threatening event) is plausible within a SHORT window — days to a few weeks — AND prompt action would avert it. ' +
+  'The alert\'s own "detail" MUST name that concrete near-term harm; if you cannot say what goes wrong and roughly how soon, it is NOT high. ' +
+  'Typical "high" cases: a critical / panic lab value; active bleeding risk on multiple antithrombotics; a drug given despite a DOCUMENTED allergy; a drug outright contraindicated at this patient\'s CURRENT organ function with active accumulation; a dangerous, acute interaction. ' +
+  'Everything that is a REVIEW item — worth checking but NOT about to cause harm in the near term — is "medium" at most, even when the topic sounds important: anticholinergic / Beers burden, polypharmacy, therapeutic duplication of ordinary drugs, a renally-dosed drug that is merely "worth confirming", mildly-abnormal or chronic-stable labs, monitoring gaps. If the recommendation is 「建議評估 / 追蹤 / 留意 / 可考慮」, the alert is by definition NOT high. ' +
+  'Use "low" for purely informational points. ' +
+  'Default to "medium". Do NOT inflate severity just because the patient is elderly or multimorbid. Most patients have ZERO or ONE "high"; if several alerts look "high", re-apply the time-to-harm test and downgrade the ones that fail — a scan where everything is high trains clinicians to ignore all of them.'
+
+// Appended to both prompts. "title", "detail" and "recommendation" are
+// SEPARATE UI fields shown in a fixed layout — a positional cross-reference
+// like 「如果有上述情形」 can point the WRONG way (the symptoms it means live in
+// another field, above OR below it depending on the layout). User report
+// 2026-07-07.
+const NO_POSITIONAL_RULE =
+  ' Never use a positional cross-reference (上述 / 下述 / 如上 / 如下 / above / below / as follows) to point from one field ("title" / "detail" / "recommendation") at another — they are separate UI blocks in a fixed layout, so "as above" may point the wrong way. Make each field self-contained: if the recommendation refers to symptoms or items, restate them briefly rather than saying 上述/下述.'
+
 // Appended to both prompts: how to cite the SOURCE LIST in "sources".
 const SOURCE_RULE =
   ' In "sources", list the SOURCE LIST key(s) (e.g. "L3", "M2") for the records this alert is based on; ' +
   'use ONLY keys that appear in the SOURCE LIST, and omit any you cannot match. This is separate from "evidence" (which stays human-readable).'
+
+// Appended to both prompts. The data is Taiwan NHI 健康存摺 — cross-facility
+// insurance records where ONE prescription is recorded twice (the prescribing
+// clinic AND the 藥局 that dispenses the 慢箋). Without this rule the model
+// flags every pharmacy-dispensed chronic script as "duplicate therapy" —
+// constant false alarms (user report 2026-07-07).
+// Appended to both prompts. One bad Flash-Lite run returned 5/5 "duplicate"
+// alerts and nothing else — a systematic sweep keeps one category from
+// crowding out a real renal/bleeding/lab risk.
+const COVERAGE_RULE =
+  ' Cover the risk categories SYSTEMATICALLY: check renal dosing, bleeding risk, critical/abnormal labs, duplicates, allergy conflicts, and monitoring gaps in turn — ' +
+  'do not let one category (e.g. duplicates) crowd out the others. Report each distinct risk once; a multimorbid elderly patient typically yields 3–6 alerts across DIFFERENT categories.'
+
+// Appended to both prompts. A run built a "watch your blood pressure" reminder
+// on a 154 mmHg reading that was 8 YEARS old (2018), calling it 「最新」 — stale
+// vitals must not masquerade as current, and must not anchor health advice.
+const TEMPORAL_RULE =
+  ' Recency check on every cited value: NEVER call a lab / vital 最新 / current / recent unless it is within ~3 months of the newest record in the data. ' +
+  'A years-old reading (e.g. a blood pressure from several years ago) must NOT anchor an alert or reminder; if you cite it at all, state its actual date and that it is old, and prefer a genuinely recent value. ' +
+  'Do not pair an old reading with a recent one as if they were measured together.'
+
+// Appended to both prompts. Flash-Lite labelled tamsulosin (α-blocker) and
+// mosapride (prokinetic) "anticholinergic" while missing the true ones
+// (imipramine, tolterodine) — a clinician reader loses trust instantly.
+const DRUG_PROPERTY_RULE =
+  ' Drug-property accuracy: when you attribute a pharmacological property to specific drugs (anticholinergic, nephrotoxic, antithrombotic, QT-prolonging…), ' +
+  'name ONLY drugs that truly have that property — e.g. an α-blocker (tamsulosin/Harnalidge) and a prokinetic (mosapride) are NOT anticholinergic, ' +
+  'while a tricyclic (imipramine) and an antimuscarinic (tolterodine) ARE. If you are not sure a drug has the property, omit that drug rather than guess.'
+
+const DUPLICATE_RULE =
+  ' Duplicate-medication rule (health-record context) — apply it strictly: these are cross-facility insurance records, so ONE prescription can appear multiple times. ' +
+  'To judge duplication, look ONLY at the PRESCRIBING facilities (clinics / hospitals). IGNORE every PHARMACY row (機構名含 藥局 / 藥房) — a pharmacy does not prescribe, it only DISPENSES / 釋出 a 慢箋, so it can NEVER be one of the duplicate sources and must NEVER appear in the "evidence". ' +
+  'Repeat fills of the same drug from the SAME clinic over time are one ongoing therapy — NOT duplicate. ' +
+  'Flag "duplicate" ONLY when the SAME drug — or two drugs of the same class with additive effect — was prescribed by TWO DIFFERENT CLINICS whose supply windows OVERLAP (so the patient could be taking a doubled dose). ' +
+  'When you flag it, "evidence" MUST name those two DIFFERENT prescribing CLINICS with their dates (never a pharmacy), ' +
+  'and its "sources" MUST cite the MedicationRequest keys (M…) of the overlapping prescriptions themselves — never only encounter (E…) keys. ' +
+  'If the only overlap is one clinic + a pharmacy dispensing that clinic\'s script, there is NO duplication — do not flag. ' +
+  'If a duplication is itself acutely dangerous (e.g. two anticoagulants → bleeding), categorise it by its HARM ("bleeding"), NOT "duplicate" — the "duplicate" and "monitoring" categories are reserved for review items that are never an emergency, so they are never "high".'
 
 // Healthcare-professional version: clinical risk language (eGFR, dosing
 // thresholds, monitoring gaps).
@@ -46,6 +107,12 @@ const SYSTEM_MEDICAL =
   'If there are no risks, return an empty "alerts" array. ' +
   'Order alerts by severity (high first). ' +
   'Keep each title under ~12 words and each detail to one concise sentence.' +
+  SEVERITY_RULE +
+  COVERAGE_RULE +
+  TEMPORAL_RULE +
+  DRUG_PROPERTY_RULE +
+  DUPLICATE_RULE +
+  NO_POSITIONAL_RULE +
   SOURCE_RULE
 
 // Patient version: same underlying analysis, but reframed as plain-language,
@@ -65,10 +132,22 @@ const SYSTEM_PATIENT =
   'Each "recommendation" gives a concrete next step: when relevant, WHICH type of doctor / specialty to follow up with ' +
   '(e.g. kidney → nephrology, heart → cardiology), and/or a simple lifestyle or self-care suggestion (diet, activity, regular monitoring). ' +
   'NEVER tell the patient to start, stop, or change any medicine on their own — always say to confirm with their own doctor or pharmacist. ' +
-  'Do not alarm: these are things to discuss and habits to consider, not diagnoses. ' +
+  'Tone (IMPORTANT): keep every reminder gentle and reassuring — a routine "worth double-checking with your doctor" item, NEVER a warning that a medicine is harming you. ' +
+  'Do NOT tie a past frightening event (confusion, a fall, a hospital visit) to a current medicine as cause-and-effect, and do NOT say a medicine "may worsen / affect / 加重" a serious symptom — that frightens people and can make them stop a medicine they actually need. ' +
+  'Instead, note neutrally that this is simply something doctors routinely review in older adults, that the medicine may well be the right choice for them, and that the doctor will judge whether any adjustment is needed. ' +
+  'These are things to discuss, not diagnoses or dangers. ' +
+  'Above all, choose wording that does NOT make the patient anxious, fearful, or panicked (用詞避免引起病患恐慌或焦慮): stay calm, matter-of-fact and reassuring; avoid frightening, urgent, or worst-case phrasing and scary symptom names in headings. ' +
+  'For a medication-review item, NEVER output a contentless "ask your doctor whether this medicine is still right for you" — the prescriber chose that medicine deliberately, and a patient showing up with a reason-free query wastes the visit and undermines trust in the prescription. ' +
+  'Either make it SYMPTOM-CONDITIONAL — name concrete signs the patient can watch for (e.g. 口乾、便祕、頭暈、記憶變差) and say to MENTION them at the next visit ONLY IF they occur, otherwise keep taking the medicine as usual — or OMIT the item (the clinician-facing scan already covers prescriber-side review). ' +
   'Do NOT fabricate values — use only values present in the data, and put the triggering items in "evidence". ' +
   'If there is nothing worth noting, return an empty "alerts" array. ' +
   'Order by importance (most important first). Keep each title short and each detail to one concise sentence.' +
+  SEVERITY_RULE +
+  COVERAGE_RULE +
+  TEMPORAL_RULE +
+  DRUG_PROPERTY_RULE +
+  DUPLICATE_RULE +
+  NO_POSITIONAL_RULE +
   SOURCE_RULE
 
 export interface GenerateSafetyAlertsInput {
@@ -113,7 +192,7 @@ export class GenerateSafetyAlertsUseCase {
    * isn't usable JSON / fails schema validation. Strips ```json fences and any
    * prose around the outermost JSON object.
    */
-  parseScanResult(text: string): SafetyScanResult | null {
+  parseScanResult(text: string, catalog?: SummarySourceCatalogEntry[]): SafetyScanResult | null {
     const json = extractJsonObject(text)
     if (!json) return null
     let raw: unknown
@@ -125,7 +204,7 @@ export class GenerateSafetyAlertsUseCase {
     const parsed = SafetyScanResultSchema.safeParse(raw)
     if (!parsed.success) return null
 
-    return {
+    const result: SafetyScanResult = {
       scannedCount: parsed.data.scannedCount,
       alerts: parsed.data.alerts.map((a, i) => ({
         ...a,
@@ -133,7 +212,65 @@ export class GenerateSafetyAlertsUseCase {
         category: normaliseCategory(a.category),
       })),
     }
+    return enforceSeverityFloor(filterDuplicateFalsePositives(result, catalog))
   }
+}
+
+// Deterministic backstop for SEVERITY_RULE. A "duplicate" or "monitoring" alert
+// is BY DEFINITION a review item, not imminent-harm — the prompt routes any
+// acutely-dangerous overlap to its harm category (e.g. bleeding) instead. So a
+// "high" stamped on these categories is mis-calibration, and unchecked it feeds
+// the alert-fatigue the whole standard exists to prevent (user directive
+// 2026-07-07: "高危險 = 不去處理短時間內就可能出重大問題"). Floor it to "medium".
+const NON_ACUTE_CATEGORIES = new Set(['duplicate', 'monitoring'])
+export function enforceSeverityFloor(result: SafetyScanResult): SafetyScanResult {
+  return {
+    ...result,
+    alerts: result.alerts.map((a) =>
+      a.severity === 'high' && NON_ACUTE_CATEGORIES.has(a.category)
+        ? { ...a, severity: 'medium' as const }
+        : a,
+    ),
+  }
+}
+
+/** A facility whose name is a pharmacy (社區藥局 / 藥房) — it DISPENSES a
+ *  script, it does not prescribe. */
+export function isPharmacyOrg(org?: string): boolean {
+  return /藥局|藥房/.test(org ?? '')
+}
+
+/** Deterministic backstop for the duplicate-medication rule. Flash-Lite
+ *  intermittently flags a drug as "duplicate" when the only multiple sources
+ *  are a prescribing clinic + the PHARMACY that dispensed its 慢箋 — one
+ *  prescription, not duplication (prompt guidance alone doesn't fully stop it,
+ *  esp. patient-audience). A genuine duplicate needs ≥2 DISTINCT non-pharmacy
+ *  prescribers; resolve each alert's cited med sources to their prescribing
+ *  organisation and drop the alert when fewer than two remain. Alerts whose
+ *  sources don't resolve to any medication are left untouched (can't evaluate).
+ *  Runs after parse for BOTH live scans and the demo snapshot. */
+export function filterDuplicateFalsePositives(
+  result: SafetyScanResult,
+  catalog?: SummarySourceCatalogEntry[],
+): SafetyScanResult {
+  if (!catalog || catalog.length === 0) return result
+  const byKey = new Map(catalog.map((c) => [c.key, c]))
+  const alerts = result.alerts.filter((a) => {
+    if (a.category !== 'duplicate') return true
+    const prescribers = new Set<string>()
+    let sawMedSource = false
+    for (const key of a.sources ?? []) {
+      const entry = byKey.get(key)
+      if (!entry || !/Medication/i.test(entry.resourceType)) continue
+      sawMedSource = true
+      if (entry.organization && !isPharmacyOrg(entry.organization)) {
+        prescribers.add(entry.organization.trim())
+      }
+    }
+    if (!sawMedSource) return true // can't verify → keep
+    return prescribers.size >= 2 // real duplication = ≥2 distinct clinics
+  })
+  return { ...result, alerts }
 }
 
 /** Pull the outermost {...} out of a reply that may have fences/prose around it. */

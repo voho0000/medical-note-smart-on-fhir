@@ -138,6 +138,19 @@ export function MedicationItem({
               {mt.chronic ?? '慢箋'}
             </span>
           )}
+          {/* 慢箋 early-refill merge indicator: an earlier same-drug fill from
+              the SAME institution is still inside its window and was folded
+              into this row (one continuing prescription). Cross-institution
+              same-drug rows are never merged — that would mask a potential
+              duplicate-therapy signal. */}
+          {(medication.overlapCount ?? 0) > 0 && (
+            <span
+              title={mt.renewedTooltip ?? 'Previous fill from the same institution still in window; showing the latest fill of one continuing prescription.'}
+              className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[0.625rem] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+            >
+              {mt.renewed ?? '已續領'}
+            </span>
+          )}
           {showStatementChip && (
             <span
               title={sourceChipStatementTooltip ?? 'MedicationStatement (currently taking, per source)'}

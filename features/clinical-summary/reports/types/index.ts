@@ -58,6 +58,21 @@ export type Row = {
    *  Drives the warning banner in MultiRegionStudyCard. Bridge spec
    *  §"hasAmbiguousAssociation" defines the rule. */
   hasAmbiguity?: boolean
+  /** ──── Lab collection-day grouping (健保存摺 fragmentation) ─────────
+   *  True on a synthetic row folding all lab DRs that share (collection
+   *  day, institution, lab category) — NHI ships one DR per analyte; the
+   *  hospital reading unit is one report per lab section (血液/生化/…).
+   *  `groupedRows` holds the members (pre-sorted by preferredOrder);
+   *  ReportRow dispatches these to LabDayGroupCard. See
+   *  utils/lab-day-grouping.ts. */
+  dayGroup?: boolean
+  /** LAB_CATEGORIES id ('cbc', 'chem', …) or 'other' — set on dayGroup rows;
+   *  drives the card's STACKING rank. */
+  dayGroupCategoryId?: string
+  /** Category ids to name in the card's chip — usually `[dayGroupCategoryId]`,
+   *  but a chem card that absorbed plain glucose labels by actual contents:
+   *  ['chem'] / ['glucose'] / ['chem','glucose']. See dayGroupLabelIds. */
+  dayGroupLabelIds?: string[]
   /** Number of DR duplicates bridge sent for this row that we collapsed
    *  via strict-prefix dedup. Drives the "bridge dup × N" badge on the
    *  row header so the bridge bug stays visible — silently merging would

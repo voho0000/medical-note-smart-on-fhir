@@ -168,6 +168,11 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                     {t.visitHistory.medications} {details.medications.length}
                   </span>
                 )}
+                {details.reports.length > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[0.6875rem] text-cyan-700 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-300">
+                    {t.visitHistory.examReports} {details.reports.length}
+                  </span>
+                )}
                 {details.procedures.length > 0 && (
                   <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[0.6875rem] text-orange-700">
                     {t.visitHistory.procedures} {details.procedures.length}

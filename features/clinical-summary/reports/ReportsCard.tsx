@@ -12,11 +12,13 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { dateSearchTokens } from "@/src/shared/utils/date.utils"
+import { getAnalyteLabel } from "@/src/shared/utils/lab-normalize"
 import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
 import { useProcedureRows } from './hooks/useProcedureRows'
 import { useGroupedRows } from './hooks/useGroupedRows'
 import { groupMultiRegionStudies } from './utils/multi-region-grouping'
+import { groupLabReportsByDay } from './utils/lab-day-grouping'
 import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
@@ -31,14 +33,25 @@ const EMPTY_EXPANDED_IDS: string[] = []
 // what makes imaging / ECG / pathology conclusions and text lab results
 // (cultures, "Target Not Detected") searchable by content, not just by title.
 // Shared by the filter and the auto-expand pass so the two never diverge.
+//
+// Names are matched BOTH ways: raw FHIR text (code.text / coding.display —
+// often Chinese from the bridge, e.g. 顏色) AND the canonical analyte label
+// (getAnalyteLabel → COLOR) — because the UI renders the canonical form
+// (ObservationBlock's getAnalyteDisplayForObs), users search what they SEE.
+// Without the canonical arm, searching "COLOR" missed the 顏色-coded row.
+function nameMatch(obsOrComponent: any, q: string): boolean {
+  const raw = (obsOrComponent?.code?.text || obsOrComponent?.code?.coding?.[0]?.display || '').toLowerCase()
+  if (raw.includes(q)) return true
+  const canonical = getAnalyteLabel(obsOrComponent)
+  return canonical !== '—' && canonical.toLowerCase().includes(q)
+}
+
 function rowInnerMatch(row: Row, q: string): boolean {
   return row.obs.some((o: any) => {
-    const codeText = (o?.code?.text || o?.code?.coding?.[0]?.display || '').toLowerCase()
-    if (codeText.includes(q)) return true
+    if (nameMatch(o, q)) return true
     if (typeof o?.valueString === 'string' && o.valueString.toLowerCase().includes(q)) return true
     return Array.isArray(o?.component) && o.component.some((c: any) => {
-      const cText = (c?.code?.text || c?.code?.coding?.[0]?.display || '').toLowerCase()
-      if (cText.includes(q)) return true
+      if (nameMatch(c, q)) return true
       return typeof c?.valueString === 'string' && c.valueString.toLowerCase().includes(q)
     })
   })
@@ -216,13 +229,26 @@ export function ReportsCard() {
     [groupedRows.imaging],
   )
 
+  // Lab tab: 健保存摺 ships one DR per analyte, so the default view folds
+  // same-(collection day, institution) reports into one LabDayGroupCard —
+  // the hospital's「一天一張檢驗單」reading unit. The flat single-item list
+  // stays one toggle away. Grouping runs on the FILTERED rows so a search
+  // shows day groups containing exactly the matching members.
+  const [labByDay, setLabByDay] = useState(true)
+  const labRows = useMemo(
+    () => (labByDay ? groupLabReportsByDay(groupedRows.lab) : groupedRows.lab),
+    [groupedRows.lab, labByDay],
+  )
+
   const tabConfigs = useMemo(() => {
     const { tabs: reportTabs } = t.reports
     const cumulativeLabel = (reportTabs as any).cumulative || 'Cumulative'
     const configs = [
       { value: "cumulative", label: cumulativeLabel, rows: [] as Row[], isCumulative: true },
       { value: "all", label: `${reportTabs.all} (${groupedRows.all.length})`, rows: groupedRows.all, isCumulative: false },
-      { value: "lab", label: `${reportTabs.lab} (${groupedRows.lab.length})`, rows: groupedRows.lab, isCumulative: false },
+      // Badge count follows the active view (day groups vs single items),
+      // matching the imaging precedent: the number shown = cards clickable.
+      { value: "lab", label: `${reportTabs.lab} (${labRows.length})`, rows: labRows, isCumulative: false },
       // Tab badge count reflects the post-grouping list (a 6-row multi-region
       // CT now reads as 1 row in the badge), so the number a user sees and
       // the cards they can click on match.
@@ -239,7 +265,7 @@ export function ReportsCard() {
       config.value === "vitals" ||
       config.rows.length > 0
     )
-  }, [groupedRows, t])
+  }, [groupedRows, imagingRows, labRows, t])
 
   // Claim DiagnosticReport / Observation navigations. Row.id is the DR id;
   // orphan-observation rows carry the obs id, so match either directly or
@@ -399,6 +425,32 @@ export function ReportsCard() {
             <p className="mt-1.5 text-xs text-muted-foreground">
               顯示 {filteredRows.length} / 共 {rows.length} 筆
             </p>
+          )}
+          {/* Lab view toggle — 依採檢日 folds the NHI one-DR-per-analyte
+              fragmentation into one card per (day × institution); 單項列表
+              is the original flat list. Lab tab only. */}
+          {activeTab === "lab" && (
+            <div className="mt-2 inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/40 p-0.5" role="group" aria-label={(t.reports as any).labViewLabel}>
+              {([
+                { byDay: true, label: (t.reports as any).byCollectionDay, title: (t.reports as any).byCollectionDayTooltip },
+                { byDay: false, label: (t.reports as any).flatList, title: undefined },
+              ] as const).map((opt) => (
+                <button
+                  key={String(opt.byDay)}
+                  type="button"
+                  onClick={() => setLabByDay(opt.byDay)}
+                  title={opt.title}
+                  aria-pressed={labByDay === opt.byDay}
+                  className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                    labByDay === opt.byDay
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}

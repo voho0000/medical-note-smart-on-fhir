@@ -327,7 +327,31 @@ const SHARED_RULES =
   'NEVER treat absence of data as absence of care (e.g. never claim "no recent visits" or "not taking medication"). ' +
   'Do NOT speculate about in-hospital findings that are not in the data (e.g. ER workup conclusions). ' +
   'Cite sources ONLY with reference keys that appear in the SOURCE LIST (e.g. "E1", "M3"); never invent keys. ' +
+  'Every key in a claim\'s "sources" must DIRECTLY support that specific claim — do not attach loosely-related keys. ' +
   'Do NOT fabricate values — use only values present in the data. ' +
+  'Diagnosis-code caution (CRITICAL): the ICD / diagnosis codes on claims and on a visit\'s reason-for-encounter are BILLING codes, ' +
+  'NOT confirmed diagnoses — they are routinely provisional, "rule-out", suspected, or carried forward across visits for reimbursement. ' +
+  'Do NOT assert a coded condition as an established diagnosis on a claim code alone, and NEVER recommend workup, referral, or staging for it on that basis ' +
+  '(e.g. do not advise "refer to hemato-oncology to assess the myeloma" merely because a myeloma claim code appears on a visit). ' +
+  'When a condition rests ONLY on a claim/reason code, either hedge it ("健保申報碼曾登錄…" / "claim records list…") or corroborate it with labs, ' +
+  'dispensed medications, or care plans before presenting it as an active problem or acting on it. ' +
+  'Corroboration MUST be CONDITION-SPECIFIC — the lab/imaging/med must directly evidence THAT condition (an echocardiogram for valvular disease; an ECG or an unrelated cardiac test does NOT confirm a valve diagnosis; a HbA1c for diabetes, not any blood test). ' +
+  'Before citing a DiagnosticReport for a condition, CHECK ITS CONTENT: read the report\'s actual result values / conclusion text in the data and cite it ONLY if that content itself mentions or measures the condition. ' +
+  'A plausible title or same-day timing is NOT a link — e.g. an abdominal ultrasound whose conclusion says "fatty liver, gallbladder sludge, renal stones" says NOTHING about 胃息肉 and must not be cited as its evidence ' +
+  '(while it IS direct evidence for 脂肪肝/膽囊沉積物/腎結石 — report those findings instead of leaving them out). ' +
+  'The same applies to documents: write 出院病摘 as a "basis" ONLY if the discharge summary text actually mentions that condition — do not attribute a condition to a document that never names it. ' +
+  'A test that does not measure or name the condition is NOT corroboration, and must not be cited in that claim\'s "sources". ' +
+  'When a condition rests only on claim codes (with or without related medications), the "basis" must say what the evidence actually is ' +
+  '(e.g. "3次門診申報及用藥") — NOT a phrase like "門診追蹤" that implies clinical confirmation, and not a test that never assessed it. ' +
+  'Do NOT recommend routine follow-up of a code-only condition as if it were established; if anything, suggest the confirmatory test. ' +
+  'NEVER name an examination or report type as evidence when no such report exists in the data — do not write 內視鏡/胃鏡/切片/心臟超音波 (or any test) in a "basis" unless that report is actually present ' +
+  '(a 息肉/polyp claim code does NOT mean an endoscopy report exists; a cardiac claim code does NOT mean an echo exists — check the actual reports). ' +
+  'Temporal honesty: call an event 近期/recent ONLY if it is within ~3 months of the newest record; otherwise state the actual date or timeframe. ' +
+  'Trend honesty (ALL audiences, including the patient version): when serial values show a direction (e.g. eGFR 35→33→32), describe it faithfully — ' +
+  'NEVER call a worsening value 穩定/stable; in patient language prefer calm-but-true phrasing (e.g. 數值逐漸下降，醫師正在追蹤) over false reassurance. ' +
+  'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
+  '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
+  'a complex multi-morbid patient typically yields 8–12 problems, not 5–6. ' +
   'The summary is a flowing narrative split into segments: consecutive segments are concatenated into ONE paragraph, so include the connecting punctuation yourself. ' +
   'Highlighting ("emphasis": true) renders as a marker-pen highlight — it only works when RARE and SHORT. ' +
   'Split each sentence so the key phrase is its OWN tiny segment: mark at most 5 segments in the whole summary, ' +
@@ -336,8 +360,10 @@ const SHARED_RULES =
   'Do NOT wrap key phrases in 「」 quotes as a substitute for highlighting — split them out instead. ' +
   'Example: instead of ONE segment {"text": "近期診斷為「肺炎」伴隨咳嗽。"}, output THREE: ' +
   '[{"text": "近期診斷為", "emphasis": false, "sources": []}, {"text": "肺炎", "emphasis": true, "sources": ["E3"]}, {"text": "伴隨咳嗽。", "emphasis": false, "sources": []}]. ' +
-  'For the timeline, pick the clinically significant events by catalog key, scaled to the case: ' +
-  'a simple patient may need only ~5, a complex multi-year multi-hospital course may justify 20+. ' +
+  'For the timeline, surface only the clinically SIGNIFICANT events — milestones and turning points ' +
+  '(a hospital admission, an ER visit, a first/major new diagnosis, starting a care plan, a key imaging study or procedure) — ' +
+  'NOT every routine follow-up visit or repeat-prescription pickup. Aim for ~5–8 such events for a case like this (only a very complex multi-year, multi-hospital course justifies more). ' +
+  'The timeline is the OBJECTIVE care journey, so choose the SAME significant events REGARDLESS of audience: the patient version changes only the WORDING of each label into plain language — it must NOT show more events, fewer events, or different events than the clinician version would. ' +
   'Curate — the full record list is already visible elsewhere; the app supplies date and hospital, you supply only the label. ' +
   'For "problems", infer the patient\'s ACTIVE problem list by SYNTHESISING across ALL data — not just claim diagnosis codes: ' +
   'coded diagnoses, ABNORMAL LAB patterns (e.g. repeatedly low Hb → 貧血), DISPENSED MEDICATIONS that imply a condition ' +
@@ -345,7 +371,9 @@ const SHARED_RULES =
   'Each problem is a plain condition NAME (e.g. 第二型糖尿病) — do NOT include ICD or any other codes. ' +
   'Give each a SHORT "basis" phrase naming the evidence type and count (e.g. "5 次檢驗異常", "藥局調劑", "照護計畫", "6 次就診申報"), ' +
   'the matching "kind", and the catalog key(s) in "sources". Merge duplicates; order by clinical importance; at most ~12 problems. ' +
-  'Cross-hospital lens: surface duplicate medications across facilities, care fragmented across providers, and follow-up gaps. ' +
+  'Cross-hospital lens: surface care fragmented across providers and follow-up gaps. ' +
+  'For duplicate medications, be strict: these are NHI cross-facility records where ONE prescription appears twice (the prescribing clinic AND the 藥局 / pharmacy that dispenses the 慢箋), ' +
+  'and same-clinic refills are one ongoing therapy — NEITHER is duplication. Only call out duplication when the SAME drug (or same-class additive drugs) is prescribed by TWO DIFFERENT CLINICS in a short window. ' +
   'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
   SCHEMA_HINT
 
@@ -361,6 +389,10 @@ const SYSTEM_PATIENT =
   'Plain, everyday language at a junior-high reading level; explain any necessary medical term; ' +
   'no ICD/ATC codes, no prognosis speculation, no probability statements — when uncertain, point them to their doctor. ' +
   'Positive facts (e.g. stable results) may be emphasised to reassure. ' +
+  'Choose wording that does NOT make the patient anxious, fearful, or panicked (用詞避免引起病患恐慌或焦慮): ' +
+  'stay calm, matter-of-fact and reassuring; avoid frightening or worst-case phrasing, and do NOT tie a past scary event ' +
+  '(confusion, a fall, a hospital visit) to a current medicine as cause-and-effect — frame anything to review as a routine ' +
+  'check with the doctor, not a danger. ' +
   '"decisions" become questions the patient can ask their doctor at the next visit — NEVER instructions to start, ' +
   'stop, or change any medicine on their own.' +
   SHARED_RULES

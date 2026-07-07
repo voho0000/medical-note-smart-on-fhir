@@ -47,6 +47,18 @@ export type EncounterDiagnosis = {
   recordedDate?: string
 }
 
+/** A narrative diagnostic report linked to a visit — EKG, imaging (CXR/CT/
+ *  ultrasound), endoscopy, pathology. Its finding lives in `conclusion`, with
+ *  no member Observations, so without surfacing it here it stays invisible
+ *  under the visit even though the FHIR `encounter` link is present. */
+export type EncounterReport = {
+  id: string
+  title: string
+  conclusion: string
+  effectiveDateTime?: string
+  status?: string
+}
+
 export type EncounterTestGroup = {
   /** Lab-category id (cbc / chem / urine / …) or null for uncategorized tests.
    *  Resolve the display label via t.reports.cumulativeCategories[categoryId]. */
@@ -104,6 +116,9 @@ export type EncounterDetails = {
    *  is kept for stats/search. Each group additionally carries `testSeries`
    *  for the multi-day collapsed view. */
   testGroups: EncounterTestGroup[]
+  /** Narrative reports (EKG / imaging / endoscopy / pathology) linked to this
+   *  visit — finding text only, no numeric member observations. */
+  reports: EncounterReport[]
   procedures: EncounterProcedure[]
   clinicalNotes: ClinicalNote[]
   /** True when this encounter's tests / meds span 2+ distinct calendar days
@@ -324,7 +339,7 @@ export function useEncounterDetails(
       if (!map.has(encounterId)) {
         map.set(encounterId, {
           diagnoses: [], medications: [], medSeries: [],
-          tests: [], testGroups: [],
+          tests: [], testGroups: [], reports: [],
           procedures: [], clinicalNotes: [],
           isMultiDay: false,
         })
@@ -391,6 +406,24 @@ export function useEncounterDetails(
           if (entry.tests.some((item) => item.id === normalized.id)) return
           entry.tests.push(normalized)
         })
+
+        // Narrative report (EKG / imaging / endoscopy / pathology): the finding
+        // lives in `conclusion` with no member Observations, so it produced no
+        // test rows above. Surface it as its own row — otherwise a linked EKG
+        // etc. is invisible under the visit despite the encounter link.
+        const conclusion = (report?.conclusion || "").trim()
+        if (conclusion) {
+          const reportId = report?.id || `${encounterId}-report-${entry.reports.length}`
+          if (!entry.reports.some((r) => r.id === reportId)) {
+            entry.reports.push({
+              id: reportId,
+              title: getCodeText(report?.code) || "Report",
+              conclusion,
+              effectiveDateTime: report?.effectiveDateTime,
+              status: report?.status,
+            })
+          }
+        }
       })
     }
 

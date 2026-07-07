@@ -55,3 +55,42 @@ describe('useEncounterDetails — clinical category grouping', () => {
     expect(ids[ids.length - 1]).toBeNull()
   })
 })
+
+// A narrative DiagnosticReport (EKG / imaging / endoscopy / pathology) carries
+// its finding in `conclusion` with NO member observations — before the fix it
+// produced zero rows and vanished from the visit despite the encounter link.
+describe('useEncounterDetails — narrative reports (conclusion-only)', () => {
+  const report = (over: any) => ({
+    id: 'r1',
+    encounter: { reference: 'Encounter/e1' },
+    code: { text: '心電圖' },
+    conclusion: 'Sinus bradycardia\nAbnormal ECG',
+    effectiveDateTime: '2026-02-10T00:00:00Z',
+    status: 'final',
+    ...over,
+  })
+  const runReports = (reports: any[]) => {
+    const { result } = renderHook(() =>
+      useEncounterDetails([], reports, [], [], [], [], 'en', 'medical'),
+    )
+    return result.current.get('e1')!
+  }
+
+  it('surfaces an EKG (conclusion, no member obs) as a report row under the visit', () => {
+    const details = runReports([report({})])
+    expect(details.reports).toHaveLength(1)
+    expect(details.reports[0]).toMatchObject({ title: '心電圖', conclusion: 'Sinus bradycardia\nAbnormal ECG' })
+    // It is NOT counted as a numeric test.
+    expect(details.tests).toHaveLength(0)
+  })
+
+  it('ignores a report with no conclusion (nothing to show)', () => {
+    const details = runReports([report({ conclusion: '   ' })])
+    expect(details.reports).toHaveLength(0)
+  })
+
+  it('deduplicates the same report id', () => {
+    const details = runReports([report({}), report({})])
+    expect(details.reports).toHaveLength(1)
+  })
+})

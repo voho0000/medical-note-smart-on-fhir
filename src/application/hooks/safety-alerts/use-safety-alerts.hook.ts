@@ -19,7 +19,6 @@ import { getUserErrorMessage } from '@/src/core/errors'
 import {
   saveEncryptedCache,
   loadEncryptedCache,
-  removeEncryptedCache,
   aiResultCacheKey,
 } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
@@ -49,22 +48,36 @@ const SAFETY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const safetyCacheKey = (patientId: string) => aiResultCacheKey('safety', patientId)
 
 interface SafetyAlertsStore {
+  // Keyed by scanKey = patientId::audience::model, so each model keeps its own
+  // result / scanning / error. Switching model changes which slot the view
+  // reads; an in-flight scan keeps running and lands in its own model's slot
+  // (per-model behaviour, matching the summary hook — user directive 2026-07-07).
   byPatient: Record<string, SafetyScanResult>
-  setResult: (patientId: string, result: SafetyScanResult) => void
-  clear: (patientId: string) => void
+  scanning: Record<string, boolean>
+  errors: Record<string, string | null>
+  setResult: (scanKey: string, result: SafetyScanResult) => void
+  clear: (scanKey: string) => void
+  setScanning: (scanKey: string, value: boolean) => void
+  setError: (scanKey: string, error: string | null) => void
 }
 
 // Module-level cache (survives tab switches; cleared when a patient is re-scanned).
 const useSafetyAlertsStore = create<SafetyAlertsStore>((set) => ({
   byPatient: {},
-  setResult: (patientId, result) =>
-    set((s) => ({ byPatient: { ...s.byPatient, [patientId]: result } })),
-  clear: (patientId) =>
+  scanning: {},
+  errors: {},
+  setResult: (scanKey, result) =>
+    set((s) => ({ byPatient: { ...s.byPatient, [scanKey]: result } })),
+  clear: (scanKey) =>
     set((s) => {
       const next = { ...s.byPatient }
-      delete next[patientId]
+      delete next[scanKey]
       return { byPatient: next }
     }),
+  setScanning: (scanKey, value) =>
+    set((s) => ({ scanning: { ...s.scanning, [scanKey]: value } })),
+  setError: (scanKey, error) =>
+    set((s) => ({ errors: { ...s.errors, [scanKey]: error } })),
 }))
 
 // Persisted user preferences: auto-scan on patient load, and the model the scan
@@ -130,20 +143,35 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
 
   const { audience } = useAudience()
   const patientId = patient?.id ?? ''
-  // Cache scope = patient + audience. The medical (安全警示) and patient (健康提醒)
-  // scans are different outputs, so each is cached & scanned independently;
-  // switching audience swaps to the matching version (or generates it).
-  const scanKey = patientId ? `${patientId}::${audience}` : ''
-  const result = useSafetyAlertsStore((s) => (scanKey ? s.byPatient[scanKey] : undefined))
-  const setResult = useSafetyAlertsStore((s) => s.setResult)
-  const clearResult = useSafetyAlertsStore((s) => s.clear)
   const autoScan = useSafetyPrefsStore((s) => s.autoScan)
   const setAutoScan = useSafetyPrefsStore((s) => s.setAutoScan)
   const modelId = useSafetyPrefsStore((s) => s.modelId)
   const setModelId = useSafetyPrefsStore((s) => s.setModelId)
 
-  const [isScanning, setIsScanning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Effective model: test seam → user pref (key-gated → free base) → default.
+  // Part of scanKey so every model keeps its own result / scanning / error slot.
+  const resolvedModelId = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const override = (window as { __safetyModelId?: string }).__safetyModelId
+      if (typeof override === 'string' && override) return override
+    }
+    const def = getModelDefinition(modelId)
+    const hasProviderKey = def
+      ? def.provider === 'openai' ? !!apiKey : def.provider === 'gemini' ? !!geminiKey : !!claudeKey
+      : false
+    return gateModel(modelId, hasProviderKey, SAFETY_ALERTS_MODEL_ID)
+  }, [modelId, apiKey, geminiKey, claudeKey])
+
+  // Cache scope = patient + audience + model. The medical (安全警示) and patient
+  // (健康提醒) scans are different outputs, and each model scans independently;
+  // switching audience/model swaps to the matching slot (or generates it).
+  const scanKey = patientId ? `${patientId}::${audience}::${resolvedModelId}` : ''
+  const result = useSafetyAlertsStore((s) => (scanKey ? s.byPatient[scanKey] : undefined))
+  const setResult = useSafetyAlertsStore((s) => s.setResult)
+  const isScanning = useSafetyAlertsStore((s) => (scanKey ? !!s.scanning[scanKey] : false))
+  const setScanning = useSafetyAlertsStore((s) => s.setScanning)
+  const error = useSafetyAlertsStore((s) => (scanKey ? s.errors[scanKey] ?? null : null))
+  const setError = useSafetyAlertsStore((s) => s.setError)
 
   // Deterministic citable-record catalog (same builder the summary uses). Fed
   // to the prompt so alerts can cite keys, and kept as a lookup so the UI can
@@ -161,34 +189,16 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     [catalogByKey],
   )
 
-  // Effective model: test seam → user pref (key-gated → free base) → default.
-  const resolvedModelId = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      const override = (window as { __safetyModelId?: string }).__safetyModelId
-      if (typeof override === 'string' && override) return override
-    }
-    const def = getModelDefinition(modelId)
-    const hasProviderKey = def
-      ? def.provider === 'openai' ? !!apiKey : def.provider === 'gemini' ? !!geminiKey : !!claudeKey
-      : false
-    return gateModel(modelId, hasProviderKey, SAFETY_ALERTS_MODEL_ID)
-  }, [modelId, apiKey, geminiKey, claudeKey])
-
-  // Clear a stale error when the patient or audience changes.
-  useEffect(() => {
-    setError(null)
-  }, [scanKey])
-
-  // Bumped by setModel to invalidate an in-flight scan: its stream came from
-  // the OLD model, so its output must be neither shown nor cached as the new
-  // model's result (setModel clears the cache precisely to force a re-scan).
-  const scanGenRef = useRef(0)
 
   const scan = useCallback(async () => {
-    if (!scanKey || isScanning) return
-    const gen = scanGenRef.current
-    setIsScanning(true)
-    setError(null)
+    if (!scanKey) return
+    // Guard per-model: never double-start the SAME model's scan, but a different
+    // model MAY scan concurrently — each writes to its own slot, so switching
+    // model never cancels or stomps another model's scan.
+    if (useSafetyAlertsStore.getState().scanning[scanKey]) return
+    const myScanKey = scanKey
+    setScanning(myScanKey, true)
+    setError(myScanKey, null)
     try {
       const clinicalContext = getFullClinicalContext()
       const messages = generateSafetyAlertsUseCase.buildMessages({
@@ -206,28 +216,26 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
         },
       })
 
-      // Model changed mid-scan — discard silently; the re-armed auto-scan (or
-      // a manual re-scan) runs on the new model.
-      if (gen !== scanGenRef.current) return
-
-      const parsed = generateSafetyAlertsUseCase.parseScanResult(full)
+      const parsed = generateSafetyAlertsUseCase.parseScanResult(full, catalog)
       if (!parsed) {
-        setError('PARSE_FAILED')
+        setError(myScanKey, 'PARSE_FAILED')
         return
       }
       // "掃描 N 筆" must be a deterministic app-side count, not the model's
       // self-reported number (which varied 30/54/68 across runs on the same
       // patient) — use the record count we actually put in the SOURCE LIST.
       const result = { ...parsed, scannedCount: catalog.length }
-      setResult(scanKey, result)
+      // Always commit to THIS run's own model slot — even if the user switched
+      // away, the result is stored and shows when they switch back.
+      setResult(myScanKey, result)
       // Persist so a refresh reuses it instead of re-scanning (re-billing).
-      void saveEncryptedCache(safetyCacheKey(scanKey), result)
+      void saveEncryptedCache(safetyCacheKey(myScanKey), result)
     } catch (err) {
-      if (gen === scanGenRef.current) setError(getUserErrorMessage(err))
+      setError(myScanKey, getUserErrorMessage(err))
     } finally {
-      setIsScanning(false)
+      setScanning(myScanKey, false)
     }
-  }, [scanKey, isScanning, getFullClinicalContext, locale, audience, catalog, ai, setResult, resolvedModelId])
+  }, [scanKey, getFullClinicalContext, locale, audience, catalog, ai, setResult, setScanning, setError, resolvedModelId])
 
   // Restore a persisted scan on (re)load before auto-scan can fire, so a refresh
   // on the same patient reuses the cached result instead of re-billing. The
@@ -260,15 +268,15 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   useEffect(() => {
     if (!scanKey || result || hydratedScan !== scanKey) return
     if (patientId !== DEMO_PATIENT_ID || locale !== 'zh-TW') return
-    if (modelId !== SAFETY_ALERTS_MODEL_ID) return
+    if (resolvedModelId !== SAFETY_ALERTS_MODEL_ID) return
     if (catalog.length === 0) return
     const snapshot = demoSafetyScanSnapshots[audience === 'patient' ? 'patient' : 'medical']
-    const parsed = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(snapshot))
+    const parsed = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(snapshot), catalog)
     if (!parsed) return
     autoTriggeredRef.current = scanKey
     // Same deterministic count rule as a live scan (see scan() above).
     setResult(scanKey, { ...parsed, scannedCount: catalog.length })
-  }, [scanKey, result, hydratedScan, patientId, locale, modelId, catalog, audience, setResult])
+  }, [scanKey, result, hydratedScan, patientId, locale, resolvedModelId, catalog, audience, setResult])
 
   // Auto-scan: fire once per patient when enabled and there's no result — but
   // only AFTER cache hydration has settled, so a refresh doesn't race the
@@ -278,26 +286,25 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     if (!autoScan || authLoading || !scanKey || isScanning || result) return
     if (hydratedScan !== scanKey) return
     if (autoTriggeredRef.current === scanKey) return
+    // Only the free BASE model (or an own-key model) auto-scans; other free
+    // proxy models require an explicit 產生 press, so browsing the model picker
+    // doesn't silently spend the visitor's free quota (user directive
+    // 2026-07-07). Mirrors the summary hook.
+    const autoOk =
+      resolvedModelId === SAFETY_ALERTS_MODEL_ID ||
+      !!getModelDefinition(resolvedModelId)?.requiresUserKey
+    if (!autoOk) return
     autoTriggeredRef.current = scanKey
     void scan()
-  }, [autoScan, authLoading, scanKey, isScanning, result, hydratedScan, scan])
+  }, [autoScan, authLoading, scanKey, isScanning, result, hydratedScan, scan, resolvedModelId])
 
-  // Changing the model invalidates the cached scan (it was produced by the old
-  // model) and re-arms auto-scan, so "重新掃描" / auto-scan re-runs on the new
-  // model instead of showing a stale result.
+  // Switching model just changes which per-model slot the view reads — it does
+  // NOT cancel or clear anything. The old model's in-flight scan keeps going and
+  // lands in its own slot; the new model shows its cached result, its spinner if
+  // still scanning, or auto-scans if it has neither (user directive 2026-07-07).
   const setModel = useCallback((id: string) => {
-    // Invalidate + abort any scan still streaming on the old model BEFORE
-    // clearing the cache — otherwise its result landed after the clear and was
-    // displayed (and persisted) as if the new model produced it.
-    scanGenRef.current += 1
-    ai.stop()
     setModelId(id)
-    if (scanKey) {
-      clearResult(scanKey)
-      removeEncryptedCache(safetyCacheKey(scanKey))
-    }
-    autoTriggeredRef.current = null
-  }, [setModelId, scanKey, clearResult, ai])
+  }, [setModelId])
 
   return {
     result,

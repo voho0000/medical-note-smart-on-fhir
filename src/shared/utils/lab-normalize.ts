@@ -129,7 +129,20 @@ export const TEST_ALIASES: Record<string, string> = {
   TOTALPROTEIN: 'TP',
   RGT: 'GGT', 'R-GT': 'GGT',
   'INORGANIC P': 'IP', INORGANICP: 'IP', P: 'IP',
-  ESTIMATEDGFR: 'EGFR', 'ESTIMATED GFR': 'EGFR',
+  // Bare eGFR (no stated formula) → MDRD key by Taiwan convention, so it lands
+  // in the SAME cumulative column as LOINC-33914-3 data instead of spawning a
+  // separate bare-'EGFR' column. The DISPLAY still shows the record's own name
+  // (see egfrDisplayForObs); only the keying defaults to MDRD.
+  ESTIMATEDGFR: 'EGFR(M)', 'ESTIMATED GFR': 'EGFR(M)', EGFR: 'EGFR(M)',
+  // eGFR method tokens — so a bundle that names the formula only in code.text
+  // (no distinct LOINC) still splits CKD-EPI vs MDRD into separate canonical
+  // keys instead of collapsing. New bridge (v1.3.2) uses distinct LOINCs, so
+  // this is the no-LOINC / legacy safety net. canonicalTestKeyFromString tries
+  // the rawUpper form before parens-stripping, so these fire on the full text.
+  'EGFR (CKD-EPI)': 'EGFR(EPI)', 'EGFR-EPI': 'EGFR(EPI)', 'EGFR CKD-EPI': 'EGFR(EPI)',
+  'ESTIMATED GFR (CKD-EPI)': 'EGFR(EPI)',
+  'EGFR (MDRD)': 'EGFR(M)', 'EGFR-MDRD': 'EGFR(M)', 'EGFR MDRD': 'EGFR(M)',
+  'ESTIMATED GFR (MDRD)': 'EGFR(M)',
   'CREATININE(U)': 'CREA', CREATININEU: 'CREA',
   SGOTAST: 'AST', SGPTALT: 'ALT',
   TROPONINI: 'TROP', TROPONINT: 'TROP',
@@ -355,11 +368,19 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   // ── Chem (additional) ─────────────────────────────────────
   '2028-9':  'CO2',           // NHI 09023C — Carbon dioxide Moles/vol S/P
                               //   (TCO2; usually reported in metabolic panel)
-  '33914-3': 'EGFR(M)',       // NHI 09015C variant — GFR by MDRD formula
-                              //   (loinc.org marks discouraged in favour of
-                              //   77147-7, but bridge still emits this code;
-                              //   matches existing chem.preferredOrder slot
-                              //   'EGFR(M)' for MDRD)
+  // eGFR is formula-specific: CKD-EPI and MDRD run different equations and
+  // give DIFFERENT values on the same specimen, so they must be DISTINCT
+  // canonical keys — otherwise a hospital that uploads both collapses them
+  // into one row/trend and a formula switch reads as a false GFR change.
+  // NHI-FHIR-Bridge v1.3.2 now emits distinct LOINCs (was all 33914-3):
+  '62238-1': 'EGFR(EPI)',     // CKD-EPI creatinine formula (bridge v1.3.2)
+  '77147-7': 'EGFR(M)',       // MDRD, and the NHI bare-eGFR default per
+                              //   Taiwan convention (bridge v1.3.2)
+  '33914-3': 'EGFR(M)',       // legacy — bridge <v1.3.2 sent this for every
+                              //   eGFR regardless of formula; kept so cached /
+                              //   older bundles still resolve (→ MDRD by the
+                              //   same convention). Discouraged on loinc.org
+                              //   in favour of 77147-7.
   '19123-9': 'MG',            // NHI 09046B — Magnesium Mass/vol S/P
   '3040-3':  'LIPASE',        // NHI 09053C — Lipase Enz act/vol S/P
   '14118-4': 'LACTATE',       // NHI 09059B — Lactate Mass/vol S/P
@@ -747,7 +768,12 @@ export const CANONICAL_TO_LAY_ZH: Record<string, string> = {
   'UA': '尿酸',
   'EGFR': '腎絲球過濾率',
   'EGFR(EPI)': '腎絲球過濾率 (CKD-EPI)',
-  'EGFR(M)': '腎絲球過濾率 (MDRD)',
+  // MDRD/bare eGFR is keyed EGFR(M) by convention but the health record didn't
+  // print "MDRD", so the cumulative column shows the plain 中文(eGFR) name —
+  // consistent with the 檢驗 view's source-faithful label. CKD-EPI keeps its
+  // suffix because the source DID state that formula (also disambiguates the
+  // two columns when a hospital uploads both).
+  'EGFR(M)': '腎絲球過濾率 (eGFR)',
   // ── Electrolytes / minerals ───────────────────────────────
   'NA': '鈉', 'K': '鉀', 'CL': '氯', 'CA': '鈣', 'IP': '磷', 'MG': '鎂',
   'CO2': '二氧化碳總量',
@@ -879,7 +905,7 @@ export const CANONICAL_TO_LAY_EN: Record<string, string> = {
   'UA': 'Uric acid',
   'EGFR': 'Estimated GFR',
   'EGFR(EPI)': 'Estimated GFR (CKD-EPI)',
-  'EGFR(M)': 'Estimated GFR (MDRD)',
+  'EGFR(M)': 'Estimated GFR',
   // ── Electrolytes / minerals ───────────────────────────────
   'NA': 'Sodium', 'K': 'Potassium', 'CL': 'Chloride',
   'CA': 'Calcium', 'IP': 'Phosphate', 'MG': 'Magnesium',
@@ -1148,5 +1174,48 @@ export function getAnalyteDisplayForObs(
   // display from the coding list instead of blindly returning code.text.
   const key = getAnalyteCanonicalKey(obsOrComponent)
   if (!key) return pickFallbackDisplayForObs(obsOrComponent, language)
+  // eGFR fidelity: the parenthetical shows the health record's OWN name
+  // (code.text — "eGFR" / "Estimated GFR") rather than a formula the app
+  // inferred. 健保存摺 often ships bare eGFR with no stated method; keying
+  // still routes it to EGFR(M) by Taiwan convention (getAnalyteLabel is
+  // unchanged), but we must not PRINT "(MDRD)" as if the record said so.
+  // Only this per-obs render path changes — the cumulative pivot builds its
+  // headers from the canonical key (getAnalyteDisplayParts) and keeps the
+  // method labels there, which is what disambiguates two eGFR rows.
+  if (EGFR_FAMILY_KEYS.has(key)) return egfrDisplayForObs(obsOrComponent, audience, language)
   return getAnalyteDisplayLabel(key, audience, language)
+}
+
+const EGFR_FAMILY_KEYS = new Set(['EGFR', 'EGFR(M)', 'EGFR(EPI)'])
+
+/** The health record's own eGFR designation (what's literally on 健保存摺):
+ *  code.text first, else a coding display. Empty when neither is present. */
+function sourceEgfrName(obsOrComponent: { code?: any } | null | undefined): string {
+  const code = obsOrComponent?.code
+  const t = typeof code?.text === 'string' ? code.text.trim() : ''
+  if (t) return t
+  const codings: any[] = Array.isArray(code?.coding) ? code.coding : []
+  for (const c of codings) {
+    if (typeof c?.display === 'string' && c.display.trim()) return c.display.trim()
+  }
+  return ''
+}
+
+function egfrDisplayForObs(
+  obsOrComponent: { code?: any } | null | undefined,
+  audience: AudienceMode,
+  language: DisplayLang,
+): string {
+  const src = sourceEgfrName(obsOrComponent)
+  // Bare eGFR stem (no method) in the requested audience/language.
+  const { name, abbr } = getAnalyteDisplayParts('EGFR', audience, language)
+  // Patient zh-TW keeps the Chinese stem and drops the SOURCE name into the
+  // parenthetical (replacing the app's English abbr), so the health-record
+  // name shows verbatim: 腎絲球過濾率 (eGFR) / 腎絲球過濾率 (Estimated GFR).
+  if (language === 'zh-TW' && audience === 'patient' && src) {
+    return `${name} (${src})`
+  }
+  // Medical / English: the lab's own label is what the reader wants — show it
+  // verbatim; fall back to the bare canonical display when the source is empty.
+  return src || (abbr ? `${name} (${abbr})` : name)
 }

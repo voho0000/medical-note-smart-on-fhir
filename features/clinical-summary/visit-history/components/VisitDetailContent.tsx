@@ -4,7 +4,7 @@
 "use client"
 
 import { EncounterObservationCard } from "./EncounterObservationCard"
-import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
+import { MedicationRow, ProcedureRow, ReportRow, DiagnosisTag } from "./EncounterCards"
 import { AnalyteTrendRow } from "./AnalyteTrendRow"
 import { MedTrendRow } from "./MedTrendRow"
 import { EncounterSection } from "./EncounterSection"
@@ -37,6 +37,7 @@ export function visitHasDetails(details?: EncounterDetails, documents?: Document
     details.diagnoses.length > 0 ||
     details.medications.length > 0 ||
     details.tests.length > 0 ||
+    details.reports.length > 0 ||
     details.procedures.length > 0
   )))
 }
@@ -138,6 +139,20 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
                   </div>
                 )}
               </div>
+            ))}
+          </div>
+        </EncounterSection>
+      ) : null}
+
+      {details?.reports.length ? (
+        <EncounterSection
+          title={t.visitHistory.examReports}
+          count={details.reports.length}
+          collapseThreshold={COLLAPSE_THRESHOLDS.procedures}
+        >
+          <div className="grid gap-2 mt-2">
+            {details.reports.map((report) => (
+              <ReportRow key={report.id} report={report} />
             ))}
           </div>
         </EncounterSection>

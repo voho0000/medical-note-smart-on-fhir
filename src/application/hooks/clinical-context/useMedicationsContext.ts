@@ -27,6 +27,10 @@ interface MedSummary {
   isChronic: boolean
   /** Number of refill cycles collapsed into this row (>=1, only set when >1) */
   refillCount?: number
+  /** Prescribing / dispensing facility (MedicationRequest.requester.display).
+   *  A 藥局/藥房 here is a pharmacy that DISPENSED a script, not a prescriber —
+   *  formatLine marks it so the AI never counts it as a duplicate source. */
+  org?: string
 }
 
 function isChronicMedication(med: any): boolean {
@@ -115,7 +119,15 @@ function summarize(
     daysRemaining,
     isInactive,
     isChronic: isChronicMedication(med),
+    org: med.requester?.display,
   }
+}
+
+/** A facility whose name is a pharmacy (社區藥局 / 藥房) — it DISPENSES a
+ *  script, it does not prescribe, so it can never be a duplicate-therapy
+ *  source. */
+function isPharmacyOrg(org?: string): boolean {
+  return /藥局|藥房/.test(org ?? '')
 }
 
 function formatLine(m: MedSummary, mode: 'active' | 'recent'): string {
@@ -134,6 +146,11 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent'): string {
   }
   if (m.refillCount && m.refillCount > 1) {
     parts.push(`(${m.refillCount} refills)`)
+  }
+  // Mark the source so the model can apply the duplicate rule: a pharmacy row
+  // is a DISPENSING of an existing script, NOT a separate prescription.
+  if (m.org) {
+    parts.push(isPharmacyOrg(m.org) ? `[藥局領藥 · dispensing, NOT a prescriber: ${m.org}]` : `[開立 by ${m.org}]`)
   }
   return parts.join(' ')
 }

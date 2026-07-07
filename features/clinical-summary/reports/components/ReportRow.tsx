@@ -17,6 +17,10 @@ import { HighlightText } from '@/src/shared/components/HighlightText'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
+// Circular at module level (LabDayGroupCard nests ReportRow for its members)
+// but safe: `export function ReportRow` is hoisted, and the reference is only
+// dereferenced at render time, long after both modules finish initialising.
+import { LabDayGroupCard } from './LabDayGroupCard'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
  *  DRs that the SMART app merged via strict-prefix dedup. Without this
@@ -286,6 +290,10 @@ interface ReportRowProps {
   defaultOpen: string[]
   /** Active search query — highlights matches in the report title. */
   query?: string
+  /** Hide the per-row institution + date cluster — set by LabDayGroupCard,
+   *  whose group header already states both, so nested members don't repeat
+   *  the same date/hospital on every line of the "lab sheet". */
+  hideMeta?: boolean
 }
 
 function formatDisplayDate(date?: string, showTime?: boolean): string {
@@ -298,6 +306,19 @@ function formatDisplayDate(date?: string, showTime?: boolean): string {
     return d.toLocaleDateString()
   } catch {
     return date
+  }
+}
+
+// Time-only label for rows inside a LabDayGroupCard (hideMeta): the group
+// header owns the date, but same-analyte serials (q6h troponin, repeat CBC)
+// still need their draw TIME to be tellable apart. Only rendered when the
+// row carries the showTime disambiguation flag.
+function formatTimeOnly(date?: string): string {
+  if (!date) return ''
+  try {
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return ''
   }
 }
 
@@ -328,7 +349,7 @@ function countAbnormal(obs: Observation[]): number {
   return count
 }
 
-function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
+function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   const [trendDialogOpen, setTrendDialogOpen] = useState(false)
   // Separate "mounted" flag so the dialog (and its expensive history hooks)
   // only enter the React tree after the user actually opens it the first
@@ -348,7 +369,10 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
     setImageDialogMounted(true)
     setImageDialogOpen(true)
   }
-  const [textExpanded, setTextExpanded] = useState(false)
+  // Long-text reports honour defaultOpen too: a day-group card opening all its
+  // members, or a search matching INSIDE the narrative (valueString), starts
+  // this expanded — previously only accordion panels respected defaultOpen.
+  const [textExpanded, setTextExpanded] = useState(() => defaultOpen.includes(row.id))
   const [copied, setCopied] = useState(false)
   // 向右展開 — single long reports (imaging / ECG / pathology narratives) can be
   // pushed to the right pane so the long text reads beside the rest of the list.
@@ -466,18 +490,25 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
     const HeaderRight = () => (
       <div className="flex items-center gap-2 shrink-0">
         {row.bridgeDupCount && row.bridgeDupCount > 0 ? <BridgeDupBadge count={row.bridgeDupCount} /> : null}
-        {row.institution && (
+        {!hideMeta && row.institution && (
           <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
             <Building2 className="h-3 w-3 shrink-0" />
             <span className="truncate">{row.institution}</span>
           </span>
         )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
-          </TooltipTrigger>
-          <TooltipContent>{metaWithDate}</TooltipContent>
-        </Tooltip>
+        {!hideMeta && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+            </TooltipTrigger>
+            <TooltipContent>{metaWithDate}</TooltipContent>
+          </Tooltip>
+        )}
+        {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
+          <Badge variant="outline" className="text-xs font-normal whitespace-nowrap tabular-nums">
+            {formatTimeOnly(row.effectiveDate)}
+          </Badge>
+        )}
       </div>
     )
 
@@ -717,21 +748,30 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
           )}
           {/* Institution + date — the compact badge shows only the date to give
               the report name maximum width; category/status (row.meta) move to
-              the hover tooltip. Falls back to the full meta when there's no date. */}
-          <div className="flex items-center gap-2 shrink-0">
-            {row.institution && (
-              <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[5rem]">
-                <Building2 className="h-3 w-3 shrink-0" />
-                <span className="truncate">{row.institution}</span>
-              </span>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
-              </TooltipTrigger>
-              <TooltipContent>{metaWithDate}</TooltipContent>
-            </Tooltip>
-          </div>
+              the hover tooltip. Falls back to the full meta when there's no date.
+              Hidden inside a LabDayGroupCard (hideMeta) — the group header
+              already states both. */}
+          {!hideMeta && (
+            <div className="flex items-center gap-2 shrink-0">
+              {row.institution && (
+                <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[5rem]">
+                  <Building2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{row.institution}</span>
+                </span>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+                </TooltipTrigger>
+                <TooltipContent>{metaWithDate}</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+          {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
+            <Badge variant="outline" className="text-xs font-normal whitespace-nowrap tabular-nums shrink-0">
+              {formatTimeOnly(row.effectiveDate)}
+            </Badge>
+          )}
           {row.isPossibleDuplicate && (
             <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
           )}
@@ -841,18 +881,25 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
                   {row.group !== "procedures" && (
                     <span className="text-xs text-muted-foreground">{displayObs.length} 項</span>
                   )}
-                  {row.institution && (
+                  {!hideMeta && row.institution && (
                     <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
                       <Building2 className="h-3 w-3 shrink-0" />
                       <span className="truncate">{row.institution}</span>
                     </span>
                   )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>{accordionMeta}</TooltipContent>
-                  </Tooltip>
+                  {!hideMeta && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>{accordionMeta}</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
+                    <Badge variant="outline" className="text-xs font-normal whitespace-nowrap tabular-nums shrink-0">
+                      {formatTimeOnly(row.effectiveDate)}
+                    </Badge>
+                  )}
                   {/* 向右展開 — placed LAST in the right cluster so it sits just
                       to the left of the AccordionTrigger's ▼ chevron, matching
                       the imaging-report layout. div[role=button] (not <button>)
@@ -929,13 +976,21 @@ function ReportRowImpl({ row, defaultOpen, query }: ReportRowProps) {
 const SingleReportRow = memo(ReportRowImpl)
 
 // Public ReportRow — dispatches between the regular single-DR card
-// (SingleReportRow above, with all its hooks) and the multi-region study
-// card (MultiRegionStudyCard) for synthetic group rows. Kept as a thin
+// (SingleReportRow above, with all its hooks), the lab collection-day group
+// (LabDayGroupCard, `dayGroup` synthetic rows) and the multi-region study
+// card (MultiRegionStudyCard) for imaging group rows. Kept as a thin
 // component so the hook order inside SingleReportRow stays unconditional,
 // honouring React's rules of hooks even when the same virtualizer slot
 // flips between a group and an ungrouped row across re-renders.
 export function ReportRow(props: ReportRowProps) {
   const { row } = props
+  // dayGroup first — day-group rows also carry groupedRows, but their members
+  // are heterogeneous lab DRs, not one ambiguous imaging study. Unlike
+  // multi-region groups, a day group can hold a SINGLE member (single-report
+  // days still render as a day card so the by-day list keeps one row shape).
+  if (row.dayGroup && row.groupedRows && row.groupedRows.length > 0) {
+    return <LabDayGroupCard row={row} defaultOpen={props.defaultOpen} query={props.query} />
+  }
   if (row.groupedRows && row.groupedRows.length > 1) {
     return <MultiRegionStudyCard row={row} />
   }

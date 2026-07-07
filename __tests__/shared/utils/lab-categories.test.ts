@@ -88,6 +88,30 @@ describe('cbc.pinnedColumns', () => {
   })
 })
 
+describe('categorizeObservation — chem analytes that used to fall to 其他', () => {
+  // User report 2026-07-07: CO2 (total), Mg and NT-proBNP were landing in the
+  // 其他 card because their LOINCs weren't in chem. They're canonical chemistry.
+  describe('by LOINC (the bridge/real-data path)', () => {
+    it.each([
+      ['二氧化碳', '2028-9'],   // total CO2 / TCO2
+      ['鎂', '19123-9'],        // magnesium
+      ['NT-proBNP', '33762-6'], // heart-failure marker
+    ])('%s (LOINC %s) categorises as chem', (text, loinc) => {
+      expect(categorizeObservation(makeObs(text, loinc))?.id).toBe('chem')
+    })
+  })
+
+  describe('by text when LOINC is absent (foreign-bundle fallback)', () => {
+    it.each(['CO2', 'TCO2', 'Magnesium', 'Mg', 'NT-proBNP', 'proBNP'])(
+      '%s with no LOINC still categorises as chem',
+      (text) => {
+        const obs = { code: { text, coding: [] }, valueQuantity: { value: 1, unit: 'x' } }
+        expect(categorizeObservation(obs)?.id).toBe('chem')
+      },
+    )
+  })
+})
+
 describe('categorizeObservation — early routing rules', () => {
   it('does NOT filter 溶血 / 脂血 quality-flag rows — bridge bug stays visible', () => {
     // Per memory/feedback_no_masking_bridge_bugs.md (2026-05-29 revision),
