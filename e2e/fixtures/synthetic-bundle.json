@@ -124,7 +124,7 @@
         "medicationCodeableConcept": { "text": "Amlodipine 5mg" },
         "authoredOn": "2026-06-01",
         "dosageInstruction": [{ "text": "1 tab PO daily", "timing": { "repeat": { "frequency": 1, "period": 1, "periodUnit": "d" } } }],
-        "dispenseRequest": { "expectedSupplyDuration": { "value": 30, "unit": "d" } }
+        "courseOfTherapyType": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/medicationrequest-course-of-therapy", "code": "continuous" }] }
       }
     },
     {

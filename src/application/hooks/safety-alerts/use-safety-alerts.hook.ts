@@ -23,6 +23,7 @@ import {
 } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
   getModelDefinition,
+  isAutoRunEligibleModel,
   gateModel,
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
@@ -286,14 +287,11 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     if (!autoScan || authLoading || !scanKey || isScanning || result) return
     if (hydratedScan !== scanKey) return
     if (autoTriggeredRef.current === scanKey) return
-    // Only the free BASE model (or an own-key model) auto-scans; other free
-    // proxy models require an explicit 產生 press, so browsing the model picker
-    // doesn't silently spend the visitor's free quota (user directive
-    // 2026-07-07). Mirrors the summary hook.
-    const autoOk =
-      resolvedModelId === SAFETY_ALERTS_MODEL_ID ||
-      !!getModelDefinition(resolvedModelId)?.requiresUserKey
-    if (!autoOk) return
+    // Only a provider's free BASE model (or an own-key model) auto-scans; free
+    // NON-base proxy models require an explicit press so browsing the model
+    // picker doesn't silently spend the visitor's free quota (2026-07-07).
+    // Mirrors the summary hook.
+    if (!isAutoRunEligibleModel(resolvedModelId)) return
     autoTriggeredRef.current = scanKey
     void scan()
   }, [autoScan, authLoading, scanKey, isScanning, result, hydratedScan, scan, resolvedModelId])

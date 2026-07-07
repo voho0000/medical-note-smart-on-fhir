@@ -92,6 +92,22 @@ export function getBaseModelIdForProvider(provider: ModelProvider): string | und
 }
 
 /**
+ * Whether a model may AUTO-run (auto-generate summary / auto-scan safety) rather
+ * than requiring an explicit 產生/掃描 press. Eligible = the free BASE of its
+ * provider (the cheap default the user lands on: nano / flash-lite / haiku) OR a
+ * model paid for with the user's OWN key. Free NON-base proxy models (e.g.
+ * gemini-3-flash-preview) are NOT eligible, so merely browsing the model picker
+ * doesn't silently spend the visitor's free daily quota (user directive
+ * 2026-07-07). Falls back to false for unknown ids.
+ */
+export function isAutoRunEligibleModel(modelId: string): boolean {
+  const def = getModelDefinition(modelId)
+  if (!def) return false
+  if (def.requiresUserKey) return true
+  return modelId === getBaseModelIdForProvider(def.provider)
+}
+
+/**
  * Resolve the model an AI call should ACTUALLY run on. If the picked model needs
  * the user's own key (`requiresUserKey`) but no key for its provider is present,
  * downgrade to the free, proxy-eligible default model (`fallback`, defaulting to

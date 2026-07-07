@@ -41,3 +41,24 @@ export async function importBundle(page: Page, bundlePath: string = LOCAL_BUNDLE
   }
   return bundlePath
 }
+
+/**
+ * Activate the 筆記對話 (chat) tab and return its input. Since v0.26 the right
+ * panel DEFAULTS to 醫療摘要 (medical summary), so the chat input renders in an
+ * inactive tab (mounted-but-hidden) until this tab is selected.
+ */
+export async function openChatInput(page: Page) {
+  await page.getByRole('tab', { name: '筆記對話' }).click()
+  const textarea = page.getByPlaceholder(/輸入/).first()
+  await expect(textarea).toBeVisible()
+  return textarea
+}
+
+/**
+ * The 筆記對話 chat tabpanel. Scope reply/message locators to this — the page
+ * now renders several `.prose` blocks (medical summary, IPS export…), so a bare
+ * page.locator('.prose') no longer means "the chat reply".
+ */
+export function chatPanel(page: Page) {
+  return page.getByRole('tabpanel', { name: '筆記對話' })
+}

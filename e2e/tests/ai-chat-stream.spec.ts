@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openChatInput, chatPanel } from '../fixtures/import'
 import { mockAiStream, getLongTasks, resetLongTasks, STREAM_PROBE_MARKER } from '../fixtures/mock-stream'
 
 /**
@@ -14,8 +14,7 @@ test.describe('AI chat streaming (mocked)', () => {
     await mockAiStream(page, { model: 'gpt-5.4-nano' })
     await importBundle(page)
 
-    const textarea = page.getByPlaceholder(/輸入/).first()
-    await expect(textarea).toBeVisible()
+    const textarea = await openChatInput(page)
     await textarea.click()
     await textarea.fill(`請整理重點 ${STREAM_PROBE_MARKER}`)
 
@@ -26,7 +25,7 @@ test.describe('AI chat streaming (mocked)', () => {
 
     // Assistant reply renders via MarkdownRenderer → a `.prose` block.
     // (User messages use CollapsibleMessage, so `.prose` is assistant-only.)
-    const reply = page.locator('.prose').last()
+    const reply = chatPanel(page).locator('.prose').last()
 
     // Formatted markdown came through the streaming path...
     await expect(reply.getByRole('table')).toBeVisible({ timeout: 25_000 })
@@ -72,7 +71,7 @@ test.describe('AI chat streaming (mocked)', () => {
     await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: HUGE_LIST, chunkSize: 8, delayMs: 6 })
     await importBundle(page)
 
-    const textarea = page.getByPlaceholder(/輸入/).first()
+    const textarea = await openChatInput(page)
     await textarea.click()
     await textarea.fill(`請列出建議 ${STREAM_PROBE_MARKER}`)
 
@@ -80,7 +79,7 @@ test.describe('AI chat streaming (mocked)', () => {
     const started = Date.now()
     await page.getByRole('button', { name: '傳送' }).click()
 
-    const reply = page.locator('.prose').last()
+    const reply = chatPanel(page).locator('.prose').last()
     await expect(reply).toContainText('檢驗項目 60', { timeout: 25_000 })
     const elapsedMs = Date.now() - started
 
@@ -102,7 +101,7 @@ test.describe('AI chat streaming (mocked)', () => {
     await mockAiStream(page, { model: 'gpt-5.4-nano', stallAfter: 3, delayMs: 8, idleTimeoutMs: 4000 })
     await importBundle(page)
 
-    const textarea = page.getByPlaceholder(/輸入/).first()
+    const textarea = await openChatInput(page)
     await textarea.click()
     await textarea.fill(`會卡住的請求 ${STREAM_PROBE_MARKER}`)
 
@@ -112,7 +111,7 @@ test.describe('AI chat streaming (mocked)', () => {
     // The stream stalls; within the idle timeout (4s) the assistant message must
     // turn into a timeout error (getUserErrorMessage maps "timed out" → 逾時),
     // NOT hang. Allow generous wall-clock for CI.
-    const reply = page.locator('.prose').last()
+    const reply = chatPanel(page).locator('.prose').last()
     await expect(reply).toContainText('逾時', { timeout: 15_000 })
     const elapsedMs = Date.now() - started
     console.log(`[e2e][stall] timed out + surfaced error in ${elapsedMs}ms`)

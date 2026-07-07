@@ -21,6 +21,9 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
 
   test('single-analyte trend shows the chart with always-on value labels and normal-range band', async ({ page }) => {
     await openReportsSubTab(page, '檢驗')
+    // The 檢驗 tab defaults to 依採檢日 day-cards (one card per day×institution);
+    // the per-analyte 查看趨勢 trend lives in the 單項列表 flat view.
+    await page.getByRole('button', { name: '單項列表' }).click()
     await page.getByRole('button', { name: '查看趨勢', exact: true }).first().click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()

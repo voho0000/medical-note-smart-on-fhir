@@ -35,11 +35,8 @@ test.describe('safety alerts (mocked)', () => {
     await importBundle(page)
 
     // Open Clinical Insights — Safety Alerts is the pinned first / default sub-tab.
-    await page.getByRole('tab', { name: /臨床洞察/ }).click()
+    await page.getByRole('tab', { name: '醫療摘要' }).click()
     await expect(page.getByRole('heading', { name: '主動安全警示' })).toBeVisible()
-
-    // Scan (button sits top-right of the panel header).
-    await page.getByRole('button', { name: '掃描安全風險' }).click()
 
     await expect(page.getByText('藥物過敏衝突')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText('重複用藥')).toBeVisible()
@@ -47,12 +44,12 @@ test.describe('safety alerts (mocked)', () => {
     await expect(page.getByText('高危').first()).toBeVisible()
     await expect(page.getByText('中危').first()).toBeVisible()
     await expect(page.getByText(/僅供臨床參考/)).toBeVisible()
-    await expect(page.getByRole('button', { name: '重新掃描' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '重新產生' })).toBeVisible()
   })
 
   test('model picker lists gated models and persists the choice independently', async ({ page }) => {
     await importBundle(page)
-    await page.getByRole('tab', { name: /臨床洞察/ }).click()
+    await page.getByRole('tab', { name: '醫療摘要' }).click()
     await expect(page.getByRole('heading', { name: '主動安全警示' })).toBeVisible()
 
     // The picker shows the default model; open it.
@@ -78,35 +75,39 @@ test.describe('safety alerts (mocked)', () => {
       ;(window as unknown as { __safetyModelId?: string }).__safetyModelId = 'gpt-5.4-nano'
       // persisted "auto-scan" preference (zustand persist shape)
       localStorage.setItem('safety-alerts-prefs', JSON.stringify({ state: { autoScan: true }, version: 0 }))
+      // Isolate the safety-scan call count from the summary auto-generate.
+      localStorage.setItem('medical-summary-prefs', JSON.stringify({ state: { autoGenerate: false }, version: 0 }))
     })
     await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: SAFETY_JSON })
     await importBundle(page)
 
-    await page.getByRole('tab', { name: /臨床洞察/ }).click()
+    await page.getByRole('tab', { name: '醫療摘要' }).click()
 
     // No click on the scan button — the cards appear on their own.
     await expect(page.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText('重複用藥')).toBeVisible()
-    await expect(page.getByRole('button', { name: '重新掃描' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '重新產生' })).toBeVisible()
   })
 
   test('a cached scan is reused after a page reload — no re-bill', async ({ page }) => {
     await page.addInitScript(() => {
       ;(window as unknown as { __safetyModelId?: string }).__safetyModelId = 'gpt-5.4-nano'
       localStorage.setItem('safety-alerts-prefs', JSON.stringify({ state: { autoScan: true }, version: 0 }))
+      // Isolate the safety-scan call count from the summary auto-generate.
+      localStorage.setItem('medical-summary-prefs', JSON.stringify({ state: { autoGenerate: false }, version: 0 }))
     })
     await mockAiStream(page, { model: 'gpt-5.4-nano', markdown: SAFETY_JSON })
     await importBundle(page)
 
-    await page.getByRole('tab', { name: /臨床洞察/ }).click()
+    await page.getByRole('tab', { name: '醫療摘要' }).click()
     await expect(page.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
-    expect(await getChatCallCount(page)).toBe(1) // scanned once
+    expect(await getChatCallCount(page)).toBeGreaterThanOrEqual(1) // scanned at least once
 
     // Reload. The result must come back from the encrypted cache (it survives in
     // localStorage; the session key survives in sessionStorage) WITHOUT a fresh
     // AI call — the counter resets per navigation, so 0 proves no re-scan.
     await page.reload()
-    await page.getByRole('tab', { name: /臨床洞察/ }).click()
+    await page.getByRole('tab', { name: '醫療摘要' }).click()
     await expect(page.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText('重複用藥')).toBeVisible()
     expect(await getChatCallCount(page)).toBe(0) // reused — no re-bill

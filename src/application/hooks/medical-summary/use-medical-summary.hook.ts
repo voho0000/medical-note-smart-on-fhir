@@ -26,6 +26,7 @@ import {
 } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
   getModelDefinition,
+  isAutoRunEligibleModel,
   gateModel,
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
@@ -283,14 +284,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     if (!scanKey || isGenerating || result || !dataReady) return
     if (hydrated !== scanKey) return
     if (autoTriggeredRef.current === scanKey) return
-    // Only the free BASE model (or a model the user pays for with their OWN key)
-    // auto-generates. Other free proxy models require an explicit 產生 press —
-    // otherwise merely browsing the model picker would silently spend the
-    // visitor's free quota on every model touched (user directive 2026-07-07).
-    const autoOk =
-      resolvedModelId === MEDICAL_SUMMARY_MODEL_ID ||
-      !!getModelDefinition(resolvedModelId)?.requiresUserKey
-    if (!autoOk) return
+    // Only a provider's free BASE model (or an own-key model) auto-generates;
+    // free NON-base proxy models require an explicit 產生 press so browsing the
+    // model picker doesn't silently spend the visitor's free quota (2026-07-07).
+    if (!isAutoRunEligibleModel(resolvedModelId)) return
     autoTriggeredRef.current = scanKey
     void generate()
   }, [autoGenerate, authLoading, scanKey, isGenerating, result, dataReady, hydrated, generate, resolvedModelId])

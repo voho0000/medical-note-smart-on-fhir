@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { importBundle } from '../fixtures/import'
+import { importBundle, openChatInput } from '../fixtures/import'
 
 test.describe('slash-template menu', () => {
   test('typing "/" opens the template menu and Enter inserts the body', async ({ page }) => {
     await importBundle(page)
 
     // Chat input lives in the right panel's default 筆記對話 tab.
-    const textarea = page.getByPlaceholder(/輸入/).first()
+    const textarea = await openChatInput(page)
     await expect(textarea).toBeVisible()
     await textarea.click()
 
@@ -27,7 +27,7 @@ test.describe('slash-template menu', () => {
 
   test('filters by an explicit shortcut (default templates)', async ({ page }) => {
     await importBundle(page)
-    const textarea = page.getByPlaceholder(/輸入/).first()
+    const textarea = await openChatInput(page)
     await textarea.click()
     // "soap" is the shortcut on a default medical template (SOAP 病歷).
     await textarea.pressSequentially('/soap')
@@ -38,7 +38,7 @@ test.describe('slash-template menu', () => {
 
   test('filters as you type and Escape dismisses', async ({ page }) => {
     await importBundle(page)
-    const textarea = page.getByPlaceholder(/輸入/).first()
+    const textarea = await openChatInput(page)
     await textarea.click()
     await textarea.pressSequentially('/')
     await expect(page.getByRole('listbox')).toBeVisible()
