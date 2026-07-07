@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
@@ -23,24 +24,30 @@ import { MultiRegionStudyCard } from './MultiRegionStudyCard'
 import { LabDayGroupCard } from './LabDayGroupCard'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
- *  DRs that the SMART app merged via strict-prefix dedup. Without this
- *  badge the merge would silently hide a bridge-side dedup miss (full-
- *  width slash slip, dictation-system whitespace inconsistency, mid-
- *  sentence upload truncation). Tooltip explains so the user can file
- *  the bridge report. */
+ *  DRs that the SMART app merged via strict-prefix dedup. It's a QA signal
+ *  (surfaces a bridge-side dedup miss so it can be filed) — so it's scoped to
+ *  the CLINICIAN view: a patient neither files bridge reports nor benefits from
+ *  a ⚠ "duplicate copies" flag (it only worries them). The dedup itself always
+ *  happens; only this badge is audience-gated. The visible label drops the
+ *  "bridge" jargon; the file-a-report hint stays in the tooltip. */
 function BridgeDupBadge({ count }: { count: number }) {
+  const { t } = useLanguage()
+  const { audience } = useAudience()
+  if (audience === 'patient') return null
+  const bd = (t.reports as { bridgeDup?: { label: string; tooltip: string } }).bridgeDup
+  const tooltip = (bd?.tooltip ?? '').replace('{count}', String(count + 1))
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0 text-[0.625rem] font-medium text-amber-800 cursor-help"
-          aria-label={`Bridge sent ${count + 1} duplicate copies; merged into one`}
+          aria-label={tooltip}
         >
-          ⚠ bridge dup ×{count}
+          ⚠ {bd?.label ?? 'dup'} ×{count}
         </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs text-xs leading-relaxed">
-        健保署送出 {count + 1} 份內容相同（或截斷版）的副本，本 App 已自動保留最完整一份顯示。如需追蹤可回報 bridge 端 dedup 漏網。
+        {tooltip}
       </TooltipContent>
     </Tooltip>
   )

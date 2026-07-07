@@ -582,6 +582,12 @@ export const zhTW = {
   reports: {
     title: '診斷報告',
     otherSubgroup: '其他',
+    // Clinician-only badge on a merged duplicate report ({count} = total copies
+    // the bridge sent). Hidden for 民眾. Tooltip keeps the file-a-report hint.
+    bridgeDup: {
+      label: '重複副本',
+      tooltip: '健保署送出 {count} 份內容相同（或截斷版）的副本，已自動保留最完整的一份顯示。如為健保 FHIR bridge 去重漏網，可回報修正。',
+    },
     // 檢驗依採檢日合併（LabDayGroupCard＋檢視切換）
     labViewLabel: '檢驗檢視',
     byCollectionDay: '依採檢日',

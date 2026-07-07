@@ -579,6 +579,12 @@ export const en = {
   reports: {
     title: 'Diagnostic Reports',
     otherSubgroup: 'Other',
+    // Clinician-only badge on a merged duplicate report ({count} = total copies
+    // the bridge sent). Hidden for the patient audience.
+    bridgeDup: {
+      label: 'dup copy',
+      tooltip: 'The NHI sent {count} identical (or truncated) copies; the most complete one is kept. A leftover here is a source-side (FHIR bridge) dedup miss worth reporting.',
+    },
     // Lab collection-day grouping (LabDayGroupCard + view toggle)
     labViewLabel: 'Lab view',
     byCollectionDay: 'By collection day',
