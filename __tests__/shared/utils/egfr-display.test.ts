@@ -80,4 +80,10 @@ describe('cumulative-report column label (key-based, getAnalyteDisplayLabel)', (
   it('CKD-EPI column keeps its formula suffix (source stated it; disambiguates)', () => {
     expect(getAnalyteDisplayLabel('EGFR(EPI)', 'patient', 'zh-TW')).toBe('腎絲球過濾率 (CKD-EPI)')
   })
+
+  it('medical MDRD column reads the clean clinical "eGFR", not the internal "EGFR(M)" key', () => {
+    expect(getAnalyteDisplayLabel('EGFR(M)', 'medical', 'en')).toBe('eGFR')
+    // CKD-EPI stays explicit so the two formulas remain distinguishable.
+    expect(getAnalyteDisplayLabel('EGFR(EPI)', 'medical', 'en')).toBe('EGFR(EPI)')
+  })
 })

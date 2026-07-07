@@ -1,6 +1,6 @@
 {
   "name": "medical-note-smart-on-fhir",
-  "version": "0.28.0",
+  "version": "0.28.1",
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
@@ -12,9 +12,9 @@
     "build:mediprisma": "node scripts/build-mediprisma.mjs",
     "build:demo": "node scripts/build-demo-bundle.mjs",
     "deploy": "npm run build:gh && gh-pages -d out -b gh-pages",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test": "TZ=Asia/Taipei jest",
+    "test:watch": "TZ=Asia/Taipei jest --watch",
+    "test:coverage": "TZ=Asia/Taipei jest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:emulated": "playwright test -c playwright.emulated.config.ts",

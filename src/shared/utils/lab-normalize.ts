@@ -1037,13 +1037,22 @@ export function getAnalyteDisplayLabel(
  *   - patient en         → { name: <long form>,   abbr: null }
  *   - no lay translation → { name: <short code>,  abbr: null }
  */
+// Medical column-header overrides — ONLY the audience display, NOT the canonical
+// key. getAnalyteLabel (sort / search / AI) still returns the canonical form via
+// CANONICAL_DISPLAY, so the two stay separated. eGFR: canonical stays 'EGFR(M)'
+// (internal MDRD/bare disambiguator) but clinicians expect a clean 'eGFR' header;
+// CKD-EPI keeps its explicit 'EGFR(EPI)' so both formulas stay distinguishable.
+const MEDICAL_HEADER_OVERRIDE: Record<string, string> = {
+  'EGFR(M)': 'eGFR',
+}
+
 export function getAnalyteDisplayParts(
   canonical: string,
   audience: AudienceMode,
   language: DisplayLang,
 ): { name: string; abbr: string | null } {
   const mixedCase = CANONICAL_DISPLAY[canonical] || canonical
-  if (audience === 'medical') return { name: mixedCase, abbr: null }
+  if (audience === 'medical') return { name: MEDICAL_HEADER_OVERRIDE[canonical] || mixedCase, abbr: null }
   const map = language === 'zh-TW' ? CANONICAL_TO_LAY_ZH : CANONICAL_TO_LAY_EN
   const lay = map[canonical]
   // No lay translation yet → fall back to the canonical short code as-is.
