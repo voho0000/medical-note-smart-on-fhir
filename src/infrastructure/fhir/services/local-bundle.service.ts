@@ -24,6 +24,7 @@
 
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
+import { expandClaimResources } from './claim-expander'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
@@ -616,6 +617,12 @@ export const LocalBundleService = {
     // style. See canonicalizeBundleResources.
     const entries: any[] = canonicalizeBundleResources(bundle)
     if (!entries.length) return null
+
+    // TW-PAS support: unpack any Claim (事前審查申請) into the standard
+    // Condition / Procedure / Observation / DocumentReference resources the rest
+    // of the pipeline already renders. No-op for non-PAS bundles. Runs before the
+    // byType() split below so the synthesised resources flow through unchanged.
+    expandClaimResources(entries)
 
     // Display canonicalisation: resolve Practitioner / Organization / Location
     // references to human-readable display strings (attending physician,

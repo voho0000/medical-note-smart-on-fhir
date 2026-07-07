@@ -180,16 +180,22 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                 )}
               </>
             )}
-            {/* Discharge-summary indicator — at-a-glance marker that this visit
-                has a linked 出院病摘 to open in the expanded view. */}
-            {docs.length > 0 && (
-              <span
-                title={docStrings.dischargeBadgeTooltip}
-                className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.6875rem] text-emerald-700"
-              >
-                {docStrings.dischargeBadge}
-              </span>
-            )}
+            {/* Linked-document indicator — at-a-glance marker that this visit
+                has a document to open in the expanded view. Only label it
+                「出院病摘」 when a linked doc is actually a discharge summary
+                (LOINC 18842-5); otherwise a generic 「病摘」 so a TW-PAS
+                事前審查申請病摘 / IPS / outpatient note isn't mislabelled. */}
+            {docs.length > 0 && (() => {
+              const hasDischarge = docs.some((d) => d.isDischargeSummary)
+              return (
+                <span
+                  title={hasDischarge ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip}
+                  className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.6875rem] text-emerald-700"
+                >
+                  {hasDischarge ? docStrings.dischargeBadge : docStrings.documentBadge}
+                </span>
+              )
+            })()}
             {/* 向右展開 — show this visit's detail in the right pane (desktop
                 only; no side-by-side room on phones). Sits beside the ▼/▲
                 (向下展開) so the user picks per row. */}

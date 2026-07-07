@@ -512,6 +512,8 @@ export const zhTW = {
     ipsBadgeTooltip: '此份文件依 IPS（國際病人摘要 International Patient Summary）規範產出。',
     dischargeBadge: '出院病摘',
     dischargeBadgeTooltip: '此份為 LOINC 18842-5 出院病摘（Hospital Discharge Summary）。',
+    documentBadge: '病摘',
+    documentBadgeTooltip: '此就診有連結的文件（如事前審查申請病摘、門診病摘），展開可閱讀全文。',
     htmlBodyHeader: '文件內容',
     htmlNoContent: '本份文件無可顯示的內容。',
     htmlExternalUrl: '開啟外部文件',

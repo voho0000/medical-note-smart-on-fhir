@@ -511,6 +511,8 @@ export const en = {
     ipsBadgeTooltip: 'This document conforms to the IPS (International Patient Summary) implementation guide.',
     dischargeBadge: 'Discharge',
     dischargeBadgeTooltip: 'This is a Hospital Discharge Summary (LOINC 18842-5).',
+    documentBadge: 'Note',
+    documentBadgeTooltip: 'This visit has a linked document (e.g. a pre-authorisation note or outpatient summary); expand to read it.',
     htmlBodyHeader: 'Document content',
     htmlNoContent: 'No displayable content in this document.',
     htmlExternalUrl: 'Open external document',

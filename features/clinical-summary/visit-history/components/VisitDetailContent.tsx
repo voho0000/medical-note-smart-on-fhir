@@ -56,12 +56,14 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
 
   return (
     <div className="space-y-4">
-      {/* Linked documents (出院病摘 / discharge summary). The popout button opens
-          the full text in the shared DocumentDetailDialog — same reader as 文件. */}
+      {/* Linked documents. Header says 「出院病摘」 only when a linked doc really
+          is a discharge summary (LOINC 18842-5); otherwise the generic 「病摘」 so
+          a TW-PAS 事前審查申請病摘 / IPS / outpatient note isn't mislabelled. The
+          popout opens the full text in the shared DocumentDetailDialog. */}
       {docs.length > 0 && (
         <div className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {docStrings.dischargeBadge}
+            {docs.some((d) => d.isDischargeSummary) ? docStrings.dischargeBadge : docStrings.documentBadge}
           </div>
           <div className="grid gap-2">
             {docs.map((doc) => (

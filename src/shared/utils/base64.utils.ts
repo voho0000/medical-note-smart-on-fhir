@@ -7,6 +7,30 @@
 // emits UTF-8 base64 directly per FHIR R4 §Attachment).
 
 /**
+ * Encode a UTF-8 string to base64 (no `data:` prefix) — the inverse of
+ * decodeBase64Utf8. Used when the app synthesises an inline text/html
+ * attachment (e.g. the TW-PAS Claim narrative expander) so the document
+ * renderer, which only reads `attachment.data`, can display it. Works in the
+ * browser (btoa) and Node/SSR (Buffer); returns '' on failure.
+ */
+export function encodeBase64Utf8(text?: string): string {
+  if (!text) return ''
+  try {
+    const bytes = new TextEncoder().encode(text)
+    if (typeof btoa !== 'undefined') {
+      // btoa needs a binary (Latin-1) string; feed it the raw UTF-8 bytes one
+      // char at a time so multibyte sequences survive the round-trip.
+      let binary = ''
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      return btoa(binary)
+    }
+    return Buffer.from(bytes).toString('base64')
+  } catch {
+    return ''
+  }
+}
+
+/**
  * Decode base64 attachment payload to a UTF-8 string. Returns '' on failure
  * so the renderer can show a placeholder instead of crashing.
  */
