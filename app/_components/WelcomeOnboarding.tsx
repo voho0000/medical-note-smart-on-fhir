@@ -10,6 +10,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Download, FlaskConical, Hospital, Shield } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useImportBundle } from '@/features/import-bundle/hooks/useImportBundle'
+import { BundleFileInput, type BundleFileInputHandle } from '@/features/import-bundle/components/BundleFileInput'
 
 export function WelcomeOnboarding() {
   const { t } = useLanguage()
@@ -20,22 +21,10 @@ export function WelcomeOnboarding() {
   const [isDragging, setIsDragging] = useState(false)
   const dragCounter = useRef(0)
 
-  // Separate file input dedicated to the "從本地匯入" info card below;
-  // ImportBundleButton (the upper CTA) owns its own input. Both end up
-  // calling the same useImportBundle.importFile, so behaviour is
-  // identical regardless of which entry point the user clicks.
-  const localCardFileRef = useRef<HTMLInputElement>(null)
-  const handleLocalCardFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    try {
-      await importFile(file)
-    } catch {
-      // error surfaces via the hook's `error` state
-    } finally {
-      if (localCardFileRef.current) localCardFileRef.current.value = ''
-    }
-  }, [importFile])
+  // The "從本地匯入" card and the header CTA (ImportBundleButton) share ONE
+  // input implementation (BundleFileInput) so accepted file types + import
+  // handling live in a single place; this ref just opens its picker.
+  const localCardFileRef = useRef<BundleFileInputHandle>(null)
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -141,7 +130,7 @@ export function WelcomeOnboarding() {
           {/* Local-import card — clickable, opens the file picker. */}
           <button
             type="button"
-            onClick={() => localCardFileRef.current?.click()}
+            onClick={() => localCardFileRef.current?.open()}
             disabled={loading}
             className="group flex flex-col rounded-2xl border border-border/60 bg-card/50 p-6 cursor-pointer shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/50 hover:shadow-md dark:hover:border-blue-700 dark:hover:bg-blue-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -193,13 +182,7 @@ export function WelcomeOnboarding() {
           {w.dragHint ?? 'Tip: you can also drag a .json file anywhere on this screen to import.'}
         </p>
 
-        <input
-          ref={localCardFileRef}
-          type="file"
-          accept=".json,application/json"
-          className="hidden"
-          onChange={handleLocalCardFile}
-        />
+        <BundleFileInput ref={localCardFileRef} />
 
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Shield className="h-3.5 w-3.5" />

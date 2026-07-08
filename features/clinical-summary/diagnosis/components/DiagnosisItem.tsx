@@ -23,6 +23,16 @@ export function DiagnosisItem({ diagnosis }: DiagnosisItemProps) {
         )}
       </div>
 
+      {/* Cancer staging — a diagnosis attribute (mCODE Condition.stage), shown
+          as its own emphasised line, not a generic category badge. */}
+      {diagnosis.stage && (
+        <div className="mt-1">
+          <span className="inline-flex items-center rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary ring-1 ring-primary/20">
+            {diagnosis.stage}
+          </span>
+        </div>
+      )}
+
       <div className="mt-2 flex flex-wrap gap-2">
         {diagnosis.clinical && (
           <StatusBadge status={diagnosis.clinical} type="clinical" />

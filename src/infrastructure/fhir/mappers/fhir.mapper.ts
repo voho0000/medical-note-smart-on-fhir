@@ -93,6 +93,9 @@ export class FhirMapper implements IDataMapper {
       recordedDate: fhirResource.recordedDate || fhirResource.dateRecorded,
       onsetDateTime: fhirResource.onsetDateTime,
       encounter: fhirResource.encounter,
+      // mCODE cancer-staging summary stamped by the Roche DIP expander. Must be
+      // listed explicitly — the mapper drops any field not named here.
+      _cancerStage: (fhirResource as { _cancerStage?: string })._cancerStage,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }

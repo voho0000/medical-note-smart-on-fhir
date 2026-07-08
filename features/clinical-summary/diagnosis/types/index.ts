@@ -11,4 +11,7 @@ export interface DiagnosisRow {
   verification?: string
   clinical?: string
   categories: string[]
+  /** mCODE cancer-staging summary (e.g. "Stage IVB (T2a · N2 · M1c)") — shown
+   *  on the diagnosis row when present (from Condition._cancerStage). */
+  stage?: string
 }

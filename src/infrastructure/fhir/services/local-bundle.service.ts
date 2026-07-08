@@ -25,6 +25,7 @@
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
+import { expandRocheResources } from './roche-expander'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
@@ -623,6 +624,12 @@ export const LocalBundleService = {
     // of the pipeline already renders. No-op for non-PAS bundles. Runs before the
     // byType() split below so the synthesised resources flow through unchanged.
     expandClaimResources(entries)
+
+    // Roche DIP support: flatten the oncology (mCODE) resources Roche nests
+    // inside List.contained and relink its identifier-based references, so the
+    // Condition / cancer-staging Observations / treatment Procedures surface and
+    // the DiagnosticReports link to the patient. No-op for non-Roche bundles.
+    expandRocheResources(entries)
 
     // Display canonicalisation: resolve Practitioner / Organization / Location
     // references to human-readable display strings (attending physician,

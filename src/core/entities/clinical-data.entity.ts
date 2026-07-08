@@ -70,6 +70,14 @@ export interface ConditionEntity {
     }>
     rationale?: string
   }
+  /**
+   * mCODE cancer-staging summary (e.g. "Stage IVB (T2a · N2 · M1c)"), resolved
+   * by the Roche DIP expander from Condition.stage.assessment → the TNM stage-
+   * group Observation + its hasMember. Staging is a diagnosis attribute, so it
+   * rides on the Condition and shows in the problem list, not as a report.
+   * App-added (underscore prefix); source bundles without staging omit it.
+   */
+  _cancerStage?: string
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string

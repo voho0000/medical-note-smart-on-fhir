@@ -31,6 +31,7 @@ export function useDiagnosisRows(conditions: any[]) {
           ? condition.verificationStatus
           : (condition.verificationStatus?.coding?.[0]?.display || condition.verificationStatus?.coding?.[0]?.code || ''),
         categories: categories,
+        stage: (condition as { _cancerStage?: string })._cancerStage || undefined,
       }
     })
 

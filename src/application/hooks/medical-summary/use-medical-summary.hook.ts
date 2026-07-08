@@ -17,6 +17,7 @@ import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { getUserErrorMessage } from '@/src/core/errors'
 import {
@@ -83,6 +84,12 @@ const useMedicalSummaryStore = create<MedicalSummaryStore>((set) => ({
   setError: (scanKey, error) =>
     set((s) => ({ errors: { ...s.errors, [scanKey]: error } })),
 }))
+
+// Wipe cached summaries when a new bundle is imported so nothing stale renders
+// against fresh clinical data.
+resetOnBundleChange(() =>
+  useMedicalSummaryStore.setState({ byPatient: {}, generating: {}, errors: {} }),
+)
 
 interface SummaryPrefsStore {
   autoGenerate: boolean

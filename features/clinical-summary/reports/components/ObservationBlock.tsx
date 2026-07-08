@@ -106,12 +106,15 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
   // so render only the attribute rows (no redundant title/value line, no trend).
   const detailsOnly = (observation as { _detailsOnly?: boolean })._detailsOnly === true
 
+  // Value fallback order: numeric → free text → coded value (valueCodeableConcept,
+  // e.g. mCODE cancer-staging "T2a" / tumour-marker status) → em-dash.
+  const codedValue = getCodeableConceptText(observation.valueCodeableConcept)
   const primaryValue = observation.valueQuantity
     ? getValueWithUnit(observation.valueQuantity)
-    : observation.valueString || '—'
+    : observation.valueString || codedValue || '—'
   const originalPrimaryValue = observation.valueQuantity
     ? getOriginalValueWithUnit(observation.valueQuantity)
-    : observation.valueString || '—'
+    : observation.valueString || codedValue || '—'
   const isLongText = !observation.valueQuantity && (observation.valueString?.length ?? 0) > 80
 
   // Procedure detail container: flat list of attribute rows, no main row.
@@ -135,7 +138,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
           const cName = getAnalyteDisplayForObs(component, audience, locale)
           const cValue = component.valueQuantity
             ? getValueWithUnit(component.valueQuantity)
-            : component.valueString || '—'
+            : component.valueString || getCodeableConceptText(component.valueCodeableConcept) || '—'
           return <ObsRow key={idx} name={cName || '—'} value={cValue} originalValue={cValue} interp={null} refText="" />
         })}
       </div>
@@ -177,12 +180,13 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
           <div className="ml-4 border-l pl-3 mt-0.5 space-y-0">
             {observation.component!.map((component, idx) => {
               const cName = getAnalyteDisplayForObs(component, audience, locale)
+              const cCoded = getCodeableConceptText(component.valueCodeableConcept)
               const cValue = component.valueQuantity
                 ? getValueWithUnit(component.valueQuantity)
-                : component.valueString || '—'
+                : component.valueString || cCoded || '—'
               const cOriginal = component.valueQuantity
                 ? getOriginalValueWithUnit(component.valueQuantity)
-                : component.valueString || '—'
+                : component.valueString || cCoded || '—'
               const cInterp = getInterpretationTag(component.interpretation)
               const cRef = getReferenceRangeText(component.referenceRange)
               return (

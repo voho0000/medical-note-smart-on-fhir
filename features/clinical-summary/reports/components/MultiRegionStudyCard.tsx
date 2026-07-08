@@ -22,9 +22,11 @@
 "use client"
 
 import { useState } from 'react'
-import { AlertTriangle, Building2, ChevronDown, FileText, ImageIcon } from 'lucide-react'
+import { AlertTriangle, Building2, ChevronDown, FileText, ImageIcon, PanelRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useRightDetail } from '@/src/application/providers/right-detail.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { Row } from '../types'
 import { ReportImageDialog } from './ReportImageDialog'
@@ -258,8 +260,46 @@ function NarrativeSubCard({
   const hasText = text.trim().length > 0
   const toggle = () => setExpanded((v) => !v)
 
+  // 向右展開 — dock this sub-report's narrative (with its AI card on top) into
+  // the right pane, matching a normal report row. Sub-reports are text-only
+  // here (image sets are separate ImageSetSubCards), so the docked node is a
+  // simple text + AI-panel column.
+  const { detail: rightDetail, toggleDetail } = useRightDetail()
+  const reportId = `report:${row.id}`
+  const isRightActive = rightDetail?.sourceId === reportId
+  const openRight = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    toggleDetail({
+      sourceId: reportId,
+      title: (
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="truncate">{reportLabel} {circled(index)}</span>
+          {bodyPart && (
+            <span className="text-xs font-normal text-muted-foreground whitespace-nowrap">· {bodyPart}</span>
+          )}
+        </span>
+      ),
+      node: (
+        <div key={reportId} className="scrollbar-thin-persistent h-full overflow-y-auto pr-1">
+          {/* AI card on top (manual mode — shares the inline per-reportId cache,
+              so docking never auto-spends), original narrative below. */}
+          <ReportInterpretationPanel
+            reportId={reportId}
+            reportText={text}
+            reportTitle={bodyPart || undefined}
+            autoGenerate={false}
+          />
+          <FormattedReportText text={text} className="text-sm leading-relaxed text-foreground/90" />
+        </div>
+      ),
+    })
+  }
+
   return (
-    <div className="rounded-md border border-border bg-background shadow-sm">
+    <div className={cn(
+      'rounded-md border bg-background shadow-sm transition-colors',
+      isRightActive ? 'border-primary/40 bg-primary/5' : 'border-border',
+    )}>
       {/* Sub-card header — number + body-part hint or label. A div-role=button
           (not <button>) so the 「AI 翻譯解讀」button can nest without an invalid
           button-in-button. */}
@@ -291,7 +331,9 @@ function NarrativeSubCard({
             </div>
           )}
         </div>
-        {hasText && (
+        {/* AI button hidden while docked to the right pane (which owns the card
+            there) — no duplicate left card / orphan button. */}
+        {hasText && !isRightActive && (
           <ReportInterpretationButton
             active={interpretOpen}
             onToggle={(e) => {
@@ -300,16 +342,39 @@ function NarrativeSubCard({
             }}
           />
         )}
+        {/* 向右展開 — dock to the right pane (desktop only). Neutral-grey button
+            with a hover tooltip, matching a normal report row. */}
+        {hasText && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={openRight}
+                aria-label="在右側面板展開全文"
+                className={cn(
+                  'hidden md:inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors',
+                  isRightActive
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-muted/40 text-muted-foreground hover:border-foreground/30 hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <PanelRight className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{isRightActive ? '已在右側面板展開' : '在右側面板展開全文'}</TooltipContent>
+          </Tooltip>
+        )}
         <span className={cn('text-xs text-muted-foreground shrink-0 select-none mt-0.5', expanded && 'rotate-180')}>
           ▾
         </span>
       </div>
       {/* 「AI 翻譯解讀」panel — above the original narrative so a 民眾 sees the AI
-          result first. Shown whenever opened, independent of the text expander. */}
-      {hasText && interpretOpen && (
+          result first. Shown whenever opened, independent of the text expander.
+          Hidden while docked to the right pane (shown there instead). */}
+      {hasText && interpretOpen && !isRightActive && (
         <div className="px-2.5">
           <ReportInterpretationPanel
-            reportId={`report:${row.id}`}
+            reportId={reportId}
             reportText={text}
             reportTitle={bodyPart || undefined}
           />

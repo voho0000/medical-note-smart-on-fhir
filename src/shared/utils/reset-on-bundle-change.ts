@@ -1,0 +1,13 @@
+// Run `reset` whenever the locally-imported FHIR bundle changes — an import, a
+// demo load, or a clear (all dispatch `mediprisma:local-bundle-changed` from
+// useImportBundle). The in-memory AI-result stores (medical summary, safety
+// scan, report interpretation) use this so importing NEW data never renders the
+// PREVIOUS bundle's cached results (which is especially wrong when the two
+// bundles share a patient id). Module-level, one listener per store for the app
+// lifetime; SSR-safe no-op on the server.
+const BUNDLE_CHANGED_EVENT = 'mediprisma:local-bundle-changed'
+
+export function resetOnBundleChange(reset: () => void): void {
+  if (typeof window === 'undefined') return
+  window.addEventListener(BUNDLE_CHANGED_EVENT, reset)
+}

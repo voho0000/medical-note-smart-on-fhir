@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useImportBundle } from "./hooks/useImportBundle"
+import { BundleFileInput, type BundleFileInputHandle } from "./components/BundleFileInput"
 
 interface ImportBundleButtonProps {
   /**
@@ -30,24 +31,12 @@ interface ImportBundleButtonProps {
 }
 
 export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleButtonProps = {}) {
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<BundleFileInputHandle>(null)
   const { t } = useLanguage()
   const i18n = t.importBundle
-  const { importFile, clear, loading, error, hasBundle, bundleIsActive, isDemo } = useImportBundle()
+  const { clear, loading, error, hasBundle, bundleIsActive, isDemo } = useImportBundle()
   // Clearing wipes the whole patient context in one click — confirm first
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    try {
-      await importFile(file)
-    } catch {
-      // error is captured in the hook's state; no extra handling needed.
-    } finally {
-      if (fileRef.current) fileRef.current.value = ''
-    }
-  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -103,7 +92,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
           className={`h-9 gap-1.5 text-xs sm:text-sm ${
             iconOnlyOnMobile ? 'px-2 sm:px-3' : 'px-3'
           }`}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => fileRef.current?.open()}
           disabled={loading}
           title={i18n.importTitle}
           aria-label={i18n.button}
@@ -138,14 +127,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
       {error && (
         <p className="text-xs text-destructive px-1">{error}</p>
       )}
-      <input
-        ref={fileRef}
-        data-testid="import-bundle-input"
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={handleFile}
-      />
+      <BundleFileInput ref={fileRef} testId="import-bundle-input" />
     </div>
   )
 }

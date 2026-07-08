@@ -864,6 +864,19 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   const accordionDateLabel = formatDisplayDate(row.effectiveDate, row.showTime)
   const accordionMeta = row.meta + (accordionDateLabel ? ` • ${accordionDateLabel}` : '')
 
+  // A panel report can ALSO carry a narrative (e.g. a pathology report whose
+  // presentedForm text rides as a "Report Summary" obs alongside structured
+  // histologic / biomarker results). The narrative deserves the same 「AI 翻譯
+  // 解讀」affordance as a standalone text report — the button is gated on
+  // "has narrative", not on "is a single-obs long-text report". This keeps the
+  // clinically-faithful grouping (results belong to their report) without
+  // sacrificing translatability.
+  const panelNarrativeObs = displayObs.find(
+    (o) => o.code?.text === 'Report Summary' && (o.valueString?.trim().length ?? 0) > 0,
+  )
+  const panelNarrative = compactBlankLines(panelNarrativeObs?.valueString || '')
+  const panelHasNarrative = panelNarrative.length > 0
+
   // 向右展開 for multi-analyte lab panels (e.g. CBC's 8 items) and procedures:
   // dock the detail in the right pane to read it beside the list. Lab panels
   // gate to 3+ analytes (a 1–2 item panel expands inline fine); a procedure is
@@ -969,6 +982,21 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                       {formatTimeOnly(row.effectiveDate)}
                     </Badge>
                   )}
+                  {/* 「AI 翻譯解讀」— shown when this panel report carries a
+                      narrative (e.g. a pathology report with its report text +
+                      structured results). asDiv so it can nest inside the
+                      AccordionTrigger <button> without button-in-button. Hidden
+                      while docked to the right pane (which owns the card). */}
+                  {panelHasNarrative && !isPanelRightActive && (
+                    <ReportInterpretationButton
+                      asDiv
+                      active={interpretOpen}
+                      onToggle={(e) => {
+                        e.stopPropagation()
+                        setInterpretOpen((v) => !v)
+                      }}
+                    />
+                  )}
                   {/* 向右展開 — placed LAST in the right cluster so it sits just
                       to the left of the AccordionTrigger's ▼ chevron, matching
                       the imaging-report layout. div[role=button] (not <button>)
@@ -1002,6 +1030,16 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               </div>
             </div>
           </AccordionTrigger>
+          {/* 「AI 翻譯解讀」panel — above the structured rows, shown whenever the
+              button is toggled, independent of the accordion's expand state so a
+              民眾 sees the AI result without expanding. Hidden while docked. */}
+          {panelHasNarrative && interpretOpen && !isPanelRightActive && (
+            <ReportInterpretationPanel
+              reportId={`report:${row.id}`}
+              reportText={panelNarrative}
+              reportTitle={row.title}
+            />
+          )}
           <AccordionContent className="pb-4">
             <div className="grid gap-3">
               {displayObs.map((obs, i) => (

@@ -1287,10 +1287,10 @@ export const en = {
   welcome: {
     title: 'Welcome to MediPrisma',
     description: 'Import your health data to get started, or launch from a hospital system via SMART-on-FHIR.',
-    dragHint: 'Tip: you can also drag a .json file anywhere on this screen to import.',
+    dragHint: 'Tip: you can also drag a .json / .txt file anywhere on this screen to import.',
     dropHere: 'Release to import',
     localTitle: 'Import from your device',
-    localDesc: 'Download your health data (.json file) from 健保存摺 or another source — once imported, it stays on this device only.',
+    localDesc: 'Download your health data (.json / .txt file) from 健保存摺 or another source — once imported, it stays on this device only.',
     demoTitle: 'Try demo data',
     demoDesc: 'Load a de-identified sample patient (adapted from a real 健保存摺 export, with a discharge summary and images) — explore without importing anything.',
     smartTitle: 'Hospital launch (SMART-on-FHIR)',

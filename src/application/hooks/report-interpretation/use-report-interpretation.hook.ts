@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
+import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
@@ -58,6 +59,11 @@ const useStore = create<Store>((set) => ({
   setGenerating: (key, value) => set((s) => ({ generating: { ...s.generating, [key]: value } })),
   setError: (key, error) => set((s) => ({ errors: { ...s.errors, [key]: error } })),
 }))
+
+// Drop cached interpretations when a new bundle is imported. (The cache key
+// already includes a content signature, but a full reset keeps re-import
+// behaviour uniform with the summary/safety stores.)
+resetOnBundleChange(() => useStore.setState({ byKey: {}, generating: {}, errors: {} }))
 
 export interface UseReportInterpretationArgs {
   /** Stable id for the report/document (namespaced by the caller so ids from

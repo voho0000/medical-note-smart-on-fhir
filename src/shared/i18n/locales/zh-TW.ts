@@ -1290,10 +1290,10 @@ export const zhTW = {
   welcome: {
     title: '歡迎使用 MediPrisma',
     description: '匯入您的健康資料開始使用，或從醫院系統透過 SMART-on-FHIR 自動載入。',
-    dragHint: '小提示：也可以將 .json 檔案直接拖曳到這個畫面匯入',
+    dragHint: '小提示：也可以將 .json／.txt 檔案直接拖曳到這個畫面匯入',
     dropHere: '放開以匯入資料',
     localTitle: '從本地匯入',
-    localDesc: '從健保存摺或其他來源下載健康資料（.json 檔），匯入後資料只留在這台電腦。',
+    localDesc: '從健保存摺或其他來源下載健康資料（.json／.txt 檔），匯入後資料只留在這台電腦。',
     demoTitle: '使用試用資料',
     demoDesc: '載入一份去識別化的示範病人資料（改編自真實健保存摺，含出院病摘與影像），不需匯入任何檔案即可體驗。',
     smartTitle: '從醫院系統登入 (SMART-on-FHIR)',

@@ -78,6 +78,13 @@ export function useImportBundle(): UseImportBundleReturn {
     await LocalBundleService.save(bundle)
     if (demo) localStorage.setItem(DEMO_FLAG_KEY, '1')
     else localStorage.removeItem(DEMO_FLAG_KEY)
+    // Importing NEW data must not leave the PREVIOUS bundle's derived results
+    // around, or the render goes inconsistent (old AI summary / safety scan /
+    // report interpretation shown against new clinical data — worst when the two
+    // bundles share a patient id). Drop the persisted AI caches here; the
+    // in-memory AI stores reset off the notifyBundleChanged() event below. This
+    // is the same cleanup clear() does — import = clear-then-load.
+    purgeAiResultCaches()
     setHasBundle(true)
     setBundleIsActive(shouldUseLocalBundle())
     setIsDemo(demo)

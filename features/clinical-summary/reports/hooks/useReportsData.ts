@@ -10,6 +10,7 @@ import {
   type LabCategory,
 } from '@/src/shared/utils/lab-categories'
 import { getOrderNameDisplay, NHI_ORDER_CODE_TO_ZH, NHI_ORDER_CODE_TO_EN } from '@/src/shared/utils/nhi-order-names'
+import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 
@@ -318,6 +319,20 @@ export function useReportsData(diagnosticReports: any[]) {
                 size: form.size,
               })
               continue
+            }
+            // Inline TEXT report as base64 (e.g. Roche DIP pathology / radiology
+            // notes ship the full report body as base64 text/plain in
+            // presentedForm, NOT in conclusion). Decode it into the narrative so
+            // it's readable + AI-interpretable, instead of dropping the body and
+            // keeping only the title. (HTML attachments are handled by the
+            // document renderer, not here — skip them to avoid raw markup.)
+            const ct = (form?.contentType || '').toLowerCase()
+            if (form?.data && ct.startsWith('text/') && !ct.includes('html')) {
+              const decoded = decodeBase64Utf8(form.data).trim()
+              if (decoded) {
+                summaryParts.push(decoded)
+                continue
+              }
             }
             const t = form?.title || form?.contentType
             if (t) attachments.push(t)
