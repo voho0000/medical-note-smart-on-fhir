@@ -1,3 +1,5 @@
+import { getInterpretationTag } from "@/src/shared/utils/interpretation-helpers"
+
 type Quantity = { value?: number; unit?: string }
 type ReferenceRange = { low?: Quantity; high?: Quantity; text?: string }
 type CodeableConcept = { text?: string; coding?: Array<{ display?: string; code?: string; system?: string }> }
@@ -12,17 +14,34 @@ export const valueWithUnit = (value?: Quantity, fallback?: string) => {
   return fallback ?? "—"
 }
 
+// See fhir-helpers.ts collapseDoubledRangeText — the bridge sometimes emits the
+// whole reference-range text twice ("[X][X]"); collapse identical halves.
+function collapseDoubledRangeText(text: string): string {
+  const t = text.trim()
+  if (t.length >= 2 && t.length % 2 === 0) {
+    const h = t.length / 2
+    if (t[h - 1] === ']' && t[h] === '[' && t.slice(0, h) === t.slice(h)) return t.slice(0, h)
+  }
+  return t
+}
+
 function parseVghBracketText(text: string): string {
+  const t = collapseDoubledRangeText(text)
   // VGH format: "[low][high]" → "low–high", "[val][]" → "val", "[][val]" → "≤val"
-  const m = text.match(/^\[([^\]]*)\]\[([^\]]*)\]$/)
-  if (!m) return text
-  const [, lo, hi] = m
-  if (!lo && !hi) return ""
-  if (!lo) return `≤${hi}`
-  if (!hi) return lo  // qualitative like "Negative"
-  const loN = parseFloat(lo), hiN = parseFloat(hi)
-  if (!isNaN(loN) && !isNaN(hiN)) return `${lo}–${hi}`
-  return lo
+  const m = t.match(/^\[([^\]]*)\]\[([^\]]*)\]$/)
+  if (m) {
+    const [, lo, hi] = m
+    if (!lo && !hi) return ""
+    if (!lo) return `≤${hi}`
+    if (!hi) return lo  // qualitative like "Negative"
+    const loN = parseFloat(lo), hiN = parseFloat(hi)
+    if (!isNaN(loN) && !isNaN(hiN)) return `${lo}–${hi}`
+    return lo
+  }
+  // Complex / multi-band text: strip a single outer bracket layer so the caller's
+  // re-wrap doesn't double it (full text stays in the hover tooltip).
+  const outer = t.match(/^\[([\s\S]*)\]$/)
+  return outer ? outer[1] : t
 }
 
 export const refRangeText = (ranges?: ReferenceRange[]) => {
@@ -41,30 +60,14 @@ export const refRangeText = (ranges?: ReferenceRange[]) => {
   return ""
 }
 
-export const getInterpTag = (concept?: CodeableConcept) => {
-  const raw = concept?.coding?.[0]?.code || concept?.coding?.[0]?.display || concept?.text || ""
-  const code = raw?.toString().toUpperCase()
-  if (!code) return null
-  if (["H", "HI", "HIGH", "ABOVE", ">", "HH", "CRIT-HI"].includes(code)) {
-    return { label: code === "HH" ? "Critical High" : "High", style: "bg-red-100 text-red-700 border border-red-200" }
-  }
-  if (["L", "LO", "LOW", "BELOW", "<", "LL", "CRIT-LO"].includes(code)) {
-    return { label: code === "LL" ? "Critical Low" : "Low", style: "bg-blue-100 text-blue-700 border border-blue-200" }
-  }
-  if (["A", "ABN", "ABNORMAL"].includes(code)) {
-    return { label: "Abnormal", style: "bg-amber-100 text-amber-700 border border-amber-200" }
-  }
-  if (["POS", "POSITIVE", "DETECTED", "REACTIVE"].includes(code)) {
-    return { label: "Positive", style: "bg-orange-100 text-orange-700 border border-orange-200" }
-  }
-  if (["NEG", "NEGATIVE", "NOT DETECTED", "NONREACTIVE"].includes(code)) {
-    return { label: "Negative", style: "bg-emerald-100 text-emerald-700 border border-emerald-200" }
-  }
-  if (["N", "NORMAL"].includes(code)) {
-    return { label: "Normal", style: "bg-gray-100 text-gray-600 border border-gray-200" }
-  }
-  return { label: code, style: "bg-muted text-muted-foreground" }
-}
+// Delegates to the single shared implementation so all three surfaces (reports,
+// cumulative pivot, visit-history) share one tag-classification source. Critically,
+// the shared version reads the FHIR `interpretation` ARRAY shape — this local copy
+// used to read only `concept.coding` and silently returned null for the bridge's
+// array-shaped interpretation, so visit-history chips never appeared for imported
+// data. Accepts the array or a single concept.
+export const getInterpTag = (concept?: CodeableConcept | CodeableConcept[]) =>
+  getInterpretationTag(concept as any)
 
 export const getReferenceId = (ref: any): string | null => {
   if (!ref) return null

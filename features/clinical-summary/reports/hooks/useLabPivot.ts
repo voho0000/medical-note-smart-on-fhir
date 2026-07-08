@@ -43,41 +43,18 @@ function isNumericCellValue(v: string | undefined): boolean {
   return Number.isFinite(Number(t))
 }
 
-// Fallback reference ranges for common tests when FHIR data lacks referenceRange
-// and the source system (e.g. VGH bridge) doesn't set interpretation codes.
-// Values are typical adult ranges — verify against your lab's report header.
-const HARDCODED_REF_RANGES: Record<string, { low?: number; high?: number }> = {
-  // Thyroid
-  TSH:        { low: 0.35, high: 4.94 },   // uIU/mL
-  'FREE T4':  { low: 0.70, high: 1.48 },   // ng/dL
-  'FREE T3':  { low: 2.0,  high: 4.4  },   // pg/mL
-  T4:         { low: 4.5,  high: 12.5 },   // ug/dL
-  T3:         { low: 80,   high: 200  },   // ng/dL
-  // Adrenal
-  CORTISOL:   { low: 6.2,  high: 19.4 },   // ug/dL (AM)
-  // Lipid
-  TG:         {             high: 150  },   // mg/dL
-  CHOL:       {             high: 200  },   // mg/dL
-  LDL:        {             high: 130  },   // mg/dL
-  HDL:        { low: 40               },   // mg/dL (conservative; male floor)
-  // Glucose — fasting range applies only to AC (空腹) measurements.
-  // Generic glucose (random/post-meal) and finger sugar are context-dependent.
-  'GLUCOSE-AC': { low: 70, high: 100 },    // mg/dL (fasting)
-  HBA1C:      {             high: 5.7 },   // %
-  // NOTE: blood-gas analytes (PH/PCO2/PO2/HCO3/BE/SO2/FIO2) intentionally have
-  // NO hardcoded range. Their cumulative-report column mixes arterial, venous
-  // and capillary specimens (see lab-categories 'bloodgas'), whose normal
-  // ranges differ materially — esp. pO2 (arterial ~80–100 vs venous ~40) and
-  // O2 sat (~95–100 vs ~70). A single hardcoded range would false-flag the
-  // other specimen, so colouring relies solely on each obs's own FHIR
-  // referenceRange (which is specimen-correct). PH is doubly unsafe here — its
-  // testKey is shared with urinalysis pH.
-}
+// NOTE (2026-07-08): the app-side HARDCODED_REF_RANGES table (TSH / lipids /
+// HbA1c / glucose-AC …) was REMOVED per user directive — "app 端不要有異常值判定器,
+// 都交給健康存摺自己會有,避免判錯,畢竟正常值範圍很多醫院都亂給". Abnormal flagging
+// now derives ONLY from the source's Observation.interpretation, falling back to
+// STRUCTURED referenceRange.low/high when no interpretation exists (see
+// formatValue below and src/shared/utils/interpretation-helpers.ts). The app no
+// longer invents its own normal ranges.
 
 // Exported for unit-test access; the cumulative-report cell colouring
 // depends on its isAbnormal output, so we lock it down separately from
 // the React hook.
-export function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string; hasFhirRefRange: boolean } {
+export function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string } {
   let value = '—'
   let unit: string | undefined
   let numericValue: number | undefined
@@ -90,7 +67,10 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   } else if (obs.valueCodeableConcept?.text) {
     value = obs.valueCodeableConcept.text
   }
+  // Observation.interpretation is FHIR 0..* (array); tolerate the single-concept
+  // shape too. This is the SOURCE's own verdict and is authoritative.
   const interp = obs.interpretation?.[0]?.coding?.[0]?.code || obs.interpretation?.coding?.[0]?.code
+  const hasInterp = !!interp
   // HL7 v3 ObservationInterpretation codes that mean "this result is fine,
   // don't flag it red." Includes:
   //   N / NORMAL        — numeric within reference range
@@ -102,48 +82,24 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   //                       "non-reactive" below the cutoff
   // Anything else (H / L / A / POS / etc.) is treated as abnormal.
   const NORMAL_INTERP_CODES = new Set(['N', 'NORMAL', 'NEG', 'NEGATIVE', 'NR', 'NONREACTIVE'])
-  let isAbnormal = !!interp && !NORMAL_INTERP_CODES.has(String(interp).toUpperCase())
+  let isAbnormal = hasInterp && !NORMAL_INTERP_CODES.has(String(interp).toUpperCase())
 
-  // Layer A: use FHIR referenceRange when interpretation code is absent.
-  // Also tracks whether a usable numeric range was found — Layer B (hardcoded
-  // fallback) must NOT run when FHIR already provided bounds, so that
-  // institution-specific ranges (e.g. HbA1c [4.8-5.9] vs our 5.7) are respected.
-  let hasFhirRefRange = false
-  if (!isAbnormal && numericValue !== undefined) {
+  // Range fallback — ONLY when the source shipped NO interpretation. The source
+  // interpretation is authoritative and must never be overridden by app-side
+  // range math (2026-07-08 policy; see interpretation-helpers.ts). We also read
+  // ONLY structured referenceRange.low/high — never referenceRange.text, whose
+  // formats (duplicated "[lo ~ hi][lo ~ hi]" brackets, sex/age-conditional
+  // prose) are too unreliable to judge and produced false red flags.
+  if (!hasInterp && numericValue !== undefined) {
     const rr = obs.referenceRange?.[0]
     if (rr) {
-      let lo = rr.low?.value, hi = rr.high?.value
-
-      // Layer A.5: parse referenceRange.text for simple numeric formats when
-      // structured low/high are absent (e.g. "0.35-4.94", "< 5.7", ">= 40").
-      // Sex-stratified text like "[男:13.7 女:11.1]..." is intentionally skipped —
-      // the bridge should provide structured low/high based on patient sex.
-      if (lo === undefined && hi === undefined && rr.text) {
-        const t = rr.text.trim()
-        // Range: "11.1 - 17.0" or "11.1~17.0"
-        const rangeM = t.match(/^([\d.]+)\s*[-~–]\s*([\d.]+)$/)
-        if (rangeM) {
-          lo = parseFloat(rangeM[1])
-          hi = parseFloat(rangeM[2])
-        } else {
-          // Upper-only: "< 5.7" or "<= 5.7"
-          const hiM = t.match(/^<[=]?\s*([\d.]+)$/)
-          if (hiM) hi = parseFloat(hiM[1])
-          // Lower-only: "> 40" or ">= 40"
-          const loM = t.match(/^>[=]?\s*([\d.]+)$/)
-          if (loM) lo = parseFloat(loM[1])
-        }
-      }
-
-      if (lo !== undefined || hi !== undefined) {
-        hasFhirRefRange = true
-        if (lo !== undefined && numericValue < lo) isAbnormal = true
-        if (hi !== undefined && numericValue > hi) isAbnormal = true
-      }
+      const lo = rr.low?.value, hi = rr.high?.value
+      if (lo !== undefined && numericValue < lo) isAbnormal = true
+      if (hi !== undefined && numericValue > hi) isAbnormal = true
     }
   }
 
-  return { value, unit, numericValue, isAbnormal, interpretationCode: interp, hasFhirRefRange }
+  return { value, unit, numericValue, isAbnormal, interpretationCode: interp }
 }
 
 // NHI system URI used by the 健康存摺 bridge
@@ -284,19 +240,8 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
 
       const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
       const fv = formatValue(obs)
-      const { value, unit, numericValue, interpretationCode, hasFhirRefRange } = fv
-      let { isAbnormal } = fv
-
-      // Layer B: hardcoded reference ranges — only when FHIR provided no usable
-      // numeric range (hasFhirRefRange=false). Skipped when FHIR has bounds so
-      // institution-specific ranges are respected over our generic fallback.
-      if (!isAbnormal && !hasFhirRefRange && numericValue !== undefined) {
-        const range = HARDCODED_REF_RANGES[testKey]
-        if (range) {
-          if (range.low !== undefined && numericValue < range.low) isAbnormal = true
-          if (range.high !== undefined && numericValue > range.high) isAbnormal = true
-        }
-      }
+      const { value, unit, numericValue, interpretationCode } = fv
+      const { isAbnormal } = fv
 
       if (!testMap.has(mapKey)) {
         testMap.set(mapKey, { mapKey, testKey, displayName, values: new Map() })

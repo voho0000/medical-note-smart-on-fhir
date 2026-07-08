@@ -3,6 +3,7 @@ import { useRef, useState, memo } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -11,7 +12,7 @@ import { useRightDetail } from "@/src/application/providers/right-detail.provide
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
 import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText } from '../utils/fhir-helpers'
-import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
+import { isObservationAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { HighlightText } from '@/src/shared/components/HighlightText'
@@ -353,15 +354,13 @@ function compactBlankLines(s: string): string {
 function countAbnormal(obs: Observation[]): number {
   let count = 0
   for (const o of obs) {
-    const tag = getInterpretationTag(o.interpretation)
-    if ((tag && tag.label !== 'Normal') || checkReferenceRangeAbnormal(o)) {
+    if (isObservationAbnormal(o)) {
       count++
       continue
     }
     if (Array.isArray(o.component)) {
       for (const c of o.component) {
-        const ctag = getInterpretationTag(c.interpretation)
-        if ((ctag && ctag.label !== 'Normal') || checkReferenceRangeAbnormal(c)) {
+        if (isObservationAbnormal(c)) {
           count++
           break
         }
@@ -493,8 +492,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // Single-value report: compact display
   if (isSingleValue) {
     const obs = displayObs[0]
-    const interp = getInterpretationTag(obs.interpretation)
-    const isAbnormal = (!!interp && interp.label !== 'Normal') || checkReferenceRangeAbnormal(obs)
+    const isAbnormal = isObservationAbnormal(obs)
     const refText = getReferenceRangeText(obs.referenceRange)
     // Synthetic narrative obs from text-based DiagnosticReports (imaging / ECG /
     // pathology) carry code.text === 'Report Summary'. These are ALWAYS routed to
@@ -769,8 +767,16 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             isAbnormal && 'border-red-200 dark:border-red-800/50 bg-red-50/30 dark:bg-red-950/10'
           )}
         >
-          {/* Title — highest priority, takes the remaining width */}
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          {/* Single line on every size (keeps mobile dense — more rows visible).
+              • Mobile (<md): name grows + value right-aligned; the reference
+                range is collapsed to a tap-to-reveal ⓘ (popover) so it doesn't
+                eat width or force a second line.
+              • md+: fixed ~45% name column so the value starts at a consistent
+                position across rows regardless of name length (short English
+                codes vs longer 民眾版 Chinese names); reference range shown
+                inline, filling the remaining width. Long names truncate, full
+                name on hover. */}
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 md:flex-none md:basis-[45%] md:grow-0">
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="text-sm font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
@@ -804,18 +810,34 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               <TooltipContent>{value}</TooltipContent>
             </Tooltip>
           )}
-          {interp && (
-            <span className={cn('inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium shrink-0', interp.style)}>
-              {interp.label}
-            </span>
-          )}
+          {/* Interpretation label chip intentionally NOT rendered — abnormal is
+              shown by red value text only (per user, no Normal/Abnormal badges). */}
           {showRef && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-xs text-muted-foreground max-w-[6rem] truncate shrink">{refText}</span>
-              </TooltipTrigger>
-              <TooltipContent>{refText}</TooltipContent>
-            </Tooltip>
+            <>
+              {/* md+: inline reference, hover tooltip for the full (possibly long) text */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="hidden md:inline-block text-xs text-muted-foreground md:min-w-0 md:flex-1 truncate">{refText}</span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[min(90vw,28rem)] whitespace-normal break-words max-h-[50vh] overflow-y-auto text-xs leading-relaxed">{refText}</TooltipContent>
+              </Tooltip>
+              {/* Mobile: collapsed to a tap-to-reveal ⓘ so the row stays single-line */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="參考範圍"
+                    className="md:hidden shrink-0 -m-1 p-1 text-muted-foreground/70 hover:text-muted-foreground"
+                  >
+                    <Info className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="max-w-[min(88vw,22rem)] text-xs leading-relaxed">
+                  <div className="font-medium text-foreground">參考範圍</div>
+                  <div className="mt-0.5 whitespace-normal break-words text-muted-foreground">{refText}</div>
+                </PopoverContent>
+              </Popover>
+            </>
           )}
           {/* Institution + date — the compact badge shows only the date to give
               the report name maximum width; category/status (row.meta) move to

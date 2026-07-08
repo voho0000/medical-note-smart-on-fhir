@@ -56,9 +56,7 @@ describe('formatValue — isAbnormal vs interpretation code', () => {
 
     it('qualitative string with no interpretation → not abnormal (we can\'t derive)', () => {
       // Without interp code AND without numeric value, we have nothing
-      // to compare against — must leave isAbnormal=false rather than
-      // guess. The visit-detail accordion handles qualitative results
-      // separately via checkReferenceRangeAbnormal (text parsing).
+      // to compare against — must leave isAbnormal=false rather than guess.
       const obs = {
         code: { text: 'Anti-HCV' },
         valueString: 'Nonreactive(0.10 S/CO)',
@@ -88,6 +86,49 @@ describe('formatValue — isAbnormal vs interpretation code', () => {
 
     it('Anti-HCV with interpretation=NEG is not abnormal (no red cell)', () => {
       expect(formatValue(antiHCV).isAbnormal).toBe(false)
+    })
+  })
+
+  describe('interpretation wins over referenceRange (Bridge v1.3.13 false-abnormal bug)', () => {
+    // Real A22259XXXX blood panel: interpretation=N, but referenceRange.text is
+    // the health-passbook duplicated-bracket form "[4180 ~ 9380][4180 ~ 9380]".
+    // App must NOT re-parse that text; the source's N is authoritative.
+    const wbc = {
+      code: { text: '白血球計數' },
+      valueQuantity: { value: 5640, unit: '/uL' },
+      referenceRange: [{ text: '[4180 ~ 9380][4180 ~ 9380]' }],
+      interpretation: [{ coding: [{ code: 'N', display: 'Normal' }] }],
+    }
+    it('WBC 5640 with interpretation=N is NOT abnormal despite garbage range text', () => {
+      expect(formatValue(wbc).isAbnormal).toBe(false)
+    })
+
+    it('interpretation=N wins even when a STRUCTURED range would flag the value', () => {
+      const obs = {
+        code: { text: 'X' },
+        valueQuantity: { value: 999, unit: 'x' },
+        referenceRange: [{ low: { value: 1 }, high: { value: 10 } }],
+        interpretation: [{ coding: [{ code: 'N' }] }],
+      }
+      expect(formatValue(obs).isAbnormal).toBe(false)
+    })
+
+    it('no interpretation + garbage referenceRange.text → NOT abnormal (text never parsed)', () => {
+      const obs = {
+        code: { text: '白血球計數' },
+        valueQuantity: { value: 5640, unit: '/uL' },
+        referenceRange: [{ text: '[4180 ~ 9380][4180 ~ 9380]' }],
+      }
+      expect(formatValue(obs).isAbnormal).toBe(false)
+    })
+  })
+
+  describe('no app-invented ranges (HARDCODED_REF_RANGES removed)', () => {
+    it('TSH out of the old hardcoded 0.35–4.94 band is NOT flagged without source signal', () => {
+      // Previously the app carried a hardcoded TSH range and would flag this;
+      // policy now: no interpretation + no structured range → not abnormal.
+      const tsh = { code: { text: 'TSH' }, valueQuantity: { value: 8.2, unit: 'uIU/mL' } }
+      expect(formatValue(tsh).isAbnormal).toBe(false)
     })
   })
 })

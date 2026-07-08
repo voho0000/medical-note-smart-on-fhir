@@ -6,7 +6,7 @@ import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, get
 import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
+import { getInterpretationTag, checkReferenceRangeAbnormal, isInterpretationAbnormal } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -34,7 +34,9 @@ function ObsRow({
   isLongText?: boolean
   refRangeAbnormal?: boolean
 }) {
-  const isAbnormal = (!!interp && interp.label !== 'Normal') || !!refRangeAbnormal
+  // Interpretation wins when present; the structured-range flag is only a
+  // fallback for when the source shipped no interpretation at all.
+  const isAbnormal = interp ? isInterpretationAbnormal(interp) : !!refRangeAbnormal
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
@@ -68,17 +70,14 @@ function ObsRow({
             {value}
           </span>
         )}
-        {interp && (
-          <span className={cn('inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium', interp.style)}>
-            {interp.label}
-          </span>
-        )}
+        {/* Interpretation label chip intentionally NOT rendered — abnormal is
+            shown by red value text only (per user, no Normal/Abnormal badges). */}
         {refText && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="text-xs text-muted-foreground max-w-[8rem] truncate">{refText}</span>
             </TooltipTrigger>
-            <TooltipContent>{refText}</TooltipContent>
+            <TooltipContent className="max-w-[min(90vw,28rem)] whitespace-normal break-words max-h-[50vh] overflow-y-auto text-xs leading-relaxed">{refText}</TooltipContent>
           </Tooltip>
         )}
       </div>

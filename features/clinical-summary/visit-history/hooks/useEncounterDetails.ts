@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationNameLocalized, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
-import { checkReferenceRangeAbnormal } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
+import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 import { getAnalyteDisplayForObs, getAnalyteLabel, getAnalyteCanonicalKey, type DisplayLang } from "@/src/shared/utils/lab-normalize"
 import {
@@ -249,7 +249,12 @@ function buildTestSeries(tests: EncounterObservation[]): EncounterTestSeries[] {
       keyOrder.push(key)
     }
     s.values.push(t)
-    if (t.refRangeAbnormal || (t.interpretationLabel && t.interpretationLabel !== 'Normal')) {
+    // Interpretation wins when present; range flag is only a no-interpretation
+    // fallback (2026-07-08 policy).
+    const abnormal = t.interpretationLabel
+      ? isAbnormalInterpretationLabel(t.interpretationLabel)
+      : !!t.refRangeAbnormal
+    if (abnormal) {
       s.abnormalCount++
     }
   }

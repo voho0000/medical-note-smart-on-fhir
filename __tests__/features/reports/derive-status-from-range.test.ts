@@ -53,9 +53,9 @@ describe('deriveStatusFromRange — referenceRange fallback', () => {
   })
 
   it('returns null when referenceRange has only text (no low/high) — caller falls through', () => {
-    // text-only ranges are parsed elsewhere (see checkReferenceRangeAbnormal
-    // in interpretation-helpers.ts); this helper deliberately doesn't
-    // re-implement that parsing.
+    // referenceRange.text is deliberately NEVER parsed for abnormal detection
+    // (2026-07-08 policy — too many unsafe formats; see interpretation-helpers.ts).
+    // This helper only uses structured low/high.
     expect(deriveStatusFromRange(50, { text: '0-100' })).toBeNull()
   })
 })

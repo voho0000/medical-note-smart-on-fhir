@@ -88,11 +88,8 @@ function ObsRow({
             {value}
           </span>
         )}
-        {interpretationLabel && interpretationStyle && (
-          <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium", interpretationStyle)}>
-            {interpretationLabel}
-          </span>
-        )}
+        {/* Interpretation label chip intentionally NOT rendered — abnormal is
+            shown by red value text only (per user, no Normal/Abnormal badges). */}
         {referenceText && (
           <span className="text-xs text-muted-foreground">{referenceText}</span>
         )}

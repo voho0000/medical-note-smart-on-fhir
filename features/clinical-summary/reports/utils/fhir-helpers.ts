@@ -26,20 +26,40 @@ export function getOriginalValueWithUnit(v?: Quantity, fallback?: string): strin
   return fallback ?? "—"
 }
 
-function parseVghBracketText(text: string): string {
-  // VGH format: "[low][high]" → "low–high", "[val][]" → "val", "[][val]" → "≤val"
-  const m = text.match(/^\[([^\]]*)\]\[([^\]]*)\]$/)
-  if (!m) return text
-  const [, lo, hi] = m
-  if (!lo && !hi) return ""
-  if (!lo) {
-    const n = parseFloat(hi)
-    return isNaN(n) ? hi : `≤${hi}`
+// The bridge sometimes emits the WHOLE reference-range text twice, back-to-back
+// ("[X][X]" where X is itself a bracketed value or a long age/sex-stratified
+// band list). Collapse identical halves so it isn't shown doubled. Only fires
+// on an exact half-split at a "][" boundary, so genuine ranges are untouched.
+function collapseDoubledRangeText(text: string): string {
+  const t = text.trim()
+  if (t.length >= 2 && t.length % 2 === 0) {
+    const h = t.length / 2
+    if (t[h - 1] === ']' && t[h] === '[' && t.slice(0, h) === t.slice(h)) return t.slice(0, h)
   }
-  if (!hi) return lo  // qualitative like "Negative" — no ≥ prefix
-  const loN = parseFloat(lo), hiN = parseFloat(hi)
-  if (!isNaN(loN) && isNaN(hiN)) return `≥${lo}`  // numeric low, text high (unusual)
-  return `${lo}–${hi}`
+  return t
+}
+
+function parseVghBracketText(text: string): string {
+  const t = collapseDoubledRangeText(text)
+  // VGH format: "[low][high]" → "low–high", "[val][]" → "val", "[][val]" → "≤val"
+  const m = t.match(/^\[([^\]]*)\]\[([^\]]*)\]$/)
+  if (m) {
+    const [, lo, hi] = m
+    if (!lo && !hi) return ""
+    if (!lo) {
+      const n = parseFloat(hi)
+      return isNaN(n) ? hi : `≤${hi}`
+    }
+    if (!hi) return lo  // qualitative like "Negative" — no ≥ prefix
+    const loN = parseFloat(lo), hiN = parseFloat(hi)
+    if (!isNaN(loN) && isNaN(hiN)) return `≥${lo}`  // numeric low, text high (unusual)
+    return `${lo}–${hi}`
+  }
+  // Complex / multi-band text we can't reduce (e.g. age/sex-stratified). Strip a
+  // single outer bracket layer so the caller's re-wrap doesn't double it; the
+  // full text is still shown (wrapped) in the hover tooltip.
+  const outer = t.match(/^\[([\s\S]*)\]$/)
+  return outer ? outer[1] : t
 }
 
 export function getReferenceRangeText(rr?: ReferenceRange[]): string {

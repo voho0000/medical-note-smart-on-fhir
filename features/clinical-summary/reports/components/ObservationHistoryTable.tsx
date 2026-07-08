@@ -47,12 +47,16 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
   const getEffectiveStatus = (item: ObservationHistoryItem): 'high' | 'low' | 'abnormal' | 'normal' | null => {
     const interp = item.interpretation?.toLowerCase()
     if (interp) {
-      // Match against single-letter codes too — but require exact match so
-      // "high" doesn't also trigger the "low" branch via its "h"-fragment.
-      if (interp === 'h' || interp.includes('high')) return 'high'
-      if (interp === 'l' || interp.includes('low')) return 'low'
-      if (interp.includes('abnormal')) return 'abnormal'
-      if (interp.includes('normal')) return 'normal'
+      // Source interpretation is authoritative — once it's present we NEVER fall
+      // through to app-side range math (2026-07-08 policy; see
+      // interpretation-helpers.ts). Match single-letter codes exactly so "high"
+      // doesn't also trigger the "low" branch via its "h"-fragment.
+      if (interp === 'h' || interp === 'hh' || interp.includes('high')) return 'high'
+      if (interp === 'l' || interp === 'll' || interp.includes('low')) return 'low'
+      if (interp === 'a' || interp === 'aa' || interp === 'abn' || interp.includes('abnormal')) return 'abnormal'
+      // Everything else present (n / normal / neg / negative / nr / nonreactive
+      // / unrecognised) → not flagged, rather than guessing from a range.
+      return 'normal'
     }
     return deriveStatusFromRange(item.value, item.referenceRange)
   }

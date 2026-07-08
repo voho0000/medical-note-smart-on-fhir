@@ -12,6 +12,7 @@
 import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { isAbnormalInterpretationLabel } from "@/src/shared/utils/interpretation-helpers"
 import type { EncounterObservation } from "./EncounterObservationCard"
 import type { EncounterTestSeries } from "../hooks/useEncounterDetails"
 
@@ -41,9 +42,11 @@ function leadingNumber(value: string): number | null {
 }
 
 function isAbnormal(o: EncounterObservation): boolean {
-  if (o.refRangeAbnormal) return true
+  // Interpretation wins when present; the structured-range flag is only a
+  // fallback for when the source shipped no interpretation (2026-07-08 policy).
   const label = o.interpretationLabel
-  return !!label && label !== 'Normal'
+  if (label) return isAbnormalInterpretationLabel(label)
+  return !!o.refRangeAbnormal
 }
 
 /** Compute the one-line trend summary shown next to the analyte name. */
@@ -170,11 +173,8 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
                 >
                   {v.value}
                 </span>
-                {v.interpretationLabel && v.interpretationStyle && (
-                  <span className={cn("inline-flex items-center rounded-full px-1 text-[0.625rem]", v.interpretationStyle)}>
-                    {v.interpretationLabel}
-                  </span>
-                )}
+                {/* Interpretation label chip intentionally NOT rendered — abnormal
+                    is shown by red value text only (per user, no badges). */}
                 {v.referenceText && (
                   <span className="text-muted-foreground/80 text-[0.625rem]">{v.referenceText}</span>
                 )}

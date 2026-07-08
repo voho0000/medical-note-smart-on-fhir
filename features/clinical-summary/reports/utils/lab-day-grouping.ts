@@ -30,7 +30,7 @@ import {
   type LabCategory,
 } from '@/src/shared/utils/lab-categories'
 import { getAnalyteLabel, getAnalyteCanonicalKey } from '@/src/shared/utils/lab-normalize'
-import { getInterpretationTag, checkReferenceRangeAbnormal } from './interpretation-helpers'
+import { isObservationAbnormal } from './interpretation-helpers'
 import type { Observation, Row } from '../types'
 
 const CHEM_CATEGORY = LAB_CATEGORIES.find((c) => c.id === 'chem') ?? null
@@ -145,15 +145,13 @@ export function countAbnormalInRows(rows: Row[]): number {
   let count = 0
   for (const row of rows) {
     for (const o of row.obs || []) {
-      const tag = getInterpretationTag(o.interpretation)
-      if ((tag && tag.label !== 'Normal') || checkReferenceRangeAbnormal(o)) {
+      if (isObservationAbnormal(o)) {
         count++
         continue
       }
       if (Array.isArray(o.component)) {
         for (const c of o.component as Observation[]) {
-          const ctag = getInterpretationTag(c.interpretation)
-          if ((ctag && ctag.label !== 'Normal') || checkReferenceRangeAbnormal(c)) {
+          if (isObservationAbnormal(c)) {
             count++
             break
           }
