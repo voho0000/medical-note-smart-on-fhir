@@ -239,7 +239,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // clinician's eye jumps to a different virus.
     preferredOrder: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'HBEAG', 'ANTI-HBE', 'HBCAG', 'ANTI-HCV'],
     codes: ['HBSAG', 'HBS AG', 'HBS-AG', 'ANTI-HBS', 'HBCAG', 'HBC AG', 'HBC-AG', 'ANTI-HBC', 'HBEAG', 'HBE AG', 'HBE-AG', 'ANTI-HBE', 'ANTI-HCV'],
-    loincCodes: ['5195-3', '5193-8', '13954-3', '13955-0', '13499-9', '22322-2', '16934-2'],
+    // HBsAg has 3 LOINCs — Presence(5195-3) / quantitative Units-vol(5196-1) /
+    // RIA(5197-9); all three already resolve to HBSAG in LOINC_TO_CANONICAL, so
+    // this loincCodes list must carry them all or a quantitative-HBsAg result
+    // (NHI 14032C → 5196-1, COI value) falls through to 「其他」 (drift found
+    // 2026-07-08 on a real 健保存摺 bundle).
+    loincCodes: ['5195-3', '5196-1', '5197-9', '5193-8', '13954-3', '13955-0', '13499-9', '22322-2', '16934-2'],
     pinnedColumns: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HCV'],
   },
   {
