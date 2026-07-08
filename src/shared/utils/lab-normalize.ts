@@ -3,6 +3,14 @@
 // (e.g. "S.G.O.T (AST)" vs "SGOT (AST)") resolve to the same canonical key.
 
 export const TEST_ALIASES: Record<string, string> = {
+  // Viral antigen / serology (NHI 14065C/14066C/14084C 病毒抗原, 12020C 黴漿菌).
+  // 健保存摺 ships these with NO LOINC and inconsistent text (English / Chinese /
+  // double-spaced), so alias every observed form to a clean canonical key.
+  // Text-alias-only path per the long-tail-analyte SOP.
+  'INF A AG:': 'FLU-A-AG', 'INF A AG': 'FLU-A-AG', INFAAG: 'FLU-A-AG', 'INFLUENZA A AG': 'FLU-A-AG', 'INFLUENZA A': 'FLU-A-AG', '流行性感冒A型病毒抗原': 'FLU-A-AG',
+  'INF B AG:': 'FLU-B-AG', 'INF B AG': 'FLU-B-AG', INFBAG: 'FLU-B-AG', 'INFLUENZA B AG': 'FLU-B-AG', 'INFLUENZA B': 'FLU-B-AG', '流行性感冒B型病毒抗原': 'FLU-B-AG',
+  'COVID AG': 'COVID-AG', COVIDAG: 'COVID-AG', 'SARS-COV-2 AG': 'COVID-AG', '新型冠狀病毒抗原檢測': 'COVID-AG', '新型冠狀病毒抗原': 'COVID-AG',
+  'MYCOPLASMA IGM': 'MYCOPLASMA-IGM', MYCOPLASMAIGM: 'MYCOPLASMA-IGM', '肺炎黴漿菌抗體試驗': 'MYCOPLASMA-IGM',
   // Creatinine
   CREATININE: 'CREA', CREAT: 'CREA', 'CREAT.': 'CREA', CREA: 'CREA',
   // Hemoglobin / Hematocrit
@@ -550,6 +558,11 @@ export function normalizeTestName(raw: string): { stripped: string; collapsed: s
 // CANONICAL_KEYS is defined further down — after LOINC_TO_CANONICAL — so it
 // can spread that map's values too.
 export const CANONICAL_DISPLAY: Record<string, string> = {
+  // Viral antigen / serology column headers (compact, read the same in zh/en).
+  'FLU-A-AG': 'Flu A Ag',
+  'FLU-B-AG': 'Flu B Ag',
+  'COVID-AG': 'COVID Ag',
+  'MYCOPLASMA-IGM': 'Myco IgM',
   'APTT-RATIO': 'APTT-ratio',
   // CK-MB is universally hyphenated clinically; the canonical key stays 'CKMB'
   // (sort/match/search) but the column header reads 'CK-MB'.

@@ -366,6 +366,21 @@ export const LAB_CATEGORIES: LabCategory[] = [
     ],
     pinnedColumns: ['PH', 'PCO2', 'PO2', 'HCO3', 'BE', 'SO2', 'FIO2'],
   },
+  {
+    id: 'serology',
+    // Viral antigen / serology ordered on a respiratory / infection workup
+    // (流感 A/B、新冠抗原、黴漿菌 IgM). 健保存摺 ships these WITHOUT LOINC, so
+    // categorise by NHI 醫令 code (14065C/14066C/14084C/12020C) — the reliable
+    // identifier (code.text is inconsistent). Analyte canonicalisation +
+    // display labels live in lab-normalize (TEST_ALIASES / CANONICAL_DISPLAY).
+    // hiddenByDefault: a minority panel — surfaced via 「查看更多」only when the
+    // patient actually has it, no persistently-empty tab for routine labs.
+    // No pinnedColumns (so the tab is nonEmpty ONLY when real data exists);
+    // preferredOrder just fixes column order when it does.
+    preferredOrder: ['FLU-A-AG', 'FLU-B-AG', 'COVID-AG', 'MYCOPLASMA-IGM'],
+    codes: ['FLU-A-AG', 'FLU-B-AG', 'COVID-AG', 'MYCOPLASMA-IGM', '14065C', '14066C', '14084C', '12020C'],
+    hiddenByDefault: true,
+  },
 ]
 
 function normalize(s: string): string {

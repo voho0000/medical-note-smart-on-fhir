@@ -641,6 +641,7 @@ export const en = {
       tumor: 'Tumor',
       urine: 'Urine',
       bloodgas: 'BG',
+      serology: 'Serology',
       // Catch-all for labs not in the five main panels — keeps
       // uncategorised results from rendering under the previous group's
       // header in the visit-history detail view.
