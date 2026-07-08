@@ -257,6 +257,26 @@ import MedicalSummaryFeature from '@/features/medical-summary/Feature'
 
 ---
 
+### 11. Report Interpretation（報告 AI 翻譯解讀）
+**Entry Point:** `@/features/report-interpretation`
+
+```typescript
+import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
+```
+
+不是右側面板分頁，而是內嵌在報告／文件卡片標頭的小型子功能——每則報告可一鍵生成**忠實中譯 ＋ 白話解讀**（重點、注意事項），面板顯示在原文**上方**（民眾預設只看得懂上半段，原文仍在下方供對照，非跳轉 modal）。
+
+**功能**：
+- **隨選生成、不預先耗用額度**：按鈕按下才呼叫 AI；zustand store 依 `reportId::audience::locale::contentSig` 快取，同一報告在不同呈現位置（列表內／右側面板 dock）共用同一份結果，不重複計費
+- **忠實翻譯優先**：譯文是嚴格的忠實轉譯防火牆，解釋只出現在「解讀」欄位（防幻覺）；直接把「該問醫師的問題」折成白話答案，**不**輸出「建議詢問醫師」清單
+- 雙受眾：醫師／民眾皆可用（醫師可代為生成給病人看），語氣依 `useAudience()` 調整；免責聲明恆常顯示、不可收合
+- **三個掛載點**：`ReportRow.tsx`（單一長文報告，如影像／病理／心電圖敘述；及帶「Report Summary」敘述的結構化 panel 報告，如病理報告文字＋切片/biomarker 結果列）、`DocumentSummaryCard.tsx`（出院病摘／IPS 文件）、`MultiRegionStudyCard.tsx` 的 `NarrativeSubCard`（健保碼共用卡內的子報告）
+- **向右展開同步**：文件／報告 dock 到右側面板時，同一顆按鈕與快取結果照樣可用（`autoGenerate={false}`，避免面板一開就自動耗用額度），內嵌卡與 dock 檢視不會重複顯示
+
+**架構重點**：`src/core/entities/report-interpretation.entity.ts`（Zod schema + truncated 標記）＋ `src/core/use-cases/report-interpretation/generate-report-interpretation.use-case.ts`（pinned 輕量模型、12000 字元輸入上限）＋ `src/application/hooks/report-interpretation/use-report-interpretation.hook.ts`（zustand + encrypted-cache）。累積報告的樞紐表格刻意不接（民眾已有中文俗名，表格儲存格不是好的提問單位）。
+
+---
+
 ## 🔗 依賴規則
 
 ### Features 可以依賴：
