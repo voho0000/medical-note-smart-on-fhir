@@ -2,4 +2,4 @@
 2:I[39756,["/medical-note-smart-on-fhir/_next/static/chunks/2_jabzad2w9e5.js","/medical-note-smart-on-fhir/_next/static/chunks/2tfkgro1_cxa8.js"],"default"]
 3:I[37457,["/medical-note-smart-on-fhir/_next/static/chunks/2_jabzad2w9e5.js","/medical-note-smart-on-fhir/_next/static/chunks/2tfkgro1_cxa8.js"],"default"]
 4:[]
-0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"3u36giKWAQRnP_2M162dY"}
+0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"t1C4q2pR18p-avt1dqTfT"}
