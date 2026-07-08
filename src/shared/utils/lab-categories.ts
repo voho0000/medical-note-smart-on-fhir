@@ -244,7 +244,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // this loincCodes list must carry them all or a quantitative-HBsAg result
     // (NHI 14032C → 5196-1, COI value) falls through to 「其他」 (drift found
     // 2026-07-08 on a real 健保存摺 bundle).
-    loincCodes: ['5195-3', '5196-1', '5197-9', '5193-8', '13954-3', '13955-0', '13499-9', '22322-2', '16934-2'],
+    // Anti-HBc ships as a qual/quant PAIR: 13952-7 (core Ab [Presence] →
+    // "Reactive") + 22316-4 (core Ab [Units/volume] → COI number). Both resolve
+    // to ANTI-HBC, so the pivot merges them into one cell "Reactive (0.012)"
+    // (see useLabPivot qual+quant merge). Both LOINCs must sit here or the
+    // 定性/定量 halves split into 其他.
+    loincCodes: ['5195-3', '5196-1', '5197-9', '5193-8', '13952-7', '22316-4', '13954-3', '13955-0', '13499-9', '22322-2', '16934-2'],
     pinnedColumns: ['HBSAG', 'ANTI-HBS', 'ANTI-HBC', 'ANTI-HCV'],
   },
   {

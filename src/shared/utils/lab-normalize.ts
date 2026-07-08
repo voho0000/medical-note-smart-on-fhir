@@ -350,10 +350,21 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   '2276-4':  'FERRITIN',      // NHI 12116C — Ferritin Mass/vol S/P
 
   // ── Hepatitis ─────────────────────────────────────────────
-  '5195-3':  'HBSAG',         // NHI 14030C / 14031C — HBsAg Presence S/P
-  '5196-1':  'HBSAG',         // NHI 14032C — HBsAg Mass/vol S/P
-  '5197-9':  'HBSAG',         // NHI 27033C — HBsAg RIA S/P
-  '13955-0': 'ANTI-HCV',      // NHI 14051C — HCV Ab S/P
+  '5195-3':  'HBSAG',         // HBsAg [Presence] S/P (IA)
+  '5196-1':  'HBSAG',         // HBsAg [Presence] S/P (IA) — PrThr/ordinal; a COI
+                              //   number (e.g. 0.333) is a cutoff index, NOT a
+                              //   concentration (verified loinc.org/5196-1)
+  '5197-9':  'HBSAG',         // HBsAg [Presence] S/P (RIA)
+  '5193-8':  'ANTI-HBS',      // Anti-HBs (surface Ab) [Units/volume] S/P (IA)
+  '22322-2': 'ANTI-HBS',      // Anti-HBs (surface Ab) [Presence] S — qualitative
+  '13952-7': 'ANTI-HBC',      // Anti-HBc (core Ab) [Presence] S/P (IA) — qualitative
+  '22316-4': 'ANTI-HBC',      // Anti-HBc (core Ab) [Units/volume] S — quantitative
+  '13954-3': 'HBEAG',         // HBeAg (e Ag) [Presence] S/P (IA) — qualitative
+  '13955-0': 'ANTI-HCV',      // HCV Ab S/P
+  // 22322-2 / 13954-3 already sat in hep.loincCodes (so they categorised to
+  // 肝炎) but had no canonical mapping here — meaning a Chinese-only display
+  // would land in the wrong pivot column. Mapped here so column assignment is
+  // fully LOINC-driven and language-independent. All verified at loinc.org.
 
   // ──────────────────────────────────────────────────────────
   // Added 2026-05-29 — coverage expansion based on v0.12.1

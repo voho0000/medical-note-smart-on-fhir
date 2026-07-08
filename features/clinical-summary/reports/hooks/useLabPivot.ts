@@ -32,6 +32,17 @@ function dateKey(s?: string): string | null {
   return s ? s.slice(0, 10) : null
 }
 
+// A pivot cell is "numeric" when its value parses as a finite number (the unit
+// lives in a separate field). Qualitative serology results (Reactive / Positive
+// / Negative / Trace …) are non-numeric. Drives the qualitative+quantitative
+// same-day merge in the cell-write loop.
+function isNumericCellValue(v: string | undefined): boolean {
+  if (!v) return false
+  const t = v.trim()
+  if (t === '' || t === '—') return false
+  return Number.isFinite(Number(t))
+}
+
 // Fallback reference ranges for common tests when FHIR data lacks referenceRange
 // and the source system (e.g. VGH bridge) doesn't set interpretation codes.
 // Values are typical adult ranges — verify against your lab's report header.
@@ -322,8 +333,28 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
       }
-      // If multiple observations on same day, keep the last one (could be revised result)
-      row.values.set(date, cell)
+      // Same analyte, same day: default is last-write-wins (a revised result
+      // supersedes the earlier one). EXCEPTION — a qualitative + quantitative
+      // PAIR: e.g. Anti-HBc ships both a Presence result "Reactive"
+      // (LOINC 13952-7) and a Units/volume COI number (22316-4), both resolving
+      // to the same canonical ANTI-HBC column. Neither should clobber the other;
+      // merge into one cell "Reactive (0.012)". Guarded narrowly to exactly
+      // one-numeric-one-qualitative, so serial numerics (two glucose draws in a
+      // day) still last-write-win rather than concatenating into garbage.
+      const prev = row.values.get(date)
+      const incomingNumeric = numericValue !== undefined
+      if (prev && incomingNumeric !== isNumericCellValue(prev.value)) {
+        const qual = incomingNumeric ? prev : cell
+        const quant = incomingNumeric ? cell : prev
+        row.values.set(date, {
+          value: `${qual.value} (${quant.value})`,
+          isAbnormal: !!qual.isAbnormal || !!quant.isAbnormal,
+          interpretationCode: qual.interpretationCode || quant.interpretationCode,
+          effectiveDateTime: cell.effectiveDateTime || prev.effectiveDateTime,
+        })
+      } else {
+        row.values.set(date, cell)
+      }
       if (cellUnit) {
         const ucMap = unitCount.get(mapKey)!
         ucMap.set(cellUnit, (ucMap.get(cellUnit) || 0) + 1)
