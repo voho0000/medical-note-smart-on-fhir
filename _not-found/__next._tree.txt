@@ -1,2 +1,2 @@
-:HL["/medical-note-smart-on-fhir/_next/static/chunks/1vtmi-7kg-rk9.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"VmB8Se5lD2LCZICF8yeO-"}
+:HL["/medical-note-smart-on-fhir/_next/static/chunks/0h00isk0zdxqz.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"yRXHZYQODRqWqy4ZC_4VN"}
