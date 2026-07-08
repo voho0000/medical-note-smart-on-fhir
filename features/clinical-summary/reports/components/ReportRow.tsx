@@ -10,7 +10,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
-import { getValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
+import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText } from '../utils/fhir-helpers'
 import { getInterpretationTag, checkReferenceRangeAbnormal } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
@@ -742,10 +742,12 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       )
     }
 
-    // Numeric or short text: single-row compact display
+    // Numeric or short text: single-row compact display. Falls through to a
+    // coded value (valueCodeableConcept — e.g. a qualitative "Positive" / blood
+    // type / mCODE result) so a single-obs report never shows a bare "—".
     const value = obs.valueQuantity
       ? getValueWithUnit(obs.valueQuantity)
-      : obs.valueString || '—'
+      : obs.valueString || getCodeableConceptText(obs.valueCodeableConcept) || '—'
 
     // For string results the bridge often emits a "reference range" that just
     // repeats the result verbatim (e.g. value "Target Not Detected" with ref

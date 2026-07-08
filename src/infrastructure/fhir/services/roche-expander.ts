@@ -147,6 +147,7 @@ export function expandRocheResources(entries: any[]): void {
     o?.valueCodeableConcept?.coding?.[0]?.display ||
     o?.valueString ||
     ''
+  const stageObsToRemove = new Set<any>()
   for (const res of entries) {
     if (res?.resourceType !== 'Condition' || !Array.isArray(res.stage)) continue
     const parts: string[] = []
@@ -154,21 +155,28 @@ export function expandRocheResources(entries: any[]): void {
       for (const a of Array.isArray(st?.assessment) ? st.assessment : []) {
         const group = typeof a?.reference === 'string' ? byRef.get(a.reference) : null
         if (!group) continue
-        const groupVal = obsValue(group)
-        const members = (Array.isArray(group.hasMember) ? group.hasMember : [])
-          .map((m: any) => obsValue(typeof m?.reference === 'string' ? byRef.get(m.reference) : null))
+        const memberObs = (Array.isArray(group.hasMember) ? group.hasMember : [])
+          .map((m: any) => (typeof m?.reference === 'string' ? byRef.get(m.reference) : null))
           .filter(Boolean)
+        const groupVal = obsValue(group)
+        const members = memberObs.map(obsValue).filter(Boolean)
         let s = groupVal ? `Stage ${groupVal}` : ''
         if (members.length) s += `${s ? ' ' : ''}(${members.join(' · ')})`
         if (s) parts.push(s)
-        // The stage-group Observation is now represented on the Condition, so
-        // strip its hasMember — otherwise it (alone among the staging obs, which
-        // are valueCodeableConcept-only) passes the orphan-observation filter
-        // and would surface as a duplicate report row.
-        delete group.hasMember
+        // These staging Observations are now fully represented on the Condition
+        // (as _cancerStage); drop the standalone copies so they don't surface as
+        // orphan report rows (they're valueCodeableConcept-only, which now passes
+        // the orphan filter).
+        stageObsToRemove.add(group)
+        for (const m of memberObs) stageObsToRemove.add(m)
       }
     }
     if (parts.length) res._cancerStage = parts.join('; ')
+  }
+  if (stageObsToRemove.size > 0) {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (stageObsToRemove.has(entries[i])) entries.splice(i, 1)
+    }
   }
 
   // (5) Biomarkers (ER / PR / HER2 / Ki-67 …) are pathology RESULTS, not a

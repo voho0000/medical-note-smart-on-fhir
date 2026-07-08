@@ -19,7 +19,10 @@ export function useOrphanObservations(observations: any[], seenIds: Set<string>)
       (Array.isArray(o.component) && o.component.length > 0) ||
       (Array.isArray(o.hasMember) && o.hasMember.length > 0) ||
       !!o.valueQuantity ||
-      !!o.valueString
+      !!o.valueString ||
+      // Coded-only results (valueCodeableConcept — e.g. blood type, mCODE tumour
+      // markers) deserve a row too, not just numeric/string values.
+      !!o.valueCodeableConcept
     )
 
     // Group by encounter + date + raw code.text. We use the raw text (not the
