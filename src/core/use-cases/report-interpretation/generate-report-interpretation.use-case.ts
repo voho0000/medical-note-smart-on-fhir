@@ -9,6 +9,8 @@ import type { AiMessage } from '@/src/core/entities/ai.entity'
 import {
   ReportInterpretationSchema,
   type ReportInterpretation,
+  type ReportInterpretationCoverage,
+  type ReportInterpretationMode,
 } from '@/src/core/entities/report-interpretation.entity'
 
 // Same fast, cheap, clean-JSON model the safety scan pinned after the head-to-
@@ -21,11 +23,28 @@ export const REPORT_INTERPRETATION_MODEL_ID = 'gemini-3.1-flash-lite'
 // tell the user the tail wasn't interpreted (better than silently dropping it —
 // see [[feedback_no_masking_bridge_bugs]] spirit: never hide a limitation).
 export const REPORT_INPUT_CHAR_CAP = 12000
+export const LONG_DOCUMENT_INPUT_CHAR_CAP = 20000
 
-const SCHEMA_HINT =
+export interface PreparedReportText {
+  text: string
+  truncated: boolean
+  coverage: ReportInterpretationCoverage
+  mode: ReportInterpretationMode
+}
+
+const LONG_DOCUMENT_OMISSION_MARKER =
+  '\n\n[...中間部分因文件過長未送入 AI；以下接文件後段 excerpt...]\n\n'
+
+const STANDARD_SCHEMA_HINT =
   '{"translation": "<faithful, COMPLETE translation of the report into the target language; markdown ok>", ' +
   '"summary": "<one or two sentences: what this exam / document is checking>", ' +
   '"findings": "<the report\'s actual findings, in plain everyday language; markdown ok>", ' +
+  '"watchFor": "<optional, gentle: what is worth keeping an eye on — omit if nothing>"}'
+
+const LONG_DOCUMENT_SCHEMA_HINT =
+  '{"translation": "<key translated passages / digest from the long document, NOT a complete line-by-line translation; markdown ok>", ' +
+  '"summary": "<one or two sentences: what this document is>", ' +
+  '"findings": "<the clinically important points from the available document text, in plain everyday language; markdown ok>", ' +
   '"watchFor": "<optional, gentle: what is worth keeping an eye on — omit if nothing>"}'
 
 // The single most important rule: the translation is the source of truth the
@@ -59,7 +78,7 @@ const SYSTEM_MEDICAL =
   'You are a clinical assistant helping a healthcare professional read ONE clinical report. ' +
   'Produce a faithful translation plus a concise, professional interpretation. ' +
   'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
-  SCHEMA_HINT +
+  STANDARD_SCHEMA_HINT +
   '\n\nRules: Keep "summary" to what the study/document is; put the substantive read in "findings" using clinical language; keep it tight.' +
   FAITHFUL_TRANSLATION_RULE +
   SAFETY_RULE +
@@ -72,12 +91,45 @@ const SYSTEM_PATIENT =
   'You are helping a patient (a layperson, NOT a clinician) understand ONE of their own clinical reports that they cannot read — it may be in English and full of medical jargon. ' +
   'Give them a faithful translation into their language AND a calm, plain-language explanation of what it means. ' +
   'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
-  SCHEMA_HINT +
+  STANDARD_SCHEMA_HINT +
   '\n\nRules: Write "summary", "findings", "watchFor" and "questions" in plain, everyday language a non-medical person understands; expand or avoid jargon. ' +
   '"summary" says, in one or two friendly sentences, what this exam or document was checking and why it is usually done. ' +
   '"findings" explains what the report actually found in plain words — translate each medical term into what it means for the body, not just a dictionary gloss, and directly answer what a layperson would naturally wonder about each finding. ' +
   '"watchFor" (optional) gently notes anything routinely worth keeping an eye on; OMIT it entirely if the report is unremarkable rather than inventing a worry. ' +
   FAITHFUL_TRANSLATION_RULE +
+  SAFETY_RULE +
+  ANSWER_DONT_ASK_RULE +
+  NO_POSITIONAL_RULE
+
+const LONG_DOCUMENT_RULE =
+  ' This is a LONG clinical document such as a discharge summary, not a short report. ' +
+  'The input may contain the complete document OR selected beginning/ending excerpts separated by an omission marker. ' +
+  'Do NOT pretend this is a complete line-by-line translation when an omission marker is present. ' +
+  'In "translation", provide a useful KEY TRANSLATION / digest of the clinically important available content: admission/discharge diagnoses, reason for admission, hospital course, major tests/procedures, treatment, discharge plan, and medications if present. ' +
+  'Skip boilerplate demographics and administrative table noise unless it changes clinical meaning. ' +
+  'If a middle portion was omitted, use only the provided text and do not infer missing details.'
+
+const SYSTEM_LONG_DOCUMENT_MEDICAL =
+  'You are a clinical assistant helping a healthcare professional read ONE long clinical document. ' +
+  'Produce a concise key translation/digest plus a professional interpretation. ' +
+  'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
+  LONG_DOCUMENT_SCHEMA_HINT +
+  '\n\nRules: Keep "summary" to what the document is; put the substantive clinical course and takeaways in "findings"; keep it tight.' +
+  LONG_DOCUMENT_RULE +
+  SAFETY_RULE +
+  ANSWER_DONT_ASK_RULE +
+  NO_POSITIONAL_RULE
+
+const SYSTEM_LONG_DOCUMENT_PATIENT =
+  'You are helping a patient (a layperson, NOT a clinician) understand ONE long clinical document, such as a discharge summary. ' +
+  'Give them a calm key translation/digest into their language AND a plain-language explanation of what the available text says. ' +
+  'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
+  LONG_DOCUMENT_SCHEMA_HINT +
+  '\n\nRules: Write "summary", "findings" and "watchFor" in plain, everyday language a non-medical person understands; expand or avoid jargon. ' +
+  '"summary" says what kind of document this is and what situation it describes. ' +
+  '"findings" explains the important clinical story from the available text in a way a patient can understand. ' +
+  '"watchFor" (optional) gently notes anything routinely worth confirming at follow-up; OMIT it if there is nothing useful to add. ' +
+  LONG_DOCUMENT_RULE +
   SAFETY_RULE +
   ANSWER_DONT_ASK_RULE +
   NO_POSITIONAL_RULE
@@ -92,24 +144,66 @@ export interface GenerateReportInterpretationInput {
   locale: 'en' | 'zh-TW'
   /** Tailors tone: layperson explanation vs concise clinical read. */
   audience?: 'medical' | 'patient'
+  /** Long documents use digest mode instead of pretending to translate every
+   *  line of a large discharge summary. Defaults to standard report mode. */
+  mode?: ReportInterpretationMode
 }
 
 /** Clamp the report text to the input cap. Returned separately so the caller can
  *  record whether truncation happened (for the card's notice + the cache key). */
 export function clampReportText(text: string): { text: string; truncated: boolean } {
+  const prepared = prepareReportText(text, 'standard')
+  return { text: prepared.text, truncated: prepared.truncated }
+}
+
+export function prepareReportText(
+  text: string,
+  mode: ReportInterpretationMode = 'standard',
+): PreparedReportText {
   const clean = (text ?? '').trim()
-  if (clean.length <= REPORT_INPUT_CHAR_CAP) return { text: clean, truncated: false }
-  return { text: clean.slice(0, REPORT_INPUT_CHAR_CAP), truncated: true }
+  if (mode !== 'long-document') {
+    if (clean.length <= REPORT_INPUT_CHAR_CAP) {
+      return { text: clean, truncated: false, coverage: 'full', mode }
+    }
+    return {
+      text: clean.slice(0, REPORT_INPUT_CHAR_CAP),
+      truncated: true,
+      coverage: 'partial',
+      mode,
+    }
+  }
+
+  if (clean.length <= LONG_DOCUMENT_INPUT_CHAR_CAP) {
+    return { text: clean, truncated: false, coverage: 'full', mode }
+  }
+
+  const available = Math.max(1000, LONG_DOCUMENT_INPUT_CHAR_CAP - LONG_DOCUMENT_OMISSION_MARKER.length)
+  const headLength = Math.floor(available * 0.6)
+  const tailLength = available - headLength
+  return {
+    text: `${clean.slice(0, headLength)}${LONG_DOCUMENT_OMISSION_MARKER}${clean.slice(-tailLength)}`,
+    truncated: true,
+    coverage: 'long-document-digest',
+    mode,
+  }
 }
 
 export class GenerateReportInterpretationUseCase {
   buildMessages(input: GenerateReportInterpretationInput): AiMessage[] {
-    const system = input.audience === 'patient' ? SYSTEM_PATIENT : SYSTEM_MEDICAL
+    const mode = input.mode ?? 'standard'
+    const system =
+      mode === 'long-document'
+        ? input.audience === 'patient'
+          ? SYSTEM_LONG_DOCUMENT_PATIENT
+          : SYSTEM_LONG_DOCUMENT_MEDICAL
+        : input.audience === 'patient'
+          ? SYSTEM_PATIENT
+          : SYSTEM_MEDICAL
     const lang =
       input.locale === 'zh-TW'
         ? '\n\nTarget language: write "translation" AND every interpretation field in Traditional Chinese (繁體中文).'
         : '\n\nTarget language: write "translation" AND every interpretation field in English.'
-    const { text } = clampReportText(input.reportText)
+    const { text } = prepareReportText(input.reportText, mode)
     const titleLine = input.reportTitle ? `Report title: ${input.reportTitle}\n\n` : ''
     return [
       { role: 'system', content: system + lang },
@@ -122,7 +216,10 @@ export class GenerateReportInterpretationUseCase {
    * isn't usable JSON / fails schema validation. `truncated` is supplied by the
    * caller (it knows whether it clamped the input), not the model.
    */
-  parseResult(text: string, truncated: boolean): ReportInterpretation | null {
+  parseResult(
+    text: string,
+    metadata: boolean | Pick<PreparedReportText, 'truncated' | 'coverage' | 'mode'>,
+  ): ReportInterpretation | null {
     const json = extractJsonObject(text)
     if (!json) return null
     let raw: unknown
@@ -133,7 +230,11 @@ export class GenerateReportInterpretationUseCase {
     }
     const parsed = ReportInterpretationSchema.safeParse(raw)
     if (!parsed.success) return null
-    return { ...parsed.data, truncated }
+    const meta: Pick<PreparedReportText, 'truncated' | 'coverage' | 'mode'> =
+      typeof metadata === 'boolean'
+        ? { truncated: metadata, coverage: metadata ? 'partial' : 'full', mode: 'standard' }
+        : metadata
+    return { ...parsed.data, truncated: meta.truncated, coverage: meta.coverage, mode: meta.mode }
   }
 }
 

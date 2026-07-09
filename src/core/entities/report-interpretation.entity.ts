@@ -34,6 +34,8 @@ export const ReportInterpretationSchema = z.object({
   watchFor: z.string().transform(trimTo(1500)).optional(),
 })
 export type ReportInterpretationInput = z.infer<typeof ReportInterpretationSchema>
+export type ReportInterpretationMode = 'standard' | 'long-document'
+export type ReportInterpretationCoverage = 'full' | 'partial' | 'long-document-digest'
 
 /** A validated interpretation plus app-side metadata about how it was produced
  *  (so the card can show a truncation notice / the disclaimer consistently). */
@@ -42,4 +44,9 @@ export interface ReportInterpretation extends ReportInterpretationInput {
    *  leading portion was sent to the model — the card surfaces this so the user
    *  knows the tail wasn't interpreted. */
   truncated: boolean
+  /** How much of the source was available to the AI. Long discharge summaries
+   *  intentionally use digest mode instead of pretending to provide a complete
+   *  line-by-line translation of a huge document. */
+  coverage?: ReportInterpretationCoverage
+  mode?: ReportInterpretationMode
 }

@@ -26,18 +26,23 @@ function getLabels(locale: string) {
   const zh = locale === 'zh-TW'
   return {
     translationHeading: zh ? '翻譯' : 'Translation',
+    keyTranslationHeading: zh ? '重點翻譯' : 'Key translation',
     interpretHeading: zh ? '白話解讀' : 'Plain-language explanation',
     summaryLabel: zh ? '這份報告在檢查什麼' : 'What this report checks',
     findingsLabel: zh ? '主要發現' : 'Key findings',
     watchForLabel: zh ? '可以留意的地方' : 'Worth keeping an eye on',
     generating: zh ? 'AI 翻譯與解讀中…' : 'Translating and explaining…',
+    loadingCached: zh ? '讀取既有 AI 解讀…' : 'Loading saved AI explanation…',
     trigger: zh ? 'AI 翻譯解讀' : 'AI translate & explain',
     regenerate: zh ? '重新產生' : 'Regenerate',
     copy: zh ? '複製' : 'Copy',
     copied: zh ? '已複製' : 'Copied',
-    truncated: zh
+    partial: zh
       ? '報告較長，僅翻譯與解讀了前半部內容。'
       : 'This report is long — only the first part was translated and explained.',
+    longDocumentDigest: zh
+      ? '文件較長，AI 已根據前後段內容整理重點；中間未送入的原文仍請直接查看原文件。'
+      : 'This document is long, so AI summarized from the beginning and ending excerpts; please still check the omitted middle in the original document.',
     error: zh
       ? 'AI 產生失敗，請稍後再試一次。'
       : 'AI generation failed. Please try again in a moment.',
@@ -63,13 +68,23 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
   const { className, autoGenerate = true, ...hookArgs } = props
   const { locale } = useLanguage()
   const labels = getLabels(locale)
-  const { result, isGenerating, error, generate, regenerate } = useReportInterpretation(hookArgs)
+  const { result, isGenerating, error, isHydrated, generate, regenerate } =
+    useReportInterpretation(hookArgs)
 
   // Auto-generate on mount only in auto mode. generate() is a no-op if a cached
   // result already exists for this key, so this never double-bills.
   useEffect(() => {
-    if (autoGenerate) void generate()
-  }, [autoGenerate, generate])
+    if (autoGenerate && isHydrated) void generate()
+  }, [autoGenerate, isHydrated, generate])
+
+  if (!isHydrated) {
+    return (
+      <div className={cn('my-2 flex items-center gap-2 py-2 text-xs text-muted-foreground', className)}>
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        {labels.loadingCached}
+      </div>
+    )
+  }
 
   // Manual mode with nothing yet to show: a compact trigger button instead of
   // the full card, so docking a report to the right pane doesn't auto-spend an
@@ -126,15 +141,20 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
           {result.truncated && (
             <div className="flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-[0.6875rem] leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-              {labels.truncated}
+              {result.coverage === 'long-document-digest'
+                ? labels.longDocumentDigest
+                : labels.partial}
             </div>
           )}
 
-          {/* Region 1 — faithful translation */}
+          {/* Region 1 — faithful translation for standard reports; key translation
+              for long clinical documents. */}
           <section>
             <h4 className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-foreground/80">
               <Languages className="h-3.5 w-3.5 text-primary" />
-              {labels.translationHeading}
+              {result.mode === 'long-document'
+                ? labels.keyTranslationHeading
+                : labels.translationHeading}
             </h4>
             <div className="text-sm leading-relaxed text-foreground/90">
               <MarkdownRenderer content={result.translation} />

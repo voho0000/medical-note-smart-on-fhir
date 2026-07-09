@@ -26,14 +26,13 @@ import { Building2, Info, PanelRight } from 'lucide-react'
 import { FeatureCard } from '@/src/shared/components'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
-import { stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
-import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
 import { HtmlDocumentRenderer, HtmlDocumentBody } from './components/HtmlDocumentRenderer'
 import { DocumentDetailDialog } from './components/DocumentDetailDialog'
 import { useDocumentSummaryStrings, makeResolveSectionLabel, type DocSummaryStrings } from './utils/strings'
+import { getDocumentPlainText } from './utils/document-text'
 import type { DocumentEntry } from './types'
 
 
@@ -133,24 +132,9 @@ function DocumentEntryCard({
   // reuses the same strip-HTML path the clinical-context builder uses, so the
   // model gets the readable document text (not sanitised HTML / base64).
   const [interpretOpen, setInterpretOpen] = useState(false)
-  const docPlainText = useMemo(() => {
-    if (entry.sourceKind === 'composition' && entry.composition) {
-      return (entry.composition.section ?? [])
-        .map((s) => {
-          const t = s.text?.div ? stripHtmlToText(s.text.div) : ''
-          if (!t) return ''
-          return s.title ? `${s.title}:\n${t}` : t
-        })
-        .filter(Boolean)
-        .join('\n\n')
-    }
-    if (entry.attachment?.data) {
-      const decoded = decodeBase64Utf8(entry.attachment.data)
-      return decoded ? stripHtmlToText(decoded) : ''
-    }
-    return ''
-  }, [entry])
+  const docPlainText = useMemo(() => getDocumentPlainText(entry), [entry])
   const canInterpret = docPlainText.trim().length > 0
+  const interpretationMode = entry.isDischargeSummary ? 'long-document' : 'standard'
 
   // 向右展開 — dock the full document (the same content the maximize dialog
   // shows) in the right pane to read it beside the list.
@@ -181,6 +165,7 @@ function DocumentEntryCard({
               reportId={sourceId}
               reportText={docPlainText}
               reportTitle={entry.typeLabel}
+              mode={interpretationMode}
               autoGenerate={false}
             />
           )}
@@ -301,6 +286,16 @@ function DocumentEntryCard({
             entry={entry}
             strings={strings}
             resolveSectionLabel={resolveSectionLabel}
+            interpretation={
+              canInterpret
+                ? {
+                    reportId: sourceId,
+                    reportText: docPlainText,
+                    reportTitle: entry.typeLabel,
+                    mode: interpretationMode,
+                  }
+                : undefined
+            }
           />
         </div>
       </div>
@@ -352,6 +347,7 @@ function DocumentEntryCard({
           reportId={`doc:${entry.id}`}
           reportText={docPlainText}
           reportTitle={entry.typeLabel}
+          mode={interpretationMode}
         />
       )}
 

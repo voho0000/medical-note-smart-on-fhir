@@ -3,6 +3,7 @@
 // inline (向下展開) or in the right-pane detail slot (向右展開).
 "use client"
 
+import { useMemo } from "react"
 import { EncounterObservationCard } from "./EncounterObservationCard"
 import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
 import { AnalyteTrendRow } from "./AnalyteTrendRow"
@@ -10,7 +11,8 @@ import { MedTrendRow } from "./MedTrendRow"
 import { EncounterSection } from "./EncounterSection"
 import { DocumentDetailDialog } from "@/features/clinical-summary/document-summary/components/DocumentDetailDialog"
 import { ReportRow as ClinicalReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
-import { useDocumentSummaryStrings, makeResolveSectionLabel } from "@/features/clinical-summary/document-summary/utils/strings"
+import { useDocumentSummaryStrings, makeResolveSectionLabel, type DocSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
+import { getDocumentPlainText } from "@/features/clinical-summary/document-summary/utils/document-text"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -68,24 +70,12 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
           </div>
           <div className="grid gap-2">
             {docs.map((doc) => (
-              <div
+              <VisitLinkedDocumentRow
                 key={doc.id}
-                className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 shadow-sm"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-foreground">{doc.typeLabel}</div>
-                  {(doc.subtitle || doc.institution) && (
-                    <div className="truncate text-xs text-muted-foreground">
-                      {doc.subtitle || doc.institution}
-                    </div>
-                  )}
-                </div>
-                <DocumentDetailDialog
-                  entry={doc}
-                  strings={docStrings}
-                  resolveSectionLabel={resolveDocSectionLabel}
-                />
-              </div>
+                doc={doc}
+                docStrings={docStrings}
+                resolveSectionLabel={resolveDocSectionLabel}
+              />
             ))}
           </div>
         </div>
@@ -190,6 +180,50 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
           </div>
         </EncounterSection>
       ) : null}
+    </div>
+  )
+}
+
+interface VisitLinkedDocumentRowProps {
+  doc: DocumentEntry
+  docStrings: DocSummaryStrings
+  resolveSectionLabel: (i18nKey: string) => string | null
+}
+
+function VisitLinkedDocumentRow({
+  doc,
+  docStrings,
+  resolveSectionLabel,
+}: VisitLinkedDocumentRowProps) {
+  const docPlainText = useMemo(() => getDocumentPlainText(doc), [doc])
+  const canInterpret = docPlainText.trim().length > 0
+  const sourceId = `doc:${doc.id}`
+
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 shadow-sm">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-foreground">{doc.typeLabel}</div>
+        {(doc.subtitle || doc.institution) && (
+          <div className="truncate text-xs text-muted-foreground">
+            {doc.subtitle || doc.institution}
+          </div>
+        )}
+      </div>
+      <DocumentDetailDialog
+        entry={doc}
+        strings={docStrings}
+        resolveSectionLabel={resolveSectionLabel}
+        interpretation={
+          canInterpret
+            ? {
+                reportId: sourceId,
+                reportText: docPlainText,
+                reportTitle: doc.typeLabel,
+                mode: doc.isDischargeSummary ? 'long-document' : 'standard',
+              }
+            : undefined
+        }
+      />
     </div>
   )
 }

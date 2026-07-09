@@ -15,8 +15,10 @@
 import { useState } from "react"
 import { Building2, FileText, Maximize2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ReportInterpretationButton, ReportInterpretationPanel } from "@/features/report-interpretation"
 import { CompositionRenderer } from "./CompositionRenderer"
 import { HtmlDocumentBody } from "./HtmlDocumentRenderer"
+import type { ReportInterpretationMode } from "@/src/core/entities/report-interpretation.entity"
 import type { DocumentEntry } from "../types"
 
 interface DocumentDetailDialogProps {
@@ -40,6 +42,12 @@ interface DocumentDetailDialogProps {
     openInDialog: string
   }
   resolveSectionLabel: (i18nKey: string) => string | null
+  interpretation?: {
+    reportId: string
+    reportText: string
+    reportTitle: string
+    mode?: ReportInterpretationMode
+  }
 }
 
 function formatDate(iso?: string): string {
@@ -59,8 +67,10 @@ export function DocumentDetailDialog({
   entry,
   strings,
   resolveSectionLabel,
+  interpretation,
 }: DocumentDetailDialogProps) {
   const [open, setOpen] = useState(false)
+  const [interpretOpen, setInterpretOpen] = useState(false)
 
   const periodStr = formatPeriod(entry.period)
   const dateStr = formatDate(entry.date)
@@ -121,20 +131,36 @@ export function DocumentDetailDialog({
               <span>{entry.primaryDiagnosis.text}</span>
             </div>
           )}
-          {headerParts.length > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {entry.institution && (
-                <span className="inline-flex items-center gap-1">
-                  <Building2 className="h-3 w-3 shrink-0" aria-hidden />
-                  {entry.institution}
-                </span>
+          {(headerParts.length > 0 || interpretation) && (
+            <div className="flex flex-wrap items-center gap-2 pr-8">
+              {headerParts.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {entry.institution && (
+                    <span className="inline-flex items-center gap-1">
+                      <Building2 className="h-3 w-3 shrink-0" aria-hidden />
+                      {entry.institution}
+                    </span>
+                  )}
+                  {entry.institution && (periodStr || dateStr) && (
+                    <span className="select-none">·</span>
+                  )}
+                  {periodStr ? (
+                    <span className="tabular-nums">{periodStr}</span>
+                  ) : dateStr ? (
+                    <span className="tabular-nums">{dateStr}</span>
+                  ) : null}
+                </div>
               )}
-              {entry.institution && (periodStr || dateStr) && <span className="select-none">·</span>}
-              {periodStr ? (
-                <span className="tabular-nums">{periodStr}</span>
-              ) : dateStr ? (
-                <span className="tabular-nums">{dateStr}</span>
-              ) : null}
+              {interpretation && (
+                <ReportInterpretationButton
+                  active={interpretOpen}
+                  onToggle={(e) => {
+                    e.stopPropagation()
+                    setInterpretOpen((value) => !value)
+                  }}
+                  className="ml-auto"
+                />
+              )}
             </div>
           )}
         </DialogHeader>
@@ -154,6 +180,15 @@ export function DocumentDetailDialog({
             wrapping the body in another collapsible adds visual noise the
             user has to dismiss every time they open a document. */}
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+          {interpretation && interpretOpen && (
+            <ReportInterpretationPanel
+              reportId={interpretation.reportId}
+              reportText={interpretation.reportText}
+              reportTitle={interpretation.reportTitle}
+              mode={interpretation.mode}
+              className="mb-4"
+            />
+          )}
           {entry.sourceKind === 'composition' && entry.composition ? (
             <CompositionRenderer
               composition={entry.composition}
