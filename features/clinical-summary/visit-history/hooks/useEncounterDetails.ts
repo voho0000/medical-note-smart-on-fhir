@@ -1,6 +1,8 @@
 import { useMemo } from "react"
 import { getReferenceId, getCodeText, getMedicationNameLocalized, formatDateTime, valueWithUnit, refRangeText, getInterpTag } from "../utils/formatters"
-import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
+import { checkReferenceRangeAbnormal, isAbnormalInterpretationLabel, isReferenceRangeAssessmentUnavailable } from "@/features/clinical-summary/reports/utils/interpretation-helpers"
+import { getCodeableConceptText, getConceptText } from "@/features/clinical-summary/reports/utils/fhir-helpers"
+import { inferGroupFromCategory } from "@/features/clinical-summary/reports/utils/grouping-helpers"
 import { isChronicPrescription } from "@/features/clinical-summary/medications/utils/fhir-helpers"
 import { getAnalyteDisplayForObs, getAnalyteLabel, getAnalyteCanonicalKey, type DisplayLang } from "@/src/shared/utils/lab-normalize"
 import {
@@ -9,6 +11,8 @@ import {
   categorizeObservation,
   compareTestsByPreferred,
 } from "@/src/shared/utils/lab-categories"
+import { decodeBase64Utf8 } from "@/src/shared/utils/base64.utils"
+import type { Observation, ReportImage, Row } from "@/features/clinical-summary/reports/types"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
 import type { EncounterMedication, EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
@@ -57,6 +61,7 @@ export type EncounterReport = {
   conclusion: string
   effectiveDateTime?: string
   status?: string
+  row: Row
 }
 
 export type EncounterTestGroup = {
@@ -171,6 +176,7 @@ const toEncounterObservation = (
           interpretationStyle: componentInterpretation?.style,
           referenceText: refRangeText(component?.referenceRange),
           refRangeAbnormal: checkReferenceRangeAbnormal(component),
+          refRangeUnassessed: isReferenceRangeAssessmentUnavailable(component),
         }
       })
     : []
@@ -185,6 +191,7 @@ const toEncounterObservation = (
     interpretationStyle: interpretation?.style,
     referenceText,
     refRangeAbnormal: checkReferenceRangeAbnormal(observation),
+    refRangeUnassessed: isReferenceRangeAssessmentUnavailable(observation),
     effectiveDateTime: observation?.effectiveDateTime,
     status: observation?.status,
     source,
@@ -284,6 +291,107 @@ function detectMultiDay(tests: EncounterObservation[]): boolean {
     if (days.size >= 2) return true
   }
   return false
+}
+
+function getDiagnosticReportInstitution(report: any): string | undefined {
+  return report?._observations?.[0]?.performer?.[0]?.display
+    || report?.performer?.[0]?.display
+    || undefined
+}
+
+function getDiagnosticReportDate(report: any): string | undefined {
+  return report?.effectiveDateTime || report?.issued
+}
+
+function getDiagnosticReportCategoryText(report: any): string {
+  const category = report?.category
+  const text = Array.isArray(category)
+    ? category.map((c: any) => getCodeableConceptText(c)).filter((s: string) => s && s !== '—').join(', ')
+    : getCodeableConceptText(category)
+  return text && text !== '—' ? text : 'Report'
+}
+
+function collectReportPayload(report: any): { text: string; images: ReportImage[] } {
+  const parts: string[] = []
+  const images: ReportImage[] = []
+
+  if (typeof report?.conclusion === 'string' && report.conclusion.trim()) {
+    parts.push(report.conclusion.trim())
+  }
+
+  const conclusionCodes = getConceptText(report?.conclusionCode)
+  if (conclusionCodes && conclusionCodes !== '—') {
+    parts.push(`Conclusion Codes: ${conclusionCodes}`)
+  }
+
+  if (Array.isArray(report?.note)) {
+    for (const note of report.note) {
+      if (typeof note?.text === 'string' && note.text.trim()) {
+        parts.push(note.text.trim())
+      }
+    }
+  }
+
+  if (Array.isArray(report?.presentedForm)) {
+    for (const form of report.presentedForm) {
+      const contentType = (form?.contentType || '').toLowerCase()
+      if (form?._imageRef) {
+        images.push({
+          ref: form._imageRef,
+          contentType: form.contentType || 'image/jpeg',
+          title: form.title,
+          size: form.size,
+        })
+        continue
+      }
+      if (form?.data && contentType.startsWith('image/')) {
+        images.push({
+          data: form.data,
+          contentType: form.contentType || 'image/jpeg',
+          title: form.title,
+          size: form.size,
+        })
+        continue
+      }
+      if (form?.data && contentType.startsWith('text/') && !contentType.includes('html')) {
+        try {
+          const decoded = decodeBase64Utf8(form.data).trim()
+          if (decoded) parts.push(decoded)
+        } catch {
+          // Ignore malformed attachment text; the report row still shows any
+          // conclusion/note/images that were valid.
+        }
+      }
+    }
+  }
+
+  return { text: parts.join('\n\n'), images }
+}
+
+function toEncounterReportRow(report: any, title: string, text: string, images: ReportImage[]): Row {
+  const rawDate = getDiagnosticReportDate(report)
+  const status = report?.status
+  const reportId = report?.id || `encounter-report-${Math.random().toString(36).slice(2, 10)}`
+  const summaryObservation: Observation = {
+    resourceType: 'Observation',
+    id: `dr-summary-${reportId}`,
+    code: { text: 'Report Summary' },
+    valueString: text,
+    effectiveDateTime: rawDate,
+    status,
+  } as Observation
+
+  return {
+    id: reportId,
+    title,
+    rawTitle: title,
+    meta: `${getDiagnosticReportCategoryText(report)} • ${status || '—'}`,
+    obs: [summaryObservation],
+    group: inferGroupFromCategory(report?.category),
+    institution: getDiagnosticReportInstitution(report),
+    effectiveDate: rawDate,
+    images: images.length > 0 ? images : undefined,
+  }
 }
 
 /** Group medications by drug name. Only invoked when the visit is multi-day
@@ -416,16 +524,18 @@ export function useEncounterDetails(
         // lives in `conclusion` with no member Observations, so it produced no
         // test rows above. Surface it as its own row — otherwise a linked EKG
         // etc. is invisible under the visit despite the encounter link.
-        const conclusion = (report?.conclusion || "").trim()
-        if (conclusion) {
+        const payload = collectReportPayload(report)
+        if (payload.text || payload.images.length > 0) {
           const reportId = report?.id || `${encounterId}-report-${entry.reports.length}`
           if (!entry.reports.some((r) => r.id === reportId)) {
+            const title = getCodeText(report?.code) || "Report"
             entry.reports.push({
               id: reportId,
-              title: getCodeText(report?.code) || "Report",
-              conclusion,
-              effectiveDateTime: report?.effectiveDateTime,
+              title,
+              conclusion: payload.text,
+              effectiveDateTime: getDiagnosticReportDate(report),
               status: report?.status,
+              row: toEncounterReportRow(report, title, payload.text, payload.images),
             })
           }
         }

@@ -1,4 +1,5 @@
 import { cn } from '@/src/shared/utils/cn.utils'
+import { getAuditedReferenceRangeBounds } from '@/src/shared/utils/interpretation-helpers'
 import type { ObservationHistoryItem } from '../hooks/useObservationHistory'
 import { formatNumberSmart } from '../utils/number-format.utils'
 
@@ -22,7 +23,13 @@ export function deriveStatusFromRange(
   referenceRange?: { low?: number; high?: number; text?: string }
 ): DerivedStatus {
   if (typeof value !== 'number' || !referenceRange) return null
-  const { low, high } = referenceRange
+  const bounds = getAuditedReferenceRangeBounds([{
+    low: referenceRange.low !== undefined ? { value: referenceRange.low } : undefined,
+    high: referenceRange.high !== undefined ? { value: referenceRange.high } : undefined,
+    text: referenceRange.text,
+  }])
+  if (!bounds) return null
+  const { low, high } = bounds
   if (typeof high === 'number' && value > high) return 'high'
   if (typeof low === 'number' && value < low) return 'low'
   if (typeof low === 'number' || typeof high === 'number') return 'normal'

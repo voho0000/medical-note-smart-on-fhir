@@ -3,7 +3,7 @@
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatDateTime } from "../utils/formatters"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import type { EncounterDiagnosis, EncounterReport } from "../hooks/useEncounterDetails"
+import type { EncounterDiagnosis } from "../hooks/useEncounterDetails"
 
 export type EncounterMedication = {
   id: string
@@ -135,27 +135,6 @@ export function ProcedureRow({ procedure }: { procedure: EncounterProcedure }) {
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-// Narrative diagnostic report (EKG / imaging / endoscopy / pathology): the
-// impression/finding text is the payload — rendered whitespace-preserved so the
-// bridge's multi-line 心電圖 / radiology conclusions read as sent.
-export function ReportRow({ report }: { report: EncounterReport }) {
-  const { locale } = useLanguage()
-
-  return (
-    <div className="rounded-lg border bg-background p-3 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <span className="text-sm font-semibold text-foreground">{report.title}</span>
-        {report.effectiveDateTime && (
-          <span className="text-xs text-muted-foreground">{formatDateTime(report.effectiveDateTime, locale)}</span>
-        )}
-      </div>
-      <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
-        {report.conclusion}
-      </p>
     </div>
   )
 }

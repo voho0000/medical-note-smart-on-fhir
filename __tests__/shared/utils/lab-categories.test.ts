@@ -10,6 +10,7 @@
 // that bridge has been observed to emit, so future LOINC-list pruning
 // can't quietly drop coverage.
 import {
+  CANONICAL_TO_CATEGORY,
   categorizeObservation,
   LAB_CATEGORIES,
 } from '@/src/shared/utils/lab-categories'
@@ -75,6 +76,23 @@ describe('categorizeObservation — CBC differentials', () => {
       (text) => {
         const obs = { code: { text, coding: [] }, valueQuantity: { value: 5, unit: '%' } }
         expect(categorizeObservation(obs)?.id).toBe('cbc')
+      },
+    )
+  })
+
+  describe('immature/smear CBC rows seen in visit-history lists', () => {
+    it.each(['Blast', 'Meta', 'Myelo.', 'Normobl.', 'PlasmaCell', 'Promyl.', 'PS', 'PS Auto DC'])(
+      '%s with no LOINC still categorises as cbc',
+      (text) => {
+        const obs = { code: { text, coding: [] }, valueQuantity: { value: 0, unit: '%' } }
+        expect(categorizeObservation(obs)?.id).toBe('cbc')
+      },
+    )
+
+    it.each(['BLAST', 'META-MYELOCYTE', 'MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PROMYELOCYTE', 'PS'])(
+      'canonical key %s maps back to cbc for visit-history grouping',
+      (key) => {
+        expect(CANONICAL_TO_CATEGORY.get(key)?.id).toBe('cbc')
       },
     )
   })

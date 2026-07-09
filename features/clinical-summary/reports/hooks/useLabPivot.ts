@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
 import { CANONICAL_KEYS, CANONICAL_DISPLAY, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
+import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
 
 export interface LabCell {
   value: string
@@ -43,13 +44,12 @@ function isNumericCellValue(v: string | undefined): boolean {
   return Number.isFinite(Number(t))
 }
 
-// NOTE (2026-07-08): the app-side HARDCODED_REF_RANGES table (TSH / lipids /
-// HbA1c / glucose-AC …) was REMOVED per user directive — "app 端不要有異常值判定器,
-// 都交給健康存摺自己會有,避免判錯,畢竟正常值範圍很多醫院都亂給". Abnormal flagging
-// now derives ONLY from the source's Observation.interpretation, falling back to
-// STRUCTURED referenceRange.low/high when no interpretation exists (see
-// formatValue below and src/shared/utils/interpretation-helpers.ts). The app no
-// longer invents its own normal ranges.
+// NOTE (2026-07-10): the app-side HARDCODED_REF_RANGES table (TSH / lipids /
+// HbA1c / glucose-AC …) was REMOVED per user directive. Abnormal flagging now
+// derives from the source's Observation.interpretation when present, falling
+// back only to audited source reference ranges (structured low/high or simple
+// text like "0~41" / "<5"; see src/shared/utils/interpretation-helpers.ts).
+// The app still does not invent its own normal ranges.
 
 // Exported for unit-test access; the cumulative-report cell colouring
 // depends on its isAbnormal output, so we lock it down separately from
@@ -70,34 +70,9 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   // Observation.interpretation is FHIR 0..* (array); tolerate the single-concept
   // shape too. This is the SOURCE's own verdict and is authoritative.
   const interp = obs.interpretation?.[0]?.coding?.[0]?.code || obs.interpretation?.coding?.[0]?.code
-  const hasInterp = !!interp
-  // HL7 v3 ObservationInterpretation codes that mean "this result is fine,
-  // don't flag it red." Includes:
-  //   N / NORMAL        — numeric within reference range
-  //   NEG / NEGATIVE    — qualitative serology result (no infection / no
-  //                       analyte detected); for HBsAg / Anti-HCV / etc.
-  //                       this is the *desired* outcome, not abnormal
-  //   NR / NONREACTIVE  — same as NEG; some labs use NR for ELISA-style
-  //                       immunoassays where "negative" technically means
-  //                       "non-reactive" below the cutoff
-  // Anything else (H / L / A / POS / etc.) is treated as abnormal.
-  const NORMAL_INTERP_CODES = new Set(['N', 'NORMAL', 'NEG', 'NEGATIVE', 'NR', 'NONREACTIVE'])
-  let isAbnormal = hasInterp && !NORMAL_INTERP_CODES.has(String(interp).toUpperCase())
-
-  // Range fallback — ONLY when the source shipped NO interpretation. The source
-  // interpretation is authoritative and must never be overridden by app-side
-  // range math (2026-07-08 policy; see interpretation-helpers.ts). We also read
-  // ONLY structured referenceRange.low/high — never referenceRange.text, whose
-  // formats (duplicated "[lo ~ hi][lo ~ hi]" brackets, sex/age-conditional
-  // prose) are too unreliable to judge and produced false red flags.
-  if (!hasInterp && numericValue !== undefined) {
-    const rr = obs.referenceRange?.[0]
-    if (rr) {
-      const lo = rr.low?.value, hi = rr.high?.value
-      if (lo !== undefined && numericValue < lo) isAbnormal = true
-      if (hi !== undefined && numericValue > hi) isAbnormal = true
-    }
-  }
+  // Shared abnormal policy: source interpretation wins; if absent, audited
+  // source reference ranges may flag the value.
+  const isAbnormal = isObservationAbnormal(obs)
 
   return { value, unit, numericValue, isAbnormal, interpretationCode: interp }
 }

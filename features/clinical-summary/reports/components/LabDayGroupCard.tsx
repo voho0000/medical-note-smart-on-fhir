@@ -40,6 +40,8 @@ interface LabDayGroupCardProps {
   query?: string
 }
 
+const EMPTY_GROUPED_ROWS: Row[] = []
+
 function formatDayLabel(iso?: string): string {
   if (!iso) return ''
   try {
@@ -52,7 +54,7 @@ function formatDayLabel(iso?: string): string {
 export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProps) {
   const { t } = useLanguage()
   const tr = (t as any).reports
-  const members = row.groupedRows ?? []
+  const members = row.groupedRows ?? EMPTY_GROUPED_ROWS
 
   // Auto-open when a search is active (the filtered members are exactly the
   // matches the user wants to see) or when navigation / inner-match targets a
@@ -166,7 +168,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         />
       </button>
       {open && (
-        <div className="space-y-1.5 border-t border-border/60 px-2 pb-2 pt-2">
+        <div className="space-y-0 border-t border-border/60 px-1.5 py-1.5">
           {displayRows.map((m) => (
             <ReportRow key={m.id} row={m} defaultOpen={allRowsOpen} query={query} hideMeta />
           ))}

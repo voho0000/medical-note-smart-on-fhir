@@ -3,7 +3,6 @@ import { useRef, useState, memo } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -12,7 +11,7 @@ import { useRightDetail } from "@/src/application/providers/right-detail.provide
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
 import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText } from '../utils/fhir-helpers'
-import { isObservationAbnormal } from '../utils/interpretation-helpers'
+import { isObservationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { HighlightText } from '@/src/shared/components/HighlightText'
@@ -20,6 +19,7 @@ import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { MultiRegionStudyCard } from './MultiRegionStudyCard'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
+import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 // Circular at module level (LabDayGroupCard nests ReportRow for its members)
 // but safe: `export function ReportRow` is hoisted, and the reference is only
 // dereferenced at render time, long after both modules finish initialising.
@@ -300,7 +300,7 @@ function ReportImagingDetail({ text, images, title, reportId }: { text: string; 
  *  list. */
 function ReportPanelDetail({ observations }: { observations: Observation[] }) {
   return (
-    <div className="scrollbar-thin-persistent grid h-full content-start gap-3 overflow-y-auto pr-1">
+    <div className="scrollbar-thin-persistent h-full space-y-0 overflow-y-auto pr-1">
       {observations.map((obs, i) => (
         <ObservationBlock key={obs.id ? `obs-${obs.id}` : `obs-${i}`} observation={obs} />
       ))}
@@ -427,7 +427,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // Inline-image indicator. Clicking opens the lazy lightbox. `stopProp` is set
   // when the button lives inside an AccordionTrigger so the click doesn't also
   // toggle the accordion (mirrors TrendButton).
-  const ImageButton = ({ stopProp }: { stopProp?: boolean }) => (
+  const renderImageButton = (stopProp?: boolean) => (
     <div
       onClick={(e) => {
         if (stopProp) e.stopPropagation()
@@ -467,7 +467,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     displayObs.length === 1 &&
     (!(displayObs[0].component) || displayObs[0].component.length === 0)
 
-  const TrendButton = ({ stopProp }: { stopProp?: boolean }) => (
+  const renderTrendButton = (stopProp?: boolean) => (
     <div
       onClick={(e) => {
         if (stopProp) e.stopPropagation()
@@ -510,7 +510,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     // in this dataset — they live on the badge's hover tooltip instead.
     // bridgeDupCount badge surfaces bridge-side dedup misses so the bug
     // doesn't get silently hidden by our merge (no-mask-bridge-bugs rule).
-    const HeaderRight = () => (
+    const headerRight = (
       <div className="flex items-center gap-2 shrink-0">
         {row.bridgeDupCount && row.bridgeDupCount > 0 ? <BridgeDupBadge count={row.bridgeDupCount} /> : null}
         {!hideMeta && row.institution && (
@@ -571,7 +571,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         <>
           <div
             className={cn(
-              'rounded-lg border bg-muted/40 px-3 py-2 transition-colors',
+              'rounded-md border bg-muted/40 px-2.5 py-1.5 transition-colors',
               // 向右展開 active: tint the row so it's clear which report the
               // right pane is showing.
               isReportRightActive && 'border-primary/40 bg-primary/5',
@@ -579,7 +579,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
           >
             <div
               className={cn(
-                'flex items-center justify-between gap-2 mb-1 rounded-md transition-all outline-none',
+                'mb-0.5 flex items-center justify-between gap-2 rounded-md transition-all outline-none',
                 hasText && 'cursor-pointer select-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50'
               )}
               role={hasText ? 'button' : undefined}
@@ -606,11 +606,11 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                   </TooltipTrigger>
                   <TooltipContent>{row.title}</TooltipContent>
                 </Tooltip>
-                <TrendButton />
-                {hasImages && <ImageButton />}
+                {renderTrendButton()}
+                {hasImages && renderImageButton()}
               </div>
               <div className="flex items-center gap-2">
-                <HeaderRight />
+                {headerRight}
                 {row.isPossibleDuplicate && (
                   <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
                 )}
@@ -747,13 +747,6 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       ? getValueWithUnit(obs.valueQuantity)
       : obs.valueString || getCodeableConceptText(obs.valueCodeableConcept) || '—'
 
-    // For string results the bridge often emits a "reference range" that just
-    // repeats the result verbatim (e.g. value "Target Not Detected" with ref
-    // "[Target Not Detected]"). Hide that redundant copy — it only steals width
-    // from the report name. Numeric ranges (e.g. "[0.27–4.2]") are kept.
-    const normRef = refText.replace(/[[\]]/g, '').trim()
-    const showRef = !!refText && normRef !== (obs.valueString || '').trim()
-
     // Single line by design: the row stays compact and overflow shows an
     // ellipsis. The name has priority — it gets the flexible width — while the
     // value and institution are capped/truncate first (full text on hover) and
@@ -761,114 +754,53 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     // amplification (DNA), quantitative" readable instead of collapsing to "Nu…".
     return (
       <>
-        <div
-          className={cn(
-            'flex items-center gap-x-2 rounded-lg border bg-muted/40 px-3 py-2',
-            isAbnormal && 'border-red-200 dark:border-red-800/50 bg-red-50/30 dark:bg-red-950/10'
-          )}
-        >
-          {/* Single line on every size (keeps mobile dense — more rows visible).
-              • Mobile (<md): name grows + value right-aligned; the reference
-                range is collapsed to a tap-to-reveal ⓘ (popover) so it doesn't
-                eat width or force a second line.
-              • md+: fixed ~45% name column so the value starts at a consistent
-                position across rows regardless of name length (short English
-                codes vs longer 民眾版 Chinese names); reference range shown
-                inline, filling the remaining width. Long names truncate, full
-                name on hover. */}
-          <div className="flex items-center gap-1.5 min-w-0 flex-1 md:flex-none md:basis-[45%] md:grow-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-sm font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
-              </TooltipTrigger>
-              <TooltipContent>{row.title}</TooltipContent>
-            </Tooltip>
-            <TrendButton />
-            {hasImages && <ImageButton />}
-          </div>
-          {obs.valueQuantity ? (
-            <span
-              className={cn(
-                'text-sm font-bold tabular-nums shrink-0',
-                isAbnormal ? 'text-red-600 dark:text-red-400' : 'text-foreground'
-              )}
-            >
-              {value}
-            </span>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    'text-sm font-bold shrink max-w-[9rem] truncate',
-                    isAbnormal ? 'text-red-600 dark:text-red-400' : 'text-foreground'
-                  )}
-                >
-                  {value}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{value}</TooltipContent>
-            </Tooltip>
-          )}
-          {/* Interpretation label chip intentionally NOT rendered — abnormal is
-              shown by red value text only (per user, no Normal/Abnormal badges). */}
-          {showRef && (
+        <CompactLabResultRow
+          title={row.title}
+          titleNode={<HighlightText text={row.title} query={query} />}
+          value={value}
+          abnormal={isAbnormal}
+          referenceText={refText}
+          rangeUnassessed={isReferenceRangeAssessmentUnavailable(obs)}
+          titleActions={(
             <>
-              {/* md+: inline reference, hover tooltip for the full (possibly long) text */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="hidden md:inline-block text-xs text-muted-foreground md:min-w-0 md:flex-1 truncate">{refText}</span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[min(90vw,28rem)] whitespace-normal break-words max-h-[50vh] overflow-y-auto text-xs leading-relaxed">{refText}</TooltipContent>
-              </Tooltip>
-              {/* Mobile: collapsed to a tap-to-reveal ⓘ so the row stays single-line */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="參考範圍"
-                    className="md:hidden shrink-0 -m-1 p-1 text-muted-foreground/70 hover:text-muted-foreground"
-                  >
-                    <Info className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="max-w-[min(88vw,22rem)] text-xs leading-relaxed">
-                  <div className="font-medium text-foreground">參考範圍</div>
-                  <div className="mt-0.5 whitespace-normal break-words text-muted-foreground">{refText}</div>
-                </PopoverContent>
-              </Popover>
+              {renderTrendButton()}
+              {hasImages && renderImageButton()}
             </>
           )}
-          {/* Institution + date — the compact badge shows only the date to give
-              the report name maximum width; category/status (row.meta) move to
-              the hover tooltip. Falls back to the full meta when there's no date.
-              Hidden inside a LabDayGroupCard (hideMeta) — the group header
-              already states both. */}
-          {!hideMeta && (
-            <div className="flex items-center gap-2 shrink-0">
-              {row.institution && (
-                <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[5rem]">
-                  <Building2 className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{row.institution}</span>
-                </span>
+          trailingContent={(
+            <>
+              {/* Institution + date — the compact badge shows only the date to give
+                  the report name maximum width; category/status (row.meta) move to
+                  the hover tooltip. Falls back to the full meta when there's no date.
+                  Hidden inside a LabDayGroupCard (hideMeta) — the group header
+                  already states both. */}
+              {!hideMeta && (
+                <div className="flex shrink-0 items-center gap-2">
+                  {row.institution && (
+                    <span className="inline-flex min-w-0 max-w-[5rem] items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
+                      <Building2 className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{row.institution}</span>
+                    </span>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>{metaWithDate}</TooltipContent>
+                  </Tooltip>
+                </div>
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
-                </TooltipTrigger>
-                <TooltipContent>{metaWithDate}</TooltipContent>
-              </Tooltip>
-            </div>
+              {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
+                <Badge variant="outline" className="shrink-0 text-xs font-normal tabular-nums whitespace-nowrap">
+                  {formatTimeOnly(row.effectiveDate)}
+                </Badge>
+              )}
+              {row.isPossibleDuplicate && (
+                <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400">⚠ 可能重複</span>
+              )}
+            </>
           )}
-          {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
-            <Badge variant="outline" className="text-xs font-normal whitespace-nowrap tabular-nums shrink-0">
-              {formatTimeOnly(row.effectiveDate)}
-            </Badge>
-          )}
-          {row.isPossibleDuplicate && (
-            <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
-          )}
-        </div>
+        />
         {imageLightbox}
         {trendDialogMounted && (
           <ObservationTrendDialog
@@ -940,118 +872,118 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         <AccordionItem
           value={row.id}
           className={cn(
-            'border rounded-lg bg-muted/40 px-3 transition-colors',
+            'overflow-hidden rounded-md border bg-muted/40 transition-colors',
             // 向右展開 active: tint the panel row so it's clear which one the
             // right pane is showing.
             isPanelRightActive && 'border-primary/40 bg-primary/5',
           )}
         >
-          <AccordionTrigger className="py-3">
-            <div className="flex w-full flex-col gap-1 text-left">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
-                    </TooltipTrigger>
-                    <TooltipContent>{row.title}</TooltipContent>
-                  </Tooltip>
-                  {/* Single observation that expands to components (e.g. Blood
-                      Pressure → systolic/diastolic) — surface its composite
-                      trend here. Multi-item panels (length > 1) are skipped:
-                      the dialog only trends firstObs, which would mislead.
-                      Procedures are skipped too — they're events, not values. */}
-                  {displayObs.length === 1 && row.group !== 'procedures' && <TrendButton stopProp />}
-                  {abnormalCount > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
-                      <AlertCircle className="h-3 w-3" />
-                      {abnormalCount} 異常
-                    </span>
+          <AccordionTrigger className="items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0">
+            <div className="flex min-w-0 basis-[45%] shrink-0 grow-0 items-center gap-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="truncate text-[0.8125rem] font-semibold text-foreground">
+                    <HighlightText text={row.title} query={query} />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{row.title}</TooltipContent>
+              </Tooltip>
+              {/* Single observation that expands to components (e.g. Blood
+                  Pressure → systolic/diastolic) — surface its composite
+                  trend here. Multi-item panels (length > 1) are skipped:
+                  the dialog only trends firstObs, which would mislead.
+                  Procedures are skipped too — they're events, not values. */}
+              {displayObs.length === 1 && row.group !== 'procedures' && renderTrendButton(true)}
+              {hasImages && renderImageButton(true)}
+            </div>
+            {/* "N 項" = sub-item count for a lab panel; meaningless for a
+                single procedure event, so hide it there. */}
+            {row.group !== "procedures" && (
+              <span className="shrink-0 text-[0.8125rem] font-bold tabular-nums text-foreground">
+                {displayObs.length} 項
+              </span>
+            )}
+            {abnormalCount > 0 && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                <AlertCircle className="h-3 w-3" />
+                {abnormalCount} 異常
+              </span>
+            )}
+            {/* Same-session sub-procedures grouped via Procedure.partOf —
+                tells the user this one title expands to several. */}
+            {row.group === "procedures" && (row.relatedCount ?? 0) > 0 && (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                +{row.relatedCount} 相關處置
+              </span>
+            )}
+            {/* Right cluster mirrors the single-value rows: institution inline +
+                date-only badge. Category/status (accordionMeta) live on the
+                badge's hover tooltip — no separate meta line, so nothing is
+                shown twice. */}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {!hideMeta && row.institution && (
+                <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
+                  <Building2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{row.institution}</span>
+                </span>
+              )}
+              {!hideMeta && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>{accordionMeta}</TooltipContent>
+                </Tooltip>
+              )}
+              {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
+                <Badge variant="outline" className="text-xs font-normal whitespace-nowrap tabular-nums shrink-0">
+                  {formatTimeOnly(row.effectiveDate)}
+                </Badge>
+              )}
+              {/* 「AI 翻譯解讀」— shown when this panel report carries a
+                  narrative (e.g. a pathology report with its report text +
+                  structured results). asDiv so it can nest inside the
+                  AccordionTrigger <button> without button-in-button. Hidden
+                  while docked to the right pane (which owns the card). */}
+              {panelHasNarrative && !isPanelRightActive && (
+                <ReportInterpretationButton
+                  asDiv
+                  active={interpretOpen}
+                  onToggle={(e) => {
+                    e.stopPropagation()
+                    setInterpretOpen((v) => !v)
+                  }}
+                />
+              )}
+              {/* 向右展開 — placed LAST in the right cluster so it sits just
+                  to the left of the AccordionTrigger's ▼ chevron, matching
+                  the imaging-report layout. div[role=button] (not <button>)
+                  avoids button-in-button; mousedown stopProp keeps the click
+                  from toggling the accordion. */}
+              {canExpandPanelRight && (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={openPanelRight}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openPanelRight(e)
+                    }
+                  }}
+                  title={isPanelRightActive ? '已在右側面板展開' : '在右側面板展開細項'}
+                  aria-label="在右側面板展開細項"
+                  className={cn(
+                    'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 cursor-pointer transition-colors',
+                    isPanelRightActive
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
-                  {/* Same-session sub-procedures grouped via Procedure.partOf —
-                      tells the user this one title expands to several. */}
-                  {row.group === "procedures" && (row.relatedCount ?? 0) > 0 && (
-                    <span className="inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300 shrink-0">
-                      +{row.relatedCount} 相關處置
-                    </span>
-                  )}
-                  {hasImages && <ImageButton stopProp />}
+                >
+                  <PanelRight className="h-3.5 w-3.5" />
                 </div>
-                {/* Right cluster mirrors the single-value rows: count +
-                    institution inline + date-only badge. Category/status
-                    (accordionMeta) live on the badge's hover tooltip — no
-                    separate meta line, so nothing is shown twice. */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* "N 項" = sub-item count for a lab panel; meaningless for a
-                      single procedure event, so hide it there. */}
-                  {row.group !== "procedures" && (
-                    <span className="text-xs text-muted-foreground">{displayObs.length} 項</span>
-                  )}
-                  {!hideMeta && row.institution && (
-                    <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
-                      <Building2 className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{row.institution}</span>
-                    </span>
-                  )}
-                  {!hideMeta && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{accordionDateLabel || accordionMeta}</Badge>
-                      </TooltipTrigger>
-                      <TooltipContent>{accordionMeta}</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
-                    <Badge variant="outline" className="text-xs font-normal whitespace-nowrap tabular-nums shrink-0">
-                      {formatTimeOnly(row.effectiveDate)}
-                    </Badge>
-                  )}
-                  {/* 「AI 翻譯解讀」— shown when this panel report carries a
-                      narrative (e.g. a pathology report with its report text +
-                      structured results). asDiv so it can nest inside the
-                      AccordionTrigger <button> without button-in-button. Hidden
-                      while docked to the right pane (which owns the card). */}
-                  {panelHasNarrative && !isPanelRightActive && (
-                    <ReportInterpretationButton
-                      asDiv
-                      active={interpretOpen}
-                      onToggle={(e) => {
-                        e.stopPropagation()
-                        setInterpretOpen((v) => !v)
-                      }}
-                    />
-                  )}
-                  {/* 向右展開 — placed LAST in the right cluster so it sits just
-                      to the left of the AccordionTrigger's ▼ chevron, matching
-                      the imaging-report layout. div[role=button] (not <button>)
-                      avoids button-in-button; mousedown stopProp keeps the click
-                      from toggling the accordion. */}
-                  {canExpandPanelRight && (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={openPanelRight}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          openPanelRight(e)
-                        }
-                      }}
-                      title={isPanelRightActive ? '已在右側面板展開' : '在右側面板展開細項'}
-                      aria-label="在右側面板展開細項"
-                      className={cn(
-                        'hidden md:inline-flex items-center rounded-md border px-1 py-0.5 cursor-pointer transition-colors',
-                        isPanelRightActive
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-                      )}
-                    >
-                      <PanelRight className="h-3.5 w-3.5" />
-                    </div>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
           </AccordionTrigger>
           {/* 「AI 翻譯解讀」panel — above the structured rows, shown whenever the
@@ -1064,8 +996,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
               reportTitle={row.title}
             />
           )}
-          <AccordionContent className="pb-4">
-            <div className="grid gap-3">
+          <AccordionContent className="pb-0">
+            <div className="space-y-0 border-t border-border/60">
               {displayObs.map((obs, i) => (
                 <ObservationBlock
                   key={obs.id ? `obs-${obs.id}` : `obs-${i}`}

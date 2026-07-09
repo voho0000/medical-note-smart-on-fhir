@@ -80,8 +80,33 @@ describe('useEncounterDetails — narrative reports (conclusion-only)', () => {
     const details = runReports([report({})])
     expect(details.reports).toHaveLength(1)
     expect(details.reports[0]).toMatchObject({ title: '心電圖', conclusion: 'Sinus bradycardia\nAbnormal ECG' })
+    expect(details.reports[0].row).toMatchObject({
+      title: '心電圖',
+      rawTitle: '心電圖',
+      obs: [
+        expect.objectContaining({
+          code: { text: 'Report Summary' },
+          valueString: 'Sinus bradycardia\nAbnormal ECG',
+        }),
+      ],
+    })
     // It is NOT counted as a numeric test.
     expect(details.tests).toHaveLength(0)
+  })
+
+  it('surfaces an image-only report row so the shared report UI can show images', () => {
+    const details = runReports([report({
+      conclusion: '   ',
+      presentedForm: [{ _imageRef: 'img-1', contentType: 'image/jpeg', title: 'preview.jpg', size: 1234 }],
+    })])
+    expect(details.reports).toHaveLength(1)
+    expect(details.reports[0].row.images).toEqual([
+      { ref: 'img-1', contentType: 'image/jpeg', title: 'preview.jpg', size: 1234 },
+    ])
+    expect(details.reports[0].row.obs[0]).toMatchObject({
+      code: { text: 'Report Summary' },
+      valueString: '',
+    })
   })
 
   it('ignores a report with no conclusion (nothing to show)', () => {

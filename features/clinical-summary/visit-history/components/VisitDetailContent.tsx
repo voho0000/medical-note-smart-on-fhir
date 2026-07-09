@@ -4,11 +4,12 @@
 "use client"
 
 import { EncounterObservationCard } from "./EncounterObservationCard"
-import { MedicationRow, ProcedureRow, ReportRow, DiagnosisTag } from "./EncounterCards"
+import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
 import { AnalyteTrendRow } from "./AnalyteTrendRow"
 import { MedTrendRow } from "./MedTrendRow"
 import { EncounterSection } from "./EncounterSection"
 import { DocumentDetailDialog } from "@/features/clinical-summary/document-summary/components/DocumentDetailDialog"
+import { ReportRow as ClinicalReportRow } from "@/features/clinical-summary/reports/components/ReportRow"
 import { useDocumentSummaryStrings, makeResolveSectionLabel } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
@@ -117,20 +118,20 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
             ) : undefined
           }
         >
-          <div className="space-y-3 mt-2">
+          <div className="space-y-2 mt-1.5">
             {details.testGroups.map((group, gi) => (
               <div key={group.categoryId ?? `other-${gi}`} className="space-y-1">
                 <div className="px-0.5 text-[0.6875rem] font-medium text-muted-foreground/80">
                   {group.categoryId ? categoryLabel(group.categoryId) : categoryLabel('other')}
                 </div>
                 {details.isMultiDay && group.testSeries.length > 0 ? (
-                  <div className="rounded-lg border bg-muted/40 overflow-hidden">
+                  <div className="space-y-0">
                     {group.testSeries.map((series) => (
                       <AnalyteTrendRow key={series.id} series={series} />
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-lg border bg-muted/40 divide-y overflow-hidden">
+                  <div className="space-y-0">
                     {group.tests.map((test) => (
                       <EncounterObservationCard
                         key={test.id}
@@ -152,9 +153,9 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
           count={details.reports.length}
           collapseThreshold={COLLAPSE_THRESHOLDS.procedures}
         >
-          <div className="grid gap-2 mt-2">
+          <div className="grid gap-0 mt-2">
             {details.reports.map((report) => (
-              <ReportRow key={report.id} report={report} />
+              <ClinicalReportRow key={report.id} row={report.row} defaultOpen={[]} />
             ))}
           </div>
         </EncounterSection>

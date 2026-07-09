@@ -49,10 +49,10 @@ interface ReportsTabContentProps {
 const EMPTY_OPEN_IDS: string[] = []
 
 // Initial guess for each row's height before the virtualizer measures it.
-// Most rows are single-line compact cards (~64px); a generous estimate
+// Most rows are single-line compact cards (~52px); a generous estimate
 // keeps over-rendering low at startup but the measurement step corrects
 // any drift as soon as rows are in the DOM.
-const ESTIMATED_ROW_HEIGHT = 72
+const ESTIMATED_ROW_HEIGHT = 56
 
 function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce }: ReportsTabContentProps) {
   // The navigation target opens like a search hit — the user asked to SEE
@@ -71,6 +71,7 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, de
   // returns []. See @tanstack/react-virtual issue #846 for the workaround.
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns its mutable measurement callbacks here.
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollEl,
@@ -162,7 +163,7 @@ function ReportsTabContentImpl({ value, rows, fullHeight = false, forceMount, de
                     left: 0,
                     width: '100%',
                     transform: `translateY(${virtualRow.start}px)`,
-                    paddingBottom: '8px', // matches the old space-y-2 gap
+                    paddingBottom: 0,
                   }}
                 >
                   <ReportRow row={row} defaultOpen={openIds} query={query} />

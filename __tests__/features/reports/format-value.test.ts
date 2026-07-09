@@ -113,11 +113,29 @@ describe('formatValue — isAbnormal vs interpretation code', () => {
       expect(formatValue(obs).isAbnormal).toBe(false)
     })
 
-    it('no interpretation + garbage referenceRange.text → NOT abnormal (text never parsed)', () => {
+    it('no interpretation + garbage referenceRange.text → NOT abnormal', () => {
       const obs = {
         code: { text: '白血球計數' },
         valueQuantity: { value: 5640, unit: '/uL' },
         referenceRange: [{ text: '[4180 ~ 9380][4180 ~ 9380]' }],
+      }
+      expect(formatValue(obs).isAbnormal).toBe(false)
+    })
+
+    it('no interpretation + simple referenceRange.text can flag abnormal', () => {
+      const cea = {
+        code: { text: '癌胚胎抗原檢驗 (CEA)' },
+        valueQuantity: { value: 75.68, unit: 'ng/mL' },
+        referenceRange: [{ text: '<5' }],
+      }
+      expect(formatValue(cea).isAbnormal).toBe(true)
+    })
+
+    it('no interpretation + reversed range is ignored by audit', () => {
+      const obs = {
+        code: { text: 'ALT' },
+        valueQuantity: { value: 20, unit: 'U/L' },
+        referenceRange: [{ text: '41~0' }],
       }
       expect(formatValue(obs).isAbnormal).toBe(false)
     })

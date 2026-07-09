@@ -27,6 +27,15 @@ describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
       ['嗜鹼性白血球', 'BASO'],
       ['後骨髓球', 'META-MYELOCYTE'],
       ['Meta-Myelocyte', 'META-MYELOCYTE'],
+      ['Blast', 'BLAST'],
+      ['Promyl.', 'PROMYELOCYTE'],
+      ['Myelo.', 'MYELOCYTE'],
+      ['Meta', 'META-MYELOCYTE'],
+      ['Meta.', 'META-MYELOCYTE'],
+      ['Normobl.', 'NORMOBLAST'],
+      ['PlasmaCell', 'PLASMA-CELL'],
+      ['PS', 'PS'],
+      ['PS Auto DC', 'PS'],
     ])('%s → %s', (input, expected) => {
       expect(canonicalTestKeyFromString(input)).toBe(expected)
     })
@@ -146,6 +155,7 @@ describe('CANONICAL_KEYS — column-header eligibility', () => {
 
   it.each(['NEU', 'LYM', 'MONO', 'EOS', 'BASO', 'BAND', 'WBC', 'RBC',
            'HB', 'HCT', 'PLT', 'MCV', 'MCH', 'MCHC', 'RDW',
+           'BLAST', 'PROMYELOCYTE', 'MYELOCYTE', 'META-MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PS',
            'PT', 'APTT', 'APTT-RATIO', 'INR', 'D-DIMER',
            'GLUCOSE-AC', 'GLUCOSE-FS', 'GLUCOSE'])('%s is canonical', (key) => {
     expect(CANONICAL_KEYS.has(key)).toBe(true)
@@ -159,6 +169,13 @@ describe('CANONICAL_DISPLAY — pretty column headers', () => {
 
   it('APTT-RATIO displays as "APTT-ratio"', () => {
     expect(CANONICAL_DISPLAY['APTT-RATIO']).toBe('APTT-ratio')
+  })
+
+  it('CBC immature/smear rows keep compact source-like headers', () => {
+    expect(CANONICAL_DISPLAY['PROMYELOCYTE']).toBe('Promyl.')
+    expect(CANONICAL_DISPLAY['MYELOCYTE']).toBe('Myelo.')
+    expect(CANONICAL_DISPLAY['NORMOBLAST']).toBe('Normobl.')
+    expect(CANONICAL_DISPLAY['PLASMA-CELL']).toBe('PlasmaCell')
   })
 })
 

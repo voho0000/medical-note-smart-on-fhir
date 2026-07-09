@@ -11,6 +11,7 @@
 
 import { useState } from "react"
 import { ChevronDown } from "lucide-react"
+import { CompactLabResultRow } from "@/features/clinical-summary/components/CompactLabResultRow"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { isAbnormalInterpretationLabel } from "@/src/shared/utils/interpretation-helpers"
 import type { EncounterObservation } from "./EncounterObservationCard"
@@ -104,43 +105,36 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
   // line so it sits alongside other analytes naturally.
   const isFoldable = series.values.length > 1
   const hasAnyAbnormal = series.abnormalCount > 0
+  const hasUnassessedRange = series.values.some((v) => v.refRangeUnassessed)
+  const toggleExpanded = () => {
+    if (isFoldable) setExpanded((v) => !v)
+  }
 
   return (
-    <div className="border-b border-border/40 last:border-b-0">
-      <button
-        type="button"
-        onClick={() => isFoldable && setExpanded((v) => !v)}
-        className={cn(
-          "w-full flex items-center gap-2 px-2 py-1.5 text-left transition-colors",
-          isFoldable ? "hover:bg-muted/60 cursor-pointer" : "cursor-default",
-        )}
-        aria-expanded={isFoldable ? expanded : undefined}
-      >
-        <span className="text-sm font-medium text-foreground shrink-0 min-w-[5rem]">
-          {series.title}
-        </span>
-        {isFoldable && (
-          <span className="inline-flex items-center rounded-full bg-muted/70 px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground shrink-0">
+    <div
+      className={cn(
+        "rounded-lg border bg-muted/40",
+        hasAnyAbnormal && "border-red-200 bg-red-50/30 dark:border-red-800/50 dark:bg-red-950/10",
+      )}
+    >
+      <CompactLabResultRow
+        title={series.title}
+        value={trend.primary}
+        abnormal={hasAnyAbnormal}
+        referenceText={series.values[0]?.referenceText}
+        rangeUnassessed={hasUnassessedRange}
+        valueMaxWidthClassName="max-w-[12rem]"
+        titleActions={isFoldable ? (
+          <span className="inline-flex shrink-0 items-center rounded-full bg-muted/70 px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground">
             {series.values.length}
           </span>
-        )}
-        <span
-          className={cn(
-            "text-sm tabular-nums",
-            hasAnyAbnormal ? "text-red-600 dark:text-red-400 font-semibold" : "text-foreground",
-          )}
-        >
-          {trend.primary}
-        </span>
-        {trend.flag && (
-          <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+        ) : undefined}
+        afterValue={trend.flag ? (
+          <span className="inline-flex shrink-0 items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
             ⚠ {trend.flag}
           </span>
-        )}
-        <span className="ml-auto text-xs text-muted-foreground shrink-0">
-          {series.values[0]?.referenceText}
-        </span>
-        {isFoldable && (
+        ) : undefined}
+        trailingContent={isFoldable ? (
           <ChevronDown
             className={cn(
               "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
@@ -148,37 +142,42 @@ export function AnalyteTrendRow({ series, defaultExpanded = false }: AnalyteTren
             )}
             aria-hidden
           />
+        ) : undefined}
+        role={isFoldable ? "button" : undefined}
+        tabIndex={isFoldable ? 0 : undefined}
+        ariaExpanded={isFoldable ? expanded : undefined}
+        onClick={isFoldable ? toggleExpanded : undefined}
+        onKeyDown={isFoldable ? (event) => {
+          if (!isFoldable) return
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            toggleExpanded()
+          }
+        } : undefined}
+        className={cn(
+          "border-0 bg-transparent",
+          isFoldable ? "cursor-pointer hover:bg-muted/60" : "cursor-default",
         )}
-      </button>
+      />
 
       {/* Expanded: per-day values. Each row carries its own abnormal styling
           so the eye can still pick out the bad days inside the series. */}
       {expanded && (
-        <div className="ml-2 border-l-2 border-muted pl-3 py-1 space-y-0.5">
+        <div className="space-y-0 border-t border-border/60 px-1.5 py-1.5">
           {series.values.map((v) => {
             const abn = isAbnormal(v)
             return (
-              <div
+              <CompactLabResultRow
                 key={v.id}
-                className="flex items-baseline gap-2 text-xs"
-              >
-                <span className="font-mono text-muted-foreground shrink-0 min-w-[2.5rem]">
-                  {shortDate(v.effectiveDateTime)}
-                </span>
-                <span
-                  className={cn(
-                    "tabular-nums",
-                    abn ? "text-red-600 dark:text-red-400 font-semibold" : "text-foreground",
-                  )}
-                >
-                  {v.value}
-                </span>
-                {/* Interpretation label chip intentionally NOT rendered — abnormal
-                    is shown by red value text only (per user, no badges). */}
-                {v.referenceText && (
-                  <span className="text-muted-foreground/80 text-[0.625rem]">{v.referenceText}</span>
-                )}
-              </div>
+                title={shortDate(v.effectiveDateTime) || "—"}
+                value={v.value}
+                abnormal={abn}
+                referenceText={v.referenceText}
+                rangeUnassessed={v.refRangeUnassessed}
+                titleColumnClassName="flex-none basis-[2.5rem] md:basis-[2.5rem]"
+                titleClassName="font-mono text-[0.6875rem] font-normal tabular-nums text-muted-foreground"
+                className="border-0 bg-background/70 px-2 py-1"
+              />
             )
           })}
         </div>

@@ -1,15 +1,14 @@
 // Observation Block Component - compact single-row display
 import { useState } from 'react'
-import { cn } from "@/src/shared/utils/cn.utils"
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
 import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { getInterpretationTag, checkReferenceRangeAbnormal, isInterpretationAbnormal } from '../utils/interpretation-helpers'
+import { getInterpretationTag, checkReferenceRangeAbnormal, isInterpretationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 
 interface ObservationBlockProps {
   observation: Observation
@@ -21,6 +20,7 @@ function ObsRow({
   originalValue,
   interp,
   refText,
+  rangeUnassessed,
   onTrendClick,
   isLongText,
   refRangeAbnormal,
@@ -30,6 +30,7 @@ function ObsRow({
   originalValue?: string
   interp: ReturnType<typeof getInterpretationTag>
   refText: string
+  rangeUnassessed?: boolean
   onTrendClick?: () => void
   isLongText?: boolean
   refRangeAbnormal?: boolean
@@ -39,49 +40,28 @@ function ObsRow({
   const isAbnormal = interp ? isInterpretationAbnormal(interp) : !!refRangeAbnormal
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
-      {/* Left: name + trend */}
-      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="text-sm font-medium text-foreground truncate">{name}</span>
-          </TooltipTrigger>
-          <TooltipContent>{name}</TooltipContent>
-        </Tooltip>
-        {onTrendClick && (
+    <CompactLabResultRow
+      title={name}
+      value={value}
+      abnormal={isAbnormal}
+      referenceText={refText}
+      rangeUnassessed={rangeUnassessed}
+      valueMaxWidthClassName={isLongText ? "max-w-[12rem]" : "max-w-[9rem]"}
+      className="rounded-none border-0 bg-transparent px-2.5 py-1.5 hover:bg-muted/60"
+      titleActions={onTrendClick ? (
           <button
+            type="button"
             onClick={onTrendClick}
-            className="text-muted-foreground hover:text-primary transition-colors"
+            className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
             aria-label="查看趨勢"
           >
-            <TrendingUp className="h-3.5 w-3.5" />
+            <TrendingUp className="h-4 w-4" />
           </button>
-        )}
-      </div>
-      {/* Right: value + interp + ref */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        {isLongText ? (
-          <span className="text-xs text-foreground/80 max-w-xs truncate">{value}</span>
-        ) : (
-          <span
-            className={cn('text-sm font-semibold tabular-nums', isAbnormal ? 'text-red-600 dark:text-red-400' : 'text-foreground')}
-            title={originalValue && originalValue !== value ? `原始值: ${originalValue}` : undefined}
-          >
-            {value}
-          </span>
-        )}
-        {/* Interpretation label chip intentionally NOT rendered — abnormal is
-            shown by red value text only (per user, no Normal/Abnormal badges). */}
-        {refText && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="text-xs text-muted-foreground max-w-[8rem] truncate">{refText}</span>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-[min(90vw,28rem)] whitespace-normal break-words max-h-[50vh] overflow-y-auto text-xs leading-relaxed">{refText}</TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-    </div>
+      ) : undefined}
+      trailingContent={originalValue && originalValue !== value ? (
+        <span className="sr-only">原始值: {originalValue}</span>
+      ) : undefined}
+    />
   )
 }
 
@@ -172,11 +152,12 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
           onTrendClick={!hasComponents ? () => setDialogOpen(true) : undefined}
           isLongText={isLongText}
           refRangeAbnormal={checkReferenceRangeAbnormal(observation)}
+          rangeUnassessed={isReferenceRangeAssessmentUnavailable(observation)}
         />
 
         {/* Component sub-rows */}
         {hasComponents && (
-          <div className="ml-4 border-l pl-3 mt-0.5 space-y-0">
+          <div className="ml-4 mt-0.5 space-y-0 border-l pl-1.5">
             {observation.component!.map((component, idx) => {
               const cName = getAnalyteDisplayForObs(component, audience, locale)
               const cCoded = getCodeableConceptText(component.valueCodeableConcept)
@@ -197,6 +178,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
                   interp={cInterp}
                   refText={cRef}
                   refRangeAbnormal={checkReferenceRangeAbnormal(component)}
+                  rangeUnassessed={isReferenceRangeAssessmentUnavailable(component)}
                 />
               )
             })}

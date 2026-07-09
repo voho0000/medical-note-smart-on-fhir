@@ -52,10 +52,24 @@ describe('deriveStatusFromRange — referenceRange fallback', () => {
     expect(deriveStatusFromRange(50)).toBeNull()
   })
 
-  it('returns null when referenceRange has only text (no low/high) — caller falls through', () => {
-    // referenceRange.text is deliberately NEVER parsed for abnormal detection
-    // (2026-07-08 policy — too many unsafe formats; see interpretation-helpers.ts).
-    // This helper only uses structured low/high.
-    expect(deriveStatusFromRange(50, { text: '0-100' })).toBeNull()
+  it('parses simple text ranges when structured low/high are absent', () => {
+    expect(deriveStatusFromRange(101, { text: '0-100' })).toBe('high')
+    expect(deriveStatusFromRange(100, { text: '0~100' })).toBe('normal')
+  })
+
+  it('parses simple comparator text ranges', () => {
+    expect(deriveStatusFromRange(6, { text: '<5' })).toBe('high')
+    expect(deriveStatusFromRange(4, { text: '＜5' })).toBe('normal')
+    expect(deriveStatusFromRange(4, { text: '>5' })).toBe('low')
+    expect(deriveStatusFromRange(6, { text: '>5' })).toBe('normal')
+  })
+
+  it('returns null for unsafe reversed ranges instead of flagging every value', () => {
+    expect(deriveStatusFromRange(20, { low: 41, high: 0 })).toBeNull()
+    expect(deriveStatusFromRange(20, { text: '41~0' })).toBeNull()
+  })
+
+  it('returns null for repeated bracket text ranges', () => {
+    expect(deriveStatusFromRange(5640, { text: '[4180 ~ 9380][4180 ~ 9380]' })).toBeNull()
   })
 })

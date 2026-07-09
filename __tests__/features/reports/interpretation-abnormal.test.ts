@@ -1,7 +1,7 @@
-// Regression locks for the app-wide abnormal-flag policy (2026-07-08):
+// Regression locks for the app-wide abnormal-flag policy (2026-07-10):
 //   1. Observation.interpretation (a FHIR array) is authoritative.
-//   2. Only when NO interpretation exists → structured referenceRange.low/high.
-//   3. referenceRange.text is NEVER parsed.
+//   2. Only when NO interpretation exists → audited source reference ranges.
+//   3. referenceRange.text is parsed only for simple safe forms.
 // The concrete bug: Bridge v1.3.13 A22259XXXX blood panel showed 9/10 red even
 // though every Observation.interpretation was N, because getInterpretationTag
 // couldn't read the array shape and the code fell back to parsing the garbage
@@ -10,6 +10,7 @@ import {
   getInterpretationTag,
   isInterpretationAbnormal,
   checkReferenceRangeAbnormal,
+  isReferenceRangeAssessmentUnavailable,
   isObservationAbnormal,
 } from '@/src/shared/utils/interpretation-helpers'
 
@@ -48,7 +49,7 @@ describe('isInterpretationAbnormal', () => {
   })
 })
 
-describe('checkReferenceRangeAbnormal — structured only, no text parsing', () => {
+describe('checkReferenceRangeAbnormal — audited source ranges', () => {
   it('flags value above structured high', () => {
     expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 24 }, referenceRange: [{ high: { value: 20 } }] })).toBe(true)
   })
@@ -58,11 +59,50 @@ describe('checkReferenceRangeAbnormal — structured only, no text parsing', () 
   it('within structured range → not abnormal', () => {
     expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 12 }, referenceRange: [{ low: { value: 8 }, high: { value: 20 } }] })).toBe(false)
   })
-  it('NEVER parses referenceRange.text (garbage bracket form)', () => {
+  it('ignores reversed structured ranges instead of flagging everything', () => {
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 20 }, referenceRange: [{ low: { value: 41 }, high: { value: 0 } }] })).toBe(false)
+  })
+  it('ignores referenceRange.text garbage bracket form', () => {
     expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 5640 }, referenceRange: [{ text: '[4180 ~ 9380][4180 ~ 9380]' }] })).toBe(false)
   })
-  it('NEVER parses even a clean text range', () => {
-    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 999 }, referenceRange: [{ text: '4180-9380' }] })).toBe(false)
+  it('parses simple text ranges safely', () => {
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 42 }, referenceRange: [{ text: '0~41' }] })).toBe(true)
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 41 }, referenceRange: [{ text: '0~41' }] })).toBe(false)
+  })
+  it('parses simple upper/lower bound text', () => {
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 6 }, referenceRange: [{ text: '＜5' }] })).toBe(true)
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 4 }, referenceRange: [{ text: '<5' }] })).toBe(false)
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 4 }, referenceRange: [{ text: '>5' }] })).toBe(true)
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 6 }, referenceRange: [{ text: '>5' }] })).toBe(false)
+  })
+  it('ignores reversed text ranges', () => {
+    expect(checkReferenceRangeAbnormal({ valueQuantity: { value: 20 }, referenceRange: [{ text: '41~0' }] })).toBe(false)
+  })
+})
+
+describe('isReferenceRangeAssessmentUnavailable', () => {
+  const complexAdultPedsRange = '[[0-14d]4.94-27.48 [15-30d]7.8-15.91 [31d-0.5y]6.0-14.99 [0.5y-6y]4.86-13.51 [6y-18y]3.84-11.4 [≧18y]M 3.54-9.06 F 3.54-9.06, (2019/7/1起 ≧18years 變更為 3.25-9.16)]'
+
+  it('flags complex numeric range text as unassessed, not abnormal', () => {
+    const obs = { valueQuantity: { value: 6.11 }, referenceRange: [{ text: complexAdultPedsRange }] }
+    expect(checkReferenceRangeAbnormal(obs)).toBe(false)
+    expect(isReferenceRangeAssessmentUnavailable(obs)).toBe(true)
+  })
+
+  it('does not show unassessed when a simple range was audited successfully', () => {
+    expect(isReferenceRangeAssessmentUnavailable({ valueQuantity: { value: 42 }, referenceRange: [{ text: '0~41' }] })).toBe(false)
+  })
+
+  it('does not show unassessed for no-range placeholders', () => {
+    expect(isReferenceRangeAssessmentUnavailable({ valueQuantity: { value: 0 }, referenceRange: [{ text: '[.]' }] })).toBe(false)
+  })
+
+  it('does not show unassessed when source interpretation is present', () => {
+    expect(isReferenceRangeAssessmentUnavailable({
+      valueQuantity: { value: 6.11 },
+      referenceRange: [{ text: complexAdultPedsRange }],
+      interpretation: [{ coding: [{ code: 'N' }] }],
+    })).toBe(false)
   })
 })
 
@@ -93,8 +133,12 @@ describe('isObservationAbnormal — the single authority', () => {
     expect(isObservationAbnormal({ valueQuantity: { value: 24 }, referenceRange: [{ high: { value: 20 } }] })).toBe(true)
   })
 
-  it('no interpretation + only text range → not abnormal (text never parsed)', () => {
+  it('no interpretation + unsafe text range → not abnormal', () => {
     expect(isObservationAbnormal({ valueQuantity: { value: 5640 }, referenceRange: [{ text: '[4180 ~ 9380][4180 ~ 9380]' }] })).toBe(false)
+  })
+
+  it('no interpretation + simple source text range can flag abnormal', () => {
+    expect(isObservationAbnormal({ valueQuantity: { value: 75.68 }, referenceRange: [{ text: '<5' }] })).toBe(true)
   })
 
   it('full 10-obs v1.3.13 panel (all interpretation=N) → 0 abnormal', () => {

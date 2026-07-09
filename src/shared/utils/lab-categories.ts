@@ -53,13 +53,13 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // Only canonical keys go here — variants like SEG / NEU. / LYM. are
     // dead entries because getAnalyteLabel always returns the canonical
     // (see memory/feedback_canonical_only_in_preferredorder.md).
-    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'PLT', 'MPV', 'NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC'],
+    preferredOrder: ['WBC', 'RBC', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'PLT', 'MPV', 'NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC', 'BLAST', 'PROMYELOCYTE', 'MYELOCYTE', 'META-MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PS'],
     // `codes` covers VGH short-form (WBC/RBC/…) AND long-form display
     // names (BASOPHIL/EOSINOPHIL/…) that bridge v0.9.9+ emits for the
     // differential cells. Long-form catches cases where the LOINC isn't
     // in `loincCodes` so categorisation doesn't depend solely on LOINC
     // accuracy.
-    codes: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'SEGMENT', 'NEU', 'NEU.', 'NEUTROPHIL', 'LYM', 'LYM.', 'LYMPHOCYTE', 'MONO', 'MONO.', 'MONOCYTE', 'EOS', 'EOS.', 'EOSINOPHIL', 'BASO', 'BASO.', 'BASOPHIL', 'ANC'],
+    codes: ['WBC', 'RBC', 'HGB', 'HB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'RDW-CV', 'PLT', 'MPV', 'BAND', 'SEG', 'SEGMENT', 'NEU', 'NEU.', 'NEUTROPHIL', 'LYM', 'LYM.', 'LYMPHOCYTE', 'MONO', 'MONO.', 'MONOCYTE', 'EOS', 'EOS.', 'EOSINOPHIL', 'BASO', 'BASO.', 'BASOPHIL', 'ANC', 'BLAST', 'BLASTS', 'PROMYL', 'PROMYL.', 'PROMYELOCYTE', 'PROMYELOCYTES', 'MYELO', 'MYELO.', 'MYELOCYTE', 'MYELOCYTES', 'META', 'META.', 'METAMYELOCYTE', 'METAMYELOCYTES', 'META-MYELOCYTE', 'NORMOBL', 'NORMOBL.', 'NORMOBLAST', 'NORMOBLASTS', 'NRBC', 'PLASMACELL', 'PLASMACELLS', 'PLASMA CELL', 'PLASMA CELLS', 'PS', 'P/S', 'PS AUTO DC', 'PSAUTODC'],
     // Differential percent LOINCs added 2026-05-27: bridge v0.9.9 emits
     //   713-8  for Eosinophils/100 leukocytes
     //   5905-5 for Monocytes/100 leukocytes
@@ -70,7 +70,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
     loincCodes: ['6690-2', '26464-8', '789-8', '26453-1', '718-7', '30350-3', '4544-3', '20570-8', '777-3', '26515-7', '787-2', '785-6', '786-4', '788-0', '32623-1', '770-8', '736-9', '731-0', '742-7', '706-2', '751-8', '4544-3', '751-8', '764-1', '32155-4', '713-8', '5905-5', '57021-8'],
     subgroups: [
       { id: 'counts',  members: ['WBC', 'RBC', 'HB', 'PLT', 'MPV'] },
-      { id: 'diff',    members: ['NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC'] },
+      { id: 'diff',    members: ['NEU', 'BAND', 'LYM', 'MONO', 'EOS', 'BASO', 'ANC', 'BLAST', 'PROMYELOCYTE', 'MYELOCYTE', 'META-MYELOCYTE', 'NORMOBLAST', 'PLASMA-CELL', 'PS'] },
       { id: 'indices', members: ['HCT', 'MCV', 'MCH', 'MCHC', 'RDW'] },
     ],
     pinnedColumns: ['WBC', 'RBC', 'HB', 'PLT', 'HCT', 'MCV', 'NEU', 'LYM', 'MONO', 'EOS', 'BASO'],

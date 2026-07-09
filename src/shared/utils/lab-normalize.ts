@@ -30,6 +30,14 @@ export const TEST_ALIASES: Record<string, string> = {
   BASO: 'BASO', 'BASO.': 'BASO', BASOPHIL: 'BASO', BASOPHILS: 'BASO',
   BAND: 'BAND', BANDS: 'BAND', 'BAND CELL': 'BAND', 'BAND CELLS': 'BAND',
   ANC: 'ANC', 'ABSOLUTE NEUTROPHIL COUNT': 'ANC',
+  // Differential — immature / smear rows commonly emitted in CBC panels.
+  BLAST: 'BLAST', BLASTS: 'BLAST', 'BLAST CELL': 'BLAST', 'BLAST CELLS': 'BLAST',
+  PROMYL: 'PROMYELOCYTE', 'PROMYL.': 'PROMYELOCYTE', PROMYELOCYTE: 'PROMYELOCYTE', PROMYELOCYTES: 'PROMYELOCYTE',
+  MYELO: 'MYELOCYTE', 'MYELO.': 'MYELOCYTE', MYELOCYTE: 'MYELOCYTE', MYELOCYTES: 'MYELOCYTE',
+  META: 'META-MYELOCYTE', 'META.': 'META-MYELOCYTE', METAMYELOCYTE: 'META-MYELOCYTE', METAMYELOCYTES: 'META-MYELOCYTE',
+  NORMOBL: 'NORMOBLAST', 'NORMOBL.': 'NORMOBLAST', NORMOBLAST: 'NORMOBLAST', NORMOBLASTS: 'NORMOBLAST', NRBC: 'NORMOBLAST',
+  PLASMACELL: 'PLASMA-CELL', PLASMACELLS: 'PLASMA-CELL', 'PLASMA CELL': 'PLASMA-CELL', 'PLASMA CELLS': 'PLASMA-CELL',
+  PS: 'PS', 'P/S': 'PS', 'PS AUTO DC': 'PS', PSAUTODC: 'PS',
   // RBC indices
   MCV: 'MCV', MCH: 'MCH', MCHC: 'MCHC',
   RDW: 'RDW', 'RDW-CV': 'RDW', 'RDW.CV': 'RDW',
@@ -575,6 +583,13 @@ export const CANONICAL_DISPLAY: Record<string, string> = {
   'COVID-AG': 'COVID Ag',
   'MYCOPLASMA-IGM': 'Myco IgM',
   'APTT-RATIO': 'APTT-ratio',
+  // CBC differential / smear rows: keep the source's familiar compact labels.
+  'BLAST': 'Blast',
+  'PROMYELOCYTE': 'Promyl.',
+  'MYELOCYTE': 'Myelo.',
+  'META-MYELOCYTE': 'Meta',
+  'NORMOBLAST': 'Normobl.',
+  'PLASMA-CELL': 'PlasmaCell',
   // CK-MB is universally hyphenated clinically; the canonical key stays 'CKMB'
   // (sort/match/search) but the column header reads 'CK-MB'.
   'CKMB': 'CK-MB',
@@ -778,6 +793,13 @@ export const CANONICAL_TO_LAY_ZH: Record<string, string> = {
   'EOS': '嗜伊紅性白血球',
   'BASO': '嗜鹼性白血球',
   'ANC': '絕對嗜中性球計數',
+  'BLAST': '芽細胞',
+  'PROMYELOCYTE': '前骨髓球',
+  'MYELOCYTE': '骨髓球',
+  'META-MYELOCYTE': '後骨髓球',
+  'NORMOBLAST': '有核紅血球',
+  'PLASMA-CELL': '漿細胞',
+  'PS': '血液抹片',
   // ── Coagulation ───────────────────────────────────────────
   'PT': '凝血酶原時間',
   'INR': '國際標準化比值',
@@ -915,6 +937,13 @@ export const CANONICAL_TO_LAY_EN: Record<string, string> = {
   'EOS': 'Eosinophils',
   'BASO': 'Basophils',
   'ANC': 'Absolute neutrophil count',
+  'BLAST': 'Blasts',
+  'PROMYELOCYTE': 'Promyelocytes',
+  'MYELOCYTE': 'Myelocytes',
+  'META-MYELOCYTE': 'Metamyelocytes',
+  'NORMOBLAST': 'Nucleated red blood cells',
+  'PLASMA-CELL': 'Plasma cells',
+  'PS': 'Peripheral smear',
   // ── Coagulation ───────────────────────────────────────────
   'PT': 'Prothrombin time',
   'INR': 'International normalized ratio',

@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@/src/shared/utils/cn.utils"
+import { CompactLabResultRow } from "@/features/clinical-summary/components/CompactLabResultRow"
 
 type EncounterObservationComponent = {
   id: string
@@ -10,6 +10,7 @@ type EncounterObservationComponent = {
   interpretationStyle?: string
   referenceText?: string
   refRangeAbnormal?: boolean
+  refRangeUnassessed?: boolean
 }
 
 export type EncounterObservation = {
@@ -24,6 +25,7 @@ export type EncounterObservation = {
   source: "diagnosticReport" | "observation"
   components: EncounterObservationComponent[]
   refRangeAbnormal?: boolean
+  refRangeUnassessed?: boolean
   /** Lab-category id (cbc / chem / urine / …) for clinical grouping; absent for
    *  observations that don't map to a known category. */
   categoryId?: string
@@ -46,55 +48,37 @@ function isAbnormalStyle(style?: string) {
 function ObsRow({
   title,
   value,
-  interpretationLabel,
   interpretationStyle,
   referenceText,
   refRangeAbnormal,
+  refRangeUnassessed,
   date,
 }: {
   title: string
   value: string
-  interpretationLabel?: string
   interpretationStyle?: string
   referenceText?: string
   refRangeAbnormal?: boolean
+  refRangeUnassessed?: boolean
   /** When set, render the date (MM-DD) before the title — used by multi-day
    *  visits so the reader can tell otherwise-identical rows apart. */
   date?: string
 }) {
   const abnormal = isAbnormalStyle(interpretationStyle) || !!refRangeAbnormal
-  const isLong = !interpretationLabel && value.length > 60
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1.5 px-2 rounded hover:bg-muted/60 transition-colors">
-      <div className="flex items-baseline gap-2 shrink-0">
-        {date && (
-          <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums min-w-[2.5rem]">
-            {date}
-          </span>
-        )}
-        <span className="text-sm font-medium text-foreground">{title}</span>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        {isLong ? (
-          <span className="text-xs text-foreground/80 max-w-xs truncate">{value}</span>
-        ) : (
-          <span
-            className={cn(
-              "text-sm font-semibold tabular-nums",
-              abnormal ? "text-red-600 dark:text-red-400" : "text-foreground"
-            )}
-          >
-            {value}
-          </span>
-        )}
-        {/* Interpretation label chip intentionally NOT rendered — abnormal is
-            shown by red value text only (per user, no Normal/Abnormal badges). */}
-        {referenceText && (
-          <span className="text-xs text-muted-foreground">{referenceText}</span>
-        )}
-      </div>
-    </div>
+    <CompactLabResultRow
+      title={title}
+      value={value}
+      abnormal={abnormal}
+      referenceText={referenceText}
+      rangeUnassessed={refRangeUnassessed}
+      leadingTitleContent={date ? (
+        <span className="min-w-[2.5rem] shrink-0 font-mono text-[0.6875rem] tabular-nums text-muted-foreground">
+          {date}
+        </span>
+      ) : undefined}
+    />
   )
 }
 
@@ -109,27 +93,27 @@ export function EncounterObservationCard({
   showDate?: boolean
 }) {
   return (
-    <div>
+    <div className="space-y-0">
       <ObsRow
         title={observation.title}
         value={observation.value}
-        interpretationLabel={observation.interpretationLabel}
         interpretationStyle={observation.interpretationStyle}
         referenceText={observation.referenceText}
         refRangeAbnormal={observation.refRangeAbnormal}
+        refRangeUnassessed={observation.refRangeUnassessed}
         date={showDate ? shortDate(observation.effectiveDateTime) : undefined}
       />
       {observation.components.length > 0 && (
-        <div className="ml-4 border-l pl-3 space-y-0">
+        <div className="ml-4 space-y-0">
           {observation.components.map((c) => (
             <ObsRow
               key={c.id}
               title={c.title}
               value={c.value}
-              interpretationLabel={c.interpretationLabel}
               interpretationStyle={c.interpretationStyle}
               referenceText={c.referenceText}
               refRangeAbnormal={c.refRangeAbnormal}
+              refRangeUnassessed={c.refRangeUnassessed}
             />
           ))}
         </div>
