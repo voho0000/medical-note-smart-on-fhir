@@ -344,7 +344,7 @@ export function ReportsCard() {
   )
 
   const reportsContent = (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
+    <Tabs value={activeTab} onValueChange={handleTabChange} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'}>
       {/* Desktop tabs */}
       <TabsList className={`hidden md:!flex !justify-start shrink-0 mb-2 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
         {tabConfigs.map((tab) => {
@@ -479,6 +479,7 @@ export function ReportsCard() {
             key={tab.value}
             value={tab.value}
             rows={tab.rows}
+            isActive={activeTab === tab.value}
             fullHeight={expanded}
             forceMount={keepMounted}
             defaultOpenIds={expandedRowIds}
@@ -525,7 +526,7 @@ export function ReportsCard() {
     // tabs sit closer to the card's top edge.
     <Card className={`${CARD_BORDER_CLASSES.clinical} relative w-full max-w-full pt-3`}>
       {expandButton}
-      <CardContent className="px-4 pb-4 overflow-hidden min-w-0">
+      <CardContent className="px-4 pb-4 min-w-0">
         {reportsContent}
       </CardContent>
     </Card>
