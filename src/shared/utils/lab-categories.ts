@@ -385,10 +385,12 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // display labels live in lab-normalize (TEST_ALIASES / CANONICAL_DISPLAY).
     // hiddenByDefault: a minority panel — surfaced via 「查看更多」only when the
     // patient actually has it, no persistently-empty tab for routine labs.
-    // No pinnedColumns (so the tab is nonEmpty ONLY when real data exists);
-    // preferredOrder just fixes column order when it does.
+    // When revealed manually, pinnedColumns still show the expected column
+    // headers even when there are no rows in the selected time range — same
+    // behaviour as blood gas, and less confusing than a blank empty-state.
     preferredOrder: ['FLU-A-AG', 'FLU-B-AG', 'COVID-AG', 'MYCOPLASMA-IGM'],
     codes: ['FLU-A-AG', 'FLU-B-AG', 'COVID-AG', 'MYCOPLASMA-IGM', '14065C', '14066C', '14084C', '12020C'],
+    pinnedColumns: ['FLU-A-AG', 'FLU-B-AG', 'COVID-AG'],
     hiddenByDefault: true,
   },
 ]

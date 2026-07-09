@@ -15,6 +15,13 @@ function makeObs(interpCode: string | undefined, opts: { value?: any; valueStrin
 }
 
 describe('formatValue — isAbnormal vs interpretation code', () => {
+  describe('presence vs missing value display', () => {
+    it('keeps a qualitative "-" result distinct from the missing-value placeholder', () => {
+      expect(formatValue(makeObs(undefined, { valueString: '-' })).value).toBe('-')
+      expect(formatValue(makeObs(undefined)).value).toBe('—')
+    })
+  })
+
   describe('normal-equivalent codes (should NOT be flagged abnormal)', () => {
     it.each(['N', 'NORMAL', 'NEG', 'NEGATIVE', 'NR', 'NONREACTIVE', 'n', 'neg', 'nonreactive'])(
       'interpretation "%s" → isAbnormal=false',

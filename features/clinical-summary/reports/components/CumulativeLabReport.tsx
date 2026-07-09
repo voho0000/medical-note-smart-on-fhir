@@ -36,6 +36,28 @@ function formatDateLabel(d: string): string {
   return d.length >= 10 ? `${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}` : d
 }
 
+function isMissingLabValue(value: string | undefined): boolean {
+  const trimmed = value?.trim()
+  return !trimmed || trimmed === '—'
+}
+
+function EmptyCell({ mapKey, label }: { mapKey: string; label: string }) {
+  return (
+    <td
+      key={mapKey}
+      className="border-l bg-muted/50 px-1 py-1 text-center"
+      title={label}
+      aria-label={label}
+      style={{
+        backgroundImage: 'repeating-linear-gradient(135deg, transparent 0, transparent 5px, hsl(var(--muted-foreground) / 0.16) 5px, hsl(var(--muted-foreground) / 0.16) 7px)',
+      }}
+    >
+      <span className="sr-only">{label}</span>
+      <span aria-hidden="true">&nbsp;</span>
+    </td>
+  )
+}
+
 function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHeight?: boolean }) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
@@ -43,6 +65,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
   const subgroupLabels = (t.reports as any).cumulativeSubgroups || {}
   const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
   const subgroupLabel = (sgId: string) => subgroupLabels[sgId] || sgId
+  const missingValueLabel = locale.startsWith('zh') ? '無資料' : 'No data'
   // Column header parts: medical audience keeps useLabPivot's displayName
   // (preserves glucose-subtype labels like "Glu-AC" / "Finger Sugar" that the
   // pivot derives from GLUCOSE_SUBTYPE_LABEL). Patient audience splits the
@@ -180,11 +203,10 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
               {flatTests.map((test) => {
                 const cell = test.values.get(date)
                 if (!cell) {
-                  return (
-                    <td key={test.mapKey} className="border-l px-1 py-1 text-center text-muted-foreground">
-                      —
-                    </td>
-                  )
+                  return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
+                }
+                if (isMissingLabValue(cell.value)) {
+                  return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
                 }
                 const cls = cell.isAbnormal ? 'text-red-600 font-medium' : 'text-foreground'
                 return (

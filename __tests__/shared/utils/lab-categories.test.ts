@@ -16,6 +16,7 @@ import {
 } from '@/src/shared/utils/lab-categories'
 
 const cbc = LAB_CATEGORIES.find((c) => c.id === 'cbc')!
+const serology = LAB_CATEGORIES.find((c) => c.id === 'serology')!
 
 function makeObs(text: string, loinc: string, value = 50, unit = '%') {
   return {
@@ -103,6 +104,12 @@ describe('cbc.pinnedColumns', () => {
     expect(cbc.pinnedColumns).toEqual(
       expect.arrayContaining(['NEU', 'LYM', 'MONO', 'EOS', 'BASO']),
     )
+  })
+})
+
+describe('serology.pinnedColumns', () => {
+  it('reserves viral antigen columns when the hidden tab is revealed with no data', () => {
+    expect(serology.pinnedColumns).toEqual(['FLU-A-AG', 'FLU-B-AG', 'COVID-AG'])
   })
 })
 
