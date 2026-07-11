@@ -8,10 +8,10 @@ import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { SEVERITY_RANK, type SafetyScanResult } from "@/src/core/entities/safety-alert.entity"
 import { SafetyAlertCard } from "./components/SafetyAlertCard"
 
-// Presentational safety-alerts section for the Medical Summary tab. Scan
-// state + controls (model / auto / trigger) are owned by the parent so the
-// whole tab has ONE set of AI controls — this component only renders the
-// section title, scan summary and the tiered alert cards.
+// Presentational safety-alerts section. Scan state + controls (model / auto /
+// trigger) may be owned by the parent so a larger surface can have one set of
+// AI controls — this component only renders the section title, optional scan
+// summary and the tiered alert cards.
 interface SafetyAlertsPanelProps {
   result: SafetyScanResult | undefined
   isScanning: boolean
@@ -19,13 +19,28 @@ interface SafetyAlertsPanelProps {
   hasPatient: boolean
   /** Renders an alert's cited source keys as a navigable citation (owned by
    *  the parent, which holds the catalog resolver + navigation). */
-  renderSources?: (keys: string[]) => ReactNode
+  renderSources?: (keys: string[], unsupportedKeys?: string[]) => ReactNode
   /** Retries ONLY the safety scan (the summary call may have succeeded). */
   onRetry?: () => void
   retryLabel?: string
+  /** Medical Summary supplies its own unified "care reminders & safety"
+   *  card heading. Keep this true for any standalone reuse. */
+  showTitle?: boolean
+  /** Hide the "scanned N records..." line when embedded in dense summaries. */
+  showScanSummary?: boolean
 }
 
-export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, renderSources, onRetry, retryLabel }: SafetyAlertsPanelProps) {
+export function SafetyAlertsPanel({
+  result,
+  isScanning,
+  error,
+  hasPatient,
+  renderSources,
+  onRetry,
+  retryLabel,
+  showTitle = true,
+  showScanSummary = true,
+}: SafetyAlertsPanelProps) {
   const { t } = useLanguage()
   const { audience } = useAudience()
   // Patient audience gets the friendlier "健康提醒" wording; clinicians keep the
@@ -46,16 +61,19 @@ export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, rende
       low: sorted.filter((a) => a.severity === "low"),
     }
   }, [result])
+  const initialScan = isScanning && !result
 
   return (
     <div className="space-y-2">
-      <h3 className="text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">{sa.title}</h3>
+      {showTitle ? (
+        <h3 className="text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">{sa.title}</h3>
+      ) : null}
 
       {!hasPatient ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
           {sa.emptyNoPatient}
         </div>
-      ) : isScanning ? (
+      ) : initialScan ? (
         <div className="py-8 flex flex-col items-center gap-2">
           <StreamingIndicator label={sa.scanning} />
           <p className="text-xs text-muted-foreground/70">{sa.scanningHint}</p>
@@ -64,18 +82,18 @@ export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, rende
         <>
           {/* Summary or first-run intro */}
           {result ? (
-            result.alerts.length > 0 ? (
+            result.alerts.length > 0 && showScanSummary ? (
               <p className="text-xs leading-snug text-muted-foreground">
                 {sa.foundSummary
                   .replace("{scanned}", String(result.scannedCount))
                   .replace("{count}", String(result.alerts.length))}
               </p>
-            ) : (
+            ) : result.alerts.length === 0 ? (
               <div className="flex items-center gap-2 rounded-md bg-green-50 dark:bg-green-950/40 px-2.5 py-1.5 text-xs text-green-700 dark:text-green-300">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 {sa.emptyNoRisk}
               </div>
-            )
+            ) : null
           ) : (
             <p className="text-xs leading-snug text-muted-foreground">{sa.scanIntro}</p>
           )}
@@ -98,8 +116,7 @@ export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, rende
           ) : null}
 
           {/* Tiered alert cards: high (full) → medium/low (compact).
-              Caps then scrolls so a big scan never dominates the
-              column — the section title + summary line stay fixed above. */}
+              Caps then scrolls so a big scan never dominates the column. */}
           {result && result.alerts.length > 0 ? (
             <div className="max-h-[24rem] overflow-y-auto scrollbar-thin-persistent">
               {high.map((alert) => (

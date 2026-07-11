@@ -37,11 +37,16 @@ describe('GenerateSafetyAlertsUseCase', () => {
         locale: 'en',
         catalog: [
           { key: 'L3', resourceType: 'DiagnosticReport', resourceId: 'r1', display: 'eGFR', date: '2026-06-02', organization: '甲醫院' },
+          { key: 'D1', resourceType: 'DocumentReference', resourceId: 'd1', display: '出院病摘', date: '2026-05-18', organization: '甲醫院' },
         ],
       })
       expect(withCatalog[0].content).toContain('"sources"')
       expect(withCatalog[1].content).toContain('SOURCE LIST')
       expect(withCatalog[1].content).toContain('[L3] DiagnosticReport | 2026-06-02 | 甲醫院 | eGFR')
+      expect(withCatalog[1].content).toContain('[D1] DocumentReference | 2026-05-18 | 甲醫院 | 出院病摘')
+      expect(withCatalog[0].content).toContain('cite its matching D# source key')
+      expect(withCatalog[0].content).toContain('valid evidence even if there is no separate endoscopy')
+      expect(withCatalog[0].content).toContain('does NOT prove that a particular procedure was performed')
     })
 
     it('omits the SOURCE LIST when no catalog is provided', () => {
@@ -79,6 +84,57 @@ describe('GenerateSafetyAlertsUseCase', () => {
         }),
       )
       expect(r!.alerts[0].sources).toEqual(['L3', 'M2'])
+    })
+
+    it('keeps a document-supported diagnosis but marks an unsupported procedure assertion', () => {
+      const catalog = [{
+        key: 'D1',
+        resourceType: 'DocumentReference',
+        resourceId: 'doc-1',
+        display: '出院病摘',
+        getContentText: () => '出院診斷：胃潰瘍。',
+      }]
+      const diagnosisOnly = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify({
+        alerts: [{
+          severity: 'medium',
+          title: '胃潰瘍病史',
+          detail: '出院病摘記載胃潰瘍。',
+          sources: ['D1'],
+          category: 'bleeding',
+        }],
+      }), catalog)
+      expect(diagnosisOnly!.alerts[0].unsupportedSourceKeys).toEqual([])
+
+      const unsupportedProcedure = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify({
+        alerts: [{
+          severity: 'medium',
+          title: '胃鏡結果',
+          detail: '胃鏡顯示胃潰瘍。',
+          sources: ['D1'],
+          category: 'bleeding',
+        }],
+      }), catalog)
+      expect(unsupportedProcedure!.alerts[0].unsupportedSourceKeys).toEqual(['D1'])
+    })
+
+    it('accepts a procedure assertion when the cited document text names it', () => {
+      const catalog = [{
+        key: 'D1',
+        resourceType: 'DocumentReference',
+        resourceId: 'doc-1',
+        display: '出院病摘',
+        getContentText: () => 'PANENDOSCOPY showed gastric ulcer.',
+      }]
+      const result = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify({
+        alerts: [{
+          severity: 'medium',
+          title: '胃鏡結果',
+          detail: '胃鏡顯示胃潰瘍。',
+          sources: ['D1'],
+          category: 'bleeding',
+        }],
+      }), catalog)
+      expect(result!.alerts[0].unsupportedSourceKeys).toEqual([])
     })
 
     it('strips markdown fences / surrounding prose', () => {

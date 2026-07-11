@@ -88,7 +88,7 @@ export function ChatTemplatesSettings() {
     // Only add to chat templates if useAs is 'chat' or undefined (default)
     if (useAs === 'insight') {
       // If user wants to use as insight, do nothing here
-      // (they should use it from Clinical Insights page)
+      // (they should use it from the Medical Summary module manager)
       return
     }
     

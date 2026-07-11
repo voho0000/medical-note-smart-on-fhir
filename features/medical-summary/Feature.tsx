@@ -1,46 +1,64 @@
-// Medical Summary (醫療摘要) — zero-click, single vertical flow: narrative →
-// disease-oriented test trends → safety alerts → decisions → cross-facility timeline → coverage. Reading
-// needs no interaction; auditing (source chips, evidence) is always visible.
+// Medical Summary (醫療摘要) — one feature with two reading modes:
+// structured standard summary and independently generated custom summaries.
 // Structured AI output (Zod-validated) renders as fixed cards — never a
 // free-text markdown blob. Pluggable via right-panel-registry (enabled flag).
 "use client"
 
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { ClipboardList, RefreshCw, Sparkles, AlertCircle } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { AlertCircle, ClipboardList, LayoutList, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
-import { useMedicalSummary } from "@/src/application/hooks/medical-summary/use-medical-summary.hook"
+import { useMedicalSummaryOrchestrator } from "@/src/application/hooks/medical-summary/use-medical-summary-orchestrator.hook"
 import {
   useResourceNavigationStore,
   NAV_CLAIM_TIMEOUT_MS,
   type ResourceNavTarget,
 } from "@/src/application/stores/resource-navigation.store"
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
-import { SafetyAlertsPanel } from "@/features/proactive-safety-alerts/SafetyAlertsPanel"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
+import {
+  MODEL_PREF_DEFAULTS,
+  useModelPref,
+  useSetModelFor,
+} from "@/src/application/stores/model-prefs.store"
 import { MEDICAL_SUMMARY_MODEL_ID } from "@/src/core/use-cases/medical-summary/generate-medical-summary.use-case"
-import { useSafetyAlerts } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
-import { countBySeverity } from "@/src/core/entities/safety-alert.entity"
-import { SummaryNarrativeCard } from "./components/SummaryNarrativeCard"
+import { CurrentPrioritiesCard } from "./components/CurrentPrioritiesCard"
 import { InvestigationTrendsCard } from "./components/InvestigationTrendsCard"
-import { SummarySectionNav, type SummarySection } from "./components/SummarySectionNav"
+import { MedicationEducationCard } from "./components/MedicationEducationCard"
+import { MedicationReconciliationCard } from "./components/MedicationReconciliationCard"
+import { CareRemindersSafetyCard } from "./components/CareRemindersSafetyCard"
 import { ProblemListCard } from "./components/ProblemListCard"
-import { DecisionList } from "./components/DecisionList"
 import { CrossFacilityTimeline } from "./components/CrossFacilityTimeline"
 import { CoverageCard } from "./components/CoverageCard"
 import { SourceSup } from "./components/SourceSup"
+import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
+import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
+import {
+  MedicalSummaryCardLayoutManager,
+  type MedicalSummaryCardLayoutItem,
+} from "./components/MedicalSummaryCardLayoutManager"
+import {
+  useMedicalSummaryCardLayout,
+  type MedicalSummaryCardId,
+} from "./hooks/useMedicalSummaryCardLayout"
+import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
+import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
 import type {
   EncounterClass,
   InvestigationDirection,
   InvestigationKind,
+  MedicationChangeType,
   ProblemKind,
   ResolvedSourceRef,
-  SummaryUrgency,
   TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
+
+type SummaryView = "standard" | "custom"
 
 export default function MedicalSummaryFeature() {
   const { t } = useLanguage()
@@ -48,67 +66,94 @@ export default function MedicalSummaryFeature() {
   const base = t.medicalSummary
   const isPatient = audience === "patient"
   // Patient keys override the clinician base set (same pattern as safety).
-  const ms = isPatient ? { ...base, ...base.patient } : base
+  const ms = useMemo(() => (isPatient ? { ...base, ...base.patient } : base), [base, isPatient])
+  const {
+    panels: insightPanels,
+    responses: insightResponses,
+    panelStatus: insightPanelStatus,
+  } = useClinicalInsightsRuntime()
+  const visibleInsightPanels = useMemo(
+    () => insightPanels
+      .filter((panel) => panel.showInSummary)
+      .slice(0, MAX_SUMMARY_INSIGHT_MODULES),
+    [insightPanels],
+  )
+  const visibleInsightCount = visibleInsightPanels.length
+  const insightsModel = useModelPref("insights")
+  const setModelFor = useSetModelFor()
+  const [activeView, setActiveView] = useState<SummaryView>("standard")
+  const [customUnread, setCustomUnread] = useState(false)
+  const [customManagerOpen, setCustomManagerOpen] = useState(false)
+  const [selectedCustomPanelId, setSelectedCustomPanelId] = useState<string | undefined>()
+  const previousLoadingPanelsRef = useRef<Set<string>>(new Set())
+  const customGenerating = visibleInsightPanels.some(
+    (panel) => insightPanelStatus[panel.id]?.isLoading,
+  )
+  const openCustomManager = useCallback((panelId?: string) => {
+    setSelectedCustomPanelId(panelId)
+    setCustomManagerOpen(true)
+  }, [])
 
+  // A hidden custom tab needs one strong completion signal. Only a genuine
+  // loading → completed transition creates the unread dot; cache hydration does
+  // not masquerade as a newly generated result.
+  useEffect(() => {
+    const currentLoading = new Set(
+      visibleInsightPanels
+        .filter((panel) => insightPanelStatus[panel.id]?.isLoading)
+        .map((panel) => panel.id),
+    )
+    const completedWhileHidden = [...previousLoadingPanelsRef.current].some((panelId) => {
+      if (currentLoading.has(panelId)) return false
+      const status = insightPanelStatus[panelId]
+      return !status?.error && Boolean(insightResponses[panelId]?.text?.trim())
+    })
+    previousLoadingPanelsRef.current = currentLoading
+
+    if (activeView !== "custom" && completedWhileHidden) {
+      const timer = window.setTimeout(() => setCustomUnread(true), 0)
+      return () => window.clearTimeout(timer)
+    }
+  }, [activeView, insightPanelStatus, insightResponses, visibleInsightPanels])
+
+  // One user-facing lifecycle coordinates the independently validated summary
+  // and safety pipelines. The feature no longer owns two sets of controls,
+  // loading states, cache hydration, or retry behaviour.
   const {
     result,
+    safetyResult,
     coverage,
-    isGenerating,
-    error,
     hasPatient,
     dataReady,
-    autoGenerate,
-    setAutoGenerate,
     model,
+    autoGenerate,
     setModel,
+    setAutoGenerate,
     generate,
-  } = useMedicalSummary()
+    retryFailed,
+    isGenerating: isBusy,
+    isRestoring,
+    summaryError,
+    safetyError,
+    hasAnyResult,
+    hasCompleteResult,
+    resolveSafetySource,
+  } = useMedicalSummaryOrchestrator()
 
-  // The whole tab is ONE briefing assembled from two independent AI calls
-  // (summary + safety). This is the ONLY useSafetyAlerts instance — the
-  // embedded panel is presentational — so its auto-scan effect fires once.
-  // The tab's single set of controls below drives BOTH.
-  const {
-    result: safetyResult,
-    isScanning,
-    error: safetyError,
-    setAutoScan,
-    model: safetyModel,
-    setModel: setSafetyModel,
-    scan,
-    resolveSource: resolveSafetySource,
-  } = useSafetyAlerts()
-
-  // Unified controls — one picker / toggle / button governs both calls.
-  const setModelBoth = useCallback(
-    (id: string) => {
-      setModel(id)
-      setSafetyModel(id)
-    },
-    [setModel, setSafetyModel],
+  const safetyText = useMemo(
+    () => (isPatient ? { ...t.safetyAlerts, ...t.safetyAlerts.patient } : t.safetyAlerts),
+    [isPatient, t.safetyAlerts],
   )
-  const setAutoBoth = useCallback(
-    (value: boolean) => {
-      setAutoGenerate(value)
-      setAutoScan(value)
-    },
-    [setAutoGenerate, setAutoScan],
-  )
-  const runBoth = useCallback(() => {
-    void generate()
-    void scan()
-  }, [generate, scan])
-  // Combined busy/has-output state for the single button.
-  const isBusy = isGenerating || isScanning
-  const hasAnyResult = !!result || !!safetyResult
-  // The two model prefs persisted separately BEFORE the controls were unified,
-  // so historical values can diverge — the picker would show the summary's
-  // model while the scan silently ran on another. One-way sync: summary's
-  // pref is the source of truth. setSafetyModel also invalidates the safety
-  // cache, which is correct — a result from a different model is stale.
-  useEffect(() => {
-    if (safetyModel !== model) setSafetyModel(model)
-  }, [safetyModel, model, setSafetyModel])
+  const generationErrors = useMemo(() => [
+    summaryError ? {
+      label: ms.prioritiesTitle,
+      message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
+    } : null,
+    safetyError ? {
+      label: ms.careSafetyTitle,
+      message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
+    } : null,
+  ].filter((item): item is { label: string; message: string } => item !== null), [ms, safetyError, safetyText.parseError, summaryError])
 
   // Clinicians see raw FHIR resource types on chips; patients get plain words.
   const typeLabel = useCallback((resourceType?: string): string => {
@@ -116,8 +161,6 @@ export default function MedicalSummaryFeature() {
     if (!isPatient) return resourceType
     return (base.patient.sourceTypes as Record<string, string>)[resourceType] ?? resourceType
   }, [base.patient.sourceTypes, isPatient])
-  const urgencyLabel = (u: SummaryUrgency) =>
-    u === "high" ? ms.urgencyHigh : u === "medium" ? ms.urgencyMedium : ms.urgencyLow
   const categoryLabel = (c: TimelineCategory) => ms.categories[c]
   const encounterClassLabel = (c: EncounterClass) => ms.encounterClasses[c]
   const problemBadgeLabel = (kind: ProblemKind) =>
@@ -129,6 +172,10 @@ export default function MedicalSummaryFeature() {
   const investigationKindLabel = (kind: InvestigationKind) => ms.investigationKinds[kind]
   const investigationDirectionLabel = (direction: InvestigationDirection) =>
     ms.investigationDirections[direction]
+  const medicationChangeTypeLabel = (type: MedicationChangeType) =>
+    type === "cross-facility"
+      ? ms.medicationChangeTypes.crossFacility
+      : ms.medicationChangeTypes[type]
 
   // Navigate the LEFT panel to a cited resource. Switching to the right tab
   // always works; the pinpoint scroll is best-effort — if no anchor claims
@@ -156,14 +203,15 @@ export default function MedicalSummaryFeature() {
   // same SourceSup the narrative/decision cards use. Resolves each key against
   // the safety catalog; unknown keys show as unverified (never dropped).
   const renderSafetySources = useCallback(
-    (keys: string[]) => {
+    (keys: string[], unsupportedKeys: string[] = []) => {
       if (!keys?.length) return null
+      const unsupported = new Set(unsupportedKeys)
       const refs: ResolvedSourceRef[] = keys.map((key, i) => {
         const e = resolveSafetySource(key)
         return {
           key,
           num: i + 1,
-          verified: !!e,
+          verified: !!e && !unsupported.has(key),
           resourceType: e?.resourceType,
           resourceId: e?.resourceId,
           display: e?.display,
@@ -189,35 +237,151 @@ export default function MedicalSummaryFeature() {
     .replace("{lab}", String(coverage?.labs ?? 0))
     .replace("{org}", String(coverage?.organizations ?? 0))
 
-  // Section jump-bar: severity counts from the safety result we already own;
-  // decisions/timeline from the summary result. Refs let a chip smooth-scroll
-  // to its section on this (possibly long) page.
-  const safetyCounts = useMemo(() => {
-    if (!safetyResult) return null
-    const c = countBySeverity(safetyResult.alerts)
-    return { ...c, total: safetyResult.alerts.length }
-  }, [safetyResult])
-  const problemsRef = useRef<HTMLDivElement>(null)
+  const [summarySettingsOpen, setSummarySettingsOpen] = useState(false)
+  const [layoutOpen, setLayoutOpen] = useState(false)
   const investigationsRef = useRef<HTMLDivElement>(null)
   const safetyRef = useRef<HTMLDivElement>(null)
-  const decisionsRef = useRef<HTMLDivElement>(null)
+  const medicationsRef = useRef<HTMLDivElement>(null)
+  const problemsRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
-  const jumpTo = useCallback((section: SummarySection) => {
-    const el = (
-      section === "problems"
-        ? problemsRef
-        : section === "investigations"
-          ? investigationsRef
-        : section === "safety"
-          ? safetyRef
-          : section === "decisions"
-            ? decisionsRef
-            : timelineRef
-    ).current
-    if (!el) return
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" })
-  }, [])
+
+  const showSafetyCard = Boolean(safetyResult || (!safetyError && result))
+  const availableCardIds = useMemo<MedicalSummaryCardId[]>(() => {
+    const ids: MedicalSummaryCardId[] = []
+    if (result) ids.push("problems")
+    if (result?.timeline.length) ids.push("timeline")
+    if (showSafetyCard) ids.push("safety")
+    if (result) ids.push("investigations")
+    if (result) ids.push("medications")
+    return ids
+  }, [result, showSafetyCard])
+
+  const cardLayout = useMedicalSummaryCardLayout({ audience, availableIds: availableCardIds })
+
+  const cardMetadata = useMemo<Record<MedicalSummaryCardId, Omit<MedicalSummaryCardLayoutItem, "id">>>(() => ({
+    problems: {
+      label: ms.navProblems,
+      description: ms.problemsTitle,
+    },
+    timeline: {
+      label: ms.navTimeline,
+      description: ms.timelineTitle,
+    },
+    safety: {
+      label: ms.navSafety,
+      description: ms.careSafetyTitle,
+    },
+    investigations: {
+      label: ms.navInvestigations,
+      description: ms.investigationsTitle,
+    },
+    medications: {
+      label: ms.navMedications,
+      description: isPatient ? ms.medicationEducationTitle : ms.medicationReviewTitle,
+    },
+  }), [isPatient, ms])
+
+  const layoutItems = useMemo<MedicalSummaryCardLayoutItem[]>(
+    () => cardLayout.orderedManageIds.map((id) => ({ id, ...cardMetadata[id] })),
+    [cardLayout.orderedManageIds, cardMetadata],
+  )
+
+  const summaryCards: Partial<Record<MedicalSummaryCardId, ReactNode>> = {
+    problems: result ? (
+      <div ref={problemsRef} className="scroll-mt-2">
+        <ProblemListCard
+          result={result}
+          title={ms.problemsTitle}
+          basisLabel={ms.problemBasisLabel}
+          badgeLabel={problemBadgeLabel}
+          typeLabel={typeLabel}
+          unverifiedLabel={ms.unverified}
+          showMoreLabel={ms.showMoreItems}
+          showLessLabel={ms.showLessItems}
+          onNavigate={navigateToResource}
+        />
+      </div>
+    ) : null,
+    timeline: result?.timeline.length ? (
+      <div ref={timelineRef} className="scroll-mt-2">
+        <CrossFacilityTimeline
+          result={result}
+          title={ms.timelineTitle}
+          categoryLabel={categoryLabel}
+          encounterClassLabel={encounterClassLabel}
+          onNavigate={navigateToResource}
+          earlierLabel={ms.timelineShowEarlier}
+          collapseLabel={ms.timelineShowLess}
+          droppedNote={
+            result.droppedTimelineCount > 0
+              ? ms.timelineDropped.replace("{count}", String(result.droppedTimelineCount))
+              : null
+          }
+        />
+      </div>
+    ) : null,
+    safety: showSafetyCard ? (
+      <div ref={safetyRef} className="scroll-mt-2">
+        <CareRemindersSafetyCard
+          result={safetyResult}
+          isScanning={false}
+          error={null}
+          hasPatient={hasPatient}
+          renderSources={renderSafetySources}
+          title={ms.careSafetyTitle}
+        />
+      </div>
+    ) : null,
+    investigations: result ? (
+      <div ref={investigationsRef} className="scroll-mt-2">
+        <InvestigationTrendsCard
+          result={result}
+          title={ms.investigationsTitle}
+          subtitle={ms.investigationsSubtitle}
+          kindLabel={investigationKindLabel}
+          directionLabel={investigationDirectionLabel}
+          typeLabel={typeLabel}
+          unverifiedLabel={ms.unverified}
+          showMoreLabel={ms.showMoreItems}
+          showLessLabel={ms.showLessItems}
+          onNavigate={navigateToResource}
+        />
+      </div>
+    ) : null,
+    medications: result ? (
+      <div ref={medicationsRef} className="scroll-mt-2">
+        {isPatient ? (
+          <MedicationEducationCard
+            result={result}
+            title={ms.medicationEducationTitle}
+            benefitLabel={ms.medicationBenefitLabel}
+            attentionLabel={ms.medicationAttentionLabel}
+            disclaimer={ms.medicationEducationDisclaimer}
+            typeLabel={typeLabel}
+            unverifiedLabel={ms.unverified}
+            showMoreLabel={ms.showMoreItems}
+            showLessLabel={ms.showLessItems}
+            onNavigate={navigateToResource}
+          />
+        ) : (
+          <MedicationReconciliationCard
+            result={result}
+            title={ms.medicationReviewTitle}
+            regimenTitle={ms.medicationReviewRegimenTitle}
+            changesTitle={ms.medicationReviewChangesTitle}
+            reconciliationTitle={ms.medicationReviewReconciliationTitle}
+            disclaimer={ms.medicationReviewDisclaimer}
+            changeTypeLabel={medicationChangeTypeLabel}
+            typeLabel={typeLabel}
+            unverifiedLabel={ms.unverified}
+            showMoreLabel={ms.showMoreItems}
+            showLessLabel={ms.showLessItems}
+            onNavigate={navigateToResource}
+          />
+        )}
+      </div>
+    ) : null,
+  }
 
   return (
     // @container drives the responsive split off the PANEL's own width, not the
@@ -225,34 +389,61 @@ export default function MedicalSummaryFeature() {
     // left panel collapses, and only container queries see that. Capped so the
     // two columns never exceed a readable line length on ultrawide screens.
     <div className="@container mx-auto max-w-[84rem] space-y-2 py-0.5">
-      {/* Header: title + controls. No maximize — the page IS the content. */}
+      <Tabs
+        value={activeView}
+        onValueChange={(value) => {
+          const next = value as SummaryView
+          setActiveView(next)
+          if (next === "custom") {
+            setCustomUnread(false)
+            setSummarySettingsOpen(false)
+          }
+        }}
+        className="gap-2"
+      >
       <div className="flex flex-wrap items-center gap-1.5">
         <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
         <h2 className="text-base font-semibold text-foreground">{ms.title}</h2>
-        <span className="rounded-md bg-teal-100 dark:bg-teal-950/60 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:text-teal-300">
+        <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
           {ms.badge}
         </span>
-        <div className="ml-auto flex items-center gap-2">
-          {/* ONE set of controls for the whole tab — each drives BOTH the
-              summary generation and the safety scan. */}
+        <TabsList className="h-7 w-auto rounded-lg p-0.5 shadow-none">
+          <TabsTrigger value="standard" className="min-w-20 rounded-md px-2.5 py-0.5 text-xs">
+            {ms.standardSummaryTab}
+          </TabsTrigger>
+          <TabsTrigger
+            value="custom"
+            title={ms.customInsightsSubtitle}
+            className="relative min-w-20 rounded-md px-2.5 py-0.5 text-xs"
+          >
+            <span>{ms.customSummaryTab}</span>
+            {visibleInsightCount > 0 ? (
+              <span className="rounded-full bg-muted px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground">
+                {visibleInsightCount}
+              </span>
+            ) : null}
+            {customGenerating ? (
+              <Loader2 className="h-3 w-3 animate-spin text-violet-500" aria-label={ms.customGenerating} />
+            ) : customUnread ? (
+              <span
+                className="h-2 w-2 rounded-full bg-violet-500"
+                title={ms.customSummaryUnread}
+                aria-label={ms.customSummaryUnread}
+              />
+            ) : null}
+          </TabsTrigger>
+        </TabsList>
+        {activeView === "standard" ? (
+        <div className="ml-auto flex items-center gap-1.5">
           <ModelPicker
             modelId={model}
             fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
-            onSelect={setModelBoth}
+            onSelect={setModel}
             tooltip={t.safetyAlerts.modelTooltip}
+            compact
           />
-          <label
-            className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
-            title={ms.autoGenerateTooltip}
-          >
-            <Switch checked={autoGenerate} onCheckedChange={setAutoBoth} className="scale-90" />
-            {ms.autoGenerate}
-          </label>
           {hasPatient && dataReady ? (
-            // Stays mounted while busy (disabled, spinning icon, SAME label) —
-            // unmounting it shifted the picker/switch rightward on every
-            // regenerate click.
-            <Button onClick={runBoth} size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs" disabled={isBusy}>
+            <Button onClick={() => void generate()} size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs" disabled={isBusy || isRestoring}>
               {isBusy ? (
                 <RefreshCw className="h-3.5 w-3.5 animate-spin" />
               ) : hasAnyResult ? (
@@ -263,25 +454,126 @@ export default function MedicalSummaryFeature() {
               {hasAnyResult ? ms.regenerate : ms.generate}
             </Button>
           ) : null}
+          <Popover open={summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant={summarySettingsOpen ? "secondary" : "ghost"}
+                className="h-7 w-7 text-muted-foreground"
+                title={ms.summaryControls}
+                aria-label={ms.summaryControls}
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 space-y-1 p-2">
+              <label
+                className="flex cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
+                title={ms.autoGenerateTooltip}
+              >
+                <span className="font-medium text-foreground">{ms.autoGenerate}</span>
+                <Switch checked={autoGenerate} onCheckedChange={setAutoGenerate} className="scale-90" />
+              </label>
+              {availableCardIds.length > 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-full justify-start gap-2 px-2 text-xs"
+                  onClick={() => {
+                    setSummarySettingsOpen(false)
+                    setLayoutOpen(true)
+                  }}
+                >
+                  <LayoutList className="h-3.5 w-3.5" />
+                  {ms.cardLayoutButton}
+                </Button>
+              ) : null}
+            </PopoverContent>
+          </Popover>
         </div>
+        ) : (
+          <div className="ml-auto flex items-center gap-1.5">
+            <ModelPicker
+              modelId={insightsModel}
+              fallbackModelId={MODEL_PREF_DEFAULTS.insights}
+              onSelect={(id) => setModelFor("insights", id)}
+              tooltip={t.modelPicker.insightsTooltip}
+              align="end"
+              compact
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => openCustomManager()}
+              title={`${ms.manageCustomInsights}。${ms.customManagerDescription}`}
+              aria-label={ms.manageCustomInsights}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              <span className="hidden @min-[38rem]:inline">{ms.manageCustomInsights}</span>
+            </Button>
+          </div>
+        )}
       </div>
 
+      <MedicalSummaryCardLayoutManager
+        open={layoutOpen}
+        onOpenChange={setLayoutOpen}
+        items={layoutItems}
+        hiddenIds={cardLayout.hiddenSet}
+        onMove={cardLayout.moveCard}
+        onReset={cardLayout.resetLayout}
+        onVisibleChange={cardLayout.setCardVisible}
+        labels={{
+          title: ms.cardLayoutTitle,
+          description: ms.cardLayoutDescription,
+          reset: ms.cardLayoutReset,
+          visible: ms.cardVisible,
+          hidden: ms.cardHidden,
+          moveUp: ms.cardMoveUp,
+          moveDown: ms.cardMoveDown,
+          showCard: ms.cardShow,
+          hideCard: ms.cardHide,
+          empty: ms.cardLayoutEmpty,
+        }}
+      />
+
+        <TabsContent value="standard" forceMount className="mt-0 space-y-2">
       {!hasPatient ? (
         <div className="py-10 text-center text-sm text-muted-foreground">{ms.emptyNoPatient}</div>
       ) : !dataReady ? (
         <div className="py-10 flex justify-center">
           <StreamingIndicator label={ms.loadingData} />
         </div>
+      ) : isRestoring ? (
+        <div className="py-10 flex justify-center">
+          <StreamingIndicator label={ms.loadingSavedSummary} />
+        </div>
+      ) : isBusy && !hasCompleteResult ? (
+        <div className="rounded-xl border border-border bg-card px-3 py-8">
+          <div className="flex flex-col items-center gap-2">
+            <StreamingIndicator label={ms.generating} />
+            <p className="text-xs text-muted-foreground/70">{ms.generatingHint}</p>
+          </div>
+        </div>
       ) : (
         <>
-          {error ? (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+          {generationErrors.length > 0 ? (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1">{error === "PARSE_FAILED" ? ms.parseError : error}</span>
-              {/* Retries ONLY the summary call — the safety scan may have
-                  succeeded, and re-running it would re-bill for nothing. */}
-              {!isGenerating ? (
-                <Button onClick={() => void generate()} size="sm" variant="outline" className="h-7 shrink-0 gap-1 px-2 text-xs">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{ms.partialGenerationError}</p>
+                {generationErrors.map((item) => (
+                  <p key={item.label} className="mt-0.5 text-xs">
+                    <span className="font-medium">{item.label}：</span>{item.message}
+                  </p>
+                ))}
+              </div>
+              {!isBusy ? (
+                <Button onClick={() => void retryFailed()} size="sm" variant="outline" className="h-7 shrink-0 gap-1 px-2 text-xs">
                   <RefreshCw className="h-3 w-3" />
                   {t.errors.retry}
                 </Button>
@@ -289,148 +581,32 @@ export default function MedicalSummaryFeature() {
             </div>
           ) : null}
 
-          {/* Section jump-bar — full width above the split; counts at a
-              glance + scroll accelerator. */}
           {result ? (
-            <SummarySectionNav
-              safety={safetyCounts}
-              problems={result.problems?.length ?? 0}
-              investigations={result.investigations?.length ?? 0}
-              decisions={result.decisions.length}
-              timeline={result.timeline.length}
-              onJump={jumpTo}
-              labels={{
-                safety: ms.navSafety,
-                problems: ms.navProblems,
-                investigations: ms.navInvestigations,
-                decisions: ms.navDecisions,
-                timeline: ms.navTimeline,
-                high: ms.urgencyHigh,
-                medium: ms.urgencyMedium,
-                low: ms.urgencyLow,
-              }}
+            <CurrentPrioritiesCard
+              result={result}
+              title={ms.prioritiesTitle}
+              generatedByLine={generatedByLine}
+              expandSummaryLabel={ms.expandSummary}
+              collapseSummaryLabel={ms.collapseSummary}
+              typeLabel={typeLabel}
+              unverifiedLabel={ms.unverified}
+              onNavigate={navigateToResource}
+              updating={false}
             />
           ) : null}
 
-          {/* Newspaper split at container ≥52rem, single column below. The
-              column contents are ordered so that when they FLATTEN into one
-              column (below 52rem) the sequence is the intended reading order:
-              narrative → investigations → safety → problems → decisions → timeline. Left =
-              narrative + tests + safety (the assessment: who is this, what's changing, what's dangerous);
-              right = problems → decisions → timeline (conditions, act, history).
-              items-start lets each column flow to its own height. */}
-          <div className="grid grid-cols-1 items-start gap-2 @min-[52rem]:grid-cols-2">
-            {/* LEFT — assessment: narrative → investigations → safety */}
-            <div className="min-w-0 space-y-2">
-              {result ? (
-                <SummaryNarrativeCard
-                  result={result}
-                  title={ms.narrativeTitle}
-                  generatedByLine={generatedByLine}
-                  typeLabel={typeLabel}
-                  unverifiedLabel={ms.unverified}
-                  onNavigate={navigateToResource}
-                  updating={isGenerating}
-                />
-              ) : isGenerating ? (
-                <div className="rounded-lg border border-border bg-card px-3 py-2.5">
-                  <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">
-                    {ms.narrativeTitle}
-                  </h3>
-                  <div className="py-5 flex flex-col items-center gap-2">
-                    <StreamingIndicator label={ms.generating} />
-                    <p className="text-xs text-muted-foreground/70">{ms.generatingHint}</p>
-                  </div>
-                </div>
-              ) : null}
-              {result ? (
-                <div ref={investigationsRef} className="scroll-mt-2">
-                  <InvestigationTrendsCard
-                    result={result}
-                    title={ms.investigationsTitle}
-                    subtitle={ms.investigationsSubtitle}
-                    kindLabel={investigationKindLabel}
-                    directionLabel={investigationDirectionLabel}
-                    typeLabel={typeLabel}
-                    unverifiedLabel={ms.unverified}
-                    onNavigate={navigateToResource}
-                  />
-                </div>
-              ) : null}
-              {/* Idle (no result, not generating) renders nothing — the header's
-                  產生摘要 button is the whole call-to-action. */}
-              {/* Safety alerts — presentational; the tab's controls drive its
-                  scan. Renders independently (own loading/error/cache). */}
-              <div ref={safetyRef} className="scroll-mt-2 rounded-lg border border-border bg-card px-3 py-2.5">
-                <SafetyAlertsPanel
-                  result={safetyResult}
-                  isScanning={isScanning}
-                  error={safetyError}
-                  hasPatient={hasPatient}
-                  renderSources={renderSafetySources}
-                  onRetry={() => void scan()}
-                  retryLabel={t.errors.retry}
-                />
-              </div>
+          {availableCardIds.length > 0 && cardLayout.orderedVisibleIds.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-5 text-center text-xs text-muted-foreground">
+              {ms.allCardsHidden}
             </div>
-
-            {/* RIGHT — conditions, act, history: problems → decisions → timeline */}
-            <div className="min-w-0 space-y-2">
-              {result ? (
-                <>
-                  <div ref={problemsRef} className="scroll-mt-2">
-                    <ProblemListCard
-                      result={result}
-                      title={ms.problemsTitle}
-                      basisLabel={ms.problemBasisLabel}
-                      badgeLabel={problemBadgeLabel}
-                      typeLabel={typeLabel}
-                      unverifiedLabel={ms.unverified}
-                      onNavigate={navigateToResource}
-                    />
-                  </div>
-                  <div ref={decisionsRef} className="scroll-mt-2">
-                    <DecisionList
-                      result={result}
-                      title={ms.decisionsTitle}
-                      urgencyLabel={urgencyLabel}
-                      basisLabel={ms.basisLabel}
-                      aiInferredLabel={ms.aiInferred}
-                      showUrgency={!isPatient}
-                      typeLabel={typeLabel}
-                      unverifiedLabel={ms.unverified}
-                      onNavigate={navigateToResource}
-                    />
-                  </div>
-                </>
-              ) : null}
+          ) : (
+            <div className="space-y-2">
+              {cardLayout.orderedVisibleIds.map((cardId) => (
+                <Fragment key={cardId}>{summaryCards[cardId] ?? null}</Fragment>
+              ))}
             </div>
-          </div>
+          )}
 
-          {/* Timeline — full width BELOW the split: each event is a horizontal
-              strip (date · class tag · hospital · label) that wraps into 2–3
-              lines at half width, so it benefits from span more than any other
-              card. Reading order keeps it last either way. */}
-          {result ? (
-            <div ref={timelineRef} className="scroll-mt-2">
-              <CrossFacilityTimeline
-                result={result}
-                title={ms.timelineTitle}
-                categoryLabel={categoryLabel}
-                encounterClassLabel={encounterClassLabel}
-                onNavigate={navigateToResource}
-                earlierLabel={ms.timelineShowEarlier}
-                collapseLabel={ms.timelineShowLess}
-                droppedNote={
-                  result.droppedTimelineCount > 0
-                    ? ms.timelineDropped.replace("{count}", String(result.droppedTimelineCount))
-                    : null
-                }
-              />
-            </div>
-          ) : null}
-
-          {/* 5. Coverage — deterministic, always visible once data is loaded */}
           {coverage ? (
             <CoverageCard
               coverage={coverage}
@@ -451,6 +627,17 @@ export default function MedicalSummaryFeature() {
           </p>
         </>
       )}
+        </TabsContent>
+
+        <TabsContent value="custom" forceMount className="mt-0">
+          <CustomInsightModulesSection onManage={openCustomManager} />
+        </TabsContent>
+      </Tabs>
+      <CustomInsightModulesManagerDrawer
+        open={customManagerOpen}
+        onOpenChange={setCustomManagerOpen}
+        initialPanelId={selectedCustomPanelId}
+      />
     </div>
   )
 }

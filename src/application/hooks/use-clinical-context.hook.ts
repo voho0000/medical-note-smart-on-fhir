@@ -25,6 +25,8 @@ export type UseClinicalContextReturn = {
   supplementaryNotes: string
   setSupplementaryNotes: (notes: string) => void
   getFullClinicalContext: () => string
+  /** Document resource ids actually included in this consumer's AI context. */
+  includedDocumentIds: string[]
   editedClinicalContext: string | null
   setEditedClinicalContext: (context: string | null) => void
   resetClinicalContextToDefault: () => void
@@ -120,11 +122,18 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     [clinicalData, selectedData.documents],
   )
 
-  const documentsSection = useMemo(() => {
+  const selectedDocuments = useMemo(() => {
     if (!selectedData.documents || !clinicalData) return null
-    const docs = resolveSelectedDocuments(allDocuments, profile.documentMode, profile.documentIds)
-    return formatDocumentsSection(docs)
+    return resolveSelectedDocuments(allDocuments, profile.documentMode, profile.documentIds)
   }, [selectedData.documents, clinicalData, allDocuments, profile.documentMode, profile.documentIds])
+  const documentsSection = useMemo(
+    () => formatDocumentsSection(selectedDocuments ?? []),
+    [selectedDocuments],
+  )
+  const includedDocumentIds = useMemo(
+    () => (selectedDocuments ?? []).map((document) => document.id),
+    [selectedDocuments],
+  )
 
   const pushRegistrySection = useCallback(
     (
@@ -208,6 +217,7 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     supplementaryNotes,
     setSupplementaryNotes,
     getFullClinicalContext,
+    includedDocumentIds,
     editedClinicalContext,
     setEditedClinicalContext,
     resetClinicalContextToDefault,

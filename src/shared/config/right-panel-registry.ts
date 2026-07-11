@@ -79,18 +79,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     contentClassName: 'flex-1 mt-1',
   },
   {
-    // Custom-prompt workbench; its recurring-analysis role is being absorbed
-    // by medical-summary, so it defaults to the overflow menu.
-    id: 'clinical-insights',
-    name: 'Clinical Insights',
-    tabLabel: 'clinicalInsights',
-    order: 3,
-    enabled: true,
-    pinned: false,
-    forceMount: true,
-    contentClassName: 'flex-1 mt-1',
-  },
-  {
     id: 'ips-export',
     name: 'IPS Export',
     tabLabel: 'ipsExport',

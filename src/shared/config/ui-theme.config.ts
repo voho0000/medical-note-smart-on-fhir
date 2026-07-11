@@ -6,7 +6,6 @@
 
 import {
   MessageSquare,
-  Lightbulb,
   Settings,
   CheckSquare,
   Stethoscope,
@@ -165,11 +164,6 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
     id: 'data-selection',
     icon: CheckSquare,
     colorKey: 'selection',
-  },
-  'clinical-insights': {
-    id: 'clinical-insights',
-    icon: Lightbulb,
-    colorKey: 'insight',
   },
   'ips-export': {
     id: 'ips-export',

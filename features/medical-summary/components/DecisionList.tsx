@@ -2,6 +2,8 @@
 // their basis ALWAYS visible in small print, never behind a toggle.
 "use client"
 
+import { useState } from "react"
+import { ChevronDown } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type {
   MedicalSummaryResult,
@@ -38,8 +40,12 @@ interface DecisionListProps {
   showUrgency: boolean
   typeLabel: (resourceType?: string) => string
   unverifiedLabel: string
+  showMoreLabel: string
+  showLessLabel: string
   onNavigate?: (target: ResourceNavTarget) => void
 }
+
+const INITIAL_VISIBLE = 3
 
 export function DecisionList({
   result,
@@ -50,18 +56,23 @@ export function DecisionList({
   showUrgency,
   typeLabel,
   unverifiedLabel,
+  showMoreLabel,
+  showLessLabel,
   onNavigate,
 }: DecisionListProps) {
+  const [showAll, setShowAll] = useState(false)
   if (result.decisions.length === 0) return null
   const byKey = new Map(result.sourceIndex.map((s) => [s.key, s]))
+  const hiddenCount = Math.max(0, result.decisions.length - INITIAL_VISIBLE)
+  const visible = showAll ? result.decisions : result.decisions.slice(0, INITIAL_VISIBLE)
 
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2.5">
       <h3 className="mb-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">{title}</h3>
       {/* Card body caps then scrolls (title stays fixed) so a long
           list never dominates the column — see the medical-summary layout doc. */}
-      <div className="max-h-[24rem] space-y-1.5 overflow-y-auto scrollbar-thin-persistent">
-        {result.decisions.map((d, i) => {
+      <div className="space-y-1.5">
+        {visible.map((d, i) => {
           const style = URGENCY_STYLES[d.urgency]
           const sources = d.sourceKeys
             .map((k) => byKey.get(k))
@@ -89,6 +100,17 @@ export function DecisionList({
           )
         })}
       </div>
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll((value) => !value)}
+          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          aria-expanded={showAll}
+        >
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
+          {showAll ? showLessLabel : showMoreLabel.replace("{count}", String(hiddenCount))}
+        </button>
+      ) : null}
     </div>
   )
 }

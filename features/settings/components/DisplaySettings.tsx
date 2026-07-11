@@ -1,7 +1,7 @@
 // Display + Connection + Feedback + About settings.
 //
 // Matches the visual rhythm of the other Settings tabs (AI Preferences,
-// Chat Templates, Clinical Insights):
+// Chat Templates, Custom Summary Modules):
 //   - Outer container: space-y-6 between major sections
 //   - Each section:    space-y-3 (small uppercase Label + content space-y-2)
 //   - Default sm buttons, no shrunk h-7 custom sizes

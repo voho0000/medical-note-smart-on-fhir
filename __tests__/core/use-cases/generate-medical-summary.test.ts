@@ -5,6 +5,8 @@ import {
   GenerateMedicalSummaryUseCase,
   buildSourceCatalog,
   buildCoverageStats,
+  buildLongitudinalInvestigationContext,
+  scopeDocumentSources,
   classifyEncounterClass,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 
@@ -105,6 +107,146 @@ describe('buildSourceCatalog — care plans', () => {
   })
 })
 
+describe('buildSourceCatalog — clinical documents', () => {
+  it('adds navigable D keys for DocumentReference and Composition resources', () => {
+    const catalog = buildSourceCatalog({
+      documentReferences: [
+        {
+          id: 'discharge-1',
+          type: { text: '出院病摘' },
+          date: '2026-06-20',
+          context: { period: { start: '2026-06-02', end: '2026-06-05' } },
+          author: [{ display: '甲醫院' }],
+        },
+      ],
+      compositions: [
+        {
+          id: 'ips-1',
+          title: 'International Patient Summary',
+          date: '2026-07-01',
+          author: [{ display: '乙醫院' }],
+        },
+      ],
+    } as never)
+
+    expect(catalog.find((source) => source.key === 'D1')).toMatchObject({
+      resourceType: 'Composition',
+      resourceId: 'ips-1',
+      display: 'International Patient Summary',
+      date: '2026-07-01',
+      organization: '乙醫院',
+    })
+    expect(catalog.find((source) => source.key === 'D2')).toMatchObject({
+      resourceType: 'DocumentReference',
+      resourceId: 'discharge-1',
+      display: '出院病摘',
+      date: '2026-06-02',
+      organization: '甲醫院',
+    })
+  })
+
+  it('exposes only documents included in the AI context and renumbers D keys', () => {
+    const scoped = scopeDocumentSources([
+      { key: 'E1', resourceType: 'Encounter', resourceId: 'enc-1', display: 'visit' },
+      { key: 'D1', resourceType: 'Composition', resourceId: 'doc-new', display: 'IPS' },
+      { key: 'D2', resourceType: 'DocumentReference', resourceId: 'doc-selected', display: '出院病摘' },
+    ], ['doc-selected'])
+
+    expect(scoped.map((source) => [source.key, source.resourceId])).toEqual([
+      ['E1', 'enc-1'],
+      ['D1', 'doc-selected'],
+    ])
+  })
+})
+
+describe('buildLongitudinalInvestigationContext', () => {
+  it('surfaces serial labs and imaging from all available reports so they are not labeled single', () => {
+    const input = {
+      diagnosticReports: [
+        {
+          id: 'a1c-new',
+          category: [{ text: 'Laboratory' }],
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2026-06-02',
+          result: [{ reference: 'Observation/obs-a1c-new' }],
+        },
+        {
+          id: 'a1c-old',
+          category: [{ text: 'Laboratory' }],
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2025-12-09',
+          result: [{ reference: 'Observation/obs-a1c-old' }],
+        },
+        {
+          id: 'psa-new',
+          category: [{ text: 'Laboratory' }],
+          code: { text: 'PSA' },
+          effectiveDateTime: '2026-06-02',
+          result: [{ reference: 'Observation/obs-psa-new' }],
+        },
+        {
+          id: 'psa-old',
+          category: [{ text: 'Laboratory' }],
+          code: { text: 'PSA' },
+          effectiveDateTime: '2025-02-10',
+          result: [{ reference: 'Observation/obs-psa-old' }],
+        },
+        {
+          id: 'cxr-new',
+          category: [{ text: 'Radiology' }],
+          code: { text: '胸腔檢查' },
+          effectiveDateTime: '2026-06-02',
+          conclusion: 'Tortuosity thoracic aorta. Borderline cardiomegaly.',
+        },
+        {
+          id: 'cxr-old',
+          category: [{ text: 'Radiology' }],
+          code: { text: '胸腔檢查' },
+          effectiveDateTime: '2026-05-25',
+          conclusion: 'Widening of upper mediastinum. Cardiomegaly.',
+        },
+      ],
+      observations: [
+        {
+          id: 'obs-a1c-new',
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2026-06-02',
+          valueQuantity: { value: 6.6, unit: '%' },
+        },
+        {
+          id: 'obs-a1c-old',
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2025-12-09',
+          valueQuantity: { value: 6.7, unit: '%' },
+        },
+        {
+          id: 'obs-psa-new',
+          code: { text: 'PSA' },
+          effectiveDateTime: '2026-06-02',
+          valueQuantity: { value: 0.64, unit: 'ng/mL' },
+        },
+        {
+          id: 'obs-psa-old',
+          code: { text: 'PSA' },
+          effectiveDateTime: '2025-02-10',
+          valueQuantity: { value: 1.32, unit: 'ng/mL' },
+        },
+      ],
+    }
+    const catalog = buildSourceCatalog(input as never)
+    const context = buildLongitudinalInvestigationContext(input as never, catalog)
+
+    expect(context).toContain('NOT a single result')
+    expect(context).toContain('HbA1c: 6.7 % (2025-12-09;')
+    expect(context).toContain('6.6 % (2026-06-02;')
+    expect(context).toContain('PSA: 1.32 ng/mL (2025-02-10;')
+    expect(context).toContain('0.64 ng/mL (2026-06-02;')
+    expect(context).toContain('胸腔檢查:')
+    expect(context).toContain('2026-05-25;')
+    expect(context).toContain('2026-06-02;')
+  })
+})
+
 describe('buildCoverageStats', () => {
   it('counts everything and derives the date range + unique organizations', () => {
     const stats = buildCoverageStats(CATALOG_INPUT)
@@ -159,6 +301,8 @@ describe('parseResult', () => {
     const parsed = useCase.parseResult(reply)
     expect(parsed).not.toBeNull()
     expect(parsed!.headline).toContain('糖尿病')
+    expect(parsed!.medicationEducation).toEqual([])
+    expect(parsed!.medicationReview).toEqual({ regimen: [], changes: [], reconciliation: [] })
   })
 
   it('rejects malformed / off-schema replies', () => {
@@ -240,6 +384,35 @@ describe('parseResult', () => {
       expect(useCase.parseResult(reply)).not.toBeNull()
       expect(warnSpy).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('medication education prompt contract', () => {
+  const input = {
+    clinicalContext: 'Medication: Metformin 500mg',
+    catalog: [{ key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', display: 'Metformin 500mg' }],
+    locale: 'en' as const,
+  }
+
+  it('asks the patient summary for benefit-first, non-alarming education', () => {
+    const messages = useCase.buildMessages({ ...input, audience: 'patient' })
+    expect(messages[0].content).toContain('Populate "medicationEducation" as benefit-first')
+    expect(messages[0].content).toContain('Do NOT use fear-provoking labels')
+    expect(messages[0].content).toContain('Never advise the patient to start, stop, skip, or change a dose')
+  })
+
+  it('keeps the clinician summary free of the patient education card', () => {
+    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
+    expect(messages[0].content).toContain('Return "medicationEducation" as an empty array')
+    expect(messages[0].content).toContain('Populate "medicationReview" as a concise clinician medication-reconciliation overview')
+    expect(messages[0].content).toContain('NOT another safety card')
+    expect(messages[0].content).toContain('cite its matching D# source key')
+    expect(messages[0].content).toContain('does NOT prove that a specific procedure was performed')
+  })
+
+  it('keeps the patient summary free of the clinician medication review', () => {
+    const messages = useCase.buildMessages({ ...input, audience: 'patient' })
+    expect(messages[0].content).toContain('Return "medicationReview" with empty regimen, changes, and reconciliation arrays')
   })
 })
 
@@ -371,6 +544,142 @@ describe('finalizeResult', () => {
     expect(result.sourceIndex.find((source) => source.key === 'L99')).toMatchObject({ verified: false })
     const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
     expect(num('L1')).toBeLessThan(num('C1'))
+  })
+
+  it('guards against a single-result badge when cited investigation sources span multiple dates', () => {
+    const serialCatalog = buildSourceCatalog({
+      diagnosticReports: [
+        { id: 'rep-new', code: { text: 'HbA1c' }, effectiveDateTime: '2026-06-02' },
+        { id: 'rep-old', code: { text: 'HbA1c' }, effectiveDateTime: '2025-12-09' },
+        { id: 'cxr-new', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-06-02' },
+        { id: 'cxr-old', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-05-25' },
+      ],
+    })
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      investigations: [
+        {
+          label: 'HbA1c',
+          kind: 'lab',
+          direction: 'single',
+          trend: '6.7% → 6.6%',
+          interpretation: '模型誤回單次結果',
+          sources: ['L1', 'L2'],
+        },
+      ],
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, serialCatalog)
+    expect(result.investigations[0].direction).toBe('unknown')
+  })
+
+  it('guards against a single-result badge when the catalog has serial reports for the same topic', () => {
+    const serialCatalog = buildSourceCatalog({
+      diagnosticReports: [
+        { id: 'rep-new', code: { text: 'HbA1c' }, effectiveDateTime: '2026-06-02' },
+        { id: 'rep-old', code: { text: 'HbA1c' }, effectiveDateTime: '2025-12-09' },
+        { id: 'cxr-new', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-06-02' },
+        { id: 'cxr-old', code: { text: '胸腔檢查' }, effectiveDateTime: '2026-05-25' },
+      ],
+    })
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      investigations: [
+        {
+          label: '血糖與糖化血色素',
+          kind: 'lab',
+          direction: 'single',
+          trend: 'HbA1c: 6.6% (2026/06/02)',
+          interpretation: '模型只引用最新一筆，但 catalog 其實有序列',
+          sources: ['L1'],
+        },
+        {
+          label: '胸腔影像檢查',
+          kind: 'imaging',
+          direction: 'single',
+          trend: '2026/06/02 影像顯示心臟輕微擴大',
+          interpretation: '模型只引用最新一筆胸片，但 catalog 其實有序列',
+          sources: ['L1'],
+        },
+      ],
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, serialCatalog)
+    expect(result.investigations[0].direction).toBe('unknown')
+    expect(result.investigations[1].direction).toBe('unknown')
+  })
+
+  it('finalizes medication education and numbers it before problem sources', () => {
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      investigations: [],
+      medicationEducation: [
+        {
+          name: 'Metformin',
+          benefit: '協助控制血糖',
+          attention: '依醫囑使用，有疑問可詢問醫師或藥師',
+          sources: ['M1', 'M99'],
+        },
+        {
+          name: '沒有用藥紀錄支持的項目',
+          benefit: '不應顯示',
+          attention: '不應顯示',
+          sources: ['C1'],
+        },
+      ],
+      problems: [{ label: '第2型糖尿病', kind: 'diagnosis', sources: ['C1'] }],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, catalog)
+    expect(result.medicationEducation).toHaveLength(1)
+    expect(result.medicationEducation[0]).toMatchObject({
+      name: 'Metformin',
+      benefit: '協助控制血糖',
+      attention: '依醫囑使用，有疑問可詢問醫師或藥師',
+      sourceKeys: ['M1', 'M99'],
+    })
+    expect(result.sourceIndex.find((source) => source.key === 'M99')).toMatchObject({ verified: false })
+    const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
+    expect(num('M1')).toBeLessThan(num('C1'))
+  })
+
+  it('finalizes clinician medication review, normalizes labels, and drops uncited items', () => {
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      investigations: [],
+      medicationReview: {
+        regimen: [
+          { group: '糖尿病', name: 'Metformin', sig: 'BID', sources: ['M1'] },
+          { group: '心臟', name: '不存在的藥', sources: ['C1'] },
+        ],
+        changes: [
+          { type: 'cross-facility', medication: 'Metformin', summary: '跨院記錄', sources: ['M1'] },
+          { type: 'invented', medication: 'Metformin', summary: '待確認', sources: ['M1'] },
+        ],
+        reconciliation: [
+          { reason: 'missing-sig', text: '需確認用法', sources: ['M1'] },
+          { reason: 'invented', text: '其他待確認', sources: ['M1'] },
+        ],
+      },
+      problems: [{ label: '第2型糖尿病', kind: 'diagnosis', sources: ['C1'] }],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, catalog)
+    expect(result.medicationReview.regimen).toHaveLength(1)
+    expect(result.medicationReview.changes.map((item) => item.type)).toEqual(['cross-facility', 'uncertain'])
+    expect(result.medicationReview.reconciliation.map((item) => item.reason)).toEqual(['missing-sig', 'other'])
+    const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
+    expect(num('M1')).toBeLessThan(num('C1'))
   })
 
   it('rescues quoted key phrases when zero highlights survive', () => {

@@ -1,5 +1,5 @@
-// Proactive Safety Alerts hook. Runs the pure-AI scan on a FIXED fast model
-// (Gemini Flash-Lite), parses the structured reply, and caches the result per
+// Proactive Safety Alerts hook. Runs the pure-AI scan on the summary's selected
+// model, parses the structured reply, and caches the result per
 // patient so switching tabs doesn't re-run / re-bill. Supports a persisted
 // "auto-scan" preference: when on, the scan fires once per patient automatically.
 'use client'
@@ -24,7 +24,6 @@ import {
 } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
   getModelDefinition,
-  isAutoRunEligibleModel,
   gateModel,
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
@@ -34,6 +33,7 @@ import {
 } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import {
   getSourceCatalog,
+  scopeDocumentSources,
   type SummaryCatalogInput,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
@@ -42,6 +42,7 @@ import {
   DEMO_PATIENT_ID,
   demoSafetyScanSnapshots,
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
+import { shouldAutoRunSummarySlot } from '@/src/application/hooks/medical-summary/summary-auto-run-policy'
 
 // Persist a completed scan per-patient so a page reload reuses it instead of
 // re-billing the model. Same lifecycle as the bundle: encrypted with the tab
@@ -125,6 +126,8 @@ export interface UseSafetyAlertsReturn {
   isScanning: boolean
   error: string | null
   hasPatient: boolean
+  /** True once this exact patient+audience+model cache slot was restored. */
+  isHydrated: boolean
   autoScan: boolean
   setAutoScan: (value: boolean) => void
   /** User-chosen scan model (independent of the chat model). */
@@ -138,14 +141,14 @@ export interface UseSafetyAlertsReturn {
 
 export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const { patient } = usePatient()
-  const { getFullClinicalContext } = useClinicalContext('insights')
+  const { getFullClinicalContext, includedDocumentIds } = useClinicalContext('insights')
   const clinicalData = useClinicalData() as unknown as SummaryCatalogInput | null
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
   // Auth must be resolved before the proxy call carries a Firebase token —
   // otherwise an early auto-scan races the auth listener and the proxy rejects
   // it with "sign-in required".
-  const { loading: authLoading } = useAuth()
+  const { loading: authLoading, user, isAnonymous } = useAuth()
 
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
 
@@ -174,6 +177,15 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   // (健康提醒) scans are different outputs, and each model scans independently;
   // switching audience/model swaps to the matching slot (or generates it).
   const scanKey = patientId ? `${patientId}::${audience}::${resolvedModelId}` : ''
+  const selectedModelProvider = getModelDefinition(modelId)?.provider
+  const hasSelectedProviderKey =
+    selectedModelProvider === 'openai' ? !!apiKey :
+    selectedModelProvider === 'gemini' ? !!geminiKey :
+    selectedModelProvider === 'claude' ? !!claudeKey : false
+  const accessScope = hasSelectedProviderKey ? 'own-key' : user ? `user:${user.uid}` : isAnonymous ? 'anonymous' : 'no-session'
+  const autoRunIdentity = scanKey
+    ? `${scanKey}::${accessScope}`
+    : ''
   const result = useSafetyAlertsStore((s) => (scanKey ? s.byPatient[scanKey] : undefined))
   const setResult = useSafetyAlertsStore((s) => s.setResult)
   const isScanning = useSafetyAlertsStore((s) => (scanKey ? !!s.scanning[scanKey] : false))
@@ -185,8 +197,10 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   // to the prompt so alerts can cite keys, and kept as a lookup so the UI can
   // resolve those keys into click-to-navigate citations.
   const catalog = useMemo(
-    () => (clinicalData ? getSourceCatalog(clinicalData) : []),
-    [clinicalData],
+    () => (clinicalData
+      ? scopeDocumentSources(getSourceCatalog(clinicalData), includedDocumentIds)
+      : []),
+    [clinicalData, includedDocumentIds],
   )
   const catalogByKey = useMemo(
     () => new Map(catalog.map((c) => [c.key, c])),
@@ -255,8 +269,8 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   useEffect(() => {
     if (!scanKey) return
     if (useSafetyAlertsStore.getState().byPatient[scanKey]) {
-      setHydratedScan(scanKey)
-      return
+      const timer = window.setTimeout(() => setHydratedScan(scanKey), 0)
+      return () => window.clearTimeout(timer)
     }
     let cancelled = false
     void loadEncryptedCache<SafetyScanResult>(safetyCacheKey(scanKey), SAFETY_CACHE_MAX_AGE_MS).then((cached) => {
@@ -281,27 +295,32 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     const snapshot = demoSafetyScanSnapshots[audience === 'patient' ? 'patient' : 'medical']
     const parsed = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(snapshot), catalog)
     if (!parsed) return
-    autoTriggeredRef.current = scanKey
+    autoTriggeredRef.current = autoRunIdentity
     // Same deterministic count rule as a live scan (see scan() above).
     setResult(scanKey, { ...parsed, scannedCount: catalog.length })
-  }, [scanKey, result, hydratedScan, patientId, locale, resolvedModelId, catalog, audience, setResult])
+  }, [scanKey, autoRunIdentity, result, hydratedScan, patientId, locale, resolvedModelId, catalog, audience, setResult])
 
   // Auto-scan: fire once per patient when enabled and there's no result — but
   // only AFTER cache hydration has settled, so a refresh doesn't race the
   // restore and re-bill. The ref guard means a failed auto-scan is NOT retried
   // in a loop; the user re-scans manually.
   useEffect(() => {
-    if (!autoScan || authLoading || !scanKey || isScanning || result) return
-    if (hydratedScan !== scanKey) return
-    if (autoTriggeredRef.current === scanKey) return
-    // Only a provider's free BASE model (or an own-key model) auto-scans; free
-    // NON-base proxy models require an explicit press so browsing the model
-    // picker doesn't silently spend the visitor's free quota (2026-07-07).
-    // Mirrors the summary hook.
-    if (!isAutoRunEligibleModel(resolvedModelId)) return
-    autoTriggeredRef.current = scanKey
+    if (!shouldAutoRunSummarySlot({
+      enabled: autoScan,
+      authLoading,
+      slotKey: scanKey,
+      busy: isScanning,
+      dataReady: true,
+      hasResult: Boolean(result),
+      hydratedSlotKey: hydratedScan,
+      autoRunIdentity,
+      triggeredIdentity: autoTriggeredRef.current,
+    })) return
+    // Mirrors the summary hook: the shared toggle authorizes every available
+    // selected model, not only the Lite/base model.
+    autoTriggeredRef.current = autoRunIdentity
     void scan()
-  }, [autoScan, authLoading, scanKey, isScanning, result, hydratedScan, scan, resolvedModelId])
+  }, [autoScan, authLoading, scanKey, autoRunIdentity, isScanning, result, hydratedScan, scan])
 
   // Switching model just changes which per-model slot the view reads — it does
   // NOT cancel or clear anything. The old model's in-flight scan keeps going and
@@ -316,6 +335,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     isScanning,
     error,
     hasPatient: !!patientId,
+    isHydrated: !scanKey || hydratedScan === scanKey,
     autoScan,
     setAutoScan,
     model: modelId,

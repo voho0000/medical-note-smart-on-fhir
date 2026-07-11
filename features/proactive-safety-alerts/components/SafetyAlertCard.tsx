@@ -3,11 +3,12 @@
 import { useState, type ReactNode } from "react"
 import { ChevronDown } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { SafetyAlert, SafetySeverity } from "@/src/core/entities/safety-alert.entity"
 
 /** Renders an alert's cited source keys as a navigable citation (from parent). */
-type RenderSources = (keys: string[]) => ReactNode
+type RenderSources = (keys: string[], unsupportedKeys?: string[]) => ReactNode
 
 const SEVERITY_BADGE: Record<SafetySeverity, string> = {
   high: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
@@ -15,12 +16,20 @@ const SEVERITY_BADGE: Record<SafetySeverity, string> = {
   low: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
 }
 
+// Patient-facing reminders deliberately avoid the danger-red hierarchy used
+// for clinician risk triage. Importance remains visible, but the language and
+// colour communicate "what to notice first" rather than imminent harm.
+const PATIENT_SEVERITY_BADGE: Record<SafetySeverity, string> = {
+  high: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+  medium: "bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300",
+  low: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+}
+
 // An AI claim must be auditable at a glance. When the alert cites source keys,
-// the navigable citation pill next to 依據 IS the audit trail (click → left
-// panel resource) and the plain-text evidence list is redundant noise — so it
-// only renders as a FALLBACK for alerts with no citable sources (不遮蔽: the
-// trail never disappears entirely). Long fallback lists truncate with a
-// plain-text "…等 n 筆" note.
+// render the same superscript citation pill used by the Medical Summary cards
+// (click → left panel resource). Plain-text evidence only renders as a fallback
+// for alerts with no citable sources (不遮蔽: the trail never disappears
+// entirely). Long fallback lists truncate with a plain-text "…等 n 筆" note.
 const EVIDENCE_VISIBLE_MAX = 5
 
 // Density tiers keep a large alert set from burying the sections below it:
@@ -29,43 +38,35 @@ const EVIDENCE_VISIBLE_MAX = 5
 //                fold behind a per-row toggle so the count stays scannable.
 type Density = "full" | "compact"
 
-function EvidenceList({
+function EvidenceInline({
   alert,
   label,
   renderSources,
+  compact = false,
 }: {
   alert: SafetyAlert
   label: string
   renderSources?: RenderSources
+  compact?: boolean
 }) {
   const { t } = useLanguage()
   const evidence = alert.evidence ?? []
   const sources = alert.sources ?? []
-  // The cited source keys become a navigable citation next to the 依據 label —
-  // parity with the summary/decision cards (click → left panel resource).
-  const sourcesEl = renderSources && sources.length > 0 ? renderSources(sources) : null
-  if (evidence.length === 0 && !sourcesEl) return null
-  const visible = evidence.slice(0, EVIDENCE_VISIBLE_MAX)
+  // The cited source keys become the same superscript citation pill used by
+  // the summary/decision cards (click → left panel resource).
+  const sourcesEl = renderSources && sources.length > 0
+    ? renderSources(sources, alert.unsupportedSourceKeys)
+    : null
+  if (sourcesEl) return <>{sourcesEl}</>
+  if (evidence.length === 0) return null
+  const visible = evidence.slice(0, compact ? 1 : EVIDENCE_VISIBLE_MAX)
   const hidden = evidence.length - visible.length
+  const fallbackEvidence = visible.join("；")
   return (
-    <div className="mt-1">
-      <p className="flex items-center gap-0.5 text-[0.625rem] tracking-wide text-violet-500/80 dark:text-violet-400/80">
-        {label}
-        {sourcesEl}
-      </p>
-      {!sourcesEl && evidence.length > 0 ? (
-        <ul className="mt-0.5 ml-1 space-y-0.5">
-          {visible.map((e, i) => (
-            <li key={i} className="text-[0.6875rem] leading-snug text-muted-foreground/80 break-words">• {e}</li>
-          ))}
-          {hidden > 0 ? (
-            <li className="text-[0.6875rem] text-muted-foreground/60">
-              {t.safetyAlerts.evidenceMore.replace("{count}", String(hidden))}
-            </li>
-          ) : null}
-        </ul>
-      ) : null}
-    </div>
+    <span className="ml-1 inline text-[0.625rem] leading-none text-muted-foreground/70">
+      （{label}：{fallbackEvidence}
+      {hidden > 0 ? t.safetyAlerts.evidenceMore.replace("{count}", String(hidden)) : null}）
+    </span>
   )
 }
 
@@ -79,18 +80,21 @@ export function SafetyAlertCard({
   renderSources?: RenderSources
 }) {
   const { t } = useLanguage()
+  const { audience } = useAudience()
   const [expanded, setExpanded] = useState(false)
+  const isPatient = audience === "patient"
+  const safety = isPatient ? { ...t.safetyAlerts, ...t.safetyAlerts.patient } : t.safetyAlerts
 
   const severityLabel: Record<SafetySeverity, string> = {
-    high: t.safetyAlerts.severityHigh,
-    medium: t.safetyAlerts.severityMedium,
-    low: t.safetyAlerts.severityLow,
+    high: safety.severityHigh,
+    medium: safety.severityMedium,
+    low: safety.severityLow,
   }
   const badge = (
     <span
       className={cn(
         "shrink-0 h-fit rounded-md px-1.5 py-px text-[0.625rem] font-semibold",
-        SEVERITY_BADGE[alert.severity],
+        (isPatient ? PATIENT_SEVERITY_BADGE : SEVERITY_BADGE)[alert.severity],
       )}
     >
       {severityLabel[alert.severity]}
@@ -98,43 +102,55 @@ export function SafetyAlertCard({
   )
 
   if (density === "compact") {
-    // A collapsible row — the whole header toggles detail + evidence. The
-    // recommendation (the actionable line) stays visible even when collapsed.
+    // A compact row: title + recommendation + source stay visible. Only the
+    // right chevron toggles detail, so clickable citations are not nested
+    // inside another button.
     const hasMore =
       !!alert.detail || (alert.evidence?.length ?? 0) > 0 || (alert.sources?.length ?? 0) > 0
     return (
       <div className="border-b border-border last:border-b-0 py-1.5">
-        <button
-          type="button"
-          onClick={() => hasMore && setExpanded((v) => !v)}
-          className={cn(
-            "flex w-full items-start gap-2 text-left",
-            hasMore && "cursor-pointer",
-          )}
-          aria-expanded={hasMore ? expanded : undefined}
-        >
+        <div className="flex w-full items-start gap-2 text-left">
           {badge}
-          <span className="min-w-0 flex-1">
-            <span className="block font-medium text-[0.8125rem] leading-snug text-foreground">{alert.title}</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-[0.8125rem] leading-snug text-foreground">
+              {alert.title}
+              <EvidenceInline
+                alert={alert}
+                label={t.safetyAlerts.evidenceLabel}
+                renderSources={renderSources}
+                compact
+              />
+            </p>
             {alert.recommendation ? (
-              <span className="mt-0.5 block text-[0.6875rem] leading-snug text-muted-foreground break-words">
+              <p className="mt-0.5 text-[0.6875rem] leading-snug text-muted-foreground break-words">
                 → {alert.recommendation}
-              </span>
+              </p>
             ) : null}
-          </span>
+          </div>
           {hasMore ? (
-            <ChevronDown
-              className={cn(
-                "h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground/50 transition-transform",
-                expanded && "rotate-180",
-              )}
-            />
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-0.5 shrink-0 rounded-sm p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-muted-foreground"
+              aria-expanded={expanded}
+              aria-label={
+                expanded
+                  ? t.medicalSummary.showLessItems
+                  : t.medicalSummary.showMoreItems.replace("{count}", "1")
+              }
+            >
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform",
+                  expanded && "rotate-180",
+                )}
+              />
+            </button>
           ) : null}
-        </button>
+        </div>
         {expanded ? (
           <div className="mt-1 ml-10 pl-0">
             <p className="text-[0.8125rem] leading-snug text-muted-foreground break-words">{alert.detail}</p>
-            <EvidenceList alert={alert} label={t.safetyAlerts.evidenceLabel} renderSources={renderSources} />
           </div>
         ) : null}
       </div>
@@ -146,14 +162,18 @@ export function SafetyAlertCard({
     <div className="flex gap-2 py-2 border-b border-border last:border-b-0">
       {badge}
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-[0.8125rem] leading-snug text-foreground">{alert.title}</p>
-        <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted-foreground break-words">{alert.detail}</p>
+        <p className="font-semibold text-[0.8125rem] leading-snug text-foreground">
+          {alert.title}
+          <EvidenceInline alert={alert} label={t.safetyAlerts.evidenceLabel} renderSources={renderSources} compact />
+        </p>
+        <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted-foreground break-words">
+          {alert.detail}
+        </p>
         {alert.recommendation ? (
           <p className="mt-0.5 text-[0.8125rem] leading-snug text-foreground/80 break-words">
             → {alert.recommendation}
           </p>
         ) : null}
-        <EvidenceList alert={alert} label={t.safetyAlerts.evidenceLabel} renderSources={renderSources} />
       </div>
     </div>
   )

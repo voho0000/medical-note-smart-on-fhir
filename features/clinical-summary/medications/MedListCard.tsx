@@ -29,6 +29,7 @@ import { useVaccineRows } from './hooks/useVaccineRows'
 import { useAllergies } from '../allergies/hooks/useAllergies'
 import { useActiveAllergies } from '../allergies/hooks/useActiveAllergies'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
+import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 import { MedicationList } from './components/MedicationList'
 import { VaccineList } from './components/VaccineList'
 import { MedicationTimeline } from './timeline/MedicationTimeline'
@@ -58,6 +59,18 @@ export function MedListCard() {
   const [tab, setTab] = useState<DataTab>('medications')
   const [view, setView] = useState<MedView>('list')
   const [searchQuery, setSearchQuery] = useState('')
+  const pendingNav = useResourceNavigationStore((s) => s.pending)
+  const navSeq = useResourceNavigationStore((s) => s.seq)
+
+  useEffect(() => {
+    if (!pendingNav || !['MedicationRequest', 'MedicationStatement'].includes(pendingNav.resourceType)) return
+    const timer = window.setTimeout(() => {
+      setTab('medications')
+      setView('list')
+      setSearchQuery('')
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [pendingNav, navSeq])
 
   // 用藥 search — matches the bilingual searchHaystack on each row (drug name
   // 中/英, NHI code, drug class, indication ICD, 機構, date incl. 民國). Both

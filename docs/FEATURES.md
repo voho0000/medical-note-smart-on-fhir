@@ -13,7 +13,6 @@
 ```typescript
 // ✅ 正確 - 使用 barrel file
 import { MedicalChatFeature } from '@/features/medical-chat'
-import { ClinicalInsightsFeature } from '@/features/clinical-insights'
 import { AllergiesCard, VitalsCard } from '@/features/clinical-summary'
 import { AuthDialog, useAuthDialog } from '@/features/auth'
 ```
@@ -100,22 +99,16 @@ import { MedicalChatFeature } from '@/features/medical-chat'
 
 ---
 
-### 4. Clinical Insights（臨床洞察）
-**Entry Point:** `@/features/clinical-insights`
-
-```typescript
-import { ClinicalInsightsFeature } from '@/features/clinical-insights'
-
-// Usage
-<ClinicalInsightsFeature />
-```
+### 4. Custom Summary Modules（自訂摘要模組）
 
 **功能**：
-- 自訂提示詞的並行 AI 分析工作台（每個標籤一個提示詞，載入病人後可自動生成）
-- 洞察標籤可新增、重新命名、調整提示詞；回應可手動編輯（重新生成前會確認）
+- 直接呈現在 Medical Summary 固定卡片下方，不需要切換分頁
+- 在醫療摘要內的管理 drawer 新增、重新命名、排序及調整提示詞
+- 可從 Prompt Gallery 匯入或分享模板
+- 每張模組獨立生成與快取；最多顯示 5 張、自動生成 2 張
 - 內建範本：變化摘要（What's Changed）、臨床快照（Clinical Snapshot）
 
-> 主動安全警示（Safety Alerts）已於 v0.26 移至「醫療摘要」分頁內嵌呈現（見第 10 節）；臨床洞察回歸純自訂工作台。
+> 舊 Clinical Insights tab 與 Settings 內的重複管理入口已移除；底層模板同步、生成與快取能力保留。
 
 ---
 
@@ -170,7 +163,7 @@ import { SettingsFeature } from '@/features/settings'
 **功能**：
 - AI 偏好設定（API 金鑰、金鑰持久化）——模型改在各 AI 功能內就地選擇（共用 `src/shared/components/ModelPicker`，各功能偏好獨立記憶）
 - 提示範本管理
-- 臨床洞察標籤自訂
+- 自訂摘要模組與 Prompt Gallery 管理
 - 外觀設定（深色/亮色模式）
 
 ---
@@ -245,11 +238,12 @@ import MedicalSummaryFeature from '@/features/medical-summary/Feature'
 **功能**：
 - **零點擊 AI 簡報**：載入病人後自動產生（onboarding 可關閉），單頁縱向流——重點閱讀零點擊，稽核才互動
 - **跨院病程摘要**：3–5 句敘事、關鍵片語 highlight、Perplexity 式引用藥丸；引用逐筆對 FHIR bundle 驗證，查無來源標「未驗證」（琥珀色、不可點），已驗證來源可點擊導航至左側面板對應卡片並閃爍定位
-- **用藥安全警示（內嵌）**：`features/proactive-safety-alerts` 的 `SafetyAlertsPanel` 以 embedded 模式內嵌；依嚴重度分級密度——高風險完整卡（證據常駐）、中風險緊湊列（點擊展開）、低風險整批收合一行
+- **民眾用藥與照護 Card**：僅民眾版顯示；挑選 3–5 組重要用藥，以「對目前照護的幫助」優先、再提供一項可行的平實提醒。禁止自行停藥／改量、恐嚇式風險標籤與罕見副作用清單；每項至少要有一筆可驗證的 Medication FHIR 來源，否則 App 端直接不渲染
+- **照護提醒與安全（固定核心 Card）**：同一套 Safety scan 依 audience 呈現為醫療人員的「主動安全警示」或民眾的「健康提醒」；最高優先項目同步進入「此刻最重要」。民眾版以「優先留意／建議留意／日常提醒」取代危險分級用語，避免不必要焦慮
 - **需要決定的事**：附緊急度（高／中／低）與依據來源
-- **跨院時間軸**：App 端確定性抽取事件骨架（日期、院所、住院／急診／門診由 `Encounter.class` 判別），AI 只做策展與一句話標籤——零幻覺日期與院所；預設顯示最近 8 筆，較早收合
+- **跨院時間軸**：App 端確定性抽取事件骨架（日期、院所、住院／急診／門診由 `Encounter.class` 判別），AI 只做策展與一句話標籤——零幻覺日期與院所；預設顯示最近 5 筆，較早收合
 - **資料涵蓋卡**：純計算（零 AI）——日期範圍、院所數、各資源計數＋健康存摺涵蓋邊界聲明（自費不含、上傳時間差）
-- **區塊導覽列**：敘事卡下方的警示／待決／時間軸計數 chip（色碼嚴重度），點擊平滑捲至區塊
+- **三層閱讀架構**：導覽列切成「此刻重點／追蹤與照護／更多資訊」；固定核心卡集中於前兩層，自訂摘要模組與時間軸收在第三層
 - **雙受眾**：醫療人員版／民眾版跟隨全域 audience，各自生成與快取；民眾版有語氣護欄與免責文案
 - **快取與韌性**：encrypted-session-cache 12 小時（key 含 audience）；Zod schema 驗證，壞 JSON 自動靜默重試一次
 

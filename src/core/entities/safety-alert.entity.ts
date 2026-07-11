@@ -50,6 +50,9 @@ export type SafetyScanResultInput = z.infer<typeof SafetyScanResultSchema>
 export interface SafetyAlert extends SafetyAlertInput {
   id: string
   category: SafetyCategory
+  /** Existing D# resources whose document text does not support a procedure
+   *  asserted by this alert. The UI keeps them visible but marks them amber. */
+  unsupportedSourceKeys?: string[]
 }
 
 export interface SafetyScanResult {

@@ -10,7 +10,7 @@
 // a DocumentReference attachment is one self-contained document.
 "use client"
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FileText } from 'lucide-react'
 import {
   Accordion,
@@ -98,6 +98,8 @@ interface HtmlDocumentRendererProps {
   /** Whether to expand the body by default. The card sets this to true when
    *  the dataset contains exactly one document, to save the user a click. */
   defaultExpanded?: boolean
+  /** Navigation sequence that should open the body for a cited source. */
+  forceExpandKey?: number
   /** Optional control rendered inside the trigger, just left of the ▼ chevron
    *  (e.g. the 向右展開 button). */
   rightControl?: ReactNode
@@ -116,6 +118,7 @@ interface HtmlDocumentRendererProps {
 export function HtmlDocumentRenderer({
   attachment,
   defaultExpanded = false,
+  forceExpandKey,
   rightControl,
   labels,
 }: HtmlDocumentRendererProps) {
@@ -124,16 +127,26 @@ export function HtmlDocumentRenderer({
   // ~tens of discharge summaries this turns a multi-MB eager parse into
   // sub-100KB per-open work.
   const [hasOpened, setHasOpened] = useState(defaultExpanded)
-  const defaultValue = defaultExpanded ? 'body' : undefined
+  const [openValue, setOpenValue] = useState(defaultExpanded ? 'body' : '')
+
+  useEffect(() => {
+    if (forceExpandKey === undefined) return
+    const timer = window.setTimeout(() => {
+      setHasOpened(true)
+      setOpenValue('body')
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [forceExpandKey])
 
   return (
     <Accordion
       type="single"
       collapsible
-      defaultValue={defaultValue}
+      value={openValue}
       className="space-y-1.5"
       onValueChange={(v) => {
         if (v === 'body') setHasOpened(true)
+        setOpenValue(v)
       }}
     >
       <AccordionItem value="body" className="rounded-md border border-border/60 bg-background">

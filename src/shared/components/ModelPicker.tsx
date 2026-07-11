@@ -1,5 +1,5 @@
 // Shared in-panel model picker. Each AI feature mounts one next to where the
-// model is actually used (chat toolbar, insights toolbar, medical-summary
+// model is actually used (chat toolbar, custom-module manager, medical-summary
 // header) and wires it to its own persisted preference.
 //
 // The trigger and the checkmark always show the EFFECTIVE model — the raw
@@ -26,6 +26,7 @@ import {
   gateModelForKeys,
   getModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
+import { cn } from "@/src/shared/utils/cn.utils"
 
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
@@ -38,6 +39,8 @@ interface ModelPickerProps {
   /** Deep mode: additionally lock models flagged disableAgentMode. */
   agentModeActive?: boolean
   align?: "start" | "end"
+  /** Dense header variant: hide the prefix and size to the actual model name. */
+  compact?: boolean
 }
 
 export function ModelPicker({
@@ -47,6 +50,7 @@ export function ModelPicker({
   tooltip,
   agentModeActive = false,
   align = "end",
+  compact = false,
 }: ModelPickerProps) {
   const { t } = useLanguage()
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
@@ -80,12 +84,17 @@ export function ModelPicker({
         <button
           type="button"
           title={tooltip}
-          className="flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+          className={cn(
+            "flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted",
+            compact && "max-w-[14rem]",
+          )}
         >
           {/* The 「模型：」 prefix follows the app's below-sm density rule
               (labels drop, icons/values stay) — on phones the bordered pill +
               tooltip carry the meaning. */}
-          <span className="hidden shrink-0 sm:inline">{t.modelPicker?.label ?? '模型'}：</span>
+          <span className={cn("hidden shrink-0 sm:inline", compact && "sm:hidden")}>
+            {t.modelPicker?.label ?? '模型'}：
+          </span>
           {/* Fixed-width name slot: the trigger keeps ONE size no matter which
               model is picked. sm:w-36 (108px at this root font-size) sits just
               past the longest label in the lineup ("Gemini 3 Flash Preview"
@@ -93,7 +102,14 @@ export function ModelPicker({
               Below sm a narrower slot truncates long names so the header strip
               survives the signed-in button set on a phone. The slot may still
               shrink (flex) when the host row is genuinely tight. */}
-          <span className="w-32 truncate text-left font-medium text-foreground sm:w-36">{effectiveLabel}</span>
+          <span
+            className={cn(
+              "truncate text-left font-medium text-foreground",
+              compact ? "max-w-[12rem]" : "w-32 sm:w-36",
+            )}
+          >
+            {effectiveLabel}
+          </span>
           <ChevronDown className="h-3 w-3 shrink-0" />
         </button>
       </DropdownMenuTrigger>

@@ -62,7 +62,7 @@ const ENCOUNTER_CLASS_STYLES: Record<EncounterClass, { pill: string; dot: string
 // Cross-hospital bundles span years; the recent events carry the clinical
 // weight, so cap the initial view and fold the older tail behind a counted
 // toggle (chronological order is preserved — earlier events slot in above).
-const INITIAL_VISIBLE = 10
+const INITIAL_VISIBLE = 5
 
 interface CrossFacilityTimelineProps {
   result: MedicalSummaryResult
@@ -103,7 +103,7 @@ export function CrossFacilityTimeline({
           split), each event compacts to a single line — date · tag · hospital
           · label — instead of stacking the label and leaving the right half
           empty. Narrow cards keep the two-line stack. */}
-      <div className="@container max-h-[26rem] overflow-y-auto scrollbar-thin-persistent">
+      <div className="@container">
         <ul className="ml-1 space-y-0 border-l-2 border-border pl-3.5">
           {visible.map((event) => {
             const encClass = event.category === "encounter" ? event.encounterClass : undefined

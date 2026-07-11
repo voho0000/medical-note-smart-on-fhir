@@ -14,10 +14,13 @@ import type { AiMessage } from '@/src/core/entities/ai.entity'
 import type {
   EncounterEntity,
   MedicationEntity,
+  ObservationEntity,
   ProcedureEntity,
   DiagnosticReportEntity,
   ConditionEntity,
   CarePlanEntity,
+  CompositionEntity,
+  DocumentReferenceEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import {
   MedicalSummaryAiResultSchema,
@@ -25,12 +28,18 @@ import {
   normaliseProblemKind,
   normaliseInvestigationKind,
   normaliseInvestigationDirection,
+  normaliseMedicationChangeType,
+  normaliseMedicationReconciliationReason,
+  type InvestigationDirection,
   type MedicalSummaryAiResult,
   type MedicalSummaryResult,
   type ResolvedSourceRef,
   type SummaryCoverageStats,
   type SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
+import { referenceId } from '@/src/core/utils/observation-selectors'
+import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
+import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -46,7 +55,13 @@ const CATALOG_CAPS = {
   procedures: 20,
   conditions: 20,
   carePlans: 15,
+  documents: 20,
 } as const
+
+const LONGITUDINAL_MAX_LAB_SERIES = 16
+const LONGITUDINAL_MAX_LAB_POINTS = 8
+const LONGITUDINAL_MAX_IMAGING_SERIES = 8
+const LONGITUDINAL_MAX_IMAGING_POINTS = 5
 
 // Highlight guardrail bounds (see finalizeResult). 24 chars fits a zh
 // diagnosis name or a value trend like "HbA1c 7.2→8.4"; a whole sentence
@@ -123,10 +138,13 @@ export function rescueEmphasisFromQuotes(segments: SummarySegment[]): SummarySeg
 export interface SummaryCatalogInput {
   encounters?: EncounterEntity[]
   medications?: MedicationEntity[]
+  observations?: ObservationEntity[]
   procedures?: ProcedureEntity[]
   diagnosticReports?: DiagnosticReportEntity[]
   conditions?: ConditionEntity[]
   carePlans?: CarePlanEntity[]
+  compositions?: CompositionEntity[]
+  documentReferences?: DocumentReferenceEntity[]
 }
 
 const day = (iso?: string): string | undefined =>
@@ -165,7 +183,7 @@ export function classifyEncounterClass(
 /**
  * Build the citable source catalog deterministically from the bundle.
  * Key prefixes: E=Encounter, M=MedicationRequest, P=Procedure,
- * L=DiagnosticReport, C=Condition.
+ * L=DiagnosticReport, C=Condition, K=CarePlan, D=clinical document.
  */
 export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCatalogEntry[] {
   const entries: SummarySourceCatalogEntry[] = []
@@ -253,6 +271,49 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
       })
     })
 
+  // Clinical documents are first-class evidence. Their decoded narrative is
+  // already present in the AI clinical context; these D keys make claims based
+  // on that narrative auditable and directly navigable to the source document.
+  const documents: Array<{
+    resourceType: 'Composition' | 'DocumentReference'
+    resourceId: string
+    display: string
+    date?: string
+    organization?: string
+    getContentText: () => string
+  }> = [
+    ...(input.compositions ?? []).map((document) => ({
+      resourceType: 'Composition' as const,
+      resourceId: document.id,
+      display: document.title?.trim() || codeText(document.type) || 'Clinical document',
+      date: day(document.date),
+      organization: document.author?.[0]?.display?.trim() || undefined,
+      getContentText: () => listClinicalDocuments({ compositions: [document] })[0]?.text ?? '',
+    })),
+    ...(input.documentReferences ?? []).map((document) => ({
+      resourceType: 'DocumentReference' as const,
+      resourceId: document.id,
+      display:
+        codeText(document.type) ||
+        document.description?.trim() ||
+        document.content?.[0]?.attachment?.title?.trim() ||
+        'Clinical document',
+      // Admission date is the meaningful date for NHI discharge summaries;
+      // DocumentReference.date is often only the batch registration timestamp.
+      date: day(document.context?.period?.start ?? document.date),
+      organization: document.author?.[0]?.display?.trim() || undefined,
+      getContentText: () => listClinicalDocuments({ documentReferences: [document] })[0]?.text ?? '',
+    })),
+  ]
+  sortByDateDesc(documents, (document) => document.date)
+    .slice(0, CATALOG_CAPS.documents)
+    .forEach((document, index) => {
+      entries.push({
+        key: `D${index + 1}`,
+        ...document,
+      })
+    })
+
   return entries
 }
 
@@ -266,6 +327,22 @@ export function getSourceCatalog(input: SummaryCatalogInput): SummarySourceCatal
   const built = buildSourceCatalog(input)
   catalogCache.set(input, built)
   return built
+}
+
+/** Keep only the clinical documents that were actually inserted into this
+ * consumer's AI context, then renumber D keys densely for a clear prompt. */
+export function scopeDocumentSources(
+  catalog: SummarySourceCatalogEntry[],
+  includedDocumentIds: string[],
+): SummarySourceCatalogEntry[] {
+  const included = new Set(includedDocumentIds)
+  let documentIndex = 0
+  return catalog.flatMap((source) => {
+    if (!['DocumentReference', 'Composition'].includes(source.resourceType)) return [source]
+    if (!included.has(source.resourceId)) return []
+    documentIndex += 1
+    return [{ ...source, key: `D${documentIndex}` }]
+  })
 }
 
 /** Coverage card numbers — deterministic, uncapped, zero AI. */
@@ -311,6 +388,268 @@ export function buildCoverageStats(input: SummaryCatalogInput): SummaryCoverageS
   }
 }
 
+interface LongitudinalLabPoint {
+  label: string
+  key: string
+  date: string
+  value: string
+  sourceKey: string
+  abnormal?: string
+}
+
+interface LongitudinalImagingPoint {
+  label: string
+  key: string
+  date: string
+  finding: string
+  sourceKey: string
+}
+
+const compactWhitespace = (s: string): string => s.replace(/\s+/g, ' ').trim()
+
+const truncateText = (s: string, max = 150): string => {
+  const cleaned = compactWhitespace(s)
+  return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned
+}
+
+const canonicalKey = (label: string): string => {
+  const s = label.toUpperCase().replace(/\s+/g, ' ').trim()
+  if (/(HBA1C|HB-A1C|A1C|GLYCATED|糖化血色素)/.test(s)) return 'HBA1C'
+  if (/(EGFR|ESTIMATED GFR|腎絲球過濾率)/.test(s)) return 'EGFR'
+  if (/(CREATININE|CREA|肌酸酐|肌酐)/.test(s)) return 'CREATININE'
+  if (/(PSA|攝護腺特異抗原|前列腺特異抗原)/.test(s)) return 'PSA'
+  if (/(CHEST|CXR|胸腔|胸部|胸片)/.test(s)) return 'CHEST_IMAGING'
+  if (/(ALBUMIN.*URINE|URINE.*ALBUMIN|微量白蛋白|尿.*白蛋白)/.test(s)) return 'URINE_ALBUMIN'
+  if (/(HEMOGLOBIN|^HB$|血色素)/.test(s)) return 'HEMOGLOBIN'
+  if (/(TSH|甲促素|甲狀腺刺激素)/.test(s)) return 'TSH'
+  return s.replace(/[^A-Z0-9\u4E00-\u9FFF]+/g, '')
+}
+
+const investigationPriority = (key: string, label: string): number => {
+  const s = `${key} ${label}`.toUpperCase()
+  if (/HBA1C|EGFR|CREATININE|URINE_ALBUMIN/.test(s)) return 0
+  if (/PSA|AFP|CEA|CA125|CA-125|CA199|CA19-9|FERRITIN/.test(s)) return 1
+  if (/HEMOGLOBIN|PLATELET|WBC|CRP|TSH|LDL|CHOLESTEROL/.test(s)) return 2
+  return 3
+}
+
+const conceptText = (c?: { text?: string; coding?: Array<{ code?: string; display?: string }> }): string | undefined =>
+  c?.text?.trim() || c?.coding?.find((coding) => coding.display?.trim())?.display?.trim() || c?.coding?.find((coding) => coding.code?.trim())?.code?.trim()
+
+const obsDate = (o: ObservationEntity): string | undefined => {
+  const extra = o as ObservationEntity & { effectivePeriod?: { start?: string }; issued?: string }
+  return day(o.effectiveDateTime ?? extra.effectivePeriod?.start ?? extra.issued)
+}
+
+const obsValue = (o: ObservationEntity): string | null => {
+  const value =
+    o.valueQuantity?.value ??
+    o.valueString ??
+    o.valueCodeableConcept?.text ??
+    o.valueCodeableConcept?.coding?.find((coding) => coding.display)?.display
+  if (value === undefined || value === null || value === '') return null
+  const text = typeof value === 'number' ? String(value) : compactWhitespace(String(value))
+  const unit = o.valueQuantity?.unit?.trim()
+  return unit ? `${text} ${unit}` : text
+}
+
+function reportObservationMap(observations?: ObservationEntity[]): Map<string, ObservationEntity> {
+  const map = new Map<string, ObservationEntity>()
+  for (const obs of observations ?? []) {
+    if (obs.id) map.set(obs.id, obs)
+  }
+  return map
+}
+
+function observationsForReport(
+  report: DiagnosticReportEntity,
+  byObservationId: Map<string, ObservationEntity>,
+): ObservationEntity[] {
+  const out: ObservationEntity[] = []
+  const seen = new Set<string>()
+  const add = (obs: ObservationEntity | undefined) => {
+    if (!obs) return
+    const key = obs.id ?? `${conceptText(obs.code) ?? ''}-${obsDate(obs) ?? ''}-${obsValue(obs) ?? ''}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(obs)
+  }
+  for (const obs of report._observations ?? []) add(obs)
+  for (const ref of report.result ?? []) {
+    const id = referenceId(ref.reference)
+    if (id) add(byObservationId.get(id))
+  }
+  return out
+}
+
+function collectLongitudinalLabPoints(
+  input: SummaryCatalogInput,
+  sourceByResourceId: Map<string, SummarySourceCatalogEntry>,
+): LongitudinalLabPoint[] {
+  const byObservationId = reportObservationMap(input.observations)
+  const points: LongitudinalLabPoint[] = []
+  for (const report of input.diagnosticReports ?? []) {
+    if (inferGroupFromCategory(report.category) !== 'lab') continue
+    const reportKey = report.id ? sourceByResourceId.get(report.id)?.key : undefined
+    if (!reportKey) continue
+    const reportDate = day(report.effectiveDateTime ?? report.issued)
+    const observations = observationsForReport(report, byObservationId)
+    for (const obs of observations) {
+      const value = obsValue(obs)
+      const date = obsDate(obs) ?? reportDate
+      if (!value || !date) continue
+      const label = conceptText(obs.code) ?? conceptText(report.code) ?? 'Lab'
+      points.push({
+        label,
+        key: canonicalKey(label),
+        date,
+        value,
+        sourceKey: reportKey,
+        abnormal: obs.interpretation?.text ?? obs.interpretation?.coding?.[0]?.code,
+      })
+    }
+  }
+  return points
+}
+
+function collectLongitudinalImagingPoints(
+  input: SummaryCatalogInput,
+  sourceByResourceId: Map<string, SummarySourceCatalogEntry>,
+): LongitudinalImagingPoint[] {
+  const points: LongitudinalImagingPoint[] = []
+  for (const report of input.diagnosticReports ?? []) {
+    if (inferGroupFromCategory(report.category) !== 'imaging') continue
+    const reportKey = report.id ? sourceByResourceId.get(report.id)?.key : undefined
+    const date = day(report.effectiveDateTime ?? report.issued)
+    if (!reportKey || !date) continue
+    const finding = report.conclusion || report.note?.map((n) => n.text).filter(Boolean).join(' ')
+    if (!finding) continue
+    const label = conceptText(report.code) ?? 'Imaging'
+    points.push({
+      label,
+      key: canonicalKey(label),
+      date,
+      finding: truncateText(finding),
+      sourceKey: reportKey,
+    })
+  }
+  return points
+}
+
+function formatLongitudinalLabLines(points: LongitudinalLabPoint[]): string[] {
+  const byKey = new Map<string, LongitudinalLabPoint[]>()
+  for (const point of points) {
+    const arr = byKey.get(point.key)
+    if (arr) arr.push(point)
+    else byKey.set(point.key, [point])
+  }
+  return [...byKey.values()]
+    .filter((series) => new Set(series.map((p) => p.date)).size >= 2)
+    .sort((a, b) => {
+      const pa = investigationPriority(a[0].key, a[0].label)
+      const pb = investigationPriority(b[0].key, b[0].label)
+      if (pa !== pb) return pa - pb
+      if (b.length !== a.length) return b.length - a.length
+      return b[b.length - 1].date.localeCompare(a[a.length - 1].date)
+    })
+    .slice(0, LONGITUDINAL_MAX_LAB_SERIES)
+    .map((series) => {
+      const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
+      const recent = sorted.slice(-LONGITUDINAL_MAX_LAB_POINTS)
+      const omitted = sorted.length - recent.length
+      const seq = recent
+        .map((p) => `${p.value}${p.abnormal ? `[${p.abnormal}]` : ''} (${p.date}; ${p.sourceKey})`)
+        .join(' → ')
+      return `- ${sorted[0].label}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${seq}`
+    })
+}
+
+function formatLongitudinalImagingLines(points: LongitudinalImagingPoint[]): string[] {
+  const byKey = new Map<string, LongitudinalImagingPoint[]>()
+  for (const point of points) {
+    const arr = byKey.get(point.key)
+    if (arr) arr.push(point)
+    else byKey.set(point.key, [point])
+  }
+  return [...byKey.values()]
+    .filter((series) => new Set(series.map((p) => p.date)).size >= 2)
+    .sort((a, b) => {
+      const latestA = [...a].sort((x, y) => y.date.localeCompare(x.date))[0]?.date ?? ''
+      const latestB = [...b].sort((x, y) => y.date.localeCompare(x.date))[0]?.date ?? ''
+      return latestB.localeCompare(latestA) || b.length - a.length
+    })
+    .slice(0, LONGITUDINAL_MAX_IMAGING_SERIES)
+    .map((series) => {
+      const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
+      const recent = sorted.slice(-LONGITUDINAL_MAX_IMAGING_POINTS)
+      const omitted = sorted.length - recent.length
+      const seq = recent
+        .map((p) => `${p.date}; ${p.sourceKey}: ${p.finding}`)
+        .join(' → ')
+      return `- ${sorted[0].label}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${seq}`
+    })
+}
+
+/**
+ * App-derived longitudinal evidence for the fixed Medical Summary card.
+ *
+ * The normal chat/insights context follows the user's Data Selection time
+ * window, which is correct for free-form prompts but too narrow for the fixed
+ * "test trends" card. This appendix is built from all available
+ * DiagnosticReports so chronic markers (HbA1c, PSA, eGFR, imaging follow-up)
+ * are not mislabeled as a single latest result.
+ */
+export function buildLongitudinalInvestigationContext(
+  input: SummaryCatalogInput,
+  catalog: SummarySourceCatalogEntry[],
+): string {
+  const sourceByResourceId = new Map(catalog.map((entry) => [entry.resourceId, entry]))
+  const labLines = formatLongitudinalLabLines(collectLongitudinalLabPoints(input, sourceByResourceId))
+  const imagingLines = formatLongitudinalImagingLines(collectLongitudinalImagingPoints(input, sourceByResourceId))
+  if (labLines.length === 0 && imagingLines.length === 0) return ''
+
+  const sections = [
+    '## Longitudinal Investigation Evidence (app-derived from all available DiagnosticReports)',
+    'Use this section for the medical-summary "investigations" card. If a topic below has 2+ dated points/reports, it is NOT a single result; use the sequence and cite the shown L keys.',
+  ]
+  if (labLines.length > 0) {
+    sections.push('### Serial lab values (oldest → newest)', ...labLines)
+  }
+  if (imagingLines.length > 0) {
+    sections.push('### Serial imaging reports (oldest → newest)', ...imagingLines)
+  }
+  return sections.join('\n')
+}
+
+function guardedInvestigationDirection(
+  rawDirection: string | undefined,
+  label: string,
+  rawSources: string[] | undefined,
+  catalogByKey: Map<string, SummarySourceCatalogEntry>,
+  catalog: SummarySourceCatalogEntry[],
+): InvestigationDirection {
+  const direction = normaliseInvestigationDirection(rawDirection)
+  if (direction !== 'single') return direction
+  const diagnosticReportDates = new Set(
+    (rawSources ?? [])
+      .map((rawKey) => catalogByKey.get(rawKey.trim()))
+      .filter((entry): entry is SummarySourceCatalogEntry =>
+        entry?.resourceType === 'DiagnosticReport' && !!entry.date,
+      )
+      .map((entry) => entry.date),
+  )
+  if (diagnosticReportDates.size >= 2) return 'unknown'
+
+  const labelKey = canonicalKey(label)
+  const topicDates = new Set(
+    catalog
+      .filter((entry) => entry.resourceType === 'DiagnosticReport' && entry.date)
+      .filter((entry) => canonicalKey(entry.display) === labelKey)
+      .map((entry) => entry.date),
+  )
+  return topicDates.size >= 2 ? 'unknown' : 'single'
+}
+
 // ---------------------------------------------------------------------------
 // Prompts
 // ---------------------------------------------------------------------------
@@ -319,8 +658,10 @@ const SCHEMA_HINT =
   '{"headline": "<one-line patient positioning>", ' +
   '"summary": [{"text": "<narrative segment>", "emphasis": <true for pivotal segments>, "sources": ["<catalog key like E1>"]}], ' +
   '"investigations": [{"label": "<disease-relevant test or imaging group>", "kind": "lab|imaging|pathology|other", "direction": "improving|stable|worsening|fluctuating|single|unknown", "trend": "<actual serial values or imaging change; say single result when only one>", "interpretation": "<why this matters for this patient>", "sources": ["<catalog key>"]}], ' +
+  '"medicationEducation": [{"name": "<medicine or medicine group in the records>", "benefit": "<plain-language explanation of how it may help this patient>", "attention": "<one calm, practical use reminder>", "sources": ["<catalog key, including at least one M key>"]}], ' +
+  '"medicationReview": {"regimen": [{"group": "<treatment area>", "name": "<medicine or clinically coherent group>", "sig": "<dose/frequency only when recorded>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported recent change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|other", "text": "<specific item to verify during medication reconciliation>", "sources": ["<M key>"]}]}, ' +
   '"problems": [{"label": "<condition name, e.g. 第二型糖尿病>", "basis": "<short basis e.g. 5 次檢驗異常 / 藥局調劑>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"]}], ' +
-  '"decisions": [{"text": "<action item>", "urgency": "high|medium|low", "rationale": "<basis, cite values>", "sources": ["<catalog key>"]}], ' +
+  '"decisions": [], ' +
   '"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup"}]}'
 
 const SHARED_RULES =
@@ -343,6 +684,9 @@ const SHARED_RULES =
   'A plausible title or same-day timing is NOT a link — e.g. an abdominal ultrasound whose conclusion says "fatty liver, gallbladder sludge, renal stones" says NOTHING about 胃息肉 and must not be cited as its evidence ' +
   '(while it IS direct evidence for 脂肪肝/膽囊沉積物/腎結石 — report those findings instead of leaving them out). ' +
   'The same applies to documents: write 出院病摘 as a "basis" ONLY if the discharge summary text actually mentions that condition — do not attribute a condition to a document that never names it. ' +
+  'Clinical-document evidence: when a claim is supported by a discharge summary or other clinical document, cite its matching D# source key. ' +
+  'A diagnosis explicitly documented in a discharge summary remains valid documentary evidence even when there is no separate endoscopy/pathology/report resource; do NOT discard it merely because that standalone report is absent. ' +
+  'However, a documented diagnosis does NOT prove that a specific procedure was performed: say the document records the diagnosis, and claim gastroscopy/endoscopy/biopsy only when the document text itself explicitly says it was performed. ' +
   'A test that does not measure or name the condition is NOT corroboration, and must not be cited in that claim\'s "sources". ' +
   'When a condition rests only on claim codes (with or without related medications), the "basis" must say what the evidence actually is ' +
   '(e.g. "3次門診申報及用藥") — NOT a phrase like "門診追蹤" that implies clinical confirmation, and not a test that never assessed it. ' +
@@ -356,7 +700,21 @@ const SHARED_RULES =
   'Choose topics from the active clinical context: for a cancer patient prioritize documented tumor markers, pathology, and serial imaging; for diabetes prioritize HbA1c, renal function/eGFR, and urine albumin when present; adapt similarly for other conditions. ' +
   'Each item must cite the DiagnosticReport source(s) that contain the stated values/findings. Put the actual data sequence in "trend" (include units when present) and a concise patient-specific meaning in "interpretation". ' +
   'Use "direction" for CLINICAL direction, not numeric direction (e.g. falling eGFR is "worsening"). Claim a trend only with at least 2 comparable time points; with one report use "single" and explicitly say it is a single result. ' +
+  'If the Longitudinal Investigation Evidence section lists 2+ dated points/reports for a topic, NEVER label that topic "single" and NEVER write "single result" for it; summarize the serial pattern instead. ' +
   'Never infer stability from one value, never invent a test that is absent, never mix non-comparable units/methods into one sequence, and do not repeat routine normal tests unless they materially answer an active problem. ' +
+  'For "medicationEducation": this is ONLY for the patient audience; for the medical audience return an empty array. ' +
+  'For patients, select 3–5 of the most relevant recent or long-term medicines (or clinically coherent medicine groups) that actually appear in the records. ' +
+  'Lead with BENEFIT: explain in plain language how each medicine may support a documented condition or care goal. Then give exactly one calm, practical "attention" reminder. ' +
+  'Do NOT use fear-provoking labels such as dangerous/high-risk medicine, do NOT dump rare or severe adverse effects, and do NOT imply that a medicine caused a past fall, confusion, admission, or other event. ' +
+  'Never advise the patient to start, stop, skip, or change a dose. Prefer actionable wording such as taking it as directed, rising slowly if dizziness occurs, or asking the doctor/pharmacist when a symptom persists. ' +
+  'Do not claim the medicine is currently being taken merely because it appears in NHI history; say the records include/show it. Only state a medicine purpose when you are confident from the drug identity and patient context; otherwise describe its recorded care area and invite confirmation. ' +
+  'Every item must cite at least one matching medication key (M#). Additional condition/report keys may be included only when they directly support the linked care goal. Merge refills and pharmacy duplicates into one item. ' +
+  'For "medicationReview": this is ONLY for the medical audience; for the patient audience return empty regimen, changes, and reconciliation arrays. ' +
+  'This is a medication-reconciliation workflow card, NOT another safety card: do not repeat interactions, renal-dose warnings, laboratory monitoring, disease problems, or patient education. ' +
+  'For "regimen", select 4–8 clinically important recent or long-term medicines, grouped by treatment area. Include dose/frequency in "sig" only when the source explicitly records it. ' +
+  'For "changes", include only date/status-supported new appearances, stops, resumptions, dose/frequency changes, or cross-facility records. When initiation is uncertain, say "newly appears in recent records" rather than claiming it was started. ' +
+  'For "reconciliation", include only concrete data/workflow gaps: conflicting status, missing SIG, multiple facilities, uncertain current status, or possible aliases of the same drug. Do not assign severity or recommend clinical dose changes. ' +
+  'NHI dispensing does not prove adherence or current use. Every medicationReview item must cite at least one matching M key; merge routine refills and prescribing-clinic/pharmacy representations of the same prescription. ' +
   'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
   '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
   'a complex multi-morbid patient typically yields 8–12 problems, not 5–6. ' +
@@ -388,8 +746,9 @@ const SHARED_RULES =
 const SYSTEM_MEDICAL =
   'You are preparing a structured cross-hospital patient summary for a physician who is seeing this patient ' +
   'without knowing their history at other facilities. Precise clinical language; cite actual values and trends. ' +
-  '"decisions" are concrete actions for the treating physician, ordered by urgency; each rationale must cite the ' +
-  'triggering values, or state explicitly that it is an inference without direct data support.' +
+  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the separate safety analysis. ' +
+  'Return "medicationEducation" as an empty array; this benefit-first education card is patient-facing. ' +
+  'Populate "medicationReview" as a concise clinician medication-reconciliation overview.' +
   SHARED_RULES
 
 const SYSTEM_PATIENT =
@@ -401,8 +760,10 @@ const SYSTEM_PATIENT =
   'stay calm, matter-of-fact and reassuring; avoid frightening or worst-case phrasing, and do NOT tie a past scary event ' +
   '(confusion, a fall, a hospital visit) to a current medicine as cause-and-effect — frame anything to review as a routine ' +
   'check with the doctor, not a danger. ' +
-  '"decisions" become questions the patient can ask their doctor at the next visit — NEVER instructions to start, ' +
-  'stop, or change any medicine on their own.' +
+  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the separate safety analysis. ' +
+  'Populate "medicationEducation" as benefit-first, reassuring medication education ' +
+  'grounded in the patient\'s medication records. ' +
+  'Return "medicationReview" with empty regimen, changes, and reconciliation arrays.' +
   SHARED_RULES
 
 export interface GenerateMedicalSummaryInput {
@@ -413,9 +774,11 @@ export interface GenerateMedicalSummaryInput {
 }
 
 // Accept pre-v3 cached/test objects during the rollout; live parseResult always
-// materialises `investigations` via the schema default.
-type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations'> & {
+// materialises newer arrays via schema defaults.
+type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations' | 'medicationEducation' | 'medicationReview'> & {
   investigations?: MedicalSummaryAiResult['investigations']
+  medicationEducation?: MedicalSummaryAiResult['medicationEducation']
+  medicationReview?: MedicalSummaryAiResult['medicationReview']
 }
 
 export class GenerateMedicalSummaryUseCase {
@@ -423,7 +786,7 @@ export class GenerateMedicalSummaryUseCase {
     const system = input.audience === 'patient' ? SYSTEM_PATIENT : SYSTEM_MEDICAL
     const lang =
       input.locale === 'zh-TW'
-        ? '\n\nWrite every "headline", "text", "rationale", "label", "trend" and "interpretation" value in Traditional Chinese (繁體中文).'
+        ? '\n\nWrite every "headline", "text", "rationale", "label", "trend", "interpretation", "name", "benefit" and "attention" value in Traditional Chinese (繁體中文).'
         : '\n\nWrite all values in English.'
     const catalogBlock = input.catalog
       .map((c) => {
@@ -548,11 +911,73 @@ export class GenerateMedicalSummaryUseCase {
     const investigations = (ai.investigations ?? []).map((item) => ({
       label: item.label,
       kind: normaliseInvestigationKind(item.kind),
-      direction: normaliseInvestigationDirection(item.direction),
+      direction: guardedInvestigationDirection(item.direction, item.label, item.sources, byKey, catalog),
       trend: item.trend,
       interpretation: item.interpretation,
       sourceKeys: (item.sources ?? []).map(registerKey),
     }))
+
+    // Patient medication education renders after investigations and before
+    // problems, so register its medication records in that same order.
+    const medicationEducation = (ai.medicationEducation ?? []).flatMap((item) => {
+      const rawSources = item.sources ?? []
+      // A patient-facing medicine explanation without a real medication record
+      // is too risky to render. Unlike ordinary narrative citations, require at
+      // least one verified Medication* source before the item enters the card.
+      const hasVerifiedMedication = rawSources.some((rawKey) =>
+        byKey.get(rawKey.trim())?.resourceType.startsWith('Medication'),
+      )
+      if (!hasVerifiedMedication) return []
+      return [{
+        name: item.name,
+        benefit: item.benefit,
+        attention: item.attention,
+        sourceKeys: rawSources.map(registerKey),
+      }]
+    })
+
+    const hasVerifiedMedicationSource = (rawSources: string[]) =>
+      rawSources.some((rawKey) => byKey.get(rawKey.trim())?.resourceType.startsWith('Medication'))
+
+    // The clinician medication card follows the same evidence rule as patient
+    // education: an item without a real Medication* record is omitted. Dates
+    // and organizations remain app-resolved through sourceIndex.
+    const rawMedicationReview = ai.medicationReview ?? {
+      regimen: [],
+      changes: [],
+      reconciliation: [],
+    }
+    const medicationReview = {
+      regimen: rawMedicationReview.regimen.flatMap((item) => {
+        const rawSources = item.sources ?? []
+        if (!hasVerifiedMedicationSource(rawSources)) return []
+        return [{
+          group: item.group,
+          name: item.name,
+          sig: item.sig?.trim() || undefined,
+          sourceKeys: rawSources.map(registerKey),
+        }]
+      }),
+      changes: rawMedicationReview.changes.flatMap((item) => {
+        const rawSources = item.sources ?? []
+        if (!hasVerifiedMedicationSource(rawSources)) return []
+        return [{
+          type: normaliseMedicationChangeType(item.type),
+          medication: item.medication,
+          summary: item.summary,
+          sourceKeys: rawSources.map(registerKey),
+        }]
+      }),
+      reconciliation: rawMedicationReview.reconciliation.flatMap((item) => {
+        const rawSources = item.sources ?? []
+        if (!hasVerifiedMedicationSource(rawSources)) return []
+        return [{
+          reason: normaliseMedicationReconciliationReason(item.reason),
+          text: item.text,
+          sourceKeys: rawSources.map(registerKey),
+        }]
+      }),
+    }
 
     // Problems register BEFORE decisions: registerKey numbers sources by first
     // appearance, and the page renders investigations → problems → decisions, so
@@ -603,6 +1028,8 @@ export class GenerateMedicalSummaryUseCase {
       headline: ai.headline,
       summary,
       investigations,
+      medicationEducation,
+      medicationReview,
       problems,
       decisions,
       timeline,

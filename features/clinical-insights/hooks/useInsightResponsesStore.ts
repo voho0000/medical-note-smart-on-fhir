@@ -1,11 +1,8 @@
 // Module-level store for generated insight responses + per-panel status.
 //
-// Why a store and not component useState: the clinical-insights feature renders
-// inside a Radix TabsContent in the right panel, which UNMOUNTS when the user
-// switches to another tab. Local useState was therefore wiped every time the
-// user left the tab and came back — the generated output vanished (very visible
-// on phones, where you tab between data + insights constantly). A module-level
-// store survives unmount/remount so the output persists.
+// Why a store and not component useState: custom modules render in Medical
+// Summary while their manager opens in a portal. A module-level store keeps
+// streamed output stable across those view lifecycles and responsive layouts.
 //
 // Cross-patient safety: the responses are keyed by panel id, which are stable
 // across patients, so we must clear them when the *patient* changes — but NOT

@@ -106,10 +106,11 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
         className="w-auto max-w-[280px] space-y-1 px-3 py-2"
       >
         {sources.map((s) =>
-          // Verified rows navigate the left panel to the raw resource; the ↗
-          // affordance marks them as links. Unverified rows have no resource
-          // to go to — plain amber text, deliberately inert.
-          s.verified && s.resourceId && onNavigate ? (
+          // Any resolved row navigates to the raw resource. Claim-level
+          // unsupported citations stay amber but remain clickable so the user
+          // can inspect why they were flagged; invented keys have no resource
+          // id and remain inert.
+          s.resourceId && onNavigate ? (
             <button
               key={s.key}
               type="button"
@@ -122,16 +123,28 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                   date: s.date,
                 })
               }}
-              className="group flex w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 -mx-1 text-left text-[0.7rem] leading-snug tabular-nums text-muted-foreground transition-colors hover:bg-violet-50 hover:text-foreground dark:hover:bg-violet-500/10"
+              className={cn(
+                "group flex w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 -mx-1 text-left text-[0.7rem] leading-snug tabular-nums transition-colors",
+                s.verified
+                  ? "text-muted-foreground hover:bg-violet-50 hover:text-foreground dark:hover:bg-violet-500/10"
+                  : "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30",
+              )}
             >
-              <b className="shrink-0 font-bold text-violet-600 dark:text-violet-400">{s.num}</b>
+              <b className={cn(
+                "shrink-0 font-bold",
+                s.verified ? "text-violet-600 dark:text-violet-400" : "text-amber-600 dark:text-amber-300",
+              )}>{s.num}</b>
               <span className="min-w-0 flex-1">
                 {typeLabel(s.resourceType)}
                 {s.organization ? <> · {s.organization}</> : null}
                 {s.date ? <> · {s.date}</> : null}
                 {s.display ? <span className="block text-foreground/80">{s.display}</span> : null}
+                {!s.verified ? <span className="block font-medium">{unverifiedLabel}</span> : null}
               </span>
-              <ArrowUpRight className="h-3 w-3 shrink-0 self-center text-violet-400 opacity-60 transition-opacity group-hover:opacity-100" />
+              <ArrowUpRight className={cn(
+                "h-3 w-3 shrink-0 self-center opacity-60 transition-opacity group-hover:opacity-100",
+                s.verified ? "text-violet-400" : "text-amber-500",
+              )} />
             </button>
           ) : (
             <p

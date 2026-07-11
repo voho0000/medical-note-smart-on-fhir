@@ -8,6 +8,7 @@
 // dropped into a Visits-tab discharge-summary view alongside its Encounter.
 "use client"
 
+import { useEffect, useState } from 'react'
 import { FileText } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import type { CompositionEntity } from '@/src/core/entities/clinical-data.entity'
@@ -19,6 +20,8 @@ interface CompositionRendererProps {
   /** When true, the first renderable section is expanded by default. Used
    *  by DocumentSummaryCard when the list has exactly one Composition. */
   defaultExpandFirst?: boolean
+  /** Navigation sequence that should open the cited document's sections. */
+  forceExpandKey?: number
   /** i18n lookup: returns the localized label for a section LOINC i18n key,
    *  or null if the key isn't translated. Passed in so the renderer stays
    *  free of i18n provider coupling. */
@@ -67,6 +70,7 @@ function getSectionTitle(
 export function CompositionRenderer({
   composition,
   defaultExpandFirst = false,
+  forceExpandKey,
   resolveSectionLabel,
   labels,
 }: CompositionRendererProps) {
@@ -87,6 +91,14 @@ export function CompositionRenderer({
   // defaultExpandFirst pre-opens just the first section.
   const defaultValue: string[] =
     defaultExpandFirst && renderableSections.length > 0 ? ['section-0'] : []
+  const [openSections, setOpenSections] = useState(defaultValue)
+  const allSectionValuesKey = renderableSections.map((_, index) => `section-${index}`).join('|')
+
+  useEffect(() => {
+    if (forceExpandKey === undefined || !allSectionValuesKey) return
+    const timer = window.setTimeout(() => setOpenSections(allSectionValuesKey.split('|')), 0)
+    return () => window.clearTimeout(timer)
+  }, [allSectionValuesKey, forceExpandKey])
 
   return (
     <div className="space-y-2">
@@ -114,7 +126,8 @@ export function CompositionRenderer({
       ) : (
         <Accordion
           type="multiple"
-          defaultValue={defaultValue}
+          value={openSections}
+          onValueChange={setOpenSections}
           className="space-y-1.5"
         >
           {renderableSections.map((section, idx) => {

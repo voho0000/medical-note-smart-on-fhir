@@ -9,7 +9,6 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { ModelAndKeySettings } from "./components/ApiKeyField"
 import { ChatTemplatesSettings } from "./components/ChatTemplatesSettings"
-import { ClinicalInsightsSettings } from "./components/ClinicalInsightsSettings"
 import { DisplaySettings } from "./components/DisplaySettings"
 
 export function SettingsFeature() {
@@ -21,27 +20,21 @@ export function SettingsFeature() {
   // for theme + about (reachable from the header overflow menu); keep
   // the allowlist in sync as sub-tabs are added.
   useEffect(() => {
-    const KNOWN_SUBTABS = ['ai', 'templates', 'insights', 'display']
+    const KNOWN_SUBTABS = ['ai', 'templates', 'display']
     if (activeTab === 'settings' && !KNOWN_SUBTABS.includes(settingsTab)) {
       setActiveTab('settings', 'ai')
     }
-  }, [activeTab])
+  }, [activeTab, settingsTab, setActiveTab])
   
   return (
     <div className="space-y-4">
       <Tabs value={settingsTab} onValueChange={(value) => setActiveTab('settings', value)} className="space-y-4">
-        {/* 2 cols on mobile, 4 cols on tablet+. Trying to cram 4 settings
-            sub-tabs into one row on a 375px phone clips the labels even
-            with truncate; wrapping to 2x2 reads better. */}
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 gap-1 h-auto sm:h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
+        <TabsList className="grid w-full grid-cols-3 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
           <TabsTrigger value="ai" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
             <span className="truncate" title={t.settings.aiPreferences}>{t.settings.aiPreferences}</span>
           </TabsTrigger>
           <TabsTrigger value="templates" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
             <span className="truncate" title={t.settings.chatTemplates}>{t.settings.chatTemplates}</span>
-          </TabsTrigger>
-          <TabsTrigger value="insights" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
-            <span className="truncate" title={t.settings.clinicalInsightsTabs}>{t.settings.clinicalInsightsTabs}</span>
           </TabsTrigger>
           <TabsTrigger value="display" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
             <span className="truncate" title={(t.settings as any).display ?? '顯示與關於'}>{(t.settings as any).display ?? '顯示與關於'}</span>
@@ -58,13 +51,6 @@ export function SettingsFeature() {
           <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
             <CardContent>
               <ChatTemplatesSettings />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="insights" className="space-y-4">
-          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
-            <CardContent>
-              <ClinicalInsightsSettings />
             </CardContent>
           </Card>
         </TabsContent>

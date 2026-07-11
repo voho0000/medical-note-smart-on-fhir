@@ -12,6 +12,7 @@ describe('leftTabForResourceType', () => {
     expect(leftTabForResourceType('CarePlan')).toBe('patient')
     expect(leftTabForResourceType('Procedure')).toBe('visits')
     expect(leftTabForResourceType('DocumentReference')).toBe('documents')
+    expect(leftTabForResourceType('Composition')).toBe('documents')
   })
 
   it('returns null for an unknown type (caller falls back to a toast)', () => {

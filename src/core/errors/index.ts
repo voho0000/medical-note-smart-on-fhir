@@ -43,8 +43,8 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
     message: '🔐 內建額度僅供登入使用者 - 請先登入，或在設定中加入自己的 API Key'
   },
   {
-    pattern: /daily quota exceeded/i,
-    message: '📊 今日內建額度已用完 - 請在設定中加入自己的 API Key，或明天再試'
+    pattern: /daily quota exceeded|(?:daily|today).{0,30}(?:free )?(?:quota|usage|limit).{0,30}(?:exceed|used up)|(?:free|built-?in).{0,20}(?:quota|usage).{0,20}(?:exceed|used up)/i,
+    message: '📊 今日免費使用量已用完。請明天再試，或到「設定」加入自己的 API Key 繼續使用。'
   },
   // API Key errors (most common)
   {
@@ -95,6 +95,13 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
     pattern: /content.*filtered|safety/i,
     message: '🛡️ 內容安全過濾 - 請調整問題內容'
   },
+  // AI SDK RetryError. Specific nested causes (quota/auth/rate limit/etc.) are
+  // matched above first; this fallback prevents the raw retry implementation
+  // detail from reaching end users when the final cause is unknown.
+  {
+    pattern: /failed after \d+ attempts/i,
+    message: 'AI 服務暂時無法完成請求，請稍後再試。'
+  },
 ]
 
 /**
@@ -105,15 +112,48 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
  * that the first mapping matches, so include responseBody too.
  */
 function buildErrorHaystack(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  const e = error as { statusCode?: unknown; status?: unknown; responseBody?: unknown; name?: unknown } | null
-  return [
-    message,
-    e?.statusCode != null ? `status ${e.statusCode}` : '',
-    e?.status != null ? `status ${e.status}` : '',
-    typeof e?.responseBody === 'string' ? e.responseBody : '',
-    typeof e?.name === 'string' ? e.name : '',
-  ].filter(Boolean).join(' ')
+  const parts: string[] = []
+  const seen = new Set<object>()
+
+  const visit = (value: unknown, depth: number) => {
+    if (value == null || depth > 4) return
+    if (typeof value === 'string' || typeof value === 'number') {
+      parts.push(String(value))
+      return
+    }
+    if (typeof value !== 'object' || seen.has(value)) return
+    seen.add(value)
+
+    const item = value as {
+      message?: unknown
+      statusCode?: unknown
+      status?: unknown
+      responseBody?: unknown
+      name?: unknown
+      lastError?: unknown
+      cause?: unknown
+      errors?: unknown
+    }
+    if (typeof item.message === 'string') parts.push(item.message)
+    if (item.statusCode != null) parts.push(`status ${String(item.statusCode)}`)
+    if (item.status != null) parts.push(`status ${String(item.status)}`)
+    if (typeof item.responseBody === 'string') parts.push(item.responseBody)
+    else if (item.responseBody && typeof item.responseBody === 'object') {
+      try { parts.push(JSON.stringify(item.responseBody)) } catch { /* ignore cyclic response bodies */ }
+    }
+    if (typeof item.name === 'string') parts.push(item.name)
+
+    // Vercel AI SDK wraps the actionable APICallError inside RetryError.
+    // Inspect both the explicit lastError and the full errors array; cause
+    // covers native Error wrapping used by fetch/provider libraries.
+    visit(item.lastError, depth + 1)
+    visit(item.cause, depth + 1)
+    if (Array.isArray(item.errors)) item.errors.forEach((nested) => visit(nested, depth + 1))
+  }
+
+  visit(error, 0)
+  if (parts.length === 0) parts.push(String(error))
+  return parts.join(' ')
 }
 
 /**
@@ -123,7 +163,7 @@ function buildErrorHaystack(error: unknown): string {
  * The chat UI uses this to show a persistent quota banner with a sign-in CTA
  * instead of only an ❌ line inside the conversation.
  */
-const QUOTA_EXCEEDED_PATTERN = /daily quota exceeded|今日內建額度已用完/i
+const QUOTA_EXCEEDED_PATTERN = /daily quota exceeded|daily.{0,30}free.{0,20}(?:quota|usage|limit).{0,20}(?:exceed|used up)|今日(?:內建額度|免費使用量)已用完/i
 
 export function isQuotaExceededError(error: unknown): boolean {
   if (!error) return false

@@ -10,11 +10,20 @@ import {
   replaceAllClinicalInsightPanels,
 } from "@/src/infrastructure/firebase/clinical-insights-sync"
 import { stripLegacySafetyPanels } from "./clinical-insights-legacy"
+import {
+  MAX_AUTO_INSIGHT_MODULES,
+  MAX_SUMMARY_INSIGHT_MODULES,
+  coerceShowInSummary,
+} from "@/src/shared/constants/clinical-insights.constants"
+
+export { MAX_AUTO_INSIGHT_MODULES, MAX_SUMMARY_INSIGHT_MODULES }
 
 export type InsightPanelConfig = {
   id: string
   title: string
   prompt: string
+  /** Whether this template is an active module rendered in Medical Summary. */
+  showInSummary: boolean
   autoGenerate: boolean
   order: number
   audience: Audience
@@ -28,6 +37,7 @@ const DEFAULT_PANELS_EN_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
     title: "What's Changed",
     prompt:
       "Compare the patient's recent clinical data to prior information and list the most important changes in status, therapy, or results. Emphasize deltas that require attention.",
+    showInSummary: true,
     autoGenerate: false,
     order: 0,
   },
@@ -36,6 +46,7 @@ const DEFAULT_PANELS_EN_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
     title: "Clinical Snapshot",
     prompt:
       "Create a succinct clinical snapshot covering active problems, current therapies, recent results, and outstanding tasks. Keep it brief and actionable.",
+    showInSummary: false,
     autoGenerate: false,
     order: 1,
   },
@@ -47,6 +58,7 @@ const DEFAULT_PANELS_EN_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
     title: "My Health Overview",
     prompt:
       "Using the imported personal health records, write a friendly plain-language overview of my current health: ongoing conditions, current medications, and any recent results that stand out. Define medical terms briefly when needed. End with a reminder that I should discuss specifics with my doctor.",
+    showInSummary: true,
     autoGenerate: false,
     order: 0,
   },
@@ -55,6 +67,7 @@ const DEFAULT_PANELS_EN_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
     title: "Things to Watch Out For",
     prompt:
       "Based on my health records, point out items that might deserve attention at my next medical visit — for example, abnormal lab values, medications that interact, vaccinations or screenings that look overdue. Do NOT diagnose; explain why each item matters in plain language and suggest I confirm with my doctor.",
+    showInSummary: false,
     autoGenerate: false,
     order: 1,
   },
@@ -63,6 +76,7 @@ const DEFAULT_PANELS_EN_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
     title: "Questions for My Doctor",
     prompt:
       "Based on my recent records, draft a concise list of questions I should ask at my next appointment. Cover medications, symptoms, abnormal results, and preventive care. Phrase the questions the way a patient would naturally ask them.",
+    showInSummary: false,
     autoGenerate: false,
     order: 2,
   },
@@ -75,6 +89,7 @@ const DEFAULT_PANELS_ZH_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
     title: "變化摘要",
     prompt:
       "比較病人最近的臨床資料與先前資訊，列出狀態、治療或結果中最重要的變化。強調需要注意的差異。",
+    showInSummary: true,
     autoGenerate: false,
     order: 0,
   },
@@ -83,6 +98,7 @@ const DEFAULT_PANELS_ZH_MEDICAL: Omit<InsightPanelConfig, "audience">[] = [
     title: "臨床快照",
     prompt:
       "建立簡潔的臨床快照，涵蓋活動中的問題、目前治療、近期結果和待辦事項。保持簡短且可執行。",
+    showInSummary: false,
     autoGenerate: false,
     order: 1,
   },
@@ -94,6 +110,7 @@ const DEFAULT_PANELS_ZH_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
     title: "我的健康總覽",
     prompt:
       "請用我匯入的個人健康資料，幫我整理一份白話版的健康總覽：目前的慢性病、正在使用的藥物，以及近期較需要關注的檢驗結果。專有名詞請在括號中簡單說明。最後提醒我若有疑慮應與醫師討論。",
+    showInSummary: true,
     autoGenerate: false,
     order: 0,
   },
@@ -102,6 +119,7 @@ const DEFAULT_PANELS_ZH_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
     title: "需要留意的事項",
     prompt:
       "根據我的健康資料，列出下次回診時可能值得留意的項目，例如：異常的檢驗值、可能交互作用的藥物、看起來逾期未做的疫苗或健檢。請不要做診斷，僅用白話文說明為什麼這些項目重要，並提醒我向醫師確認。",
+    showInSummary: false,
     autoGenerate: false,
     order: 1,
   },
@@ -110,6 +128,7 @@ const DEFAULT_PANELS_ZH_PATIENT: Omit<InsightPanelConfig, "audience">[] = [
     title: "可以問醫師的問題",
     prompt:
       "根據我的近期健康資料，幫我整理一份下次回診可以詢問醫師的問題清單，涵蓋用藥、症狀、異常檢驗值與預防性檢查。請用病人會自然問出口的口吻。",
+    showInSummary: false,
     autoGenerate: false,
     order: 2,
   },
@@ -148,7 +167,8 @@ function panelsEqualDefaults(panels: InsightPanelConfig[], language: 'en' | 'zh-
   if (current.length !== defaults.length) return false
   return current.every((p, i) => {
     const d = defaults[i]
-    return d && p.id === d.id && p.title === d.title && p.prompt === d.prompt
+    return d && p.id === d.id && p.title === d.title && p.prompt === d.prompt &&
+      p.showInSummary === d.showInSummary && p.autoGenerate === d.autoGenerate
   })
 }
 
@@ -158,7 +178,7 @@ export function getDefaultClinicalInsightPanels(language: 'en' | 'zh-TW' = 'en',
 
 type ClinicalInsightsConfigContextValue = {
   panels: InsightPanelConfig[]
-  addPanel: () => string | null
+  addPanel: (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate">>) => string | null
   updatePanel: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => void
   updatePanelAndSave: (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => Promise<void>
   removePanel: (id: string) => void
@@ -196,6 +216,10 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
       id: typeof c.id === "string" ? c.id : generatePanelId(),
       title: typeof c.title === "string" ? c.title : "Untitled Panel",
       prompt: typeof c.prompt === "string" ? c.prompt : "",
+      // Pre-v0.34 records had no placement flag. Only the high-value Changes
+      // default is activated during migration; saved custom templates remain
+      // in the library until the user explicitly adds them to the summary.
+      showInSummary: coerceShowInSummary(c.showInSummary, c.id),
       autoGenerate: c.autoGenerate === true,
       order: typeof c.order === "number" ? c.order : fallbackOrder,
       audience: audienceValue,
@@ -352,15 +376,16 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     [allPanels, audience],
   )
 
-  const addPanel = () => {
+  const addPanel = (initial?: Partial<Pick<InsightPanelConfig, "title" | "prompt" | "showInSummary" | "autoGenerate">>) => {
     const audienceCount = allPanels.filter((p) => p.audience === audience).length
     if (audienceCount >= MAX_PANELS) return null
     const suffix = audienceCount + 1
     const newPanel: InsightPanelConfig = {
       id: generatePanelId(),
-      title: `Custom Panel ${suffix}`,
-      prompt: "Describe the key clinical insights for this focus area using the provided context.",
-      autoGenerate: false,
+      title: initial?.title ?? `Custom Panel ${suffix}`,
+      prompt: initial?.prompt ?? "Describe the key clinical insights for this focus area using the provided context.",
+      showInSummary: initial?.showInSummary ?? false,
+      autoGenerate: initial?.autoGenerate ?? false,
       order: audienceCount,
       audience,
     }
@@ -369,15 +394,47 @@ export function ClinicalInsightsConfigProvider({ children }: { children: ReactNo
     return newPanel.id
   }
 
+  const normalizePatch = (patch: Partial<Omit<InsightPanelConfig, "audience">>) => {
+    if (patch.showInSummary === false) return { ...patch, autoGenerate: false }
+    if (patch.autoGenerate === true) return { ...patch, showInSummary: true }
+    return patch
+  }
+
+  const applyConstrainedPatch = (
+    source: InsightPanelConfig[],
+    id: string,
+    patch: Partial<Omit<InsightPanelConfig, "audience">>,
+  ) => {
+    const target = source.find((panel) => panel.id === id)
+    if (!target) return source
+    const normalized = normalizePatch(patch)
+    const audiencePanels = source.filter((panel) => panel.audience === target.audience && panel.id !== id)
+    if (
+      normalized.showInSummary === true &&
+      !target.showInSummary &&
+      audiencePanels.filter((panel) => panel.showInSummary).length >= MAX_SUMMARY_INSIGHT_MODULES
+    ) return source
+    if (
+      normalized.autoGenerate === true &&
+      !target.autoGenerate &&
+      audiencePanels.filter((panel) => panel.showInSummary && panel.autoGenerate).length >= MAX_AUTO_INSIGHT_MODULES
+    ) return source
+    return source.map((panel) => (
+      panel.id === id
+        ? { ...panel, ...normalized, id: panel.id, audience: panel.audience }
+        : panel
+    ))
+  }
+
   const updatePanel = (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => {
-    setAllPanels((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch, id: p.id, audience: p.audience } : p)))
+    setAllPanels((prev) => applyConstrainedPatch(prev, id, patch))
     setCustomByAudience((prev) => ({ ...prev, [audience]: true }))
   }
 
   const updatePanelAndSave = async (id: string, patch: Partial<Omit<InsightPanelConfig, "audience">>) => {
     return new Promise<void>((resolve, reject) => {
       setAllPanels((prev) => {
-        const updated = prev.map((p) => (p.id === id ? { ...p, ...patch, id: p.id, audience: p.audience } : p))
+        const updated = applyConstrainedPatch(prev, id, patch)
 
         if (user?.uid) {
           setIsSaving(true)

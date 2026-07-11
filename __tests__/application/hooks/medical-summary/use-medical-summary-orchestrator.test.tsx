@@ -1,0 +1,142 @@
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { useMedicalSummaryOrchestrator } from '@/src/application/hooks/medical-summary/use-medical-summary-orchestrator.hook'
+import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
+import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
+
+jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', () => ({
+  useMedicalSummary: jest.fn(),
+}))
+jest.mock('@/src/application/hooks/safety-alerts/use-safety-alerts.hook', () => ({
+  useSafetyAlerts: jest.fn(),
+}))
+
+const mockUseMedicalSummary = useMedicalSummary as jest.MockedFunction<typeof useMedicalSummary>
+const mockUseSafetyAlerts = useSafetyAlerts as jest.MockedFunction<typeof useSafetyAlerts>
+
+const summaryGenerate = jest.fn(async () => {})
+const safetyGenerate = jest.fn(async () => {})
+const setSummaryModel = jest.fn()
+const setSafetyModel = jest.fn()
+const setSummaryAuto = jest.fn()
+const setSafetyAuto = jest.fn()
+
+interface ArrangeOptions {
+  summaryResult?: unknown
+  safetyResult?: unknown
+  summaryError?: string | null
+  safetyError?: string | null
+  summaryHydrated?: boolean
+  safetyHydrated?: boolean
+  summaryGenerating?: boolean
+  safetyGenerating?: boolean
+  summaryModel?: string
+  safetyModel?: string
+  summaryAuto?: boolean
+  safetyAuto?: boolean
+}
+
+function arrange({
+  summaryResult = { headline: 'summary' },
+  safetyResult = { alerts: [] },
+  summaryError = null,
+  safetyError = null,
+  summaryHydrated = true,
+  safetyHydrated = true,
+  summaryGenerating = false,
+  safetyGenerating = false,
+  summaryModel = 'gemini-3.1-flash-lite',
+  safetyModel = 'gemini-3.1-flash-lite',
+  summaryAuto = true,
+  safetyAuto = true,
+}: ArrangeOptions = {}) {
+  mockUseMedicalSummary.mockReturnValue({
+    result: summaryResult as never,
+    coverage: null,
+    isGenerating: summaryGenerating,
+    error: summaryError,
+    hasPatient: true,
+    dataReady: true,
+    isHydrated: summaryHydrated,
+    autoGenerate: summaryAuto,
+    setAutoGenerate: setSummaryAuto,
+    model: summaryModel,
+    setModel: setSummaryModel,
+    generate: summaryGenerate,
+  })
+  mockUseSafetyAlerts.mockReturnValue({
+    result: safetyResult as never,
+    isScanning: safetyGenerating,
+    error: safetyError,
+    hasPatient: true,
+    isHydrated: safetyHydrated,
+    autoScan: safetyAuto,
+    setAutoScan: setSafetyAuto,
+    model: safetyModel,
+    setModel: setSafetyModel,
+    scan: safetyGenerate,
+    resolveSource: jest.fn(),
+  })
+}
+
+describe('useMedicalSummaryOrchestrator', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    arrange()
+  })
+
+  it('runs summary and safety as one user-facing generation action', async () => {
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    await act(async () => result.current.generate())
+    expect(summaryGenerate).toHaveBeenCalledTimes(1)
+    expect(safetyGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries only the failed pipeline', async () => {
+    arrange({ summaryError: 'failed' })
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    await act(async () => result.current.retryFailed())
+    expect(summaryGenerate).toHaveBeenCalledTimes(1)
+    expect(safetyGenerate).not.toHaveBeenCalled()
+  })
+
+  it('waits for both audience cache slots before presenting the summary', () => {
+    arrange({ safetyHydrated: false })
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    expect(result.current.isRestoring).toBe(true)
+  })
+
+  it('migrates historical safety preferences to the summary controls', async () => {
+    arrange({ safetyModel: 'old-model', safetyAuto: false })
+    renderHook(() => useMedicalSummaryOrchestrator())
+    await waitFor(() => {
+      expect(setSafetyModel).toHaveBeenCalledWith('gemini-3.1-flash-lite')
+      expect(setSafetyAuto).toHaveBeenCalledWith(true)
+    })
+  })
+
+  it('publishes refreshed summary and safety results together after a batch settles', async () => {
+    const oldSummary = { headline: 'old summary' }
+    const oldSafety = { alerts: [{ id: 'old' }] }
+    arrange({ summaryResult: oldSummary, safetyResult: oldSafety, summaryGenerating: true })
+    const { result, rerender } = renderHook(() => useMedicalSummaryOrchestrator())
+    await waitFor(() => expect(result.current.activeBatchId).not.toBeNull())
+
+    arrange({
+      summaryResult: { headline: 'new summary' },
+      safetyResult: { alerts: [{ id: 'new' }] },
+      summaryGenerating: true,
+    })
+    rerender()
+    expect(result.current.result).toEqual(oldSummary)
+    expect(result.current.safetyResult).toEqual(oldSafety)
+
+    arrange({
+      summaryResult: { headline: 'new summary' },
+      safetyResult: { alerts: [{ id: 'new' }] },
+    })
+    rerender()
+    await waitFor(() => expect(result.current.activeBatchId).toBeNull())
+    expect(result.current.result).toEqual({ headline: 'new summary' })
+    expect(result.current.safetyResult).toEqual({ alerts: [{ id: 'new' }] })
+  })
+})

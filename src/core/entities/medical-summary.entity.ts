@@ -49,6 +49,29 @@ export const INVESTIGATION_DIRECTIONS = [
 ] as const
 export type InvestigationDirection = (typeof INVESTIGATION_DIRECTIONS)[number]
 
+// Clinician-facing medication reconciliation. These labels describe the
+// record state / workflow — deliberately not clinical risk severity, which
+// belongs to the separate safety card.
+export const MEDICATION_CHANGE_TYPES = [
+  'new',
+  'stopped',
+  'resumed',
+  'changed',
+  'cross-facility',
+  'uncertain',
+] as const
+export type MedicationChangeType = (typeof MEDICATION_CHANGE_TYPES)[number]
+
+export const MEDICATION_RECONCILIATION_REASONS = [
+  'status-conflict',
+  'missing-sig',
+  'multi-facility',
+  'uncertain-current',
+  'possible-same-drug',
+  'other',
+] as const
+export type MedicationReconciliationReason = (typeof MEDICATION_RECONCILIATION_REASONS)[number]
+
 // ---------------------------------------------------------------------------
 // AI output schema (validated with Zod; malformed replies are rejected)
 //
@@ -116,6 +139,43 @@ export const SummaryInvestigationSchema = z.object({
   sources: clampedKeys(8),
 })
 
+// Patient-facing medication education. This intentionally describes how a
+// recorded medicine may support the patient's care before offering one calm,
+// practical reminder. It is structured (rather than free markdown) so every
+// item remains tied to the original medication record.
+export const SummaryMedicationEducationSchema = z.object({
+  name: clampedText(120),
+  benefit: clampedText(400),
+  attention: clampedText(400),
+  sources: clampedKeys(8),
+})
+
+const SummaryMedicationRegimenSchema = z.object({
+  group: clampedText(80),
+  name: clampedText(160),
+  sig: z.string().transform((s) => (s.length > 240 ? s.slice(0, 240) : s)).optional(),
+  sources: clampedKeys(8),
+})
+
+const SummaryMedicationChangeSchema = z.object({
+  type: z.string().optional(),
+  medication: clampedText(160),
+  summary: clampedText(320),
+  sources: clampedKeys(8),
+})
+
+const SummaryMedicationReconciliationItemSchema = z.object({
+  reason: z.string().optional(),
+  text: clampedText(320),
+  sources: clampedKeys(8),
+})
+
+export const SummaryMedicationReviewSchema = z.object({
+  regimen: z.array(SummaryMedicationRegimenSchema).default([]).transform((a) => a.slice(0, 8)),
+  changes: z.array(SummaryMedicationChangeSchema).default([]).transform((a) => a.slice(0, 5)),
+  reconciliation: z.array(SummaryMedicationReconciliationItemSchema).default([]).transform((a) => a.slice(0, 5)),
+})
+
 export const MedicalSummaryAiResultSchema = z.object({
   headline: clampedText(240),
   // Segment clamp is deliberately roomy (32, prompt asks for far fewer): it is
@@ -123,6 +183,12 @@ export const MedicalSummaryAiResultSchema = z.object({
   // loses its conclusion, so only truly degenerate outputs should hit it.
   summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
   investigations: z.array(SummaryInvestigationSchema).default([]).transform((a) => a.slice(0, 8)),
+  medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
+  medicationReview: SummaryMedicationReviewSchema.default({
+    regimen: [],
+    changes: [],
+    reconciliation: [],
+  }),
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
   decisions: z.array(SummaryDecisionSchema).default([]).transform((a) => a.slice(0, 16)),
   // Patient complexity varies too much for an editorial cap — the prompt asks
@@ -151,6 +217,10 @@ export interface SummarySourceCatalogEntry {
   /** ISO date (YYYY-MM-DD) taken from the resource — never from the AI. */
   date?: string
   organization?: string
+  /** Lazy decoded document narrative, used only for claim-level verification.
+   *  Kept out of prompts/source pills so large discharge summaries are not
+   *  duplicated in memory or exposed as metadata. */
+  getContentText?: () => string
   /** Only set for Encounter entries whose class is recognisable. */
   encounterClass?: EncounterClass
 }
@@ -200,10 +270,39 @@ export interface SummaryInvestigation {
   sourceKeys: string[]
 }
 
+export interface SummaryMedicationEducation {
+  name: string
+  benefit: string
+  attention: string
+  sourceKeys: string[]
+}
+
+export interface SummaryMedicationReview {
+  regimen: Array<{
+    group: string
+    name: string
+    sig?: string
+    sourceKeys: string[]
+  }>
+  changes: Array<{
+    type: MedicationChangeType
+    medication: string
+    summary: string
+    sourceKeys: string[]
+  }>
+  reconciliation: Array<{
+    reason: MedicationReconciliationReason
+    text: string
+    sourceKeys: string[]
+  }>
+}
+
 export interface MedicalSummaryResult {
   headline: string
   summary: Array<{ text: string; emphasis: boolean; sourceKeys: string[] }>
   investigations: SummaryInvestigation[]
+  medicationEducation: SummaryMedicationEducation[]
+  medicationReview: SummaryMedicationReview
   problems: SummaryProblem[]
   decisions: Array<{
     text: string
@@ -213,7 +312,7 @@ export interface MedicalSummaryResult {
   }>
   timeline: SummaryTimelineEvent[]
   /** Unique cited sources in first-appearance order, matching the RENDER
-   *  order (summary → investigations → problems → decisions) so superscript numbers read
+   *  order (summary → investigations → medication card → problems → decisions) so superscript numbers read
    *  top-to-bottom on the page. */
   sourceIndex: ResolvedSourceRef[]
   /** Timeline picks whose ref didn't resolve to the bundle (dropped, counted). */
@@ -255,4 +354,18 @@ export function normaliseInvestigationDirection(raw?: string): InvestigationDire
   return (INVESTIGATION_DIRECTIONS as readonly string[]).includes(c)
     ? (c as InvestigationDirection)
     : 'unknown'
+}
+
+export function normaliseMedicationChangeType(raw?: string): MedicationChangeType {
+  const c = (raw ?? '').toLowerCase().trim()
+  return (MEDICATION_CHANGE_TYPES as readonly string[]).includes(c)
+    ? (c as MedicationChangeType)
+    : 'uncertain'
+}
+
+export function normaliseMedicationReconciliationReason(raw?: string): MedicationReconciliationReason {
+  const c = (raw ?? '').toLowerCase().trim()
+  return (MEDICATION_RECONCILIATION_REASONS as readonly string[]).includes(c)
+    ? (c as MedicationReconciliationReason)
+    : 'other'
 }

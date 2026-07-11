@@ -10,10 +10,12 @@
 // 不臆測。
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Syringe } from 'lucide-react'
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
+import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationRow } from '../types'
 import { medicationHistoryCategoryChipClass } from './medication-chip-styles'
@@ -62,6 +64,8 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
   const [showInjectables, setShowInjectables] = useState(false)
+  const pending = useResourceNavigationStore((s) => s.pending)
+  const navSeq = useResourceNavigationStore((s) => s.seq)
 
   // Sort drugs by most-recently-stopped first — the clinically relevant end of
   // a long history. localeCompare on the formatted date string sorts correctly
@@ -79,6 +83,16 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
     }
     return { regular: reg, injectable: inj }
   }, [groups])
+
+  useEffect(() => {
+    if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
+    const targetInInjectables = injectable.some((group) =>
+      group.medications.some((medication) => medication.id === pending.resourceId),
+    )
+    if (!targetInInjectables) return
+    const timer = window.setTimeout(() => setShowInjectables(true), 0)
+    return () => window.clearTimeout(timer)
+  }, [pending, navSeq, injectable])
 
   return (
     <div className="max-h-[28rem] space-y-2 overflow-y-auto scrollbar-thin-persistent pr-1">
@@ -124,12 +138,25 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
   const { audience } = useAudience()
   const isMedical = audience === 'medical'
   const [open, setOpen] = useState(false)
+  const pending = useResourceNavigationStore((s) => s.pending)
+  const navSeq = useResourceNavigationStore((s) => s.seq)
   const latest = group.medications[0]
   const latestDate = latestDateOf(latest)
   const timesUnit = mt.refillTimes ?? '次'
+  const groupAnchorRef = useResourceAnchor<HTMLLIElement>(
+    ['MedicationRequest', 'MedicationStatement'],
+    group.medications.map((medication) => medication.id),
+  )
+
+  useEffect(() => {
+    if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
+    if (!group.medications.some((medication) => medication.id === pending.resourceId)) return
+    const timer = window.setTimeout(() => setOpen(true), 0)
+    return () => window.clearTimeout(timer)
+  }, [pending, navSeq, group.medications])
 
   return (
-    <li className="rounded-md border border-border/60">
+    <li ref={groupAnchorRef} className="rounded-md border border-border/60">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -177,13 +204,28 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
             if (m.pharmacy) parts.push(m.pharmacy)
             if (isMedical && m.icdCode) parts.push(`${m.icdCode}${m.icdText ? ` ${m.icdText}` : ''}`)
             return (
-              <div key={m.id || i} className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-                {parts.length > 0 ? parts.join('  ·  ') : (mt.noDetail ?? '')}
-              </div>
+              <MedicationHistoryDetail
+                key={m.id || i}
+                medication={m}
+                text={parts.length > 0 ? parts.join('  ·  ') : (mt.noDetail ?? '')}
+              />
             )
           })}
         </div>
       )}
     </li>
+  )
+}
+
+function MedicationHistoryDetail({ medication, text }: { medication: MedicationRow; text: string }) {
+  const anchorRef = useResourceAnchor<HTMLDivElement>(
+    ['MedicationRequest', 'MedicationStatement'],
+    medication.id,
+  )
+
+  return (
+    <div ref={anchorRef} className="rounded-sm px-1 py-0.5 text-[0.6875rem] leading-relaxed text-muted-foreground">
+      {text}
+    </div>
   )
 }

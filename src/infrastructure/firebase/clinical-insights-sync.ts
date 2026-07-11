@@ -12,6 +12,7 @@ import {
   type Unsubscribe
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
+import { coerceShowInSummary } from '@/src/shared/constants/clinical-insights.constants'
 
 export type PanelAudience = 'medical' | 'patient'
 
@@ -19,6 +20,7 @@ export interface ClinicalInsightPanel {
   id: string
   title: string
   prompt: string
+  showInSummary: boolean
   autoGenerate: boolean
   order: number
   audience: PanelAudience
@@ -30,6 +32,7 @@ interface FirestoreClinicalInsightPanel {
   id: string
   title: string
   prompt: string
+  showInSummary?: boolean
   autoGenerate: boolean
   order: number
   audience?: PanelAudience
@@ -54,6 +57,7 @@ export async function getUserClinicalInsightPanels(userId: string): Promise<Clin
         id: doc.id,
         title: data.title,
         prompt: data.prompt,
+        showInSummary: coerceShowInSummary(data.showInSummary, data.id),
         autoGenerate: data.autoGenerate || false,
         order: data.order || 0,
         audience: data.audience ?? 'medical',
@@ -84,6 +88,7 @@ export async function saveClinicalInsightPanel(
       id: panel.id,
       title: panel.title,
       prompt: panel.prompt,
+      showInSummary: panel.showInSummary,
       autoGenerate: panel.autoGenerate,
       order: panel.order,
       audience: panel.audience ?? 'medical',
@@ -136,6 +141,7 @@ export function subscribeToClinicalInsightPanels(
         id: doc.id,
         title: data.title,
         prompt: data.prompt,
+        showInSummary: coerceShowInSummary(data.showInSummary, data.id),
         autoGenerate: data.autoGenerate || false,
         order: data.order || 0,
         audience: data.audience ?? 'medical',

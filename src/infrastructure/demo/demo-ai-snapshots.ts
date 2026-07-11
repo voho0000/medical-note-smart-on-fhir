@@ -35,6 +35,37 @@ export const DEMO_PATIENT_ID = 'demo-patient-1'
 
 type Audience = 'medical' | 'patient'
 
+// Free-form custom-module snapshots are intentionally separate from the
+// structured medical-summary snapshots. They preload only while the matching
+// default prompt and default Insights model are still selected.
+export const demoClinicalInsightSnapshots: Record<Audience, Record<string, { prompt: string; text: string }>> = {
+  medical: {
+    changes: {
+      prompt: '比較病人最近的臨床資料與先前資訊，列出狀態、治療或結果中最重要的變化。強調需要注意的差異。',
+      text: [
+        '### 近期重要變化',
+        '- **腎功能持續緩慢下降**：近期 eGFR 約由 35 降至 32 mL/min/1.73m²，應持續追蹤腎功能、蛋白尿與藥物劑量。',
+        '- **心肺狀況需要追蹤**：近期胸部影像記錄雙側肺部浸潤、肋膜積水及輕度心臟擴大，需合併症狀與後續影像評估。',
+        '- **貧血仍存在**：血色素約 11.2–12.1 g/dL，應配合慢性腎病與營養狀況一併判讀。',
+        '- **近期反覆呼吸道就醫**：跨院紀錄中有肺炎、慢性咳嗽及住院事件，回診時宜確認症狀是否完全改善。',
+      ].join('\n'),
+    },
+  },
+  patient: {
+    'health-overview': {
+      prompt: '請用我匯入的個人健康資料，幫我整理一份白話版的健康總覽：目前的慢性病、正在使用的藥物，以及近期較需要關注的檢驗結果。專有名詞請在括號中簡單說明。最後提醒我若有疑慮應與醫師討論。',
+      text: [
+        '### 最近值得注意的健康變化',
+        '- 腎功能數值最近有緩慢下降，需要按照醫師安排持續抽血追蹤。',
+        '- 胸部檢查曾出現肺部浸潤與積水，若仍有喘、咳嗽或發燒，請儘早回診。',
+        '- 血色素稍低，可能與慢性疾病等多種因素有關，可在下次看診時請醫師一起說明。',
+        '',
+        '這是依健康存摺資料整理的提醒，實際病情與用藥調整請和您的醫療團隊確認。',
+      ].join('\n'),
+    },
+  },
+}
+
 export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResult> = {
   medical: {
     headline: '94歲男性，患有多重慢性疾病且腎功能持續監測中。',
@@ -73,6 +104,61 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
         sources: ['L1'],
       },
     ],
+    medicationEducation: [],
+    medicationReview: {
+      regimen: [
+        {
+          group: '眼科',
+          name: '青光眼局部用藥組合',
+          sig: '近期紀錄包含派滴兒、Brimonidine、Latanoprost 與複方點眼液',
+          sources: ['M3', 'M4', 'M5', 'M6'],
+        },
+        {
+          group: '泌尿',
+          name: 'Harnalidge OCAS 0.4 mg',
+          sig: '近期紀錄平均每日 1 錠',
+          sources: ['M19', 'M39'],
+        },
+        {
+          group: '內分泌',
+          name: 'Levothyroxine',
+          sig: '近期紀錄平均每日 1 錠',
+          sources: ['M15', 'M32'],
+        },
+        {
+          group: '尿酸',
+          name: 'Febuxostat 80 mg',
+          sig: '近期紀錄平均每日 0.25 錠',
+          sources: ['M16', 'M33'],
+        },
+      ],
+      changes: [
+        {
+          type: 'new',
+          medication: '青光眼局部用藥組合',
+          summary: '四項眼科局部用藥集中出現在近期紀錄；此處僅代表紀錄中新出現，不等同本次開始使用。',
+          sources: ['M3', 'M4', 'M5', 'M6'],
+        },
+        {
+          type: 'cross-facility',
+          medication: '便通樂膜衣錠',
+          summary: '同一藥品於不同機構與日期的紀錄中出現，需於藥物整合時確認實際來源與用法。',
+          sources: ['M8', 'M30'],
+        },
+      ],
+      reconciliation: [
+        {
+          reason: 'uncertain-current',
+          text: '青光眼點眼藥共列四項，需確認目前實際品項、點用頻率及是否仍全部使用。',
+          sources: ['M3', 'M4', 'M5', 'M6'],
+        },
+        {
+          reason: 'multi-facility',
+          text: '便通樂膜衣錠有跨機構紀錄，需區分同次處方調劑與不同來源用藥。',
+          sources: ['M8', 'M30'],
+        },
+      ],
+    },
     problems: [
       { label: '慢性腎臟病', basis: '照護計畫及eGFR 32 ml/min/1.73m2', kind: 'diagnosis', sources: ['K1', 'K2', 'E4'] },
       { label: '肺炎', basis: '近期多次門診申報', kind: 'diagnosis', sources: ['E3', 'E9'] },
@@ -148,6 +234,37 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
         sources: ['L1'],
       },
     ],
+    medicationEducation: [
+      {
+        name: '青光眼眼藥水（派滴兒、必目寧等）',
+        benefit: '這些眼藥水用於協助控制眼壓，幫助保護視神經與維持眼睛狀況。',
+        attention: '請依眼科醫師指示點藥；若同時使用多種眼藥水，可請醫師或藥師再次確認點用順序與間隔。',
+        sources: ['M3', 'M4', 'M5', 'M6'],
+      },
+      {
+        name: '攝護腺相關藥物',
+        benefit: '紀錄中的藥物可協助排尿更順暢，減少攝護腺問題對日常生活的影響。',
+        attention: '若服藥後容易頭暈，起身時可以慢一些；症狀持續時可在回診時告訴醫師。',
+        sources: ['M19', 'M39'],
+      },
+      {
+        name: '甲狀腺素補充藥物',
+        benefit: '這類藥物補充身體需要的甲狀腺素，協助維持代謝與日常精神體力。',
+        attention: '請依醫囑固定方式使用；若服用時間或與其他藥物的間隔不確定，可詢問醫師或藥師。',
+        sources: ['M15', 'M32'],
+      },
+      {
+        name: '降尿酸藥物',
+        benefit: '這類藥物協助控制尿酸，支持長期關節與腎臟照護。',
+        attention: '規律依醫囑使用較能維持效果；若有不舒服或用藥疑問，請先和醫師或藥師討論。',
+        sources: ['M16', 'M33'],
+      },
+    ],
+    medicationReview: {
+      regimen: [],
+      changes: [],
+      reconciliation: [],
+    },
     problems: [
       { label: '慢性腎臟病', basis: '照護計畫及多次血液檢查', kind: 'careplan', sources: ['K1', 'K2', 'L7', 'L24'] },
       {

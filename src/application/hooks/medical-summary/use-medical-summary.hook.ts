@@ -1,10 +1,9 @@
 // Medical Summary hook — mirrors use-safety-alerts.hook.ts: runs the structured
-// generation on a pinned fast model, verifies citations against the bundle, and
+// generation on the selected summary model, verifies citations against the bundle, and
 // caches per patient+audience so tab switches / reloads don't re-bill.
 //
-// Auto-generate policy: on by default, but only fires for signed-in users or
-// users with their own provider key — anonymous free-tier visitors keep the
-// manual button so the summary doesn't silently burn their 50/day chat quota.
+// Auto-generate policy: when enabled, every available selected model runs once
+// for an empty patient+audience+model slot after cache/auth hydration.
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -27,14 +26,15 @@ import {
 } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
   getModelDefinition,
-  isAutoRunEligibleModel,
   gateModel,
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import {
   generateMedicalSummaryUseCase,
   getSourceCatalog,
+  scopeDocumentSources,
   buildCoverageStats,
+  buildLongitudinalInvestigationContext,
   MEDICAL_SUMMARY_MODEL_ID,
   type SummaryCatalogInput,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
@@ -46,11 +46,16 @@ import {
   DEMO_PATIENT_ID,
   demoMedicalSummarySnapshots,
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
+import { shouldAutoRunSummarySlot } from './summary-auto-run-policy'
 
 const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
-// v3: bumped when the result shape gained disease-oriented `investigations`;
-// older cached summaries are valid but would silently omit the new overview.
-const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary3', scanKey)
+// v6: clinician summaries now include the structured medication-reconciliation
+// card. Older cached summaries do not contain that field and must regenerate.
+const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary6', scanKey)
+// The v6 schema change was clinician-only. Patient summaries produced under
+// v5 remain valid, so use them as a fallback instead of making an audience
+// switch look as though its saved summary disappeared.
+const legacyPatientSummaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary5', scanKey)
 
 interface MedicalSummaryStore {
   // All keyed by scanKey = patientId::audience::model — so each model keeps its
@@ -124,6 +129,8 @@ export interface UseMedicalSummaryReturn {
   error: string | null
   hasPatient: boolean
   dataReady: boolean
+  /** True once this exact patient+audience+model cache slot was restored. */
+  isHydrated: boolean
   autoGenerate: boolean
   setAutoGenerate: (value: boolean) => void
   model: string
@@ -134,7 +141,7 @@ export interface UseMedicalSummaryReturn {
 export function useMedicalSummary(): UseMedicalSummaryReturn {
   const { patient } = usePatient()
   // Same data-selection profile as insights — the summary is insight-family.
-  const { getFullClinicalContext } = useClinicalContext('insights')
+  const { getFullClinicalContext, includedDocumentIds } = useClinicalContext('insights')
   const clinicalData = useClinicalData() as unknown as
     | (SummaryCatalogInput & { isLoading?: boolean; error?: unknown })
     | null
@@ -142,7 +149,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const { locale } = useLanguage()
   // authLoading still gates auto-generate: firing before the (possibly
   // anonymous) session resolves would race getProxyIdToken on first load.
-  const { loading: authLoading } = useAuth()
+  const { loading: authLoading, user, isAnonymous } = useAuth()
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
   const { audience } = useAudience()
 
@@ -165,6 +172,19 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   }, [modelId, apiKey, geminiKey, claudeKey])
 
   const scanKey = patientId ? `${patientId}::${audience}::${resolvedModelId}` : ''
+  const selectedModelProvider = getModelDefinition(modelId)?.provider
+  const hasSelectedProviderKey =
+    selectedModelProvider === 'openai' ? !!apiKey :
+    selectedModelProvider === 'gemini' ? !!geminiKey :
+    selectedModelProvider === 'claude' ? !!claudeKey : false
+  // A failed anonymous auto-run must become eligible again after login (or
+  // after the user adds their own provider key). The result cache remains
+  // patient+audience+model scoped; only the once-per-access-context trigger
+  // guard needs this extra identity.
+  const accessScope = hasSelectedProviderKey ? 'own-key' : user ? `user:${user.uid}` : isAnonymous ? 'anonymous' : 'no-session'
+  const autoRunIdentity = scanKey
+    ? `${scanKey}::${accessScope}`
+    : ''
 
   const result = useMedicalSummaryStore((s) => (scanKey ? s.byPatient[scanKey] : undefined))
   const setResult = useMedicalSummaryStore((s) => s.setResult)
@@ -178,12 +198,18 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   // Deterministic pieces — catalog for citations, coverage for the coverage
   // card. Both recompute only when the bundle changes.
   const catalog = useMemo(
-    () => (dataReady && clinicalData ? getSourceCatalog(clinicalData) : []),
-    [dataReady, clinicalData],
+    () => (dataReady && clinicalData
+      ? scopeDocumentSources(getSourceCatalog(clinicalData), includedDocumentIds)
+      : []),
+    [dataReady, clinicalData, includedDocumentIds],
   )
   const coverage = useMemo(
     () => (dataReady && clinicalData ? buildCoverageStats(clinicalData) : null),
     [dataReady, clinicalData],
+  )
+  const longitudinalInvestigationContext = useMemo(
+    () => (dataReady && clinicalData ? buildLongitudinalInvestigationContext(clinicalData, catalog) : ''),
+    [dataReady, clinicalData, catalog],
   )
 
   // Guests auto-generate too (v0.25.x): the onboarding step is an explicit
@@ -201,7 +227,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     setGenerating(myScanKey, true)
     setError(myScanKey, null)
     try {
-      const clinicalContext = getFullClinicalContext()
+      const clinicalContext = [getFullClinicalContext(), longitudinalInvestigationContext]
+        .filter(Boolean)
+        .join('\n\n')
       const messages = generateMedicalSummaryUseCase.buildMessages({
         clinicalContext,
         catalog,
@@ -239,7 +267,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     } finally {
       setGenerating(myScanKey, false)
     }
-  }, [scanKey, dataReady, getFullClinicalContext, catalog, locale, audience, ai, setResult, setGenerating, setError, resolvedModelId])
+  }, [scanKey, dataReady, getFullClinicalContext, longitudinalInvestigationContext, catalog, locale, audience, ai, setResult, setGenerating, setError, resolvedModelId])
 
   // Restore the persisted result before auto-generate can fire (see safety
   // hook for the StrictMode rationale of reading the store imperatively).
@@ -247,20 +275,27 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   useEffect(() => {
     if (!scanKey) return
     if (useMedicalSummaryStore.getState().byPatient[scanKey]) {
-      setHydrated(scanKey)
-      return
+      const timer = window.setTimeout(() => setHydrated(scanKey), 0)
+      return () => window.clearTimeout(timer)
     }
     let cancelled = false
-    void loadEncryptedCache<MedicalSummaryResult>(
-      summaryCacheKey(scanKey),
-      SUMMARY_CACHE_MAX_AGE_MS,
-    ).then((cached) => {
+    void (async () => {
+      let cached = await loadEncryptedCache<MedicalSummaryResult>(
+        summaryCacheKey(scanKey),
+        SUMMARY_CACHE_MAX_AGE_MS,
+      )
+      if (!cached && audience === 'patient') {
+        cached = await loadEncryptedCache<MedicalSummaryResult>(
+          legacyPatientSummaryCacheKey(scanKey),
+          SUMMARY_CACHE_MAX_AGE_MS,
+        )
+      }
       if (cancelled) return
       if (cached) setResult(scanKey, cached)
       setHydrated(scanKey)
-    })
+    })()
     return () => { cancelled = true }
-  }, [scanKey, setResult])
+  }, [audience, scanKey, setResult])
 
   const autoTriggeredRef = useRef<string | null>(null)
 
@@ -280,24 +315,30 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const snapshot = demoMedicalSummarySnapshots[audience === 'patient' ? 'patient' : 'medical']
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
     if (!parsed) return
-    autoTriggeredRef.current = scanKey
+    autoTriggeredRef.current = autoRunIdentity
     setResult(scanKey, generateMedicalSummaryUseCase.finalizeResult(parsed, catalog))
-  }, [scanKey, result, hydrated, patientId, locale, resolvedModelId, dataReady, catalog, audience, setResult])
+  }, [scanKey, autoRunIdentity, result, hydrated, patientId, locale, resolvedModelId, dataReady, catalog, audience, setResult])
 
   // Auto-generate once per patient+audience after hydration; a failed attempt
   // is NOT retried in a loop — the user regenerates manually.
   useEffect(() => {
-    if (!autoGenerate || authLoading) return
-    if (!scanKey || isGenerating || result || !dataReady) return
-    if (hydrated !== scanKey) return
-    if (autoTriggeredRef.current === scanKey) return
-    // Only a provider's free BASE model (or an own-key model) auto-generates;
-    // free NON-base proxy models require an explicit 產生 press so browsing the
-    // model picker doesn't silently spend the visitor's free quota (2026-07-07).
-    if (!isAutoRunEligibleModel(resolvedModelId)) return
-    autoTriggeredRef.current = scanKey
+    if (!shouldAutoRunSummarySlot({
+      enabled: autoGenerate,
+      authLoading,
+      slotKey: scanKey,
+      busy: isGenerating,
+      dataReady,
+      hasResult: Boolean(result),
+      hydratedSlotKey: hydrated,
+      autoRunIdentity,
+      triggeredIdentity: autoTriggeredRef.current,
+    })) return
+    // The toggle is explicit authorization for every available selected model,
+    // not only the Lite/base model. Availability/key fallback has already been
+    // applied in resolvedModelId.
+    autoTriggeredRef.current = autoRunIdentity
     void generate()
-  }, [autoGenerate, authLoading, scanKey, isGenerating, result, dataReady, hydrated, generate, resolvedModelId])
+  }, [autoGenerate, authLoading, scanKey, autoRunIdentity, isGenerating, result, dataReady, hydrated, generate])
 
   // Switching model just changes which per-model slot the view reads — it does
   // NOT cancel or clear anything. The old model's in-flight run keeps going and
@@ -315,6 +356,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     error,
     hasPatient: !!patientId,
     dataReady,
+    isHydrated: !scanKey || hydrated === scanKey,
     autoGenerate,
     setAutoGenerate,
     model: modelId,

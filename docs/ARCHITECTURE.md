@@ -87,7 +87,7 @@ src/core/
 - `chat/` - 對話管理用例
 - `clinical-context/` - 臨床上下文
 - `clinical-data/` - 臨床資料處理
-- `clinical-insights/` - 臨床洞察生成
+- `clinical-insights/` - 自訂摘要模組生成
 - `patient/` - 病人資料
 - `transcription/` - 語音轉錄
 
@@ -190,7 +190,7 @@ export function MyFeatureCard() {
 **預設功能**（4 個）：
 - Medical Chat - AI 對話（一般模式 + 深入模式）
 - Data Selection - 資料選擇
-- Clinical Insights - 臨床洞察
+- Medical Summary - 固定核心摘要＋自訂摘要模組
 - Settings - 設定
 
 ### 架構優勢
@@ -437,7 +437,7 @@ features/
 │   ├── hooks/
 │   └── index.ts            # 公開 API
 ├── chat-history/           # 對話歷史
-├── clinical-insights/      # 臨床洞察
+├── clinical-insights/      # 自訂摘要模組 runtime 與管理 UI
 ├── clinical-summary/       # 臨床摘要（7 個子功能）
 ├── data-selection/         # 資料選擇
 ├── medical-chat/           # AI 對話

@@ -5,6 +5,8 @@
 // title flags it as an inference pending physician confirmation.
 "use client"
 
+import { useState } from "react"
+import { ChevronDown } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type {
   MedicalSummaryResult,
@@ -35,8 +37,14 @@ interface ProblemListCardProps {
   badgeLabel: (kind: ProblemKind) => string
   typeLabel: (resourceType?: string) => string
   unverifiedLabel: string
+  showMoreLabel: string
+  showLessLabel: string
   onNavigate?: (target: ResourceNavTarget) => void
 }
+
+// Wide cards use two columns, so 8 items render as four visual rows. This keeps
+// the default scan useful before the fifth row is folded behind the toggle.
+const INITIAL_VISIBLE = 8
 
 export function ProblemListCard({
   result,
@@ -45,12 +53,17 @@ export function ProblemListCard({
   badgeLabel,
   typeLabel,
   unverifiedLabel,
+  showMoreLabel,
+  showLessLabel,
   onNavigate,
 }: ProblemListCardProps) {
+  const [showAll, setShowAll] = useState(false)
   // `?? []` tolerates results cached before the problems field existed.
   const problems = result.problems ?? []
   if (problems.length === 0) return null
   const byKey = new Map(result.sourceIndex.map((s) => [s.key, s]))
+  const hiddenCount = Math.max(0, problems.length - INITIAL_VISIBLE)
+  const visible = showAll ? problems : problems.slice(0, INITIAL_VISIBLE)
 
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2.5">
@@ -59,9 +72,9 @@ export function ProblemListCard({
           wide enough (@container ≥34rem) they flow into two columns — halves
           the card height and kills the text-plus-dead-space look. Dividers are
           per-item borders (not divide-y) so the grid keeps its row lines. */}
-      <div className="@container max-h-[24rem] overflow-y-auto scrollbar-thin-persistent">
+      <div className="@container">
         <div className="grid grid-cols-1 gap-x-5 @min-[32rem]:grid-cols-2">
-        {problems.map((p, i) => {
+        {visible.map((p, i) => {
           const sources = p.sourceKeys
             .map((k) => byKey.get(k))
             .filter((s): s is ResolvedSourceRef => s !== undefined)
@@ -99,6 +112,17 @@ export function ProblemListCard({
         })}
         </div>
       </div>
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll((value) => !value)}
+          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          aria-expanded={showAll}
+        >
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
+          {showAll ? showLessLabel : showMoreLabel.replace("{count}", String(hiddenCount))}
+        </button>
+      ) : null}
     </div>
   )
 }

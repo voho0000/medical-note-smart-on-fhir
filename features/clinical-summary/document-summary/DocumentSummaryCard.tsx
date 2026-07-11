@@ -20,12 +20,13 @@
 // or once the bridge ships discharge summaries.
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Building2, Info, PanelRight } from 'lucide-react'
 import { FeatureCard } from '@/src/shared/components'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
+import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
 import { useDocumentSummaries } from './hooks/useDocumentSummaries'
 import { CompositionRenderer } from './components/CompositionRenderer'
@@ -127,6 +128,10 @@ function DocumentEntryCard({
 }: DocumentEntryCardProps) {
   const dateStr = formatDate(entry.date)
   const periodStr = formatPeriod(entry.period)
+  const resourceType = entry.sourceKind === 'composition' ? 'Composition' : 'DocumentReference'
+  const [forceExpandKey, setForceExpandKey] = useState<number>()
+  const handleResourceMatch = useCallback((sequence: number) => setForceExpandKey(sequence), [])
+  const anchorRef = useResourceAnchor<HTMLLIElement>(resourceType, entry.id, handleResourceMatch)
 
   // 「AI 翻譯解讀」— on-demand per document (民眾 feature). Plain-text extraction
   // reuses the same strip-HTML path the clinical-context builder uses, so the
@@ -221,6 +226,7 @@ function DocumentEntryCard({
 
   return (
     <li
+      ref={anchorRef}
       className={cn(
         'rounded-md border border-border/60 bg-muted/20 p-2.5 transition-colors',
         isRightActive && 'border-primary/40 bg-primary/5',
@@ -357,6 +363,7 @@ function DocumentEntryCard({
         <CompositionRenderer
           composition={entry.composition}
           defaultExpandFirst={autoExpand}
+          forceExpandKey={forceExpandKey}
           resolveSectionLabel={resolveSectionLabel}
           labels={{
             documentDate: strings.documentDate,
@@ -369,6 +376,7 @@ function DocumentEntryCard({
         <HtmlDocumentRenderer
           attachment={entry.attachment}
           defaultExpanded={autoExpand}
+          forceExpandKey={forceExpandKey}
           rightControl={rightButton}
           labels={{
             bodyHeader: strings.htmlBodyHeader,

@@ -1,10 +1,11 @@
 // Improved Medication List Component with Collapsible Sections
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, History } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import type { MedicationRow } from '../types'
 import { MedicationItem } from './MedicationItem'
 import { MedicationHistoryList } from './MedicationHistoryList'
@@ -35,6 +36,18 @@ export function MedicationList({
   const mt = (t.medications as any)
   const [showInactive, setShowInactive] = useState(false)
   const { activeMedications, inactiveMedicationGroups } = useGroupedMedications(medications)
+  const pending = useResourceNavigationStore((s) => s.pending)
+  const navSeq = useResourceNavigationStore((s) => s.seq)
+
+  useEffect(() => {
+    if (!pending || !['MedicationRequest', 'MedicationStatement'].includes(pending.resourceType)) return
+    const targetInHistory = inactiveMedicationGroups.some((group) =>
+      group.medications.some((medication) => medication.id === pending.resourceId),
+    )
+    if (!targetInHistory) return
+    const timer = window.setTimeout(() => setShowInactive(true), 0)
+    return () => window.clearTimeout(timer)
+  }, [pending, navSeq, inactiveMedicationGroups])
 
   if (isLoading) {
     return <div className="text-sm text-muted-foreground">{t.common.loading}</div>

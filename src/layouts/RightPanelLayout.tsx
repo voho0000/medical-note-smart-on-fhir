@@ -51,10 +51,6 @@ const DataSelectionFeature = dynamic(
   () => import("@/features/data-selection/Feature").then((m) => m.DataSelectionFeature),
   { ssr: false, loading: FeatureLoading },
 )
-const ClinicalInsightsFeature = dynamic(() => import("@/features/clinical-insights/Feature"), {
-  ssr: false,
-  loading: FeatureLoading,
-})
 const IpsExportFeature = dynamic(() => import("@/features/ips-export/Feature"), {
   ssr: false,
   loading: FeatureLoading,
@@ -75,6 +71,7 @@ import { DataSelectionProvider } from "@/src/application/providers/data-selectio
 import { AsrProvider } from "@/src/application/providers/asr.provider"
 import { ClinicalInsightsConfigProvider } from "@/src/application/providers/clinical-insights-config.provider"
 import { ChatTemplatesProvider } from "@/src/application/providers/chat-templates.provider"
+import { ClinicalInsightsRuntimeProvider } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 
 // ============================================================================
 // FEATURE COMPONENT MAP - Map feature IDs to their components
@@ -84,7 +81,6 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'medical-summary': MedicalSummaryFeature,
   'medical-chat': MedicalChatFeature,
   'data-selection': DataSelectionFeature,
-  'clinical-insights': ClinicalInsightsFeature,
   'ips-export': IpsExportFeature,
   'medical-calculator': MedicalCalculatorFeature,
   'settings': SettingsFeature,
@@ -100,7 +96,9 @@ function RightPanelProviders({ children }: { children: ReactNode }) {
       <AsrProvider>
         <ChatTemplatesProvider>
           <ClinicalInsightsConfigProvider>
-            {children}
+            <ClinicalInsightsRuntimeProvider>
+              {children}
+            </ClinicalInsightsRuntimeProvider>
           </ClinicalInsightsConfigProvider>
         </ChatTemplatesProvider>
       </AsrProvider>

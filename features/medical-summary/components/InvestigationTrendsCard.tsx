@@ -3,8 +3,10 @@
 // row keeps navigable citations to the original FHIR DiagnosticReports.
 "use client"
 
+import { useState } from "react"
 import {
   Activity,
+  ChevronDown,
   FlaskConical,
   Images,
   Microscope,
@@ -74,8 +76,12 @@ interface InvestigationTrendsCardProps {
   directionLabel: (direction: InvestigationDirection) => string
   typeLabel: (resourceType?: string) => string
   unverifiedLabel: string
+  showMoreLabel: string
+  showLessLabel: string
   onNavigate?: (target: ResourceNavTarget) => void
 }
+
+const INITIAL_VISIBLE = 3
 
 export function InvestigationTrendsCard({
   result,
@@ -85,12 +91,17 @@ export function InvestigationTrendsCard({
   directionLabel,
   typeLabel,
   unverifiedLabel,
+  showMoreLabel,
+  showLessLabel,
   onNavigate,
 }: InvestigationTrendsCardProps) {
+  const [showAll, setShowAll] = useState(false)
   // Tolerate encrypted caches from before this card was introduced.
   const investigations = result.investigations ?? []
   if (investigations.length === 0) return null
   const byKey = new Map(result.sourceIndex.map((source) => [source.key, source]))
+  const hiddenCount = Math.max(0, investigations.length - INITIAL_VISIBLE)
+  const visible = showAll ? investigations : investigations.slice(0, INITIAL_VISIBLE)
 
   return (
     <section className="rounded-lg border border-border bg-card px-3 py-2.5" aria-labelledby="investigation-trends-title">
@@ -101,8 +112,8 @@ export function InvestigationTrendsCard({
         <p className="mt-0.5 text-[0.65rem] leading-snug text-muted-foreground/75">{subtitle}</p>
       </div>
 
-      <div className="max-h-[26rem] space-y-1.5 overflow-y-auto scrollbar-thin-persistent">
-        {investigations.map((item, index) => {
+      <div className="space-y-1.5">
+        {visible.map((item, index) => {
           const style = DIRECTION_STYLE[item.direction]
           const DirectionIcon = style.icon
           const KindIcon = KIND_ICON[item.kind]
@@ -143,6 +154,17 @@ export function InvestigationTrendsCard({
           )
         })}
       </div>
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll((value) => !value)}
+          className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
+          aria-expanded={showAll}
+        >
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
+          {showAll ? showLessLabel : showMoreLabel.replace("{count}", String(hiddenCount))}
+        </button>
+      ) : null}
     </section>
   )
 }

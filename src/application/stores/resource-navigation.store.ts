@@ -35,6 +35,7 @@ export function leftTabForResourceType(resourceType: string): string | null {
     case 'CarePlan':
       return 'patient'
     case 'DocumentReference':
+    case 'Composition':
       return 'documents'
     // Procedures render inside visit details — land on the visits tab.
     case 'Procedure':

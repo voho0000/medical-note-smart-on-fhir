@@ -6,9 +6,8 @@
 // kebab `⋯` menu alongside a link into Settings → 顯示與關於 (which
 // houses theme, connection info, feedback, and about).
 //
-// Pattern: Radix DropdownMenu wrapping an icon-only trigger, same as
-// TabManagementToolbar.tsx (clinical-insights). Whole wrapper carries
-// `sm:hidden` so desktop doesn't even mount the trigger.
+// Pattern: Radix DropdownMenu wrapping an icon-only trigger. The whole wrapper
+// carries `sm:hidden` so desktop doesn't even mount the trigger.
 'use client'
 
 import {

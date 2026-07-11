@@ -53,7 +53,12 @@ const NO_POSITIONAL_RULE =
 // Appended to both prompts: how to cite the SOURCE LIST in "sources".
 const SOURCE_RULE =
   ' In "sources", list the SOURCE LIST key(s) (e.g. "L3", "M2") for the records this alert is based on; ' +
-  'use ONLY keys that appear in the SOURCE LIST, and omit any you cannot match. This is separate from "evidence" (which stays human-readable).'
+  'use ONLY keys that appear in the SOURCE LIST, and omit any you cannot match. This is separate from "evidence" (which stays human-readable). ' +
+  'When an alert relies on a discharge summary or other clinical document, cite its matching D# source key.'
+
+const DOCUMENT_EVIDENCE_RULE =
+  ' Clinical-document evidence: a diagnosis explicitly written in a discharge summary is valid evidence even if there is no separate endoscopy, pathology, or imaging resource; do NOT reject it merely because a standalone report is absent. ' +
+  'But a documented diagnosis does NOT prove that a particular procedure was performed. State that the document records the diagnosis, and claim gastroscopy/endoscopy/biopsy only if the document text itself explicitly says it was performed.'
 
 // Appended to both prompts. The data is Taiwan NHI 健康存摺 — cross-facility
 // insurance records where ONE prescription is recorded twice (the prescribing
@@ -112,6 +117,7 @@ const SYSTEM_MEDICAL =
   TEMPORAL_RULE +
   DRUG_PROPERTY_RULE +
   DUPLICATE_RULE +
+  DOCUMENT_EVIDENCE_RULE +
   NO_POSITIONAL_RULE +
   SOURCE_RULE
 
@@ -147,6 +153,7 @@ const SYSTEM_PATIENT =
   TEMPORAL_RULE +
   DRUG_PROPERTY_RULE +
   DUPLICATE_RULE +
+  DOCUMENT_EVIDENCE_RULE +
   NO_POSITIONAL_RULE +
   SOURCE_RULE
 
@@ -158,6 +165,49 @@ export interface GenerateSafetyAlertsInput {
   /** Citable bundle records; appended as a SOURCE LIST the model cites in
    *  each alert's "sources". Omit/empty → no source citation (evidence only). */
   catalog?: SummarySourceCatalogEntry[]
+}
+
+const DOCUMENT_PROCEDURE_CLAIMS = [
+  {
+    claim: /(?:接受|進行|做過|施行|經由?).{0,8}(?:胃鏡|胃內視鏡|上消化道內視鏡)|(?:胃鏡|胃內視鏡|上消化道內視鏡).{0,16}(?:顯示|發現|證實|結果|切片)|(?:gastroscopy|upper\s+(?:gi\s+)?endoscopy|panendoscopy|\bEGD\b).{0,40}(?:showed|found|revealed|confirmed|performed|underwent)/i,
+    evidence: /胃鏡|胃內視鏡|上消化道內視鏡|gastroscop|upper\s+(?:gi\s+)?endoscop|panendoscop|\bEGD\b/i,
+  },
+  {
+    claim: /(?:接受|進行|做過|施行|經由?).{0,8}(?:大腸鏡|結腸鏡)|(?:大腸鏡|結腸鏡).{0,16}(?:顯示|發現|證實|結果|切片)|colonoscopy.{0,40}(?:showed|found|revealed|confirmed|performed|underwent)/i,
+    evidence: /大腸鏡|結腸鏡|colonoscop/i,
+  },
+  {
+    claim: /(?:接受|進行|做過|施行|經由?).{0,8}(?:切片|活檢)|(?:切片|活檢).{0,16}(?:顯示|發現|證實|結果)|(?:biopsy|histopatholog).{0,40}(?:showed|found|revealed|confirmed|performed)/i,
+    evidence: /切片|活檢|biopsy|histopatholog/i,
+  },
+] as const
+
+/**
+ * Claim-level document check for procedure assertions. A discharge summary may
+ * validly establish a diagnosis without a standalone report, so diagnosis-only
+ * language is never flagged. We only mark a D# source unsupported when the
+ * alert positively claims a procedure/result and that document's decoded text
+ * contains no matching procedure term.
+ */
+export function findUnsupportedDocumentProcedureSources(
+  alert: { title: string; detail: string; evidence?: string[]; sources?: string[] },
+  catalog?: SummarySourceCatalogEntry[],
+): string[] {
+  if (!catalog?.length) return []
+  // Recommendations may appropriately propose a future test, so exclude them.
+  const assertedText = `${alert.title} ${alert.detail} ${(alert.evidence ?? []).join(' ')}`
+  const assertedProcedures = DOCUMENT_PROCEDURE_CLAIMS.filter((procedure) =>
+    procedure.claim.test(assertedText),
+  )
+  if (assertedProcedures.length === 0) return []
+
+  const byKey = new Map(catalog.map((source) => [source.key, source]))
+  return (alert.sources ?? []).filter((key) => {
+    const source = byKey.get(key)
+    if (!source || !['DocumentReference', 'Composition'].includes(source.resourceType)) return false
+    const documentText = source.getContentText?.() ?? ''
+    return assertedProcedures.some((procedure) => !procedure.evidence.test(documentText))
+  })
 }
 
 export class GenerateSafetyAlertsUseCase {
@@ -210,6 +260,7 @@ export class GenerateSafetyAlertsUseCase {
         ...a,
         id: `sa-${i}`,
         category: normaliseCategory(a.category),
+        unsupportedSourceKeys: findUnsupportedDocumentProcedureSources(a, catalog),
       })),
     }
     return enforceSeverityFloor(filterDuplicateFalsePositives(result, catalog))
