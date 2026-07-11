@@ -46,4 +46,32 @@ describe('ChatMessageList — afterMessages slot (follow-up chips placement)', (
     renderList()
     expect(screen.queryByTestId('chips')).toBeNull()
   })
+
+  it('renders reply quote metadata on user messages', () => {
+    const messages = [
+      {
+        id: 'u1',
+        role: 'user',
+        content: 'QUESTION_TEXT',
+        timestamp: 0,
+        replyTo: {
+          messageId: 'a0',
+          role: 'assistant',
+          label: 'GPT',
+          excerpt: 'SELECTED_ANSWER_EXCERPT',
+          timestamp: 0,
+        },
+      },
+    ] as any[]
+
+    render(
+      <LanguageProvider>
+        <ChatMessageList messages={messages} isLoading={false} />
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByText('回覆 GPT')).toBeInTheDocument()
+    expect(screen.getByText('SELECTED_ANSWER_EXCERPT')).toBeInTheDocument()
+    expect(screen.getByText('QUESTION_TEXT')).toBeInTheDocument()
+  })
 })

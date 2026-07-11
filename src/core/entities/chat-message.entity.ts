@@ -17,6 +17,14 @@ export interface AgentState {
   timestamp: number
 }
 
+export interface ChatReplyReference {
+  messageId: string
+  role: "user" | "assistant" | "system"
+  label: string
+  excerpt: string
+  timestamp: number
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant" | "system"
@@ -26,4 +34,5 @@ export interface ChatMessage {
   agentStates?: AgentState[]
   images?: ChatImage[]  // Support multiple images
   toolCalls?: string[]  // List of tool names that were called
+  replyTo?: ChatReplyReference
 }

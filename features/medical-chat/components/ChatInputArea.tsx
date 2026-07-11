@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { Square, Zap, X } from "lucide-react"
+import { Reply, Square, Zap, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { VoiceRecorder } from "./VoiceRecorder"
 import { AudioWaveform } from "./AudioWaveform"
@@ -14,6 +14,7 @@ import type { ImageFile } from "../hooks/useImageUpload"
 import { useSlashTemplates } from "../hooks/useSlashTemplates"
 import { useSlashMenu } from "../hooks/useSlashMenu"
 import { SlashTemplateMenu } from "./SlashTemplateMenu"
+import type { ChatReplyReference } from "@/src/application/stores/chat.store"
 
 interface ChatInputAreaProps {
   input: {
@@ -43,6 +44,8 @@ interface ChatInputAreaProps {
     clearError: () => void
   }
   disabled?: boolean
+  replyDraft?: ChatReplyReference | null
+  onCancelReply?: () => void
 }
 
 export function ChatInputArea({
@@ -53,7 +56,9 @@ export function ChatInputArea({
   onStopGeneration,
   voice,
   images,
-  disabled = false
+  disabled = false,
+  replyDraft,
+  onCancelReply,
 }: ChatInputAreaProps) {
   const { t } = useLanguage()
   // Live mic stream while recording — drives the waveform visualizer
@@ -120,6 +125,31 @@ export function ChatInputArea({
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {replyDraft && (
+        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-2 text-xs text-blue-900 dark:border-blue-800/70 dark:bg-blue-950/40 dark:text-blue-100">
+          <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-300" />
+          <div className="min-w-0 flex-1">
+            <div className="mb-0.5 font-medium">
+              {(t.chat as any).replyingTo ?? 'Replying to'} {replyDraft.label}
+            </div>
+            <div className="max-h-[2.5rem] overflow-hidden leading-snug text-blue-800/80 dark:text-blue-100/75">
+              {replyDraft.excerpt}
+            </div>
+          </div>
+          {onCancelReply && (
+            <button
+              type="button"
+              onClick={onCancelReply}
+              aria-label={(t.chat as any).cancelReply ?? 'Cancel reply'}
+              title={(t.chat as any).cancelReply ?? 'Cancel reply'}
+              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-blue-700/70 hover:bg-blue-100 hover:text-blue-900 dark:text-blue-100/70 dark:hover:bg-blue-900/60 dark:hover:text-blue-50"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
 

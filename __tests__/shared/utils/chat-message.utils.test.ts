@@ -2,7 +2,10 @@ import {
   createUserMessage,
   createAssistantMessage,
   createAgentState,
-  addMessagePair
+  addMessagePair,
+  createReplyReference,
+  formatChatMessageContentForAi,
+  normalizeReplyExcerpt,
 } from '@/src/shared/utils/chat-message.utils'
 import type { ChatMessage } from '@/src/application/stores/chat.store'
 
@@ -29,6 +32,21 @@ describe('chat-message.utils', () => {
       const message2 = createUserMessage('Message 2')
       
       expect(message1.id).not.toBe(message2.id)
+    })
+
+    it('should include reply metadata when provided', () => {
+      const replyTo = {
+        messageId: 'a1',
+        role: 'assistant' as const,
+        label: 'GPT',
+        excerpt: 'quoted answer',
+        timestamp: 123,
+      }
+
+      const message = createUserMessage('Follow up', undefined, replyTo)
+
+      expect(message.replyTo).toEqual(replyTo)
+      expect(message.content).toBe('Follow up')
     })
 
     it('should have different timestamps for messages created at different times', async () => {
@@ -166,6 +184,21 @@ describe('chat-message.utils', () => {
       expect(result.messages[1].agentStates).toEqual(agentStates)
     })
 
+    it('should add reply metadata to the created user message', () => {
+      const replyTo = {
+        messageId: 'a1',
+        role: 'assistant' as const,
+        label: 'Claude',
+        excerpt: 'selected assistant text',
+        timestamp: 456,
+      }
+
+      const result = addMessagePair([], 'Why?', undefined, '', undefined, undefined, replyTo)
+
+      expect(result.messages[0].replyTo).toEqual(replyTo)
+      expect(result.messages[0].content).toBe('Why?')
+    })
+
     it('should return the correct assistant message ID', () => {
       const result = addMessagePair([], 'Hello')
       
@@ -185,6 +218,66 @@ describe('chat-message.utils', () => {
       addMessagePair(currentMessages, 'Hello')
       
       expect(currentMessages).toHaveLength(originalLength)
+    })
+  })
+
+  describe('reply helpers', () => {
+    it('normalizes and truncates selected reply excerpts', () => {
+      const excerpt = normalizeReplyExcerpt('  alpha\n\n beta   gamma  ', 13)
+
+      expect(excerpt).toBe('alpha beta...')
+    })
+
+    it('creates a reply reference from selected assistant text', () => {
+      const source: ChatMessage = {
+        id: 'a1',
+        role: 'assistant',
+        content: 'Long answer',
+        timestamp: 1000,
+        modelId: 'gpt-5',
+      }
+
+      const reply = createReplyReference(source, ' selected text ', 'GPT-5')
+
+      expect(reply).toEqual({
+        messageId: 'a1',
+        role: 'assistant',
+        label: 'GPT-5',
+        excerpt: 'selected text',
+        timestamp: 1000,
+      })
+    })
+
+    it('returns null for an empty selected reply excerpt', () => {
+      const source: ChatMessage = {
+        id: 'a1',
+        role: 'assistant',
+        content: 'Long answer',
+        timestamp: 1000,
+      }
+
+      expect(createReplyReference(source, '   ', 'AI')).toBeNull()
+    })
+
+    it('formats reply metadata into the AI-facing message content', () => {
+      const formatted = formatChatMessageContentForAi({
+        content: 'What does this imply?',
+        replyTo: {
+          messageId: 'a1',
+          role: 'assistant',
+          label: 'GPT',
+          excerpt: 'The report suggests interval growth.',
+          timestamp: 123,
+        },
+      })
+
+      expect(formatted).toContain('User is replying to this assistant message excerpt:')
+      expect(formatted).toContain('<quote>\nThe report suggests interval growth.\n</quote>')
+      expect(formatted).toContain('User message:\nWhat does this imply?')
+    })
+
+    it('leaves non-reply message content unchanged for AI', () => {
+      expect(formatChatMessageContentForAi({ content: '  Plain question  ' })).toBe('  Plain question  ')
     })
   })
 })

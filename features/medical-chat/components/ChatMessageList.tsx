@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, memo, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, useState, memo, type ReactNode } from "react"
 import { toast } from "sonner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/src/shared/utils/cn.utils"
@@ -10,10 +10,11 @@ import { MarkdownRenderer } from "@/src/shared/components/MarkdownRenderer"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
-import type { ChatMessage } from "@/src/application/stores/chat.store"
+import type { ChatMessage, ChatReplyReference } from "@/src/application/stores/chat.store"
+import { createReplyReference } from "@/src/shared/utils/chat-message.utils"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
-import { Check, Copy, Sparkles } from "lucide-react"
+import { Check, Copy, Reply, Sparkles } from "lucide-react"
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
@@ -24,6 +25,7 @@ interface ChatMessageListProps {
   /** Bump to re-trigger the auto-scroll when `afterMessages` content appears/changes
    *  (the [messages] effect alone won't fire, since messages didn't change). */
   scrollSignal?: number
+  onReplyToSelection?: (reply: ChatReplyReference) => void
 }
 
 function getModelDisplayName(modelId?: string): string {
@@ -54,12 +56,89 @@ function formatTimestamp(timestamp: number): string {
   return `${dateStr} ${timeStr}`
 }
 
-const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMessage; t: any }) {
+interface SelectionAction {
+  reply: ChatReplyReference
+  x: number
+  y: number
+}
+
+const MessageItem = memo(function MessageItem({
+  message,
+  t,
+  onReplyToSelection,
+  replyDisabled,
+}: {
+  message: ChatMessage
+  t: any
+  onReplyToSelection?: (reply: ChatReplyReference) => void
+  replyDisabled?: boolean
+}) {
   const { copied, copy } = useCopyToClipboard()
+  const bubbleRef = useRef<HTMLDivElement | null>(null)
+  const [selectionAction, setSelectionAction] = useState<SelectionAction | null>(null)
 
   const handleCopy = async () => {
     const ok = await copy(markdownToPlainText(message.content))
     if (!ok) toast.error(t.common.copyFailed)
+  }
+
+  const updateSelectionAction = useCallback(() => {
+    if (replyDisabled || message.role !== "assistant" || !onReplyToSelection || !bubbleRef.current) {
+      setSelectionAction(null)
+      return
+    }
+
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setSelectionAction(null)
+      return
+    }
+
+    const anchorInside = selection.anchorNode ? bubbleRef.current.contains(selection.anchorNode) : false
+    const focusInside = selection.focusNode ? bubbleRef.current.contains(selection.focusNode) : false
+    if (!anchorInside || !focusInside) {
+      setSelectionAction(null)
+      return
+    }
+
+    const selectedText = selection.toString()
+    const reply = createReplyReference(message, selectedText, getModelDisplayName(message.modelId))
+    if (!reply) {
+      setSelectionAction(null)
+      return
+    }
+
+    const range = selection.getRangeAt(0)
+    const selectionRect = range.getBoundingClientRect()
+    const fallbackRect = bubbleRef.current.getBoundingClientRect()
+    const rect = selectionRect.width > 0 || selectionRect.height > 0 ? selectionRect : fallbackRect
+    const x = Math.min(Math.max(rect.left + rect.width / 2, 48), window.innerWidth - 48)
+    const y = Math.max(8, rect.top - 38)
+
+    setSelectionAction({ reply, x, y })
+  }, [message, onReplyToSelection, replyDisabled])
+
+  const handleSelectionEnd = useCallback(() => {
+    window.setTimeout(updateSelectionAction, 0)
+  }, [updateSelectionAction])
+
+  useEffect(() => {
+    if (!selectionAction) return
+    const handleSelectionChange = () => {
+      const selection = window.getSelection()
+      if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+        setSelectionAction(null)
+      }
+    }
+    document.addEventListener('selectionchange', handleSelectionChange)
+    return () => document.removeEventListener('selectionchange', handleSelectionChange)
+  }, [selectionAction])
+
+  const handleReplyClick = () => {
+    if (!selectionAction) return
+    onReplyToSelection?.(selectionAction.reply)
+    setSelectionAction(null)
+    window.getSelection()?.removeAllRanges()
   }
 
   return (
@@ -99,6 +178,10 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
           />
         )}
         <div
+          ref={bubbleRef}
+          onMouseUp={handleSelectionEnd}
+          onTouchEnd={handleSelectionEnd}
+          onKeyUp={handleSelectionEnd}
           className={cn(
             "relative px-4 py-2.5 text-sm break-words",
             message.role === "assistant" 
@@ -137,6 +220,23 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
               ))}
             </div>
           )}
+          {message.replyTo && (
+            <div
+              className={cn(
+                "mb-2 rounded-md border px-2 py-1.5 text-xs leading-snug",
+                message.role === "user"
+                  ? "border-white/25 bg-white/15 text-white/90"
+                  : "border-border/70 bg-background/60 text-muted-foreground",
+              )}
+            >
+              <div className={cn("mb-0.5 font-medium", message.role === "user" ? "text-white" : "text-foreground")}>
+                {(t.chat as any).replyingTo ?? 'Replying to'} {message.replyTo.label}
+              </div>
+              <div className="max-h-[2.5rem] overflow-hidden opacity-90">
+                {message.replyTo.excerpt}
+              </div>
+            </div>
+          )}
           {message.role === "assistant" ? (
             // MarkdownRenderer renders block-by-block and memoizes each block,
             // so while a reply streams in only the trailing (growing) block is
@@ -145,6 +245,22 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
             <MarkdownRenderer content={message.content} />
           ) : (
             <CollapsibleMessage content={message.content} />
+          )}
+          {selectionAction && !replyDisabled && (
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={handleReplyClick}
+              className="fixed z-50 inline-flex h-8 items-center gap-1 rounded-full border border-border bg-popover px-3 text-xs font-medium text-popover-foreground shadow-lg transition-colors hover:bg-accent"
+              style={{
+                left: selectionAction.x,
+                top: selectionAction.y,
+                transform: 'translateX(-50%)',
+              }}
+            >
+              <Reply className="h-3.5 w-3.5" />
+              {(t.chat as any).reply ?? 'Reply'}
+            </button>
           )}
         </div>
         {message.role === "assistant" && message.content && (
@@ -173,14 +289,17 @@ const MessageItem = memo(function MessageItem({ message, t }: { message: ChatMes
 }, (prevProps, nextProps) => {
   return prevProps.message.id === nextProps.message.id && 
          prevProps.message.content === nextProps.message.content &&
-         prevProps.message.agentStates?.length === nextProps.message.agentStates?.length
+         prevProps.message.agentStates?.length === nextProps.message.agentStates?.length &&
+         prevProps.message.replyTo?.messageId === nextProps.message.replyTo?.messageId &&
+         prevProps.message.replyTo?.label === nextProps.message.replyTo?.label &&
+         prevProps.message.replyTo?.excerpt === nextProps.message.replyTo?.excerpt &&
+         prevProps.replyDisabled === nextProps.replyDisabled
 })
 
-export function ChatMessageList({ messages, isLoading, afterMessages, scrollSignal }: ChatMessageListProps) {
+export function ChatMessageList({ messages, isLoading, afterMessages, scrollSignal, onReplyToSelection }: ChatMessageListProps) {
   const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const prevMessagesLengthRef = useRef(0)
-  const scrollAreaRef = useRef<HTMLDivElement | null>(null)
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Auto-scroll with debouncing to prevent blocking during fast streaming
@@ -225,6 +344,8 @@ export function ChatMessageList({ messages, isLoading, afterMessages, scrollSign
               key={message.id}
               message={message}
               t={t}
+              onReplyToSelection={onReplyToSelection}
+              replyDisabled={isLoading}
             />
           ))
         )}

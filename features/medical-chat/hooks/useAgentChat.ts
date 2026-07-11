@@ -7,11 +7,10 @@ import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
 import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-tools.hook"
 import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-client.service"
-import { createUserMessage, createAgentState } from "@/src/shared/utils/chat-message.utils"
+import { createUserMessage, createAgentState, formatChatMessageContentForAi } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
 import { getModelDefinition, gateModelForKeys } from "@/src/shared/constants/ai-models.constants"
@@ -19,14 +18,14 @@ import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-
 import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
+import type { ChatReplyReference } from "@/src/core/entities/chat-message.entity"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
   const { apiKey: openAiKey, geminiKey, perplexityKey, claudeKey } = useAllApiKeys()
   const { patient } = usePatient()
-  const { locale, t } = useLanguage()
-  const { getFullClinicalContext } = useClinicalContext('chat')
+  const { t } = useLanguage()
   const { user, isAnonymous } = useAuth()
   // The proxy accepts any Firebase token — a real account OR an anonymous
   // (free-tier) one. Gate proxy use on "we have a token", not "real account".
@@ -52,7 +51,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   }, [fhirTools, literatureTools])
 
   const handleSend = useCallback(
-    async (input: string, images?: ChatImage[]) => {
+    async (input: string, images?: ChatImage[], replyTo?: ChatReplyReference | null) => {
       hasReceivedChunkRef.current = false
       const trimmed = input.trim()
       if (!trimmed && (!images || images.length === 0)) return
@@ -64,7 +63,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const effectiveModelId = gateModelForKeys(modelId, { openAiKey, geminiKey, claudeKey })
 
       // Create user message with images
-      const userMessage = createUserMessage(trimmed, images)
+      const userMessage = createUserMessage(trimmed, images, replyTo)
       const newMessages = [...chatMessages, userMessage]
       setChatMessages(newMessages)
 
@@ -157,7 +156,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
         const apiMessages = [
           { role: "system" as const, content: enhancedSystemPrompt },
-          ...newMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+          ...newMessages.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: formatChatMessageContentForAi(m),
+          })),
         ]
 
         // UI rendering for the headless agent core's events. The orchestration
@@ -277,7 +279,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
       }
     },
-    [chatMessages, modelId, openAiKey, geminiKey, claudeKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, locale, tools, user, isAnonymous, hasProxyAccess, perplexityKey, getFullClinicalContext, t]
+    [chatMessages, modelId, openAiKey, geminiKey, claudeKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, tools, hasProxyAccess, perplexityKey, t, isLocalMode]
   )
 
   const handleReset = useCallback(() => {

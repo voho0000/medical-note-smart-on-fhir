@@ -11,7 +11,7 @@ import type { ChatMessage } from '@/src/core/entities/chat-message.entity'
 
 // Domain types live in core (audit C3); re-exported here so existing
 // consumers importing from the store keep working.
-export type { ChatMessage, ChatImage, AgentState } from '@/src/core/entities/chat-message.entity'
+export type { ChatMessage, ChatImage, AgentState, ChatReplyReference } from '@/src/core/entities/chat-message.entity'
 
 interface ChatState {
   messages: ChatMessage[]

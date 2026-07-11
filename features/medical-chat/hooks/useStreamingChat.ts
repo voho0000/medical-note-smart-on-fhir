@@ -2,15 +2,16 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
+import { useChatMessages, useSetChatMessages, type ChatImage } from "@/src/application/stores/chat.store"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { gateModelForKeys } from "@/src/shared/constants/ai-models.constants"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { truncateToContextWindow, getTokenStats, selectMessagesToSend } from "@/src/shared/utils/context-window-manager"
-import { addMessagePair } from "@/src/shared/utils/chat-message.utils"
+import { addMessagePair, formatChatMessageContentForAi } from "@/src/shared/utils/chat-message.utils"
 import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
+import type { ChatReplyReference } from "@/src/core/entities/chat-message.entity"
 
 export function useStreamingChat(
   systemPrompt: string, 
@@ -27,7 +28,7 @@ export function useStreamingChat(
   const hasReceivedChunkRef = useRef(false)
 
   const handleSend = useCallback(
-    async (input: string, images?: ChatImage[]) => {
+    async (input: string, images?: ChatImage[], replyTo?: ChatReplyReference | null) => {
       hasReceivedChunkRef.current = false
       const trimmed = input.trim()
       if (!trimmed && (!images || images.length === 0)) return
@@ -46,7 +47,8 @@ export function useStreamingChat(
         effectiveModelId,
         "", // Empty initial content
         images,
-        undefined // agentStates
+        undefined, // agentStates
+        replyTo,
       )
       setChatMessages(newMessages)
 
@@ -68,14 +70,15 @@ export function useStreamingChat(
         
         // Check token usage and truncate if needed (use text-only for counting)
         const messagesForTokenCount = userMessages.map((m) => {
-          let content = m.content
+          const baseContent = formatChatMessageContentForAi(m)
+          let content = baseContent
           if (m.images && m.images.length > 0) {
-            content = `${m.content}\n[${m.images.length} image${m.images.length > 1 ? 's' : ''} attached]`
+            content = `${baseContent}\n[${m.images.length} image${m.images.length > 1 ? 's' : ''} attached]`
           }
           return { role: m.role, content }
         })
         
-        const stats = getTokenStats(messagesForTokenCount, { modelId: effectiveModelId, systemPrompt })
+        const _stats = getTokenStats(messagesForTokenCount, { modelId: effectiveModelId, systemPrompt })
 
         // Truncate to fit context window
         const truncatedMessages = truncateToContextWindow(messagesForTokenCount, {
@@ -94,7 +97,7 @@ export function useStreamingChat(
           ...selectMessagesToSend(userMessages, truncatedMessages.length)
             .map(m => ({
               role: m.role as "user" | "assistant" | "system",
-              content: m.content,
+              content: formatChatMessageContentForAi(m),
               ...(m.images && m.images.length > 0 && { images: m.images })
             })),
         ]

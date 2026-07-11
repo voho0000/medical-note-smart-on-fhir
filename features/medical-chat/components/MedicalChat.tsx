@@ -1,7 +1,7 @@
 // Refactored Medical Chat Component
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { AlertCircle, Maximize2, MessageSquareDashed, SquarePen, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -46,7 +46,7 @@ import { useSystemPrompt } from "../hooks/useSystemPrompt"
 import { useImageUpload } from "../hooks/useImageUpload"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
 import { fileToBase64 } from "@/src/shared/utils/file-to-base64.utils"
-import type { ChatImage } from "@/src/application/stores/chat.store"
+import type { ChatImage, ChatReplyReference } from "@/src/application/stores/chat.store"
 import { useAgentMode } from "../hooks/useAgentMode"
 import { useExpandable } from "@/src/shared/hooks/ui/use-expandable.hook"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
@@ -123,6 +123,7 @@ export default function MedicalChat() {
 
   // New-conversation confirm — only shown when the current chat would be lost
   const [showNewChatConfirm, setShowNewChatConfirm] = useState(false)
+  const [replyDraft, setReplyDraft] = useState<ChatReplyReference | null>(null)
   
   // FHIR context for chat history (patient ID and server URL)
   const { patientId, fhirServerUrl } = useFhirContext()
@@ -160,11 +161,13 @@ export default function MedicalChat() {
       }
       setMessagesGlobal([])
       setCurrentSessionId(null)
+      setReplyDraft(null)
       setIsTemporaryMode(true)
     } else {
       // Exiting: discard the in-memory temporary conversation.
       setMessagesGlobal([])
       setCurrentSessionId(null)
+      setReplyDraft(null)
       setIsTemporaryMode(false)
     }
   }, [isTemporaryMode, forceSave, setMessagesGlobal, setCurrentSessionId, setIsTemporaryMode])
@@ -189,7 +192,9 @@ export default function MedicalChat() {
   } = useFollowupSuggestions()
   
   // Ensure chat.messages is always an array
-  const chatMessages = Array.isArray(chat.messages) ? chat.messages : []
+  const chatMessages = useMemo(() => (
+    Array.isArray(chat.messages) ? chat.messages : []
+  ), [chat.messages])
 
   // Reset the conversation when the patient context changes (a local bundle is
   // imported or cleared). Chat messages are in-memory only, so without this the
@@ -198,9 +203,14 @@ export default function MedicalChat() {
   // and drops the saved-session pointer so the next turn starts fresh. The ref
   // keeps the listener stable while always invoking the active mode's reset.
   const handleResetRef = useRef(chat.handleReset)
-  handleResetRef.current = chat.handleReset
   useEffect(() => {
-    const onBundleChange = () => handleResetRef.current()
+    handleResetRef.current = chat.handleReset
+  }, [chat.handleReset])
+  useEffect(() => {
+    const onBundleChange = () => {
+      setReplyDraft(null)
+      handleResetRef.current()
+    }
     window.addEventListener('mediprisma:local-bundle-changed', onBundleChange)
     return () => window.removeEventListener('mediprisma:local-bundle-changed', onBundleChange)
   }, [])
@@ -214,6 +224,7 @@ export default function MedicalChat() {
     // Every new conversation starts in deep mode (the assistant's primary mode).
     agentMode.enableAgentMode()
     if (chatMessages.length === 0) {
+      setReplyDraft(null)
       chat.handleReset()
       return
     }
@@ -223,6 +234,7 @@ export default function MedicalChat() {
       } catch {
         // Best-effort save; still start the new chat.
       }
+      setReplyDraft(null)
       chat.handleReset()
       toast.success(t.chat.newChatSavedToast)
       return
@@ -233,6 +245,7 @@ export default function MedicalChat() {
   const confirmNewConversation = useCallback(() => {
     setShowNewChatConfirm(false)
     agentMode.enableAgentMode()
+    setReplyDraft(null)
     chat.handleReset()
   }, [chat, agentMode])
   
@@ -297,6 +310,7 @@ export default function MedicalChat() {
     clearFollowups()
     const trimmed = (typeof overrideText === "string" ? overrideText : input.input).trim()
     const hasImages = imageUpload.images.length > 0
+    const activeReply = typeof overrideText === "string" ? null : replyDraft
     
     // Require either text or images
     if (!trimmed && !hasImages) return
@@ -330,13 +344,14 @@ export default function MedicalChat() {
     
     // Clear input and reset height immediately after sending
     clearInputAndResetHeight()
+    setReplyDraft(null)
     
     // Clear images after successful send
     clearImagesAfterSend()
     
     // Pass images to chat handler (this will add user message to state)
     // Note: handleSend is async and will start streaming, but user message is added to state immediately
-    const sendPromise = chat.handleSend(messageToSend, chatImages)
+    const sendPromise = chat.handleSend(messageToSend, chatImages, activeReply)
     
     // Stage 1: Save user message immediately after it's added to state (prevent data loss)
     // This ensures user input is never lost even if AI response fails or gets interrupted
@@ -352,7 +367,12 @@ export default function MedicalChat() {
     // Wait for AI response to complete
     await sendPromise
     // Stage 2: AI response completion will trigger another forceSave to update with full conversation
-  }, [input, imageUpload.images, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups])
+  }, [input, imageUpload.images, replyDraft, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups])
+
+  const handleReplyToSelection = useCallback((reply: ChatReplyReference) => {
+    setReplyDraft(reply)
+    window.setTimeout(() => textareaRef.current?.focus(), 0)
+  }, [])
 
   // Generate "next step" chips when an assistant answer finishes streaming.
   // Guarded by the assistant message id so it fires once per answer; clears when
@@ -536,6 +556,7 @@ export default function MedicalChat() {
           messages={chatMessages}
           isLoading={chat.isLoading}
           scrollSignal={followupSuggestions.length}
+          onReplyToSelection={handleReplyToSelection}
           afterMessages={
             <SuggestionChips
               suggestions={followupSuggestions}
@@ -644,6 +665,8 @@ export default function MedicalChat() {
             voice={voice}
             images={imageUpload}
             disabled={isAgentMode && !canUseDeepMode}
+            replyDraft={replyDraft}
+            onCancelReply={() => setReplyDraft(null)}
           />
         </div>
       </CardFooter>
