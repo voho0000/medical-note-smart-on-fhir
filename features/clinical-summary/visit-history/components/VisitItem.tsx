@@ -43,7 +43,7 @@ const getTypeBadge = (type: VisitType, labels: any) => {
     other:      { label: labels.other,      className: '' },
   }
   const { label, className } = typeMap[type] || typeMap.other
-  return <Badge variant="outline" className={className || undefined}>{label}</Badge>
+  return <Badge variant="outline" className={cn("h-5 px-1.5 py-0 text-[0.6875rem]", className || undefined)}>{label}</Badge>
 }
 
 export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
@@ -114,31 +114,27 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
             onToggle()
           }
         }}
-        className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40 cursor-pointer"
+        className="w-full rounded-lg px-3 py-1 text-left transition-colors hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring/40 cursor-pointer"
       >
         {/* Header: when/where on the left, the at-a-glance count pills pushed
             to the right (justify-between), then the expand chevron. A collapsed
             visit stays ~2 short rows. The pills live in their own right cluster
             that wraps INTERNALLY (max-w cap) when they're many/wide, so the
             left date never gets orphaned onto its own line. */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-1 items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
+        <div className="flex items-center justify-between gap-1.5 leading-5">
+          <div className="flex flex-1 items-center gap-x-1.5 overflow-hidden min-w-0">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
             {visit.location && (
-              <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                {visit.location}
+              <span
+                className="inline-flex h-5 max-w-[9rem] shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0 text-[0.6875rem] text-muted-foreground"
+                title={visit.location}
+              >
+                <span className="truncate">{visit.location}</span>
               </span>
             )}
-            <span className="font-medium">{dateLabel}</span>
-            {visit.department && (
-              <span className="text-xs text-muted-foreground">· {visit.department}</span>
-            )}
-            {/* The i18n label already ends with a colon (主治醫師：/ Physician:) */}
-            {visit.physician && (
-              <span className="text-xs text-muted-foreground">{t.visitHistory.physician} {visit.physician}</span>
-            )}
+            <span className="min-w-0 truncate text-[0.9375rem] font-medium leading-5">{dateLabel}</span>
             {visit.status === "in-progress" && (
-              <Badge variant="outline" className="border-green-500 text-green-700">
+              <Badge variant="outline" className="h-5 px-1.5 py-0 text-[0.6875rem] border-green-500 text-green-700">
                 {t.visitHistory.inProgress}
               </Badge>
             )}
@@ -149,32 +145,32 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
             {details && (
               <>
                 {details.diagnoses.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[0.6875rem] text-violet-700">
+                  <span className="inline-flex h-5 items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] text-violet-700">
                     {t.visitHistory.diagnoses} {details.diagnoses.length}
                   </span>
                 )}
                 {details.tests.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[0.6875rem] text-blue-700">
+                  <span className="inline-flex h-5 items-center rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0 text-[0.625rem] text-blue-700">
                     {t.visitHistory.tests} {details.tests.length}
                   </span>
                 )}
                 {abnormalCount > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[0.6875rem] font-medium text-red-700">
+                  <span className="inline-flex h-5 items-center rounded-full border border-red-200 bg-red-50 px-1.5 py-0 text-[0.625rem] font-medium text-red-700">
                     {(t.visitHistory as any).abnormal ?? 'Abnormal'} {abnormalCount}
                   </span>
                 )}
                 {details.medications.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[0.6875rem] text-green-700">
+                  <span className="inline-flex h-5 items-center rounded-full border border-green-200 bg-green-50 px-1.5 py-0 text-[0.625rem] text-green-700">
                     {t.visitHistory.medications} {details.medications.length}
                   </span>
                 )}
                 {details.reports.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[0.6875rem] text-cyan-700 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-300">
+                  <span className="inline-flex h-5 items-center rounded-full border border-cyan-200 bg-cyan-50 px-1.5 py-0 text-[0.625rem] text-cyan-700 dark:border-cyan-500/40 dark:bg-cyan-500/10 dark:text-cyan-300">
                     {t.visitHistory.examReports} {details.reports.length}
                   </span>
                 )}
                 {details.procedures.length > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[0.6875rem] text-orange-700">
+                  <span className="inline-flex h-5 items-center rounded-full border border-orange-200 bg-orange-50 px-1.5 py-0 text-[0.625rem] text-orange-700">
                     {t.visitHistory.procedures} {details.procedures.length}
                   </span>
                 )}
@@ -190,7 +186,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
               return (
                 <span
                   title={hasDischarge ? docStrings.dischargeBadgeTooltip : docStrings.documentBadgeTooltip}
-                  className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.6875rem] text-emerald-700"
+                  className="inline-flex h-5 items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[0.625rem] text-emerald-700"
                 >
                   {hasDischarge ? docStrings.dischargeBadge : docStrings.documentBadge}
                 </span>
@@ -207,13 +203,13 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                 title={(t.visitHistory as any).openRight ?? '在右側展開'}
                 aria-label={(t.visitHistory as any).openRight ?? '在右側展開'}
                 className={cn(
-                  "hidden md:inline-flex items-center rounded-md border px-1 py-0.5 transition-colors",
+                  "hidden h-5 w-5 md:inline-flex items-center justify-center rounded-md border p-0 transition-colors",
                   isRightActive
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <PanelRight className="h-3.5 w-3.5" />
+                <PanelRight className="h-3 w-3" />
               </button>
             )}
             <span
@@ -225,18 +221,28 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
           </div>
         </div>
 
-        {(visit.reason || visit.diagnosis) && (
-          <div className="mt-1.5 space-y-1 text-sm">
+        {(visit.department || visit.physician || visit.reason || visit.diagnosis) && (
+          <div className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-sm leading-5">
+            {visit.department && (
+              <span className="max-w-[8rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={visit.department}>
+                {visit.department}
+              </span>
+            )}
+            {visit.physician && (
+              <span className="max-w-[9rem] shrink-0 truncate text-xs leading-5 text-muted-foreground" title={`${t.visitHistory.physician} ${visit.physician}`}>
+                {t.visitHistory.physician} {visit.physician}
+              </span>
+            )}
             {visit.reason && (
-              <div>
+              <span className="flex min-w-0 flex-1 items-center gap-1">
                 <span
-                  className="font-medium text-muted-foreground"
+                  className="shrink-0 font-medium text-muted-foreground"
                   title={(t.visitHistory as any).icdCodesTooltip}
                 >
                   {(t.visitHistory as any).recordedIcdCodes ?? t.visitHistory.reason}:{' '}
                 </span>
                 {hasIcdCodes ? (
-                  <span className="inline-flex flex-wrap gap-1 align-middle">
+                  <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden align-middle">
                     {/* Default: primary only. Click "+N" to reveal secondaries inline. */}
                     {(icdExpanded ? reasonCodes : reasonCodes.slice(0, 1)).map((rc, i) => (
                       <span
@@ -244,11 +250,11 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                         title={(t.visitHistory as any).icdCodesTooltip}
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 select-text cursor-text"
+                        className="inline-flex h-5 min-w-0 max-w-[16rem] items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0 text-xs text-amber-800 select-text cursor-text"
                       >
                         <span className="font-mono font-medium">{rc.code}</span>
                         {rc.description && (
-                          <span className="text-amber-700/80 max-w-[200px] truncate">
+                          <span className="min-w-0 truncate text-amber-700/80">
                             {rc.description}
                           </span>
                         )}
@@ -263,7 +269,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                           setIcdExpanded((v) => !v)
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50/60 px-1.5 py-0.5 text-[0.6875rem] text-amber-700 hover:bg-amber-100 transition-colors"
+                        className="inline-flex h-5 shrink-0 items-center rounded-md border border-amber-200 bg-amber-50/60 px-1.5 py-0 text-[0.6875rem] text-amber-700 hover:bg-amber-100 transition-colors"
                       >
                         {icdExpanded ? '−' : `+${reasonCodes.length - 1}`}
                       </button>
@@ -273,18 +279,18 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                   <span
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="select-text cursor-text"
+                    className="min-w-0 truncate select-text cursor-text"
                   >
                     {visit.reason}
                   </span>
                 )}
-              </div>
+              </span>
             )}
-            {visit.diagnosis && (
-              <div>
-                <span className="font-medium text-muted-foreground">{t.visitHistory.diagnosis}: </span>
-                <span>{visit.diagnosis}</span>
-              </div>
+            {!visit.reason && visit.diagnosis && (
+              <span className="flex min-w-0 flex-1 items-center gap-1">
+                <span className="shrink-0 font-medium text-muted-foreground">{t.visitHistory.diagnosis}: </span>
+                <span className="min-w-0 truncate">{visit.diagnosis}</span>
+              </span>
             )}
           </div>
         )}

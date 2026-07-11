@@ -383,11 +383,12 @@ export function VisitHistoryCard() {
                 )}
               </div>
             ) : (
-              // Tighter list spacing (space-y-2) than the panel's space-y-3 so
+              // Match the report list's dense rhythm: rows sit directly against
+              // each other, while each VisitItem keeps its own border/radius.
               // more collapsed visits fit on screen at once. border-t keeps the
               // filters visually separated from the list now that the standalone
               // count row (which carried that divider) is gone.
-              <div className="space-y-2 border-t pt-2">
+              <div className="space-y-0 border-t pt-1.5">
                 {visibleVisits.map((visit) => (
                   <VisitItem
                     key={visit.id}

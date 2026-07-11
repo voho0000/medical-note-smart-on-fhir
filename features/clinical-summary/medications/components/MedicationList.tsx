@@ -62,7 +62,7 @@ export function MedicationList({
           <h3 className="text-sm font-semibold text-foreground">
             {mt.currentlyInUse} ({activeMedications.length})
           </h3>
-          <div className="space-y-1">
+          <div className="space-y-0">
             {activeMedications.map((medication) => (
               <MedicationItem
                 key={medication.id}

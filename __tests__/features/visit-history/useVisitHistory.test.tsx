@@ -126,6 +126,32 @@ describe('useVisitHistory — bridge bug regression locks', () => {
     })
   })
 
+  describe('ICD display cleanup', () => {
+    it('strips compact duplicate ICD code from reasonCode.text descriptions', () => {
+      const { result } = render([
+        {
+          id: 'enc-icd',
+          status: 'finished',
+          class: { code: 'AMB' },
+          type: [{ text: '門診' }],
+          period: { start: '2026-05-13T00:00:00+08:00' },
+          reasonCode: [
+            {
+              coding: [{ code: 'F33.42', display: 'Major depressive disorder, recurrent, in full remission' }],
+              text: 'F3342 鬱症，復發，完全緩解',
+            },
+          ],
+        },
+      ])
+
+      expect(result.current[0].icdCodes[0]).toEqual({
+        code: 'F33.42',
+        description: '鬱症，復發，完全緩解',
+      })
+      expect(result.current[0].reason).toBe('F33.42 - 鬱症，復發，完全緩解')
+    })
+  })
+
   describe('encounter status filter (IC-card inpatient = "unknown")', () => {
     // NHI 健保存摺 IC-card inpatient stays have no discharge date, so the bridge
     // marks them status="unknown". The visit history previously allow-listed only

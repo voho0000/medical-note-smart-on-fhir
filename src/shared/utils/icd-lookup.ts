@@ -7,6 +7,42 @@ export interface IcdCode {
   description?: string
 }
 
+function normalizeIcdCodeToken(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function stripLeadingIcdCode(description: string | undefined, code: string): string | undefined {
+  const clean = description?.trim()
+  if (!clean || !code) return clean || undefined
+
+  const normalizedCode = normalizeIcdCodeToken(code)
+  if (!normalizedCode) return clean
+
+  let i = 0
+  let collected = ''
+  while (i < clean.length && collected.length < normalizedCode.length) {
+    const ch = clean[i]
+    if (/[A-Za-z0-9]/.test(ch)) {
+      collected += ch.toUpperCase()
+      i += 1
+      continue
+    }
+    if (/[.\-_\s]/.test(ch)) {
+      i += 1
+      continue
+    }
+    break
+  }
+
+  if (collected !== normalizedCode) return clean
+
+  // Avoid stripping "F33421..." when the target code is "F33.42".
+  if (i < clean.length && /[A-Za-z0-9]/.test(clean[i])) return clean
+
+  while (i < clean.length && /[\s:：\-–—,，.。]/.test(clean[i])) i += 1
+  return clean.slice(i).trim() || undefined
+}
+
 /**
  * Parse a comma/semicolon separated string of ICD codes into individual codes.
  * Example: "C50.912,N95.1,N73.9" → ["C50.912", "N95.1", "N73.9"]
@@ -142,13 +178,13 @@ const BUILTIN_ICD: Record<string, string> = {
 export function lookupIcd(code: string, dict?: Map<string, string>): string | undefined {
   if (!code) return undefined
   // Try exact match
-  if (dict?.has(code)) return dict.get(code)
-  if (BUILTIN_ICD[code]) return BUILTIN_ICD[code]
+  if (dict?.has(code)) return stripLeadingIcdCode(dict.get(code), code)
+  if (BUILTIN_ICD[code]) return stripLeadingIcdCode(BUILTIN_ICD[code], code)
   // Prefix match (e.g., "C50.912" → "C50")
   const prefix = code.split('.')[0]
   if (prefix !== code) {
-    if (dict?.has(prefix)) return dict.get(prefix)
-    if (BUILTIN_ICD[prefix]) return BUILTIN_ICD[prefix]
+    if (dict?.has(prefix)) return stripLeadingIcdCode(dict.get(prefix), prefix)
+    if (BUILTIN_ICD[prefix]) return stripLeadingIcdCode(BUILTIN_ICD[prefix], prefix)
   }
   return undefined
 }
@@ -197,7 +233,8 @@ export function extractEncounterIcds(
   const push = (code: string, description?: string) => {
     if (!code || seen.has(code)) return
     seen.add(code)
-    out.push({ code, description })
+    const cleanedDescription = stripLeadingIcdCode(description, code)
+    out.push({ code, description: cleanedDescription })
   }
 
   const preferEnglish = locale === 'en'
@@ -210,9 +247,10 @@ export function extractEncounterIcds(
     const rawText = typeof rc?.text === 'string' ? rc.text.trim() : ''
 
     if (code) {
-      // NEW format: per-reasonCode entry. Strip the leading "CODE " from text
-      // so we get just the Chinese description.
-      const textNoPrefix = rawText.replace(new RegExp('^' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '').trim()
+      // NEW format: per-reasonCode entry. Strip the leading code from text so
+      // we get just the diagnosis description. NHI text may use either the
+      // dotted ICD ("F33.42") or the compact form ("F3342").
+      const textNoPrefix = stripLeadingIcdCode(rawText, code)
       const picked = preferEnglish
         ? (display || textNoPrefix || lookupIcd(code, dict))
         : (textNoPrefix || display || lookupIcd(code, dict))

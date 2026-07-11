@@ -16,6 +16,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationRow } from '../types'
+import { medicationHistoryCategoryChipClass } from './medication-chip-styles'
 
 export interface MedicationHistoryGroup {
   name: string
@@ -81,7 +82,7 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
 
   return (
     <div className="max-h-[28rem] space-y-2 overflow-y-auto scrollbar-thin-persistent pr-1">
-      <ul className="space-y-1">
+      <ul className="space-y-0">
         {regular.map((group) => (
           <HistoryRow key={group.name} group={group} mt={mt} />
         ))}
@@ -107,7 +108,7 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
             </span>
           </button>
           {showInjectables && (
-            <ul className="space-y-1 px-1.5 pb-1.5">
+            <ul className="space-y-0 px-1.5 pb-1.5">
               {injectable.map((group) => (
                 <HistoryRow key={group.name} group={group} mt={mt} />
               ))}
@@ -148,7 +149,7 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
         {latest?.category && (
           <span
             title={latest.category}
-            className="inline-flex shrink-0 max-w-[9rem] items-center truncate rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
+            className={medicationHistoryCategoryChipClass}
           >
             {latest.category}
           </span>

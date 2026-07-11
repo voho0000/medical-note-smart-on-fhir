@@ -2,10 +2,18 @@
 // Line 1: drug name (truncate) + chronic badge + status badge
 // Line 2: dose · freq · route · date range · pharmacy · billing ICD (medical) · refill count
 import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
+import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationRow } from '../types'
+import {
+  medicationCategoryChipClass,
+  medicationDaysLeftBadgeClass,
+  medicationIcdChipClass,
+  medicationIcdTextClass,
+} from './medication-chip-styles'
 
 interface MedicationItemProps {
   medication: MedicationRow
@@ -55,6 +63,13 @@ export function MedicationItem({
   const isMedical = audience === 'medical'
   const showStatementChip =
     showSourceChip && medication.sourceResourceType === 'MedicationStatement'
+  const billingIcdTitle = medication.icdCode
+    ? `${medication.icdCode}${medication.icdText ? ` ${medication.icdText}` : ''}`
+    : mt.billingIcdTooltip
+  const showDaysLeftBadge =
+    !medication.isInactive &&
+    medication.daysRemaining !== undefined &&
+    medication.daysRemaining > 0
 
   // ── Line-2 inline parts (collapse empties) ────────────────────────────
   // Single-word dose/freq/route join into "5mg · PO · QD"; date range and
@@ -85,14 +100,33 @@ export function MedicationItem({
   }
 
   if (medication.pharmacy) {
-    parts.push(<span key="pharm">{medication.pharmacy}</span>)
+    parts.push(
+      <span
+        key="pharm"
+        title={medication.pharmacy}
+        className="inline-flex h-5 max-w-[8rem] items-center rounded-md border border-border bg-muted px-1.5 py-0 text-[0.6875rem] text-muted-foreground"
+      >
+        <span className="truncate">{medication.pharmacy}</span>
+      </span>
+    )
   }
   if (isMedical && medication.icdCode) {
     parts.push(
-      <span key="icd" title={mt.billingIcdTooltip} className="cursor-help">
-        <span className="font-mono">{medication.icdCode}</span>
-        {medication.icdText && <span className="ml-1">{medication.icdText}</span>}
-      </span>
+      <Tooltip key="icd">
+        <TooltipTrigger asChild>
+          <span
+            aria-label={billingIcdTitle}
+            tabIndex={0}
+            className={medicationIcdChipClass}
+          >
+            <span className="font-mono">{medication.icdCode}</span>
+            {medication.icdText && <span className={medicationIcdTextClass}>{medication.icdText}</span>}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed">
+          {billingIcdTitle}
+        </TooltipContent>
+      </Tooltip>
     )
   }
   if (medication.refillCount > 1) {
@@ -125,7 +159,7 @@ export function MedicationItem({
           {medication.category && (
             <span
               title={medication.category}
-              className="inline-flex shrink-0 max-w-[10rem] items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-700 truncate dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
+              className={medicationCategoryChipClass}
             >
               {medication.category}
             </span>
@@ -160,16 +194,22 @@ export function MedicationItem({
             </span>
           )}
         </div>
-        <Badge variant={badge.variant} className="ml-1 capitalize shrink-0 text-[0.625rem] px-1.5 py-0">
+        <Badge
+          variant={badge.variant}
+          className={cn(
+            "ml-1 capitalize shrink-0 text-[0.625rem] px-1.5 py-0",
+            showDaysLeftBadge && medicationDaysLeftBadgeClass,
+          )}
+        >
           {badge.label}
         </Badge>
       </div>
 
       {/* ── Line 2 (compact metadata) ──────────────────────────────────── */}
       {parts.length > 0 && (
-        <div className="mt-0 flex flex-wrap items-center gap-x-1.5 gap-y-0 text-[0.625rem] text-muted-foreground">
+        <div className="mt-0 flex flex-nowrap items-center gap-x-1 overflow-hidden whitespace-nowrap text-[0.625rem] text-muted-foreground">
           {parts.map((node, i) => (
-            <span key={i} className="inline-flex items-center gap-x-1.5">
+            <span key={i} className="inline-flex min-w-0 items-center gap-x-1">
               {i > 0 && <Sep />}
               {node}
             </span>

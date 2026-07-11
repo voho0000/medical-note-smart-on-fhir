@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import type { VaccineRow } from '../hooks/useVaccineRows'
+import { medicationCategoryChipClass } from './medication-chip-styles'
 
 interface VaccineItemProps {
   vaccine: VaccineRow
@@ -39,7 +40,7 @@ export function VaccineItem({ vaccine }: VaccineItemProps) {
           {vaccine.category && (
             <span
               title={vaccine.category}
-              className="inline-flex shrink-0 max-w-[10rem] items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0 text-[0.625rem] font-medium text-slate-700 truncate"
+              className={medicationCategoryChipClass}
             >
               {vaccine.category}
             </span>
