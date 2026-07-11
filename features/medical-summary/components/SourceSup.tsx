@@ -85,7 +85,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
             // which dropped this and collapsed the pill to a 0-height line
             // (preflight gives <sup> line-height:0). Arbitrary properties are
             // immune to that conflict group.
-            "ml-0.5 inline-flex cursor-pointer select-none items-center rounded-full border px-1 text-[0.6rem] font-bold [line-height:1.15rem] align-super",
+            "ml-0.5 inline-flex cursor-pointer select-none items-center rounded-full border px-0.5 text-[0.5625rem] font-bold [line-height:0.95rem] align-super",
             "touch-manipulation transition-transform active:scale-90",
             hasUnverified
               ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-600/60 dark:bg-amber-950/50 dark:text-amber-300"

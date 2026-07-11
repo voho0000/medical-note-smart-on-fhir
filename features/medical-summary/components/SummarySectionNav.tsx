@@ -31,7 +31,7 @@ interface SummarySectionNavProps {
 }
 
 const chipBase =
-  "flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-teal-300 hover:text-foreground dark:hover:border-teal-500/40"
+  "flex min-h-[24px] items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-[0.6875rem] font-medium text-muted-foreground transition-colors hover:border-teal-300 hover:text-foreground dark:hover:border-teal-500/40"
 
 export function SummarySectionNav({ safety, problems, investigations, decisions, timeline, onJump, labels }: SummarySectionNavProps) {
   // Nothing to navigate to → no bar (keeps a sparse summary clean).
@@ -39,10 +39,10 @@ export function SummarySectionNav({ safety, problems, investigations, decisions,
   if (!hasSafety && problems === 0 && investigations === 0 && decisions === 0 && timeline === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       {investigations > 0 ? (
         <button type="button" onClick={() => onJump("investigations")} className={chipBase}>
-          <ChartNoAxesCombined className="h-3.5 w-3.5 text-teal-500" />
+          <ChartNoAxesCombined className="h-3 w-3 text-teal-500" />
           {labels.investigations}
           <span className="font-semibold tabular-nums text-foreground">{investigations}</span>
         </button>
@@ -50,7 +50,7 @@ export function SummarySectionNav({ safety, problems, investigations, decisions,
 
       {problems > 0 ? (
         <button type="button" onClick={() => onJump("problems")} className={chipBase}>
-          <ListChecks className="h-3.5 w-3.5 text-violet-500" />
+          <ListChecks className="h-3 w-3 text-violet-500" />
           {labels.problems}
           <span className="font-semibold tabular-nums text-foreground">{problems}</span>
         </button>
@@ -58,7 +58,7 @@ export function SummarySectionNav({ safety, problems, investigations, decisions,
 
       {hasSafety ? (
         <button type="button" onClick={() => onJump("safety")} className={chipBase}>
-          <ShieldAlert className="h-3.5 w-3.5 text-blue-500" />
+          <ShieldAlert className="h-3 w-3 text-blue-500" />
           {labels.safety}
           <span className="flex items-center gap-1 tabular-nums font-semibold">
             {safety!.high > 0 ? (
@@ -84,7 +84,7 @@ export function SummarySectionNav({ safety, problems, investigations, decisions,
 
       {decisions > 0 ? (
         <button type="button" onClick={() => onJump("decisions")} className={chipBase}>
-          <ClipboardCheck className="h-3.5 w-3.5 text-amber-500" />
+          <ClipboardCheck className="h-3 w-3 text-amber-500" />
           {labels.decisions}
           <span className="font-semibold tabular-nums text-foreground">{decisions}</span>
         </button>
@@ -92,7 +92,7 @@ export function SummarySectionNav({ safety, problems, investigations, decisions,
 
       {timeline > 0 ? (
         <button type="button" onClick={() => onJump("timeline")} className={cn(chipBase)}>
-          <Clock className="h-3.5 w-3.5 text-teal-500" />
+          <Clock className="h-3 w-3 text-teal-500" />
           {labels.timeline}
           <span className="font-semibold tabular-nums text-foreground">{timeline}</span>
         </button>

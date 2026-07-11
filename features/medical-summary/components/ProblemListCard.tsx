@@ -53,22 +53,22 @@ export function ProblemListCard({
   const byKey = new Map(result.sourceIndex.map((s) => [s.key, s]))
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground">{title}</h3>
+    <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+      <h3 className="mb-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">{title}</h3>
       {/* Problem rows are short (name + basis + badge), so once the card is
           wide enough (@container ≥34rem) they flow into two columns — halves
           the card height and kills the text-plus-dead-space look. Dividers are
           per-item borders (not divide-y) so the grid keeps its row lines. */}
-      <div className="@container max-h-[30rem] overflow-y-auto scrollbar-thin-persistent">
-        <div className="grid grid-cols-1 gap-x-8 @min-[34rem]:grid-cols-2">
+      <div className="@container max-h-[24rem] overflow-y-auto scrollbar-thin-persistent">
+        <div className="grid grid-cols-1 gap-x-5 @min-[32rem]:grid-cols-2">
         {problems.map((p, i) => {
           const sources = p.sourceKeys
             .map((k) => byKey.get(k))
             .filter((s): s is ResolvedSourceRef => s !== undefined)
           return (
-            <div key={i} className="flex items-start justify-between gap-3 border-b border-border py-2.5 last:border-b-0">
+            <div key={i} className="flex items-start justify-between gap-2 border-b border-border py-2 last:border-b-0">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-snug text-foreground break-words">
+                <p className="text-[0.8125rem] font-semibold leading-snug text-foreground break-words">
                   {p.label}
                   <SourceSup
                     sources={sources}
@@ -80,7 +80,7 @@ export function ProblemListCard({
                 {p.basis ? (
                   // e.g. "依據:照護計畫" — no ICD by design (LLM codes proved
                   // unstable/unverifiable; the navigable sources ARE the audit).
-                  <p className="mt-0.5 text-xs text-muted-foreground break-words">
+                  <p className="mt-0.5 text-[0.6875rem] leading-snug text-muted-foreground break-words">
                     <span className="text-muted-foreground/80">{basisLabel}</span>
                     {p.basis}
                   </p>
@@ -88,7 +88,7 @@ export function ProblemListCard({
               </div>
               <span
                 className={cn(
-                  "shrink-0 h-fit rounded-md px-2 py-0.5 text-[0.65rem] font-semibold",
+                  "shrink-0 h-fit rounded-md px-1.5 py-px text-[0.625rem] font-semibold",
                   KIND_BADGE[p.kind],
                 )}
               >

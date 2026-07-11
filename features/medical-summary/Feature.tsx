@@ -111,11 +111,11 @@ export default function MedicalSummaryFeature() {
   }, [safetyModel, model, setSafetyModel])
 
   // Clinicians see raw FHIR resource types on chips; patients get plain words.
-  const typeLabel = (resourceType?: string): string => {
+  const typeLabel = useCallback((resourceType?: string): string => {
     if (!resourceType) return ""
     if (!isPatient) return resourceType
     return (base.patient.sourceTypes as Record<string, string>)[resourceType] ?? resourceType
-  }
+  }, [base.patient.sourceTypes, isPatient])
   const urgencyLabel = (u: SummaryUrgency) =>
     u === "high" ? ms.urgencyHigh : u === "medium" ? ms.urgencyMedium : ms.urgencyLow
   const categoryLabel = (c: TimelineCategory) => ms.categories[c]
@@ -224,15 +224,15 @@ export default function MedicalSummaryFeature() {
     // viewport — the right panel is ~700px in a split view but ~1900px once the
     // left panel collapses, and only container queries see that. Capped so the
     // two columns never exceed a readable line length on ultrawide screens.
-    <div className="@container mx-auto max-w-[84rem] space-y-3 py-1">
+    <div className="@container mx-auto max-w-[84rem] space-y-2 py-0.5">
       {/* Header: title + controls. No maximize — the page IS the content. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <ClipboardList className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
         <h2 className="text-base font-semibold text-foreground">{ms.title}</h2>
         <span className="rounded-md bg-teal-100 dark:bg-teal-950/60 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:text-teal-300">
           {ms.badge}
         </span>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2">
           {/* ONE set of controls for the whole tab — each drives BOTH the
               summary generation and the safety scan. */}
           <ModelPicker
@@ -252,13 +252,13 @@ export default function MedicalSummaryFeature() {
             // Stays mounted while busy (disabled, spinning icon, SAME label) —
             // unmounting it shifted the picker/switch rightward on every
             // regenerate click.
-            <Button onClick={runBoth} size="sm" variant="outline" className="gap-1.5" disabled={isBusy}>
+            <Button onClick={runBoth} size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs" disabled={isBusy}>
               {isBusy ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
               ) : hasAnyResult ? (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-3.5 w-3.5" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-3.5 w-3.5" />
               )}
               {hasAnyResult ? ms.regenerate : ms.generate}
             </Button>
@@ -319,9 +319,9 @@ export default function MedicalSummaryFeature() {
               narrative + tests + safety (the assessment: who is this, what's changing, what's dangerous);
               right = problems → decisions → timeline (conditions, act, history).
               items-start lets each column flow to its own height. */}
-          <div className="grid grid-cols-1 items-start gap-3 @min-[52rem]:grid-cols-2">
+          <div className="grid grid-cols-1 items-start gap-2 @min-[52rem]:grid-cols-2">
             {/* LEFT — assessment: narrative → investigations → safety */}
-            <div className="min-w-0 space-y-3">
+            <div className="min-w-0 space-y-2">
               {result ? (
                 <SummaryNarrativeCard
                   result={result}
@@ -333,11 +333,11 @@ export default function MedicalSummaryFeature() {
                   updating={isGenerating}
                 />
               ) : isGenerating ? (
-                <div className="rounded-xl border border-border bg-card p-4">
-                  <h3 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground">
+                <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+                  <h3 className="mb-2 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">
                     {ms.narrativeTitle}
                   </h3>
-                  <div className="py-6 flex flex-col items-center gap-2">
+                  <div className="py-5 flex flex-col items-center gap-2">
                     <StreamingIndicator label={ms.generating} />
                     <p className="text-xs text-muted-foreground/70">{ms.generatingHint}</p>
                   </div>
@@ -361,7 +361,7 @@ export default function MedicalSummaryFeature() {
                   產生摘要 button is the whole call-to-action. */}
               {/* Safety alerts — presentational; the tab's controls drive its
                   scan. Renders independently (own loading/error/cache). */}
-              <div ref={safetyRef} className="scroll-mt-2 rounded-xl border border-border bg-card p-4">
+              <div ref={safetyRef} className="scroll-mt-2 rounded-lg border border-border bg-card px-3 py-2.5">
                 <SafetyAlertsPanel
                   result={safetyResult}
                   isScanning={isScanning}
@@ -375,7 +375,7 @@ export default function MedicalSummaryFeature() {
             </div>
 
             {/* RIGHT — conditions, act, history: problems → decisions → timeline */}
-            <div className="min-w-0 space-y-3">
+            <div className="min-w-0 space-y-2">
               {result ? (
                 <>
                   <div ref={problemsRef} className="scroll-mt-2">
@@ -446,7 +446,7 @@ export default function MedicalSummaryFeature() {
             />
           ) : null}
 
-          <p className="pb-1 text-center text-[0.6875rem] leading-relaxed text-muted-foreground/60">
+          <p className="pb-0.5 text-center text-[0.65rem] leading-snug text-muted-foreground/60">
             {ms.secondLayerNote}
           </p>
         </>

@@ -93,15 +93,15 @@ export function InvestigationTrendsCard({
   const byKey = new Map(result.sourceIndex.map((source) => [source.key, source]))
 
   return (
-    <section className="rounded-xl border border-border bg-card p-4" aria-labelledby="investigation-trends-title">
-      <div className="mb-3">
-        <h3 id="investigation-trends-title" className="text-xs font-semibold tracking-wide text-muted-foreground">
+    <section className="rounded-lg border border-border bg-card px-3 py-2.5" aria-labelledby="investigation-trends-title">
+      <div className="mb-2">
+        <h3 id="investigation-trends-title" className="text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">
           {title}
         </h3>
-        <p className="mt-1 text-[0.6875rem] leading-relaxed text-muted-foreground/75">{subtitle}</p>
+        <p className="mt-0.5 text-[0.65rem] leading-snug text-muted-foreground/75">{subtitle}</p>
       </div>
 
-      <div className="max-h-[34rem] space-y-2 overflow-y-auto scrollbar-thin-persistent">
+      <div className="max-h-[26rem] space-y-1.5 overflow-y-auto scrollbar-thin-persistent">
         {investigations.map((item, index) => {
           const style = DIRECTION_STYLE[item.direction]
           const DirectionIcon = style.icon
@@ -111,11 +111,11 @@ export function InvestigationTrendsCard({
             .filter((source): source is ResolvedSourceRef => source !== undefined)
 
           return (
-            <article key={`${item.label}-${index}`} className={cn("rounded-lg border-l-[3px] px-3 py-2.5", style.box)}>
-              <div className="flex flex-wrap items-start gap-2">
-                <KindIcon className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+            <article key={`${item.label}-${index}`} className={cn("rounded-md border-l-[3px] px-2.5 py-2", style.box)}>
+              <div className="flex flex-wrap items-start gap-1.5">
+                <KindIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold leading-snug text-foreground">
+                  <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">
                     {item.label}
                     <SourceSup
                       sources={sources}
@@ -124,20 +124,20 @@ export function InvestigationTrendsCard({
                       onNavigate={onNavigate}
                     />
                   </p>
-                  <p className="mt-1 text-sm font-medium leading-relaxed tabular-nums text-foreground/90">
+                  <p className="mt-0.5 text-[0.8125rem] font-medium leading-snug tabular-nums text-foreground/90">
                     {item.trend}
                   </p>
                 </div>
-                <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[0.65rem] font-semibold", style.badge)}>
+                <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-px text-[0.625rem] font-semibold", style.badge)}>
                   <DirectionIcon className="h-3 w-3" aria-hidden="true" />
                   {directionLabel(item.direction)}
                 </span>
               </div>
-              <div className="mt-1.5 flex items-start gap-1.5 pl-6 text-[0.6875rem] leading-relaxed text-muted-foreground">
-                <span className="shrink-0 rounded bg-background/70 px-1.5 py-0.5 font-medium">
+              <div className="mt-1 flex items-start gap-1.5 pl-5 text-[0.65rem] leading-snug text-muted-foreground">
+                <span className="shrink-0 rounded bg-background/70 px-1.5 py-px font-medium">
                   {kindLabel(item.kind)}
                 </span>
-                <p className="min-w-0 pt-0.5">{item.interpretation}</p>
+                <p className="min-w-0 pt-px">{item.interpretation}</p>
               </div>
             </article>
           )

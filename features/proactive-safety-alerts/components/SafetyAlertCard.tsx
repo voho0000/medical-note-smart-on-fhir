@@ -48,18 +48,18 @@ function EvidenceList({
   const visible = evidence.slice(0, EVIDENCE_VISIBLE_MAX)
   const hidden = evidence.length - visible.length
   return (
-    <div className="mt-1.5">
-      <p className="flex items-center gap-0.5 text-[0.65rem] tracking-wide text-violet-500/80 dark:text-violet-400/80">
+    <div className="mt-1">
+      <p className="flex items-center gap-0.5 text-[0.625rem] tracking-wide text-violet-500/80 dark:text-violet-400/80">
         {label}
         {sourcesEl}
       </p>
       {!sourcesEl && evidence.length > 0 ? (
         <ul className="mt-0.5 ml-1 space-y-0.5">
           {visible.map((e, i) => (
-            <li key={i} className="text-xs text-muted-foreground/80 break-words">• {e}</li>
+            <li key={i} className="text-[0.6875rem] leading-snug text-muted-foreground/80 break-words">• {e}</li>
           ))}
           {hidden > 0 ? (
-            <li className="text-xs text-muted-foreground/60">
+            <li className="text-[0.6875rem] text-muted-foreground/60">
               {t.safetyAlerts.evidenceMore.replace("{count}", String(hidden))}
             </li>
           ) : null}
@@ -89,7 +89,7 @@ export function SafetyAlertCard({
   const badge = (
     <span
       className={cn(
-        "shrink-0 h-fit rounded-md px-2 py-0.5 text-xs font-semibold",
+        "shrink-0 h-fit rounded-md px-1.5 py-px text-[0.625rem] font-semibold",
         SEVERITY_BADGE[alert.severity],
       )}
     >
@@ -103,21 +103,21 @@ export function SafetyAlertCard({
     const hasMore =
       !!alert.detail || (alert.evidence?.length ?? 0) > 0 || (alert.sources?.length ?? 0) > 0
     return (
-      <div className="border-b border-border last:border-b-0 py-2">
+      <div className="border-b border-border last:border-b-0 py-1.5">
         <button
           type="button"
           onClick={() => hasMore && setExpanded((v) => !v)}
           className={cn(
-            "flex w-full items-start gap-2.5 text-left",
+            "flex w-full items-start gap-2 text-left",
             hasMore && "cursor-pointer",
           )}
           aria-expanded={hasMore ? expanded : undefined}
         >
           {badge}
           <span className="min-w-0 flex-1">
-            <span className="block font-medium text-sm leading-snug text-foreground">{alert.title}</span>
+            <span className="block font-medium text-[0.8125rem] leading-snug text-foreground">{alert.title}</span>
             {alert.recommendation ? (
-              <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground break-words">
+              <span className="mt-0.5 block text-[0.6875rem] leading-snug text-muted-foreground break-words">
                 → {alert.recommendation}
               </span>
             ) : null}
@@ -125,15 +125,15 @@ export function SafetyAlertCard({
           {hasMore ? (
             <ChevronDown
               className={cn(
-                "h-4 w-4 shrink-0 mt-0.5 text-muted-foreground/50 transition-transform",
+                "h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground/50 transition-transform",
                 expanded && "rotate-180",
               )}
             />
           ) : null}
         </button>
         {expanded ? (
-          <div className="mt-1.5 ml-[calc(0.625rem+2.5rem)] pl-0">
-            <p className="text-sm leading-relaxed text-muted-foreground break-words">{alert.detail}</p>
+          <div className="mt-1 ml-10 pl-0">
+            <p className="text-[0.8125rem] leading-snug text-muted-foreground break-words">{alert.detail}</p>
             <EvidenceList alert={alert} label={t.safetyAlerts.evidenceLabel} renderSources={renderSources} />
           </div>
         ) : null}
@@ -143,13 +143,13 @@ export function SafetyAlertCard({
 
   // Full tier — everything visible, no interaction.
   return (
-    <div className="flex gap-3 py-3 border-b border-border last:border-b-0">
+    <div className="flex gap-2 py-2 border-b border-border last:border-b-0">
       {badge}
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-sm leading-snug text-foreground">{alert.title}</p>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground break-words">{alert.detail}</p>
+        <p className="font-semibold text-[0.8125rem] leading-snug text-foreground">{alert.title}</p>
+        <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted-foreground break-words">{alert.detail}</p>
         {alert.recommendation ? (
-          <p className="mt-1 text-sm leading-relaxed text-foreground/80 break-words">
+          <p className="mt-0.5 text-[0.8125rem] leading-snug text-foreground/80 break-words">
             → {alert.recommendation}
           </p>
         ) : null}

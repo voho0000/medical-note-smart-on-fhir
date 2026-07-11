@@ -48,15 +48,15 @@ export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, rende
   }, [result])
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">{sa.title}</h3>
+    <div className="space-y-2">
+      <h3 className="text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">{sa.title}</h3>
 
       {!hasPatient ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">
+        <div className="py-8 text-center text-sm text-muted-foreground">
           {sa.emptyNoPatient}
         </div>
       ) : isScanning ? (
-        <div className="py-10 flex flex-col items-center gap-3">
+        <div className="py-8 flex flex-col items-center gap-2">
           <StreamingIndicator label={sa.scanning} />
           <p className="text-xs text-muted-foreground/70">{sa.scanningHint}</p>
         </div>
@@ -65,30 +65,30 @@ export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, rende
           {/* Summary or first-run intro */}
           {result ? (
             result.alerts.length > 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs leading-snug text-muted-foreground">
                 {sa.foundSummary
                   .replace("{scanned}", String(result.scannedCount))
                   .replace("{count}", String(result.alerts.length))}
               </p>
             ) : (
-              <div className="flex items-center gap-2 rounded-lg bg-green-50 dark:bg-green-950/40 px-3 py-2 text-sm text-green-700 dark:text-green-300">
+              <div className="flex items-center gap-2 rounded-md bg-green-50 dark:bg-green-950/40 px-2.5 py-1.5 text-xs text-green-700 dark:text-green-300">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 {sa.emptyNoRisk}
               </div>
             )
           ) : (
-            <p className="text-sm text-muted-foreground">{sa.scanIntro}</p>
+            <p className="text-xs leading-snug text-muted-foreground">{sa.scanIntro}</p>
           )}
 
           {error ? (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+            <div className="flex items-center gap-2 rounded-md bg-red-50 dark:bg-red-950/40 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-300">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1">{error === "PARSE_FAILED" ? sa.parseError : error}</span>
               {onRetry ? (
                 <button
                   type="button"
                   onClick={onRetry}
-                  className="flex shrink-0 items-center gap-1 rounded-md border border-red-200 dark:border-red-800 px-2 py-1 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                  className="flex shrink-0 items-center gap-1 rounded-md border border-red-200 dark:border-red-800 px-2 py-0.5 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                 >
                   <RefreshCw className="h-3 w-3" />
                   {retryLabel}
@@ -97,11 +97,11 @@ export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, rende
             </div>
           ) : null}
 
-          {/* Tiered alert cards: high (full) → medium (compact) → low (folded).
-              Caps at 30rem then scrolls so a big scan never dominates the
+          {/* Tiered alert cards: high (full) → medium/low (compact).
+              Caps then scrolls so a big scan never dominates the
               column — the section title + summary line stay fixed above. */}
           {result && result.alerts.length > 0 ? (
-            <div className="max-h-[30rem] overflow-y-auto scrollbar-thin-persistent rounded-xl border border-border bg-card px-4 py-1">
+            <div className="max-h-[24rem] overflow-y-auto scrollbar-thin-persistent">
               {high.map((alert) => (
                 <SafetyAlertCard key={alert.id} alert={alert} density="full" renderSources={renderSources} />
               ))}
@@ -118,7 +118,7 @@ export function SafetyAlertsPanel({ result, isScanning, error, hasPatient, rende
 
           {/* AI disclaimer — pure-AI output, clinician must verify */}
           {result && result.alerts.length > 0 ? (
-            <p className="pt-1 text-[0.6875rem] leading-relaxed text-muted-foreground/70">
+            <p className="text-[0.65rem] leading-snug text-muted-foreground/70">
               {sa.disclaimer}
             </p>
           ) : null}

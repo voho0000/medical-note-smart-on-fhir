@@ -56,27 +56,27 @@ export function DecisionList({
   const byKey = new Map(result.sourceIndex.map((s) => [s.key, s]))
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-2.5 text-xs font-semibold tracking-wide text-muted-foreground">{title}</h3>
-      {/* Card body caps at 30rem then scrolls (title stays fixed) so a long
+    <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+      <h3 className="mb-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">{title}</h3>
+      {/* Card body caps then scrolls (title stays fixed) so a long
           list never dominates the column — see the medical-summary layout doc. */}
-      <div className="max-h-[30rem] space-y-2 overflow-y-auto scrollbar-thin-persistent">
+      <div className="max-h-[24rem] space-y-1.5 overflow-y-auto scrollbar-thin-persistent">
         {result.decisions.map((d, i) => {
           const style = URGENCY_STYLES[d.urgency]
           const sources = d.sourceKeys
             .map((k) => byKey.get(k))
             .filter((s): s is ResolvedSourceRef => s !== undefined)
           return (
-            <div key={i} className={cn("rounded-lg border-l-[3px] px-3 py-2.5", style.box)}>
+            <div key={i} className={cn("rounded-md border-l-[3px] px-2.5 py-2", style.box)}>
               <div className="flex items-start gap-2">
                 {showUrgency ? (
-                  <span className={cn("mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[0.65rem] font-bold", style.badge)}>
+                  <span className={cn("mt-0.5 shrink-0 rounded-md px-1.5 py-px text-[0.625rem] font-bold", style.badge)}>
                     {urgencyLabel(d.urgency)}
                   </span>
                 ) : null}
-                <p className="min-w-0 flex-1 text-sm leading-relaxed text-foreground">{d.text}</p>
+                <p className="min-w-0 flex-1 text-[0.8125rem] leading-snug text-foreground">{d.text}</p>
               </div>
-              <p className="mt-1.5 text-[0.6875rem] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-[0.65rem] leading-snug text-muted-foreground">
                 {basisLabel}：{d.rationale?.trim() || aiInferredLabel}
                 <SourceSup
                   sources={sources}

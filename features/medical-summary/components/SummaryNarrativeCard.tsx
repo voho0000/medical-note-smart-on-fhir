@@ -38,45 +38,45 @@ export function SummaryNarrativeCard({
   const byKey = new Map(result.sourceIndex.map((s) => [s.key, s]))
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
+    <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+      <h3 className="mb-1.5 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-muted-foreground">
         {title}
         {updating ? <Loader2 className="h-3 w-3 animate-spin text-violet-500" /> : null}
       </h3>
-      {/* Body caps at 30rem then scrolls (title fixed above, responsibility
+      {/* Body caps then scrolls (title fixed above, responsibility
           footer fixed below) — a safety net; the narrative rarely overflows. */}
-      <div className="max-h-[30rem] overflow-y-auto scrollbar-thin-persistent">
-      <p className="text-sm font-semibold leading-relaxed text-foreground">{result.headline}</p>
-      <p className="mt-1.5 text-sm leading-relaxed text-foreground">
-        {result.summary.map((seg, i) => {
-          const sources = seg.sourceKeys
-            .map((k) => byKey.get(k))
-            .filter((s): s is ResolvedSourceRef => s !== undefined)
-          const sup = (
-            <SourceSup
-              sources={sources}
-              typeLabel={typeLabel}
-              unverifiedLabel={unverifiedLabel}
-              onNavigate={onNavigate}
-            />
-          )
-          return seg.emphasis ? (
-            <span key={i}>
-              <span className="rounded bg-violet-100 px-1 font-semibold text-violet-900 dark:bg-violet-500/15 dark:text-violet-300">
-                {seg.text}
+      <div className="max-h-[24rem] overflow-y-auto scrollbar-thin-persistent">
+        <p className="text-[0.8125rem] font-semibold leading-snug text-foreground">{result.headline}</p>
+        <p className="mt-1 text-[0.8125rem] leading-normal text-foreground">
+          {result.summary.map((seg, i) => {
+            const sources = seg.sourceKeys
+              .map((k) => byKey.get(k))
+              .filter((s): s is ResolvedSourceRef => s !== undefined)
+            const sup = (
+              <SourceSup
+                sources={sources}
+                typeLabel={typeLabel}
+                unverifiedLabel={unverifiedLabel}
+                onNavigate={onNavigate}
+              />
+            )
+            return seg.emphasis ? (
+              <span key={i}>
+                <span className="rounded bg-violet-100 px-1 font-semibold text-violet-900 dark:bg-violet-500/15 dark:text-violet-300">
+                  {seg.text}
+                </span>
+                {sup}
               </span>
-              {sup}
-            </span>
-          ) : (
-            <span key={i}>
-              {seg.text}
-              {sup}
-            </span>
-          )
-        })}
-      </p>
+            ) : (
+              <span key={i}>
+                {seg.text}
+                {sup}
+              </span>
+            )
+          })}
+        </p>
       </div>
-      <p className="mt-3 border-t border-border pt-2.5 text-[0.6875rem] leading-relaxed text-muted-foreground/70">
+      <p className="mt-2 border-t border-border pt-1.5 text-[0.65rem] leading-snug text-muted-foreground/70">
         {generatedByLine}
       </p>
     </div>
