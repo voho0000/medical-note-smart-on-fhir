@@ -48,9 +48,9 @@ import {
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
 
 const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
-// v2: bumped when the result shape gained `problems` — ignore older-shape
-// cached results (they'd render without the problem list / crash on access).
-const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary2', scanKey)
+// v3: bumped when the result shape gained disease-oriented `investigations`;
+// older cached summaries are valid but would silently omit the new overview.
+const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary3', scanKey)
 
 interface MedicalSummaryStore {
   // All keyed by scanKey = patientId::audience::model — so each model keeps its

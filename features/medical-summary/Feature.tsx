@@ -1,5 +1,5 @@
 // Medical Summary (醫療摘要) — zero-click, single vertical flow: narrative →
-// safety alerts → decisions → cross-facility timeline → coverage. Reading
+// disease-oriented test trends → safety alerts → decisions → cross-facility timeline → coverage. Reading
 // needs no interaction; auditing (source chips, evidence) is always visible.
 // Structured AI output (Zod-validated) renders as fixed cards — never a
 // free-text markdown blob. Pluggable via right-panel-registry (enabled flag).
@@ -25,6 +25,7 @@ import { MEDICAL_SUMMARY_MODEL_ID } from "@/src/core/use-cases/medical-summary/g
 import { useSafetyAlerts } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
 import { countBySeverity } from "@/src/core/entities/safety-alert.entity"
 import { SummaryNarrativeCard } from "./components/SummaryNarrativeCard"
+import { InvestigationTrendsCard } from "./components/InvestigationTrendsCard"
 import { SummarySectionNav, type SummarySection } from "./components/SummarySectionNav"
 import { ProblemListCard } from "./components/ProblemListCard"
 import { DecisionList } from "./components/DecisionList"
@@ -33,6 +34,8 @@ import { CoverageCard } from "./components/CoverageCard"
 import { SourceSup } from "./components/SourceSup"
 import type {
   EncounterClass,
+  InvestigationDirection,
+  InvestigationKind,
   ProblemKind,
   ResolvedSourceRef,
   SummaryUrgency,
@@ -123,6 +126,9 @@ export default function MedicalSummaryFeature() {
       : kind === "discharge"
         ? ms.problemBadgeDischarge
         : ms.problemBadgeInferred
+  const investigationKindLabel = (kind: InvestigationKind) => ms.investigationKinds[kind]
+  const investigationDirectionLabel = (direction: InvestigationDirection) =>
+    ms.investigationDirections[direction]
 
   // Navigate the LEFT panel to a cited resource. Switching to the right tab
   // always works; the pinpoint scroll is best-effort — if no anchor claims
@@ -192,6 +198,7 @@ export default function MedicalSummaryFeature() {
     return { ...c, total: safetyResult.alerts.length }
   }, [safetyResult])
   const problemsRef = useRef<HTMLDivElement>(null)
+  const investigationsRef = useRef<HTMLDivElement>(null)
   const safetyRef = useRef<HTMLDivElement>(null)
   const decisionsRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -199,6 +206,8 @@ export default function MedicalSummaryFeature() {
     const el = (
       section === "problems"
         ? problemsRef
+        : section === "investigations"
+          ? investigationsRef
         : section === "safety"
           ? safetyRef
           : section === "decisions"
@@ -286,12 +295,14 @@ export default function MedicalSummaryFeature() {
             <SummarySectionNav
               safety={safetyCounts}
               problems={result.problems?.length ?? 0}
+              investigations={result.investigations?.length ?? 0}
               decisions={result.decisions.length}
               timeline={result.timeline.length}
               onJump={jumpTo}
               labels={{
                 safety: ms.navSafety,
                 problems: ms.navProblems,
+                investigations: ms.navInvestigations,
                 decisions: ms.navDecisions,
                 timeline: ms.navTimeline,
                 high: ms.urgencyHigh,
@@ -304,12 +315,12 @@ export default function MedicalSummaryFeature() {
           {/* Newspaper split at container ≥52rem, single column below. The
               column contents are ordered so that when they FLATTEN into one
               column (below 52rem) the sequence is the intended reading order:
-              narrative → safety → problems → decisions → timeline. Left =
-              narrative + safety (the assessment: who is this, what's dangerous);
+              narrative → investigations → safety → problems → decisions → timeline. Left =
+              narrative + tests + safety (the assessment: who is this, what's changing, what's dangerous);
               right = problems → decisions → timeline (conditions, act, history).
               items-start lets each column flow to its own height. */}
           <div className="grid grid-cols-1 items-start gap-3 @min-[52rem]:grid-cols-2">
-            {/* LEFT — assessment: narrative → safety */}
+            {/* LEFT — assessment: narrative → investigations → safety */}
             <div className="min-w-0 space-y-3">
               {result ? (
                 <SummaryNarrativeCard
@@ -330,6 +341,20 @@ export default function MedicalSummaryFeature() {
                     <StreamingIndicator label={ms.generating} />
                     <p className="text-xs text-muted-foreground/70">{ms.generatingHint}</p>
                   </div>
+                </div>
+              ) : null}
+              {result ? (
+                <div ref={investigationsRef} className="scroll-mt-2">
+                  <InvestigationTrendsCard
+                    result={result}
+                    title={ms.investigationsTitle}
+                    subtitle={ms.investigationsSubtitle}
+                    kindLabel={investigationKindLabel}
+                    directionLabel={investigationDirectionLabel}
+                    typeLabel={typeLabel}
+                    unverifiedLabel={ms.unverified}
+                    onNavigate={navigateToResource}
+                  />
                 </div>
               ) : null}
               {/* Idle (no result, not generating) renders nothing — the header's

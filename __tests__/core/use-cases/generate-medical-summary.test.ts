@@ -335,6 +335,44 @@ describe('finalizeResult', () => {
     expect(num('C1')).toBeLessThan(num('M1'))
   })
 
+  it('finalizes disease-oriented investigation trends before problem sources', () => {
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      investigations: [
+        {
+          label: 'HbA1c',
+          kind: 'lab',
+          direction: 'worsening',
+          trend: '7.2% → 8.4%',
+          interpretation: '血糖控制變差',
+          sources: ['L1', 'L99'],
+        },
+        {
+          label: '未知類型',
+          kind: 'unsupported',
+          direction: 'sideways',
+          trend: '單次結果',
+          interpretation: '資料不足',
+          sources: [],
+        },
+      ],
+      problems: [{ label: '第2型糖尿病', kind: 'diagnosis', sources: ['C1'] }],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, catalog)
+    expect(result.investigations[0]).toMatchObject({
+      kind: 'lab',
+      direction: 'worsening',
+      sourceKeys: ['L1', 'L99'],
+    })
+    expect(result.investigations[1]).toMatchObject({ kind: 'other', direction: 'unknown' })
+    expect(result.sourceIndex.find((source) => source.key === 'L99')).toMatchObject({ verified: false })
+    const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
+    expect(num('L1')).toBeLessThan(num('C1'))
+  })
+
   it('rescues quoted key phrases when zero highlights survive', () => {
     const ai = {
       headline: 'h',

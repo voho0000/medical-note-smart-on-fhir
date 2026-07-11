@@ -56,6 +56,7 @@ export function auditSummaryGrounding(ai: any, input: GroundingAuditInput): stri
   const { presentTerms, isImaging, displayOf } = makeHelpers(input)
   const issues: string[] = []
   const spans: Array<{ text: string; tag: string }> = []
+  for (const [i, item] of (ai.investigations ?? []).entries()) spans.push({ text: `${item.label} ${item.trend ?? ''} ${item.interpretation ?? ''}`, tag: `investigation[${i}] ${item.label}` })
   for (const [i, p] of (ai.problems ?? []).entries()) spans.push({ text: `${p.label} ${p.basis ?? ''}`, tag: `problem[${i}] ${p.label}` })
   for (const [i, d] of (ai.decisions ?? []).entries()) spans.push({ text: `${d.text} ${d.rationale ?? ''}`, tag: `decision[${i}]` })
   for (const [i, t] of (ai.timeline ?? []).entries()) spans.push({ text: t.label, tag: `timeline[${i}] ${t.label}` })
@@ -68,6 +69,17 @@ export function auditSummaryGrounding(ai: any, input: GroundingAuditInput): stri
     if (/腎|eGFR|GFR/i.test(p.label)) for (const k of p.sources ?? []) if (isImaging(k) && !/超音波/.test(displayOf(k))) issues.push(`renal claim cites imaging ${k} (${displayOf(k)}) in problem[${i}] ${p.label}`)
     if (/息肉/.test(p.label)) for (const k of p.sources ?? []) if (/超音波|X光/.test(displayOf(k))) issues.push(`polyp cites imaging ${k} (${displayOf(k)}) in problem[${i}] ${p.label}`)
     if (/瓣/.test(p.label)) for (const k of p.sources ?? []) if (/心電圖|ECG/i.test(displayOf(k))) issues.push(`valve claim cites ECG ${k} in problem[${i}] ${p.label}`)
+  }
+  for (const [i, item] of (ai.investigations ?? []).entries()) {
+    // Disease-oriented rows must cite the matching report, not a topically
+    // unrelated image. This mirrors the long-standing problem-list guard.
+    if (/腎|eGFR|GFR/i.test(`${item.label} ${item.trend ?? ''}`)) {
+      for (const k of item.sources ?? []) {
+        if (isImaging(k) && !/超音波|肌酸酐|Creat|GFR|尿素|BUN/i.test(displayOf(k))) {
+          issues.push(`renal investigation cites imaging ${k} (${displayOf(k)}) in investigation[${i}] ${item.label}`)
+        }
+      }
+    }
   }
   return issues
 }

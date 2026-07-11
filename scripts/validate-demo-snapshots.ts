@@ -45,7 +45,7 @@ async function main() {
     if (emph.length > EMPHASIS_MAX_COUNT) fail(`summary[${aud}]: ${emph.length} emphasis > cap`)
     for (const e of emph) if (e.text.length > EMPHASIS_MAX_CHARS) fail(`summary[${aud}]: emphasis too long: ${e.text}`)
     for (const issue of auditSummaryGrounding(demoMedicalSummarySnapshots[aud], grounding)) fail(`summary[${aud}] grounding: ${issue}`)
-    console.log(`✓ summary[${aud}]: ${finalized.summary.length} segs (${emph.length} highlights), ${finalized.problems.length} problems, ${finalized.decisions.length} decisions, ${finalized.timeline.length} timeline, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
+    console.log(`✓ summary[${aud}]: ${finalized.summary.length} segs (${emph.length} highlights), ${finalized.investigations.length} investigation trends, ${finalized.problems.length} problems, ${finalized.decisions.length} decisions, ${finalized.timeline.length} timeline, ${finalized.sourceIndex.length} sources all verified; grounding clean`)
 
     // --- safety: same path as a live reply ---
     const scan = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(demoSafetyScanSnapshots[aud]))

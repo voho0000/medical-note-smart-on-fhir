@@ -5,21 +5,23 @@
 // is unaffected — this is an optional accelerator, not a gate.
 "use client"
 
-import { ShieldAlert, ClipboardCheck, Clock, ListChecks } from "lucide-react"
+import { ShieldAlert, ClipboardCheck, Clock, ListChecks, ChartNoAxesCombined } from "lucide-react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { SafetyAlertCounts } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
 
-export type SummarySection = "problems" | "safety" | "decisions" | "timeline"
+export type SummarySection = "problems" | "investigations" | "safety" | "decisions" | "timeline"
 
 interface SummarySectionNavProps {
   safety: SafetyAlertCounts | null
   problems: number
+  investigations: number
   decisions: number
   timeline: number
   onJump: (section: SummarySection) => void
   labels: {
     safety: string
     problems: string
+    investigations: string
     decisions: string
     timeline: string
     high: string
@@ -31,13 +33,21 @@ interface SummarySectionNavProps {
 const chipBase =
   "flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-teal-300 hover:text-foreground dark:hover:border-teal-500/40"
 
-export function SummarySectionNav({ safety, problems, decisions, timeline, onJump, labels }: SummarySectionNavProps) {
+export function SummarySectionNav({ safety, problems, investigations, decisions, timeline, onJump, labels }: SummarySectionNavProps) {
   // Nothing to navigate to → no bar (keeps a sparse summary clean).
   const hasSafety = safety && safety.total > 0
-  if (!hasSafety && problems === 0 && decisions === 0 && timeline === 0) return null
+  if (!hasSafety && problems === 0 && investigations === 0 && decisions === 0 && timeline === 0) return null
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {investigations > 0 ? (
+        <button type="button" onClick={() => onJump("investigations")} className={chipBase}>
+          <ChartNoAxesCombined className="h-3.5 w-3.5 text-teal-500" />
+          {labels.investigations}
+          <span className="font-semibold tabular-nums text-foreground">{investigations}</span>
+        </button>
+      ) : null}
+
       {problems > 0 ? (
         <button type="button" onClick={() => onJump("problems")} className={chipBase}>
           <ListChecks className="h-3.5 w-3.5 text-violet-500" />

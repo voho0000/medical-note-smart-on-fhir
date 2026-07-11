@@ -1,0 +1,148 @@
+// Disease-oriented test overview: the AI selects only the lab / pathology /
+// imaging topics that matter for this patient's active problems, while every
+// row keeps navigable citations to the original FHIR DiagnosticReports.
+"use client"
+
+import {
+  Activity,
+  FlaskConical,
+  Images,
+  Microscope,
+  Minus,
+  Shuffle,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react"
+import { cn } from "@/src/shared/utils/cn.utils"
+import type {
+  InvestigationDirection,
+  InvestigationKind,
+  MedicalSummaryResult,
+  ResolvedSourceRef,
+} from "@/src/core/entities/medical-summary.entity"
+import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
+import { SourceSup } from "./SourceSup"
+
+const DIRECTION_STYLE: Record<
+  InvestigationDirection,
+  { box: string; badge: string; icon: typeof TrendingUp }
+> = {
+  improving: {
+    box: "border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/20",
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    icon: TrendingUp,
+  },
+  stable: {
+    box: "border-l-blue-400 bg-blue-50/50 dark:bg-blue-950/20",
+    badge: "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
+    icon: Minus,
+  },
+  worsening: {
+    box: "border-l-red-500 bg-red-50/60 dark:bg-red-950/20",
+    badge: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+    icon: TrendingDown,
+  },
+  fluctuating: {
+    box: "border-l-amber-500 bg-amber-50/60 dark:bg-amber-950/20",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+    icon: Shuffle,
+  },
+  single: {
+    box: "border-l-slate-400 bg-slate-50/70 dark:bg-slate-900/40",
+    badge: "bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300",
+    icon: Activity,
+  },
+  unknown: {
+    box: "border-l-slate-300 bg-slate-50/50 dark:bg-slate-900/30",
+    badge: "bg-slate-100 text-slate-600 dark:bg-slate-800/70 dark:text-slate-300",
+    icon: Activity,
+  },
+}
+
+const KIND_ICON: Record<InvestigationKind, typeof FlaskConical> = {
+  lab: FlaskConical,
+  imaging: Images,
+  pathology: Microscope,
+  other: Activity,
+}
+
+interface InvestigationTrendsCardProps {
+  result: MedicalSummaryResult
+  title: string
+  subtitle: string
+  kindLabel: (kind: InvestigationKind) => string
+  directionLabel: (direction: InvestigationDirection) => string
+  typeLabel: (resourceType?: string) => string
+  unverifiedLabel: string
+  onNavigate?: (target: ResourceNavTarget) => void
+}
+
+export function InvestigationTrendsCard({
+  result,
+  title,
+  subtitle,
+  kindLabel,
+  directionLabel,
+  typeLabel,
+  unverifiedLabel,
+  onNavigate,
+}: InvestigationTrendsCardProps) {
+  // Tolerate encrypted caches from before this card was introduced.
+  const investigations = result.investigations ?? []
+  if (investigations.length === 0) return null
+  const byKey = new Map(result.sourceIndex.map((source) => [source.key, source]))
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4" aria-labelledby="investigation-trends-title">
+      <div className="mb-3">
+        <h3 id="investigation-trends-title" className="text-xs font-semibold tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        <p className="mt-1 text-[0.6875rem] leading-relaxed text-muted-foreground/75">{subtitle}</p>
+      </div>
+
+      <div className="max-h-[34rem] space-y-2 overflow-y-auto scrollbar-thin-persistent">
+        {investigations.map((item, index) => {
+          const style = DIRECTION_STYLE[item.direction]
+          const DirectionIcon = style.icon
+          const KindIcon = KIND_ICON[item.kind]
+          const sources = item.sourceKeys
+            .map((key) => byKey.get(key))
+            .filter((source): source is ResolvedSourceRef => source !== undefined)
+
+          return (
+            <article key={`${item.label}-${index}`} className={cn("rounded-lg border-l-[3px] px-3 py-2.5", style.box)}>
+              <div className="flex flex-wrap items-start gap-2">
+                <KindIcon className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-snug text-foreground">
+                    {item.label}
+                    <SourceSup
+                      sources={sources}
+                      typeLabel={typeLabel}
+                      unverifiedLabel={unverifiedLabel}
+                      onNavigate={onNavigate}
+                    />
+                  </p>
+                  <p className="mt-1 text-sm font-medium leading-relaxed tabular-nums text-foreground/90">
+                    {item.trend}
+                  </p>
+                </div>
+                <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[0.65rem] font-semibold", style.badge)}>
+                  <DirectionIcon className="h-3 w-3" aria-hidden="true" />
+                  {directionLabel(item.direction)}
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-start gap-1.5 pl-6 text-[0.6875rem] leading-relaxed text-muted-foreground">
+                <span className="shrink-0 rounded bg-background/70 px-1.5 py-0.5 font-medium">
+                  {kindLabel(item.kind)}
+                </span>
+                <p className="min-w-0 pt-0.5">{item.interpretation}</p>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  )
+}

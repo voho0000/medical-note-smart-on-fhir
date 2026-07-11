@@ -33,6 +33,22 @@ export const PROBLEM_KINDS = [
 ] as const
 export type ProblemKind = (typeof PROBLEM_KINDS)[number]
 
+// Disease-oriented investigation overview. `kind` controls the icon/label;
+// `direction` describes the CLINICAL direction (better/worse), not merely
+// whether the raw number went up or down (e.g. falling eGFR = worsening).
+export const INVESTIGATION_KINDS = ['lab', 'imaging', 'pathology', 'other'] as const
+export type InvestigationKind = (typeof INVESTIGATION_KINDS)[number]
+
+export const INVESTIGATION_DIRECTIONS = [
+  'improving',
+  'stable',
+  'worsening',
+  'fluctuating',
+  'single',
+  'unknown',
+] as const
+export type InvestigationDirection = (typeof INVESTIGATION_DIRECTIONS)[number]
+
 // ---------------------------------------------------------------------------
 // AI output schema (validated with Zod; malformed replies are rejected)
 //
@@ -86,12 +102,27 @@ export const SummaryProblemSchema = z.object({
   sources: clampedKeys(6),
 })
 
+// A compact, disease-relevant lab / imaging analysis. The model writes the
+// human-readable trend from values that exist in the supplied clinical data;
+// sources are resolved app-side so every row remains auditable/navigation-ready.
+export const SummaryInvestigationSchema = z.object({
+  label: clampedText(120),
+  kind: z.string().optional(),
+  direction: z.string().optional(),
+  /** Data-first display, e.g. "HbA1c 7.2% → 8.4%" or an imaging finding. */
+  trend: clampedText(240),
+  /** One short, patient-specific interpretation of why the result matters. */
+  interpretation: clampedText(400),
+  sources: clampedKeys(8),
+})
+
 export const MedicalSummaryAiResultSchema = z.object({
   headline: clampedText(240),
   // Segment clamp is deliberately roomy (32, prompt asks for far fewer): it is
   // a runaway-output guard, not a style enforcer — trimming a narrative's tail
   // loses its conclusion, so only truly degenerate outputs should hit it.
   summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
+  investigations: z.array(SummaryInvestigationSchema).default([]).transform((a) => a.slice(0, 8)),
   problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
   decisions: z.array(SummaryDecisionSchema).default([]).transform((a) => a.slice(0, 16)),
   // Patient complexity varies too much for an editorial cap — the prompt asks
@@ -160,9 +191,19 @@ export interface SummaryProblem {
   sourceKeys: string[]
 }
 
+export interface SummaryInvestigation {
+  label: string
+  kind: InvestigationKind
+  direction: InvestigationDirection
+  trend: string
+  interpretation: string
+  sourceKeys: string[]
+}
+
 export interface MedicalSummaryResult {
   headline: string
   summary: Array<{ text: string; emphasis: boolean; sourceKeys: string[] }>
+  investigations: SummaryInvestigation[]
   problems: SummaryProblem[]
   decisions: Array<{
     text: string
@@ -172,7 +213,7 @@ export interface MedicalSummaryResult {
   }>
   timeline: SummaryTimelineEvent[]
   /** Unique cited sources in first-appearance order, matching the RENDER
-   *  order (summary → problems → decisions) so superscript numbers read
+   *  order (summary → investigations → problems → decisions) so superscript numbers read
    *  top-to-bottom on the page. */
   sourceIndex: ResolvedSourceRef[]
   /** Timeline picks whose ref didn't resolve to the bundle (dropped, counted). */
@@ -200,4 +241,18 @@ export function normaliseTimelineCategory(raw?: string): TimelineCategory {
 export function normaliseProblemKind(raw?: string): ProblemKind {
   const c = (raw ?? '').toLowerCase().trim()
   return (PROBLEM_KINDS as readonly string[]).includes(c) ? (c as ProblemKind) : 'other'
+}
+
+export function normaliseInvestigationKind(raw?: string): InvestigationKind {
+  const c = (raw ?? '').toLowerCase().trim()
+  return (INVESTIGATION_KINDS as readonly string[]).includes(c)
+    ? (c as InvestigationKind)
+    : 'other'
+}
+
+export function normaliseInvestigationDirection(raw?: string): InvestigationDirection {
+  const c = (raw ?? '').toLowerCase().trim()
+  return (INVESTIGATION_DIRECTIONS as readonly string[]).includes(c)
+    ? (c as InvestigationDirection)
+    : 'unknown'
 }

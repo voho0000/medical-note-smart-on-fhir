@@ -23,6 +23,8 @@ import {
   MedicalSummaryAiResultSchema,
   normaliseTimelineCategory,
   normaliseProblemKind,
+  normaliseInvestigationKind,
+  normaliseInvestigationDirection,
   type MedicalSummaryAiResult,
   type MedicalSummaryResult,
   type ResolvedSourceRef,
@@ -316,6 +318,7 @@ export function buildCoverageStats(input: SummaryCatalogInput): SummaryCoverageS
 const SCHEMA_HINT =
   '{"headline": "<one-line patient positioning>", ' +
   '"summary": [{"text": "<narrative segment>", "emphasis": <true for pivotal segments>, "sources": ["<catalog key like E1>"]}], ' +
+  '"investigations": [{"label": "<disease-relevant test or imaging group>", "kind": "lab|imaging|pathology|other", "direction": "improving|stable|worsening|fluctuating|single|unknown", "trend": "<actual serial values or imaging change; say single result when only one>", "interpretation": "<why this matters for this patient>", "sources": ["<catalog key>"]}], ' +
   '"problems": [{"label": "<condition name, e.g. 第二型糖尿病>", "basis": "<short basis e.g. 5 次檢驗異常 / 藥局調劑>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"]}], ' +
   '"decisions": [{"text": "<action item>", "urgency": "high|medium|low", "rationale": "<basis, cite values>", "sources": ["<catalog key>"]}], ' +
   '"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup"}]}'
@@ -349,6 +352,11 @@ const SHARED_RULES =
   'Temporal honesty: call an event 近期/recent ONLY if it is within ~3 months of the newest record; otherwise state the actual date or timeframe. ' +
   'Trend honesty (ALL audiences, including the patient version): when serial values show a direction (e.g. eGFR 35→33→32), describe it faithfully — ' +
   'NEVER call a worsening value 穩定/stable; in patient language prefer calm-but-true phrasing (e.g. 數值逐漸下降，醫師正在追蹤) over false reassurance. ' +
+  'For "investigations", create a disease-oriented overview of the 3–6 MOST clinically relevant laboratory, pathology, and imaging topics for THIS patient, not a dump of every test. ' +
+  'Choose topics from the active clinical context: for a cancer patient prioritize documented tumor markers, pathology, and serial imaging; for diabetes prioritize HbA1c, renal function/eGFR, and urine albumin when present; adapt similarly for other conditions. ' +
+  'Each item must cite the DiagnosticReport source(s) that contain the stated values/findings. Put the actual data sequence in "trend" (include units when present) and a concise patient-specific meaning in "interpretation". ' +
+  'Use "direction" for CLINICAL direction, not numeric direction (e.g. falling eGFR is "worsening"). Claim a trend only with at least 2 comparable time points; with one report use "single" and explicitly say it is a single result. ' +
+  'Never infer stability from one value, never invent a test that is absent, never mix non-comparable units/methods into one sequence, and do not repeat routine normal tests unless they materially answer an active problem. ' +
   'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
   '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
   'a complex multi-morbid patient typically yields 8–12 problems, not 5–6. ' +
@@ -404,12 +412,18 @@ export interface GenerateMedicalSummaryInput {
   audience?: 'medical' | 'patient'
 }
 
+// Accept pre-v3 cached/test objects during the rollout; live parseResult always
+// materialises `investigations` via the schema default.
+type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations'> & {
+  investigations?: MedicalSummaryAiResult['investigations']
+}
+
 export class GenerateMedicalSummaryUseCase {
   buildMessages(input: GenerateMedicalSummaryInput): AiMessage[] {
     const system = input.audience === 'patient' ? SYSTEM_PATIENT : SYSTEM_MEDICAL
     const lang =
       input.locale === 'zh-TW'
-        ? '\n\nWrite every "headline", "text", "rationale" and "label" value in Traditional Chinese (繁體中文).'
+        ? '\n\nWrite every "headline", "text", "rationale", "label", "trend" and "interpretation" value in Traditional Chinese (繁體中文).'
         : '\n\nWrite all values in English.'
     const catalogBlock = input.catalog
       .map((c) => {
@@ -474,7 +488,7 @@ export class GenerateMedicalSummaryUseCase {
    * - timeline picks: unknown refs are dropped (no trustworthy date) and counted.
    */
   finalizeResult(
-    ai: MedicalSummaryAiResult,
+    ai: FinalizableMedicalSummary,
     catalog: SummarySourceCatalogEntry[],
   ): MedicalSummaryResult {
     const byKey = new Map(catalog.map((c) => [c.key, c]))
@@ -528,8 +542,20 @@ export class GenerateMedicalSummaryUseCase {
     // Citations belong to claims — move fragment citations to the highlight /
     // sentence boundary they support instead of scattering them mid-sentence.
     summary = coalesceCitations(summary)
+    // Investigations render directly after the narrative, so register their
+    // evidence before problem/decision sources to keep citation numbers
+    // increasing top-to-bottom on the page.
+    const investigations = (ai.investigations ?? []).map((item) => ({
+      label: item.label,
+      kind: normaliseInvestigationKind(item.kind),
+      direction: normaliseInvestigationDirection(item.direction),
+      trend: item.trend,
+      interpretation: item.interpretation,
+      sourceKeys: (item.sources ?? []).map(registerKey),
+    }))
+
     // Problems register BEFORE decisions: registerKey numbers sources by first
-    // appearance, and the page renders narrative → problems → decisions, so
+    // appearance, and the page renders investigations → problems → decisions, so
     // this keeps superscript numbers increasing top-to-bottom.
     const problems = (ai.problems ?? []).map((p) => ({
       label: p.label,
@@ -576,6 +602,7 @@ export class GenerateMedicalSummaryUseCase {
     return {
       headline: ai.headline,
       summary,
+      investigations,
       problems,
       decisions,
       timeline,

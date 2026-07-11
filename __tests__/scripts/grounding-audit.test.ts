@@ -43,6 +43,22 @@ describe('auditSummaryGrounding', () => {
     expect(issues).toEqual([expect.stringContaining('renal claim cites imaging L1')])
   })
 
+  it('audits investigation text and rejects a renal trend citing a chest X-ray', () => {
+    const ai = {
+      investigations: [
+        {
+          label: '腎功能',
+          trend: 'eGFR 35 → 32',
+          interpretation: '數值下降',
+          sources: ['L1'],
+        },
+      ],
+    }
+    expect(auditSummaryGrounding(ai, input)).toEqual([
+      expect.stringContaining('renal investigation cites imaging L1'),
+    ])
+  })
+
   it('flags a polyp problem citing the abdominal ultrasound (which says nothing about polyps)', () => {
     const ai = { problems: [{ label: '胃及十二指腸息肉', basis: '腹部超音波', sources: ['L30'] }] }
     expect(auditSummaryGrounding(ai, input)).toEqual([expect.stringContaining('polyp cites imaging L30')])
