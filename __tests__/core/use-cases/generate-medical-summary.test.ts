@@ -9,6 +9,7 @@ import {
   scopeDocumentSources,
   classifyEncounterClass,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
 const useCase = new GenerateMedicalSummaryUseCase()
 
@@ -81,6 +82,33 @@ describe('buildSourceCatalog', () => {
     })
     expect(byKey.get('L1')).toMatchObject({ resourceId: 'rep-1', display: 'HbA1c' })
     expect(byKey.get('C1')).toMatchObject({ resourceId: 'cond-1' })
+  })
+
+  it('retains one citable chronic record per drug beyond the recent medication cap', () => {
+    const recentAcute = Array.from({ length: 41 }, (_, index) => ({
+      id: `acute-${index}`,
+      authoredOn: `2026-06-${String(30 - (index % 20)).padStart(2, '0')}`,
+      medicationCodeableConcept: {
+        coding: [{ system: 'nhi', code: `A${index}`, display: `Acute ${index}` }],
+      },
+    }))
+    const oldChronic = {
+      id: 'old-chronic-forxiga',
+      authoredOn: '2024-01-01',
+      medicationCodeableConcept: {
+        coding: [{ system: 'nhi', code: 'BC26476100', display: 'Forxiga Film-coated Tablets 10mg' }],
+      },
+      courseOfTherapyType: {
+        coding: [{ code: 'continuous' }],
+      },
+    }
+
+    const medicationSources = buildSourceCatalog({
+      medications: [...recentAcute, oldChronic],
+    }).filter((source) => source.resourceType.startsWith('Medication'))
+
+    expect(medicationSources).toHaveLength(41)
+    expect(medicationSources.some((source) => source.resourceId === 'old-chronic-forxiga')).toBe(true)
   })
 })
 
@@ -412,6 +440,24 @@ describe('medication education prompt contract', () => {
     expect(messages[0].content).toContain('does NOT prove that a specific procedure was performed')
   })
 
+  it('asks for indication-grouped, clinically actionable medication reconciliation', () => {
+    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
+    const prompt = messages[0].content
+
+    expect(prompt).toContain('Group STRICTLY by indication or treatment area')
+    expect(prompt).toContain('make "name" state the treatment pattern')
+    expect(prompt).toContain('NEVER group by prescription batch, date, or facility')
+    expect(prompt).toContain('Artificial tears / lubricants such as Patear are NOT pressure-lowering glaucoma therapy')
+    expect(prompt).toContain('NEVER calculate or estimate a daily dose from dispensed quantity and supply days')
+    expect(prompt).toContain('An EMPTY "changes" array is the correct answer for a stable regimen')
+    expect(prompt).toContain('name the SPECIFIC medicine(s), the SPECIFIC record gap or conflict')
+    expect(prompt).toContain('TWO different non-pharmacy institutions during overlapping supply periods')
+    expect(prompt).toContain('Missing dose, route, or frequency ALONE is a known source-data limitation')
+    expect(prompt).toContain('do not create a reconciliation item merely to ask how often')
+    expect(prompt).toContain('A single completed historical chronic prescription is NOT enough')
+    expect(prompt).toContain('at most ONE of "changes" or "reconciliation"')
+  })
+
   it('keeps the patient summary free of the clinician medication review', () => {
     const messages = useCase.buildMessages({ ...input, audience: 'patient' })
     expect(messages[0].content).toContain('Return "medicationReview" with empty regimen, changes, and reconciliation arrays')
@@ -702,9 +748,167 @@ describe('finalizeResult', () => {
     const result = useCase.finalizeResult(ai, catalog)
     expect(result.medicationReview.regimen).toHaveLength(1)
     expect(result.medicationReview.changes.map((item) => item.type)).toEqual(['cross-facility', 'uncertain'])
-    expect(result.medicationReview.reconciliation.map((item) => item.reason)).toEqual(['missing-sig', 'other'])
+    expect(result.medicationReview.reconciliation.map((item) => item.reason)).toEqual(['other'])
     const num = (key: string) => result.sourceIndex.find((source) => source.key === key)!.num
     expect(num('M1')).toBeLessThan(num('C1'))
+  })
+
+  it('deterministically lists every chronic drug and merges its cross-facility records', () => {
+    const medications = [
+      {
+        id: 'forxiga-current',
+        status: 'active',
+        authoredOn: '2026-06-25',
+        medicationCodeableConcept: {
+          text: '福適佳膜衣錠10毫克',
+          coding: [{
+            system: 'nhi',
+            code: 'BC26476100',
+            display: 'Forxiga Film-coated Tablets 10mg',
+          }],
+        },
+        category: [{ text: '抗糖尿病藥物', coding: [{ display: 'ANTIDIABETIC AGENTS' }] }],
+        requester: { display: '示範康健藥局' },
+        dosageInstruction: [{ text: '給藥總量 28，給藥日數 28 天（平均每日 1）' }],
+      },
+      {
+        id: 'forxiga-chronic',
+        status: 'completed',
+        authoredOn: '2026-04-28',
+        medicationCodeableConcept: {
+          text: '福適佳膜衣錠10毫克',
+          coding: [{
+            system: 'nhi',
+            code: 'BC26476100',
+            display: 'Forxiga Film-coated Tablets 10mg',
+          }],
+        },
+        courseOfTherapyType: { coding: [{ code: 'continuous' }] },
+        category: [{ text: '抗糖尿病藥物', coding: [{ display: 'ANTIDIABETIC AGENTS' }] }],
+        requester: { display: '示範向陽藥局' },
+        dosageInstruction: [{ text: '給藥總量 28，給藥日數 28 天（平均每日 1）' }],
+      },
+      {
+        id: 'acute-only',
+        authoredOn: '2026-06-20',
+        medicationCodeableConcept: {
+          coding: [{ system: 'nhi', code: 'ACUTE', display: 'Acute medicine' }],
+        },
+      },
+    ]
+    const medicationCatalog = buildSourceCatalog({ medications })
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      medicationReview: { regimen: [], changes: [], reconciliation: [] },
+      problems: [{ label: '慢性腎臟病', kind: 'diagnosis', sources: [] }],
+      decisions: [],
+      timeline: [],
+    }
+
+    const result = useCase.finalizeResult(ai, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+    })
+
+    expect(result.medicationReview.regimen).toHaveLength(1)
+    expect(result.medicationReview.regimen[0]).toMatchObject({
+      group: '抗糖尿病藥物',
+      name: 'Forxiga Film-coated Tablets 10mg',
+      sig: undefined,
+    })
+    const sourceIds = result.medicationReview.regimen[0].sourceKeys.map(
+      (key) => medicationCatalog.find((source) => source.key === key)?.resourceId,
+    )
+    expect(sourceIds).toEqual(['forxiga-current', 'forxiga-chronic'])
+    expect(result.sourceIndex.filter((source) => source.resourceType?.startsWith('Medication')))
+      .toHaveLength(2)
+  })
+
+  it('removes a completed-only historical chronic medicine from the current regimen', () => {
+    const medications = [{
+      id: 'historical-uretropic',
+      status: 'completed',
+      authoredOn: '2026-04-25',
+      medicationCodeableConcept: {
+        coding: [{ system: 'nhi', code: 'AC010471G0', display: 'URETROPIC TABLETS' }],
+      },
+      courseOfTherapyType: { coding: [{ code: 'continuous' }] },
+      category: [{ text: '利尿劑' }],
+    }]
+    const medicationCatalog = buildSourceCatalog({ medications })
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      medicationReview: {
+        regimen: [{ group: '利尿劑慢箋', name: 'URETROPIC TABLETS', sources: ['M1'] }],
+        changes: [],
+        reconciliation: [],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+
+    const result = useCase.finalizeResult(ai, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+    })
+
+    expect(result.medicationReview.regimen).toEqual([])
+  })
+
+  it('keeps demo Forxiga while excluding completed-only Uretropic history', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bundle = require('../../../public/demo/demo-bundle.json') as {
+      entry: Array<{ resource: Record<string, unknown> & { resourceType?: string } }>
+    }
+    const medications = bundle.entry
+      .map((entry) => entry.resource)
+      .filter((resource) => resource.resourceType === 'MedicationRequest') as unknown as MedicationEntity[]
+    const demoCatalog = buildSourceCatalog({ medications })
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { demoMedicalSummarySnapshots } = require('../../../src/infrastructure/demo/demo-ai-snapshots')
+    const parsed = useCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots.medical))
+    expect(parsed).not.toBeNull()
+
+    const result = useCase.finalizeResult(parsed!, demoCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+    })
+    expect(result.medicationReview.regimen).toHaveLength(8)
+    expect(result.medicationReview.regimen[0]).toMatchObject({
+      group: '血糖／腎臟',
+      name: 'Forxiga Film-coated Tablets 10mg',
+    })
+    const forxiga = result.medicationReview.regimen.find(
+      (item) => item.name.includes('Forxiga'),
+    )
+
+    expect(forxiga).toMatchObject({ group: '血糖／腎臟', sig: undefined })
+    expect(result.medicationReview.regimen.some((item) => item.group === '同次慢箋')).toBe(false)
+    expect(result.medicationReview.regimen.find((item) => item.name.includes('PATEAR')))
+      .toMatchObject({ group: '眼表潤滑' })
+    expect(result.medicationReview.regimen.some((item) => item.name.includes('URETROPIC'))).toBe(false)
+    expect(result.medicationReview.changes).toEqual([])
+    expect(result.medicationReview.regimen.find((item) => item.group === '青光眼')?.name)
+      .toContain('三種降眼壓藥併用')
+    expect(result.medicationReview.reconciliation).toEqual([
+      expect.objectContaining({
+        reason: 'multi-facility',
+        text: expect.stringContaining('Sennosides'),
+      }),
+    ])
+    const citedResourceIds = forxiga?.sourceKeys.map(
+      (key) => demoCatalog.find((source) => source.key === key)?.resourceId,
+    )
+    expect(citedResourceIds).toEqual(expect.arrayContaining([
+      'demo-medicationrequest-29', // continuous / 慢箋 evidence
+      'demo-medicationrequest-99', // latest pharmacy record
+    ]))
   })
 
   it('rescues quoted key phrases when zero highlights survive', () => {

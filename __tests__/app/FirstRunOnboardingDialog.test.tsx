@@ -13,15 +13,18 @@ const mockOnboarding = {
   welcomeBody: '介紹',
   privacyTitle: '隱私與使用提醒',
   privacyPoints: ['提醒'],
-  autoScanTitle: '是否自動產生 AI 摘要？',
+  autoScanTitle: '醫療摘要產生方式',
   autoScanBody: '說明',
   autoScanPrivacyNote: '雲端提醒',
-  autoScanOnLabel: '自動產生',
+  autoScanOnLabel: '自動產生醫療摘要',
   autoScanOnDesc: '自動產生說明',
-  autoScanOffLabel: '需要時手動產生',
+  autoScanOffLabel: '需要時再產生',
   autoScanOffDesc: '手動產生說明',
-  autoScanConsent: '我同意資料傳送至雲端 AI',
-  autoScanConsentRequired: '請先勾選同意，才能繼續。',
+  autoScanConfirmationTitle: '啟用前請確認',
+  autoScanConsent: '我了解上述資料使用方式，並選擇啟用自動摘要',
+  autoScanConsentRequired: '請先確認上述資料使用方式，才能啟用自動摘要。',
+  autoScanConfirmCta: '確認並啟用',
+  autoScanManualCta: '繼續',
   signInTitle: '登入或以訪客身分繼續',
   signInBody: '登入說明',
   signInBenefitsTitle: '登入與資料同步',
@@ -85,14 +88,14 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
     reachAutoGenerateStep()
     fireEvent.click(screen.getByRole('button', { name: /自動產生/ }))
 
-    const next = screen.getByRole('button', { name: '下一步' })
+    const next = screen.getByRole('button', { name: '確認並啟用' })
     expect(next).toBeDisabled()
-    expect(screen.getByText('請先勾選同意，才能繼續。')).toBeInTheDocument()
+    expect(screen.getByText('請先確認上述資料使用方式，才能啟用自動摘要。')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('checkbox', { name: '我同意資料傳送至雲端 AI' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' }))
 
     expect(next).toBeEnabled()
-    expect(screen.queryByText('請先勾選同意，才能繼續。')).not.toBeInTheDocument()
+    expect(screen.queryByText('請先確認上述資料使用方式，才能啟用自動摘要。')).not.toBeInTheDocument()
 
     fireEvent.click(next)
     expect(useSummaryPrefsStore.getState().autoGenerate).toBe(true)
@@ -102,10 +105,10 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
   it('does not require cloud-AI consent when manual generation is selected', () => {
     reachAutoGenerateStep()
 
-    fireEvent.click(screen.getByRole('button', { name: /需要時手動產生/ }))
+    fireEvent.click(screen.getByRole('button', { name: /需要時再產生/ }))
 
-    expect(screen.queryByRole('checkbox', { name: '我同意資料傳送至雲端 AI' })).not.toBeInTheDocument()
-    const next = screen.getByRole('button', { name: '下一步' })
+    expect(screen.queryByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' })).not.toBeInTheDocument()
+    const next = screen.getByRole('button', { name: '繼續' })
     expect(next).toBeEnabled()
 
     fireEvent.click(next)

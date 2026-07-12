@@ -53,13 +53,15 @@ import {
 import { shouldAutoRunSummarySlot } from './summary-auto-run-policy'
 
 const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
-// v6: clinician summaries now include the structured medication-reconciliation
-// card. Older cached summaries do not contain that field and must regenerate.
-const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary6', scanKey)
-// The v6 schema change was clinician-only. Patient summaries produced under
-// v5 remain valid, so use them as a fallback instead of making an audience
-// switch look as though its saved summary disappeared.
-const legacyPatientSummaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary5', scanKey)
+// v12: surface clinically meaningful treatment patterns and true overlapping
+// prescriptions from two non-pharmacy institutions. Older results regenerate.
+const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary12', scanKey)
+// The v12 change is clinician-only. Patient summaries from v6/v5 remain valid,
+// so retain them instead of making an audience switch lose its saved summary.
+const legacyPatientSummaryCacheKeys = (scanKey: string) => [
+  aiResultCacheKey('medsummary6', scanKey),
+  aiResultCacheKey('medsummary5', scanKey),
+]
 
 interface MedicalSummaryStore {
   // All keyed by scanKey = patientId::audience::model — so each model keeps its
@@ -263,7 +265,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       }
       // Always commit to THIS run's own model slot — even if the user has since
       // switched away, the result is stored and shows when they switch back.
-      const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, catalog)
+      const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, catalog, {
+        clinicalData: clinicalData ?? undefined,
+        audience: audience === 'patient' ? 'patient' : 'medical',
+        locale: locale === 'zh-TW' ? 'zh-TW' : 'en',
+      })
       setResult(myScanKey, finalized)
       void saveEncryptedCache(summaryCacheKey(myScanKey), finalized)
     } catch (err) {
@@ -289,10 +295,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         SUMMARY_CACHE_MAX_AGE_MS,
       )
       if (!cached && audience === 'patient') {
-        cached = await loadEncryptedCache<MedicalSummaryResult>(
-          legacyPatientSummaryCacheKey(scanKey),
-          SUMMARY_CACHE_MAX_AGE_MS,
-        )
+        for (const key of legacyPatientSummaryCacheKeys(scanKey)) {
+          cached = await loadEncryptedCache<MedicalSummaryResult>(key, SUMMARY_CACHE_MAX_AGE_MS)
+          if (cached) break
+        }
       }
       if (cancelled) return
       if (cached) setResult(scanKey, cached)
@@ -332,7 +338,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
     if (!parsed) return
     autoTriggeredRef.current = autoRunIdentity
-    setResult(scanKey, generateMedicalSummaryUseCase.finalizeResult(parsed, catalog))
+    setResult(scanKey, generateMedicalSummaryUseCase.finalizeResult(parsed, catalog, {
+      clinicalData: clinicalData ?? undefined,
+      audience: audience === 'patient' ? 'patient' : 'medical',
+      locale: 'zh-TW',
+    }))
   }, [scanKey, autoRunIdentity, result, hydrated, patientId, locale, dataReady, catalog, audience, setResult])
 
   // Auto-generate once per patient+audience after hydration; a failed attempt

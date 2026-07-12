@@ -175,10 +175,6 @@ export function FirstRunOnboardingDialog() {
                 </DialogTitle>
                 <DialogDescription>{ob.autoScanBody}</DialogDescription>
               </DialogHeader>
-              <p className="flex items-start gap-1.5 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-                <span>{ob.autoScanPrivacyNote}</span>
-              </p>
               <div className="grid gap-3 pt-1 sm:grid-cols-2">
                 <button
                   type="button"
@@ -205,6 +201,13 @@ export function FirstRunOnboardingDialog() {
               </div>
               {autoAiChoice === 'auto' ? (
                 <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2.5">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                    <Lock className="h-3.5 w-3.5 text-primary" />
+                    {ob.autoScanConfirmationTitle}
+                  </p>
+                  <p className="mb-2.5 text-xs leading-relaxed text-muted-foreground">
+                    {ob.autoScanPrivacyNote}
+                  </p>
                   <div className="flex items-start gap-2.5">
                     <Checkbox
                       id="onboarding-auto-ai-consent"
@@ -276,7 +279,7 @@ export function FirstRunOnboardingDialog() {
                   onClick={continueFromAutoScan}
                   disabled={!autoAiChoice || (autoAiChoice === 'auto' && !autoAiConsent)}
                 >
-                  {isLast ? ob.finish : ob.next}
+                  {autoAiChoice === 'auto' ? ob.autoScanConfirmCta : ob.autoScanManualCta}
                 </Button>
               )}
               {step === 'signIn' && (

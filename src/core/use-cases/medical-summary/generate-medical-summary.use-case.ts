@@ -42,6 +42,7 @@ import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpe
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
+import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -155,6 +156,45 @@ const day = (iso?: string): string | undefined =>
 const codeText = (c?: { text?: string; coding?: Array<{ display?: string }> }) =>
   c?.text ?? c?.coding?.[0]?.display
 
+/** Stable identity used to merge the same drug across prescribing and
+ * dispensing records. Prefer the NHI/Rx code; fall back to normalized names
+ * for bundles that only provide free text. */
+function medicationIdentity(medication: MedicationEntity): string {
+  const coding = medication.medicationCodeableConcept?.coding?.find((item) => item.code?.trim())
+  if (coding?.code) {
+    return `code:${(coding.system ?? '').trim().toLowerCase()}|${coding.code.trim().toLowerCase()}`
+  }
+  const name = (
+    medication.medicationCodeableConcept?.coding?.[0]?.display ??
+    medication.medicationCodeableConcept?.text ??
+    medication.id
+  )
+  return `name:${name.toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, '')}`
+}
+
+function selectCatalogMedications(medications: MedicationEntity[]): MedicationEntity[] {
+  const sorted = sortByDateDesc(medications, (medication) => medication.authoredOn)
+  const selected = sorted.slice(0, CATALOG_CAPS.medications)
+  const selectedIds = new Set(selected.map((medication) => medication.id))
+
+  // A chronic prescription can be older than the ordinary 40-record prompt
+  // window. Retain the newest continuous record for every distinct drug so
+  // the deterministic medication-reconciliation pass can always cite it.
+  const chronicIdentitySeen = new Set<string>()
+  for (const medication of sorted) {
+    if (!isChronicPrescription(medication)) continue
+    const identity = medicationIdentity(medication)
+    if (chronicIdentitySeen.has(identity)) continue
+    chronicIdentitySeen.add(identity)
+    if (!selectedIds.has(medication.id)) {
+      selected.push(medication)
+      selectedIds.add(medication.id)
+    }
+  }
+
+  return sortByDateDesc(selected, (medication) => medication.authoredOn)
+}
+
 function sortByDateDesc<T>(items: T[], getDate: (item: T) => string | undefined): T[] {
   return [...items].sort((a, b) => (getDate(b) ?? '').localeCompare(getDate(a) ?? ''))
 }
@@ -206,8 +246,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
       })
     })
 
-  sortByDateDesc(input.medications ?? [], (m) => m.authoredOn)
-    .slice(0, CATALOG_CAPS.medications)
+  selectCatalogMedications(input.medications ?? [])
     .forEach((m, i) => {
       entries.push({
         key: `M${i + 1}`,
@@ -713,9 +752,18 @@ const SHARED_RULES =
   'Every item must cite at least one matching medication key (M#). Additional condition/report keys may be included only when they directly support the linked care goal. Merge refills and pharmacy duplicates into one item. ' +
   'For "medicationReview": this is ONLY for the medical audience; for the patient audience return empty regimen, changes, and reconciliation arrays. ' +
   'This is a medication-reconciliation workflow card, NOT another safety card: do not repeat interactions, renal-dose warnings, laboratory monitoring, disease problems, or patient education. ' +
-  'For "regimen", select 4–8 clinically important recent or long-term medicines, grouped by treatment area. Include dose/frequency in "sig" only when the source explicitly records it. ' +
-  'For "changes", include only date/status-supported new appearances, stops, resumptions, dose/frequency changes, or cross-facility records. When initiation is uncertain, say "newly appears in recent records" rather than claiming it was started. ' +
-  'For "reconciliation", include only concrete data/workflow gaps: conflicting status, missing SIG, multiple facilities, uncertain current status, or possible aliases of the same drug. Do not assign severity or recommend clinical dose changes. ' +
+  'For "regimen", include every CURRENTLY EVIDENCED distinct medicine that has a [慢箋] / continuous long-term therapy record, merging refill and pharmacy duplicates of the same drug. Do NOT include a historical chronic medicine when its latest matching record is completed, stopped, or cancelled and there is no later active continuation. Then add other clinically important recent medicines only when useful. ' +
+  'Group STRICTLY by indication or treatment area: "group" is the clinician-facing treatment-area chip (e.g. 血糖／腎臟, 甲狀腺, 痛風／降尿酸, 排便, 青光眼, 眼表潤滑, 攝護腺). Use one row per medicine, or one row for multiple medicines only when they treat the SAME indication. When a same-indication group itself is clinically informative, make "name" state the treatment pattern (e.g. 三種降眼壓藥併用：Brimonidine、Latanoprost、Cosopt), not merely a bare medicine list. ' +
+  'NEVER group by prescription batch, date, or facility. Group labels such as 同次慢箋, 慢箋用藥, or 近期用藥 are forbidden; split unrelated medicines from one prescription into separate treatment-area rows. ' +
+  'Verify each medicine identity before grouping: the same route or prescription does NOT prove the same indication. Artificial tears / lubricants such as Patear are NOT pressure-lowering glaucoma therapy; when indication is uncertain, use a neutral pharmacologic/organ label instead of guessing a disease. ' +
+  'For "sig", copy only an explicitly recorded dose, route, and frequency. NEVER calculate or estimate a daily dose from dispensed quantity and supply days. Text containing 給藥總量, 給藥日數, or 平均每日 is dispensing arithmetic, not a verified SIG: omit "sig" unless a real instruction is separately recorded. ' +
+  'For "changes", include ONLY clinically meaningful, date/status-supported regimen changes: an explicit stop or switch; a dose/frequency change that states both old and new; or a clinically significant drug class newly appearing with no earlier same-class record. Cross-facility overlap belongs in "reconciliation", not "changes". ' +
+  'A routine 慢箋 refill is NEVER "new", and a [藥局領藥 · dispensing, NOT a prescriber] row is NEVER cross-facility prescribing. An EMPTY "changes" array is the correct answer for a stable regimen: do not manufacture an item and do not add per-item hedges already covered by the card disclaimer. ' +
+  'For "reconciliation", every item must name the SPECIFIC medicine(s), the SPECIFIC record gap or conflict, and phrase ONE concrete question answerable at the visit. Generic text that could apply to any patient (e.g. 確認是否仍在使用 without a stated reason) is forbidden. ' +
+  'A high-value cross-facility item is the same or same-class medicine prescribed by TWO different non-pharmacy institutions during overlapping supply periods. State the medicine, both institutions, relevant dates/supply overlap, and ask whether this represents a transfer/refill or simultaneous possession. A prescribing institution plus its dispensing pharmacy is one prescription and must never trigger this item. ' +
+  'Taiwan NHI 健康存摺 commonly omits a complete SIG / administration frequency. Missing dose, route, or frequency ALONE is a known source-data limitation, NOT a patient-specific reconciliation problem: do not create a reconciliation item merely to ask how often a medicine is taken or an eye drop is used. Only mention SIG when two explicit recorded instructions conflict or another concrete patient-specific inconsistency exists. ' +
+  'A supply gap is actionable only when there is an established repeated chronic-refill pattern and the latest recorded supply end date has passed without a later refill. A single completed historical chronic prescription is NOT enough and must not be revived as a reconciliation item. Phrase a supported gap as 供藥中斷待確認, never as definitively stopped. ' +
+  'A medicine may appear in at most ONE of "changes" or "reconciliation"; choose the more actionable framing. Empty arrays are preferred over low-information items. Do not assign severity or recommend clinical dose changes. ' +
   'NHI dispensing does not prove adherence or current use. Every medicationReview item must cite at least one matching M key; merge routine refills and prescribing-clinic/pharmacy representations of the same prescription. ' +
   'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
   '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
@@ -773,6 +821,117 @@ export interface GenerateMedicalSummaryInput {
   catalog: SummarySourceCatalogEntry[]
   locale: 'en' | 'zh-TW'
   audience?: 'medical' | 'patient'
+}
+
+export interface FinalizeMedicalSummaryOptions {
+  /** Required for the clinician completeness guarantee: every distinct FHIR
+   * continuous/long-term medicine is rendered even when the model omitted it. */
+  clinicalData?: SummaryCatalogInput
+  audience?: 'medical' | 'patient'
+  locale?: 'en' | 'zh-TW'
+}
+
+type RawMedicationRegimenItem = {
+  group: string
+  name: string
+  sig?: string
+  sources: string[]
+}
+
+function completeChronicMedicationRegimen(
+  aiRegimen: RawMedicationRegimenItem[],
+  input: SummaryCatalogInput,
+  catalog: SummarySourceCatalogEntry[],
+  locale: 'en' | 'zh-TW',
+): RawMedicationRegimenItem[] {
+  const medications = input.medications ?? []
+  const catalogByResourceId = new Map(
+    catalog
+      .filter((entry) => entry.resourceType.startsWith('Medication'))
+      .map((entry) => [entry.resourceId, entry]),
+  )
+  const medicationCatalogKeys = new Set(
+    [...catalogByResourceId.values()].map((entry) => entry.key),
+  )
+  const groups = new Map<string, MedicationEntity[]>()
+
+  for (const medication of medications) {
+    const identity = medicationIdentity(medication)
+    const group = groups.get(identity) ?? []
+    group.push(medication)
+    groups.set(identity, group)
+  }
+
+  const chronicGroups: Array<{
+    identity: string
+    representative: MedicationEntity
+    sourceKeys: string[]
+  }> = []
+  const historicalChronicSourceKeys = new Set<string>()
+
+  for (const [identity, group] of groups) {
+    if (!group.some(isChronicPrescription)) continue
+    const sorted = sortByDateDesc(group, (medication) => medication.authoredOn)
+    const catalogled = sorted.filter((medication) => catalogByResourceId.has(medication.id))
+    const entries = catalogled.flatMap((medication) => {
+      const entry = catalogByResourceId.get(medication.id)
+      return entry ? [entry] : []
+    })
+    const sourceKeys = [...new Set(entries.map((entry) => entry.key))]
+    if (sourceKeys.length === 0) continue
+    const latestStatus = sorted[0]?.status?.trim().toLowerCase()
+    // A historic continuous prescription is not the same as a current
+    // regimen. Keep it only when the latest same-drug record is not explicitly
+    // terminal; later active refills (e.g. Forxiga) therefore remain included,
+    // while completed-only history (e.g. demo Uretropic) does not.
+    if (['completed', 'stopped', 'cancelled', 'entered-in-error'].includes(latestStatus ?? '')) {
+      sourceKeys.forEach((key) => historicalChronicSourceKeys.add(key))
+      continue
+    }
+    const representative = catalogled[0] ?? sorted.find(isChronicPrescription) ?? sorted[0]
+    if (!representative) continue
+    chronicGroups.push({ identity, representative, sourceKeys })
+  }
+
+  const currentAiRegimen = aiRegimen.filter((item) => {
+    const citedMedicationKeys = item.sources
+      .map((key) => key.trim())
+      .filter((key) => medicationCatalogKeys.has(key))
+    return citedMedicationKeys.length === 0 ||
+      !citedMedicationKeys.every((key) => historicalChronicSourceKeys.has(key))
+  })
+  const aiSourceKeys = new Set(currentAiRegimen.flatMap((item) => item.sources.map((key) => key.trim())))
+  const missing = chronicGroups.filter(
+    (group) => !group.sourceKeys.some((key) => aiSourceKeys.has(key)),
+  )
+  if (missing.length === 0) return currentAiRegimen
+
+  // Preserve the AI's clinical organization. The deterministic fallback is
+  // only a completeness guard, so keep each omitted medicine explicit and use
+  // its recorded therapeutic category instead of inventing a clinically
+  // meaningless same-prescription group.
+  const fallbackRows = missing.map(({ representative, sourceKeys }) => {
+    const concept = representative.medicationCodeableConcept
+    const category = representative.category?.[0]
+    const recordedSig = representative.dosageInstruction
+      ?.map((instruction) => instruction.text?.trim())
+      .filter((value): value is string =>
+        typeof value === 'string' && value.length > 0 &&
+        !/給藥總量|給藥日數|平均每日/.test(value),
+      )
+      .join('；') || undefined
+
+    return {
+      group: locale === 'en'
+        ? category?.coding?.[0]?.display?.trim() || category?.text?.trim() || 'Other'
+        : category?.text?.trim() || category?.coding?.[0]?.display?.trim() || '其他',
+      name: concept?.coding?.[0]?.display?.trim() || concept?.text?.trim() || 'Medication',
+      sig: recordedSig,
+      sources: sourceKeys,
+    }
+  })
+
+  return [...currentAiRegimen, ...fallbackRows]
 }
 
 // Accept pre-v3 cached/test objects during the rollout; live parseResult always
@@ -853,6 +1012,7 @@ export class GenerateMedicalSummaryUseCase {
   finalizeResult(
     ai: FinalizableMedicalSummary,
     catalog: SummarySourceCatalogEntry[],
+    options: FinalizeMedicalSummaryOptions = {},
   ): MedicalSummaryResult {
     const byKey = new Map(catalog.map((c) => [c.key, c]))
 
@@ -947,8 +1107,17 @@ export class GenerateMedicalSummaryUseCase {
       changes: [],
       reconciliation: [],
     }
+    const completeRegimen =
+      options.audience !== 'patient' && options.clinicalData
+        ? completeChronicMedicationRegimen(
+            rawMedicationReview.regimen,
+            options.clinicalData,
+            catalog,
+            options.locale ?? 'zh-TW',
+          )
+        : rawMedicationReview.regimen
     const medicationReview = {
-      regimen: rawMedicationReview.regimen.flatMap((item) => {
+      regimen: completeRegimen.flatMap((item) => {
         const rawSources = item.sources ?? []
         if (!hasVerifiedMedicationSource(rawSources)) return []
         return [{
@@ -971,8 +1140,13 @@ export class GenerateMedicalSummaryUseCase {
       reconciliation: rawMedicationReview.reconciliation.flatMap((item) => {
         const rawSources = item.sources ?? []
         if (!hasVerifiedMedicationSource(rawSources)) return []
+        const reason = normaliseMedicationReconciliationReason(item.reason)
+        // Health Bank commonly omits complete directions. Treat missing SIG as
+        // a source limitation rather than rendering the same low-value
+        // "how often do you take it?" question for nearly every patient.
+        if (reason === 'missing-sig') return []
         return [{
-          reason: normaliseMedicationReconciliationReason(item.reason),
+          reason,
           text: item.text,
           sourceKeys: rawSources.map(registerKey),
         }]

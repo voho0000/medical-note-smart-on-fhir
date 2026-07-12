@@ -36,7 +36,11 @@ async function main() {
     // --- medical summary: exact same path as a live reply ---
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(demoMedicalSummarySnapshots[aud]))
     if (!parsed) { fail(`summary[${aud}]: parseResult rejected`); continue }
-    const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, catalog)
+    const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, catalog, {
+      clinicalData: collection,
+      audience: aud,
+      locale: 'zh-TW',
+    })
     const unverified = finalized.sourceIndex.filter((s: any) => !s.verified)
     if (unverified.length) fail(`summary[${aud}]: unverified keys ${unverified.map((s: any) => s.key).join(',')}`)
     if (finalized.droppedTimelineCount > 0) fail(`summary[${aud}]: ${finalized.droppedTimelineCount} timeline picks dropped`)

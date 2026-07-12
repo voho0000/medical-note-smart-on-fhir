@@ -124,53 +124,51 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
     medicationReview: {
       regimen: [
         {
-          group: '眼科',
-          name: '青光眼局部用藥組合',
-          sig: '近期紀錄包含派滴兒、Brimonidine、Latanoprost 與複方點眼液',
-          sources: ['M3', 'M4', 'M5', 'M6'],
+          group: '血糖／腎臟',
+          name: 'Forxiga Film-coated Tablets 10mg',
+          sources: ['M17', 'M34', 'M48'],
         },
         {
-          group: '泌尿',
+          group: '青光眼',
+          name: '三種降眼壓藥併用：Brimonidine、Latanoprost、Cosopt',
+          sources: ['M4', 'M5', 'M6', 'M41', 'M42'],
+        },
+        {
+          group: '甲狀腺',
+          name: 'Eltroxin Tablets 100mcg',
+          sources: ['M15', 'M32', 'M46'],
+        },
+        {
+          group: '痛風／降尿酸',
+          name: 'Feburic 80 mg Film Coated Tablets',
+          sources: ['M16', 'M33', 'M47'],
+        },
+        {
+          group: '眼表潤滑',
+          name: 'PATEAR EYE LOTIONS "PATRON"',
+          sources: ['M3', 'M20', 'M40'],
+        },
+        {
+          group: '排便',
+          name: 'Sennosides',
+          sources: ['M8', 'M13', 'M30', 'M44'],
+        },
+        {
+          group: '葉酸補充',
+          name: 'FOLACIN F.C. TABLETS 5MG',
+          sources: ['M14', 'M31', 'M45'],
+        },
+        {
+          group: '攝護腺',
           name: 'Harnalidge OCAS 0.4 mg',
-          sig: '近期紀錄平均每日 1 錠',
           sources: ['M19', 'M39'],
         },
-        {
-          group: '內分泌',
-          name: 'Levothyroxine',
-          sig: '近期紀錄平均每日 1 錠',
-          sources: ['M15', 'M32'],
-        },
-        {
-          group: '尿酸',
-          name: 'Febuxostat 80 mg',
-          sig: '近期紀錄平均每日 0.25 錠',
-          sources: ['M16', 'M33'],
-        },
       ],
-      changes: [
-        {
-          type: 'new',
-          medication: '青光眼局部用藥組合',
-          summary: '四項眼科局部用藥集中出現在近期紀錄；此處僅代表紀錄中新出現，不等同本次開始使用。',
-          sources: ['M3', 'M4', 'M5', 'M6'],
-        },
-        {
-          type: 'cross-facility',
-          medication: '便通樂膜衣錠',
-          summary: '同一藥品於不同機構與日期的紀錄中出現，需於藥物整合時確認實際來源與用法。',
-          sources: ['M8', 'M30'],
-        },
-      ],
+      changes: [],
       reconciliation: [
         {
-          reason: 'uncertain-current',
-          text: '青光眼點眼藥共列四項，需確認目前實際品項、點用頻率及是否仍全部使用。',
-          sources: ['M3', 'M4', 'M5', 'M6'],
-        },
-        {
           reason: 'multi-facility',
-          text: '便通樂膜衣錠有跨機構紀錄，需區分同次處方調劑與不同來源用藥。',
+          text: 'Sennosides 於 2026-06-02 由示範長青醫院、2026-06-25 由示範嘉恩醫院各開立 28 天，供藥期間有重疊—此次是轉院續方，還是同時持有兩院處方？',
           sources: ['M8', 'M30'],
         },
       ],
@@ -178,7 +176,7 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
     problems: [
       { label: '慢性腎臟病', basis: '照護計畫及eGFR 32 ml/min/1.73m2', kind: 'diagnosis', sources: ['K1', 'K2', 'E4'] },
       { label: '肺炎', basis: '近期多次門診申報', kind: 'diagnosis', sources: ['E3', 'E9'] },
-      { label: '青光眼', basis: '長期眼藥水處方', kind: 'diagnosis', sources: ['E2', 'E7', 'M3', 'M4', 'M5', 'M6'] },
+      { label: '青光眼', basis: '長期眼藥水處方', kind: 'diagnosis', sources: ['E2', 'E7', 'M4', 'M5', 'M6'] },
       { label: '貧血', basis: '近期 Hb 11.2-12.1 g/dL', kind: 'lab', sources: ['L9'] },
       { label: '良性攝護腺增生', basis: '長期藥物治療', kind: 'diagnosis', sources: ['E6', 'E12', 'M19', 'M39'] },
       { label: '甲狀腺功能減退', basis: '持續性補充甲狀腺素', kind: 'medication', sources: ['M15', 'M32'] },
