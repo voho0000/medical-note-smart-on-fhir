@@ -20,9 +20,15 @@ interface SourceSupProps {
   onNavigate?: (target: ResourceNavTarget) => void
   /** Extra classes for the trigger <sup> (e.g. sizing per host context). */
   className?: string
+  /** Keys cited by THIS claim whose report type contradicts the claim's stated
+   *  evidence (e.g. 依據:心電圖 citing a chest X-ray). The key resolves — the
+   *  resource exists — so the row stays navigable, but it tints amber with
+   *  `suspectLabel` so the mismatch is visible, not hidden. */
+  suspectKeys?: ReadonlySet<string>
+  suspectLabel?: string
 }
 
-export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, className }: SourceSupProps) {
+export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, className, suspectKeys, suspectLabel }: SourceSupProps) {
   const [open, setOpen] = useState(false)
   // Hover uses a small close delay so the pointer can travel into the bubble.
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -63,7 +69,17 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
   }
 
   if (sources.length === 0) return null
+  const isSuspect = (s: ResolvedSourceRef) => Boolean(suspectKeys?.has(s.key))
   const hasUnverified = sources.some((s) => !s.verified)
+  const hasWarning = hasUnverified || sources.some(isSuspect)
+  // Screen readers otherwise announce a bare "2" — compose a name from the
+  // already-localised type labels so no host needs a new prop.
+  const ariaLabel = [
+    sources.map((s) => s.num).join(","),
+    [...new Set(sources.map((s) => typeLabel(s.resourceType)).filter(Boolean))].join(", "),
+    hasUnverified ? unverifiedLabel : "",
+    sources.some(isSuspect) && suspectLabel ? suspectLabel : "",
+  ].filter(Boolean).join(" · ")
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -74,6 +90,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
         <sup
           role="button"
           tabIndex={0}
+          aria-label={ariaLabel}
           onPointerEnter={onPointerEnter}
           onPointerLeave={onPointerLeave}
           onPointerDown={onPointerDown}
@@ -86,8 +103,12 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
             // (preflight gives <sup> line-height:0). Arbitrary properties are
             // immune to that conflict group.
             "ml-0.5 inline-flex cursor-pointer select-none items-center rounded-full border px-0.5 text-[0.5625rem] font-bold [line-height:0.95rem] align-super",
+            // The pill renders ~13px tall — an unusable touch target. An
+            // invisible ::before overlay extends the hit area to ~25px without
+            // disturbing inline text flow (the visual pill stays small).
+            "relative before:absolute before:-inset-1.5 before:content-['']",
             "touch-manipulation transition-transform active:scale-90",
-            hasUnverified
+            hasWarning
               ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-600/60 dark:bg-amber-950/50 dark:text-amber-300"
               : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20",
             className,
@@ -125,14 +146,14 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
               }}
               className={cn(
                 "group flex w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 -mx-1 text-left text-[0.7rem] leading-snug tabular-nums transition-colors",
-                s.verified
+                s.verified && !isSuspect(s)
                   ? "text-muted-foreground hover:bg-violet-50 hover:text-foreground dark:hover:bg-violet-500/10"
                   : "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30",
               )}
             >
               <b className={cn(
                 "shrink-0 font-bold",
-                s.verified ? "text-violet-600 dark:text-violet-400" : "text-amber-600 dark:text-amber-300",
+                s.verified && !isSuspect(s) ? "text-violet-600 dark:text-violet-400" : "text-amber-600 dark:text-amber-300",
               )}>{s.num}</b>
               <span className="min-w-0 flex-1">
                 {typeLabel(s.resourceType)}
@@ -140,10 +161,11 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                 {s.date ? <> · {s.date}</> : null}
                 {s.display ? <span className="block text-foreground/80">{s.display}</span> : null}
                 {!s.verified ? <span className="block font-medium">{unverifiedLabel}</span> : null}
+                {isSuspect(s) && suspectLabel ? <span className="block font-medium">{suspectLabel}</span> : null}
               </span>
               <ArrowUpRight className={cn(
                 "h-3 w-3 shrink-0 self-center opacity-60 transition-opacity group-hover:opacity-100",
-                s.verified ? "text-violet-400" : "text-amber-500",
+                s.verified && !isSuspect(s) ? "text-violet-400" : "text-amber-500",
               )} />
             </button>
           ) : (
@@ -151,7 +173,7 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
               key={s.key}
               className={cn(
                 "flex items-baseline gap-1.5 text-[0.7rem] leading-snug tabular-nums",
-                s.verified ? "text-muted-foreground" : "text-amber-700 dark:text-amber-300",
+                s.verified && !isSuspect(s) ? "text-muted-foreground" : "text-amber-700 dark:text-amber-300",
               )}
             >
               <b className="shrink-0 font-bold text-violet-600 dark:text-violet-400">{s.num}</b>
@@ -163,6 +185,9 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
                     {s.date ? <> · {s.date}</> : null}
                     {s.display ? (
                       <span className="block text-foreground/80">{s.display}</span>
+                    ) : null}
+                    {isSuspect(s) && suspectLabel ? (
+                      <span className="block font-medium">{suspectLabel}</span>
                     ) : null}
                   </>
                 ) : (

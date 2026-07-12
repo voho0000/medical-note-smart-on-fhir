@@ -122,6 +122,8 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
     ],
     medicationEducation: [],
     medicationReview: {
+      overview:
+        '長期用藥共 8 組：眼科用藥由示範嘉恩醫院處方（青光眼三種機轉併用，屬進階治療型態），攝護腺用藥由示範長青醫院處方，代謝內分泌慢箋近三個月每月均有調劑紀錄；最需確認的是 Sennosides 兩院供藥期間重疊。',
       regimen: [
         {
           group: '血糖／腎臟',

@@ -458,6 +458,41 @@ describe('medication education prompt contract', () => {
     expect(prompt).toContain('at most ONE of "changes" or "reconciliation"')
   })
 
+  it('asks for cross-record medication insight beyond classification', () => {
+    const messages = useCase.buildMessages({ ...input, audience: 'medical' })
+    const prompt = messages[0].content
+
+    // Bidirectional gap cross-check against the rest of the record.
+    expect(prompt).toContain('"no-documented-indication"')
+    // Orphan-drug check must consult the prescribing-visit context first
+    // (the imipramine-at-a-BPH-visit false positive).
+    expect(prompt).toContain('check the PRESCRIBING VISIT context')
+    expect(prompt).toContain('not when the recorded context merely differs from the drug\'s best-known use')
+    expect(prompt).toContain('"condition-without-therapy"')
+    expect(prompt).toContain('cites the condition/lab keys instead of an M key')
+    // condition-without-therapy is a record-anomaly check, never a
+    // guideline-completeness prescribing suggestion (the CKD→ACEi/ARB misfire).
+    expect(prompt).toContain('NEVER a prescribing suggestion')
+    expect(prompt).toContain('an SGLT2 inhibitor already provides renal protection in CKD')
+    expect(prompt).toContain('Guideline-completeness reminders')
+    // Every reconciliation item must be anchored in this patient\'s records.
+    expect(prompt).toContain('If an item could be written without looking at the records')
+    // Same-institution sequential brand switches answer themselves — only
+    // cross-institution / overlapping same-drug aliases are worth verifying.
+    expect(prompt).toContain('Reason "possible-same-drug" is for REAL ambiguity only')
+    expect(prompt).toContain('do NOT raise a reconciliation item for it')
+    // Refill-regularity / adherence signal, phrased neutrally.
+    expect(prompt).toContain('"adherence-pattern"')
+    expect(prompt).toContain('never phrase it as non-adherence or blame')
+    // Treatment-intensity pattern reading.
+    expect(prompt).toContain('The pattern reading is the insight')
+    // Pre/post-hospitalization regimen comparison.
+    expect(prompt).toContain('compare the chronic regimen before and after')
+    // One-glance overview synthesis, clinician-only.
+    expect(prompt).toContain('For "overview"')
+    expect(prompt).toContain('Omit "overview" for the patient audience')
+  })
+
   it('keeps the patient summary free of the clinician medication review', () => {
     const messages = useCase.buildMessages({ ...input, audience: 'patient' })
     expect(messages[0].content).toContain('Return "medicationReview" with empty regimen, changes, and reconciliation arrays')
@@ -753,6 +788,150 @@ describe('finalizeResult', () => {
     expect(num('M1')).toBeLessThan(num('C1'))
   })
 
+  it('passes the clinician overview through and grounds condition-without-therapy on condition/lab keys', () => {
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      investigations: [],
+      medicationReview: {
+        overview: '長期用藥 1 種，由單一院所處方，續領規律。',
+        regimen: [{ group: '糖尿病', name: 'Metformin', sources: ['M1'] }],
+        changes: [],
+        reconciliation: [
+          // Flags an ABSENT medicine — no M key exists, condition evidence grounds it.
+          { reason: 'condition-without-therapy', text: '糖尿病診斷但現行慢箋未見降血糖藥——確認是否自費或他院', sources: ['C1'] },
+          // Any other reason still requires a real Medication record.
+          { reason: 'uncertain-current', text: '沒有用藥紀錄佐證的待確認', sources: ['C1'] },
+          // condition-without-therapy citing only an invented key stays dropped.
+          { reason: 'condition-without-therapy', text: '引用不存在來源的項目', sources: ['C99'] },
+        ],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, catalog)
+    expect(result.medicationReview.overview).toBe('長期用藥 1 種，由單一院所處方，續領規律。')
+    expect(result.medicationReview.reconciliation).toEqual([
+      expect.objectContaining({
+        reason: 'condition-without-therapy',
+        sourceKeys: ['C1'],
+      }),
+    ])
+  })
+
+  it('strips regimen sigs that are dispensing arithmetic rewrites or filler', () => {
+    const medications = [{
+      id: 'forxiga-arithmetic',
+      status: 'active',
+      authoredOn: '2026-06-25',
+      medicationCodeableConcept: {
+        coding: [{ system: 'nhi', code: 'BC26476100', display: 'Forxiga Film-coated Tablets 10mg' }],
+      },
+      category: [{ text: '抗糖尿病藥物' }],
+      // The ONLY recorded dosage line is dispensing arithmetic — any sig the
+      // model writes for this drug is derived, not recorded.
+      dosageInstruction: [{ text: '給藥總量 28，給藥日數 28 天（平均每日 1）' }],
+    }, {
+      id: 'eltroxin-real-sig',
+      status: 'active',
+      authoredOn: '2026-06-25',
+      medicationCodeableConcept: {
+        coding: [{ system: 'nhi', code: 'BC24708100', display: 'Eltroxin Tablets 100mcg' }],
+      },
+      category: [{ text: '甲狀腺' }],
+      dosageInstruction: [{ text: '每日1次，每次1錠，飯前服用' }],
+    }]
+    const medicationCatalog = buildSourceCatalog({ medications })
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      medicationReview: {
+        regimen: [
+          { group: '血糖', name: 'Forxiga', sig: '每日一次', sources: ['M1'] },
+          { group: '甲狀腺', name: 'Eltroxin', sig: '每日1次，每次1錠', sources: ['M2'] },
+          { group: '排便', name: 'Sennosides', sig: '依醫囑服用', sources: ['M1'] },
+        ],
+        changes: [],
+        reconciliation: [],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, medicationCatalog, {
+      clinicalData: { medications },
+      audience: 'medical',
+      locale: 'zh-TW',
+    })
+    const sigs = Object.fromEntries(result.medicationReview.regimen.map((r) => [r.name, r.sig]))
+    expect(sigs['Forxiga']).toBeUndefined()          // derived from arithmetic → stripped
+    expect(sigs['Eltroxin']).toBe('每日1次，每次1錠') // real recorded instruction → kept
+    expect(sigs['Sennosides']).toBeUndefined()       // filler → stripped
+  })
+
+  it('flags problem citations whose report type contradicts the stated basis', () => {
+    const diagnosticReports = [
+      {
+        id: 'rep-cxr',
+        code: { text: '胸腔檢查（包括各種角度部位之胸腔檢查）' },
+        effectiveDateTime: '2026-06-14',
+        performer: [{ display: '林口長庚' }],
+      },
+      {
+        id: 'rep-ecg',
+        code: { text: '心電圖' },
+        effectiveDateTime: '2026-06-14',
+        performer: [{ display: '林口長庚' }],
+      },
+      {
+        id: 'rep-hba1c',
+        code: { text: 'HbA1c' },
+        effectiveDateTime: '2026-06-01',
+      },
+    ]
+    const reportCatalog = buildSourceCatalog({ diagnosticReports })
+    const key = (id: string) => reportCatalog.find((c) => c.resourceId === id)!.key
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      problems: [
+        // 心電圖 basis citing a chest X-ray → that key flagged, ECG key clean.
+        { label: '右側束枝傳導阻斷 (RBBB)', basis: '心電圖紀錄', kind: 'diagnosis', sources: [key('rep-cxr'), key('rep-ecg')] },
+        // Basis type matches the cited report → no flag.
+        { label: '心律異常', basis: '心電圖紀錄', kind: 'diagnosis', sources: [key('rep-ecg')] },
+        // Unclassifiable basis / report never triggers (conservative).
+        { label: '第2型糖尿病', basis: '3 次檢驗異常', kind: 'lab', sources: [key('rep-hba1c')] },
+      ],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, reportCatalog)
+    expect(result.problems[0].suspectSourceKeys).toEqual([key('rep-cxr')])
+    expect(result.problems[0].sourceKeys).toContain(key('rep-cxr')) // shown, not hidden
+    expect(result.problems[1].suspectSourceKeys).toBeUndefined()
+    expect(result.problems[2].suspectSourceKeys).toBeUndefined()
+  })
+
+  it('drops the medication-review overview for the patient audience', () => {
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      investigations: [],
+      medicationReview: {
+        overview: '不應出現在民眾版的綜合判讀。',
+        regimen: [],
+        changes: [],
+        reconciliation: [],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, catalog, { audience: 'patient' })
+    expect(result.medicationReview.overview).toBeUndefined()
+  })
+
   it('deterministically lists every chronic drug and merges its cross-facility records', () => {
     const medications = [
       {
@@ -880,6 +1059,7 @@ describe('finalizeResult', () => {
       locale: 'zh-TW',
     })
     expect(result.medicationReview.regimen).toHaveLength(8)
+    expect(result.medicationReview.overview).toContain('進階治療型態')
     expect(result.medicationReview.regimen[0]).toMatchObject({
       group: '血糖／腎臟',
       name: 'Forxiga Film-coated Tablets 10mg',
@@ -896,6 +1076,11 @@ describe('finalizeResult', () => {
     expect(result.medicationReview.changes).toEqual([])
     expect(result.medicationReview.regimen.find((item) => item.group === '青光眼')?.name)
       .toContain('三種降眼壓藥併用')
+    // Exactly ONE reconciliation item survives the quality bar. Deliberately
+    // absent: the Alphagan P → Brimonin same-institution brand switch (a clean
+    // sequential switch answers itself from the record) and an Imimine
+    // no-documented-indication item (it was co-prescribed with tamsulosin at a
+    // BPH visit — the prescribing-visit context IS its plausible indication).
     expect(result.medicationReview.reconciliation).toEqual([
       expect.objectContaining({
         reason: 'multi-facility',

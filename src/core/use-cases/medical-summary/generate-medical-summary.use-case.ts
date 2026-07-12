@@ -700,7 +700,7 @@ const SCHEMA_HINT =
   '"summary": [{"text": "<narrative segment>", "emphasis": <true for pivotal segments>, "sources": ["<catalog key like E1>"]}], ' +
   '"investigations": [{"label": "<disease-relevant test or imaging group>", "kind": "lab|imaging|pathology|other", "direction": "improving|stable|worsening|fluctuating|single|unknown", "trend": "<actual serial values or imaging change; say single result when only one>", "interpretation": "<why this matters for this patient>", "sources": ["<catalog key>"]}], ' +
   '"medicationEducation": [{"name": "<medicine or medicine group in the records>", "benefit": "<plain-language explanation of how it may help this patient>", "attention": "<one calm, practical use reminder>", "sources": ["<catalog key, including at least one M key>"]}], ' +
-  '"medicationReview": {"regimen": [{"group": "<treatment area>", "name": "<medicine or clinically coherent group>", "sig": "<dose/frequency only when recorded>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported recent change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|other", "text": "<specific item to verify during medication reconciliation>", "sources": ["<M key>"]}]}, ' +
+  '"medicationReview": {"overview": "<1-2 sentence clinician synthesis of the whole regimen>", "regimen": [{"group": "<treatment area>", "name": "<medicine or clinically coherent group>", "sig": "<dose/frequency only when recorded>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported recent change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify during medication reconciliation>", "sources": ["<M key>"]}]}, ' +
   '"problems": [{"label": "<condition name, e.g. 第二型糖尿病>", "basis": "<short basis e.g. 5 次檢驗異常 / 藥局調劑>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"]}], ' +
   '"decisions": [], ' +
   '"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup"}]}'
@@ -754,17 +754,37 @@ const SHARED_RULES =
   'This is a medication-reconciliation workflow card, NOT another safety card: do not repeat interactions, renal-dose warnings, laboratory monitoring, disease problems, or patient education. ' +
   'For "regimen", include every CURRENTLY EVIDENCED distinct medicine that has a [慢箋] / continuous long-term therapy record, merging refill and pharmacy duplicates of the same drug. Do NOT include a historical chronic medicine when its latest matching record is completed, stopped, or cancelled and there is no later active continuation. Then add other clinically important recent medicines only when useful. ' +
   'Group STRICTLY by indication or treatment area: "group" is the clinician-facing treatment-area chip (e.g. 血糖／腎臟, 甲狀腺, 痛風／降尿酸, 排便, 青光眼, 眼表潤滑, 攝護腺). Use one row per medicine, or one row for multiple medicines only when they treat the SAME indication. When a same-indication group itself is clinically informative, make "name" state the treatment pattern (e.g. 三種降眼壓藥併用：Brimonidine、Latanoprost、Cosopt), not merely a bare medicine list. ' +
+  'Every medicine in a multi-drug row must be NAMED in "name" — an unnamed roll-up such as 多種抗生素及抗發炎藥物 or 抗憂鬱劑及鎮靜安眠藥 is forbidden, because the clinician cannot verify an unnamed drug. ' +
   'NEVER group by prescription batch, date, or facility. Group labels such as 同次慢箋, 慢箋用藥, or 近期用藥 are forbidden; split unrelated medicines from one prescription into separate treatment-area rows. ' +
   'Verify each medicine identity before grouping: the same route or prescription does NOT prove the same indication. Artificial tears / lubricants such as Patear are NOT pressure-lowering glaucoma therapy; when indication is uncertain, use a neutral pharmacologic/organ label instead of guessing a disease. ' +
   'For "sig", copy only an explicitly recorded dose, route, and frequency. NEVER calculate or estimate a daily dose from dispensed quantity and supply days. Text containing 給藥總量, 給藥日數, or 平均每日 is dispensing arithmetic, not a verified SIG: omit "sig" unless a real instruction is separately recorded. ' +
+  'Rewriting that arithmetic into instruction form (平均每日 1 → 每日一次) is the SAME violation, and filler such as 依醫囑服用／遵醫囑使用 is not a sig — in both cases OMIT the field entirely. ' +
   'For "changes", include ONLY clinically meaningful, date/status-supported regimen changes: an explicit stop or switch; a dose/frequency change that states both old and new; or a clinically significant drug class newly appearing with no earlier same-class record. Cross-facility overlap belongs in "reconciliation", not "changes". ' +
   'A routine 慢箋 refill is NEVER "new", and a [藥局領藥 · dispensing, NOT a prescriber] row is NEVER cross-facility prescribing. An EMPTY "changes" array is the correct answer for a stable regimen: do not manufacture an item and do not add per-item hedges already covered by the card disclaimer. ' +
   'For "reconciliation", every item must name the SPECIFIC medicine(s), the SPECIFIC record gap or conflict, and phrase ONE concrete question answerable at the visit. Generic text that could apply to any patient (e.g. 確認是否仍在使用 without a stated reason) is forbidden. ' +
+  'Reconciliation quality bar: every item must be anchored in concrete facts read from THIS patient\'s records — dates, institutions, supply periods, values, or drug names. If an item could be written without looking at the records (a guideline reminder, a textbook check), it is noise: drop it. Prefer 2-3 strong record-anchored items over a padded list. ' +
   'A high-value cross-facility item is the same or same-class medicine prescribed by TWO different non-pharmacy institutions during overlapping supply periods. State the medicine, both institutions, relevant dates/supply overlap, and ask whether this represents a transfer/refill or simultaneous possession. A prescribing institution plus its dispensing pharmacy is one prescription and must never trigger this item. ' +
+  'Reason "possible-same-drug" is for REAL ambiguity only: two brand names of the same ingredient from DIFFERENT institutions, or with overlapping supply, where the patient may not realise both bottles are the same drug. A clean sequential brand/formulary switch at the SAME institution (old brand completed, new brand starts afterwards, no overlap) answers itself from the record: merge it into one regimen row and do NOT raise a reconciliation item for it. ' +
   'Taiwan NHI 健康存摺 commonly omits a complete SIG / administration frequency. Missing dose, route, or frequency ALONE is a known source-data limitation, NOT a patient-specific reconciliation problem: do not create a reconciliation item merely to ask how often a medicine is taken or an eye drop is used. Only mention SIG when two explicit recorded instructions conflict or another concrete patient-specific inconsistency exists. ' +
-  'A supply gap is actionable only when there is an established repeated chronic-refill pattern and the latest recorded supply end date has passed without a later refill. A single completed historical chronic prescription is NOT enough and must not be revived as a reconciliation item. Phrase a supported gap as 供藥中斷待確認, never as definitively stopped. ' +
+  'ACTIVELY scan for supply gaps — do not wait to notice one: for EVERY [慢箋] / repeatedly-refilled medicine, compare its latest supply end date (the "— until <date>" / "last ended <date>" annotation) against the newest record date in the data. A chronic medicine whose supply lapsed weeks-to-months before the newest records, with no later refill, is a TOP-priority reconciliation item. ' +
+  'Compute the gap per DRUG, not per row: first merge every row of the same medicine (all institutions, brand names, and dispensing pharmacies) and take the LATEST end date. One row ending is NOT a gap while another row of the same medicine still supplies — that situation is the multi-facility overlap item instead, which takes precedence over any gap framing. A supply that ended only days ago is normal refill cadence, not a gap. ' +
+  'A supply gap is actionable only when there is an established repeated chronic-refill pattern and the latest recorded supply end date has passed without a later refill. A single completed historical chronic prescription is NOT enough and must not be revived as a reconciliation item. Phrase a supported gap as 供藥中斷待確認, never as definitively stopped; use reason "supply-gap". ' +
+  'Reconciliation insight comes from cross-checking medicines against the REST of the record, not only against other medicines: ' +
+  '(a) reason "no-documented-indication" — a chronic medicine whose indication has no supporting diagnosis, abnormal lab, or document anywhere in the data: ask what it treats (紀錄中未見對應診斷——確認適應症). ' +
+  'Before raising it, check the PRESCRIBING VISIT context: the visit\'s reason code, its specialty, and the medicines co-prescribed at the same visit. A drug consistent with that context is NOT an orphan even when its textbook primary indication is absent — e.g. low-dose imipramine prescribed at a BPH/urology visit alongside tamsulosin is plausibly for urinary symptoms, not undocumented depression. ' +
+  'Multi-purpose drugs (TCAs, gabapentinoids, beta-blockers, SSRIs) especially: raise this item ONLY when NO plausible clinical context exists anywhere — not when the recorded context merely differs from the drug\'s best-known use. ' +
+  '(b) reason "condition-without-therapy" — an active condition with objective evidence but NO medicine serving that treatment goal ANYWHERE in the regimen: this flags a RECORD anomaly to verify (自費、他院、已停用或尚未上傳), NEVER a prescribing suggestion. ' +
+  'Before raising it, scan the WHOLE regimen for any medicine already serving the goal, including other classes with the same purpose — e.g. an SGLT2 inhibitor already provides renal protection in CKD, so 未見 ACEi/ARB is NOT a therapy gap. ' +
+  'Guideline-completeness reminders ("CKD 應考慮 ACEi/ARB", "應加 statin", "AF 應抗凝") are FORBIDDEN here: whether to START a drug is the treating physician\'s decision, not a reconciliation check, and such items read identically for every patient with that diagnosis. ' +
+  'Raise it ONLY when the record pattern itself is anomalous — the disease shows ongoing objective activity (abnormal trending labs, active care plan, repeated claims) yet the ENTIRE treatment goal has zero medicines — and phrase strictly as verification (e.g. 糖尿病診斷且 HbA1c 上升，現行紀錄未見任何降血糖藥——確認是否自費或他院治療). ' +
+  'This is the ONE item type that cites the condition/lab keys instead of an M key, because the missing medicine has no record to cite. ' +
+  '(c) reason "adherence-pattern" — refill regularity is a signal only NHI data can give: a long interruption inside an established refill rhythm, followed by resumption, is worth ONE neutral question about the interruption; never phrase it as non-adherence or blame. A stable regular rhythm is NOT a reconciliation item — mention it in "overview" instead. ' +
+  'Treatment-intensity reading: when a same-indication multi-drug pattern or a recent step-up/step-down itself carries clinical meaning, state that reading in ONE hedged clause inside the regimen "name" or a change "summary" (e.g. 三種不同機轉降眼壓藥併用，屬進階治療型態，暗示眼壓控制困難; 口服降血糖藥外新增胰島素，暗示血糖控制惡化). The pattern reading is the insight — a bare medicine list the clinician can already see elsewhere. ' +
+  'Care transitions: when the data contains an inpatient episode or discharge summary, explicitly compare the chronic regimen before and after it, and report medicines that newly appear or disappear after discharge in "changes" (cite the M keys, plus the D key when the document evidences the change). When present, this before/after comparison is the highest-value content of the whole card. ' +
+  'For "overview", write 1-2 sentences a clinician can absorb at a glance: total chronic-medicine burden and how many institutions prescribe it; which treatment areas dominate and, when care is split across institutions, who manages what (e.g. 青光眼用藥由A院、攝護腺用藥由B院處方); and the single most important pattern (treatment intensity, refill regularity or its interruption, or a supply gap). ' +
+  'The overview describes the CURRENT regimen: a therapy whose supply has lapsed may appear only AS lapsed (e.g. 青光眼藥供藥已中斷), never as an ongoing mainstay. Restate only facts already carried by cited items elsewhere in the review — no new claims, no recommendations. Omit "overview" for the patient audience. ' +
   'A medicine may appear in at most ONE of "changes" or "reconciliation"; choose the more actionable framing. Empty arrays are preferred over low-information items. Do not assign severity or recommend clinical dose changes. ' +
-  'NHI dispensing does not prove adherence or current use. Every medicationReview item must cite at least one matching M key; merge routine refills and prescribing-clinic/pharmacy representations of the same prescription. ' +
+  'NHI dispensing does not prove adherence or current use. Every medicationReview item must cite at least one matching M key (sole exception: "condition-without-therapy" cites the condition/lab evidence); merge routine refills and prescribing-clinic/pharmacy representations of the same prescription. ' +
   'Completeness sweep: before finalizing "problems", re-scan the labs and the long-term medication list for clearly-supported conditions you have not yet listed ' +
   '(e.g. abnormal TSH → 甲狀腺問題, chronic urate-lowering therapy → 高尿酸血症, repeated past-year events such as 譫妄就診) — ' +
   'a complex multi-morbid patient typically yields 8–12 problems, not 5–6. ' +
@@ -787,6 +807,7 @@ const SHARED_RULES =
   'Each problem is a plain condition NAME (e.g. 第二型糖尿病) — do NOT include ICD or any other codes. ' +
   'Give each a SHORT "basis" phrase naming the evidence type and count (e.g. "5 次檢驗異常", "藥局調劑", "照護計畫", "6 次就診申報"), ' +
   'the matching "kind", and the catalog key(s) in "sources". Merge duplicates; order by clinical importance; at most ~12 problems. ' +
+  'The report TYPE cited must match the evidence type the basis names: 依據:心電圖紀錄 must cite the ECG report key itself — a same-day chest X-ray (胸腔檢查) or any other modality is a citation ERROR, not a substitute. When you cannot tell which key is that report, omit the report key entirely rather than citing a wrong-type one. ' +
   'Cross-hospital lens: surface care fragmented across providers and follow-up gaps. ' +
   'For duplicate medications, be strict: these are NHI cross-facility records where ONE prescription appears twice (the prescribing clinic AND the 藥局 / pharmacy that dispenses the 慢箋), ' +
   'and same-clinic refills are one ongoing therapy — NEITHER is duplication. Only call out duplication when the SAME drug (or same-class additive drugs) is prescribed by TWO DIFFERENT CLINICS in a short window. ' +
@@ -932,6 +953,30 @@ function completeChronicMedicationRegimen(
   })
 
   return [...currentAiRegimen, ...fallbackRows]
+}
+
+// Evidence-modality lexicon for the problems citation cross-check. Most
+// specific patterns first (心電圖 before 攝影, 心臟超音波 before 超音波).
+// Deliberately conservative: a mismatch is flagged only when BOTH the basis
+// text and the cited report display classify, and to different modalities —
+// unclassifiable text never triggers.
+const EVIDENCE_TYPE_LEXICON: Array<{ id: string; pattern: RegExp }> = [
+  { id: 'ecg', pattern: /心電圖|\bECG\b|\bEKG\b|electrocardio/i },
+  { id: 'echo', pattern: /心臟超音波|echocardio/i },
+  { id: 'ultrasound', pattern: /超音波|都卜勒|ultrasound|sonograph|\bsono\b/i },
+  { id: 'ct', pattern: /電腦斷層|computed tomography|\bCT\b/i },
+  { id: 'mri', pattern: /磁振造影|magnetic resonance|\bMRI\b/i },
+  { id: 'xray', pattern: /X光|X-ray|radiograph|胸腔檢查|攝影/i },
+  { id: 'endoscopy', pattern: /內視鏡|胃鏡|大腸鏡|支氣管鏡|膀胱鏡|endoscop|gastroscop|colonoscop|bronchoscop/i },
+  { id: 'pathology', pattern: /病理|切片|細胞學|biopsy|patholog|cytolog/i },
+]
+
+function classifyEvidenceType(text?: string): string | null {
+  if (!text) return null
+  for (const { id, pattern } of EVIDENCE_TYPE_LEXICON) {
+    if (pattern.test(text)) return id
+  }
+  return null
 }
 
 // Accept pre-v3 cached/test objects during the rollout; live parseResult always
@@ -1103,6 +1148,7 @@ export class GenerateMedicalSummaryUseCase {
     // education: an item without a real Medication* record is omitted. Dates
     // and organizations remain app-resolved through sourceIndex.
     const rawMedicationReview = ai.medicationReview ?? {
+      overview: undefined,
       regimen: [],
       changes: [],
       reconciliation: [],
@@ -1116,14 +1162,47 @@ export class GenerateMedicalSummaryUseCase {
             options.locale ?? 'zh-TW',
           )
         : rawMedicationReview.regimen
+    // Deterministic sig contract: the prompt forbids dispensing-arithmetic
+    // rewrites (平均每日 1 → 每日一次) and filler (依醫囑服用), but flash-tier
+    // models keep producing them. Enforce here: a sig survives only when at
+    // least one cited medication actually records a non-arithmetic instruction.
+    const SIG_ARITHMETIC = /給藥總量|給藥日數|平均每日/
+    const SIG_FILLER = /依醫囑|遵醫囑|as directed/i
+    const medicationsById = new Map(
+      (options.clinicalData?.medications ?? []).map((medication) => [medication.id, medication]),
+    )
+    const groundedSig = (rawSources: string[], sig?: string): string | undefined => {
+      const trimmed = sig?.trim()
+      if (!trimmed) return undefined
+      if (SIG_FILLER.test(trimmed) || SIG_ARITHMETIC.test(trimmed)) return undefined
+      if (medicationsById.size === 0) return trimmed
+      const recorded = rawSources
+        .map((key) => byKey.get(key.trim()))
+        .filter((entry) => entry?.resourceType.startsWith('Medication'))
+        .flatMap((entry) => {
+          const medication = medicationsById.get(entry!.resourceId)
+          return (medication?.dosageInstruction ?? [])
+            .map((instruction) => instruction.text?.trim())
+            .filter((value): value is string => Boolean(value))
+        })
+      if (recorded.length > 0 && recorded.every((text) => SIG_ARITHMETIC.test(text))) return undefined
+      return trimmed
+    }
+
     const medicationReview = {
+      // The overview is a clinician-audience synthesis line; the patient card
+      // never renders it, so drop it at the same gate as regimen completion.
+      overview:
+        options.audience !== 'patient'
+          ? rawMedicationReview.overview?.trim() || undefined
+          : undefined,
       regimen: completeRegimen.flatMap((item) => {
         const rawSources = item.sources ?? []
         if (!hasVerifiedMedicationSource(rawSources)) return []
         return [{
           group: item.group,
           name: item.name,
-          sig: item.sig?.trim() || undefined,
+          sig: groundedSig(rawSources, item.sig),
           sourceKeys: rawSources.map(registerKey),
         }]
       }),
@@ -1139,8 +1218,15 @@ export class GenerateMedicalSummaryUseCase {
       }),
       reconciliation: rawMedicationReview.reconciliation.flatMap((item) => {
         const rawSources = item.sources ?? []
-        if (!hasVerifiedMedicationSource(rawSources)) return []
         const reason = normaliseMedicationReconciliationReason(item.reason)
+        // condition-without-therapy flags an ABSENT medicine, so there is no
+        // M key to cite — it is grounded by the condition/lab evidence
+        // instead. Every other item still needs a real Medication record.
+        const grounded =
+          reason === 'condition-without-therapy'
+            ? rawSources.some((rawKey) => byKey.has(rawKey.trim()))
+            : hasVerifiedMedicationSource(rawSources)
+        if (!grounded) return []
         // Health Bank commonly omits complete directions. Treat missing SIG as
         // a source limitation rather than rendering the same low-value
         // "how often do you take it?" question for nearly every patient.
@@ -1156,12 +1242,33 @@ export class GenerateMedicalSummaryUseCase {
     // Problems register BEFORE decisions: registerKey numbers sources by first
     // appearance, and the page renders investigations → problems → decisions, so
     // this keeps superscript numbers increasing top-to-bottom.
-    const problems = (ai.problems ?? []).map((p) => ({
-      label: p.label,
-      basis: p.basis?.trim() || undefined,
-      kind: normaliseProblemKind(p.kind),
-      sourceKeys: (p.sources ?? []).map(registerKey),
-    }))
+    const problems = (ai.problems ?? []).map((p) => {
+      const rawSources = p.sources ?? []
+      const basis = p.basis?.trim() || undefined
+      // Evidence-type cross-check: a resolved key renders a green pill even
+      // when the model cited the wrong report (依據:心電圖紀錄 citing a chest
+      // X-ray). When the basis names an evidence modality and a cited
+      // DiagnosticReport clearly belongs to a DIFFERENT one, flag that key as
+      // suspect — shown amber, never silently dropped.
+      const basisType = classifyEvidenceType(basis)
+      const suspectSourceKeys = basisType
+        ? rawSources
+            .map((key) => key.trim())
+            .filter((key) => {
+              const entry = byKey.get(key)
+              if (entry?.resourceType !== 'DiagnosticReport') return false
+              const entryType = classifyEvidenceType(entry.display)
+              return entryType !== null && entryType !== basisType
+            })
+        : []
+      return {
+        label: p.label,
+        basis,
+        kind: normaliseProblemKind(p.kind),
+        sourceKeys: rawSources.map(registerKey),
+        ...(suspectSourceKeys.length > 0 ? { suspectSourceKeys } : {}),
+      }
+    })
 
     const decisions = ai.decisions.map((d) => ({
       text: d.text,

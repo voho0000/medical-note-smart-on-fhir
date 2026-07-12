@@ -296,6 +296,7 @@ export default function MedicalSummaryFeature() {
           badgeLabel={problemBadgeLabel}
           typeLabel={typeLabel}
           unverifiedLabel={ms.unverified}
+          sourceTypeMismatchLabel={ms.sourceTypeMismatch}
           showMoreLabel={ms.showMoreItems}
           showLessLabel={ms.showLessItems}
           onNavigate={navigateToResource}

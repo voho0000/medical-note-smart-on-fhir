@@ -68,6 +68,14 @@ export const MEDICATION_RECONCILIATION_REASONS = [
   'multi-facility',
   'uncertain-current',
   'possible-same-drug',
+  // A chronic medicine with no supporting diagnosis/lab anywhere in the data,
+  // or an evidenced active condition with no corresponding therapy on the
+  // current regimen. The latter is the one reconciliation item allowed to
+  // cite non-Medication sources (there is no M key for an absent drug).
+  'no-documented-indication',
+  'condition-without-therapy',
+  'supply-gap',
+  'adherence-pattern',
   'other',
 ] as const
 export type MedicationReconciliationReason = (typeof MEDICATION_RECONCILIATION_REASONS)[number]
@@ -171,6 +179,11 @@ const SummaryMedicationReconciliationItemSchema = z.object({
 })
 
 export const SummaryMedicationReviewSchema = z.object({
+  /** 1–2 sentence clinician synthesis: burden (drug count / institutions),
+   *  dominant treatment areas and who manages them, and the single most
+   *  important pattern. Text-only — every fact must already be carried by a
+   *  cited item elsewhere in the review. */
+  overview: z.string().transform((s) => (s.length > 400 ? s.slice(0, 400) : s)).optional(),
   regimen: z.array(SummaryMedicationRegimenSchema).default([]).transform((a) => a.slice(0, 8)),
   changes: z.array(SummaryMedicationChangeSchema).default([]).transform((a) => a.slice(0, 5)),
   reconciliation: z.array(SummaryMedicationReconciliationItemSchema).default([]).transform((a) => a.slice(0, 5)),
@@ -259,6 +272,11 @@ export interface SummaryProblem {
   basis?: string
   kind: ProblemKind
   sourceKeys: string[]
+  /** Cited keys whose report type contradicts the evidence type the basis
+   *  names (e.g. 依據:心電圖紀錄 citing a chest X-ray). Detected app-side at
+   *  finalize; rendered amber — shown, not hidden — so the clinician knows to
+   *  verify that citation instead of trusting the pill. */
+  suspectSourceKeys?: string[]
 }
 
 export interface SummaryInvestigation {
@@ -278,6 +296,7 @@ export interface SummaryMedicationEducation {
 }
 
 export interface SummaryMedicationReview {
+  overview?: string
   regimen: Array<{
     group: string
     name: string

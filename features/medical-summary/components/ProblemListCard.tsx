@@ -37,6 +37,8 @@ interface ProblemListCardProps {
   badgeLabel: (kind: ProblemKind) => string
   typeLabel: (resourceType?: string) => string
   unverifiedLabel: string
+  /** Shown on a citation whose report type contradicts the stated basis. */
+  sourceTypeMismatchLabel: string
   showMoreLabel: string
   showLessLabel: string
   onNavigate?: (target: ResourceNavTarget) => void
@@ -53,6 +55,7 @@ export function ProblemListCard({
   badgeLabel,
   typeLabel,
   unverifiedLabel,
+  sourceTypeMismatchLabel,
   showMoreLabel,
   showLessLabel,
   onNavigate,
@@ -78,6 +81,11 @@ export function ProblemListCard({
           const sources = p.sourceKeys
             .map((k) => byKey.get(k))
             .filter((s): s is ResolvedSourceRef => s !== undefined)
+          // Finalize-detected evidence-type mismatches (依據:心電圖 citing a
+          // chest X-ray) tint that citation amber instead of hiding it.
+          const suspectKeys = p.suspectSourceKeys?.length
+            ? new Set(p.suspectSourceKeys)
+            : undefined
           return (
             <div key={i} className="flex items-start justify-between gap-2 border-b border-border py-2 last:border-b-0">
               <div className="min-w-0 flex-1">
@@ -87,6 +95,8 @@ export function ProblemListCard({
                     sources={sources}
                     typeLabel={typeLabel}
                     unverifiedLabel={unverifiedLabel}
+                    suspectKeys={suspectKeys}
+                    suspectLabel={sourceTypeMismatchLabel}
                     onNavigate={onNavigate}
                   />
                 </p>

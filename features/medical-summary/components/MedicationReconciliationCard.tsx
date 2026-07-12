@@ -91,6 +91,12 @@ export function MedicationReconciliationCard({
         {title}
       </h3>
 
+      {review.overview ? (
+        <p className="mb-2 rounded-md bg-muted/45 px-2.5 py-1.5 text-[0.75rem] leading-snug text-foreground/90">
+          {review.overview}
+        </p>
+      ) : null}
+
       {regimen.length > 0 ? (
         <div>
           <h4 className="mb-1 text-[0.625rem] font-semibold text-muted-foreground">{regimenTitle}</h4>
