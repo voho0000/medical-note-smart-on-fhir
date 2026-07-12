@@ -2,7 +2,7 @@
 
 import type { FilterValue } from '@/src/core/interfaces/data-category.interface'
 
-export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | '3y' | '5y' | 'all'
+export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | '3y' | '5y' | 'all' | 'sinceLastVisit'
 
 export interface ClinicalContextSection {
   title: string
@@ -55,6 +55,14 @@ export interface DataFilters {
   // Reports / observations
   labReportVersion: 'latest' | 'all'
   labReportTimeRange: TimeRange
+  /** Max trend points per analyte in the lab context (full-trend mode). */
+  labTrendPoints: '4' | '8' | '16'
+  /**
+   * CSV of lab panel ids (cbc/chem/coag/…) to restrict the lab context to.
+   * Empty string = all panels. Stored as CSV (not string[]) so it flows through
+   * the scalar FilterValue plumbing like every other filter.
+   */
+  labPanelIds: string
   imagingReportVersion: 'latest' | 'all'
   imagingReportTimeRange: TimeRange
   vitalSignsVersion: 'latest' | 'all'

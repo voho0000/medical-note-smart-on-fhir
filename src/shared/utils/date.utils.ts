@@ -90,14 +90,18 @@ export function calculateAge(birthDate?: string | null): string {
   return age >= 0 ? `${age}` : "Unknown"
 }
 
-export type TimeRange = "all" | "24h" | "3d" | "1w" | "1m" | "3m" | "6m" | "1y" | "3y" | "5y"
+export type TimeRange = "all" | "24h" | "3d" | "1w" | "1m" | "3m" | "6m" | "1y" | "3y" | "5y" | "sinceLastVisit"
 
 export function isWithinTimeRange(dateString: string | undefined, range: TimeRange): boolean {
   if (!dateString) return false
   const date = new Date(dateString)
   if (Number.isNaN(date.getTime())) return false
 
-  if (range === "all") return true
+  // 'sinceLastVisit' needs the patient's encounter cadence, which this
+  // stateless helper doesn't have — callers that support it use
+  // makeTimeRangeTest instead. Here it degrades to 'all' (a safe superset)
+  // rather than dropping every row.
+  if (range === "all" || range === "sinceLastVisit") return true
 
   const now = new Date()
   const startDate = new Date(now)

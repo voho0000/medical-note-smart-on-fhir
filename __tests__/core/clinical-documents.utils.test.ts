@@ -101,6 +101,33 @@ describe('clinical-documents.utils', () => {
       } as any)
       expect(resolveSelectedDocuments(noDischarge, 'latestAdmission', []).map((d) => d.id)).toEqual(['b'])
     })
+
+    it('recentAdmissions returns the most recent N discharge summaries', () => {
+      const many = listClinicalDocuments({
+        documentReferences: [1, 2, 3, 4].map((n) => ({
+          id: `d${n}`,
+          date: `2025-0${n}-01`,
+          type: { coding: [{ code: '18842-5' }] },
+          content: [{ attachment: { contentType: 'text/html', data: btoa(`<p>note ${n}</p>`) } }],
+        })),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any)
+      // newest-first: d4, d3, d2, d1 → keep top 3
+      expect(resolveSelectedDocuments(many, 'recentAdmissions', []).map((d) => d.id)).toEqual(['d4', 'd3', 'd2'])
+    })
+
+    it('recentAdmissions falls back to the latest N docs when none are discharge summaries', () => {
+      const noDischarge = listClinicalDocuments({
+        compositions: [
+          { id: 'a', date: '2020-01-01' },
+          { id: 'b', date: '2021-01-01' },
+          { id: 'c', date: '2022-01-01' },
+          { id: 'd', date: '2023-01-01' },
+        ],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any)
+      expect(resolveSelectedDocuments(noDischarge, 'recentAdmissions', []).map((d) => d.id)).toEqual(['d', 'c', 'b'])
+    })
   })
 
   it('stripHtmlToText flattens block tags to newlines', () => {

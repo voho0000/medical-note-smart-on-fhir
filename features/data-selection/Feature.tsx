@@ -45,6 +45,10 @@ export function DataSelectionFeature() {
     return clinicalDataMapper.toClinicalDataCollection(rawClinicalData)
   }, [rawClinicalData, clinicalDataMapper])
 
+  // Note: the sparse-patient auto-select-all runs app-wide via
+  // <AdaptiveDataDefaultsRunner/> (mounted in RightPanelProviders), not here —
+  // so it applies even when this panel was never opened.
+
   const handleFiltersChange = useCallback((newFilters: DataFilters) => {
     setFilters(newFilters)
   }, [setFilters])

@@ -4,7 +4,7 @@
 // useEncountersContext (see clinical-context hooks). This category exists for
 // the data-selection UI (count, label, toggle).
 import type { DataCategory } from '../interfaces/data-category.interface'
-import { isWithinTimeRange } from '../utils/date-filter.utils'
+import { makeTimeRangeTest } from '../utils/date-filter.utils'
 
 export const encountersCategory: DataCategory<any> = {
   id: 'encounters',
@@ -26,6 +26,7 @@ export const encountersCategory: DataCategory<any> = {
         { value: '1y', label: 'Last Year' },
         { value: '3y', label: 'Last 3 Years' },
         { value: '5y', label: 'Last 5 Years' },
+        { value: 'sinceLastVisit', label: 'Since last visit' },
         { value: 'all', label: 'All Time' },
       ],
       defaultValue: '6m',
@@ -41,8 +42,11 @@ export const encountersCategory: DataCategory<any> = {
   getCount: (data, filters) => {
     const range = (filters?.encounterTimeRange as string) || 'all'
     if (!range || range === 'all') return data.length
+    // data IS the encounters array, so it doubles as the visit-cadence source
+    // for the 'sinceLastVisit' window.
+    const inWindow = makeTimeRangeTest(range, { encounters: data })
     const inRange = data.filter((e: any) =>
-      e?.period?.start ? isWithinTimeRange(e.period.start, range) : false
+      e?.period?.start ? inWindow(e.period.start) : false
     )
     return inRange.length > 0 ? inRange.length : data.length
   },

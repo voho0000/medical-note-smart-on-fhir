@@ -2,6 +2,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
+import { toast } from "sonner"
 import { useChatMessages, useSetChatMessages, type ChatImage } from "@/src/application/stores/chat.store"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
@@ -21,7 +22,7 @@ export function useStreamingChat(
 ) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
-  const {} = useLanguage()
+  const { t } = useLanguage()
   const ai = useUnifiedAi()
   const { apiKey: openAiKey, geminiKey, claudeKey } = useAllApiKeys()
   const [error, setError] = useState<Error | null>(null)
@@ -78,7 +79,7 @@ export function useStreamingChat(
           return { role: m.role, content }
         })
         
-        const _stats = getTokenStats(messagesForTokenCount, { modelId: effectiveModelId, systemPrompt })
+        const stats = getTokenStats(messagesForTokenCount, { modelId: effectiveModelId, systemPrompt })
 
         // Truncate to fit context window
         const truncatedMessages = truncateToContextWindow(messagesForTokenCount, {
@@ -86,6 +87,28 @@ export function useStreamingChat(
           systemPrompt,
           maxResponseTokens: 4000
         })
+
+        // Surface what the truncation actually did (previously silent):
+        //  • system prompt (= selected clinical context) alone overruns the
+        //    window → nothing fits; the request will likely fail or lose all
+        //    history. Tell the user how to fix it instead of a bare API error.
+        //  • only OLDER turns were dropped → a lightweight heads-up so a
+        //    "the AI forgot what I said earlier" surprise is explained.
+        const cw = t.chat?.contextWindow as Record<string, string> | undefined
+        if (truncatedMessages.length === 0 && messagesForTokenCount.length > 0) {
+          toast.warning(
+            cw?.contextOverflow ??
+              '選取的病歷資料已超過此模型的內容上限,無法完整送出。請在「資料選擇」縮小文件或檢驗範圍,或改用內容視窗更大的模型。',
+          )
+        } else if (truncatedMessages.length < messagesForTokenCount.length) {
+          toast.info(
+            (cw?.historyTruncated ??
+              '已省略較早的對話以符合此模型的內容上限(利用率約 {pct}%)。').replace(
+              '{pct}',
+              String(stats.utilizationPercent),
+            ),
+          )
+        }
 
         // Build final messages for API - pass full message objects with images
         // The StreamOrchestrator/Proxy will handle multimodal formatting

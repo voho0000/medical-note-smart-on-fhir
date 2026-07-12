@@ -25,8 +25,31 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
     expect(result.current.activePreset).toBe('followUp')
     expect(result.current.getProfile('chat').selection.medicalDevices).toBe(false)
     expect(result.current.getProfile('insights').selection.medicalDevices).toBe(false)
-    expect(result.current.getProfile('chat').filters.labReportTimeRange).toBe('3m')
+    // Follow-up now uses an event-based window (since the previous visit) rather
+    // than a fixed 3-month wall-clock window.
+    expect(result.current.getProfile('chat').filters.labReportTimeRange).toBe('sinceLastVisit')
     expect(result.current.getProfile('ips').selection.observations).toBe(false) // untouched
+  })
+
+  it('selectAllData turns on every category, opens all-time windows, and sets documents to all', () => {
+    const { result } = setup()
+    act(() => result.current.selectAllData())
+    const chat = result.current.getProfile('chat')
+    // every category on
+    expect(Object.values(chat.selection).every((v, i) =>
+      // observations is the hidden legacy field (stays false); everything else true
+      Object.keys(chat.selection)[i] === 'observations' ? v === false : v === true,
+    )).toBe(true)
+    // windows opened
+    expect(chat.filters.labReportTimeRange).toBe('all')
+    expect(chat.filters.encounterTimeRange).toBe('all')
+    expect(chat.filters.medicationTimeRange).toBe('all')
+    expect(chat.filters.labPanelIds).toBe('')
+    expect(chat.filters.labTrendPoints).toBe('16')
+    expect(chat.documentMode).toBe('all')
+    // broadcast to insights, never ips
+    expect(result.current.getProfile('insights').filters.labReportTimeRange).toBe('all')
+    expect(result.current.getProfile('ips').filters.labReportTimeRange).toBe('6m')
   })
 
   it('updateSelectionFor edits only the named consumer', () => {

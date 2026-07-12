@@ -10,7 +10,7 @@ import { useMemo } from "react"
 import type { ClinicalContextSection, TimeRange } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import { buildIcdDictionary, extractEncounterIcds } from "@/src/shared/utils/icd-lookup"
-import { isWithinTimeRange } from "@/src/core/utils/date-filter.utils"
+import { makeTimeRangeTest } from "@/src/core/utils/date-filter.utils"
 import { partitionByEncounterLink } from "@/src/core/utils/encounter-link.utils"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -174,9 +174,10 @@ export function useEncountersContext(
     // fallback: if NO visit falls inside the range (e.g. a stable/elderly
     // patient whose last visit predates it), show the most recent visits
     // anyway rather than emitting an empty section.
+    const inWindow = makeTimeRangeTest(timeRange, clinicalData as { encounters?: any[] })
     const inRange = timeRange === 'all'
       ? sorted
-      : sorted.filter((e) => isWithinTimeRange(e.period?.start, timeRange))
+      : sorted.filter((e) => e.period?.start && inWindow(e.period.start))
     const visitsToShow = (inRange.length > 0 ? inRange : sorted).slice(0, MAX_VISITS)
     const omittedCount = sorted.length - visitsToShow.length
 

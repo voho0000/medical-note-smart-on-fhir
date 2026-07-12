@@ -10,6 +10,8 @@ import { useDataSelection } from "@/src/application/providers/data-selection.pro
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import { CategoryFilterControls } from "./CategoryFilterControls"
 import { DocumentChecklist } from "./DocumentChecklist"
+import { LabPanelChecklist } from "./LabPanelChecklist"
+import { ContextTokenMeter } from "./ContextTokenMeter"
 import type { PresetId } from "@/src/shared/constants/data-selection.constants"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
@@ -59,6 +61,7 @@ export function DataSelectionTab({
     applyPreset,
     activePreset,
     resetToDefaults,
+    selectAllData,
     setEditedClinicalContext,
   } = useDataSelection()
   const [mounted, setMounted] = useState(false)
@@ -86,6 +89,10 @@ export function DataSelectionTab({
 
   return (
     <div className="space-y-3">
+      {/* Live token meter — surfaces under/over-selection against the chat model's
+          context window (the two previously-invisible failure modes). */}
+      <ContextTokenMeter />
+
       {/* Templates — one-tap fill, then tweak the single selection freely. */}
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -114,6 +121,18 @@ export function DataSelectionTab({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              title={ds.selectAllDataHint ?? '納入所有類別與全部時間範圍(配合上方內容量使用)'}
+              onClick={() => {
+                selectAllData()
+                setEditedClinicalContext(null)
+              }}
+            >
+              {ds.selectAllData ?? '全部資料'}
+            </Button>
             <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onToggleAll(!allSelected)}>
               {allSelected ? ds.deselectAll : ds.selectAll}
             </Button>
@@ -201,6 +220,15 @@ export function DataSelectionTab({
                       {item.id === 'documents' && isSelected && (
                         <div className="mt-2 pl-9">
                           <DocumentChecklist clinicalData={clinicalData} />
+                        </div>
+                      )}
+                      {item.id === 'labReports' && isSelected && (
+                        <div className="mt-2 pl-9">
+                          <LabPanelChecklist
+                            clinicalData={clinicalData}
+                            filters={filters}
+                            onFilterChange={onFilterChange}
+                          />
                         </div>
                       )}
                     </div>

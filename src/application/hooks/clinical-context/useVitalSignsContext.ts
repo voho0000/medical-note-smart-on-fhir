@@ -1,7 +1,7 @@
 // Vital Signs Context Hook
 import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
-import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
+import { makeTimeRangeTest } from "@/src/core/utils/date-filter.utils"
 import { formatNumberSmart } from "@/src/shared/utils/number-format.utils"
 import type { ClinicalData, Observation } from "./types"
 
@@ -22,8 +22,12 @@ export function useVitalSignsContext(
     // Deduplicate by id
     const uniqueVitalSigns = Array.from(new Map(allVitalSigns.map((v) => [v.id, v])).values())
 
+    const inWindow = makeTimeRangeTest(
+      filters?.vitalSignsTimeRange ?? "all",
+      clinicalData as { encounters?: any[] } | null,
+    )
     const filteredVitalSigns = uniqueVitalSigns.filter((obs: Observation) =>
-      isWithinTimeRange(obs.effectiveDateTime, filters?.vitalSignsTimeRange ?? "all")
+      inWindow(obs.effectiveDateTime)
     )
 
     if (filteredVitalSigns.length === 0) {

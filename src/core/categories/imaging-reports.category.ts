@@ -2,9 +2,16 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
-import { isWithinTimeRange } from '../utils/date-filter.utils'
+import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { referenceId } from '../utils/observation-selectors'
+
+// In 'all reports' mode a high-frequency-imaging patient (e.g. an oncology or
+// ICU case) can have many dozens of studies in a wide window. Cap the rendered
+// list at the most recent N so the context stays bounded; older ones collapse
+// to a summary line. 'latest' mode already dedups by name, so this only bites
+// the full-history view.
+const MAX_IMAGING_REPORTS = 25
 
 // Helper to get latest imaging reports by name
 const getLatestImagingReports = (reports: DiagnosticReport[]): DiagnosticReport[] => {
@@ -49,6 +56,7 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
         { value: '3m', label: 'Last 3 Months' },
         { value: '6m', label: 'Last 6 Months' },
         { value: '1y', label: 'Last Year' },
+        { value: 'sinceLastVisit', label: 'Since last visit' },
         { value: 'all', label: 'All Time' }
       ],
       defaultValue: '1y'
@@ -76,15 +84,16 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
     
     const timeRange = filters.imagingReportTimeRange as string
     if (timeRange && timeRange !== 'all') {
-      filtered = filtered.filter(report => 
-        isWithinTimeRange(report.effectiveDateTime || report.issued, timeRange)
+      const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
+      filtered = filtered.filter(report =>
+        inWindow(report.effectiveDateTime || report.issued)
       )
     }
-    
+
     if (filters.imagingReportVersion === 'latest') {
       filtered = getLatestImagingReports(filtered)
     }
-    
+
     return filtered.length
   },
   
@@ -92,22 +101,33 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
     if (data.length === 0) return null
     
     let filtered = data
-    
+
     const timeRange = filters.imagingReportTimeRange as string
     if (timeRange && timeRange !== 'all') {
-      filtered = filtered.filter(report => 
-        isWithinTimeRange(report.effectiveDateTime || report.issued, timeRange)
+      const inWindow = makeTimeRangeTest(timeRange, allClinicalData)
+      filtered = filtered.filter(report =>
+        inWindow(report.effectiveDateTime || report.issued)
       )
     }
-    
+
     if (filtered.length === 0) {
       return { title: 'Imaging Reports', items: ['No imaging reports found within the selected time range.'] }
     }
-    
+
     if (filters.imagingReportVersion === 'latest') {
       filtered = getLatestImagingReports(filtered)
     }
-    
+
+    // Bound the full-history list to the most recent N studies.
+    let omittedImaging = 0
+    if (filtered.length > MAX_IMAGING_REPORTS) {
+      const byDateDesc = [...filtered].sort((a, b) =>
+        (b.effectiveDateTime || b.issued || '').localeCompare(a.effectiveDateTime || a.issued || '')
+      )
+      omittedImaging = filtered.length - MAX_IMAGING_REPORTS
+      filtered = byDateDesc.slice(0, MAX_IMAGING_REPORTS)
+    }
+
     const observations = allClinicalData?.observations || []
     
     const items: string[] = []
@@ -140,11 +160,15 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
     })
     
     if (items.length === 0) return null
-    
-    const title = filters.imagingReportVersion === 'latest' 
-      ? 'Imaging Reports (Latest Only)' 
+
+    if (omittedImaging > 0) {
+      items.push(`…and ${omittedImaging} earlier imaging report(s) omitted for brevity.`)
+    }
+
+    const title = filters.imagingReportVersion === 'latest'
+      ? 'Imaging Reports (Latest Only)'
       : 'Imaging Reports'
-    
+
     return { title, items }
   }
 }

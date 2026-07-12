@@ -39,6 +39,7 @@ export function DocumentChecklist({ clinicalData }: { clinicalData: ClinicalData
 
   const MODES: Array<{ id: DocumentMode; label: string }> = [
     { id: 'latestAdmission', label: ds.docModeLatestAdmission ?? '最近一次住院' },
+    { id: 'recentAdmissions', label: ds.docModeRecentAdmissions ?? '最近三次住院' },
     { id: 'all', label: ds.docModeAll ?? '全部' },
     { id: 'custom', label: ds.docModeCustom ?? '自選' },
   ]

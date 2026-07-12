@@ -53,9 +53,18 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // refills still collapse to one current row.
   medicationTimeRange: '6m',
   // Labs default to the FULL trend ('all') so the AI sees trajectories
-  // (Cr 1.2 → 1.5 → 2.0 = worsening), bounded by the 6-month window.
+  // (Cr 1.2 → 1.5 → 2.0 = worsening), bounded by the 6-month window. When the
+  // window is empty (a stable patient's last panel predates it), the lab
+  // category falls back to the most recent sampling days rather than an empty
+  // section — see applyLabWindow.
   labReportVersion: 'all',
   labReportTimeRange: '6m',
+  // Trend depth per analyte (full-trend mode). 8 balances trajectory vs volume;
+  // raise for long-term trending (renal/HbA1c), lower for token-tight cases.
+  labTrendPoints: '8',
+  // Empty = include every lab panel. Narrow (e.g. 'cbc,chem') only for
+  // analyte-dense patients where the full panel set overwhelms the context.
+  labPanelIds: '',
   imagingReportVersion: 'latest',
   imagingReportTimeRange: '1y',
   // Vitals / procedures / immunizations: `latest`-version filter already dedups
@@ -74,10 +83,59 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   carePlanStatus: 'active',
 }
 
+// ── 全部資料 (everything) — for the 全選 button ──────────────────────────────
+// One-click "include everything": every category on, every time window opened
+// to all-time, every version at full detail, all lab panels, all documents.
+// Pairs with the token meter — when a patient's context is small, the user can
+// take the whole record in a single click instead of widening each filter.
+export const ALL_DATA_SELECTION: DataSelection = {
+  patientInfo: true,
+  vitalSigns: true,
+  problemList: true,
+  advanceDirectives: true,
+  medicalDevices: true,
+  carePlans: true,
+  encounters: true,
+  labReports: true,
+  imagingReports: true,
+  procedures: true,
+  observations: false, // hidden legacy field; standalone results fold into labReports
+  medications: true,
+  allergies: true,
+  immunizations: true,
+  documents: true,
+}
+
+export const ALL_DATA_FILTERS: DataFilters = {
+  ...DEFAULT_DATA_FILTERS,
+  problemListStatus: 'all',
+  problemListTimeRange: 'all',
+  encounterTimeRange: 'all',
+  medicationStatus: 'all',
+  medicationChronic: 'all',
+  medicationTimeRange: 'all',
+  labReportVersion: 'all',
+  labReportTimeRange: 'all',
+  labTrendPoints: '16', // deepest trend for a complete history
+  labPanelIds: '',      // all panels
+  imagingReportVersion: 'all',
+  imagingReportTimeRange: 'all',
+  vitalSignsVersion: 'all',
+  vitalSignsTimeRange: 'all',
+  procedureVersion: 'all',
+  procedureTimeRange: 'all',
+  observationVersion: 'all',
+  observationTimeRange: 'all',
+  immunizationTimeRange: 'all',
+  carePlanStatus: 'all',
+}
+
 // ── 追蹤 (follow-up) — focused profile ──────────────────────────────────────
-// For an established patient: what changed in the last 3 months. Active
-// problems + active meds + recent labs/vitals/imaging/procedures/visits;
-// stable history (vaccines, devices, care plans) trimmed away.
+// For an established patient: what changed since the previous visit. Active
+// problems + active meds + labs/vitals/imaging/procedures/visits scoped to the
+// patient's own visit cadence (not a fixed wall-clock window — a patient seen
+// every 6 months would otherwise show an empty "last 3 months"); stable history
+// (vaccines, devices, care plans) trimmed away.
 const FOLLOW_UP_SELECTION: DataSelection = {
   patientInfo: true,
   vitalSigns: true,
@@ -98,11 +156,15 @@ const FOLLOW_UP_SELECTION: DataSelection = {
 
 const FOLLOW_UP_FILTERS: DataFilters = {
   ...DEFAULT_DATA_FILTERS,
-  labReportTimeRange: '3m',
-  vitalSignsTimeRange: '3m',
-  encounterTimeRange: '3m',
-  imagingReportTimeRange: '3m',
-  procedureTimeRange: '3m',
+  // Event-based window: everything since the previous distinct visit day, so
+  // the follow-up scope tracks the patient's real cadence instead of a fixed
+  // 3-month window that empties out for anyone seen less often. The lab
+  // fallback still guarantees a non-empty trend if even that window is empty.
+  labReportTimeRange: 'sinceLastVisit',
+  vitalSignsTimeRange: 'sinceLastVisit',
+  encounterTimeRange: 'sinceLastVisit',
+  imagingReportTimeRange: 'sinceLastVisit',
+  procedureTimeRange: 'sinceLastVisit',
 }
 
 // ── 初診 (new patient) — comprehensive first-visit profile ───────────────────

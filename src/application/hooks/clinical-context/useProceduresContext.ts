@@ -1,7 +1,7 @@
 // Procedures Context Hook
 import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
-import { isWithinTimeRange } from "@/src/shared/utils/date.utils"
+import { makeTimeRangeTest } from "@/src/core/utils/date-filter.utils"
 import type { ClinicalData } from "./types"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -39,9 +39,13 @@ export function useProceduresContext(
     }
 
     // Filter by time range
+    const inWindow = makeTimeRangeTest(
+      filters?.procedureTimeRange ?? 'all',
+      clinicalData as { encounters?: any[] } | null,
+    )
     let procedures = source.filter((procedure) => {
       const performed = procedure.performedDateTime || procedure.performedPeriod?.end || procedure.performedPeriod?.start
-      return isWithinTimeRange(performed, filters?.procedureTimeRange ?? 'all')
+      return inWindow(performed)
     })
 
     if (procedures.length === 0) {

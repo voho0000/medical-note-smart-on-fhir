@@ -17,6 +17,8 @@ import { StorageService } from '@/src/shared/utils/storage.utils'
 import {
   DEFAULT_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
+  ALL_DATA_SELECTION,
+  ALL_DATA_FILTERS,
   CUSTOM_TEMPLATE_DEFAULT,
   DATA_SELECTION_PRESETS,
   STORAGE_KEYS,
@@ -55,6 +57,9 @@ interface DataSelectionContextValue {
   updateSelection: (dataType: DataType, isSelected: boolean) => void
   resetToDefaults: () => void
   applyPreset: (presetId: PresetId) => void
+  /** One-click "include everything": all categories + all-time windows + all
+   *  documents. Pairs with the token meter for small-context patients. */
+  selectAllData: () => void
   /** Selected template mode for the main Data Selection panel. */
   activePreset: PresetId
   filters: DataFilters
@@ -143,7 +148,7 @@ export function coerceProfile(saved: Partial<ConsumerProfile> | undefined): Cons
     // stored profile are simply ignored here.
     supplementaryNotes: typeof saved.supplementaryNotes === 'string' ? saved.supplementaryNotes : '',
     editedClinicalContext: typeof saved.editedClinicalContext === 'string' ? saved.editedClinicalContext : null,
-    documentMode: mode === 'all' || mode === 'custom' || mode === 'latestAdmission' ? mode : 'latestAdmission',
+    documentMode: mode === 'all' || mode === 'custom' || mode === 'latestAdmission' || mode === 'recentAdmissions' ? mode : 'latestAdmission',
     documentIds: Array.isArray(saved.documentIds) ? saved.documentIds.filter((x): x is string => typeof x === 'string') : [],
   }
 }
@@ -282,6 +287,24 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
     [patchTargets, templateForPreset],
   )
 
+  // Include everything: all categories on, all-time windows, all documents.
+  // Documents switch to 'all' mode (not the sticky latestAdmission) so 全選
+  // really means every discharge summary too. Mirrors into the custom template
+  // when that's the active slot, like the other bulk edits.
+  const selectAllData = useCallback(() => {
+    patchTargets({
+      selection: { ...ALL_DATA_SELECTION },
+      filters: { ...ALL_DATA_FILTERS },
+      documentMode: 'all',
+    })
+    if (activePreset === 'custom') {
+      setCustomTemplate({
+        selection: { ...ALL_DATA_SELECTION },
+        filters: { ...ALL_DATA_FILTERS },
+      })
+    }
+  }, [activePreset, patchTargets])
+
   const setSupplementaryNotes = useCallback(
     (notes: string) => patchTargets({ supplementaryNotes: notes }),
     [patchTargets],
@@ -337,6 +360,7 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       updateSelection,
       resetToDefaults,
       applyPreset,
+      selectAllData,
       activePreset,
       filters: current.filters,
       setFilters,
@@ -356,7 +380,7 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       setFiltersFor,
     }),
     [
-      current, setSelectedData, updateSelection, resetToDefaults, applyPreset, activePreset,
+      current, setSelectedData, updateSelection, resetToDefaults, applyPreset, selectAllData, activePreset,
       setFilters, setSupplementaryNotes, setEditedClinicalContext, setDocumentMode, setDocumentIds,
       getProfile, setNotesFor, setEditedContextFor, updateSelectionFor, setFiltersFor,
     ],

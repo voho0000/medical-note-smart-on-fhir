@@ -15,7 +15,10 @@ import type {
 /** LOINC 18842-5 = 出院病摘 (discharge summary). */
 export const DISCHARGE_SUMMARY_LOINC = '18842-5'
 
-export type DocumentMode = 'latestAdmission' | 'all' | 'custom'
+export type DocumentMode = 'latestAdmission' | 'recentAdmissions' | 'all' | 'custom'
+
+/** How many admissions 'recentAdmissions' mode includes. */
+export const RECENT_ADMISSIONS_COUNT = 3
 
 export interface ClinicalDocumentRef {
   id: string
@@ -156,9 +159,12 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
 
 /**
  * The documents to actually include, given the user's mode + custom id list.
- * - latestAdmission → the single most recent 出院病摘 (fallback: latest doc)
- * - all            → every document
- * - custom         → exactly the ticked ids
+ * - latestAdmission  → the single most recent 出院病摘 (fallback: latest doc)
+ * - recentAdmissions → the most recent N 出院病摘 (fallback: N latest docs) —
+ *                      covers a multi-admission treatment course without dumping
+ *                      every discharge summary a frequent-flyer patient has.
+ * - all              → every document
+ * - custom           → exactly the ticked ids
  * Input is assumed newest-first (as `listClinicalDocuments` returns).
  */
 export function resolveSelectedDocuments(
@@ -170,6 +176,11 @@ export function resolveSelectedDocuments(
   if (mode === 'custom') {
     const set = new Set(ids)
     return docs.filter((d) => set.has(d.id))
+  }
+  if (mode === 'recentAdmissions') {
+    const discharges = docs.filter((d) => d.isDischargeSummary)
+    const pool = discharges.length ? discharges : docs
+    return pool.slice(0, RECENT_ADMISSIONS_COUNT)
   }
   // latestAdmission
   const discharge = docs.find((d) => d.isDischargeSummary)

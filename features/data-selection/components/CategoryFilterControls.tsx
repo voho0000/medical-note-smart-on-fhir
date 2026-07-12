@@ -23,6 +23,11 @@ const VALUE_LABELS: Record<string, { zh: string; en: string }> = {
   '1y': { zh: '1 年', en: '1y' },
   '3y': { zh: '3 年', en: '3y' },
   '5y': { zh: '5 年', en: '5y' },
+  sinceLastVisit: { zh: '上次就醫以來', en: 'Since last visit' },
+  // Lab trend-depth options (labTrendPoints)
+  '4': { zh: '4 點', en: '4 pts' },
+  '8': { zh: '8 點', en: '8 pts' },
+  '16': { zh: '16 點', en: '16 pts' },
 }
 
 interface CategoryFilterControlsProps {

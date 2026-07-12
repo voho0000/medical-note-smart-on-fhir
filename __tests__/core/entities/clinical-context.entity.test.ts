@@ -27,6 +27,8 @@ const makeFilters = (range: TimeRange = 'all'): DataFilters => ({
   medicationTimeRange: range,
   labReportVersion: 'latest',
   labReportTimeRange: range,
+  labTrendPoints: '8',
+  labPanelIds: '',
   imagingReportVersion: 'latest',
   imagingReportTimeRange: range,
   vitalSignsVersion: 'latest',

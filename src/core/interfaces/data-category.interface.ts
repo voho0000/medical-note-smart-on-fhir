@@ -13,7 +13,7 @@ export type DataFilterKey =
   | 'problemList'
   | 'procedure'
 
-export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | 'all'
+export type TimeRange = '24h' | '3d' | '1w' | '1m' | '3m' | '6m' | '1y' | 'all' | 'sinceLastVisit'
 
 export interface ClinicalContextSection {
   title: string

@@ -102,6 +102,8 @@ describe('GenerateClinicalContextUseCase', () => {
       medicationTimeRange: 'all',
       labReportVersion: 'all',
       labReportTimeRange: 'all',
+      labTrendPoints: '8',
+      labPanelIds: '',
       imagingReportVersion: 'all',
       imagingReportTimeRange: 'all',
       vitalSignsVersion: 'all',

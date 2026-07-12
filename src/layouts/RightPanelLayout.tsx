@@ -68,6 +68,7 @@ const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
 // PROVIDERS - Import providers needed by features
 // ============================================================================
 import { DataSelectionProvider } from "@/src/application/providers/data-selection.provider"
+import { AdaptiveDataDefaultsRunner } from "@/features/data-selection/AdaptiveDataDefaultsRunner"
 import { AsrProvider } from "@/src/application/providers/asr.provider"
 import { ClinicalInsightsConfigProvider } from "@/src/application/providers/clinical-insights-config.provider"
 import { ChatTemplatesProvider } from "@/src/application/providers/chat-templates.provider"
@@ -93,6 +94,7 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
 function RightPanelProviders({ children }: { children: ReactNode }) {
   return (
     <DataSelectionProvider>
+      <AdaptiveDataDefaultsRunner />
       <AsrProvider>
         <ChatTemplatesProvider>
           <ClinicalInsightsConfigProvider>
