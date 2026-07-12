@@ -8,7 +8,6 @@ import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { ModelAndKeySettings } from "./components/ApiKeyField"
-import { ChatTemplatesSettings } from "./components/ChatTemplatesSettings"
 import { DisplaySettings } from "./components/DisplaySettings"
 
 export function SettingsFeature() {
@@ -20,7 +19,7 @@ export function SettingsFeature() {
   // for theme + about (reachable from the header overflow menu); keep
   // the allowlist in sync as sub-tabs are added.
   useEffect(() => {
-    const KNOWN_SUBTABS = ['ai', 'templates', 'display']
+    const KNOWN_SUBTABS = ['ai', 'display']
     if (activeTab === 'settings' && !KNOWN_SUBTABS.includes(settingsTab)) {
       setActiveTab('settings', 'ai')
     }
@@ -29,12 +28,9 @@ export function SettingsFeature() {
   return (
     <div className="space-y-4">
       <Tabs value={settingsTab} onValueChange={(value) => setActiveTab('settings', value)} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
+        <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50 rounded-md">
           <TabsTrigger value="ai" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
             <span className="truncate" title={t.settings.aiPreferences}>{t.settings.aiPreferences}</span>
-          </TabsTrigger>
-          <TabsTrigger value="templates" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
-            <span className="truncate" title={t.settings.chatTemplates}>{t.settings.chatTemplates}</span>
           </TabsTrigger>
           <TabsTrigger value="display" className={`text-sm rounded-sm overflow-hidden ${TAB_ACTIVE_CLASSES.settings} min-w-0`}>
             <span className="truncate" title={(t.settings as any).display ?? '顯示與關於'}>{(t.settings as any).display ?? '顯示與關於'}</span>
@@ -44,13 +40,6 @@ export function SettingsFeature() {
           <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
             <CardContent>
               <ModelAndKeySettings />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="templates" className="space-y-4">
-          <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
-            <CardContent>
-              <ChatTemplatesSettings />
             </CardContent>
           </Card>
         </TabsContent>

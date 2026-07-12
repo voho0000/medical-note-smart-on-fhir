@@ -32,6 +32,7 @@ import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { ChatMessageList } from "./ChatMessageList"
 import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
+import { ChatTemplatesManagerDrawer } from "./ChatTemplatesManagerDrawer"
 import { ChatModeSelector } from "./ChatModeSelector"
 import { ChatInputArea } from "./ChatInputArea"
 import { SuggestionChips } from "./SuggestionChips"
@@ -117,6 +118,7 @@ export default function MedicalChat() {
   
   // Prompt Gallery state
   const [showPromptGallery, setShowPromptGallery] = useState(false)
+  const [showTemplateManager, setShowTemplateManager] = useState(false)
   
   // Auth Dialog state
   const [showAuthDialog, setShowAuthDialog] = useState(false)
@@ -587,6 +589,7 @@ export default function MedicalChat() {
               onTemplateChange={template.setSelectedTemplateId}
               hasTemplateContent={!!template.selectedTemplate?.content?.trim()}
               onOpenGallery={() => setShowPromptGallery(true)}
+              onManageTemplates={() => setShowTemplateManager(true)}
               isLoadingClinicalData={isLoadingClinicalData}
               agentModeActive={isAgentMode}
               showModelPicker={isExpanded}
@@ -708,6 +711,11 @@ export default function MedicalChat() {
           mode="chat"
           onSelectPrompt={handleSelectPrompt}
         />
+        <ChatTemplatesManagerDrawer
+          open={showTemplateManager}
+          onOpenChange={setShowTemplateManager}
+          initialTemplateId={template.selectedTemplate?.id}
+        />
         <AuthDialog
           open={showAuthDialog}
           onOpenChange={setShowAuthDialog}
@@ -725,6 +733,11 @@ export default function MedicalChat() {
         onOpenChange={setShowPromptGallery}
         mode="chat"
         onSelectPrompt={handleSelectPrompt}
+      />
+      <ChatTemplatesManagerDrawer
+        open={showTemplateManager}
+        onOpenChange={setShowTemplateManager}
+        initialTemplateId={template.selectedTemplate?.id}
       />
       <AuthDialog
         open={showAuthDialog}

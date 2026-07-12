@@ -9,7 +9,7 @@ import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAutoIncludeContext, useSetAutoIncludeContext } from "@/src/application/stores/chat.store"
 import { useModelPref, useSetModelFor, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
-import { Plus, FileText, Settings, ChevronDown, Library, Sparkles, KeyRound } from "lucide-react"
+import { Plus, FileText, Settings, ChevronDown, Library, Sparkles, KeyRound, SlidersHorizontal } from "lucide-react"
 
 interface Template {
   id: string
@@ -26,6 +26,7 @@ interface ChatToolbarProps {
   onTemplateChange: (id: string) => void
   hasTemplateContent: boolean
   onOpenGallery?: () => void
+  onManageTemplates: () => void
   isLoadingClinicalData?: boolean
   /** Deep mode active: models flagged disableAgentMode are locked in the picker. */
   agentModeActive?: boolean
@@ -43,22 +44,19 @@ export function ChatToolbar({
   onTemplateChange,
   hasTemplateContent,
   onOpenGallery,
+  onManageTemplates,
   isLoadingClinicalData = false,
   agentModeActive = false,
   showModelPicker = false,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
-  const { setActiveTab } = useRightPanel()
   const autoIncludeContext = useAutoIncludeContext()
   const setAutoIncludeContext = useSetAutoIncludeContext()
   const chatModelPref = useModelPref('chat')
   const setModelFor = useSetModelFor()
 
-  const handleManageTemplates = () => {
-    setActiveTab('settings', 'templates')
-  }
-
   // Models are picked in-panel now; Settings only holds the API keys.
+  const { setActiveTab } = useRightPanel()
   const handleManageKeys = () => {
     setActiveTab('settings', 'ai')
   }
@@ -151,6 +149,17 @@ export function ChatToolbar({
               ))}
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={onManageTemplates}
+            className="h-7 w-7 border-l sm:h-6 sm:w-6"
+            aria-label={t.chat.manageTemplates || "管理範本"}
+            title={t.chat.manageTemplates || "管理範本"}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ) : null}
       {showModelPicker && (
@@ -184,8 +193,8 @@ export function ChatToolbar({
             <KeyRound className="h-3.5 w-3.5" />
             {t.chat.manageKeys || "API 金鑰"}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleManageTemplates} className="gap-2 cursor-pointer">
-            <Settings className="h-3.5 w-3.5" />
+          <DropdownMenuItem onClick={onManageTemplates} className="gap-2 cursor-pointer">
+            <SlidersHorizontal className="h-3.5 w-3.5" />
             {t.chat.manageTemplates || "管理範本"}
           </DropdownMenuItem>
         </DropdownMenuContent>
