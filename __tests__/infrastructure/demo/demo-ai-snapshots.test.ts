@@ -28,4 +28,8 @@ describe('demo medical-summary snapshots', () => {
       JSON.stringify(demoMedicalSummarySnapshots[audience]),
     )).not.toBeNull()
   })
+
+  it.each(['medical', 'patient'] as const)('does not restore the retired %s decisions card', (audience) => {
+    expect(demoMedicalSummarySnapshots[audience].decisions).toEqual([])
+  })
 })

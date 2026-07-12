@@ -188,11 +188,8 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
       { label: '腎結石', basis: '超音波檢查紀錄', kind: 'diagnosis', sources: ['L30'] },
       { label: '膽囊沉積物', basis: '超音波檢查紀錄', kind: 'diagnosis', sources: ['L30'] },
     ],
-    decisions: [
-      { text: '密切追蹤肺部浸潤與肺炎症狀', urgency: 'high', rationale: '近期影像顯示雙側肺部浸潤及雙側肋膜積水', sources: ['L1'] },
-      { text: '監測腎功能惡化趨勢', urgency: 'medium', rationale: 'eGFR由35降至32，需評估藥物對腎臟之影響', sources: ['L7'] },
-      { text: '安排心臟超音波評估', urgency: 'medium', rationale: '心電圖顯示陳舊性前中隔梗塞及邊緣性心臟擴大', sources: ['L16', 'L1'] },
-    ],
+    // Follow-up and safety actions live in the separate safety analysis.
+    decisions: [],
     // Timeline = the OBJECTIVE care journey: the SAME significant milestones as
     // the patient view (identical refs + categories), only the label wording
     // differs by audience. Curated (not per-audience AI-generated) because two
@@ -300,20 +297,8 @@ export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResul
       { label: '腎結石', basis: '腹部超音波檢查', kind: 'lab', sources: ['L30'] },
       { label: '膽囊沉積物', basis: '腹部超音波檢查', kind: 'lab', sources: ['L30'] },
     ],
-    decisions: [
-      {
-        text: '請於下次門診時與醫師確認目前的腎功能狀況（eGFR數值追蹤）。',
-        urgency: 'medium',
-        rationale: '近期的檢驗結果顯示腎功能指數有變化（如 eGFR 35→33→32），適合向主治醫師確認治療調整方向。',
-        sources: ['L7', 'L24'],
-      },
-      {
-        text: '請與眼科醫師討論目前的眼藥水使用計畫，確認各項眼藥點用順序。',
-        urgency: 'low',
-        rationale: '有多種眼藥水（如派滴兒、必目寧等）正在同時使用中。',
-        sources: ['M3', 'M4', 'M5', 'M6'],
-      },
-    ],
+    // Follow-up and safety actions live in the separate safety analysis.
+    decisions: [],
     // Same significant milestones as the medical view (identical refs +
     // categories) — only the label wording is plainer. Never more/fewer/other
     // events than the clinician sees.
