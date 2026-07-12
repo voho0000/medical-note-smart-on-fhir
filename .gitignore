@@ -58,3 +58,4 @@ next-env.d.ts
 # loop-engineering working files — verdict output + per-iteration goal
 /.loop/
 /scripts/loop/goal.md
+scripts/experiments/*/results/
