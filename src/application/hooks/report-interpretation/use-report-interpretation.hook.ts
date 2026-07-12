@@ -3,18 +3,16 @@
 // and caches the result per report so re-expanding / switching tabs doesn't
 // re-run / re-bill. Purely ON-DEMAND — unlike the safety scan there is NO
 // auto-run: a patient may have dozens of reports, so we never spend quota until
-// the user presses the button on a specific report.
+// the user presses the button on a specific report. (That's why this hook uses
+// only the store + run-body pieces of the shared ai-generation machinery, not
+// the patient-slot engine: its cache key is content-based, not patient-based.)
 'use client'
 
 import { useCallback, useEffect, useMemo } from 'react'
-import { create } from 'zustand'
-import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
-import { getUserErrorMessage } from '@/src/core/errors'
 import {
-  saveEncryptedCache,
   loadEncryptedCache,
   aiResultCacheKey,
 } from '@/src/infrastructure/cache/encrypted-session-cache'
@@ -23,6 +21,8 @@ import {
   prepareReportText,
   REPORT_INTERPRETATION_MODEL_ID,
 } from '@/src/core/use-cases/report-interpretation/generate-report-interpretation.use-case'
+import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
+import { runGenerationJob } from '@/src/application/hooks/ai-generation/run-generation-job'
 import { buildReportInterpretationCompositeKey } from './report-interpretation-cache-key'
 import type {
   ReportInterpretation,
@@ -34,43 +34,14 @@ import type {
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const cacheKey = (compositeKey: string) => aiResultCacheKey('report-interp', compositeKey)
 
-interface Store {
-  // Keyed by compositeKey = mode::audience::locale::contentSig. This lets the
-  // same narrative reuse one result across report and visit-history entry
-  // points even if their row ids differ, while text changes still invalidate it.
-  byKey: Record<string, ReportInterpretation>
-  generating: Record<string, boolean>
-  errors: Record<string, string | null>
-  hydrated: Record<string, boolean>
-  setResult: (key: string, result: ReportInterpretation) => void
-  clear: (key: string) => void
-  setGenerating: (key: string, value: boolean) => void
-  setError: (key: string, error: string | null) => void
-  setHydrated: (key: string, value: boolean) => void
-}
-
-// Module-level cache (survives tab switches / accordion collapse within a session).
-const useStore = create<Store>((set) => ({
-  byKey: {},
-  generating: {},
-  errors: {},
-  hydrated: {},
-  setResult: (key, result) => set((s) => ({ byKey: { ...s.byKey, [key]: result } })),
-  clear: (key) =>
-    set((s) => {
-      const next = { ...s.byKey }
-      delete next[key]
-      return { byKey: next }
-    }),
-  setGenerating: (key, value) => set((s) => ({ generating: { ...s.generating, [key]: value } })),
-  setError: (key, error) => set((s) => ({ errors: { ...s.errors, [key]: error } })),
-  setHydrated: (key, value) => set((s) => ({ hydrated: { ...s.hydrated, [key]: value } })),
-}))
-
-// Drop cached interpretations when a new bundle is imported. (The cache key
-// already includes a content signature, but a full reset keeps re-import
-// behaviour uniform with the summary/safety stores.)
-resetOnBundleChange(() => useStore.setState({ byKey: {}, generating: {}, errors: {}, hydrated: {} }))
+// Module-level cache (survives tab switches / accordion collapse within a
+// session; wiped when a new bundle is imported — the cache key already includes
+// a content signature, but a full reset keeps re-import behaviour uniform with
+// the summary/safety stores). Keyed by compositeKey =
+// mode::audience::locale::contentSig, so the same narrative reuses one result
+// across report and visit-history entry points even if their row ids differ,
+// while text changes still invalidate it.
+const useStore = createAiResultStore<ReportInterpretation>()
 
 export interface UseReportInterpretationArgs {
   /** Stable host id for UI/debug identity. The AI cache is content-based so the
@@ -129,10 +100,8 @@ export function useReportInterpretation(
   const result = useStore((s) => (compositeKey ? s.byKey[compositeKey] : undefined))
   const setResult = useStore((s) => s.setResult)
   const clearSlot = useStore((s) => s.clear)
-  const isGenerating = useStore((s) => (compositeKey ? !!s.generating[compositeKey] : false))
-  const setGenerating = useStore((s) => s.setGenerating)
+  const isGenerating = useStore((s) => (compositeKey ? !!s.running[compositeKey] : false))
   const error = useStore((s) => (compositeKey ? s.errors[compositeKey] ?? null : null))
-  const setError = useStore((s) => s.setError)
   const isHydrated = useStore((s) => (compositeKey ? !!s.hydrated[compositeKey] : false))
   const setHydrated = useStore((s) => s.setHydrated)
 
@@ -164,45 +133,39 @@ export function useReportInterpretation(
       if (!useStore.getState().hydrated[compositeKey]) return
       if (!force && useStore.getState().byKey[compositeKey]) return
       // Never double-start the same slot; a different report may run concurrently.
-      if (useStore.getState().generating[compositeKey]) return
+      // (Checked here too so a forced re-run doesn't clear a slot mid-flight.)
+      if (useStore.getState().running[compositeKey]) return
       const myKey = compositeKey
       if (force) clearSlot(myKey)
-      setGenerating(myKey, true)
-      setError(myKey, null)
-      try {
-        const prepared = prepareReportText(clean, mode)
-        const messages = generateReportInterpretationUseCase.buildMessages({
-          reportText: clean,
-          reportTitle,
-          locale: targetLocale,
-          audience: targetAudience,
-          mode,
-        })
-        let full = ''
-        await ai.stream(messages, {
-          modelId: REPORT_INTERPRETATION_MODEL_ID,
-          onChunk: (chunk: string) => {
-            full = chunk
-          },
-        })
-        const parsed = generateReportInterpretationUseCase.parseResult(full, {
-          truncated: prepared.truncated,
-          coverage: prepared.coverage,
-          mode: prepared.mode,
-        })
-        if (!parsed) {
-          setError(myKey, 'PARSE_FAILED')
-          return
-        }
-        setResult(myKey, parsed)
-        void saveEncryptedCache(cacheKey(myKey), parsed)
-      } catch (err) {
-        setError(myKey, getUserErrorMessage(err))
-      } finally {
-        setGenerating(myKey, false)
-      }
+      await runGenerationJob({
+        store: useStore,
+        key: myKey,
+        cacheKey: cacheKey(myKey),
+        produce: async () => {
+          const prepared = prepareReportText(clean, mode)
+          const messages = generateReportInterpretationUseCase.buildMessages({
+            reportText: clean,
+            reportTitle,
+            locale: targetLocale,
+            audience: targetAudience,
+            mode,
+          })
+          let full = ''
+          await ai.stream(messages, {
+            modelId: REPORT_INTERPRETATION_MODEL_ID,
+            onChunk: (chunk: string) => {
+              full = chunk
+            },
+          })
+          return generateReportInterpretationUseCase.parseResult(full, {
+            truncated: prepared.truncated,
+            coverage: prepared.coverage,
+            mode: prepared.mode,
+          })
+        },
+      })
     },
-    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, ai, clearSlot, setGenerating, setError, setResult],
+    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, ai, clearSlot],
   )
 
   const generate = useCallback(() => run(false), [run])

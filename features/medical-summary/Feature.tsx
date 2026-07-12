@@ -28,6 +28,7 @@ import {
 } from "@/src/application/stores/model-prefs.store"
 import { MEDICAL_SUMMARY_MODEL_ID } from "@/src/core/use-cases/medical-summary/generate-medical-summary.use-case"
 import { CurrentPrioritiesCard } from "./components/CurrentPrioritiesCard"
+import { DecisionList } from "./components/DecisionList"
 import { InvestigationTrendsCard } from "./components/InvestigationTrendsCard"
 import { MedicationEducationCard } from "./components/MedicationEducationCard"
 import { MedicationReconciliationCard } from "./components/MedicationReconciliationCard"
@@ -55,6 +56,7 @@ import type {
   MedicationChangeType,
   ProblemKind,
   ResolvedSourceRef,
+  SummaryUrgency,
   TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
 
@@ -132,6 +134,8 @@ export default function MedicalSummaryFeature() {
     generate,
     retryFailed,
     isGenerating: isBusy,
+    isSummaryGenerating,
+    isSafetyGenerating,
     isRestoring,
     summaryError,
     safetyError,
@@ -176,6 +180,8 @@ export default function MedicalSummaryFeature() {
     type === "cross-facility"
       ? ms.medicationChangeTypes.crossFacility
       : ms.medicationChangeTypes[type]
+  const urgencyLabel = (urgency: SummaryUrgency) =>
+    urgency === "high" ? ms.urgencyHigh : urgency === "medium" ? ms.urgencyMedium : ms.urgencyLow
 
   // Navigate the LEFT panel to a cited resource. Switching to the right tab
   // always works; the pinpoint scroll is best-effort — if no anchor claims
@@ -241,6 +247,7 @@ export default function MedicalSummaryFeature() {
   const [layoutOpen, setLayoutOpen] = useState(false)
   const investigationsRef = useRef<HTMLDivElement>(null)
   const safetyRef = useRef<HTMLDivElement>(null)
+  const decisionsRef = useRef<HTMLDivElement>(null)
   const medicationsRef = useRef<HTMLDivElement>(null)
   const problemsRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -251,6 +258,7 @@ export default function MedicalSummaryFeature() {
     if (result) ids.push("problems")
     if (result?.timeline.length) ids.push("timeline")
     if (showSafetyCard) ids.push("safety")
+    if (result?.decisions.length) ids.push("decisions")
     if (result) ids.push("investigations")
     if (result) ids.push("medications")
     return ids
@@ -270,6 +278,10 @@ export default function MedicalSummaryFeature() {
     safety: {
       label: ms.navSafety,
       description: ms.careSafetyTitle,
+    },
+    decisions: {
+      label: ms.navDecisions,
+      description: ms.decisionsTitle,
     },
     investigations: {
       label: ms.navInvestigations,
@@ -325,11 +337,28 @@ export default function MedicalSummaryFeature() {
       <div ref={safetyRef} className="scroll-mt-2">
         <CareRemindersSafetyCard
           result={safetyResult}
-          isScanning={false}
+          isScanning={isSafetyGenerating}
           error={null}
           hasPatient={hasPatient}
           renderSources={renderSafetySources}
           title={ms.careSafetyTitle}
+        />
+      </div>
+    ) : null,
+    decisions: result?.decisions.length ? (
+      <div ref={decisionsRef} className="scroll-mt-2">
+        <DecisionList
+          result={result}
+          title={ms.decisionsTitle}
+          urgencyLabel={urgencyLabel}
+          basisLabel={ms.basisLabel}
+          aiInferredLabel={ms.aiInferred}
+          showUrgency={!isPatient}
+          typeLabel={typeLabel}
+          unverifiedLabel={ms.unverified}
+          showMoreLabel={ms.showMoreItems}
+          showLessLabel={ms.showLessItems}
+          onNavigate={navigateToResource}
         />
       </div>
     ) : null,
@@ -436,13 +465,18 @@ export default function MedicalSummaryFeature() {
         </TabsList>
         {activeView === "standard" ? (
         <div className="ml-auto flex items-center gap-1.5">
-          <ModelPicker
-            modelId={model}
-            fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
-            onSelect={setModel}
-            tooltip={t.safetyAlerts.modelTooltip}
-            compact
-          />
+          {/* Model choice and card-layout tools are clinician-grade controls —
+              a layperson gains nothing from a raw model dropdown and it reads
+              as alarming; patients keep the regenerate button + auto toggle. */}
+          {!isPatient ? (
+            <ModelPicker
+              modelId={model}
+              fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
+              onSelect={setModel}
+              tooltip={t.safetyAlerts.modelTooltip}
+              compact
+            />
+          ) : null}
           {hasPatient && dataReady ? (
             <Button onClick={() => void generate()} size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs" disabled={isBusy || isRestoring}>
               {isBusy ? (
@@ -476,7 +510,7 @@ export default function MedicalSummaryFeature() {
                 <span className="font-medium text-foreground">{ms.autoGenerate}</span>
                 <Switch checked={autoGenerate} onCheckedChange={setAutoGenerate} className="scale-90" />
               </label>
-              {availableCardIds.length > 0 ? (
+              {!isPatient && availableCardIds.length > 0 ? (
                 <Button
                   type="button"
                   size="sm"
@@ -592,7 +626,7 @@ export default function MedicalSummaryFeature() {
               typeLabel={typeLabel}
               unverifiedLabel={ms.unverified}
               onNavigate={navigateToResource}
-              updating={false}
+              updating={isSummaryGenerating}
             />
           ) : null}
 

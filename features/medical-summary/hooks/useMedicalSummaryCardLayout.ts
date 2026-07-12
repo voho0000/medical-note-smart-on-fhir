@@ -7,6 +7,7 @@ export const MEDICAL_SUMMARY_CARD_IDS = [
   "problems",
   "timeline",
   "safety",
+  "decisions",
   "investigations",
   "medications",
 ] as const
@@ -27,11 +28,11 @@ interface UseMedicalSummaryCardLayoutInput {
 
 const STORAGE_KEY_PREFIX = "medical-summary-card-layout:v2"
 const STORAGE_CHANGE_EVENT = "medical-summary-card-layout-change"
-const LAYOUT_VERSION = 5
+const LAYOUT_VERSION = 6
 
 const DEFAULT_ORDER_BY_AUDIENCE: Record<Audience, MedicalSummaryCardId[]> = {
-  patient: ["problems", "timeline", "investigations", "medications", "safety"],
-  medical: ["problems", "timeline", "investigations", "safety", "medications"],
+  patient: ["problems", "timeline", "investigations", "medications", "safety", "decisions"],
+  medical: ["problems", "timeline", "investigations", "safety", "decisions", "medications"],
 }
 
 const DEFAULT_HIDDEN_BY_AUDIENCE: Record<Audience, MedicalSummaryCardId[]> = {
@@ -84,17 +85,23 @@ function normalizeLayout(value: unknown, audience: Audience): MedicalSummaryCard
     ...defaults.order.filter((id) => !order.includes(id)),
   ]
 
-  // v2 placed patient safety reminders above tests and medication education.
-  // Migrate that persisted layout once so existing browsers receive the new
-  // patient reading flow; subsequent v3 user reordering remains untouched.
-  if (audience === "patient" && candidate.version !== LAYOUT_VERSION) {
+  // Migrations are gated on the version the layout was STORED at (`< N`, not
+  // `!== LAYOUT_VERSION`) so bumping LAYOUT_VERSION for a new step doesn't
+  // re-run old steps over layouts the user has since reordered.
+  const storedVersion = typeof candidate.version === "number" ? candidate.version : 0
+  // v3: patient safety reminders moved below tests and medication education.
+  if (audience === "patient" && storedVersion < 3) {
     fullOrder = moveAfter(fullOrder, "safety", "medications")
   }
-  // v5 places the clinician medication-reconciliation card directly after
-  // safety. Apply once to existing layouts; users can freely reorder it after
-  // this migration.
-  if (audience === "medical" && candidate.version !== LAYOUT_VERSION) {
+  // v5: clinician medication-reconciliation card moved directly after safety.
+  if (audience === "medical" && storedVersion < 5) {
     fullOrder = moveAfter(fullOrder, "medications", "safety")
+  }
+  // v6: the decisions card became a first-class card. Unknown ids are appended
+  // at the end by the fullOrder merge above; place it after safety (its
+  // companion "needs your attention" card) for both audiences.
+  if (storedVersion < 6) {
+    fullOrder = moveAfter(fullOrder, "decisions", "safety")
   }
 
   const storedHidden = Array.isArray(candidate.hidden)
