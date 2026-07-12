@@ -51,7 +51,11 @@ export function HtmlDocumentBody({ attachment, labels }: HtmlDocumentBodyProps) 
     return sanitizeNarrative(decoded)
   }, [attachment.data])
 
-  const isExternal = !attachment.data && !!attachment.url
+  // Only link out to real web URLs — attachment.url comes from an untrusted
+  // imported bundle, so a `javascript:`/`data:` scheme must never become a
+  // clickable href.
+  const isExternal =
+    !attachment.data && !!attachment.url && /^https?:\/\//i.test(attachment.url.trim())
 
   if (isExternal) {
     return (

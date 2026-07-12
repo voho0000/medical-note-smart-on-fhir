@@ -149,10 +149,11 @@ describe('OpenAiService', () => {
       expect(body.temperature).toBe(1)
     })
 
-    it('should include custom temperature when provided', async () => {
-      // Arrange
+    it('should include custom temperature when provided (non-reasoning model)', async () => {
+      // Arrange — gpt-4o: not in the gpt-5 reasoning family, so the caller's
+      // temperature passes through.
       const customTempRequest: AiQueryRequest = {
-        modelId: 'gpt-5.1',
+        modelId: 'gpt-4o',
         messages: [{ role: 'user', content: 'Test' }],
         temperature: 0.5,
       }
@@ -171,6 +172,27 @@ describe('OpenAiService', () => {
       const fetchCall = mockFetch.mock.calls[0]
       const body = JSON.parse(fetchCall[1]?.body as string)
       expect(body.temperature).toBe(0.5)
+    })
+
+    it('forces temperature=1 for every gpt-5-family model (reasoning models reject other values)', async () => {
+      const request: AiQueryRequest = {
+        modelId: 'gpt-5.4-nano',
+        messages: [{ role: 'user', content: 'Test' }],
+        temperature: 0.5,
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'Response' } }],
+        }),
+      } as Response)
+
+      await service.query(request)
+
+      const fetchCall = mockFetch.mock.calls[0]
+      const body = JSON.parse(fetchCall[1]?.body as string)
+      expect(body.temperature).toBe(1)
     })
 
     it('should attach an auth header derived from the API key', async () => {

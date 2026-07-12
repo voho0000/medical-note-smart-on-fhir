@@ -44,6 +44,7 @@ import {
   applyLimit,
 } from './_filter-helpers'
 import { scrubPii } from './_scrub-pii'
+import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 
 export interface AgentDataSource {
   patient: PatientEntity | null
@@ -142,6 +143,13 @@ function dedupMedsByName(meds: any[]): Array<any & { refillCount: number }> {
 // ── factory ────────────────────────────────────────────────────────────────
 
 export function createFhirTools(getData: () => AgentDataSource) {
+  // Structured scrub (ids / birthDate / provider display) + free-text scrub:
+  // discharge summaries and report conclusions carry the patient's name /
+  // chart number / 身分證字號 INSIDE the text, so every string is also masked
+  // against those patterns and the loaded patient's own name/id literals.
+  const scrub = <T,>(payload: T): T =>
+    scrubPii(payload, buildPatientTextLiterals(getData().patient))
+
   return {
     // ── Patient ────────────────────────────────────────────────────────────
 
@@ -151,9 +159,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
       execute: async () => {
         const { patient } = getData()
         if (!patient) {
-          return scrubPii({ success: false, summary: 'Patient not loaded yet', data: null })
+          return scrub({ success: false, summary: 'Patient not loaded yet', data: null })
         }
-        return scrubPii({
+        return scrub({
           success: true,
           summary: 'Patient demographics retrieved (anonymized)',
           data: {
@@ -169,7 +177,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: overviewSchema,
       execute: async () => {
         const { collection } = getData()
-        if (!collection) return scrubPii({ success: false, summary: 'No data loaded', data: null })
+        if (!collection) return scrub({ success: false, summary: 'No data loaded', data: null })
 
         const range = (items: any[], getDate: (x: any) => string | undefined) => {
           const dates = items.map(getDate).filter(Boolean).sort() as string[]
@@ -177,7 +185,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           return { earliest: dates[0]?.slice(0, 10), latest: dates[dates.length - 1]?.slice(0, 10) }
         }
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: 'Data inventory across all resource types',
           data: {
@@ -238,7 +246,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const capped = applyLimit(filtered, limit)
 
         if (summarize) {
-          return scrubPii({
+          return scrub({
             success: true,
             summary: `Found ${filtered.length} Encounter record(s)`,
             count: filtered.length,
@@ -250,7 +258,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           })
         }
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Found ${filtered.length} Encounter record(s)`,
           count: filtered.length,
@@ -272,7 +280,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: recentVisitsSchema,
       execute: async ({ limit, type }: z.infer<typeof recentVisitsSchema>) => {
         const { collection } = getData()
-        if (!collection) return scrubPii({ success: false, summary: 'No data', data: [] })
+        if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
 
         const encounters = [...collection.encounters].sort((a, b) =>
           (b.period?.start || '').localeCompare(a.period?.start || '')
@@ -298,7 +306,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           if (id) procsByEnc.set(id, (procsByEnc.get(id) ?? 0) + 1)
         }
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Top ${top.length} of ${filtered.length} recent visits`,
           count: top.length,
@@ -322,11 +330,11 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: encounterDetailsSchema,
       execute: async ({ encounterId }: z.infer<typeof encounterDetailsSchema>) => {
         const { collection } = getData()
-        if (!collection) return scrubPii({ success: false, summary: 'No data', data: null })
+        if (!collection) return scrub({ success: false, summary: 'No data', data: null })
 
         const enc = collection.encounters.find((e: any) => e.id === encounterId)
         if (!enc) {
-          return scrubPii({
+          return scrub({
             success: false,
             summary: `Encounter ${encounterId} not found`,
             data: null,
@@ -366,7 +374,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           effectiveDateTime: r.effectiveDateTime,
         }))
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Encounter ${encounterId} details`,
           data: {
@@ -400,7 +408,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           .sort((a, b) => b[1] - a[1])
           .map(([department, visitCount]) => ({ department, visitCount }))
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `${data.length} distinct departments`,
           count: data.length,
@@ -421,7 +429,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           matchClinicalStatus(c.clinicalStatus, clinicalStatus)
         )
         const capped = applyLimit(filtered, limit, 100)
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Found ${filtered.length} Condition record(s)`,
           count: filtered.length,
@@ -484,7 +492,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗數據', dateFrom, dateTo)
 
         if (summarize) {
-          return scrubPii({
+          return scrub({
             success: true,
             summary,
             count: filtered.length,
@@ -497,7 +505,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           })
         }
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary,
           count: filtered.length,
@@ -539,7 +547,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           : notFoundMessage('檢驗報告', dateFrom, dateTo)
 
         if (summarize) {
-          return scrubPii({
+          return scrub({
             success: true,
             summary,
             count: filtered.length,
@@ -552,7 +560,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           })
         }
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary,
           count: filtered.length,
@@ -578,7 +586,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: observationSearchSchema,
       execute: async ({ query, withTrend, limit }: z.infer<typeof observationSearchSchema>) => {
         const { collection } = getData()
-        if (!collection) return scrubPii({ success: false, summary: 'No data', data: [] })
+        if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
 
         const all = [...collection.observations, ...collection.vitalSigns]
         const seen = new Set<string>()
@@ -640,7 +648,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         }
         const capped = applyLimit(flat, limit, 50)
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Matched ${matches.length} observation(s) across ${byCode.size} code(s) for "${query}"`,
           count: capped.length,
@@ -667,7 +675,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           )
         }
         const capped = applyLimit(filtered, limit)
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Found ${filtered.length} Procedure record(s)`,
           count: filtered.length,
@@ -685,7 +693,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: listObservationCodesSchema,
       execute: async () => {
         const { collection } = getData()
-        if (!collection) return scrubPii({ success: false, summary: 'No data', data: [] })
+        if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
 
         const all = [...collection.observations, ...collection.vitalSigns]
         const counts = new Map<string, number>()
@@ -697,7 +705,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           .sort((a, b) => b[1] - a[1])
           .map(([code, count]) => ({ code, count }))
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `${data.length} distinct observation codes`,
           count: data.length,
@@ -723,7 +731,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         }
         filtered = [...filtered].sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
         const capped = applyLimit(filtered, limit)
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Found ${filtered.length} MedicationRequest record(s)`,
           count: filtered.length,
@@ -759,7 +767,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
         const deduped = dedupMedsByName(active)
           .sort((a, b) => (b.authoredOn || '').localeCompare(a.authoredOn || ''))
 
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `${deduped.length} active medication(s)`,
           count: deduped.length,
@@ -783,7 +791,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           matchAllergyType(a.type, type) &&
           matchAllergySeverity(a.criticality, severity)
         )
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Found ${filtered.length} AllergyIntolerance record(s)`,
           count: filtered.length,
@@ -807,7 +815,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           filtered = filtered.filter((imm: any) => isWithinDateRange(imm.occurrenceDateTime, dateFrom, dateTo))
         }
         const capped = applyLimit(filtered, limit)
-        return scrubPii({
+        return scrub({
           success: true,
           summary: `Found ${filtered.length} Immunization record(s)`,
           count: filtered.length,

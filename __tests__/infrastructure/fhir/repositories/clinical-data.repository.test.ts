@@ -39,7 +39,7 @@ describe('FhirClinicalDataRepository', () => {
         if (url.startsWith('Observation') && !url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
         if (url.startsWith('DiagnosticReport')) return Promise.resolve({ entry: [{ resource: { resourceType: 'DiagnosticReport' } }] })
         if (url.startsWith('Procedure')) return Promise.resolve({ entry: [{ resource: {} }] })
-        if (url.startsWith('Encounter')) return Promise.resolve({ entry: [{ resource: {} }] })
+        if (url.startsWith('Encounter')) return Promise.resolve({ entry: [{ resource: { resourceType: 'Encounter' } }] })
         if (url.startsWith('DocumentReference')) return Promise.resolve({ entry: [] })
         if (url.startsWith('Composition')) return Promise.resolve({ entry: [] })
         return Promise.resolve({ entry: [] })
@@ -269,7 +269,7 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchEncounters', () => {
     it('should fetch encounters', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'enc-1', status: 'finished' } }]
+        entry: [{ resource: { resourceType: 'Encounter', id: 'enc-1', status: 'finished' } }]
       }
       mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
       mockMapper.toEncounter.mockReturnValue({ id: 'enc-1', status: 'finished' })
@@ -277,6 +277,26 @@ describe('FhirClinicalDataRepository', () => {
       const result = await repository.fetchEncounters('patient-123')
 
       expect(result).toHaveLength(1)
+    })
+
+    // Regression: the query uses _include=Encounter:patient / :location, so
+    // the response bundle also carries Patient and Location entries — those
+    // must NOT be mapped into junk EncounterEntity rows.
+    it('ignores _include-d Patient/Location entries in the same bundle', async () => {
+      const mockResponse = {
+        entry: [
+          { resource: { resourceType: 'Patient', id: 'patient-123' } },
+          { resource: { resourceType: 'Encounter', id: 'enc-1', status: 'finished' } },
+          { resource: { resourceType: 'Location', id: 'loc-1' } },
+        ]
+      }
+      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
+      mockMapper.toEncounter.mockImplementation((r: any) => ({ id: r.id, status: r.status }))
+
+      const result = await repository.fetchEncounters('patient-123')
+
+      expect(result).toEqual([{ id: 'enc-1', status: 'finished' }])
+      expect(mockMapper.toEncounter).toHaveBeenCalledTimes(1)
     })
   })
 })

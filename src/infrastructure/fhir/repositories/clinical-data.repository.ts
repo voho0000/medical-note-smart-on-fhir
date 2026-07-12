@@ -262,7 +262,13 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.requestAllPages(
         `Encounter?patient=${patientId}&_sort=-date&_count=100&_include=Encounter:patient&_include=Encounter:location`
       )
-      return response.entry?.map((e: any) => FhirMapper.toEncounter(e.resource)) || []
+      // _include puts Patient/Location entries in the same bundle — map only
+      // actual Encounters (same guard as fetchDiagnosticReports).
+      return (
+        response.entry
+          ?.filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.ENCOUNTER)
+          .map((e: any) => FhirMapper.toEncounter(e.resource)) || []
+      )
     } catch (error) {
       logFhirError('Failed to fetch encounters:', error)
       return []

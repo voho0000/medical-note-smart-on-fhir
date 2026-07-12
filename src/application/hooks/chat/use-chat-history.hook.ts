@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useChatSessionsQuery, useRemoveSessionMutation } from './use-chat-sessions-query.hook'
-import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
+import { getChatSessionRepository } from '@/src/application/composition.chat'
 import { DeleteChatSessionUseCase } from '@/src/core/use-cases/chat/delete-chat-session.use-case'
 import { logger } from '@/src/shared/services/logger.service'
 
-const repository = new FirestoreChatSessionRepository()
+const repository = getChatSessionRepository()
 
 export function useChatHistory(patientId?: string, fhirServerUrl?: string) {
   const { user } = useAuth()

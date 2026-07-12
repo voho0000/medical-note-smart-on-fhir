@@ -17,6 +17,7 @@ import { useProblemListContext } from "./clinical-context/useProblemListContext"
 import type { ClinicalData } from "./clinical-context/types"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import { listClinicalDocuments, resolveSelectedDocuments, formatDocumentsSection } from "@/src/core/utils/clinical-documents.utils"
+import { scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
 
 export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
@@ -200,10 +201,15 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
 
   const getFullClinicalContext = useCallback((): string => {
     const baseContext = editedClinicalContext ?? formatClinicalContext(getClinicalContext())
-    if (supplementaryNotes.trim()) {
-      return `${baseContext}\n\n## Supplementary Notes\n${supplementaryNotes}`
-    }
-    return baseContext
+    const full = supplementaryNotes.trim()
+      ? `${baseContext}\n\n## Supplementary Notes\n${supplementaryNotes}`
+      : baseContext
+    // Outbound-only PII mask (身分證字號, labeled 病歷號/姓名 values): this
+    // string goes to cloud LLMs (chat first message, summary / safety /
+    // insights context) — discharge-summary bodies included via 文件 selection
+    // are the main carrier. The preview (getFormattedClinicalContext) stays
+    // unmasked so the UI keeps showing source data verbatim.
+    return scrubFreeText(full)
   }, [editedClinicalContext, getClinicalContext, supplementaryNotes])
 
   const resetClinicalContextToDefault = useCallback(() => {

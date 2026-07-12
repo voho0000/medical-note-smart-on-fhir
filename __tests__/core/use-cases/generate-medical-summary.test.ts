@@ -349,13 +349,15 @@ describe('parseResult', () => {
     it('warns with the failure reason and the raw reply head', () => {
       expect(useCase.parseResult('not json at all')).toBeNull()
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('no JSON object found'),
+        expect.stringContaining('no parseable JSON found'),
         'not json at all',
       )
 
+      // Broken syntax also fails extraction (shared llm-json extractor
+      // repairs trailing commas but not arbitrary syntax errors).
       expect(useCase.parseResult('{"headline": "x", broken}')).toBeNull()
       expect(warnSpy).toHaveBeenLastCalledWith(
-        expect.stringContaining('invalid JSON'),
+        expect.stringContaining('no parseable JSON found'),
         expect.any(String),
       )
 

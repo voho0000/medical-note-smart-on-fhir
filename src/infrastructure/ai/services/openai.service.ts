@@ -54,9 +54,11 @@ export class OpenAiService {
       stream: false,
     }
 
-    // Special handling for gpt-5-mini and gpt-5-nano
-    // Firebase proxy only supports temperature = 1 for these models
-    if (request.modelId === 'gpt-5-mini' || request.modelId === 'gpt-5-nano') {
+    // GPT-5-family (reasoning) models only accept temperature = 1. The old
+    // check listed retired ids (gpt-5-mini / gpt-5-nano) verbatim and silently
+    // stopped matching when the lineup moved to gpt-5.4-* — match the family
+    // by prefix so lineup bumps can't reintroduce the drift.
+    if (/^gpt-5/.test(request.modelId)) {
       body.temperature = 1
     } else if (request.temperature !== undefined) {
       body.temperature = request.temperature

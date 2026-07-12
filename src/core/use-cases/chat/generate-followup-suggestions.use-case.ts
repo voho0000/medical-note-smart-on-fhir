@@ -3,6 +3,7 @@
 // clinician is likely to want. Pure prompt+parse, no state/framework — runs on
 // a cheap model and fails closed (empty list) so it can never break the chat.
 import type { AiMessage } from '@/src/core/entities/ai.entity'
+import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 
 export interface FollowupSuggestion {
   /** Short button text, in the UI language (≤ ~12 words). */
@@ -88,24 +89,17 @@ export class GenerateFollowupSuggestionsUseCase {
     ]
   }
 
-  /** Tolerant parse: strip fences, slice to the outermost object, validate. */
+  /** Tolerant parse: shared fence/prose-stripping extractor, then validate. */
   parse(text: string): FollowupSuggestion[] {
     if (!text || !text.trim()) return []
-    try {
-      const cleaned = text.replace(/```json\s*|```/g, '').trim()
-      const start = cleaned.indexOf('{')
-      const end = cleaned.lastIndexOf('}')
-      const json = start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned
-      const obj = JSON.parse(json)
-      const arr = Array.isArray(obj?.suggestions) ? obj.suggestions : []
-      return arr
-        .filter((s: any) => s && typeof s.label === 'string' && typeof s.prompt === 'string')
-        .map((s: any) => ({ label: s.label.trim().slice(0, 80), prompt: s.prompt.trim() }))
-        .filter((s: FollowupSuggestion) => s.label.length > 0 && s.prompt.length > 0)
-        .slice(0, 4)
-    } catch {
-      return []
-    }
+    const obj = tryExtractJsonValue(text) as any
+    if (obj === null) return []
+    const arr = Array.isArray(obj?.suggestions) ? obj.suggestions : []
+    return arr
+      .filter((s: any) => s && typeof s.label === 'string' && typeof s.prompt === 'string')
+      .map((s: any) => ({ label: s.label.trim().slice(0, 80), prompt: s.prompt.trim() }))
+      .filter((s: FollowupSuggestion) => s.label.length > 0 && s.prompt.length > 0)
+      .slice(0, 4)
   }
 }
 

@@ -7,56 +7,12 @@
 // rows rather than failing the whole batch. Total failure → [].
 
 import { z } from 'zod'
+// The generic extraction/repair logic was promoted to core so every
+// structured-output feature shares it — re-exported here so existing
+// feature-internal imports keep working.
+import { extractJsonObject, LlmJsonError } from '@/src/core/utils/llm-json.utils'
 
-/** Thrown when no JSON object/array can be extracted from the model output. */
-export class LlmJsonError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'LlmJsonError'
-  }
-}
-
-/**
- * Pull a JSON value out of a raw model response. Handles markdown code fences and
- * leading/trailing prose, and retries once after stripping trailing commas.
- * Returns the parsed value (object or array). Throws `LlmJsonError` on failure.
- */
-export function extractJsonObject(raw: string): unknown {
-  if (!raw || typeof raw !== 'string') {
-    throw new LlmJsonError('Empty model response')
-  }
-
-  let s = raw.trim()
-
-  // Strip a fenced ```json … ``` / ``` … ``` block, keeping the inner content.
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fence?.[1]) s = fence[1].trim()
-
-  // Slice from the first opening bracket to the last matching closing bracket so
-  // surrounding prose ("Here is the JSON: { … }") doesn't break JSON.parse.
-  const firstObj = s.indexOf('{')
-  const firstArr = s.indexOf('[')
-  const start =
-    firstObj === -1 ? firstArr : firstArr === -1 ? firstObj : Math.min(firstObj, firstArr)
-  const lastObj = s.lastIndexOf('}')
-  const lastArr = s.lastIndexOf(']')
-  const end = Math.max(lastObj, lastArr)
-  if (start !== -1 && end !== -1 && end > start) {
-    s = s.slice(start, end + 1)
-  }
-
-  try {
-    return JSON.parse(s)
-  } catch {
-    // One repair pass: remove trailing commas before } or ].
-    const repaired = s.replace(/,\s*([}\]])/g, '$1')
-    try {
-      return JSON.parse(repaired)
-    } catch {
-      throw new LlmJsonError('Model response was not valid JSON')
-    }
-  }
-}
+export { extractJsonObject, LlmJsonError }
 
 const EvidenceSchema = z.object({
   kind: z

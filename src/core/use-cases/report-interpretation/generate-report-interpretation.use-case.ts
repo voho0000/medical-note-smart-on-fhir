@@ -12,6 +12,8 @@ import {
   type ReportInterpretationCoverage,
   type ReportInterpretationMode,
 } from '@/src/core/entities/report-interpretation.entity'
+import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
+import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 
 // Same fast, cheap, clean-JSON model the safety scan pinned after the head-to-
 // head eval — pin it so this on-demand task doesn't ride the user's possibly-slow
@@ -160,7 +162,11 @@ export function prepareReportText(
   text: string,
   mode: ReportInterpretationMode = 'standard',
 ): PreparedReportText {
-  const clean = (text ?? '').trim()
+  // Outbound PII scrub BEFORE clamping: discharge summaries / report bodies
+  // often carry the patient's name, chart number, and 身分證字號 in the free
+  // text — mask those before the text reaches any cloud LLM. Display paths
+  // never go through here, so the UI keeps showing the source verbatim.
+  const clean = scrubFreeText((text ?? '').trim())
   if (mode !== 'long-document') {
     if (clean.length <= REPORT_INPUT_CHAR_CAP) {
       return { text: clean, truncated: false, coverage: 'full', mode }
@@ -220,14 +226,8 @@ export class GenerateReportInterpretationUseCase {
     text: string,
     metadata: boolean | Pick<PreparedReportText, 'truncated' | 'coverage' | 'mode'>,
   ): ReportInterpretation | null {
-    const json = extractJsonObject(text)
-    if (!json) return null
-    let raw: unknown
-    try {
-      raw = JSON.parse(json)
-    } catch {
-      return null
-    }
+    const raw = tryExtractJsonValue(text)
+    if (raw === null) return null
     const parsed = ReportInterpretationSchema.safeParse(raw)
     if (!parsed.success) return null
     const meta: Pick<PreparedReportText, 'truncated' | 'coverage' | 'mode'> =
@@ -236,16 +236,6 @@ export class GenerateReportInterpretationUseCase {
         : metadata
     return { ...parsed.data, truncated: meta.truncated, coverage: meta.coverage, mode: meta.mode }
   }
-}
-
-/** Pull the outermost {...} out of a reply that may have fences/prose around it. */
-function extractJsonObject(text: string): string | null {
-  if (!text) return null
-  const stripped = text.replace(/```json/gi, '').replace(/```/g, '').trim()
-  const start = stripped.indexOf('{')
-  const end = stripped.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) return null
-  return stripped.slice(start, end + 1)
 }
 
 export const generateReportInterpretationUseCase = new GenerateReportInterpretationUseCase()

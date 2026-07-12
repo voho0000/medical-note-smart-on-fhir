@@ -4,6 +4,12 @@ export interface ModelDefinition {
   id: string
   label: string
   provider: ModelProvider
+  // Conservative input-context budget (tokens) used by context-window
+  // truncation (token-estimator/context-window-manager). REQUIRED so a new
+  // model can never silently fall back to a tiny default — keeping this here
+  // (instead of a separate CONTEXT_LIMITS table) is what prevents the two
+  // lists from drifting apart.
+  contextLimit: number
   requiresUserKey?: boolean
   disableAgentMode?: boolean // Models with known function calling issues
   disabled?: boolean // Temporarily not selectable (shown locked) — e.g. not yet available
@@ -11,8 +17,8 @@ export interface ModelDefinition {
 
 // Internal models for AI title generation (not shown to users)
 export const INTERNAL_MODELS = [
-  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai" as const },
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini" as const },
+  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai" as const, contextLimit: 120000 },
+  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini" as const, contextLimit: 900000 },
 ] as const satisfies readonly ModelDefinition[]
 
 // User-selectable models. Within each provider, an entry WITHOUT
@@ -22,24 +28,24 @@ export const INTERNAL_MODELS = [
 // Gemini intentionally exposes two free tiers (Flash-Lite + Flash Preview); the
 // proxy's own allowlist (functions: ALLOWED_GEMINI_MODEL_IDS) must match.
 export const GPT_MODELS = [
-  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai" },
-  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "openai", requiresUserKey: true },
-  { id: "gpt-5.4", label: "GPT-5.4", provider: "openai", requiresUserKey: true },
-  { id: "gpt-5.5", label: "GPT-5.5", provider: "openai", requiresUserKey: true },
+  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai", contextLimit: 120000 },
+  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "openai", requiresUserKey: true, contextLimit: 120000 },
+  { id: "gpt-5.4", label: "GPT-5.4", provider: "openai", requiresUserKey: true, contextLimit: 120000 },
+  { id: "gpt-5.5", label: "GPT-5.5", provider: "openai", requiresUserKey: true, contextLimit: 120000 },
 ] as const satisfies readonly ModelDefinition[]
 
 export const GEMINI_MODELS = [
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini" },
-  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", provider: "gemini" },
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", provider: "gemini", requiresUserKey: true },
-  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", provider: "gemini", requiresUserKey: true },
+  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini", contextLimit: 900000 },
+  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", provider: "gemini", contextLimit: 900000 },
+  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", provider: "gemini", requiresUserKey: true, contextLimit: 900000 },
+  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", provider: "gemini", requiresUserKey: true, contextLimit: 1800000 },
 ] as const satisfies readonly ModelDefinition[]
 
 export const CLAUDE_MODELS = [
-  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", provider: "claude" },
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "claude", requiresUserKey: true },
-  { id: "claude-opus-4-8", label: "Claude Opus 4.8", provider: "claude", requiresUserKey: true },
-  { id: "claude-fable-5", label: "Claude Fable 5", provider: "claude", requiresUserKey: true, disabled: true },
+  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", provider: "claude", contextLimit: 180000 },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "claude", requiresUserKey: true, contextLimit: 180000 },
+  { id: "claude-opus-4-8", label: "Claude Opus 4.8", provider: "claude", requiresUserKey: true, contextLimit: 180000 },
+  { id: "claude-fable-5", label: "Claude Fable 5", provider: "claude", requiresUserKey: true, disabled: true, contextLimit: 180000 },
 ] as const satisfies readonly ModelDefinition[]
 
 export type GptModelId = (typeof GPT_MODELS)[number]["id"]

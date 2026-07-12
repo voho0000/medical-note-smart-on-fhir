@@ -5,6 +5,7 @@
  */
 
 import type { AiMessage, AiProvider } from '@/src/core/entities/ai.entity'
+import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 
 const SYSTEM_INSTRUCTION =
   "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate.\n\n" +
@@ -43,7 +44,9 @@ export class GenerateInsightUseCase {
       { role: "system" as const, content: SYSTEM_INSTRUCTION },
       {
         role: "user" as const,
-        content: `${input.prompt}\n\n---\nPatient Clinical Context:\n${input.clinicalContext}`,
+        // Outbound PII mask (身分證 / labeled 病歷號/姓名) — idempotent over
+        // what getFullClinicalContext already scrubbed upstream.
+        content: `${input.prompt}\n\n---\nPatient Clinical Context:\n${scrubFreeText(input.clinicalContext)}`,
       },
     ]
   }

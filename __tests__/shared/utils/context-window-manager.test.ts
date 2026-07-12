@@ -42,12 +42,16 @@ describe('selectMessagesToSend', () => {
 })
 
 describe('truncateToContextWindow', () => {
+  // Context limits now live on ModelDefinition (ai-models.constants.ts); an id
+  // that isn't in the current lineup falls back to DEFAULT_CONTEXT_LIMIT
+  // (15000). Use an unknown id so these tests exercise the conservative-floor
+  // path without depending on any real model's budget.
   it('keeps the most recent messages that fit within the budget', () => {
-    // gpt-4 limit 7000, reserve 1000 → ~6000 available. Each message ≈ 2004
-    // tokens (8000 chars / 4 + 4 overhead), so only the last two fit.
-    const messages = Array.from({ length: 6 }, (_, i) => msg('user', `${i}:` + 'x'.repeat(8000)))
+    // Unknown model → 15000 limit, reserve 1000 → ~14000 available. Each
+    // message ≈ 5006 tokens (20000 chars / 4 + overhead), so only two fit.
+    const messages = Array.from({ length: 6 }, (_, i) => msg('user', `${i}:` + 'x'.repeat(20000)))
     const out = truncateToContextWindow(messages, {
-      modelId: 'gpt-4',
+      modelId: 'some-retired-model',
       systemPrompt: 'sys',
       maxResponseTokens: 1000,
     })
@@ -59,8 +63,8 @@ describe('truncateToContextWindow', () => {
 
   it('returns [] when the system prompt alone exceeds the budget', () => {
     const out = truncateToContextWindow([msg('user', 'hello')], {
-      modelId: 'gpt-4', // 7000 limit
-      systemPrompt: 'x'.repeat(20000), // ≈ 5000 tokens > 3000 available
+      modelId: 'some-retired-model', // unknown → 15000 limit
+      systemPrompt: 'x'.repeat(48000), // ≈ 12000 tokens > 11000 available
       maxResponseTokens: 4000,
     })
     expect(out).toEqual([])
@@ -71,8 +75,8 @@ describe('truncateToContextWindow', () => {
   it('integrates with selectMessagesToSend so an empty truncation sends one turn, not all', () => {
     const original = ['q1', 'q2', 'q3'].map((c) => msg('user', c))
     const truncated = truncateToContextWindow(original, {
-      modelId: 'gpt-4',
-      systemPrompt: 'x'.repeat(20000),
+      modelId: 'some-retired-model',
+      systemPrompt: 'x'.repeat(48000),
       maxResponseTokens: 4000,
     })
     expect(truncated).toEqual([])

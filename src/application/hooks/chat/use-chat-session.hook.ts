@@ -2,14 +2,14 @@ import { useCallback } from 'react'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useChatStore } from '@/src/application/stores/chat.store'
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
-import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
+import { getChatSessionRepository } from '@/src/application/composition.chat'
 import { LoadChatSessionUseCase } from '@/src/core/use-cases/chat/load-chat-session.use-case'
 import { logger } from '@/src/shared/services/logger.service'
 // Note: we mutate isTemporaryMode via useChatStore.getState() instead of a
 // subscribing selector — loadSession is an imperative action, no need to
 // re-render this hook when temp mode flips.
 
-const repository = new FirestoreChatSessionRepository()
+const repository = getChatSessionRepository()
 const loadChatSessionUseCase = new LoadChatSessionUseCase(repository)
 const chatSessionLogger = logger.scope('Chat Session')
 

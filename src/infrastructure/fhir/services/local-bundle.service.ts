@@ -44,6 +44,11 @@ import {
 const STORAGE_KEY = 'fhir_bundle_override'
 const MARKER = '1'
 
+// Set while the loaded bundle is the bundled demo patient (試用資料). Owned
+// here so every bundle wipe (import-bundle clear, logout PHI wipe) removes it
+// from one place.
+export const DEMO_FLAG_KEY = 'mediprisma:demo-active'
+
 // IndexedDB coordinates for the bundle payload.
 const DB_NAME = 'mediprisma'
 const DB_VERSION = 2
@@ -504,6 +509,7 @@ export const LocalBundleService = {
     memBundle = null
     if (typeof window === 'undefined') return
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(DEMO_FLAG_KEY)
     clearSessionBundleKey()
     try {
       await idbDelete()

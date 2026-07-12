@@ -72,14 +72,16 @@ const config = [
   },
 
   // ── Boundary: src/shared stays below features/application ──
-  // (src/shared/di + src/shared/config registries are composition roots that
-  //  intentionally wire everything — exempted below. src/shared/components is
-  //  a KNOWN DEBT: those components consume application providers (i18n,
-  //  audience, theme) because the providers live in application — they only
-  //  get the weaker no-features rule until the providers move down.)
+  // (src/shared/config registries are composition roots that intentionally
+  //  wire everything — exempted below. src/shared/components is a KNOWN DEBT:
+  //  those components consume application providers (i18n, audience, theme)
+  //  because the providers live in application — they only get the weaker
+  //  no-features rule until the providers move down. The old src/shared/di
+  //  container was dead code and has been deleted; the composition root is
+  //  now src/application/composition.ts.)
   {
     files: ["src/shared/**/*.ts", "src/shared/**/*.tsx"],
-    ignores: ["src/shared/di/**", "src/shared/config/**", "src/shared/components/**"],
+    ignores: ["src/shared/config/**", "src/shared/components/**"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -131,6 +133,37 @@ const config = [
         {
           patterns: [
             { group: ["@/features/*"], message: "application must not import from features — features consume application hooks, not the reverse." },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ── Boundary: features go through application/core, not raw infrastructure ──
+  // KNOWN DEBT below is exempted file-by-file (not by directory) so no NEW
+  // feature file can silently take a direct infrastructure dependency:
+  //  - medical-chat useAgentChat/useVoiceRecording: deep-mode agent wiring —
+  //    slated to move behind a core use-case (audit 2026-07 refactor #3).
+  //  - import-bundle useImportBundle + reports useReportImageUrls: local-bundle
+  //    persistence IS this feature's job; a facade would only rename it.
+  //  - auth useAuthDialog: firebase auth-error mapping.
+  //  - clinical-insights sync consumers: Firestore panel sync (post-merge).
+  {
+    files: ["features/**/*.ts", "features/**/*.tsx"],
+    ignores: [
+      "features/medical-chat/hooks/useAgentChat.ts",
+      "features/medical-chat/hooks/useVoiceRecording.ts",
+      "features/import-bundle/hooks/useImportBundle.ts",
+      "features/clinical-summary/reports/hooks/useReportImageUrls.ts",
+      "features/auth/hooks/useAuthDialog.ts",
+      "features/clinical-insights/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["@/src/infrastructure/*"], message: "features must not import infrastructure directly — go through an application hook / core use-case (composition root: src/application/composition.ts)." },
           ],
         },
       ],

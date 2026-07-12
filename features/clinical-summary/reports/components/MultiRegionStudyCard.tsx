@@ -29,6 +29,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useRightDetail } from '@/src/application/providers/right-detail.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
 import type { Row } from '../types'
+import { formatDate } from '../utils/fhir-helpers'
 import { ReportImageDialog } from './ReportImageDialog'
 import { FormattedReportText } from './FormattedReportText'
 import { ReportInterpretationButton, ReportInterpretationPanel } from '@/features/report-interpretation'
@@ -42,14 +43,6 @@ function circled(n: number): string {
   return CIRCLED_NUMBERS[n] || `(${n + 1})`
 }
 
-function formatDate(iso?: string): string {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleDateString()
-  } catch {
-    return iso.slice(0, 10)
-  }
-}
 
 /** Pull the first long-form valueString from the row's observations — the
  *  narrative text bridge typically writes there for image reports. Returns

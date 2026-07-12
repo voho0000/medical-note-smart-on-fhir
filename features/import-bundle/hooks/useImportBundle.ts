@@ -12,20 +12,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { LocalBundleService, DEMO_FLAG_KEY } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
-
-const BUNDLE_CHANGED_EVENT = 'mediprisma:local-bundle-changed'
-// Set while the currently-loaded bundle is the bundled demo ("試用資料"), so the
-// UI can show a "您正在檢視示範資料" banner and so a real import clears it.
-const DEMO_FLAG_KEY = 'mediprisma:demo-active'
-
-function notifyBundleChanged() {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT))
-  }
-}
+import {
+  BUNDLE_CHANGED_EVENT,
+  notifyBundleChanged,
+} from '@/src/shared/utils/reset-on-bundle-change'
 
 export interface UseImportBundleReturn {
   /** Parse + persist a FHIR Bundle file. Throws on validation error;
@@ -126,8 +119,7 @@ export function useImportBundle(): UseImportBundleReturn {
   }, [persistBundle])
 
   const clear = useCallback(async () => {
-    await LocalBundleService.clear()
-    localStorage.removeItem(DEMO_FLAG_KEY)
+    await LocalBundleService.clear() // also removes the demo flag
     // Clearing the bundle must also drop cached AI results (safety scan,
     // insights) so re-importing the same patient starts fresh, not stale.
     purgeAiResultCaches()

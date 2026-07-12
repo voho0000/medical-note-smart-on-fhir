@@ -4,12 +4,12 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useChatStore } from '@/src/application/stores/chat.store'
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
 import { useAddSessionMutation, useUpdateSessionMutation } from './use-chat-sessions-query.hook'
-import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
+import { getChatSessionRepository } from '@/src/application/composition.chat'
 import { SaveChatSessionUseCase } from '@/src/core/use-cases/chat/save-chat-session.use-case'
 import { UpdateChatSessionUseCase } from '@/src/core/use-cases/chat/update-chat-session.use-case'
 import { logger } from '@/src/shared/services/logger.service'
 
-const repository = new FirestoreChatSessionRepository()
+const repository = getChatSessionRepository()
 const saveChatSessionUseCase = new SaveChatSessionUseCase(repository)
 const updateChatSessionUseCase = new UpdateChatSessionUseCase(repository)
 const autoSaveLogger = logger.scope('Auto-save')

@@ -11,6 +11,8 @@ import {
 // one the medical-summary use-case builds. Reused here so safety-alert evidence
 // can cite bundle records the app resolves into click-to-navigate citations.
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
+import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
+import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 
 // Gemini Flash-Lite won the head-to-head eval (clean JSON, caught all risk
 // categories, fast, cheap, 900K context for big bundles) — pin it so this
@@ -232,7 +234,9 @@ export class GenerateSafetyAlertsUseCase {
       { role: 'system', content: system + lang },
       {
         role: 'user',
-        content: `Patient clinical data:\n${input.clinicalContext}${catalogBlock}`,
+        // Outbound PII mask (身分證 / labeled 病歷號/姓名) — idempotent over
+        // what getFullClinicalContext already scrubbed upstream.
+        content: `Patient clinical data:\n${scrubFreeText(input.clinicalContext)}${catalogBlock}`,
       },
     ]
   }
@@ -243,14 +247,8 @@ export class GenerateSafetyAlertsUseCase {
    * prose around the outermost JSON object.
    */
   parseScanResult(text: string, catalog?: SummarySourceCatalogEntry[]): SafetyScanResult | null {
-    const json = extractJsonObject(text)
-    if (!json) return null
-    let raw: unknown
-    try {
-      raw = JSON.parse(json)
-    } catch {
-      return null
-    }
+    const raw = tryExtractJsonValue(text)
+    if (raw === null) return null
     const parsed = SafetyScanResultSchema.safeParse(raw)
     if (!parsed.success) return null
 
@@ -322,16 +320,6 @@ export function filterDuplicateFalsePositives(
     return prescribers.size >= 2 // real duplication = ≥2 distinct clinics
   })
   return { ...result, alerts }
-}
-
-/** Pull the outermost {...} out of a reply that may have fences/prose around it. */
-function extractJsonObject(text: string): string | null {
-  if (!text) return null
-  const stripped = text.replace(/```json/gi, '').replace(/```/g, '').trim()
-  const start = stripped.indexOf('{')
-  const end = stripped.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) return null
-  return stripped.slice(start, end + 1)
 }
 
 export const generateSafetyAlertsUseCase = new GenerateSafetyAlertsUseCase()

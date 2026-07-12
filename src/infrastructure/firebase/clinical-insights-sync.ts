@@ -1,18 +1,7 @@
 // Clinical Insights Panel Sync with Firestore
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot,
-  query,
-  orderBy,
-  Timestamp,
-  type Unsubscribe
-} from 'firebase/firestore'
-import { db } from '@/src/shared/config/firebase.config'
+import { Timestamp, type Unsubscribe } from 'firebase/firestore'
 import { coerceShowInSummary } from '@/src/shared/constants/clinical-insights.constants'
+import { createUserCollectionSync } from './user-collection-sync'
 
 export type PanelAudience = 'medical' | 'patient'
 
@@ -40,86 +29,62 @@ interface FirestoreClinicalInsightPanel {
   updatedAt: Timestamp
 }
 
+const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinicalInsightPanel>({
+  collectionName: 'clinicalInsightPanels',
+  logLabel: 'Clinical Insights Sync',
+  nounSingular: 'panel',
+  nounPlural: 'panels',
+  getId: panel => panel.id,
+  fromDoc: (id, data) => ({
+    id,
+    title: data.title,
+    prompt: data.prompt,
+    showInSummary: coerceShowInSummary(data.showInSummary, data.id),
+    autoGenerate: data.autoGenerate || false,
+    order: data.order || 0,
+    audience: data.audience ?? 'medical',
+    createdAt: data.createdAt?.toDate(),
+    updatedAt: data.updatedAt?.toDate(),
+  }),
+  toDoc: (panel, now) => ({
+    id: panel.id,
+    title: panel.title,
+    prompt: panel.prompt,
+    showInSummary: panel.showInSummary,
+    autoGenerate: panel.autoGenerate,
+    order: panel.order,
+    audience: panel.audience ?? 'medical',
+    createdAt: panel.createdAt ? Timestamp.fromDate(panel.createdAt) : now,
+    updatedAt: now,
+  }),
+  subscribeOrdering: { mode: 'query' },
+})
+
 /**
  * Get all clinical insight panels for a user
  */
 export async function getUserClinicalInsightPanels(userId: string): Promise<ClinicalInsightPanel[]> {
-  if (!db) return []
-
-  try {
-    const panelsRef = collection(db, 'users', userId, 'clinicalInsightPanels')
-    const q = query(panelsRef, orderBy('order', 'asc'))
-    const snapshot = await getDocs(q)
-    
-    return snapshot.docs.map(doc => {
-      const data = doc.data() as FirestoreClinicalInsightPanel
-      return {
-        id: doc.id,
-        title: data.title,
-        prompt: data.prompt,
-        showInSummary: coerceShowInSummary(data.showInSummary, data.id),
-        autoGenerate: data.autoGenerate || false,
-        order: data.order || 0,
-        audience: data.audience ?? 'medical',
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate(),
-      }
-    })
-  } catch (error) {
-    console.error('[Clinical Insights Sync] Error loading panels:', error)
-    return []
-  }
+  return panelSync.getAll(userId)
 }
 
 /**
  * Save or update a clinical insight panel
  */
 export async function saveClinicalInsightPanel(
-  userId: string, 
+  userId: string,
   panel: ClinicalInsightPanel
 ): Promise<boolean> {
-  if (!db) return false
-
-  try {
-    const panelRef = doc(db, 'users', userId, 'clinicalInsightPanels', panel.id)
-    const now = Timestamp.now()
-    
-    await setDoc(panelRef, {
-      id: panel.id,
-      title: panel.title,
-      prompt: panel.prompt,
-      showInSummary: panel.showInSummary,
-      autoGenerate: panel.autoGenerate,
-      order: panel.order,
-      audience: panel.audience ?? 'medical',
-      createdAt: panel.createdAt ? Timestamp.fromDate(panel.createdAt) : now,
-      updatedAt: now,
-    })
-    
-    return true
-  } catch (error) {
-    console.error('[Clinical Insights Sync] Error saving panel:', error)
-    return false
-  }
+  return panelSync.save(userId, panel)
 }
 
 /**
  * Delete a clinical insight panel
  */
 export async function deleteClinicalInsightPanel(
-  userId: string, 
+  userId: string,
   panelId: string
 ): Promise<boolean> {
-  if (!db) return false
-
-  try {
-    const panelRef = doc(db, 'users', userId, 'clinicalInsightPanels', panelId)
-    await deleteDoc(panelRef)
-    return true
-  } catch (error) {
-    console.error('[Clinical Insights Sync] Error deleting panel:', error)
-    return false
-  }
+  return panelSync.remove(userId, panelId)
 }
 
 /**
@@ -129,30 +94,7 @@ export function subscribeToClinicalInsightPanels(
   userId: string,
   onUpdate: (panels: ClinicalInsightPanel[]) => void
 ): Unsubscribe {
-  if (!db) return () => {}
-
-  const panelsRef = collection(db, 'users', userId, 'clinicalInsightPanels')
-  const q = query(panelsRef, orderBy('order', 'asc'))
-  
-  return onSnapshot(q, (snapshot) => {
-    const panels = snapshot.docs.map(doc => {
-      const data = doc.data() as FirestoreClinicalInsightPanel
-      return {
-        id: doc.id,
-        title: data.title,
-        prompt: data.prompt,
-        showInSummary: coerceShowInSummary(data.showInSummary, data.id),
-        autoGenerate: data.autoGenerate || false,
-        order: data.order || 0,
-        audience: data.audience ?? 'medical',
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate(),
-      }
-    })
-    onUpdate(panels)
-  }, (error) => {
-    console.error('[Clinical Insights Sync] Error in subscription:', error)
-  })
+  return panelSync.subscribe(userId, onUpdate)
 }
 
 /**
@@ -162,16 +104,7 @@ export async function batchSaveClinicalInsightPanels(
   userId: string,
   panels: ClinicalInsightPanel[]
 ): Promise<boolean> {
-  if (!db) return false
-
-  try {
-    const promises = panels.map(panel => saveClinicalInsightPanel(userId, panel))
-    await Promise.all(promises)
-    return true
-  } catch (error) {
-    console.error('[Clinical Insights Sync] Error batch saving panels:', error)
-    return false
-  }
+  return panelSync.batchSave(userId, panels)
 }
 
 /**
@@ -181,25 +114,5 @@ export async function replaceAllClinicalInsightPanels(
   userId: string,
   panels: ClinicalInsightPanel[]
 ): Promise<boolean> {
-  if (!db) return false
-
-  try {
-    // First, get all existing panels
-    const existingPanels = await getUserClinicalInsightPanels(userId)
-    
-    // Delete all existing panels
-    const deletePromises = existingPanels.map(panel => 
-      deleteClinicalInsightPanel(userId, panel.id)
-    )
-    await Promise.all(deletePromises)
-    
-    // Then save new panels
-    const savePromises = panels.map(panel => saveClinicalInsightPanel(userId, panel))
-    await Promise.all(savePromises)
-    
-    return true
-  } catch (error) {
-    console.error('[Clinical Insights Sync] Error replacing panels:', error)
-    return false
-  }
+  return panelSync.replaceAll(userId, panels)
 }

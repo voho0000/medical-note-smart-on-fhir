@@ -6,11 +6,11 @@ import { useChatStore } from '@/src/application/stores/chat.store'
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
 import { useUpdateSessionMutation } from './use-chat-sessions-query.hook'
 import { useFhirContext } from './use-fhir-context.hook'
-import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
+import { getChatSessionRepository } from '@/src/application/composition.chat'
 import { GenerateSmartTitleUseCase } from '@/src/core/use-cases/chat/generate-smart-title.use-case'
 import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 
-const repository = new FirestoreChatSessionRepository()
+const repository = getChatSessionRepository()
 
 export function useSmartTitleGeneration() {
   const { user } = useAuth()

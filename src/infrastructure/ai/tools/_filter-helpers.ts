@@ -3,6 +3,8 @@
 // tools must apply identical filtering so the LLM sees consistent
 // behaviour regardless of data source.
 
+import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
+
 export function isWithinDateRange(
   date: string | undefined,
   dateFrom?: string,
@@ -109,61 +111,16 @@ export function matchAllergyType(type: string | undefined, target: string | unde
   return String(type || '').toLowerCase() === target.toLowerCase()
 }
 
-const ABNORMAL_CODES = new Set([
-  'H', 'HI', 'HIGH', 'HH', 'CRIT-HI',
-  'L', 'LO', 'LOW', 'LL', 'CRIT-LO',
-  'A', 'ABN', 'ABNORMAL',
-  'POS', 'POSITIVE', 'DETECTED', 'REACTIVE',
-])
-
-function getInterpretationCode(concept: any): string {
-  const raw = concept?.coding?.[0]?.code || concept?.coding?.[0]?.display || concept?.text || ''
-  return String(raw).toUpperCase().trim()
-}
-
 /**
- * Abnormal observation detector — matches `interpretation` code (H/L/A/POS
- * and crit variants) OR falls back to FHIR `referenceRange` low/high check
- * when no interpretation is set. Mirrors the left-panel report highlight.
+ * Abnormal observation detector for AI tool output. Delegates to the app's
+ * single source of truth (`isObservationAbnormal`) so the LLM sees exactly
+ * the same verdict as the left-panel display: source interpretation is
+ * authoritative when present (Normal/Negative → NOT abnormal, no range math),
+ * and only when interpretation is absent does the audited referenceRange
+ * fallback run (rejects low>high and dirty repeated-bracket text ranges).
  */
 export function isAbnormalObservation(obs: any): boolean {
-  const interpretation = obs?.interpretation
-  if (interpretation) {
-    const arr = Array.isArray(interpretation) ? interpretation : [interpretation]
-    for (const i of arr) {
-      const code = getInterpretationCode(i)
-      if (ABNORMAL_CODES.has(code)) return true
-    }
-  }
-
-  // referenceRange fallback for numeric values
-  const numVal = obs?.valueQuantity?.value
-  if (numVal === undefined || numVal === null) return false
-  const rr = obs?.referenceRange?.[0]
-  if (!rr) return false
-
-  let lo: number | undefined = rr.low?.value
-  let hi: number | undefined = rr.high?.value
-
-  if (lo === undefined && hi === undefined && rr.text) {
-    const t = String(rr.text).trim()
-    const bracketM = t.match(/^\[([^\]]*)\]\[([^\]]*)\]$/)
-    if (bracketM) {
-      const [, loStr, hiStr] = bracketM
-      if (loStr) { const n = parseFloat(loStr); if (!isNaN(n)) lo = n }
-      if (hiStr) { const n = parseFloat(hiStr); if (!isNaN(n)) hi = n }
-    } else {
-      const rangeM = t.match(/^([\d.]+)\s*[-~–]\s*([\d.]+)$/)
-      if (rangeM) {
-        lo = parseFloat(rangeM[1])
-        hi = parseFloat(rangeM[2])
-      }
-    }
-  }
-
-  if (lo !== undefined && numVal < lo) return true
-  if (hi !== undefined && numVal > hi) return true
-  return false
+  return isObservationAbnormal(obs)
 }
 
 export function matchSubstring(haystack: string | undefined, needle: string | undefined): boolean {

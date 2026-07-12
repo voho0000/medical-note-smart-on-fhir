@@ -40,6 +40,8 @@ import {
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
+import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
+import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -798,8 +800,12 @@ export class GenerateMedicalSummaryUseCase {
       { role: 'system', content: system + lang },
       {
         role: 'user',
+        // scrubFreeText: outbound PII mask (身分證 / labeled 病歷號/姓名) —
+        // idempotent over what getFullClinicalContext already scrubbed, and
+        // covers the longitudinal-investigation block appended after it
+        // (imaging conclusions can carry patient identifiers).
         content:
-          `Patient clinical data:\n${input.clinicalContext}\n\n` +
+          `Patient clinical data:\n${scrubFreeText(input.clinicalContext)}\n\n` +
           `SOURCE LIST (cite these keys in "sources" / "timeline.ref"):\n${catalogBlock}`,
       },
     ]
@@ -825,14 +831,8 @@ export class GenerateMedicalSummaryUseCase {
       }
       return null
     }
-    const json = extractJsonObject(text)
-    if (!json) return fail('no JSON object found')
-    let raw: unknown
-    try {
-      raw = JSON.parse(json)
-    } catch {
-      return fail('invalid JSON')
-    }
+    const raw = tryExtractJsonValue(text)
+    if (raw === null) return fail('no parseable JSON found')
     const parsed = MedicalSummaryAiResultSchema.safeParse(raw)
     if (parsed.success) return parsed.data
     // Zod paths/codes carry no PHI — safe to log in prod, and without them a
@@ -1037,16 +1037,6 @@ export class GenerateMedicalSummaryUseCase {
       droppedTimelineCount,
     }
   }
-}
-
-/** Pull the outermost {...} out of a reply that may have fences/prose around it. */
-function extractJsonObject(text: string): string | null {
-  if (!text) return null
-  const stripped = text.replace(/```json/gi, '').replace(/```/g, '').trim()
-  const start = stripped.indexOf('{')
-  const end = stripped.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) return null
-  return stripped.slice(start, end + 1)
 }
 
 export const generateMedicalSummaryUseCase = new GenerateMedicalSummaryUseCase()

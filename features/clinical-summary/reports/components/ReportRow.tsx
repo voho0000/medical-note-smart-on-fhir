@@ -10,7 +10,7 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightDetail } from "@/src/application/providers/right-detail.provider"
 import { useReportImageUrls } from '../hooks/useReportImageUrls'
 import type { Row, Observation, ReportImage } from '../types'
-import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText } from '../utils/fhir-helpers'
+import { getValueWithUnit, getReferenceRangeText, getCodeableConceptText, formatDate } from '../utils/fhir-helpers'
 import { isObservationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
 import { ObservationBlock } from './ObservationBlock'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
@@ -319,27 +319,37 @@ interface ReportRowProps {
   hideMeta?: boolean
 }
 
+// Date part goes through the shared, partial-date/timezone-safe formatDate
+// (a bare YYYY-MM-DD must not shift a day via UTC parsing). Time is appended
+// only when the source string actually carries one — never fabricated from a
+// date-only value.
 function formatDisplayDate(date?: string, showTime?: boolean): string {
   if (!date) return ''
-  try {
-    const d = new Date(date)
-    if (showTime) {
-      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const datePart = formatDate(date)
+  if (showTime && date.includes('T')) {
+    try {
+      const d = new Date(date)
+      if (!Number.isNaN(d.getTime())) {
+        return datePart + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    } catch {
+      // fall through to date-only
     }
-    return d.toLocaleDateString()
-  } catch {
-    return date
   }
+  return datePart
 }
 
 // Time-only label for rows inside a LabDayGroupCard (hideMeta): the group
 // header owns the date, but same-analyte serials (q6h troponin, repeat CBC)
 // still need their draw TIME to be tellable apart. Only rendered when the
-// row carries the showTime disambiguation flag.
+// row carries the showTime disambiguation flag. Date-only values have no
+// time to show — returning '' beats inventing "08:00" from UTC midnight.
 function formatTimeOnly(date?: string): string {
-  if (!date) return ''
+  if (!date || !date.includes('T')) return ''
   try {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const d = new Date(date)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   } catch {
     return ''
   }

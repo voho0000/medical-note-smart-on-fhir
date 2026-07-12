@@ -2,6 +2,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { 
   signInWithPopup,
   getRedirectResult,
@@ -22,6 +23,9 @@ import { auth, db } from '@/src/shared/config/firebase.config'
 import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { clearSessionKey } from '@/src/shared/utils/crypto.utils'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
+import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
 
 export interface User {
   uid: string
@@ -79,6 +83,7 @@ const isMobileDevice = () => {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<User | null>(null)
   const [isAnonymous, setIsAnonymous] = useState(false)
   // uid of the active Firebase session (real OR anonymous) — drives the usage
@@ -290,6 +295,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // keys and the obfuscation key so the next user can't reuse them
       useAiConfigStore.getState().clearAllKeys()
       clearSessionKey()
+
+      // …and the previous PATIENT's data, not just the doctor's keys: the
+      // imported bundle (IndexedDB ciphertext + sessionStorage AES key +
+      // stored images + demo flag) and cached AI results would otherwise
+      // survive logout and be fully readable by the next person at the
+      // workstation.
+      await LocalBundleService.clear()
+      purgeAiResultCaches()
+      // Same signal an import/clear dispatches — resets in-memory AI-result
+      // stores and lets every useImportBundle instance drop its state.
+      notifyBundleChanged()
+      // Drop the React-Query-cached chart so the UI stops showing the
+      // previous patient immediately, not just after a reload.
+      await queryClient.invalidateQueries()
     } finally {
       setLoading(false)
     }

@@ -1,6 +1,8 @@
 // Token Estimation Utility
 // Rough estimation: 1 token ≈ 4 characters for English, ≈ 1.5 characters for Chinese
 
+import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+
 export function estimateTokens(text: string): number {
   if (!text) return 0
   
@@ -20,23 +22,12 @@ export function estimateMessagesTokens(messages: { role: string; content: string
   return contentTokens + messageOverhead
 }
 
-// Model context window limits (conservative estimates to leave room for response)
-export const CONTEXT_LIMITS = {
-  'gpt-4o': 120000,
-  'gpt-4-turbo': 120000,
-  'gpt-4': 7000,
-  'gpt-3.5-turbo': 15000,
-  'gpt-5-mini': 15000,
-  'gpt-5.1': 120000,
-  'gpt-5.2': 120000,
-  'gpt-5-pro': 120000,
-  'gemini-2.5-flash': 900000,
-  'gemini-3-flash-preview': 900000,
-  'gemini-2.5-pro': 1800000,
-  'gemini-3-pro-preview': 1800000,
-  'default': 15000,
-} as const
+// Context-window limits live on ModelDefinition (ai-models.constants.ts) so
+// the model lineup and the truncation budget can never drift apart again.
+// Unknown ids (e.g. a stale persisted model pick) fall back to a conservative
+// floor rather than a guess.
+export const DEFAULT_CONTEXT_LIMIT = 15000
 
 export function getContextLimit(modelId: string): number {
-  return CONTEXT_LIMITS[modelId as keyof typeof CONTEXT_LIMITS] || CONTEXT_LIMITS.default
+  return getModelDefinition(modelId)?.contextLimit ?? DEFAULT_CONTEXT_LIMIT
 }

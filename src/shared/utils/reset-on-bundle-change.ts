@@ -5,9 +5,15 @@
 // PREVIOUS bundle's cached results (which is especially wrong when the two
 // bundles share a patient id). Module-level, one listener per store for the app
 // lifetime; SSR-safe no-op on the server.
-const BUNDLE_CHANGED_EVENT = 'mediprisma:local-bundle-changed'
+export const BUNDLE_CHANGED_EVENT = 'mediprisma:local-bundle-changed'
 
 export function resetOnBundleChange(reset: () => void): void {
   if (typeof window === 'undefined') return
   window.addEventListener(BUNDLE_CHANGED_EVENT, reset)
+}
+
+/** Dispatch the bundle-changed signal (import / demo load / clear / logout wipe). */
+export function notifyBundleChanged(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT))
 }

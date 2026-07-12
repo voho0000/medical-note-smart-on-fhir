@@ -14,6 +14,8 @@
 //   - Department names (type.text), institution names, lot numbers
 //     (these are gray-area but clinically useful)
 
+import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
+
 const STRIP_TOP_LEVEL_KEYS = new Set(['birthDate', 'identifier'])
 
 // Field path patterns where a `display` is a person/provider name we want to
@@ -36,10 +38,15 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
-function walk(value: unknown, parentKey: string | null): unknown {
+function walk(value: unknown, parentKey: string | null, literals: string[]): unknown {
   if (Array.isArray(value)) {
-    return value.map((v) => walk(v, parentKey))
+    return value.map((v) => walk(v, parentKey, literals))
   }
+  // Free-text fields (report conclusions, document bodies, notes) are the
+  // densest PHI channel — mask TW national IDs, labeled chart numbers /
+  // names, and the loaded patient's own name/identifier literals in EVERY
+  // string, so new tools inherit the protection automatically.
+  if (typeof value === 'string') return scrubFreeText(value, literals)
   if (!isObject(value)) return value
 
   const out: Record<string, unknown> = {}
@@ -58,7 +65,7 @@ function walk(value: unknown, parentKey: string | null): unknown {
       continue
     }
 
-    out[key] = walk(raw, key)
+    out[key] = walk(raw, key, literals)
   }
   return out
 }
@@ -67,7 +74,10 @@ function walk(value: unknown, parentKey: string | null): unknown {
  * Recursively strip patient + provider PII from a tool response.
  * Safe to apply to `{ success, summary, count, data }` shape — only
  * `data` typically contains the sensitive fields.
+ *
+ * `literals` (optional): the loaded patient's own name / identifier strings —
+ * masked wherever they appear inside free-text values.
  */
-export function scrubPii<T>(payload: T): T {
-  return walk(payload, null) as T
+export function scrubPii<T>(payload: T, literals: string[] = []): T {
+  return walk(payload, null, literals) as T
 }

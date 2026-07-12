@@ -13,7 +13,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { FirestoreChatSessionRepository } from '@/src/infrastructure/firebase/repositories/chat-session.repository'
+import { getChatSessionRepository } from '@/src/application/composition.chat'
 import { GetChatHistoryUseCase } from '@/src/core/use-cases/chat/get-chat-history.use-case'
 import type { ChatSessionMetadata } from '@/src/core/entities/chat-session.entity'
 
@@ -32,7 +32,7 @@ export function useChatSessionsQuery(
         return []
       }
 
-      const repository = new FirestoreChatSessionRepository()
+      const repository = getChatSessionRepository()
       const useCase = new GetChatHistoryUseCase(repository)
       return await useCase.execute(userId, patientId, fhirServerUrl)
     },
@@ -45,7 +45,7 @@ export function useChatSessionsQuery(
   useEffect(() => {
     if (!userId || !patientId || !fhirServerUrl) return
 
-    const repository = new FirestoreChatSessionRepository()
+    const repository = getChatSessionRepository()
     const unsubscribe = repository.subscribe(
       userId,
       patientId,
