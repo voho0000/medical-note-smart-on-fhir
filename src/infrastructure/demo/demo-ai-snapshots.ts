@@ -25,9 +25,9 @@
 // amber "unverified" pills — the visible signal to regenerate this file (run
 // scripts/validate-demo-snapshots.ts, or just re-author).
 //
-// Scope guards (enforced by the hooks): demo patient + zh-TW locale + default
-// model + no cached result. Switching model or pressing 重新產生 always runs a
-// live call.
+// Scope guards (enforced by the hooks): demo patient + zh-TW locale + no cached
+// result. A retained model preference never causes an automatic live call;
+// pressing 重新產生 explicitly still runs the selected model.
 import type { MedicalSummaryAiResult } from '@/src/core/entities/medical-summary.entity'
 import type { SafetyScanResultInput } from '@/src/core/entities/safety-alert.entity'
 
@@ -64,6 +64,22 @@ export const demoClinicalInsightSnapshots: Record<Audience, Record<string, { pro
       ].join('\n'),
     },
   },
+}
+
+/**
+ * Return a bundled custom-insight snapshot solely from demo identity and panel
+ * identity. Model preference is intentionally absent: retaining a model from a
+ * real patient must never turn loading the frozen demo into an automatic cloud
+ * request. Manual regeneration remains model-aware in the caller.
+ */
+export function getDemoClinicalInsightSnapshot(
+  patientId: string,
+  audience: Audience,
+  panelId: string,
+) {
+  return patientId === DEMO_PATIENT_ID
+    ? demoClinicalInsightSnapshots[audience][panelId]
+    : undefined
 }
 
 export const demoMedicalSummarySnapshots: Record<Audience, MedicalSummaryAiResult> = {

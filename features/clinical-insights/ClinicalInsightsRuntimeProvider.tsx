@@ -16,7 +16,7 @@ import { usePatient } from "@/src/application/hooks/patient/use-patient-query.ho
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
-import { MODEL_PREF_DEFAULTS, useEffectiveModel } from "@/src/application/stores/model-prefs.store"
+import { useEffectiveModel } from "@/src/application/stores/model-prefs.store"
 import {
   useClinicalInsightsConfig,
   type InsightPanelConfig,
@@ -36,8 +36,7 @@ import { useInsightResponsesStore } from "./hooks/useInsightResponsesStore"
 import { useAutoGenerate } from "./hooks/useAutoGenerate"
 import type { PanelStatus, ResponseEntry } from "./types"
 import {
-  DEMO_PATIENT_ID,
-  demoClinicalInsightSnapshots,
+  getDemoClinicalInsightSnapshot,
 } from "@/src/infrastructure/demo/demo-ai-snapshots"
 
 const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
@@ -186,9 +185,12 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
         INSIGHTS_CACHE_MAX_AGE_MS,
       )
       if (!cached) {
-        const demo = patientId === DEMO_PATIENT_ID && model === MODEL_PREF_DEFAULTS.insights
-          ? demoClinicalInsightSnapshots[audience][panel.id]
-          : undefined
+        // The demo bundle is frozen and its bundled insight snapshots are
+        // audited constants. Restore them regardless of a model preference
+        // retained from the user's own data; otherwise the hidden custom-
+        // insight runtime can silently start cloud AI while the standard demo
+        // summary is loading. A deliberate regenerate still uses `model`.
+        const demo = getDemoClinicalInsightSnapshot(patientId, audience, panel.id)
         if (demo && contentSignature(demo.prompt) === panel.promptSig) {
           return [panel.id, { text: demo.text, isEdited: false, metadata: null }] as const
         }

@@ -14,7 +14,11 @@ import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
-import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
+import {
+  BUNDLE_CHANGED_EVENT,
+  BUNDLE_CHANGE_SETTLED_EVENT,
+  resetOnBundleChange,
+} from '@/src/shared/utils/reset-on-bundle-change'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { getUserErrorMessage } from '@/src/core/errors'
 import {
@@ -282,14 +286,28 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
 
   const autoTriggeredRef = useRef<string | null>(null)
 
+  // Store reset happens before React Query publishes the replacement bundle.
+  // Suppress auto-run in that window so the previous patient's empty slot
+  // cannot launch a redundant cloud request.
+  const [bundleTransitionActive, setBundleTransitionActive] = useState(false)
+  useEffect(() => {
+    const begin = () => setBundleTransitionActive(true)
+    const settle = () => setBundleTransitionActive(false)
+    window.addEventListener(BUNDLE_CHANGED_EVENT, begin)
+    window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
+    return () => {
+      window.removeEventListener(BUNDLE_CHANGED_EVENT, begin)
+      window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
+    }
+  }, [])
+  const demoSnapshotExpected = patientId === DEMO_PATIENT_ID && locale === 'zh-TW'
+
   // Demo bundle: seed the pre-generated scan snapshot instead of burning an AI
-  // call (see use-medical-summary.hook.ts — same rules: demo patient + zh-TW +
-  // default model + nothing cached; snapshot goes through the same
-  // parseScanResult validation as a live reply; re-scan / model switch stay live).
+  // call. It waits for the real demo catalog while automatic live scans stay
+  // blocked; a manual re-scan still uses the selected model.
   useEffect(() => {
     if (!scanKey || result || hydratedScan !== scanKey) return
     if (patientId !== DEMO_PATIENT_ID || locale !== 'zh-TW') return
-    if (resolvedModelId !== SAFETY_ALERTS_MODEL_ID) return
     if (catalog.length === 0) return
     const snapshot = demoSafetyScanSnapshots[audience === 'patient' ? 'patient' : 'medical']
     const parsed = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(snapshot), catalog)
@@ -297,7 +315,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     autoTriggeredRef.current = autoRunIdentity
     // Same deterministic count rule as a live scan (see scan() above).
     setResult(scanKey, { ...parsed, scannedCount: catalog.length })
-  }, [scanKey, autoRunIdentity, result, hydratedScan, patientId, locale, resolvedModelId, catalog, audience, setResult])
+  }, [scanKey, autoRunIdentity, result, hydratedScan, patientId, locale, catalog, audience, setResult])
 
   // Auto-scan: fire once per patient when enabled and there's no result — but
   // only AFTER cache hydration has settled, so a refresh doesn't race the
@@ -306,6 +324,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   useEffect(() => {
     if (!shouldAutoRunSummarySlot({
       enabled: autoScan,
+      blocked: bundleTransitionActive || demoSnapshotExpected,
       authLoading,
       slotKey: scanKey,
       busy: isScanning,
@@ -319,7 +338,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     // selected model, not only the Lite/base model.
     autoTriggeredRef.current = autoRunIdentity
     void scan()
-  }, [autoScan, authLoading, scanKey, autoRunIdentity, isScanning, result, hydratedScan, scan])
+  }, [autoScan, bundleTransitionActive, demoSnapshotExpected, authLoading, scanKey, autoRunIdentity, isScanning, result, hydratedScan, scan])
 
   // Switching model just changes which per-model slot the view reads — it does
   // NOT cancel or clear anything. The old model's in-flight scan keeps going and

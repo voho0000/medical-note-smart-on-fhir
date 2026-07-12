@@ -3,6 +3,7 @@
  * to every selected model that survives provider/key gating. */
 export function shouldAutoRunSummarySlot(input: {
   enabled: boolean
+  blocked?: boolean
   authLoading: boolean
   slotKey: string
   busy: boolean
@@ -13,6 +14,7 @@ export function shouldAutoRunSummarySlot(input: {
   triggeredIdentity: string | null
 }) {
   return input.enabled &&
+    !input.blocked &&
     !input.authLoading &&
     Boolean(input.slotKey) &&
     !input.busy &&

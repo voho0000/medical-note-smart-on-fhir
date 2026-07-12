@@ -35,4 +35,9 @@ describe('Medical Summary auto-run policy', () => {
   it('respects the user-facing auto-generate toggle', () => {
     expect(shouldAutoRunSummarySlot({ ...ready, enabled: false })).toBe(false)
   })
+
+  it('stays blocked while a bundle switch or demo snapshot is pending', () => {
+    expect(shouldAutoRunSummarySlot({ ...ready, blocked: true })).toBe(false)
+    expect(shouldAutoRunSummarySlot({ ...ready, blocked: false })).toBe(true)
+  })
 })

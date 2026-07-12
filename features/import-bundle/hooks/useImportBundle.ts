@@ -17,6 +17,7 @@ import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-clie
 import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
   BUNDLE_CHANGED_EVENT,
+  notifyBundleChangeSettled,
   notifyBundleChanged,
 } from '@/src/shared/utils/reset-on-bundle-change'
 
@@ -82,7 +83,11 @@ export function useImportBundle(): UseImportBundleReturn {
     setBundleIsActive(shouldUseLocalBundle())
     setIsDemo(demo)
     notifyBundleChanged()
-    await queryClient.invalidateQueries()
+    try {
+      await queryClient.invalidateQueries()
+    } finally {
+      notifyBundleChangeSettled()
+    }
   }, [queryClient])
 
   const importFile = useCallback(async (file: File) => {
@@ -128,7 +133,11 @@ export function useImportBundle(): UseImportBundleReturn {
     setIsDemo(false)
     setError(null)
     notifyBundleChanged()
-    await queryClient.invalidateQueries()
+    try {
+      await queryClient.invalidateQueries()
+    } finally {
+      notifyBundleChangeSettled()
+    }
   }, [queryClient])
 
   return { importFile, loadDemo, clear, loading, error, hasBundle, bundleIsActive, isDemo }

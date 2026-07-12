@@ -6,6 +6,7 @@
 // bundles share a patient id). Module-level, one listener per store for the app
 // lifetime; SSR-safe no-op on the server.
 export const BUNDLE_CHANGED_EVENT = 'mediprisma:local-bundle-changed'
+export const BUNDLE_CHANGE_SETTLED_EVENT = 'mediprisma:local-bundle-change-settled'
 
 export function resetOnBundleChange(reset: () => void): void {
   if (typeof window === 'undefined') return
@@ -16,4 +17,10 @@ export function resetOnBundleChange(reset: () => void): void {
 export function notifyBundleChanged(): void {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT))
+}
+
+/** Signal that React Query has finished publishing the new patient/data. */
+export function notifyBundleChangeSettled(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(BUNDLE_CHANGE_SETTLED_EVENT))
 }

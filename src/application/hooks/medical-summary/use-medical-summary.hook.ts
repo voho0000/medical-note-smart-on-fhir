@@ -16,7 +16,11 @@ import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
-import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
+import {
+  BUNDLE_CHANGED_EVENT,
+  BUNDLE_CHANGE_SETTLED_EVENT,
+  resetOnBundleChange,
+} from '@/src/shared/utils/reset-on-bundle-change'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { getUserErrorMessage } from '@/src/core/errors'
 import {
@@ -299,31 +303,44 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
 
   const autoTriggeredRef = useRef<string | null>(null)
 
+  // Store reset happens before React Query publishes the replacement bundle.
+  // Suppress auto-run in that window so the previous patient's empty slot
+  // cannot launch a redundant cloud request.
+  const [bundleTransitionActive, setBundleTransitionActive] = useState(false)
+  useEffect(() => {
+    const begin = () => setBundleTransitionActive(true)
+    const settle = () => setBundleTransitionActive(false)
+    window.addEventListener(BUNDLE_CHANGED_EVENT, begin)
+    window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
+    return () => {
+      window.removeEventListener(BUNDLE_CHANGED_EVENT, begin)
+      window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
+    }
+  }, [])
+  const demoSnapshotExpected = patientId === DEMO_PATIENT_ID && locale === 'zh-TW'
+
   // Demo bundle: seed the pre-generated snapshot instead of burning an AI call
   // on data whose answer is a constant. Runs through the SAME parse → finalize
   // pipeline as a live reply, so citations verify against the real catalog.
-  // Scope: demo patient + zh-TW + the free base model (whatever the pick
-  // RESOLVES to) + nothing cached. Declared BEFORE the auto-generate effect and
-  // marks autoTriggeredRef first, so the same commit can't also fire a live
-  // generation. Switching to a non-base model shows that model's own slot
-  // (cached / generating / auto-generated) instead of this snapshot.
+  // It waits for the real demo catalog, while auto-run stays blocked for this
+  // frozen patient. Manual regenerate still uses the selected model.
   useEffect(() => {
     if (!scanKey || result || hydrated !== scanKey) return
     if (patientId !== DEMO_PATIENT_ID || locale !== 'zh-TW') return
-    if (resolvedModelId !== MEDICAL_SUMMARY_MODEL_ID) return
     if (!dataReady || catalog.length === 0) return
     const snapshot = demoMedicalSummarySnapshots[audience === 'patient' ? 'patient' : 'medical']
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
     if (!parsed) return
     autoTriggeredRef.current = autoRunIdentity
     setResult(scanKey, generateMedicalSummaryUseCase.finalizeResult(parsed, catalog))
-  }, [scanKey, autoRunIdentity, result, hydrated, patientId, locale, resolvedModelId, dataReady, catalog, audience, setResult])
+  }, [scanKey, autoRunIdentity, result, hydrated, patientId, locale, dataReady, catalog, audience, setResult])
 
   // Auto-generate once per patient+audience after hydration; a failed attempt
   // is NOT retried in a loop — the user regenerates manually.
   useEffect(() => {
     if (!shouldAutoRunSummarySlot({
       enabled: autoGenerate,
+      blocked: bundleTransitionActive || demoSnapshotExpected,
       authLoading,
       slotKey: scanKey,
       busy: isGenerating,
@@ -338,7 +355,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // applied in resolvedModelId.
     autoTriggeredRef.current = autoRunIdentity
     void generate()
-  }, [autoGenerate, authLoading, scanKey, autoRunIdentity, isGenerating, result, dataReady, hydrated, generate])
+  }, [autoGenerate, bundleTransitionActive, demoSnapshotExpected, authLoading, scanKey, autoRunIdentity, isGenerating, result, dataReady, hydrated, generate])
 
   // Switching model just changes which per-model slot the view reads — it does
   // NOT cancel or clear anything. The old model's in-flight run keeps going and
