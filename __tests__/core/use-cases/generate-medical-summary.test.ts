@@ -458,6 +458,29 @@ describe('finalizeResult', () => {
     expect(result.timeline[0].encounterClass).toBeUndefined()
   })
 
+  it('drops exact duplicate timeline events but keeps distinct events from one source', () => {
+    const ai = {
+      headline: 'h',
+      problems: [],
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      decisions: [],
+      timeline: [
+        { ref: 'E1', label: '住院接受治療', category: 'encounter' },
+        { ref: 'E1', label: '住院接受治療', category: 'encounter' },
+        { ref: 'E1', label: '出院後持續追蹤', category: 'followup' },
+      ],
+    }
+
+    const result = useCase.finalizeResult(ai, catalog)
+
+    expect(result.timeline).toHaveLength(2)
+    expect(result.timeline.map((event) => event.label)).toEqual([
+      '住院接受治療',
+      '出院後持續追蹤',
+    ])
+    expect(result.timeline.map((event) => event.key)).toEqual(['E1', 'E1'])
+  })
+
   it('demotes over-long highlights and caps the emphasised count', () => {
     const seg = (text: string) => ({ text, emphasis: true, sources: [] })
     const ai = {

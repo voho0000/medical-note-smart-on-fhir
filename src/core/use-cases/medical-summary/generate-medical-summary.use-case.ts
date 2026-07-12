@@ -997,6 +997,7 @@ export class GenerateMedicalSummaryUseCase {
     }))
 
     let droppedTimelineCount = 0
+    const seenTimelineEvents = new Set<string>()
     const timeline = ai.timeline
       .flatMap((pick) => {
         const entry = byKey.get(pick.ref.trim())
@@ -1004,12 +1005,23 @@ export class GenerateMedicalSummaryUseCase {
           droppedTimelineCount += 1
           return []
         }
+        const category = normaliseTimelineCategory(pick.category)
+        // A single source (especially a discharge summary) may legitimately
+        // support more than one timeline event. Drop only an exact repeated
+        // event instead of deduplicating by source key and losing information.
+        const eventSignature = JSON.stringify([
+          entry.key,
+          category,
+          compactWhitespace(pick.label),
+        ])
+        if (seenTimelineEvents.has(eventSignature)) return []
+        seenTimelineEvents.add(eventSignature)
         return [
           {
             key: entry.key,
             date: entry.date,
             label: pick.label,
-            category: normaliseTimelineCategory(pick.category),
+            category,
             organization: entry.organization,
             resourceType: entry.resourceType,
             resourceId: entry.resourceId,

@@ -131,7 +131,10 @@ export function CrossFacilityTimeline({
               </div>
             )
             return (
-              <li key={`${event.key}-${event.date}`} className="relative pb-3 last:pb-0 @min-[30rem]:pb-2">
+              <li
+                key={`${event.key}-${event.date}-${event.category}-${event.label}`}
+                className="relative pb-3 last:pb-0 @min-[30rem]:pb-2"
+              >
                 <span
                   className={cn(
                     "absolute -left-[19.5px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card",
