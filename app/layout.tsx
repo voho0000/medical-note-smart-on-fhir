@@ -5,7 +5,7 @@ import { Toaster } from "sonner"
 
 export const metadata: Metadata = {
   title: "MediPrisma · SMART on FHIR",
-  description: "A modular SMART on FHIR app with clinical summary and medical note features.",
+  description: "A FHIR-based clinical-data integration and reading tool with source-linked AI summaries, trends, and safety reminders.",
 }
 
 // Content-Security-Policy for the STATIC export. next.config.ts `headers()`

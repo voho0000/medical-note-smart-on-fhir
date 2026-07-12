@@ -2,7 +2,7 @@
 
 > 語言 / Language: [**中文**](#中文) ｜ [**English**](#english)
 
-基於 **Next.js 16** 與 **SMART on FHIR** 的臨床文件 AI 助理：把病人的 FHIR 資料整理成可讀的臨床摘要，並用 AI 協助查詢資料、檢索醫學文獻、起草病歷。
+基於 **Next.js 16** 與 **SMART on FHIR** 的臨床資料整合與閱讀工具：集中呈現跨院就診、用藥、檢驗趨勢與臨床文件，並以可回查來源的 AI 摘要、安全提醒與報告解讀協助快速掌握重點。
 
 > ⚠️ 研究／教學用途，非醫療器材，輸出僅供參考，臨床決策請以醫師判斷為準。
 
@@ -16,27 +16,28 @@
 - **報告 AI 翻譯解讀**：影像／病理／出院病摘等報告可一鍵生成忠實中譯＋白話解讀（重點、注意事項），呈現在原文**上方**（民眾預設只看得懂的部分，原文仍在下方供對照）；醫師與民眾皆可用，隨選生成、不預先耗用額度。
 - **醫療摘要**（開啟病人後的預設分頁）：**零點擊 AI 簡報**——跨院病程摘要（關鍵片語標示＋可點擊的來源引用，逐筆對回 FHIR 資源，查無來源標「未驗證」）、主動用藥安全警示、需要決定的事、跨院時間軸與資料涵蓋卡；民眾版另有固定的「我的用藥與照護」Card，以藥物帶來的幫助為主、搭配平實注意事項，且每項必須對應原始 Medication FHIR 紀錄。醫療人員版／民眾版各自生成，結果快取 12 小時。
 - **AI 協助**：
-  - **筆記對話**（一般模式）：互動式 AI 助理，可插入選定的臨床資料、起草病歷章節；輸入 `/` 即可快速套用提示模板；每次回答後提供可點選的追問建議。
+  - **臨床對話**（一般模式）：依選取的臨床資料提問、比較與整理資訊；輸入 `/` 即可快速套用提示模板；每次回答後提供可點選的追問建議。
   - **深入模式（AI Agent）**：以客戶端 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）＋醫學文獻搜尋（Perplexity）。
   - **臨床洞察**：自訂提示詞的並行分析工作台——每個標籤一個提示詞，載入病人後可自動生成、結果可手動編輯（主動用藥安全警示已移至**醫療摘要**內嵌呈現；民眾受眾為白話的**健康提醒**版本）。
   - **語音口述**：Whisper 轉錄。
 - **資料選擇**：挑選要餵給 AI 的資料範圍（門診／檢驗／用藥…），多種預設與每用途記憶。
-- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、50+ 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製到病歷。
+- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、50+ 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製。
 - **匯出（IPS）**：組出 International Patient Summary FHIR 文件，附可直接複製的 Markdown 預覽與 AI 問題清單推論（逐項確認後才納入）。
 - **提示範本庫**：社群共享的提示範本。
-- **雙受眾**：首次使用會詢問身分（醫事人員／民眾），介面與 AI 輸出（含安全警示）依受眾調整。
+- **雙受眾**：首次使用可選擇醫療人員或民眾身份；藥名、檢驗名稱、臨床代碼與 AI 輸出會配合調整，並可隨時切換。
 - **多語言（中／英）、深色模式、響應式**。
 
 ## 資料來源（三種）
 
 1. **SMART on FHIR**：由 EHR 啟動（OAuth 2.0 + PKCE），即時讀取 FHIR 伺服器資料。
-2. **本地匯入**：匯入健保存摺等來源的 FHIR Bundle（`.json`）。資料**只留在本機**，不上傳。
-3. **試用資料（示範病人）**：一鍵載入內建、**去識別化**的示範病人（改編自真實健保存摺，含出院病摘與真實影像），無需匯入任何檔案即可體驗；資料同樣只留在本機。
+2. **本地匯入**：匯入健保存摺等來源的 FHIR Bundle（`.json`）。完整匯入檔只儲存在本機；使用 AI 功能時，選取的相關內容才會依使用者設定傳送至雲端服務。
+3. **試用資料（示範病人）**：一鍵載入內建、**去識別化**的示範病人（改編自真實健保存摺，含出院病摘與真實影像），無需匯入任何檔案即可體驗；完整資料同樣儲存在本機。
 
 ## 隱私與安全
 
-- **病人 FHIR 資料只存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。
+- **病人 FHIR 原始資料儲存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。使用 AI 時，產生內容所需的選取資料會傳送至所選的雲端 AI 服務；內建模型可能經由 MediPrisma Firebase Functions 代理。
 - **API 金鑰**：預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。金鑰一律留在瀏覽器，不上雲端。
+- **對話紀錄**：登入後，一般對話會儲存於 Firestore 並跨裝置同步；「無痕對話」不會儲存，訪客對話不會同步。
 - **回饋**：刻意不收集病人識別資訊。
 - 詳見 [SECURITY.md](./docs/SECURITY.md)、[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)。
 
@@ -172,7 +173,7 @@ Clean Architecture 分層：
 
 [🔝 Back to top](#醫析-mediprisma--smart-on-fhir) ｜ [切換中文](#中文)
 
-A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHIR**: it turns a patient's FHIR data into a readable clinical summary and uses AI to query data, search medical literature, and draft notes.
+A clinical-data integration and reading tool built on **Next.js 16** and **SMART on FHIR**: it brings cross-facility visits, medications, test trends, and clinical documents together, with source-linked AI summaries, safety reminders, and report explanations to help users find the key points.
 
 > ⚠️ For research/education only — not a medical device. Output is for reference; clinical decisions remain the clinician's.
 
@@ -182,27 +183,28 @@ A clinical-documentation AI assistant built on **Next.js 16** and **SMART on FHI
 - **Report AI translate & explain**: imaging/pathology reports and discharge summaries can generate a one-click faithful translation plus a plain-language interpretation (key points, what to watch for), shown **above** the original text (the original stays below for comparison); available to both clinicians and patients, generated on demand so it never spends quota unasked.
 - **Medical Summary** (the default tab after loading a patient): a **zero-click AI briefing** — cross-hospital course narrative, disease-oriented test trends, proactive safety alerts, pending decisions, problem list and timeline, followed by optional **custom summary modules**. The patient view also includes a fixed benefit-first **My medicines and care** card; every item must resolve to a Medication FHIR record. Custom modules use user-managed prompts, load independently from the fixed summary, and can be added from the Prompt Gallery directly inside the summary.
 - **AI**:
-  - **Note Chat** (normal): interactive assistant; insert selected clinical data, draft note sections; type `/` to quickly apply a prompt template; tappable follow-up suggestions after each answer.
+  - **Clinical Chat** (normal): ask questions, compare records, and organize information from selected clinical data; type `/` to quickly apply a prompt template; tappable follow-up suggestions after each answer.
   - **Deep Mode (AI Agent)**: client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters) + medical-literature search (Perplexity).
   - **Custom summary modules**: reusable prompt templates embedded in **Medical Summary**; users can add, order, preview, manually run, or auto-generate selected modules without switching tabs.
   - **Voice dictation**: Whisper transcription.
 - **Data Selection**: choose which data to feed the AI, with presets and per-consumer memory.
-- **Medical Calculator**: MDCalc-style clinical scores/formulas (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65… — 50+ across 10 categories) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy to the note.
+- **Medical Calculator**: MDCalc-style clinical scores/formulas (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65… — 50+ across 10 categories) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy.
 - **Export (IPS)**: builds an International Patient Summary FHIR document, with a copy-ready Markdown preview and AI problem-list inference (each suggestion confirmed before inclusion).
 - **Prompt Gallery**: community-shared prompt templates.
-- **Two audiences**: first run asks whether you're a clinician or a patient (醫事人員／民眾); the UI and AI output (including safety alerts) adapt.
+- **Two audiences**: choose healthcare-professional or patient/citizen; medication names, test labels, clinical codes, and AI output adapt, and the audience can be switched at any time.
 - **Bilingual (EN/中文), dark mode, responsive.**
 
 ## Data sources
 
 1. **SMART on FHIR** — launched from an EHR (OAuth 2.0 + PKCE), reading the FHIR server live.
-2. **Local import** — import a FHIR Bundle (`.json`, e.g. from Taiwan's NHI health record). Data **stays on the device**, never uploaded.
-3. **Demo data (sample patient)** — one-click load of a built-in, **de-identified** sample patient (adapted from a real NHI record, with a discharge summary and real images); no file needed, and it also stays on the device.
+2. **Local import** — import a FHIR Bundle (`.json`, e.g. from Taiwan's NHI health record). The full imported file stays on the device; when an AI feature is used, only the selected relevant content is sent to cloud services according to the user's settings.
+3. **Demo data (sample patient)** — one-click load of a built-in, **de-identified** sample patient (adapted from a real NHI record, with a discharge summary and real images); no file needed, and the full dataset also stays on the device.
 
 ## Privacy & security
 
-- **Patient FHIR data stays local**: AES-GCM-encrypted in IndexedDB, kept at most **12 hours**, purged on next load when expired and on logout; users can "clear local data" anytime.
+- **Source FHIR data is stored locally**: AES-GCM-encrypted in IndexedDB, kept at most **12 hours**, purged on next load when expired and on logout; users can "clear local data" anytime. When AI is used, the selected data needed to generate the content is sent to the chosen cloud AI service; built-in models may route through the MediPrisma Firebase Functions proxy.
 - **API keys**: by default kept only for the current browser session (cleared when you close the window); a "remember on this device" toggle in Settings makes them persist. Keys never leave the browser.
+- **Conversation history**: after sign-in, regular conversations are stored in Firestore and synced across devices; temporary conversations are not saved, and guest conversations are not synced.
 - **Feedback** deliberately collects no patient identifiers.
 - See [SECURITY.md](./docs/SECURITY.md) and [PRIVACY_POLICY.md](./PRIVACY_POLICY.md).
 

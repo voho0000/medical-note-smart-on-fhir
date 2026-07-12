@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Stethoscope, User, Sparkles, LogIn, Lock } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
@@ -25,6 +26,7 @@ import { useOnboarding } from '@/src/application/hooks/onboarding/use-onboarding
 import { AuthDialog } from '@/features/auth/components/AuthDialog'
 
 type StepId = 'welcome' | 'audience' | 'autoScan' | 'signIn'
+type AutoAiChoice = 'auto' | 'manual'
 
 export function FirstRunOnboardingDialog() {
   const { t } = useLanguage()
@@ -52,6 +54,12 @@ export function FirstRunOnboardingDialog() {
   const [steps, setSteps] = useState<StepId[] | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [showAuth, setShowAuth] = useState(false)
+  // Keep the onboarding selection local until the user continues. Otherwise
+  // clicking "auto" could start an AI request before the consent box is read.
+  const [autoAiChoice, setAutoAiChoice] = useState<AutoAiChoice | null>(
+    autoAiOn ? 'auto' : autoAiOff ? 'manual' : null,
+  )
+  const [autoAiConsent, setAutoAiConsent] = useState(false)
 
   // Freeze the step list when the flow first opens. The audience choice is
   // always asked first (it shapes the entire UI), even for returning users.
@@ -76,6 +84,12 @@ export function FirstRunOnboardingDialog() {
   const goNext = () => setStepIndex((i) => Math.min(i + 1, steps.length - 1))
   const goBack = () => setStepIndex((i) => Math.max(i - 1, 0))
   const finish = () => markComplete()
+  const continueFromAutoScan = () => {
+    if (!autoAiChoice) return
+    setAutoAi(autoAiChoice === 'auto')
+    if (isLast) finish()
+    else goNext()
+  }
   const finishAndSignIn = () => {
     markComplete()
     setShowAuth(true)
@@ -168,10 +182,10 @@ export function FirstRunOnboardingDialog() {
               <div className="grid gap-3 pt-1 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setAutoAi(true)}
-                  aria-pressed={autoAiOn}
+                  onClick={() => setAutoAiChoice('auto')}
+                  aria-pressed={autoAiChoice === 'auto'}
                   className={`flex flex-col items-start gap-1.5 rounded-lg border-2 p-4 text-left transition-colors focus:outline-none ${
-                    autoAiOn ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                    autoAiChoice === 'auto' ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
                   }`}
                 >
                   <div className="font-semibold">{ob.autoScanOnLabel}</div>
@@ -179,16 +193,40 @@ export function FirstRunOnboardingDialog() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAutoAi(false)}
-                  aria-pressed={autoAiOff}
+                  onClick={() => setAutoAiChoice('manual')}
+                  aria-pressed={autoAiChoice === 'manual'}
                   className={`flex flex-col items-start gap-1.5 rounded-lg border-2 p-4 text-left transition-colors focus:outline-none ${
-                    autoAiOff ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                    autoAiChoice === 'manual' ? 'border-primary bg-accent' : 'border-border hover:border-primary/50 hover:bg-accent/50'
                   }`}
                 >
                   <div className="font-semibold">{ob.autoScanOffLabel}</div>
                   <div className="text-sm text-muted-foreground">{ob.autoScanOffDesc}</div>
                 </button>
               </div>
+              {autoAiChoice === 'auto' ? (
+                <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id="onboarding-auto-ai-consent"
+                      checked={autoAiConsent}
+                      onCheckedChange={(checked) => setAutoAiConsent(checked === true)}
+                      aria-describedby={!autoAiConsent ? 'onboarding-auto-ai-consent-required' : undefined}
+                      className="mt-0.5"
+                    />
+                    <label
+                      htmlFor="onboarding-auto-ai-consent"
+                      className="cursor-pointer text-sm leading-snug text-foreground"
+                    >
+                      {ob.autoScanConsent}
+                    </label>
+                  </div>
+                  {!autoAiConsent ? (
+                    <p id="onboarding-auto-ai-consent-required" className="mt-1.5 pl-6.5 text-xs text-muted-foreground">
+                      {ob.autoScanConsentRequired}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           )}
 
@@ -233,7 +271,11 @@ export function FirstRunOnboardingDialog() {
                 </Button>
               )}
               {step === 'autoScan' && (
-                <Button size="sm" onClick={isLast ? finish : goNext}>
+                <Button
+                  size="sm"
+                  onClick={continueFromAutoScan}
+                  disabled={!autoAiChoice || (autoAiChoice === 'auto' && !autoAiConsent)}
+                >
                   {isLast ? ob.finish : ob.next}
                 </Button>
               )}

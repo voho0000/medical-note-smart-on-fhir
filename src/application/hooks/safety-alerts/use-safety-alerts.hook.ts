@@ -102,10 +102,9 @@ interface SafetyPrefsStore {
 export const useSafetyPrefsStore = create<SafetyPrefsStore>()(
   persist(
     (set) => ({
-      // Default ON to match medical-summary autoGenerate: the Medical Summary
-      // tab shows ONE "自動產生" toggle governing both, so their defaults must
-      // agree or the toggle would read ON while the scan silently stays manual.
-      autoScan: true,
+      // Default OFF to match medical-summary autoGenerate. First-run onboarding
+      // enables both only after the user explicitly consents to cloud AI.
+      autoScan: false,
       setAutoScan: (value) => set({ autoScan: value }),
       modelId: SAFETY_ALERTS_MODEL_ID,
       setModelId: (id) => set({ modelId: id }),

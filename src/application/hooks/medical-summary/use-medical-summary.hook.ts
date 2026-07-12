@@ -106,9 +106,9 @@ interface SummaryPrefsStore {
 export const useSummaryPrefsStore = create<SummaryPrefsStore>()(
   persist(
     (set) => ({
-      // Default ON — the tab's whole point is "open the patient, see the
-      // summary". The auto effect below still gates out anonymous visitors.
-      autoGenerate: true,
+      // Default OFF until first-run onboarding records an explicit choice. This
+      // prevents a new patient's data from reaching cloud AI before consent.
+      autoGenerate: false,
       setAutoGenerate: (value) => set({ autoGenerate: value }),
       modelId: MEDICAL_SUMMARY_MODEL_ID,
       setModelId: (id) => set({ modelId: id }),
