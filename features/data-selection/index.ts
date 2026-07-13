@@ -1,8 +1,12 @@
 /**
  * Data Selection Feature - Public API
  * 
- * This is the only entry point for this feature.
- * Internal components, hooks, and utilities are not exported.
+ * Public, pluggable entry points for the scope editor and its drawer host.
+ * Internal selection components, hooks, and utilities remain encapsulated.
  */
 
-export { DataSelectionFeature } from './Feature'
+export { DataSelectionFeature, type DataSelectionFeatureProps } from './Feature'
+export {
+  DataSelectionDrawer,
+  type DataSelectionDrawerProps,
+} from './components/DataSelectionDrawer'

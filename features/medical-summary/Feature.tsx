@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { AlertCircle, ClipboardList, LayoutList, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react"
+import { AlertCircle, ClipboardList, Database, LayoutList, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
@@ -39,6 +39,7 @@ import { CoverageCard } from "./components/CoverageCard"
 import { SourceSup } from "./components/SourceSup"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
 import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
+import { DataSelectionDrawer } from "@/features/data-selection"
 import {
   MedicalSummaryCardLayoutManager,
   type MedicalSummaryCardLayoutItem,
@@ -86,6 +87,7 @@ export default function MedicalSummaryFeature() {
   const [activeView, setActiveView] = useState<SummaryView>("standard")
   const [customUnread, setCustomUnread] = useState(false)
   const [customManagerOpen, setCustomManagerOpen] = useState(false)
+  const [dataScopeOpen, setDataScopeOpen] = useState(false)
   const [selectedCustomPanelId, setSelectedCustomPanelId] = useState<string | undefined>()
   const previousLoadingPanelsRef = useRef<Set<string>>(new Set())
   const customGenerating = visibleInsightPanels.some(
@@ -463,12 +465,8 @@ export default function MedicalSummaryFeature() {
             ) : null}
           </TabsTrigger>
         </TabsList>
-        {activeView === "standard" ? (
-        <div className="ml-auto flex items-center gap-1.5">
-          {/* Model choice and card-layout tools are clinician-grade controls —
-              a layperson gains nothing from a raw model dropdown and it reads
-              as alarming; patients keep the regenerate button + auto toggle. */}
-          {!isPatient ? (
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          {activeView === "standard" ? (
             <ModelPicker
               modelId={model}
               fallbackModelId={MEDICAL_SUMMARY_MODEL_ID}
@@ -476,25 +474,49 @@ export default function MedicalSummaryFeature() {
               tooltip={t.safetyAlerts.modelTooltip}
               compact
             />
-          ) : null}
-          {hasPatient && dataReady ? (
-            <Button onClick={() => void generate()} size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs" disabled={isBusy || isRestoring}>
-              {isBusy ? (
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-              ) : hasAnyResult ? (
-                <RefreshCw className="h-3.5 w-3.5" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              {hasAnyResult ? ms.regenerate : ms.generate}
+          ) : (
+            <ModelPicker
+              modelId={insightsModel}
+              fallbackModelId={MODEL_PREF_DEFAULTS.insights}
+              onSelect={(id) => setModelFor("insights", id)}
+              tooltip={t.modelPicker.insightsTooltip}
+              align="end"
+              compact
+            />
+          )}
+          {activeView === "standard" ? (
+            hasPatient && dataReady ? (
+              <Button onClick={() => void generate()} size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs" disabled={isBusy || isRestoring}>
+                {isBusy ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : hasAnyResult ? (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {hasAnyResult ? ms.regenerate : ms.generate}
+              </Button>
+            ) : null
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => openCustomManager()}
+              title={`${ms.manageCustomInsights}。${ms.customManagerDescription}`}
+              aria-label={ms.manageCustomInsights}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              <span className="hidden @min-[38rem]:inline">{ms.manageCustomInsights}</span>
             </Button>
-          ) : null}
+          )}
           <Popover open={summarySettingsOpen} onOpenChange={setSummarySettingsOpen}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
                 size="icon"
-                variant={summarySettingsOpen ? "secondary" : "ghost"}
+                variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "ghost"}
                 className="h-7 w-7 text-muted-foreground"
                 title={ms.summaryControls}
                 aria-label={ms.summaryControls}
@@ -503,14 +525,32 @@ export default function MedicalSummaryFeature() {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 space-y-1 p-2">
-              <label
-                className="flex cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
-                title={ms.autoGenerateTooltip}
+              {activeView === "standard" ? (
+                <label
+                  className="flex cursor-pointer select-none items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
+                  title={ms.autoGenerateTooltip}
+                >
+                  <span className="font-medium text-foreground">{ms.autoGenerate}</span>
+                  <Switch checked={autoGenerate} onCheckedChange={setAutoGenerate} className="scale-90" />
+                </label>
+              ) : null}
+              <Button
+                type="button"
+                data-testid="medical-summary-data-scope-trigger"
+                size="sm"
+                variant="ghost"
+                className="h-8 w-full justify-start gap-2 px-2 text-xs"
+                onClick={() => {
+                  setSummarySettingsOpen(false)
+                  setDataScopeOpen(true)
+                }}
+                disabled={!hasPatient}
+                title={hasPatient ? ms.dataScopeDescription : ms.dataScopeRequiresPatient}
               >
-                <span className="font-medium text-foreground">{ms.autoGenerate}</span>
-                <Switch checked={autoGenerate} onCheckedChange={setAutoGenerate} className="scale-90" />
-              </label>
-              {!isPatient && availableCardIds.length > 0 ? (
+                <Database className="h-3.5 w-3.5" />
+                {ms.dataScopeButton}
+              </Button>
+              {activeView === "standard" && !isPatient && availableCardIds.length > 0 ? (
                 <Button
                   type="button"
                   size="sm"
@@ -528,30 +568,6 @@ export default function MedicalSummaryFeature() {
             </PopoverContent>
           </Popover>
         </div>
-        ) : (
-          <div className="ml-auto flex items-center gap-1.5">
-            <ModelPicker
-              modelId={insightsModel}
-              fallbackModelId={MODEL_PREF_DEFAULTS.insights}
-              onSelect={(id) => setModelFor("insights", id)}
-              tooltip={t.modelPicker.insightsTooltip}
-              align="end"
-              compact
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1 px-2 text-xs"
-              onClick={() => openCustomManager()}
-              title={`${ms.manageCustomInsights}。${ms.customManagerDescription}`}
-              aria-label={ms.manageCustomInsights}
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-              <span className="hidden @min-[38rem]:inline">{ms.manageCustomInsights}</span>
-            </Button>
-          </div>
-        )}
       </div>
 
       <MedicalSummaryCardLayoutManager
@@ -668,6 +684,15 @@ export default function MedicalSummaryFeature() {
           <CustomInsightModulesSection onManage={openCustomManager} />
         </TabsContent>
       </Tabs>
+      <DataSelectionDrawer
+        open={dataScopeOpen}
+        onOpenChange={setDataScopeOpen}
+        title={ms.dataScopeTitle}
+        description={ms.dataScopeDescription}
+        applyHint={ms.dataScopeApplyHint}
+        modelId={activeView === "standard" ? model : insightsModel}
+        fallbackModelId={activeView === "standard" ? MEDICAL_SUMMARY_MODEL_ID : MODEL_PREF_DEFAULTS.insights}
+      />
       <CustomInsightModulesManagerDrawer
         open={customManagerOpen}
         onOpenChange={setCustomManagerOpen}

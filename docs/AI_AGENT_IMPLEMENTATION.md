@@ -60,8 +60,8 @@ SMART on FHIR 的 `fhirclient` 庫是專門為瀏覽器設計的，它依賴：
 
 ### 4. UI 層
 - `@/features/medical-chat/components/MedicalChat.tsx`
-  - 加入模式切換按鈕（一般模式 vs 深入模式）
-  - 根據模式使用不同的 chat hook
+  - 單一 Agent 對話路徑
+  - AI 自主決定是否調用 FHIR／文獻工具
 
 ## 可用的 FHIR Tools
 
@@ -87,14 +87,13 @@ SMART on FHIR 的 `fhirclient` 庫是專門為瀏覽器設計的，它依賴：
 
 ### 在 Medical Chat 中使用
 
-1. 點擊「深入模式」按鈕
-2. 輸入問題，例如：
+1. 輸入問題，例如：
    - "這個病人有什麼診斷？"
    - "最近的檢驗結果是什麼？"
    - "病人有哪些用藥？"
    - "有過敏史嗎？"
 
-3. AI 會自動：
+2. AI 會自動：
    - 判斷需要查詢哪些資料
    - 調用對應的 FHIR tools
    - 整合查詢結果
@@ -128,7 +127,6 @@ SMART on FHIR 的 `fhirclient` 庫是專門為瀏覽器設計的，它依賴：
 ## 測試建議
 
 1. **基本功能測試**
-   - 切換到深入模式
    - 詢問病人的診斷、用藥、檢驗等
    - 確認 AI 能正確調用 tools
 
@@ -137,9 +135,9 @@ SMART on FHIR 的 `fhirclient` 庫是專門為瀏覽器設計的，它依賴：
    - API key 缺失時的錯誤處理
    - FHIR 查詢失敗時的錯誤處理
 
-3. **模式切換測試**
-   - 在一般模式和深入模式間切換
-   - 確認使用正確的 chat hook
+3. **Agent 路徑測試**
+   - 一般問題不應被強迫查詢 FHIR
+   - 病人問題應使用正確的 FHIR tool
 
 ## 未來改進
 

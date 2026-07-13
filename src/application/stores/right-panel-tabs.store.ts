@@ -6,6 +6,7 @@
  * which features exist and their defaults — this store only layers boolean
  * overrides on top, so newly added features automatically pick up their
  * registry default and overrides for removed features are harmless leftovers.
+ * The More menu is rendered only while at least one feature is in overflow.
  */
 
 import { create } from 'zustand'
@@ -40,4 +41,30 @@ export function isFeaturePinned(
 ): boolean {
   if (feature.pinLocked) return true
   return pinOverrides[feature.id] ?? feature.pinned !== false
+}
+
+export interface RightPanelFeatureGroups {
+  lockedFeatures: RightPanelFeatureConfig[]
+  unlockedFeatures: RightPanelFeatureConfig[]
+  pinnedFeatures: RightPanelFeatureConfig[]
+  overflowFeatures: RightPanelFeatureConfig[]
+}
+
+/**
+ * Registry-driven tab placement. Keeping this pure makes the overflow policy
+ * reusable and testable as features are plugged in or user overrides change.
+ */
+export function groupRightPanelFeatures(
+  features: RightPanelFeatureConfig[],
+  pinOverrides: Record<string, boolean>,
+): RightPanelFeatureGroups {
+  const lockedFeatures = features.filter((feature) => feature.pinLocked)
+  const unlockedFeatures = features.filter((feature) => !feature.pinLocked)
+
+  return {
+    lockedFeatures,
+    unlockedFeatures,
+    pinnedFeatures: unlockedFeatures.filter((feature) => isFeaturePinned(feature, pinOverrides)),
+    overflowFeatures: unlockedFeatures.filter((feature) => !isFeaturePinned(feature, pinOverrides)),
+  }
 }

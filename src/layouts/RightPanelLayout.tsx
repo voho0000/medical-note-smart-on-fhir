@@ -20,7 +20,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
-import { useRightPanelTabsStore, isFeaturePinned } from "@/src/application/stores/right-panel-tabs.store"
+import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
 import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 // RightPanelProvider moved to AppProviders (app-level) in v0.4.0 so the
 // header's overflow menu can navigate to right-panel tabs (e.g. open
@@ -47,10 +47,6 @@ const MedicalChatFeature = dynamic(() => import("@/features/medical-chat/Feature
   ssr: false,
   loading: FeatureLoading,
 })
-const DataSelectionFeature = dynamic(
-  () => import("@/features/data-selection/Feature").then((m) => m.DataSelectionFeature),
-  { ssr: false, loading: FeatureLoading },
-)
 const IpsExportFeature = dynamic(() => import("@/features/ips-export/Feature"), {
   ssr: false,
   loading: FeatureLoading,
@@ -81,7 +77,6 @@ import { ClinicalInsightsRuntimeProvider } from "@/features/clinical-insights/Cl
 const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'medical-summary': MedicalSummaryFeature,
   'medical-chat': MedicalChatFeature,
-  'data-selection': DataSelectionFeature,
   'ips-export': IpsExportFeature,
   'medical-calculator': MedicalCalculatorFeature,
   'settings': SettingsFeature,
@@ -153,11 +148,10 @@ function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
   //
   // Radix renders the viewport's content in a `display:table; min-width:100%`
   // wrapper (shrink-to-fit), which GROWS to a child's max-content width. A
-  // child with a wide intrinsic width — e.g. the data-selection preview
-  // <textarea> whose content has long unbreakable tokens like a drug name —
-  // therefore stretches the whole panel past the column and overflows the
-  // viewport horizontally. These panels only ever scroll vertically, so force
-  // that wrapper to `display:block` (= viewport width, content wraps).
+  // child with a wide intrinsic width can therefore stretch the whole panel
+  // past the column and overflow the viewport horizontally. These panels only
+  // ever scroll vertically, so force that wrapper to `display:block`
+  // (= viewport width, content wraps).
   if (feature.id !== 'medical-chat') {
     return (
       <ScrollArea className="h-full pr-2 [&_[data-radix-scroll-area-viewport]>div]:!block">
@@ -195,10 +189,12 @@ function RightPanelContentInner() {
 
   // Tab-bar grouping is purely registry-driven (no feature ids here):
   // [pinned…] [temp trigger for an active overflow tab?] [more ▾] [pinLocked…]
-  const lockedFeatures = features.filter(f => f.pinLocked)
-  const unlockedFeatures = features.filter(f => !f.pinLocked)
-  const pinnedFeatures = unlockedFeatures.filter(f => isFeaturePinned(f, pinOverrides))
-  const overflowFeatures = unlockedFeatures.filter(f => !isFeaturePinned(f, pinOverrides))
+  const {
+    lockedFeatures,
+    unlockedFeatures,
+    pinnedFeatures,
+    overflowFeatures,
+  } = groupRightPanelFeatures(features, pinOverrides)
   // An overflow feature can become active (menu click, or external
   // setActiveTab e.g. from the header) — give it a temporary real trigger so
   // the Radix active state has a visible anchor.
@@ -250,8 +246,9 @@ function RightPanelContentInner() {
     )
   }
 
+  const showOverflowMenu = overflowFeatures.length > 0
   const columnCount =
-    pinnedFeatures.length + (activeOverflowFeature ? 1 : 0) + 1 + lockedFeatures.length
+    pinnedFeatures.length + (activeOverflowFeature ? 1 : 0) + (showOverflowMenu ? 1 : 0) + lockedFeatures.length
 
   return (
     <Tabs
@@ -265,48 +262,51 @@ function RightPanelContentInner() {
       >
         {pinnedFeatures.map(renderTrigger)}
         {activeOverflowFeature && renderTrigger(activeOverflowFeature)}
-        {/* "More" is a menu, not a TabsTrigger — always rendered because the
-            pin-management submenu lives here even when overflow is empty. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className="text-sm font-medium min-w-0 flex items-center justify-center gap-1.5 rounded-lg text-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground/90 transition-colors data-[state=open]:bg-background data-[state=open]:text-foreground dark:data-[state=open]:bg-card"
-            title={t.tabs.more}
-            aria-label={t.tabs.more}
-          >
-            <MoreHorizontal className="h-4 w-4 shrink-0" />
-            <span className="truncate hidden sm:inline">{t.tabs.more}</span>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {overflowFeatures.map(feature => (
-              <DropdownMenuItem
-                key={feature.id}
-                onSelect={() => setActiveTab(feature.id)}
-              >
-                {renderMenuItemContent(feature)}
-              </DropdownMenuItem>
-            ))}
-            {overflowFeatures.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <SlidersHorizontal className="h-4 w-4 shrink-0" />
-                {t.tabs.managePinned}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {unlockedFeatures.map(feature => (
-                  <DropdownMenuCheckboxItem
-                    key={feature.id}
-                    checked={isFeaturePinned(feature, pinOverrides)}
-                    onCheckedChange={(checked) => setPinned(feature.id, checked === true)}
-                    // Keep the menu open while toggling several pins in a row
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    {renderMenuItemContent(feature)}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Keep the pluggable overflow/pin mechanism, but do not spend a whole
+            toolbar column on an empty menu. A future `pinned:false` feature or
+            an existing user override makes this entry reappear automatically. */}
+        {showOverflowMenu ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="text-sm font-medium min-w-0 flex items-center justify-center gap-1.5 rounded-lg text-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground/90 transition-colors data-[state=open]:bg-background data-[state=open]:text-foreground dark:data-[state=open]:bg-card"
+              title={t.tabs.more}
+              aria-label={t.tabs.more}
+            >
+              <MoreHorizontal className="h-4 w-4 shrink-0" />
+              <span className="truncate hidden sm:inline">{t.tabs.more}</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {overflowFeatures.map(feature => (
+                <DropdownMenuItem
+                  key={feature.id}
+                  onSelect={() => setActiveTab(feature.id)}
+                >
+                  {renderMenuItemContent(feature)}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                  {t.tabs.managePinned}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {unlockedFeatures.map(feature => (
+                    <DropdownMenuCheckboxItem
+                      key={feature.id}
+                      checked={isFeaturePinned(feature, pinOverrides)}
+                      onCheckedChange={(checked) => setPinned(feature.id, checked === true)}
+                      // Keep the menu open while toggling several pins in a row
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {renderMenuItemContent(feature)}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
         {lockedFeatures.map(renderTrigger)}
       </TabsList>
 

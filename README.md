@@ -16,11 +16,10 @@
 - **報告 AI 翻譯解讀**：影像／病理／出院病摘等報告可一鍵生成忠實中譯＋白話解讀（重點、注意事項），呈現在原文**上方**（民眾預設只看得懂的部分，原文仍在下方供對照）；醫師與民眾皆可用，隨選生成、不預先耗用額度。
 - **醫療摘要**（開啟病人後的預設分頁）：**零點擊 AI 簡報**——跨院病程摘要（關鍵片語標示＋可點擊的來源引用，逐筆對回 FHIR 資源，查無來源標「未驗證」）、主動用藥安全警示、需要決定的事、跨院時間軸與資料涵蓋卡；民眾版另有固定的「我的用藥與照護」Card，以藥物帶來的幫助為主、搭配平實注意事項，且每項必須對應原始 Medication FHIR 紀錄。醫療人員版／民眾版各自生成，結果快取 12 小時。
 - **AI 協助**：
-  - **臨床對話**（一般模式）：依選取的臨床資料提問、比較與整理資訊；輸入 `/` 即可快速套用提示模板；每次回答後提供可點選的追問建議。
-  - **深入模式（AI Agent）**：以客戶端 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）＋醫學文獻搜尋（Perplexity）。
+  - **臨床 AI Agent 對話**：依問題自主決定是否以 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）或搜尋醫學文獻（Perplexity）；輸入 `/` 可快速套用提示模板，每次回答後提供可點選的追問建議。
   - **臨床洞察**：自訂提示詞的並行分析工作台——每個標籤一個提示詞，載入病人後可自動生成、結果可手動編輯（主動用藥安全警示已移至**醫療摘要**內嵌呈現；民眾受眾為白話的**健康提醒**版本）。
   - **語音口述**：Whisper 轉錄。
-- **資料選擇**：挑選要餵給 AI 的資料範圍（門診／檢驗／用藥…），多種預設與每用途記憶。
+- **AI 資料範圍**：從醫療摘要的側邊 panel 調整要納入摘要與自訂摘要的 FHIR 資料（門診／檢驗／用藥…），並預覽 AI 主要收到的內容；臨床對話改由 Agent 按需查詢。
 - **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、50+ 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製。
 - **匯出（IPS）**：組出 International Patient Summary FHIR 文件，附可直接複製的 Markdown 預覽與 AI 問題清單推論（逐項確認後才納入）。
 - **提示範本庫**：社群共享的提示範本。
@@ -56,7 +55,7 @@
 | 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、Claude Haiku 4.5 |
 | 進階（需自備金鑰） | GPT-5.4 Mini／GPT-5.4／GPT-5.5；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
 
-醫學文獻搜尋使用 Perplexity（深入模式）。
+醫學文獻搜尋使用 Perplexity（AI Agent 對話）。
 
 ## 技術堆疊
 
@@ -146,7 +145,7 @@ Clean Architecture 分層：
 功能以 registry 可插拔：
 
 - **左側面板** `src/shared/config/feature-registry.ts` — 5 個分頁：病人資訊／就診紀錄／報告／用藥／文件。
-- **右側面板** `src/shared/config/right-panel-registry.ts` — 7 個功能：醫療摘要／筆記對話／資料選擇／臨床洞察／匯出（IPS）／醫療計算機／設定；低頻分頁預設收合於「更多」選單，使用者可在選單內自訂哪些常駐。
+- **右側面板** `src/shared/config/right-panel-registry.ts` — 5 個主功能：醫療摘要／臨床對話／匯出（IPS）／醫療計算機／設定；資料範圍與自訂摘要管理以可插拔 drawer 嵌入醫療摘要。
 
 ## 文件
 
@@ -183,11 +182,10 @@ A clinical-data integration and reading tool built on **Next.js 16** and **SMART
 - **Report AI translate & explain**: imaging/pathology reports and discharge summaries can generate a one-click faithful translation plus a plain-language interpretation (key points, what to watch for), shown **above** the original text (the original stays below for comparison); available to both clinicians and patients, generated on demand so it never spends quota unasked.
 - **Medical Summary** (the default tab after loading a patient): a **zero-click AI briefing** — cross-hospital course narrative, disease-oriented test trends, proactive safety alerts, pending decisions, problem list and timeline, followed by optional **custom summary modules**. The patient view also includes a fixed benefit-first **My medicines and care** card; every item must resolve to a Medication FHIR record. Custom modules use user-managed prompts, load independently from the fixed summary, and can be added from the Prompt Gallery directly inside the summary.
 - **AI**:
-  - **Clinical Chat** (normal): ask questions, compare records, and organize information from selected clinical data; type `/` to quickly apply a prompt template; tappable follow-up suggestions after each answer.
-  - **Deep Mode (AI Agent)**: client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters) + medical-literature search (Perplexity).
+  - **Clinical AI Agent chat**: autonomously decides whether to use client-side tool calling over FHIR resources (patient / conditions / medications / allergies / diagnostic reports / observations / procedures / encounters) or medical-literature search (Perplexity); type `/` for prompt templates and use tappable follow-up suggestions after each answer.
   - **Custom summary modules**: reusable prompt templates embedded in **Medical Summary**; users can add, order, preview, manually run, or auto-generate selected modules without switching tabs.
   - **Voice dictation**: Whisper transcription.
-- **Data Selection**: choose which data to feed the AI, with presets and per-consumer memory.
+- **AI data scope**: a reusable drawer inside Medical Summary for selecting and previewing the main FHIR context supplied to standard and custom summaries; agent chat queries FHIR on demand.
 - **Medical Calculator**: MDCalc-style clinical scores/formulas (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65… — 50+ across 10 categories) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy.
 - **Export (IPS)**: builds an International Patient Summary FHIR document, with a copy-ready Markdown preview and AI problem-list inference (each suggestion confirmed before inclusion).
 - **Prompt Gallery**: community-shared prompt templates.
@@ -223,7 +221,7 @@ Without your own key, requests go through a Firebase Functions proxy (daily free
 | Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, Claude Haiku 4.5 |
 | Advanced (your own key) | GPT-5.4 Mini / GPT-5.4 / GPT-5.5; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
 
-Literature search uses Perplexity (Deep Mode).
+Literature search uses Perplexity (AI Agent chat).
 
 ## Tech stack
 
@@ -288,7 +286,7 @@ Infrastructure    src/infrastructure/
 Pluggable via registries:
 
 - **Left panel** `src/shared/config/feature-registry.ts` — 5 tabs: Patient / Visits / Reports / Medications / Documents.
-- **Right panel** `src/shared/config/right-panel-registry.ts` — 6 features: Medical Summary / Note Chat / Data Selection / Export (IPS) / Medical Calculator / Settings; low-frequency tabs collapse into a "More" menu by default, and users can customize which tabs stay pinned.
+- **Right panel** `src/shared/config/right-panel-registry.ts` — 5 primary features: Medical Summary / Clinical Chat / Export (IPS) / Medical Calculator / Settings. Data scope and custom-summary management are pluggable drawers owned by Medical Summary.
 
 ## Docs
 

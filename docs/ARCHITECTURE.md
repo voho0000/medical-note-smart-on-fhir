@@ -187,10 +187,11 @@ export function MyFeatureCard() {
 }
 ```
 
-**預設功能**（4 個）：
-- Medical Chat - AI 對話（一般模式 + 深入模式）
-- Data Selection - 資料選擇
-- Medical Summary - 固定核心摘要＋自訂摘要模組
+**預設頂層功能**（5 個）：
+- Medical Summary - 固定核心摘要＋自訂摘要模組＋ AI 資料範圍 drawer
+- Medical Chat - 單一 AI Agent 對話（依需求自主調用 FHIR／文獻工具）
+- IPS Export - 匯出與獨立資料範圍
+- Medical Calculator - 醫療計算機
 - Settings - 設定
 
 ### 架構優勢
@@ -439,7 +440,7 @@ features/
 ├── chat-history/           # 對話歷史
 ├── clinical-insights/      # 自訂摘要模組 runtime 與管理 UI
 ├── clinical-summary/       # 臨床摘要（7 個子功能）
-├── data-selection/         # 資料選擇
+├── data-selection/         # 可重用的 AI 資料範圍功能與 drawer
 ├── medical-chat/           # AI 對話
 ├── prompt-gallery/         # 提示範本庫
 └── settings/               # 設定

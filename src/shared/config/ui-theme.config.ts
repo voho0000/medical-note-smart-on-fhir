@@ -7,7 +7,6 @@
 import {
   MessageSquare,
   Settings,
-  CheckSquare,
   Stethoscope,
   FileText,
   Files,
@@ -159,11 +158,6 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
     id: 'medical-chat',
     icon: MessageSquare,
     colorKey: 'chat',
-  },
-  'data-selection': {
-    id: 'data-selection',
-    icon: CheckSquare,
-    colorKey: 'selection',
   },
   'ips-export': {
     id: 'ips-export',

@@ -23,38 +23,22 @@ export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
   formatClinicalContext: (sections: ClinicalContextSection[]) => string
   getFormattedClinicalContext: () => string
-  supplementaryNotes: string
-  setSupplementaryNotes: (notes: string) => void
   getFullClinicalContext: () => string
   /** Document resource ids actually included in this consumer's AI context. */
   includedDocumentIds: string[]
-  editedClinicalContext: string | null
-  setEditedClinicalContext: (context: string | null) => void
-  resetClinicalContextToDefault: () => void
 }
 
 export { ClinicalContextSection }
 
 export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextReturn {
   const ds = useDataSelection()
-  // Each consumer (chat / insights / ips) reads its own profile. The data-selection
-  // panel drives chat + insights together, so the preview (no consumer given)
-  // follows the 對話 base.
+  // Each consumer (chat / insights / ips) reads its own profile. The main scope
+  // editor targets summary/insights and mirrors chat only for stored-profile
+  // compatibility; agent chat queries FHIR on demand instead of preloading it.
   const activeConsumer: DataConsumer = consumer ?? 'chat'
   const profile = ds.getProfile(activeConsumer)
   const selectedData = profile.selection
   const filters = profile.filters
-  const supplementaryNotes = profile.supplementaryNotes
-  const editedClinicalContext = profile.editedClinicalContext
-  const { setNotesFor, setEditedContextFor } = ds
-  const setSupplementaryNotes = useCallback(
-    (notes: string) => setNotesFor(activeConsumer, notes),
-    [setNotesFor, activeConsumer],
-  )
-  const setEditedClinicalContext = useCallback(
-    (context: string | null) => setEditedContextFor(activeConsumer, context),
-    [setEditedContextFor, activeConsumer],
-  )
 
   const clinicalData = (useClinicalData() as ClinicalData | null) ?? null
 
@@ -110,9 +94,8 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
 
   // Decode + HTML-strip every document ONCE per clinicalData load. This is the
   // expensive step (base64 + regex strip per discharge summary). Keeping it out
-  // of the per-selection memo below means ticking a document checkbox — which
-  // changes documentIds and re-renders the live context preview — no longer
-  // re-decodes all documents, which lagged the checkbox by several seconds.
+  // of the per-selection memo below means ticking a document checkbox no
+  // longer re-decodes all documents, which lagged the checkbox by seconds.
   // clinicalData is the full ClinicalDataCollection at runtime (carries
   // compositions + documentReferences); the hook's local type omits them.
   const allDocuments = useMemo(
@@ -200,32 +183,19 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
   )
 
   const getFullClinicalContext = useCallback((): string => {
-    const baseContext = editedClinicalContext ?? formatClinicalContext(getClinicalContext())
-    const full = supplementaryNotes.trim()
-      ? `${baseContext}\n\n## Supplementary Notes\n${supplementaryNotes}`
-      : baseContext
+    const full = formatClinicalContext(getClinicalContext())
     // Outbound-only PII mask (身分證字號, labeled 病歷號/姓名 values): this
-    // string goes to cloud LLMs (chat first message, summary / safety /
-    // insights context) — discharge-summary bodies included via 文件 selection
-    // are the main carrier. The preview (getFormattedClinicalContext) stays
-    // unmasked so the UI keeps showing source data verbatim.
+    // string goes to cloud LLMs (summary / safety / insights context) —
+    // discharge-summary bodies included via 文件 selection are the main carrier.
+    // Internal formatted-context consumers stay unmasked.
     return scrubFreeText(full)
-  }, [editedClinicalContext, getClinicalContext, supplementaryNotes])
-
-  const resetClinicalContextToDefault = useCallback(() => {
-    setEditedClinicalContext(null)
-  }, [setEditedClinicalContext])
+  }, [getClinicalContext])
 
   return {
     getClinicalContext,
     formatClinicalContext,
     getFormattedClinicalContext,
-    supplementaryNotes,
-    setSupplementaryNotes,
     getFullClinicalContext,
     includedDocumentIds,
-    editedClinicalContext,
-    setEditedClinicalContext,
-    resetClinicalContextToDefault,
   }
 }

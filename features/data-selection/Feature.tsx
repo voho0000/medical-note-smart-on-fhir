@@ -26,7 +26,19 @@ interface RawClinicalData {
   error?: Error | null
 }
 
-export function DataSelectionFeature() {
+export interface DataSelectionFeatureProps {
+  /** Model used for context-budget feedback by the embedding feature. */
+  modelId?: string
+  fallbackModelId?: string
+  /** Standalone surfaces may keep the explanatory line; drawers own it in their header. */
+  showScopeDescription?: boolean
+}
+
+export function DataSelectionFeature({
+  modelId,
+  fallbackModelId,
+  showScopeDescription = true,
+}: DataSelectionFeatureProps = {}) {
   const { t } = useLanguage()
   const rawClinicalData = useClinicalData() as RawClinicalData
   const clinicalDataMapper = useClinicalDataMapper()
@@ -95,6 +107,9 @@ export function DataSelectionFeature() {
         onSelectionChange={setSelectedData}
         filters={filters}
         onFiltersChange={handleFiltersChange}
+        modelId={modelId}
+        fallbackModelId={fallbackModelId}
+        showScopeDescription={showScopeDescription}
       />
     </div>
   )

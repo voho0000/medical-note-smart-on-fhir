@@ -19,6 +19,9 @@ interface DataSelectionPanelProps {
   filters: DataFilters
   onSelectionChange: (selectedData: DataSelection) => void
   onFiltersChange: (filters: DataFilters) => void
+  modelId?: string
+  fallbackModelId?: string
+  showScopeDescription?: boolean
 }
 
 export function DataSelectionPanel({ 
@@ -26,24 +29,14 @@ export function DataSelectionPanel({
   selectedData,
   filters,
   onSelectionChange,
-  onFiltersChange 
+  onFiltersChange,
+  modelId,
+  fallbackModelId,
+  showScopeDescription = true,
 }: DataSelectionPanelProps) {
   const { t } = useLanguage()
-  const { 
-    getFormattedClinicalContext, 
-    supplementaryNotes, 
-    setSupplementaryNotes,
-    editedClinicalContext,
-    setEditedClinicalContext,
-    resetClinicalContextToDefault
-  } = useClinicalContext()
-
-  // Build the (potentially huge) context preview ONLY while the preview tab is
-  // open. Otherwise getFormattedClinicalContext() — which formats every section,
-  // incl. all meds/labs/documents — ran on every render and lagged each
-  // checkbox toggle by seconds on large patients.
+  const { getFormattedClinicalContext } = useClinicalContext()
   const [activeTab, setActiveTab] = useState('selection')
-
   const { filterKey, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
   const dataCategories = useDataCategories(clinicalData, filterKey, filters)
 
@@ -55,34 +48,42 @@ export function DataSelectionPanel({
   })
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-      <TabsList className="grid w-full grid-cols-2 gap-1 h-9 bg-muted/40 p-1 border border-border/50">
-        <TabsTrigger value="selection" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>{t.dataSelection.title}</TabsTrigger>
-        <TabsTrigger value="preview" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>{t.common.preview}</TabsTrigger>
-      </TabsList>
-      <TabsContent value="selection">
-        <DataSelectionTab
-          clinicalData={clinicalData}
-          dataCategories={dataCategories}
-          selectedData={selectedData}
-          filters={filters}
-          onToggle={handleToggle}
-          onToggleAll={handleToggleAll}
-          onFilterChange={handleFilterChange}
-          allSelected={allSelected}
-          someSelected={someSelected}
-        />
-      </TabsContent>
-      <TabsContent value="preview">
-        <PreviewTab
-          supplementaryNotes={supplementaryNotes}
-          onSupplementaryNotesChange={setSupplementaryNotes}
-          editedClinicalContext={editedClinicalContext}
-          onEditedClinicalContextChange={setEditedClinicalContext}
-          formattedClinicalContext={activeTab === 'preview' ? getFormattedClinicalContext() : ''}
-          onReset={resetClinicalContextToDefault}
-        />
-      </TabsContent>
-    </Tabs>
+    <div className="w-full space-y-2.5">
+      {showScopeDescription ? (
+        <p className="px-1 text-xs leading-relaxed text-muted-foreground">
+          {t.dataSelection.scopeDescription}
+        </p>
+      ) : null}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
+        <TabsList className="grid h-9 w-full grid-cols-2 gap-1 border border-border/50 bg-muted/40 p-1">
+          <TabsTrigger value="selection" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>
+            {t.dataSelection.title}
+          </TabsTrigger>
+          <TabsTrigger value="preview" className={`text-sm ${TAB_ACTIVE_CLASSES.selection}`}>
+            {t.common.preview}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="selection">
+          <DataSelectionTab
+            clinicalData={clinicalData}
+            dataCategories={dataCategories}
+            selectedData={selectedData}
+            filters={filters}
+            onToggle={handleToggle}
+            onToggleAll={handleToggleAll}
+            onFilterChange={handleFilterChange}
+            allSelected={allSelected}
+            someSelected={someSelected}
+            modelId={modelId}
+            fallbackModelId={fallbackModelId}
+          />
+        </TabsContent>
+        <TabsContent value="preview">
+          <PreviewTab
+            formattedClinicalContext={activeTab === 'preview' ? getFormattedClinicalContext() : ''}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }

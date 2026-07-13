@@ -12,7 +12,6 @@ import { CategoryFilterControls } from "./CategoryFilterControls"
 import { DocumentChecklist } from "./DocumentChecklist"
 import { LabPanelChecklist } from "./LabPanelChecklist"
 import { ContextTokenMeter } from "./ContextTokenMeter"
-import type { PresetId } from "@/src/shared/constants/data-selection.constants"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
@@ -28,6 +27,8 @@ interface DataSelectionTabProps {
   onFilterChange: (key: keyof DataFilters, value: FilterValue) => void
   allSelected: boolean
   someSelected: boolean
+  modelId?: string
+  fallbackModelId?: string
 }
 
 // Sections mirror the LEFT-panel tabs so what you toggle here maps 1:1 to what
@@ -55,6 +56,8 @@ export function DataSelectionTab({
   onToggleAll,
   onFilterChange,
   allSelected,
+  modelId,
+  fallbackModelId,
 }: DataSelectionTabProps) {
   const { t } = useLanguage()
   const {
@@ -62,7 +65,6 @@ export function DataSelectionTab({
     activePreset,
     resetToDefaults,
     selectAllData,
-    setEditedClinicalContext,
   } = useDataSelection()
   const [mounted, setMounted] = useState(false)
   const [openGroups, setOpenGroups] = useState<Set<string>>(DEFAULT_OPEN)
@@ -82,16 +84,11 @@ export function DataSelectionTab({
   const ds = t.dataSelection as unknown as Record<string, string>
   const adaptedFilters = filters as unknown as Record<string, FilterValue>
 
-  const handleApplyPreset = (presetId: PresetId) => {
-    applyPreset(presetId)
-    setEditedClinicalContext(null)
-  }
-
   return (
     <div className="space-y-3">
-      {/* Live token meter — surfaces under/over-selection against the chat model's
+      {/* Live token meter — surfaces under/over-selection against the active summary model's
           context window (the two previously-invisible failure modes). */}
-      <ContextTokenMeter />
+      <ContextTokenMeter modelId={modelId} fallbackModelId={fallbackModelId} />
 
       {/* Templates — one-tap fill, then tweak the single selection freely. */}
       <div>
@@ -107,7 +104,7 @@ export function DataSelectionTab({
                 <button
                   key={id}
                   type="button"
-                  onClick={() => handleApplyPreset(id)}
+                  onClick={() => applyPreset(id)}
                   aria-pressed={activePreset === id}
                   className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                     activePreset === id
@@ -126,10 +123,7 @@ export function DataSelectionTab({
               size="sm"
               className="h-7 px-2 text-xs"
               title={ds.selectAllDataHint ?? '納入所有類別與全部時間範圍(配合上方內容量使用)'}
-              onClick={() => {
-                selectAllData()
-                setEditedClinicalContext(null)
-              }}
+              onClick={selectAllData}
             >
               {ds.selectAllData ?? '全部資料'}
             </Button>
@@ -140,10 +134,7 @@ export function DataSelectionTab({
               variant="outline"
               size="sm"
               className="h-7 px-2 text-xs"
-              onClick={() => {
-                resetToDefaults()
-                setEditedClinicalContext(null)
-              }}
+              onClick={resetToDefaults}
             >
               {ds.restorePresetDefaults ?? ds.resetToDefault}
             </Button>

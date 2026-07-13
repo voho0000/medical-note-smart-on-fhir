@@ -12,8 +12,8 @@ export interface RightPanelFeatureConfig {
   enabled: boolean
   /**
    * Default tab-bar placement (default true). false = starts in the "more"
-   * overflow menu. Users can override per feature via the right-panel-tabs
-   * store ("customize pinned tabs" in the more menu).
+   * overflow menu. The menu is hidden when overflow is empty and appears
+   * automatically for a false default or a saved user override.
    */
   pinned?: boolean
   /**
@@ -66,17 +66,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     enabled: true,
     forceMount: true,
     contentClassName: 'flex-1 overflow-hidden mt-1',
-  },
-  {
-    // Configuration-type feature (per-consumer data scopes) — set up once,
-    // rarely touched mid-consult, so it defaults to the overflow menu.
-    id: 'data-selection',
-    name: 'Data Selection',
-    tabLabel: 'dataSelection',
-    order: 2,
-    enabled: true,
-    pinned: false,
-    contentClassName: 'flex-1 mt-1',
   },
   {
     id: 'ips-export',

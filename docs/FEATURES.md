@@ -22,7 +22,7 @@ import { AuthDialog, useAuthDialog } from '@/features/auth'
 ```typescript
 // ❌ 錯誤 - 不要直接存取內部檔案
 import MedicalChat from '@/features/medical-chat/components/MedicalChat'
-import { useStreamingChat } from '@/features/medical-chat/hooks/useStreamingChat'
+import { useAgentChat } from '@/features/medical-chat/hooks/useAgentChat'
 ```
 
 ### ❌ 錯誤做法：跨 feature 依賴
@@ -90,8 +90,8 @@ import { MedicalChatFeature } from '@/features/medical-chat'
 ```
 
 **功能**：
-- 一般模式：基本 AI 對話
-- 深入模式：AI Agent with Tool Calling
+- 單一 AI Agent 對話，依問題自主決定是否查詢工具
+- FHIR 臨床資料查詢與醫學文獻 Tool Calling
 - 支援 OpenAI、Gemini、Perplexity
 - 語音錄製和轉錄
 - 對話歷史整合
@@ -112,20 +112,27 @@ import { MedicalChatFeature } from '@/features/medical-chat'
 
 ---
 
-### 5. Data Selection（資料選擇）
+### 5. Data Selection（AI 資料範圍）
 **Entry Point:** `@/features/data-selection`
 
 ```typescript
-import { DataSelectionFeature } from '@/features/data-selection'
+import { DataSelectionDrawer } from '@/features/data-selection'
 
-// Usage
-<DataSelectionFeature />
+<DataSelectionDrawer
+  open={open}
+  onOpenChange={setOpen}
+  title="AI 資料範圍"
+  description="..."
+/>
 ```
 
 **功能**：
+- 從醫療摘要 toolbar 開啟右側 drawer，不佔用頂層功能 tab
 - 互動式資料選擇介面
 - 篩選臨床資料
 - 提供情境感知的 AI 回應
+- 管理要納入 AI 摘要／洞察的 FHIR 資料範圍，並提供唯讀 context 預覽；不提供手動覆寫
+- 臨床對話會按問題自行查詢 FHIR；系統外背景直接輸入對話框即可
 
 ---
 
@@ -358,11 +365,6 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     forceMount: true,             // 切換分頁時保留狀態
   },
   {
-    id: 'data-selection',
-    // ...
-    pinned: false,                // 預設收合於「更多」選單
-  },
-  {
     id: 'settings',
     // ...
     pinLocked: true,              // 永遠常駐、不可被使用者收合
@@ -370,6 +372,8 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
   },
 ]
 ```
+
+Data Selection 是摘要的情境設定，透過 `DataSelectionDrawer` 插入 Medical Summary；選擇狀態仍由 app-level `DataSelectionProvider` 管理，IPS 使用自己的獨立 profile。
 
 **分頁常駐與收合**：`pinned: false` 的功能預設收在 tab 列的「更多」下拉選單；使用者可在選單內「自訂常駐分頁」逐一 pin／unpin，覆寫值持久化於 `right-panel-tabs` store（localStorage）。`pinLocked` 的功能（設定）永遠顯示在最右端。
 

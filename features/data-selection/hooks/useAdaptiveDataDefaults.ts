@@ -104,7 +104,7 @@ export function useAdaptiveDataDefaults(clinicalData: ClinicalDataCollection | n
     if (structured > 0 && estimateFullRecordTokens(clinicalData) <= AUTO_SELECT_ALL_TOKENS) {
       selectAllData()
       const ds = t.dataSelection as unknown as Record<string, string>
-      toast.info(ds.autoSelectAllToast ?? '因資料量少,已自動帶入全部資料(可在「資料選擇」調整)。')
+      toast.info(ds.autoSelectAllToast ?? '因資料量少,已自動帶入全部資料(可在「資料範圍」調整)。')
     }
     appliedSigRef.current = sig
   }, [clinicalData, filters, activePreset, selectAllData, t])

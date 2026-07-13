@@ -1,19 +1,19 @@
 "use client"
 
-// Live token meter for the 資料選擇 panel. Shows how much of the chat model's
+// Live token meter for the 資料選擇 panel. Shows how much of the AI model's
 // context window the current selection will occupy, plus the heaviest sections,
 // so the user can SEE when a selection is too thin or (for an ICU/onco patient)
 // about to overflow — the two failure modes that were previously invisible.
 //
-// Perf: formatting the full context is the same expensive call the preview tab
-// gates. We debounce it and lean on the per-document decode cache, so retyping /
-// toggling stays responsive; the heavy string work runs ~400ms after the last
-// change, off the interaction path.
+// Perf: formatting the full context can be expensive. We debounce it and lean
+// on the per-document decode cache, so toggling stays responsive; the heavy
+// string work runs ~400ms after the last change, off the interaction path.
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { useEffectiveModel } from "@/src/application/stores/model-prefs.store"
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { gateModelForKeys, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { estimateTokens } from "@/src/shared/utils/token-estimator"
 import { evaluateContextBudget, type ContextBudgetLevel } from "@/src/shared/utils/context-budget"
 
@@ -30,11 +30,26 @@ const LEVEL_TEXT: Record<ContextBudgetLevel, string> = {
 
 const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`)
 
-export function ContextTokenMeter() {
+interface ContextTokenMeterProps {
+  /** Raw model preference for the surface that opened this panel. */
+  modelId?: string
+  /** Free model used when the raw preference is currently key-gated. */
+  fallbackModelId?: string
+}
+
+export function ContextTokenMeter({ modelId, fallbackModelId }: ContextTokenMeterProps) {
   const { t } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
   const { getClinicalContext, formatClinicalContext } = useClinicalContext()
-  const modelId = useEffectiveModel("chat")
+  const defaultModelId = useEffectiveModel("insights")
+  const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
+  const effectiveModelId = modelId
+    ? gateModelForKeys(
+        modelId,
+        { openAiKey: apiKey, geminiKey, claudeKey },
+        fallbackModelId ?? defaultModelId,
+      )
+    : defaultModelId
 
   // Debounced snapshot of the formatted context. We recompute sections on a
   // trailing timer rather than every render.
@@ -60,13 +75,13 @@ export function ContextTokenMeter() {
     }
   }, [getClinicalContext, formatClinicalContext])
 
-  const budget = useMemo(() => evaluateContextBudget(total, modelId), [total, modelId])
+  const budget = useMemo(() => evaluateContextBudget(total, effectiveModelId), [total, effectiveModelId])
   const topSections = useMemo(
     () => [...sections].sort((a, b) => b.tokens - a.tokens).slice(0, 3).filter((s) => s.tokens > 0),
     [sections],
   )
 
-  const modelLabel = getModelDefinition(modelId)?.label ?? modelId
+  const modelLabel = getModelDefinition(effectiveModelId)?.label ?? effectiveModelId
   const pct = Math.round(budget.fraction * 100)
 
   return (
