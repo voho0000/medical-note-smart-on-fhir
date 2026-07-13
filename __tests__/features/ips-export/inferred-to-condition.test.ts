@@ -22,6 +22,7 @@ function emptyCollection(extraConditions: ConditionEntity[] = []): ClinicalDataC
     observations: [],
     vitalSigns: [],
     diagnosticReports: [],
+    imagingStudies: [],
     procedures: [],
     encounters: [],
     documentReferences: [],

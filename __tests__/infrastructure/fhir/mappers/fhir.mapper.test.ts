@@ -341,6 +341,58 @@ describe('FhirMapper', () => {
 
       expect(result._observations).toBeUndefined()
     })
+
+    it('preserves ImagingStudy references and identifiers', () => {
+      const result = FhirMapper.toDiagnosticReport({
+        id: 'dr-imaging',
+        identifier: [{ system: 'urn:accession', value: 'ACC-123' }],
+        status: 'final',
+        code: { text: 'Chest CT' },
+        imagingStudy: [{ reference: 'ImagingStudy/study-1' }],
+      }, [])
+
+      expect(result.identifier?.[0].value).toBe('ACC-123')
+      expect(result.imagingStudy).toEqual([{ reference: 'ImagingStudy/study-1' }])
+    })
+  })
+
+  describe('toImagingStudy', () => {
+    it('preserves study, series, instance, and human-readable metadata', () => {
+      const result = FhirMapper.toImagingStudy({
+        id: 'study-1',
+        identifier: [{ system: 'urn:accession', value: 'ACC-123' }],
+        status: 'available',
+        started: '2026-06-01T09:30:00+08:00',
+        description: 'CT chest without contrast',
+        modality: [{ system: 'http://dicom.nema.org/resources/ontology/DCM', code: 'CT', display: 'Computed Tomography' }],
+        location: { reference: 'Location/rad', display: 'Radiology Department' },
+        reasonCode: [{ text: 'Persistent cough' }],
+        note: [{ text: 'Metadata only; no DICOM retrieval required.' }],
+        numberOfSeries: 1,
+        numberOfInstances: 2,
+        series: [{
+          uid: '1.2.3',
+          number: 1,
+          description: 'Axial lung series',
+          modality: { code: 'CT', display: 'Computed Tomography' },
+          bodySite: { code: 'CHEST', display: 'Chest' },
+          instance: [
+            { uid: '1.2.3.1', title: 'Scout view' },
+            { uid: '1.2.3.2', title: 'Axial image' },
+          ],
+        }],
+      })
+
+      expect(result.id).toBe('study-1')
+      expect(result.description).toBe('CT chest without contrast')
+      expect(result.location?.display).toBe('Radiology Department')
+      expect(result.reasonCode?.[0].text).toBe('Persistent cough')
+      expect(result.series?.[0].description).toBe('Axial lung series')
+      expect(result.series?.[0].instance?.map((instance) => instance.title)).toEqual([
+        'Scout view',
+        'Axial image',
+      ])
+    })
   })
 
   describe('toProcedure', () => {

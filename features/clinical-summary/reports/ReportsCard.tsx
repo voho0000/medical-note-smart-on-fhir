@@ -59,7 +59,7 @@ function rowInnerMatch(row: Row, q: string): boolean {
 
 export function ReportsCard() {
   const { t } = useLanguage()
-  const { diagnosticReports = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
+  const { diagnosticReports = [], imagingStudies = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
   // Lifted here (not inside CumulativeLabReport) so the selected cumulative
   // sub-category (生化 …) survives the fullscreen toggle, which remounts the
@@ -91,7 +91,7 @@ export function ReportsCard() {
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
 
-  const { reportRows, seenIds } = useReportsData(diagnosticReports)
+  const { reportRows, seenIds } = useReportsData(diagnosticReports, imagingStudies)
   const procedureRows = useProcedureRows(procedures, observations)
   
   // Mark procedure-category observations as seen so they don't appear as orphans
@@ -276,9 +276,11 @@ export function ReportsCard() {
   const consumeNav = useResourceNavigationStore((s) => s.consume)
   useEffect(() => {
     if (!navPending) return
-    if (!['DiagnosticReport', 'Observation'].includes(navPending.resourceType)) return
+    if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
     const hit = rows.find(
-      (r) => r.id === navPending.resourceId || r.obs.some((o) => o?.id === navPending.resourceId),
+      (r) => r.id === navPending.resourceId
+        || r.imagingStudyIds?.includes(navPending.resourceId)
+        || r.obs.some((o) => o?.id === navPending.resourceId),
     )
     if (!hit) return // unclaimed → the generic fallback toast explains
     const tab = tabConfigs.find((c) => !c.isCumulative && c.rows.some((r) => r.id === hit.id))

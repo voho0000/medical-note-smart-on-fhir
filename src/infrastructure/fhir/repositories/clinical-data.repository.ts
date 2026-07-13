@@ -6,6 +6,7 @@ import type {
   AllergyEntity,
   ObservationEntity,
   DiagnosticReportEntity,
+  ImagingStudyEntity,
   ProcedureEntity,
   EncounterEntity,
   DocumentReferenceEntity,
@@ -40,6 +41,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       observations,
       vitalSigns,
       diagnosticReports,
+      imagingStudies,
       procedures,
       encounters,
       documentReferences,
@@ -55,6 +57,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       this.fetchObservations(patientId),
       this.fetchVitalSigns(patientId),
       this.fetchDiagnosticReports(patientId),
+      this.fetchImagingStudies(patientId),
       this.fetchProcedures(patientId),
       this.fetchEncounters(patientId),
       this.fetchDocumentReferences(patientId),
@@ -94,6 +97,7 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       observations,
       vitalSigns,
       diagnosticReports: enrichedDiagnosticReports,
+      imagingStudies,
       procedures,
       encounters,
       documentReferences,
@@ -242,6 +246,35 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
     } catch (error) {
       logFhirError('Failed to fetch diagnostic reports:', error)
       return []
+    }
+  }
+
+  async fetchImagingStudies(patientId: string): Promise<ImagingStudyEntity[]> {
+    const mapResponse = (response: any): ImagingStudyEntity[] =>
+      response.entry
+        ?.filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.IMAGING_STUDY)
+        .map((e: any) => FhirMapper.toImagingStudy(e.resource)) || []
+
+    try {
+      const response = await fhirClient.requestAllPages(
+        `ImagingStudy?patient=${patientId}&_count=200&_sort=-started`
+      )
+      return mapResponse(response)
+    } catch {
+      // Some R4 servers expose ImagingStudy but reject `_sort=started`.
+      // Retry the standard patient search without sorting before concluding
+      // that the optional resource/search is unavailable.
+      try {
+        const response = await fhirClient.requestAllPages(
+          `ImagingStudy?patient=${patientId}&_count=200`
+        )
+        return mapResponse(response)
+      } catch (fallbackError) {
+        // ImagingStudy is optional on many R4 servers. Treat unsupported search
+        // as an empty collection without failing the rest of the patient chart.
+        warnFhirError('Failed to fetch imaging studies:', fallbackError)
+        return []
+      }
     }
   }
 

@@ -58,6 +58,7 @@ describe('GenerateClinicalContextUseCase', () => {
         ]
       }
     ],
+    imagingStudies: [],
     procedures: [
       {
         id: 'proc-1',
@@ -205,6 +206,7 @@ describe('GenerateClinicalContextUseCase', () => {
         observations: [],
         vitalSigns: [],
         diagnosticReports: [],
+        imagingStudies: [],
         procedures: [],
         encounters: [],
         documentReferences: [],

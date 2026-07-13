@@ -5,6 +5,7 @@ import type {
   AllergyEntity,
   ObservationEntity,
   DiagnosticReportEntity,
+  ImagingStudyEntity,
   ProcedureEntity,
   EncounterEntity,
   ClinicalDataCollection
@@ -45,6 +46,9 @@ export interface IClinicalDataRepository {
    * Fetch diagnostic reports
    */
   fetchDiagnosticReports(patientId: string): Promise<DiagnosticReportEntity[]>
+
+  /** Fetch imaging study metadata. DICOM instances are not downloaded. */
+  fetchImagingStudies(patientId: string): Promise<ImagingStudyEntity[]>
   
   /**
    * Fetch procedures

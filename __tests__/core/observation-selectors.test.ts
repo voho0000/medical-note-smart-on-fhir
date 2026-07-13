@@ -49,6 +49,7 @@ function emptyCollection(): ClinicalDataCollection {
     observations: [],
     vitalSigns: [],
     diagnosticReports: [],
+    imagingStudies: [],
     procedures: [],
     encounters: [],
     documentReferences: [],

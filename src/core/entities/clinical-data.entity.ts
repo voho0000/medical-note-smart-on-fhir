@@ -288,6 +288,11 @@ export interface ObservationEntity {
 
 export interface DiagnosticReportEntity {
   id: string
+  identifier?: Array<{
+    system?: string
+    value?: string
+    use?: string
+  }>
   code?: {
     text?: string
     coding?: Array<{
@@ -305,6 +310,10 @@ export interface DiagnosticReportEntity {
   issued?: string
   category?: any
   conclusionCode?: any
+  imagingStudy?: Array<{
+    reference?: string
+    display?: string
+  }>
   note?: Array<{ text?: string }>
   // Bridge v0.14.0+ inlines imaging (健保存摺 X-ray / ECG …) as base64 in
   // `data` (JPEG, ~2-3 MB each). `data` carries NO `data:<mime>;base64,` prefix.
@@ -318,6 +327,75 @@ export interface DiagnosticReportEntity {
   }
   performer?: Array<{ display?: string; reference?: string }>
   // Multi-hospital support
+  sourceSystem?: string
+  sourceId?: string
+}
+
+/**
+ * FHIR R4 ImagingStudy metadata. This intentionally preserves the human-
+ * readable study/series/instance fields and references only; the app does not
+ * fetch DICOM bytes or act as a PACS viewer.
+ */
+export interface ImagingStudyEntity {
+  id: string
+  identifier?: Array<{
+    system?: string
+    value?: string
+    use?: string
+  }>
+  status?: string
+  modality?: Array<{
+    system?: string
+    code?: string
+    display?: string
+  }>
+  subject?: { reference?: string; display?: string }
+  encounter?: { reference?: string; display?: string }
+  started?: string
+  basedOn?: Array<{ reference?: string; display?: string }>
+  referrer?: { reference?: string; display?: string }
+  interpreter?: Array<{ reference?: string; display?: string }>
+  endpoint?: Array<{ reference?: string; display?: string }>
+  numberOfSeries?: number
+  numberOfInstances?: number
+  procedureReference?: { reference?: string; display?: string }
+  procedureCode?: Array<{
+    text?: string
+    coding?: Array<{ system?: string; code?: string; display?: string }>
+  }>
+  location?: { reference?: string; display?: string }
+  reasonCode?: Array<{
+    text?: string
+    coding?: Array<{ system?: string; code?: string; display?: string }>
+  }>
+  reasonReference?: Array<{ reference?: string; display?: string }>
+  note?: Array<{ text?: string }>
+  description?: string
+  series?: Array<{
+    uid?: string
+    number?: number
+    modality?: { system?: string; code?: string; display?: string }
+    description?: string
+    numberOfInstances?: number
+    endpoint?: Array<{ reference?: string; display?: string }>
+    bodySite?: { system?: string; code?: string; display?: string }
+    laterality?: { system?: string; code?: string; display?: string }
+    specimen?: Array<{ reference?: string; display?: string }>
+    started?: string
+    performer?: Array<{
+      function?: {
+        text?: string
+        coding?: Array<{ system?: string; code?: string; display?: string }>
+      }
+      actor?: { reference?: string; display?: string }
+    }>
+    instance?: Array<{
+      uid?: string
+      sopClass?: { system?: string; code?: string; display?: string }
+      number?: number
+      title?: string
+    }>
+  }>
   sourceSystem?: string
   sourceId?: string
 }
@@ -741,6 +819,7 @@ export interface ClinicalDataCollection {
   observations: ObservationEntity[]
   vitalSigns: ObservationEntity[]
   diagnosticReports: DiagnosticReportEntity[]
+  imagingStudies: ImagingStudyEntity[]
   procedures: ProcedureEntity[]
   encounters: EncounterEntity[]
   documentReferences: DocumentReferenceEntity[]

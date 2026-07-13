@@ -203,6 +203,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
               count: collection.diagnosticReports.length,
               range: range(collection.diagnosticReports, (r) => r.effectiveDateTime),
             },
+            imagingStudies: {
+              count: collection.imagingStudies?.length ?? 0,
+              range: range(collection.imagingStudies ?? [], (study) => study.started),
+            },
             observations: {
               // Dedup by id — many bridges include vital-signs entries in
               // both `observations` and `vitalSigns` arrays.
@@ -374,6 +378,22 @@ export function createFhirTools(getData: () => AgentDataSource) {
           effectiveDateTime: r.effectiveDateTime,
         }))
 
+        const imagingStudies = (collection.imagingStudies ?? []).filter((study: any) => matches(study.encounter)).map((study: any) => ({
+          description: study.description,
+          status: study.status,
+          started: study.started,
+          modality: (study.modality ?? []).map((coding: any) => coding.display || coding.code).filter(Boolean),
+          notes: (study.note ?? []).map((note: any) => note.text).filter(Boolean),
+          series: (study.series ?? []).map((series: any) => ({
+            description: series.description,
+            modality: series.modality?.display || series.modality?.code,
+            bodySite: series.bodySite?.display || series.bodySite?.code,
+            laterality: series.laterality?.display || series.laterality?.code,
+            numberOfInstances: series.numberOfInstances,
+            instanceTitles: (series.instance ?? []).map((instance: any) => instance.title).filter(Boolean),
+          })),
+        }))
+
         return scrub({
           success: true,
           summary: `Encounter ${encounterId} details`,
@@ -388,6 +408,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
             observations: obs,
             procedures: procs,
             reports,
+            imagingStudies,
           },
         })
       },

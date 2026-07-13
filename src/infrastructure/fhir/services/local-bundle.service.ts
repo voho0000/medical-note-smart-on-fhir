@@ -411,7 +411,7 @@ function toDateStr(dateStr?: string): string | null {
 }
 
 // Attach encounter references for non-medication resources by same-day match.
-// Used by Observation / Procedure / Condition / DiagnosticReport — these
+// Used by Observation / Procedure / Condition / DiagnosticReport / ImagingStudy — these
 // don't carry a "requester / provider" field, so date alone is the best we
 // have. Multi-encounter same-day collisions take the first match (existing
 // VGH behaviour).
@@ -424,6 +424,7 @@ function attachEncounterRefsByDate(resources: any[], encounterDateMap: Map<strin
       r.performedPeriod?.start,
       r.recordedDate,         // Condition
       r.effectiveDateTime,    // Observation, DiagnosticReport
+      r.started,              // ImagingStudy
       r.period?.start,
     ]
 
@@ -735,6 +736,7 @@ export const LocalBundleService = {
 
     const obs    = attachEncounterRefsByDate(byType('Observation'), encounterDateMap)
     const reports = byType('DiagnosticReport')
+    const imagingStudies = attachEncounterRefsByDate(byType('ImagingStudy'), encounterDateMap)
     const procs  = attachEncounterRefsByDate(byType('Procedure'), encounterDateMap)
     const conds  = attachEncounterRefsByDate(byType('Condition'), encounterDateMap)
     const allerg = byType('AllergyIntolerance')
@@ -768,6 +770,7 @@ export const LocalBundleService = {
       observations,
       vitalSigns,
       diagnosticReports: processedReports,
+      imagingStudies:    imagingStudies.map((r: any) => FhirMapper.toImagingStudy(r)),
       procedures:       procs.map((r: any) => FhirMapper.toProcedure(r)),
       encounters:       encounters.map((r: any) => FhirMapper.toEncounter(r)),
       documentReferences: docRefs.map((r: any) => FhirMapper.toDocumentReference(r)),

@@ -6,6 +6,7 @@ export type {
   Quantity,
   Observation,
   DiagnosticReport,
+  ImagingStudy,
   Procedure,
   Condition,
   MedicationRequest,
@@ -20,6 +21,7 @@ export type ClinicalData = {
   medications?: Array<import('@/src/shared/types/fhir.types').MedicationRequest>
   allergies?: Array<import('@/src/shared/types/fhir.types').AllergyIntolerance>
   diagnosticReports?: Array<import('@/src/shared/types/fhir.types').DiagnosticReport>
+  imagingStudies?: Array<import('@/src/shared/types/fhir.types').ImagingStudy>
   observations?: Array<import('@/src/shared/types/fhir.types').Observation>
   vitalSigns?: Array<import('@/src/shared/types/fhir.types').Observation>
   procedures?: Array<import('@/src/shared/types/fhir.types').Procedure>

@@ -1,6 +1,6 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
-import type { DiagnosticReport, Observation, Row, ReportImage } from '../types'
+import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
 import { getAnalyteLabel, getAnalyteCanonicalKey, getAnalyteDisplayLabel, CANONICAL_DISPLAY } from '@/src/shared/utils/lab-normalize'
@@ -13,6 +13,12 @@ import { getOrderNameDisplay, NHI_ORDER_CODE_TO_ZH, NHI_ORDER_CODE_TO_EN } from 
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { referenceId } from '@/src/core/utils/observation-selectors'
+import {
+  formatImagingStudyMetadata,
+  imagingStudyInstitution,
+  imagingStudyTitle,
+} from '@/src/shared/utils/imaging-study.utils'
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -48,12 +54,17 @@ function getDrDate(dr: any): string | undefined {
   return dr?.effectiveDateTime || dr?.issued
 }
 
-export function useReportsData(diagnosticReports: any[]) {
+export function useReportsData(diagnosticReports: any[], imagingStudies: any[] = []) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
   return useMemo(() => {
     const rows: Row[] = []
     const seen = new Set() as Set<string>
+    const studyById = new Map<string, ImagingStudy>()
+    for (const study of imagingStudies as ImagingStudy[]) {
+      if (study?.id) studyById.set(study.id, study)
+    }
+    const linkedStudyIds = new Set<string>()
 
     // Group DRs sharing (code.text, calendar date, institution) so bridge-
     // emitted multi-DR bundles (each antibiotic = one DR) collapse into one
@@ -242,12 +253,25 @@ export function useReportsData(diagnosticReports: any[]) {
       const grp = groups.get(key)!
       const head = grp[0]
       const isMulti = grp.length > 1
+      const linkedStudies: ImagingStudy[] = []
+      const rowStudyIds = new Set<string>()
+      for (const dr of grp) {
+        for (const ref of dr.imagingStudy ?? []) {
+          const id = referenceId(ref.reference)
+          if (!id || rowStudyIds.has(id)) continue
+          rowStudyIds.add(id)
+          linkedStudyIds.add(id)
+          const study = studyById.get(id)
+          if (study) linkedStudies.push(study)
+        }
+      }
       // Computed once for the whole group; reused by the synthetic summary obs
       // and the row's display date below (both keyed off head, the group's
       // first DR — all members share this date since it's part of the key).
-      const rawDate = getDrDate(head)
+      const rawDate = getDrDate(head) || linkedStudies[0]?.started
 
       const groupText = (getCodeableConceptText(head.code) || '').trim()
+        || (linkedStudies[0] ? imagingStudyTitle(linkedStudies[0]) : '')
       const summaryParts: string[] = []
       const attachments: string[] = []
       const images: ReportImage[] = []
@@ -338,6 +362,26 @@ export function useReportsData(diagnosticReports: any[]) {
             if (t) attachments.push(t)
           }
         }
+      }
+
+      // ImagingStudy is study metadata, not a diagnostic conclusion. Append it
+      // as a clearly labelled UI summary so metadata-only studies remain
+      // visible without fabricating report narrative or fetching DICOM bytes.
+      for (const study of linkedStudies) {
+        const heading = locale === 'zh-TW' ? 'ImagingStudy 檢查資料' : 'ImagingStudy metadata'
+        summaryParts.push(`${heading}\n${formatImagingStudyMetadata(study, locale)}`)
+      }
+
+      // A server may return only the DiagnosticReport reference while denying
+      // or not supporting an ImagingStudy search. Preserve that provenance in
+      // the row instead of silently dropping an otherwise metadata-only report.
+      if (linkedStudies.length === 0 && rowStudyIds.size > 0) {
+        const refs = [...rowStudyIds].join(', ')
+        summaryParts.push(
+          locale === 'zh-TW'
+            ? `ImagingStudy 參照: ${refs}（目前未取得該資源內容）`
+            : `ImagingStudy reference: ${refs} (resource content unavailable)`,
+        )
       }
 
       if (allObs.length === 0 && summaryParts.length === 0 && attachments.length === 0 && images.length === 0) continue
@@ -517,6 +561,8 @@ export function useReportsData(diagnosticReports: any[]) {
         ? head.category.map((c: any) => getCodeableConceptText(c)).filter(Boolean).join(', ')
         : getCodeableConceptText(head.category)
       const institution = getDrInstitution(head)
+        || (linkedStudies[0] ? imagingStudyInstitution(linkedStudies[0]) : undefined)
+      const isLinkedImagingStudy = rowStudyIds.size > 0
 
       rows.push({
         id: head.id || Math.random().toString(36),
@@ -527,9 +573,9 @@ export function useReportsData(diagnosticReports: any[]) {
         // or translation is appended. Falls back to displayTitle when groupText is
         // empty so the lookup key is never blank.
         rawTitle: groupText || deriveGroupTitle(displayTitle),
-        meta: `${category || 'Laboratory'} • ${head.status || '—'}`,
+        meta: `${category || (isLinkedImagingStudy ? 'ImagingStudy' : 'Laboratory')} • ${head.status || linkedStudies[0]?.status || '—'}`,
         obs: obsWithSummary,
-        group: inferGroupFromCategory(head.category),
+        group: isLinkedImagingStudy ? 'imaging' : inferGroupFromCategory(head.category),
         institution,
         effectiveDate: rawDate,
         images: images.length > 0 ? images : undefined,
@@ -537,9 +583,40 @@ export function useReportsData(diagnosticReports: any[]) {
         // surface the count so the row can show a small badge. 0 → row
         // omits the field entirely.
         bridgeDupCount: dupCountByKey.get(key),
+        imagingStudyIds: rowStudyIds.size > 0 ? [...rowStudyIds] : undefined,
+      })
+    }
+
+    // Standalone ImagingStudy resources have no DiagnosticReport to host them.
+    // Render them directly in the Imaging tab using a synthetic display-only
+    // Observation so the existing accessible accordion/text renderer can be
+    // reused without changing the source FHIR semantics.
+    for (const [index, study] of (imagingStudies as ImagingStudy[]).entries()) {
+      if (!study || (study.id && linkedStudyIds.has(study.id))) continue
+      const title = imagingStudyTitle(study)
+      const metadata = formatImagingStudyMetadata(study, locale)
+      const heading = locale === 'zh-TW' ? 'ImagingStudy 檢查資料' : 'ImagingStudy metadata'
+      const rowId = study.id || `imaging-study-${index + 1}`
+      rows.push({
+        id: rowId,
+        title,
+        rawTitle: title,
+        meta: `ImagingStudy • ${study.status || '—'}`,
+        obs: [{
+          resourceType: 'Observation',
+          id: `imaging-study-summary-${rowId}`,
+          code: { text: 'Report Summary' },
+          valueString: `${heading}\n${metadata}`,
+          effectiveDateTime: study.started,
+          status: study.status,
+        }],
+        group: 'imaging',
+        institution: imagingStudyInstitution(study),
+        effectiveDate: study.started,
+        imagingStudyIds: study.id ? [study.id] : undefined,
       })
     }
 
     return { reportRows: rows, seenIds: seen }
-  }, [diagnosticReports, audience, locale])
+  }, [diagnosticReports, imagingStudies, audience, locale])
 }

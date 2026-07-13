@@ -8,6 +8,7 @@ export type {
   ReferenceRange,
   Observation,
   DiagnosticReport,
+  ImagingStudy,
   Procedure,
 } from '@/src/shared/types/fhir.types'
 
@@ -83,4 +84,8 @@ export type Row = {
    *  "+N 相關處置" hint on the collapsed session header so the user knows
    *  expanding reveals nested sub-procedures. Absent / 0 = standalone. */
   relatedCount?: number
+  /** ImagingStudy resources represented by this row. A linked
+   * DiagnosticReport keeps its own id as the row id, so these ids are retained
+   * separately for source navigation and deduplication. */
+  imagingStudyIds?: string[]
 }

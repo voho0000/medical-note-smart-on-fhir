@@ -82,6 +82,7 @@ export interface Observation {
 export interface DiagnosticReport {
   id?: string
   resourceType?: string
+  identifier?: Identifier[]
   status?: string
   category?: CodeableConcept | CodeableConcept[]
   code?: CodeableConcept
@@ -93,6 +94,7 @@ export interface DiagnosticReport {
   result?: Reference[]
   conclusion?: string
   conclusionCode?: CodeableConcept[]
+  imagingStudy?: Reference[]
   note?: Array<{ text?: string }>
   presentedForm?: Array<{
     contentType?: string
@@ -106,6 +108,60 @@ export interface DiagnosticReport {
   }>
   performer?: Array<{ display?: string; reference?: string }>
   _observations?: Observation[]
+}
+
+// Imaging Study Types (FHIR R4)
+// Metadata for a DICOM imaging study. The app intentionally consumes only the
+// resource's text/structured metadata; it does not retrieve or decode DICOM
+// instances from Endpoint references.
+export interface ImagingStudySeriesInstance {
+  uid?: string
+  sopClass?: Coding
+  number?: number
+  title?: string
+}
+
+export interface ImagingStudySeries {
+  uid?: string
+  number?: number
+  modality?: Coding
+  description?: string
+  numberOfInstances?: number
+  endpoint?: Reference[]
+  bodySite?: Coding
+  laterality?: Coding
+  specimen?: Reference[]
+  started?: string
+  performer?: Array<{
+    function?: CodeableConcept
+    actor?: Reference
+  }>
+  instance?: ImagingStudySeriesInstance[]
+}
+
+export interface ImagingStudy {
+  id?: string
+  resourceType?: string
+  identifier?: Identifier[]
+  status?: string
+  modality?: Coding[]
+  subject?: Reference
+  encounter?: Reference
+  started?: string
+  basedOn?: Reference[]
+  referrer?: Reference
+  interpreter?: Reference[]
+  endpoint?: Reference[]
+  numberOfSeries?: number
+  numberOfInstances?: number
+  procedureReference?: Reference
+  procedureCode?: CodeableConcept[]
+  location?: Reference
+  reasonCode?: CodeableConcept[]
+  reasonReference?: Reference[]
+  note?: Array<{ text?: string }>
+  description?: string
+  series?: ImagingStudySeries[]
 }
 
 // Medication Types

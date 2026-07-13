@@ -28,6 +28,7 @@ describe('FhirClinicalDataRepository', () => {
       const mockObservation = { id: 'obs-1', code: { text: 'Glucose' }, status: 'final' }
       const mockVital = { id: 'vital-1', code: { text: 'BP' }, status: 'final' }
       const mockReport = { id: 'report-1', code: { text: 'CBC' }, status: 'final' }
+      const mockImagingStudy = { id: 'study-1', description: 'Chest CT', status: 'available' }
       const mockProcedure = { id: 'proc-1', code: { text: 'Surgery' }, status: 'completed' }
       const mockEncounter = { id: 'enc-1', status: 'finished' }
 
@@ -38,6 +39,7 @@ describe('FhirClinicalDataRepository', () => {
         if (url.startsWith('Observation') && url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
         if (url.startsWith('Observation') && !url.includes('vital-signs')) return Promise.resolve({ entry: [{ resource: {} }] })
         if (url.startsWith('DiagnosticReport')) return Promise.resolve({ entry: [{ resource: { resourceType: 'DiagnosticReport' } }] })
+        if (url.startsWith('ImagingStudy')) return Promise.resolve({ entry: [{ resource: { resourceType: 'ImagingStudy' } }] })
         if (url.startsWith('Procedure')) return Promise.resolve({ entry: [{ resource: {} }] })
         if (url.startsWith('Encounter')) return Promise.resolve({ entry: [{ resource: { resourceType: 'Encounter' } }] })
         if (url.startsWith('DocumentReference')) return Promise.resolve({ entry: [] })
@@ -50,6 +52,7 @@ describe('FhirClinicalDataRepository', () => {
       mockMapper.toAllergy.mockReturnValue(mockAllergy)
       mockMapper.toObservation.mockReturnValue(mockObservation)
       mockMapper.toDiagnosticReport.mockReturnValue(mockReport)
+      mockMapper.toImagingStudy.mockReturnValue(mockImagingStudy)
       mockMapper.toProcedure.mockReturnValue(mockProcedure)
       mockMapper.toEncounter.mockReturnValue(mockEncounter)
 
@@ -61,6 +64,7 @@ describe('FhirClinicalDataRepository', () => {
       expect(result.observations).toHaveLength(1)
       expect(result.vitalSigns).toHaveLength(1)
       expect(result.diagnosticReports).toHaveLength(1)
+      expect(result.imagingStudies).toHaveLength(1)
       expect(result.procedures).toHaveLength(1)
       expect(result.encounters).toHaveLength(1)
     })
@@ -249,6 +253,33 @@ describe('FhirClinicalDataRepository', () => {
 
       expect(result).toEqual([])
       consoleErrorSpy.mockRestore()
+    })
+  })
+
+  describe('fetchImagingStudies', () => {
+    it('fetches only ImagingStudy resources and maps metadata', async () => {
+      mockFhirClient.requestAllPages.mockResolvedValue({
+        entry: [
+          { resource: { resourceType: 'ImagingStudy', id: 'study-1', description: 'Chest CT' } },
+          { resource: { resourceType: 'Patient', id: 'patient-123' } },
+        ],
+      })
+      mockMapper.toImagingStudy.mockReturnValue({ id: 'study-1', description: 'Chest CT' })
+
+      const result = await repository.fetchImagingStudies('patient-123')
+
+      expect(result).toEqual([{ id: 'study-1', description: 'Chest CT' }])
+      expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
+        expect.stringContaining('ImagingStudy?patient=patient-123'),
+      )
+    })
+
+    it('returns an empty collection when the server does not support ImagingStudy', async () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation()
+      mockFhirClient.requestAllPages.mockRejectedValue(new Error('not supported'))
+
+      await expect(repository.fetchImagingStudies('patient-123')).resolves.toEqual([])
+      consoleWarnSpy.mockRestore()
     })
   })
 

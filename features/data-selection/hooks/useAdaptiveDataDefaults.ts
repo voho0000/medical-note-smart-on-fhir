@@ -45,6 +45,7 @@ const TOKENS_PER_RECORD = 15
 const STRUCTURED_KEYS = [
   'observations',
   'diagnosticReports',
+  'imagingStudies',
   'medications',
   'procedures',
   'encounters',

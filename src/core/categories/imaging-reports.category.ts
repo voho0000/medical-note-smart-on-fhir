@@ -1,10 +1,19 @@
 // Imaging Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
-import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
+import type { DiagnosticReport, ImagingStudy, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { referenceId } from '../utils/observation-selectors'
+import {
+  formatImagingStudyMetadata,
+  imagingStudyTitle,
+} from '@/src/shared/utils/imaging-study.utils'
+
+type ImagingReportData = DiagnosticReport & {
+  _imagingStudyText?: string
+  _imagingStudyIds?: string[]
+}
 
 // In 'all reports' mode a high-frequency-imaging patient (e.g. an oncology or
 // ICU case) can have many dozens of studies in a wide window. Cap the rendered
@@ -14,7 +23,7 @@ import { referenceId } from '../utils/observation-selectors'
 const MAX_IMAGING_REPORTS = 25
 
 // Helper to get latest imaging reports by name
-const getLatestImagingReports = (reports: DiagnosticReport[]): DiagnosticReport[] => {
+const getLatestImagingReports = (reports: ImagingReportData[]): ImagingReportData[] => {
   return getLatestByName(
     reports,
     (report) => getCodeableConceptText(report.code),
@@ -26,7 +35,7 @@ const getLatestImagingReports = (reports: DiagnosticReport[]): DiagnosticReport[
   )
 }
 
-export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
+export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   id: 'imagingReports',
   label: 'Imaging Reports',
   labelKey: 'dataSelection.imagingReports',
@@ -66,10 +75,54 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
   filterComponentKey: 'imagingReport',
   
   extractData: (clinicalData) => {
-    const reports = clinicalData?.diagnosticReports || []
-    return reports.filter((report: DiagnosticReport) => 
-      inferGroupFromCategory(report.category) === 'imaging'
-    )
+    const reports = (clinicalData?.diagnosticReports || []) as DiagnosticReport[]
+    const studies = (clinicalData?.imagingStudies || []) as ImagingStudy[]
+    const studyById = new Map(studies.filter((study) => !!study.id).map((study) => [study.id!, study]))
+    const linkedIds = new Set<string>()
+
+    const reportItems = reports
+      .filter((report) =>
+        inferGroupFromCategory(report.category) === 'imaging'
+        || (report.imagingStudy?.length ?? 0) > 0
+      )
+      .map((report): ImagingReportData => {
+        const ids = (report.imagingStudy ?? [])
+          .map((ref) => referenceId(ref.reference))
+          .filter((id): id is string => !!id)
+        ids.forEach((id) => linkedIds.add(id))
+        const metadata = ids
+          .map((id) => studyById.get(id))
+          .filter((study): study is ImagingStudy => !!study)
+          .map((study) => formatImagingStudyMetadata(study))
+        return {
+          ...report,
+          _imagingStudyIds: ids,
+          _imagingStudyText: metadata.join('\n\n'),
+        }
+      })
+
+    const standaloneItems = studies
+      .filter((study) => !study.id || !linkedIds.has(study.id))
+      .map((study): ImagingReportData => ({
+        id: study.id,
+        resourceType: 'ImagingStudy',
+        status: study.status,
+        category: [{
+          coding: [{
+            system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+            code: 'RAD',
+            display: 'Radiology',
+          }],
+          text: 'Imaging',
+        }],
+        code: { text: imagingStudyTitle(study) },
+        encounter: study.encounter,
+        effectiveDateTime: study.started,
+        _imagingStudyIds: study.id ? [study.id] : [],
+        _imagingStudyText: formatImagingStudyMetadata(study),
+      }))
+
+    return [...reportItems, ...standaloneItems]
   },
   
   getCount: (data, filters, allClinicalData) => {
@@ -78,8 +131,10 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
       const hasObservations = report.result && report.result.length > 0
       const hasConclusion = !!report.conclusion
       const hasNotes = Array.isArray((report as any).note) && (report as any).note.length > 0
+      const hasAttachment = Array.isArray(report.presentedForm) && report.presentedForm.length > 0
+      const hasStudyMetadata = !!report._imagingStudyText || (report._imagingStudyIds?.length ?? 0) > 0
       
-      return hasObservations || hasConclusion || hasNotes
+      return hasObservations || hasConclusion || hasNotes || hasAttachment || hasStudyMetadata
     })
     
     const timeRange = filters.imagingReportTimeRange as string
@@ -154,8 +209,21 @@ export const imagingReportsCategory: DataCategory<DiagnosticReport> = {
             items.push(`  • ${obs.code?.text || 'Finding'}: ${value}${unit}`)
           }
         })
-      } else if (report.conclusion) {
-        items.push(`${report.code?.text || 'Study'}: ${report.conclusion}${datePart}`)
+        const reportText = [
+          report.conclusion,
+          ...(report.note ?? []).map((note) => note.text),
+          report._imagingStudyText,
+        ].filter((text): text is string => !!text?.trim())
+        reportText.forEach((text) => items.push(`  • ${text}`))
+      } else {
+        const narrative = [
+          report.conclusion,
+          ...(report.note ?? []).map((note) => note.text),
+          report._imagingStudyText,
+        ].filter((text): text is string => !!text?.trim()).join('\n')
+        if (narrative) {
+          items.push(`${report.code?.text || 'Study'}${datePart}: ${narrative}`)
+        }
       }
     })
     

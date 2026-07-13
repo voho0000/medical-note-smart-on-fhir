@@ -148,6 +148,7 @@ export const sampleCollection: ClinicalDataCollection = {
       _observations: [],
     } as any,
   ],
+  imagingStudies: [],
   procedures: [
     {
       id: 'proc-1',

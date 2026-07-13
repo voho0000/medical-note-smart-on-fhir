@@ -5,6 +5,7 @@
 import type {
   ObservationEntity,
   DiagnosticReportEntity,
+  ImagingStudyEntity,
   ProcedureEntity,
   MedicationEntity,
   ConditionEntity,
@@ -33,6 +34,9 @@ export interface IDataMapper<TSourceType = any> {
    * Map source diagnostic report to domain entity
    */
   mapDiagnosticReport(source: TSourceType, observations?: ObservationEntity[]): DiagnosticReportEntity
+
+  /** Map FHIR ImagingStudy metadata (no DICOM retrieval). */
+  mapImagingStudy(source: TSourceType): ImagingStudyEntity
   
   /**
    * Map source procedure to domain entity

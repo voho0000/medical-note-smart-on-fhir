@@ -38,7 +38,7 @@ export function useClinicalDataQuery() {
         if (error instanceof LocalBundleModeError) {
           return {
             conditions: [], medications: [], allergies: [], observations: [],
-            vitalSigns: [], diagnosticReports: [], procedures: [], encounters: [],
+            vitalSigns: [], diagnosticReports: [], imagingStudies: [], procedures: [], encounters: [],
             documentReferences: [], compositions: [], immunizations: [],
             consents: [], devices: [], carePlans: [],
           }
@@ -67,6 +67,7 @@ export function useClinicalData() {
     observations: data?.observations ?? [],
     vitalSigns: data?.vitalSigns ?? [],
     diagnosticReports: data?.diagnosticReports ?? [],
+    imagingStudies: data?.imagingStudies ?? [],
     procedures: data?.procedures ?? [],
     encounters: data?.encounters ?? [],
     documentReferences: data?.documentReferences ?? [],

@@ -45,6 +45,7 @@ export const FHIR_RESOURCES = {
   ALLERGY_INTOLERANCE: 'AllergyIntolerance',
   OBSERVATION: 'Observation',
   DIAGNOSTIC_REPORT: 'DiagnosticReport',
+  IMAGING_STUDY: 'ImagingStudy',
   PROCEDURE: 'Procedure',
   ENCOUNTER: 'Encounter',
 } as const

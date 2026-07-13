@@ -7,6 +7,7 @@ import type {
   AllergyEntity,
   ObservationEntity,
   DiagnosticReportEntity,
+  ImagingStudyEntity,
   ProcedureEntity,
   EncounterEntity,
   DocumentReferenceEntity,
@@ -24,6 +25,7 @@ import type {
   AllergyIntolerance,
   Observation,
   DiagnosticReport,
+  ImagingStudy,
   Procedure,
   CodeableConcept,
   Reference,
@@ -64,6 +66,10 @@ export class FhirMapper implements IDataMapper {
 
   mapDiagnosticReport(source: DiagnosticReport, observations?: ObservationEntity[]): DiagnosticReportEntity {
     return FhirMapper.toDiagnosticReport(source, observations || [])
+  }
+
+  mapImagingStudy(source: ImagingStudy): ImagingStudyEntity {
+    return FhirMapper.toImagingStudy(source)
   }
 
   mapProcedure(source: Procedure): ProcedureEntity {
@@ -169,6 +175,7 @@ export class FhirMapper implements IDataMapper {
   static toDiagnosticReport(fhirResource: DiagnosticReport, observations: ObservationEntity[]): DiagnosticReportEntity {
     const report: DiagnosticReportEntity = {
       id: fhirResource.id || '',
+      identifier: fhirResource.identifier,
       code: fhirResource.code,
       result: fhirResource.result,
       conclusion: fhirResource.conclusion,
@@ -177,6 +184,7 @@ export class FhirMapper implements IDataMapper {
       issued: fhirResource.issued,
       category: fhirResource.category,
       conclusionCode: fhirResource.conclusionCode,
+      imagingStudy: fhirResource.imagingStudy,
       note: fhirResource.note,
       presentedForm: fhirResource.presentedForm,
       encounter: fhirResource.encounter,
@@ -217,6 +225,34 @@ export class FhirMapper implements IDataMapper {
     }
 
     return report
+  }
+
+  static toImagingStudy(fhirResource: ImagingStudy): ImagingStudyEntity {
+    return {
+      id: fhirResource.id || '',
+      identifier: fhirResource.identifier,
+      status: fhirResource.status,
+      modality: fhirResource.modality,
+      subject: fhirResource.subject,
+      encounter: fhirResource.encounter,
+      started: fhirResource.started,
+      basedOn: fhirResource.basedOn,
+      referrer: fhirResource.referrer,
+      interpreter: fhirResource.interpreter,
+      endpoint: fhirResource.endpoint,
+      numberOfSeries: fhirResource.numberOfSeries,
+      numberOfInstances: fhirResource.numberOfInstances,
+      procedureReference: fhirResource.procedureReference,
+      procedureCode: fhirResource.procedureCode,
+      location: fhirResource.location,
+      reasonCode: fhirResource.reasonCode,
+      reasonReference: fhirResource.reasonReference,
+      note: fhirResource.note,
+      description: fhirResource.description,
+      series: fhirResource.series,
+      sourceSystem: FHIR_SOURCE_SYSTEM,
+      sourceId: fhirResource.id,
+    }
   }
 
   static toProcedure(fhirResource: Procedure): ProcedureEntity {

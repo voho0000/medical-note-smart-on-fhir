@@ -17,6 +17,7 @@ function makeData(partial: Partial<ClinicalDataCollection> = {}): ClinicalDataCo
     observations: [],
     vitalSigns: [],
     diagnosticReports: [],
+    imagingStudies: [],
     procedures: [],
     encounters: [],
     documentReferences: [],

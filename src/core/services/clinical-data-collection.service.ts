@@ -32,6 +32,7 @@ export class ClinicalDataCollectionService {
       medications: data.medications || [],
       allergies: data.allergies || [],
       diagnosticReports: data.diagnosticReports || [],
+      imagingStudies: data.imagingStudies || [],
       observations: data.observations || data.vitalSigns || data.vitals || [],
       vitalSigns: data.vitalSigns || data.vitals || [],
       procedures: data.procedures || [],
@@ -55,6 +56,7 @@ export class ClinicalDataCollectionService {
       medications: [],
       allergies: [],
       diagnosticReports: [],
+      imagingStudies: [],
       observations: [],
       vitalSigns: [],
       procedures: [],
@@ -84,6 +86,7 @@ export class ClinicalDataCollectionService {
       collection.medications.length > 0 ||
       collection.allergies.length > 0 ||
       collection.diagnosticReports.length > 0 ||
+      collection.imagingStudies.length > 0 ||
       collection.observations.length > 0 ||
       collection.vitalSigns.length > 0 ||
       collection.procedures.length > 0 ||
