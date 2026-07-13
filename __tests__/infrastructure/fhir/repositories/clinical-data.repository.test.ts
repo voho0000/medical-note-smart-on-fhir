@@ -26,7 +26,6 @@ describe('FhirClinicalDataRepository', () => {
       const mockMedication = { id: 'med-1', medicationCodeableConcept: { text: 'Metformin' }, status: 'active', intent: 'order' }
       const mockAllergy = { id: 'allergy-1', code: { text: 'Penicillin' } }
       const mockObservation = { id: 'obs-1', code: { text: 'Glucose' }, status: 'final' }
-      const mockVital = { id: 'vital-1', code: { text: 'BP' }, status: 'final' }
       const mockReport = { id: 'report-1', code: { text: 'CBC' }, status: 'final' }
       const mockImagingStudy = { id: 'study-1', description: 'Chest CT', status: 'available' }
       const mockProcedure = { id: 'proc-1', code: { text: 'Surgery' }, status: 'completed' }
@@ -77,6 +76,28 @@ describe('FhirClinicalDataRepository', () => {
       expect(result.conditions).toHaveLength(0)
       expect(result.medications).toHaveLength(0)
       expect(result.allergies).toHaveLength(0)
+      expect(result.resourceQueryStatus?.Condition).toMatchObject({ state: 'empty', count: 0 })
+      expect(result.resourceQueryStatus?.MedicationStatement).toMatchObject({ state: 'empty', count: 0 })
+    })
+
+    it('distinguishes a forbidden resource search from an empty result', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
+      mockFhirClient.requestAllPages.mockImplementation((url: string) => {
+        if (url.startsWith('AllergyIntolerance')) {
+          return Promise.reject({ status: 403, message: 'Forbidden' })
+        }
+        return Promise.resolve({ entry: [] })
+      })
+
+      const result = await repository.fetchAllClinicalData('patient-123')
+
+      expect(result.allergies).toEqual([])
+      expect(result.resourceQueryStatus?.AllergyIntolerance).toMatchObject({
+        resourceType: 'AllergyIntolerance',
+        state: 'forbidden',
+        httpStatus: 403,
+      })
+      consoleErrorSpy.mockRestore()
     })
   })
 
@@ -135,9 +156,11 @@ describe('FhirClinicalDataRepository', () => {
   describe('fetchMedications', () => {
     it('should fetch medications successfully', async () => {
       const mockResponse = {
-        entry: [{ resource: { id: 'med-1', medicationCodeableConcept: { text: 'Aspirin' } } }]
+        entry: [{ resource: { resourceType: 'MedicationRequest', id: 'med-1', medicationCodeableConcept: { text: 'Aspirin' } } }]
       }
-      mockFhirClient.requestAllPages.mockResolvedValue(mockResponse)
+      mockFhirClient.requestAllPages.mockImplementation((url: string) =>
+        Promise.resolve(url.startsWith('MedicationStatement') ? { entry: [] } : mockResponse),
+      )
       mockMapper.toMedication.mockReturnValue({ id: 'med-1', medicationCodeableConcept: { text: 'Aspirin' }, status: 'active', intent: 'order' })
 
       const result = await repository.fetchMedications('patient-123')
@@ -146,6 +169,72 @@ describe('FhirClinicalDataRepository', () => {
       expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
         expect.stringContaining('MedicationRequest?patient=patient-123')
       )
+      expect(mockFhirClient.requestAllPages).toHaveBeenCalledWith(
+        expect.stringContaining('MedicationStatement?patient=patient-123')
+      )
+    })
+
+    it('combines statements and resolves included Medication references', async () => {
+      mockFhirClient.requestAllPages.mockImplementation((url: string) => {
+        if (url.startsWith('MedicationRequest')) return Promise.resolve({ entry: [] })
+        return Promise.resolve({
+          entry: [
+            {
+              resource: {
+                resourceType: 'MedicationStatement',
+                id: 'statement-1',
+                status: 'active',
+                medicationReference: { reference: 'Medication/aspirin' },
+                effectiveDateTime: '2024-01-01',
+              },
+            },
+            {
+              fullUrl: 'https://ehr.example/fhir/Medication/aspirin',
+              resource: {
+                resourceType: 'Medication',
+                id: 'aspirin',
+                code: { text: 'Aspirin 100 mg' },
+              },
+            },
+          ],
+        })
+      })
+      mockMapper.toMedication.mockImplementation((resource: any) => ({
+        id: resource.id,
+        medicationCodeableConcept: resource.medicationCodeableConcept,
+        status: resource.status,
+        _sourceResourceType: resource._sourceResourceType,
+      }))
+
+      const result = await repository.fetchMedications('patient-123')
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: 'statement-1',
+          medicationCodeableConcept: { text: 'Aspirin 100 mg' },
+          _sourceResourceType: 'MedicationStatement',
+        }),
+      ])
+    })
+
+    it('keeps MedicationRequest results when MedicationStatement is unsupported', async () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation()
+      mockFhirClient.requestAllPages.mockImplementation((url: string) => {
+        if (url.startsWith('MedicationStatement')) return Promise.reject(new Error('not supported'))
+        return Promise.resolve({
+          entry: [{ resource: { resourceType: 'MedicationRequest', id: 'request-1' } }],
+        })
+      })
+      mockMapper.toMedication.mockReturnValue({
+        id: 'request-1',
+        _sourceResourceType: 'MedicationRequest',
+      })
+
+      const result = await repository.fetchMedications('patient-123')
+
+      expect(result).toHaveLength(1)
+      expect(result[0]._sourceResourceType).toBe('MedicationRequest')
+      consoleWarnSpy.mockRestore()
     })
 
     it('should return empty array on error', async () => {

@@ -1,5 +1,6 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
+import { buildSmartAuthorizeConfig } from "@/src/infrastructure/fhir/client/smart-launch-config"
 
 // Trusted SMART `iss` origins — launches against these authorize immediately.
 // Anything else shows an explicit confirmation naming the target server first:
@@ -47,14 +48,12 @@ async function authorize(iss: string, launch: string | undefined) {
   const baseUrl = `${window.location.origin}${prefix}`.replace(/\/+$/, "")
   const redirectUri = `${baseUrl}/smart/callback` // 無結尾斜線（和 Pages 設定一致）
 
-  const authConfig: any = {
+  const authConfig = buildSmartAuthorizeConfig({
     clientId: (process.env.NEXT_PUBLIC_SMART_CLIENT_ID || "my_web_app").trim(),
-    scope: "launch openid fhirUser patient/*.read online_access",
     redirectUri,
     iss,
     launch,
-    completeInTarget: true,
-  }
+  })
 
   // Public client + PKCE only. We deliberately do NOT support a
   // browser-side clientSecret: NEXT_PUBLIC_* is baked into the static

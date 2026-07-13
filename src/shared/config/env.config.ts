@@ -21,7 +21,8 @@ export const ENV_CONFIG = {
 
   // SMART on FHIR
   smartClientId: 'my_web_app',
-  smartScopes: 'launch openid fhirUser patient/*.read online_access',
+  smartScopes: 'launch openid fhirUser patient/*.rs online_access',
+  smartStandaloneScopes: 'launch/patient openid fhirUser patient/*.rs online_access',
   
   // GitHub Pages base path
   githubPages: process.env.GITHUB_PAGES === 'true',

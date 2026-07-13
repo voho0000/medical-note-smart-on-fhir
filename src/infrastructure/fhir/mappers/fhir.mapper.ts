@@ -22,6 +22,7 @@ import { dataMapperRegistry } from '@/src/core/interfaces/data-mapper.interface'
 import type {
   Condition,
   MedicationRequest,
+  MedicationStatement,
   AllergyIntolerance,
   Observation,
   DiagnosticReport,
@@ -107,23 +108,31 @@ export class FhirMapper implements IDataMapper {
     }
   }
 
-  static toMedication(fhirResource: MedicationRequest): MedicationEntity {
+  static toMedication(fhirResource: MedicationRequest | MedicationStatement): MedicationEntity {
+    const statement = fhirResource as MedicationStatement
+    const request = fhirResource as MedicationRequest
+    const isStatement = fhirResource.resourceType === 'MedicationStatement'
+      || request._sourceResourceType === 'MedicationStatement'
+
     return {
       id: fhirResource.id || '',
       medicationCodeableConcept: fhirResource.medicationCodeableConcept,
+      medicationReference: fhirResource.medicationReference,
       status: fhirResource.status,
-      intent: fhirResource.intent,
-      authoredOn: fhirResource.authoredOn,
-      dosageInstruction: fhirResource.dosageInstruction,
-      encounter: fhirResource.encounter,
-      dispenseRequest: fhirResource.dispenseRequest,
-      courseOfTherapyType: fhirResource.courseOfTherapyType,
+      intent: request.intent,
+      authoredOn: request.authoredOn
+        ?? statement.effectivePeriod?.start
+        ?? statement.effectiveDateTime
+        ?? statement.dateAsserted,
+      dosageInstruction: request.dosageInstruction ?? statement.dosage,
+      encounter: request.encounter ?? statement.context,
+      dispenseRequest: request.dispenseRequest,
+      courseOfTherapyType: request.courseOfTherapyType,
       category: fhirResource.category,
-      requester: fhirResource.requester,
+      requester: request.requester,
+      informationSource: statement.informationSource,
       reasonCode: fhirResource.reasonCode,
-      // Passthrough of the source-resource marker stamped by LocalBundleService.parse
-      // (MedicationRequest vs MedicationStatement). Bridge data omits it.
-      _sourceResourceType: fhirResource._sourceResourceType,
+      _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }
@@ -133,11 +142,19 @@ export class FhirMapper implements IDataMapper {
     return {
       id: fhirResource.id || '',
       code: fhirResource.code,
+      type: fhirResource.type,
+      category: fhirResource.category,
       clinicalStatus: fhirResource.clinicalStatus?.coding?.[0]?.code,
       verificationStatus: fhirResource.verificationStatus?.coding?.[0]?.code,
       criticality: fhirResource.criticality,
+      encounter: fhirResource.encounter,
+      onsetDateTime: fhirResource.onsetDateTime,
       reaction: fhirResource.reaction,
       recordedDate: fhirResource.recordedDate || fhirResource.recorded,
+      recorder: fhirResource.recorder,
+      asserter: fhirResource.asserter,
+      lastOccurrence: fhirResource.lastOccurrence,
+      note: fhirResource.note,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
     }

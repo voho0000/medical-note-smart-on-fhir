@@ -1,26 +1,23 @@
 // Allergy Item Component
 import { Badge } from "@/components/ui/badge"
-import type { AllergyIntolerance } from '@/src/shared/types/fhir.types'
+import type { AllergyEntity } from '@/src/core/entities/clinical-data.entity'
 import { getCodeableConceptText, formatDate } from '@/src/shared/utils/fhir-helpers'
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 interface AllergyItemProps {
-  allergy: AllergyIntolerance
+  allergy: AllergyEntity
 }
 
 export function AllergyItem({ allergy }: AllergyItemProps) {
   const { t } = useLanguage()
   const substance = getCodeableConceptText(allergy.code)
-  // 直接使用字符串值，不用 getCodeableConceptText
-  const clinicalStatus = typeof allergy.clinicalStatus === 'string' 
-    ? allergy.clinicalStatus 
-    : getCodeableConceptText(allergy.clinicalStatus)
-  const verificationStatus = typeof allergy.verificationStatus === 'string'
-    ? allergy.verificationStatus
-    : getCodeableConceptText(allergy.verificationStatus)
+  const clinicalStatus = allergy.clinicalStatus
+  const verificationStatus = allergy.verificationStatus
   const criticality = allergy.criticality
-  const type = allergy.type || 'allergy' // 默认为 allergy
-  const category = allergy.category?.[0] || 'food' // 根据你的数据，默认为 food
+  // Missing type/category means unknown. Do not turn absent source data into a
+  // clinically meaningful "allergy" or "food" classification.
+  const type = allergy.type
+  const category = allergy.category?.[0]
   const reactions = allergy.reaction || []
   
   // 获取翻译

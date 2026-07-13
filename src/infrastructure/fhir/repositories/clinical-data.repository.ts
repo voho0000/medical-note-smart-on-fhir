@@ -14,11 +14,18 @@ import type {
   ConsentEntity,
   DeviceEntity,
   CarePlanEntity,
-  ClinicalDataCollection
+  ClinicalDataCollection,
+  ClinicalDataQueryKey,
+  ClinicalDataQueryStatus,
 } from '@/src/core/entities/clinical-data.entity'
 import { fhirClient, LocalBundleModeError } from '../client/fhir-client.service'
 import { FhirMapper } from '../mappers/fhir.mapper'
 import { FHIR_RESOURCES } from '@/src/shared/constants/fhir-systems.constants'
+import {
+  classifyFhirQueryError,
+  shouldRetryBasicFhirSearch,
+  successfulFhirQueryStatus,
+} from '../utils/fhir-query-status'
 
 // Skip console noise for the "no SMART client" sentinel — that's a planned
 // fallback (user is in local-bundle mode or the data source went away
@@ -32,8 +39,94 @@ function warnFhirError(label: string, error: unknown) {
   console.warn(label, error)
 }
 
+type MedicationSourceType = 'MedicationRequest' | 'MedicationStatement'
+
+function medicationReferenceCandidates(reference: string): string[] {
+  const withoutHistory = reference.split('/_history/')[0]
+  const segments = withoutHistory.split('/').filter(Boolean)
+  const id = segments.at(-1)
+  return [reference, withoutHistory, id, id ? `Medication/${id}` : undefined]
+    .filter((candidate): candidate is string => Boolean(candidate))
+}
+
+/**
+ * Extract the requested medication resources from a searchset and promote the
+ * code from included/contained Medication resources when the choice element is
+ * a medicationReference. Keeping this at the repository boundary gives the UI
+ * one consistent MedicationEntity shape for both SMART and local bundles.
+ */
+function mapMedicationSearchResponse(
+  response: any,
+  sourceType: MedicationSourceType,
+): MedicationEntity[] {
+  const entries = response.entry || []
+  const medicationLookup = new Map<string, any>()
+
+  for (const entry of entries) {
+    const resource = entry.resource
+    if (resource?.resourceType !== 'Medication') continue
+    if (entry.fullUrl) medicationLookup.set(entry.fullUrl, resource)
+    if (resource.id) {
+      medicationLookup.set(resource.id, resource)
+      medicationLookup.set(`Medication/${resource.id}`, resource)
+    }
+  }
+
+  return entries
+    .filter((entry: any) => {
+      const resourceType = entry.resource?.resourceType
+      // Tolerate resourceType-less fixtures, but never map included Medication
+      // resources as medication orders/statements.
+      return resourceType === sourceType || !resourceType
+    })
+    .map((entry: any) => {
+      const resource = entry.resource
+      const reference = resource.medicationReference?.reference as string | undefined
+      let referencedMedication: any
+
+      if (reference?.startsWith('#')) {
+        referencedMedication = resource.contained?.find(
+          (contained: any) => contained.id === reference.slice(1) && contained.resourceType === 'Medication',
+        )
+      } else if (reference) {
+        for (const candidate of medicationReferenceCandidates(reference)) {
+          referencedMedication = medicationLookup.get(candidate)
+          if (referencedMedication) break
+        }
+      }
+
+      return FhirMapper.toMedication({
+        ...resource,
+        medicationCodeableConcept:
+          resource.medicationCodeableConcept ?? referencedMedication?.code,
+        _sourceResourceType: sourceType,
+      })
+    })
+}
+
 export class FhirClinicalDataRepository implements IClinicalDataRepository {
+  private resourceQueryStatus: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>> = {}
+
+  private markQuerySuccess(key: ClinicalDataQueryKey, resourceType: string, count: number) {
+    this.resourceQueryStatus[key] = successfulFhirQueryStatus(resourceType, count)
+  }
+
+  private markQueryFailure(key: ClinicalDataQueryKey, resourceType: string, error: unknown) {
+    this.resourceQueryStatus[key] = classifyFhirQueryError(error, resourceType)
+  }
+
+  private async requestWithBasicFallback(primary: string, fallback?: string): Promise<any> {
+    try {
+      return await fhirClient.requestAllPages(primary)
+    } catch (error) {
+      if (!fallback || !shouldRetryBasicFhirSearch(error)) throw error
+      warnFhirError('FHIR server rejected optional search features; retrying a basic search:', error)
+      return fhirClient.requestAllPages(fallback)
+    }
+  }
+
   async fetchAllClinicalData(patientId: string): Promise<ClinicalDataCollection> {
+    this.resourceQueryStatus = {}
     const [
       conditions,
       medications,
@@ -105,7 +198,8 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       immunizations,
       consents,
       devices,
-      carePlans
+      carePlans,
+      resourceQueryStatus: { ...this.resourceQueryStatus },
     }
   }
 
@@ -114,8 +208,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.requestAllPages(
         `Consent?patient=${patientId}&_count=100`
       )
-      return response.entry?.map((e: any) => FhirMapper.toConsent(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toConsent(e.resource)) || []
+      this.markQuerySuccess('Consent', 'Consent', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Consent', 'Consent', error)
       warnFhirError('Failed to fetch consents:', error)
       return []
     }
@@ -126,8 +223,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.requestAllPages(
         `Device?patient=${patientId}&_count=100`
       )
-      return response.entry?.map((e: any) => FhirMapper.toDevice(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toDevice(e.resource)) || []
+      this.markQuerySuccess('Device', 'Device', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Device', 'Device', error)
       warnFhirError('Failed to fetch devices:', error)
       return []
     }
@@ -135,11 +235,15 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchCarePlans(patientId: string): Promise<CarePlanEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `CarePlan?patient=${patientId}&_sort=-date&_count=100`
+      const response = await this.requestWithBasicFallback(
+        `CarePlan?patient=${patientId}&_sort=-date&_count=100`,
+        `CarePlan?patient=${patientId}&_count=100`,
       )
-      return response.entry?.map((e: any) => FhirMapper.toCarePlan(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toCarePlan(e.resource)) || []
+      this.markQuerySuccess('CarePlan', 'CarePlan', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('CarePlan', 'CarePlan', error)
       warnFhirError('Failed to fetch care plans:', error)
       return []
     }
@@ -147,11 +251,15 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchImmunizations(patientId: string): Promise<import('@/src/core/entities/clinical-data.entity').ImmunizationEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `Immunization?patient=${patientId}&_sort=-date&_count=200`
+      const response = await this.requestWithBasicFallback(
+        `Immunization?patient=${patientId}&_sort=-date&_count=200`,
+        `Immunization?patient=${patientId}&_count=200`,
       )
-      return response.entry?.map((e: any) => FhirMapper.toImmunization(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toImmunization(e.resource)) || []
+      this.markQuerySuccess('Immunization', 'Immunization', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Immunization', 'Immunization', error)
       warnFhirError('Failed to fetch immunizations:', error)
       return []
     }
@@ -159,32 +267,59 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchConditions(patientId: string): Promise<ConditionEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `Condition?patient=${patientId}&_sort=-recorded-date&_count=100`
+      const response = await this.requestWithBasicFallback(
+        `Condition?patient=${patientId}&_sort=-recorded-date&_count=100`,
+        `Condition?patient=${patientId}&_count=100`,
       )
-      return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
+      this.markQuerySuccess('Condition', 'Condition', result.length)
+      return result
     } catch (error) {
-      warnFhirError('Failed to sort conditions, trying without sort:', error)
-      try {
-        const response = await fhirClient.requestAllPages(`Condition?patient=${patientId}&_count=100`)
-        return response.entry?.map((e: any) => FhirMapper.toCondition(e.resource)) || []
-      } catch (fallbackError) {
-        logFhirError('Failed to fetch conditions:', fallbackError)
-        return []
-      }
+      this.markQueryFailure('Condition', 'Condition', error)
+      logFhirError('Failed to fetch conditions:', error)
+      return []
     }
   }
 
   async fetchMedications(patientId: string): Promise<MedicationEntity[]> {
-    try {
-      const response = await fhirClient.requestAllPages(
-        `MedicationRequest?patient=${patientId}&_sort=-authoredon&_count=100`
-      )
-      return response.entry?.map((e: any) => FhirMapper.toMedication(e.resource)) || []
-    } catch (error) {
-      logFhirError('Failed to fetch medications:', error)
-      return []
-    }
+    const searches: Array<{
+      sourceType: MedicationSourceType
+      primary: string
+      fallback: string
+    }> = [
+      {
+        sourceType: 'MedicationRequest',
+        primary: `MedicationRequest?patient=${patientId}&_sort=-authoredon&_count=100&_include=MedicationRequest:medication`,
+        fallback: `MedicationRequest?patient=${patientId}&_count=100`,
+      },
+      {
+        sourceType: 'MedicationStatement',
+        primary: `MedicationStatement?patient=${patientId}&_count=100&_include=MedicationStatement:medication`,
+        fallback: `MedicationStatement?patient=${patientId}&_count=100`,
+      },
+    ]
+
+    const results = await Promise.allSettled(
+      searches.map(async ({ sourceType, primary, fallback }) => {
+        const response = await this.requestWithBasicFallback(primary, fallback)
+        return mapMedicationSearchResponse(response, sourceType)
+      }),
+    )
+
+    const medications: MedicationEntity[] = []
+    results.forEach((result, index) => {
+      const sourceType = searches[index].sourceType
+      if (result.status === 'fulfilled') {
+        medications.push(...result.value)
+        this.markQuerySuccess(sourceType, sourceType, result.value.length)
+        return
+      }
+      this.markQueryFailure(sourceType, sourceType, result.reason)
+      const log = sourceType === 'MedicationRequest' ? logFhirError : warnFhirError
+      log(`Failed to fetch ${sourceType} resources:`, result.reason)
+    })
+
+    return medications
   }
 
   async fetchAllergies(patientId: string): Promise<AllergyEntity[]> {
@@ -192,8 +327,11 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
       const response = await fhirClient.requestAllPages(
         `AllergyIntolerance?patient=${patientId}&_count=100`
       )
-      return response.entry?.map((e: any) => FhirMapper.toAllergy(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toAllergy(e.resource)) || []
+      this.markQuerySuccess('AllergyIntolerance', 'AllergyIntolerance', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('AllergyIntolerance', 'AllergyIntolerance', error)
       logFhirError('Failed to fetch allergies:', error)
       return []
     }
@@ -202,12 +340,16 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
   async fetchObservations(patientId: string): Promise<ObservationEntity[]> {
     try {
       // Fetch all observations (laboratory, procedure, etc.)
-      const response = await fhirClient.requestAllPages(
-        `Observation?patient=${patientId}&_count=200&_sort=-date`
+      const response = await this.requestWithBasicFallback(
+        `Observation?patient=${patientId}&_count=200&_sort=-date`,
+        `Observation?patient=${patientId}&_count=200`,
       )
 
-      return response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
+      this.markQuerySuccess('Observation', 'Observation', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Observation', 'Observation', error)
       logFhirError('Failed to fetch observations:', error)
       return []
     }
@@ -215,11 +357,15 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchVitalSigns(patientId: string): Promise<ObservationEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=200`
+      const response = await this.requestWithBasicFallback(
+        `Observation?patient=${patientId}&category=vital-signs&_sort=-date&_count=200`,
+        `Observation?patient=${patientId}&category=vital-signs&_count=200`,
       )
-      return response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toObservation(e.resource)) || []
+      this.markQuerySuccess('Observation:vital-signs', 'Observation', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Observation:vital-signs', 'Observation', error)
       logFhirError('Failed to fetch vital signs:', error)
       return []
     }
@@ -227,8 +373,9 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchDiagnosticReports(patientId: string): Promise<DiagnosticReportEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `DiagnosticReport?patient=${patientId}&_count=500&_sort=-date&_include=DiagnosticReport:result&_include:iterate=Observation:has-member`
+      const response = await this.requestWithBasicFallback(
+        `DiagnosticReport?patient=${patientId}&_count=500&_sort=-date&_include=DiagnosticReport:result&_include:iterate=Observation:has-member`,
+        `DiagnosticReport?patient=${patientId}&_count=500`,
       )
 
       const entries = response.entry || []
@@ -240,10 +387,13 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.OBSERVATION)
         .map((e: any) => FhirMapper.toObservation(e.resource))
 
-      return reports.map((report: any) => 
+      const result = reports.map((report: any) =>
         FhirMapper.toDiagnosticReport(report, observations)
       )
+      this.markQuerySuccess('DiagnosticReport', 'DiagnosticReport', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('DiagnosticReport', 'DiagnosticReport', error)
       logFhirError('Failed to fetch diagnostic reports:', error)
       return []
     }
@@ -256,35 +406,33 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
         .map((e: any) => FhirMapper.toImagingStudy(e.resource)) || []
 
     try {
-      const response = await fhirClient.requestAllPages(
-        `ImagingStudy?patient=${patientId}&_count=200&_sort=-started`
+      const response = await this.requestWithBasicFallback(
+        `ImagingStudy?patient=${patientId}&_count=200&_sort=-started`,
+        `ImagingStudy?patient=${patientId}&_count=200`,
       )
-      return mapResponse(response)
-    } catch {
-      // Some R4 servers expose ImagingStudy but reject `_sort=started`.
-      // Retry the standard patient search without sorting before concluding
-      // that the optional resource/search is unavailable.
-      try {
-        const response = await fhirClient.requestAllPages(
-          `ImagingStudy?patient=${patientId}&_count=200`
-        )
-        return mapResponse(response)
-      } catch (fallbackError) {
-        // ImagingStudy is optional on many R4 servers. Treat unsupported search
-        // as an empty collection without failing the rest of the patient chart.
-        warnFhirError('Failed to fetch imaging studies:', fallbackError)
-        return []
-      }
+      const result = mapResponse(response)
+      this.markQuerySuccess('ImagingStudy', 'ImagingStudy', result.length)
+      return result
+    } catch (error) {
+      this.markQueryFailure('ImagingStudy', 'ImagingStudy', error)
+      // ImagingStudy is optional on many R4 servers. Keep the rest of the chart
+      // usable, while resourceQueryStatus tells the UI why this list is empty.
+      warnFhirError('Failed to fetch imaging studies:', error)
+      return []
     }
   }
 
   async fetchProcedures(patientId: string): Promise<ProcedureEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `Procedure?patient=${patientId}&_count=100&_sort=-date`
+      const response = await this.requestWithBasicFallback(
+        `Procedure?patient=${patientId}&_count=100&_sort=-date`,
+        `Procedure?patient=${patientId}&_count=100`,
       )
-      return response.entry?.map((e: any) => FhirMapper.toProcedure(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toProcedure(e.resource)) || []
+      this.markQuerySuccess('Procedure', 'Procedure', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Procedure', 'Procedure', error)
       logFhirError('Failed to fetch procedures:', error)
       return []
     }
@@ -292,17 +440,21 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchEncounters(patientId: string): Promise<EncounterEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `Encounter?patient=${patientId}&_sort=-date&_count=100&_include=Encounter:patient&_include=Encounter:location`
+      const response = await this.requestWithBasicFallback(
+        `Encounter?patient=${patientId}&_sort=-date&_count=100&_include=Encounter:patient&_include=Encounter:location`,
+        `Encounter?patient=${patientId}&_count=100`,
       )
       // _include puts Patient/Location entries in the same bundle — map only
       // actual Encounters (same guard as fetchDiagnosticReports).
-      return (
+      const result = (
         response.entry
           ?.filter((e: any) => e.resource?.resourceType === FHIR_RESOURCES.ENCOUNTER)
           .map((e: any) => FhirMapper.toEncounter(e.resource)) || []
       )
+      this.markQuerySuccess('Encounter', 'Encounter', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Encounter', 'Encounter', error)
       logFhirError('Failed to fetch encounters:', error)
       return []
     }
@@ -310,11 +462,15 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchDocumentReferences(patientId: string): Promise<DocumentReferenceEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `DocumentReference?patient=${patientId}&_sort=-date&_count=100`
+      const response = await this.requestWithBasicFallback(
+        `DocumentReference?patient=${patientId}&_sort=-date&_count=100`,
+        `DocumentReference?patient=${patientId}&_count=100`,
       )
-      return response.entry?.map((e: any) => FhirMapper.toDocumentReference(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toDocumentReference(e.resource)) || []
+      this.markQuerySuccess('DocumentReference', 'DocumentReference', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('DocumentReference', 'DocumentReference', error)
       logFhirError('Failed to fetch document references:', error)
       return []
     }
@@ -322,11 +478,15 @@ export class FhirClinicalDataRepository implements IClinicalDataRepository {
 
   async fetchCompositions(patientId: string): Promise<CompositionEntity[]> {
     try {
-      const response = await fhirClient.requestAllPages(
-        `Composition?patient=${patientId}&_sort=-date&_count=100`
+      const response = await this.requestWithBasicFallback(
+        `Composition?patient=${patientId}&_sort=-date&_count=100`,
+        `Composition?patient=${patientId}&_count=100`,
       )
-      return response.entry?.map((e: any) => FhirMapper.toComposition(e.resource)) || []
+      const result = response.entry?.map((e: any) => FhirMapper.toComposition(e.resource)) || []
+      this.markQuerySuccess('Composition', 'Composition', result.length)
+      return result
     } catch (error) {
+      this.markQueryFailure('Composition', 'Composition', error)
       logFhirError('Failed to fetch compositions:', error)
       return []
     }

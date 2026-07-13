@@ -27,7 +27,8 @@ describe('env.config', () => {
 
     it('should have correct SMART on FHIR configuration', () => {
       expect(ENV_CONFIG.smartClientId).toBe('my_web_app')
-      expect(ENV_CONFIG.smartScopes).toBe('launch openid fhirUser patient/*.read online_access')
+      expect(ENV_CONFIG.smartScopes).toBe('launch openid fhirUser patient/*.rs online_access')
+      expect(ENV_CONFIG.smartStandaloneScopes).toBe('launch/patient openid fhirUser patient/*.rs online_access')
     })
 
     it('should have correct GitHub Pages configuration', () => {

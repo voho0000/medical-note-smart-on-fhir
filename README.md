@@ -96,7 +96,9 @@ npm run test:coverage
 - Launch URL：`<origin>/smart/launch`
 - Redirect URL：`<origin>/smart/callback`
 - Client Type：Public（PKCE）
-- Scopes：`launch openid fhirUser patient/*.read online_access`
+- EHR launch scopes：`launch openid fhirUser patient/*.rs online_access`
+- Standalone launch scopes：`launch/patient openid fhirUser patient/*.rs online_access`
+- Public client authorization requires S256 PKCE.
 
 > 本專案只用 **public client + PKCE**，不支援 client secret（靜態前端無法藏密碼）。`NEXT_PUBLIC_SMART_CLIENT_ID` 為公開識別碼、選用（預設 `my_web_app`）。
 
@@ -262,7 +264,9 @@ Register the app in your FHIR sandbox/server (**public client + PKCE**):
 - Launch URL: `<origin>/smart/launch`
 - Redirect URL: `<origin>/smart/callback`
 - Client Type: Public (PKCE)
-- Scopes: `launch openid fhirUser patient/*.read online_access`
+- EHR launch scopes: `launch openid fhirUser patient/*.rs online_access`
+- Standalone launch scopes: `launch/patient openid fhirUser patient/*.rs online_access`
+- Public client authorization requires S256 PKCE.
 
 > This app uses **public client + PKCE** only — no client secret (a static front end can't keep one). `NEXT_PUBLIC_SMART_CLIENT_ID` is a public identifier, optional (defaults to `my_web_app`).
 

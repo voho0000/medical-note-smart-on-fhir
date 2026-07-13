@@ -48,7 +48,11 @@ import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
 import { runGenerationJob } from './run-generation-job'
 import type { AiResultStore } from './create-ai-result-store'
 
-type ClinicalDataInput = SummaryCatalogInput & { isLoading?: boolean; error?: unknown }
+type ClinicalDataInput = SummaryCatalogInput & {
+  isLoading?: boolean
+  error?: unknown
+  hasBlockingQueryIssues?: boolean
+}
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
@@ -188,7 +192,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // Never build a catalog from (or auto-run against) a bundle that is still
   // loading or errored — a run over partial data would cache a misleadingly
   // thin result for 12h.
-  const dataReady = !!clinicalData && !clinicalData.isLoading && !clinicalData.error
+  const dataReady = !!clinicalData
+    && !clinicalData.isLoading
+    && !clinicalData.error
+    && !clinicalData.hasBlockingQueryIssues
 
   // Deterministic citable-record catalog — fed to the prompt so replies can
   // cite keys, and returned so the feature can resolve those keys into

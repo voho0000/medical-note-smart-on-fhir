@@ -217,6 +217,35 @@ export interface MedicationRequest {
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'
 }
 
+export interface MedicationStatement {
+  id?: string
+  resourceType?: string
+  status?: string
+  category?: CodeableConcept[]
+  medicationCodeableConcept?: CodeableConcept
+  medicationReference?: Reference
+  subject?: Reference
+  context?: Reference
+  effectiveDateTime?: string
+  effectivePeriod?: Period
+  dateAsserted?: string
+  informationSource?: Reference
+  reasonCode?: CodeableConcept[]
+  reasonReference?: Reference[]
+  dosage?: DosageInstruction[]
+  contained?: Array<{
+    id?: string
+    resourceType?: string
+    code?: CodeableConcept
+  }>
+}
+
+export interface Medication {
+  id?: string
+  resourceType?: string
+  code?: CodeableConcept
+}
+
 // Condition (Diagnosis) Types
 export interface Condition {
   id?: string

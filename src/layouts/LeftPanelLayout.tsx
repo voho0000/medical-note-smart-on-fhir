@@ -13,6 +13,7 @@ import {
   leftTabForResourceType,
 } from "@/src/application/stores/resource-navigation.store"
 import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
+import { FhirDataIssuesBanner } from "@/features/clinical-summary/components/FhirDataIssuesBanner"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -77,6 +78,7 @@ export default function ClinicalSummaryFeature() {
 
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
+      <FhirDataIssuesBanner />
       <Tabs
         value={activeTab}
         // Switching the left clinical tab dismisses any right-pane detail
@@ -86,7 +88,7 @@ export default function ClinicalSummaryFeature() {
           setActiveTab(value)
           clearDetail()
         }}
-        className="flex h-full flex-col"
+        className="flex min-h-0 flex-1 flex-col"
       >
         {/* Grid columns are driven by the registered tab count so adding /
             removing tabs in feature-registry.ts doesn't need a layout edit.

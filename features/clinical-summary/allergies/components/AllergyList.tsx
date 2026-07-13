@@ -1,9 +1,9 @@
 // Allergy List Component
-import type { AllergyIntolerance } from '@/src/shared/types/fhir.types'
+import type { AllergyEntity } from '@/src/core/entities/clinical-data.entity'
 import { AllergyItem } from './AllergyItem'
 
 interface AllergyListProps {
-  allergies: AllergyIntolerance[]
+  allergies: AllergyEntity[]
   isLoading: boolean
   error: Error | null
 }

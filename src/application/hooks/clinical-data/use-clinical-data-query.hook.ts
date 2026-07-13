@@ -17,6 +17,15 @@ import { LocalBundleModeError } from '@/src/infrastructure/fhir/client/fhir-clie
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import { usePatientQuery } from '../patient/use-patient-query.hook'
 
+const BLOCKING_FHIR_QUERY_KEYS = new Set([
+  'Condition',
+  'MedicationRequest',
+  'AllergyIntolerance',
+  'Observation',
+  'DiagnosticReport',
+  'Encounter',
+])
+
 export function useClinicalDataQuery() {
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
 
@@ -54,11 +63,15 @@ export function useClinicalDataQuery() {
 
 // Backward compatibility hook that matches the old ClinicalDataProvider API
 export function useClinicalData() {
-  const { data: patient, isLoading: patientLoading } = usePatientQuery()
+  const { isLoading: patientLoading } = usePatientQuery()
   const { data, isLoading: clinicalDataLoading, error, refetch } = useClinicalDataQuery()
   
   // Consider loading if either patient or clinical data is loading
   const isLoading = patientLoading || clinicalDataLoading
+  const resourceQueryStatus = data?.resourceQueryStatus ?? {}
+  const queryIssues = Object.entries(resourceQueryStatus)
+    .filter(([, status]) => status && status.state !== 'ok' && status.state !== 'empty')
+  const hasBlockingQueryIssues = queryIssues.some(([key]) => BLOCKING_FHIR_QUERY_KEYS.has(key))
   
   return {
     conditions: data?.conditions ?? [],
@@ -76,6 +89,9 @@ export function useClinicalData() {
     consents: data?.consents ?? [],
     devices: data?.devices ?? [],
     carePlans: data?.carePlans ?? [],
+    resourceQueryStatus,
+    queryIssues,
+    hasBlockingQueryIssues,
     isLoading,
     error: error as Error | null,
     refetch: async () => {

@@ -72,6 +72,10 @@ export interface MedicationEntity {
       system?: string
     }>
   }
+  medicationReference?: {
+    reference?: string
+    display?: string
+  }
   status?: string
   intent?: string
   authoredOn?: string
@@ -133,6 +137,11 @@ export interface MedicationEntity {
     display?: string
     reference?: string
   }
+  /** MedicationStatement.informationSource — who supplied the medication list. */
+  informationSource?: {
+    display?: string
+    reference?: string
+  }
   /**
    * FHIR R4 MedicationRequest.reasonCode — billing ICD-10 attached to the
    * prescription. NOT a confirmed clinical diagnosis (see billingIcdTooltip).
@@ -164,18 +173,60 @@ export interface AllergyEntity {
     coding?: Array<{
       code?: string
       display?: string
+      system?: string
     }>
   }
+  type?: string
+  category?: string[]
   clinicalStatus?: string
   verificationStatus?: string
   criticality?: string
+  encounter?: {
+    reference?: string
+    display?: string
+  }
+  onsetDateTime?: string
   reaction?: Array<{
+    substance?: {
+      text?: string
+      coding?: Array<{
+        code?: string
+        display?: string
+        system?: string
+      }>
+    }
     manifestation?: Array<{
       text?: string
+      coding?: Array<{
+        code?: string
+        display?: string
+        system?: string
+      }>
     }>
+    description?: string
+    onset?: string
     severity?: string
+    exposureRoute?: {
+      text?: string
+      coding?: Array<{
+        code?: string
+        display?: string
+        system?: string
+      }>
+    }
+    note?: Array<{ text?: string }>
   }>
   recordedDate?: string
+  recorder?: {
+    reference?: string
+    display?: string
+  }
+  asserter?: {
+    reference?: string
+    display?: string
+  }
+  lastOccurrence?: string
+  note?: Array<{ text?: string }>
   // Multi-hospital support
   sourceSystem?: string
   sourceId?: string
@@ -792,6 +843,45 @@ export interface CarePlanEntity {
   sourceId?: string
 }
 
+export type ClinicalDataQueryKey =
+  | 'Condition'
+  | 'MedicationRequest'
+  | 'MedicationStatement'
+  | 'AllergyIntolerance'
+  | 'Observation'
+  | 'Observation:vital-signs'
+  | 'DiagnosticReport'
+  | 'ImagingStudy'
+  | 'Procedure'
+  | 'Encounter'
+  | 'DocumentReference'
+  | 'Composition'
+  | 'Immunization'
+  | 'Consent'
+  | 'Device'
+  | 'CarePlan'
+
+export type ClinicalDataQueryState =
+  | 'ok'
+  | 'empty'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'unsupported'
+  | 'error'
+
+export interface ClinicalDataQueryStatus {
+  resourceType: string
+  state: ClinicalDataQueryState
+  count?: number
+  httpStatus?: number
+  message?: string
+  operationOutcome?: {
+    severity?: string
+    code?: string
+    diagnostics?: string
+  }
+}
+
 /**
  * The full set of clinical resources loaded for one patient.
  *
@@ -828,4 +918,10 @@ export interface ClinicalDataCollection {
   consents: ConsentEntity[]
   devices: DeviceEntity[]
   carePlans: CarePlanEntity[]
+  /**
+   * Per-search outcome for SMART data. Optional because imported/local bundles
+   * do not perform network searches. This prevents an authorization or server
+   * failure from being represented as the clinically different "no records".
+   */
+  resourceQueryStatus?: Partial<Record<ClinicalDataQueryKey, ClinicalDataQueryStatus>>
 }

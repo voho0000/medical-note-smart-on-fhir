@@ -103,12 +103,34 @@ describe('FhirMapper', () => {
       expect(result.medicationCodeableConcept).toBeUndefined()
       expect(result.status).toBeUndefined()
     })
+
+    it('maps MedicationStatement fields and preserves its source type', () => {
+      const statement = {
+        resourceType: 'MedicationStatement',
+        id: 'statement-1',
+        status: 'active',
+        medicationReference: { reference: 'Medication/aspirin', display: 'Aspirin' },
+        effectivePeriod: { start: '2024-02-01' },
+        context: { reference: 'Encounter/1' },
+        dosage: [{ text: 'Take daily' }],
+      }
+
+      const result = FhirMapper.toMedication(statement)
+
+      expect(result.medicationReference).toEqual(statement.medicationReference)
+      expect(result.authoredOn).toBe('2024-02-01')
+      expect(result.encounter).toEqual(statement.context)
+      expect(result.dosageInstruction).toEqual(statement.dosage)
+      expect(result._sourceResourceType).toBe('MedicationStatement')
+    })
   })
 
   describe('toAllergy', () => {
     it('should map FHIR AllergyIntolerance to domain entity', () => {
       const fhirAllergy = {
         id: 'allergy-123',
+        type: 'allergy',
+        category: ['medication'],
         code: {
           coding: [{ code: '227493005', display: 'Cashew nut' }],
           text: 'Cashew nuts'
@@ -133,11 +155,40 @@ describe('FhirMapper', () => {
 
       expect(result.id).toBe('allergy-123')
       expect(result.code).toEqual(fhirAllergy.code)
+      expect(result.type).toBe('allergy')
+      expect(result.category).toEqual(['medication'])
       expect(result.clinicalStatus).toBe('active')
       expect(result.verificationStatus).toBe('confirmed')
       expect(result.criticality).toBe('high')
       expect(result.reaction).toHaveLength(1)
       expect(result.recordedDate).toBe('2023-05-15')
+    })
+
+    it('preserves allergy context and reaction details used by the viewer', () => {
+      const fhirAllergy = {
+        id: 'allergy-context',
+        encounter: { reference: 'Encounter/1' },
+        onsetDateTime: '2022-01-01',
+        recorder: { reference: 'Practitioner/1' },
+        asserter: { reference: 'Patient/1' },
+        lastOccurrence: '2024-01-01',
+        note: [{ text: 'Patient confirmed' }],
+        reaction: [{
+          manifestation: [{ text: 'Rash' }],
+          description: 'Diffuse rash',
+          onset: '2024-01-01',
+        }],
+      }
+
+      const result = FhirMapper.toAllergy(fhirAllergy)
+
+      expect(result.encounter).toEqual(fhirAllergy.encounter)
+      expect(result.onsetDateTime).toBe('2022-01-01')
+      expect(result.recorder).toEqual(fhirAllergy.recorder)
+      expect(result.asserter).toEqual(fhirAllergy.asserter)
+      expect(result.lastOccurrence).toBe('2024-01-01')
+      expect(result.note).toEqual(fhirAllergy.note)
+      expect(result.reaction?.[0].description).toBe('Diffuse rash')
     })
 
     it('should handle recorded fallback', () => {
