@@ -1,11 +1,11 @@
 // Medical Summary hook — thin adapter over the shared AI slot-generation
 // engine (src/application/hooks/ai-generation/): runs the structured
 // generation on the selected summary model, verifies citations against the
-// bundle, and caches per patient+audience+model so tab switches / reloads
-// don't re-bill.
+// bundle, and caches per patient/audience/locale/model/exact clinical input so
+// tab switches / reloads don't re-bill or restore a result for stale data.
 //
 // Auto-generate policy: when enabled, every available selected model runs once
-// for an empty patient+audience+model slot after cache/auth hydration.
+// for an empty content-bound slot after cache/auth hydration.
 'use client'
 
 import { useCallback, useMemo } from 'react'
@@ -80,7 +80,7 @@ export interface UseMedicalSummaryReturn {
   error: string | null
   hasPatient: boolean
   dataReady: boolean
-  /** True once this exact patient+audience+model cache slot was restored. */
+  /** True once this exact content-bound cache slot was restored. */
   isHydrated: boolean
   autoGenerate: boolean
   setAutoGenerate: (value: boolean) => void
@@ -115,7 +115,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const longitudinalInvestigationContext = ctx.clinicalData
       ? buildLongitudinalInvestigationContext(ctx.clinicalData, ctx.catalog)
       : ''
-    const clinicalContext = [ctx.getFullClinicalContext(), longitudinalInvestigationContext]
+    const clinicalContext = [ctx.clinicalContext, longitudinalInvestigationContext]
       .filter(Boolean)
       .join('\n\n')
     const messages = generateMedicalSummaryUseCase.buildMessages({

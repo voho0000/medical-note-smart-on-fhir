@@ -3,7 +3,8 @@
 // 帶入醫療摘要 path) can peek at generated summaries without importing the
 // full generation hook graph (providers, unified AI, toasts…).
 //
-// Slot key format (owned by use-ai-slot-generation): patientId::audience::model.
+// Slot key format (owned by use-ai-slot-generation):
+// patientId::audience::locale::model::ctx-<selected-clinical-input-signature>.
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { aiResultCacheKey } from '@/src/infrastructure/cache/encrypted-session-cache'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'

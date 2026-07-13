@@ -4,8 +4,10 @@ import { useAiSlotGeneration } from '@/src/application/hooks/ai-generation/use-a
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 let mockPatientId = 'demo-patient-1'
+let mockClinicalContext = 'demo context'
 let mockClinicalData: Record<string, unknown> = {
   isLoading: false,
+  isFetching: false,
   error: null,
   encounters: [{ id: 'demo-encounter-1' }],
 }
@@ -16,7 +18,7 @@ jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
 }))
 jest.mock('@/src/application/hooks/use-clinical-context.hook', () => ({
   useClinicalContext: () => ({
-    getFullClinicalContext: () => 'demo context',
+    getFullClinicalContext: () => mockClinicalContext,
     includedDocumentIds: [],
   }),
 }))
@@ -50,6 +52,7 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
   useAuth: () => ({ loading: false, user: { uid: 'user-1' }, isAnonymous: false }),
 }))
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({
+  ...jest.requireActual('@/src/infrastructure/cache/encrypted-session-cache'),
   loadEncryptedCache: jest.fn(async () => mockCachedResult),
 }))
 jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-case', () => ({
@@ -67,8 +70,10 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
 describe('useAiSlotGeneration demo snapshot', () => {
   beforeEach(() => {
     mockPatientId = 'demo-patient-1'
+    mockClinicalContext = 'demo context'
     mockClinicalData = {
       isLoading: false,
+      isFetching: false,
       error: null,
       encounters: [{ id: 'demo-encounter-1' }],
     }
@@ -124,6 +129,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     mockClinicalData = {
       isLoading: false,
+      isFetching: false,
       error: null,
       encounters: [{ id: 'demo-encounter-1' }],
     }
@@ -177,5 +183,79 @@ describe('useAiSlotGeneration demo snapshot', () => {
       expect(result.current.result).toEqual({ headline: 'pre-generated demo result' })
     })
     expect(run).not.toHaveBeenCalled()
+  })
+
+  it('does not expose a generation slot while clinical data is background-fetching', async () => {
+    mockPatientId = 'smart-patient-1'
+    mockClinicalData = {
+      isLoading: false,
+      isFetching: true,
+      error: null,
+      encounters: [{ id: 'demo-encounter-1' }],
+    }
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async () => ({ headline: 'full-data result' }))
+
+    const { result, rerender } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: 'gemini-3.1-flash-lite',
+      autoRunEnabled: true,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    expect(result.current.dataReady).toBe(false)
+    expect(result.current.slotKey).toBe('')
+    expect(run).not.toHaveBeenCalled()
+
+    mockClinicalData = {
+      isLoading: false,
+      isFetching: false,
+      error: null,
+      encounters: [{ id: 'demo-encounter-1' }],
+    }
+    rerender()
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    expect(result.current.dataReady).toBe(true)
+    expect(result.current.slotKey).toContain('::ctx-')
+  })
+
+  it('uses a new slot and does not reuse the old result when clinical input changes', async () => {
+    mockPatientId = 'smart-patient-1'
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async (ctx: { clinicalContext: string }) => ({
+      headline: `result for ${ctx.clinicalContext}`,
+    }))
+
+    const { result, rerender } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: 'gemini-3.1-flash-lite',
+      autoRunEnabled: true,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    await waitFor(() => {
+      expect(result.current.result).toEqual({ headline: 'result for demo context' })
+    })
+    const firstSlot = result.current.slotKey
+
+    mockClinicalContext = 'complete visits, reports, and medications'
+    rerender()
+
+    await waitFor(() => {
+      expect(result.current.result).toEqual({
+        headline: 'result for complete visits, reports, and medications',
+      })
+    })
+    expect(result.current.slotKey).not.toBe(firstSlot)
+    expect(run).toHaveBeenCalledTimes(2)
   })
 })

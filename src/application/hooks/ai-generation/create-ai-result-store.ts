@@ -7,8 +7,9 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
 
 export interface AiResultStoreState<T> {
-  // Keyed by the feature's slot key (e.g. patientId::audience::model for the
-  // patient-scoped pipelines, mode::audience::locale::contentSig for report
+  // Keyed by the feature's slot key (e.g. the content-bound
+  // patientId::audience::locale::model::ctx-signature for patient-scoped
+  // pipelines, mode::audience::locale::contentSig for report
   // interpretation), so each slot keeps its OWN result / loading / error.
   // Switching slot (model, audience…) just changes which slot the view reads;
   // an in-flight generation keeps running and lands in its own slot (user

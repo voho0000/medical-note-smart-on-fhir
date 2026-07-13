@@ -85,8 +85,17 @@ export function useClinicalDataQuery() {
 
 // Backward compatibility hook that matches the old ClinicalDataProvider API
 export function useClinicalData() {
-  const { isLoading: patientLoading } = usePatientQuery()
-  const { data, isLoading: clinicalDataLoading, error, refetch } = useClinicalDataQuery()
+  const {
+    isLoading: patientLoading,
+    isFetching: patientFetching,
+  } = usePatientQuery()
+  const {
+    data,
+    isLoading: clinicalDataLoading,
+    isFetching: clinicalDataFetching,
+    error,
+    refetch,
+  } = useClinicalDataQuery()
   
   // Consider loading if either patient or clinical data is loading
   const isLoading = patientLoading || clinicalDataLoading
@@ -115,6 +124,11 @@ export function useClinicalData() {
     queryIssues,
     hasBlockingQueryIssues,
     isLoading,
+    // React Query keeps isLoading=false while it refreshes cached data in the
+    // background. AI consumers must also wait for that refresh: otherwise a
+    // patient card can remain available from cache while the matching visits,
+    // reports and medications are still being replaced underneath it.
+    isFetching: patientFetching || clinicalDataFetching,
     error: error as Error | null,
     refetch: async () => {
       await refetch()

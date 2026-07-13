@@ -87,6 +87,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   const { getFullClinicalContext } = useClinicalContext("insights")
   const {
     isLoading: clinicalDataLoading,
+    isFetching: clinicalDataFetching,
     error: clinicalDataError,
     hasBlockingQueryIssues,
   } = useClinicalData()
@@ -151,7 +152,10 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   }, [patientId, resetForPatient, stopAll])
 
   const contextSig = useMemo(() => contentSignature(context), [context])
-  const clinicalDataReady = !clinicalDataLoading && !clinicalDataError && !hasBlockingQueryIssues
+  const clinicalDataReady = !clinicalDataLoading
+    && !clinicalDataFetching
+    && !clinicalDataError
+    && !hasBlockingQueryIssues
   const runtimeIdentity = patientId && context.trim() && clinicalDataReady
     ? `${patientId}:${contextSig}:${model}:${INSIGHTS_PIPELINE_VERSION}`
     : ""
@@ -260,7 +264,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     model,
     canGenerate,
     hasData,
-    clinicalDataLoading,
+    clinicalDataLoading: clinicalDataLoading || clinicalDataFetching,
     clinicalDataError,
     responses,
     panelStatus,
@@ -277,6 +281,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     canGenerate,
     hasData,
     clinicalDataLoading,
+    clinicalDataFetching,
     clinicalDataError,
     responses,
     panelStatus,

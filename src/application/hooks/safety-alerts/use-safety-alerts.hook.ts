@@ -1,8 +1,9 @@
 // Proactive Safety Alerts hook — thin adapter over the shared AI
 // slot-generation engine (src/application/hooks/ai-generation/): runs the
 // pure-AI scan on the selected model, parses the structured reply, and caches
-// the result per patient+audience+model so switching tabs doesn't re-run /
-// re-bill. Supports a persisted "auto-scan" preference: when on, the scan
+// the result per patient/audience/locale/model/exact clinical input so switching
+// tabs doesn't re-run / re-bill or restore a scan for stale data. Supports a
+// persisted "auto-scan" preference: when on, the scan
 // fires once per patient automatically.
 'use client'
 
@@ -74,7 +75,7 @@ export interface UseSafetyAlertsReturn {
   isScanning: boolean
   error: string | null
   hasPatient: boolean
-  /** True once this exact patient+audience+model cache slot was restored. */
+  /** True once this exact content-bound cache slot was restored. */
   isHydrated: boolean
   autoScan: boolean
   setAutoScan: (value: boolean) => void
@@ -94,9 +95,8 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const setModelId = useSafetyPrefsStore((s) => s.setModelId)
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<SafetyScanResult | null> => {
-    const clinicalContext = ctx.getFullClinicalContext()
     const messages = generateSafetyAlertsUseCase.buildMessages({
-      clinicalContext,
+      clinicalContext: ctx.clinicalContext,
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       catalog: ctx.catalog,

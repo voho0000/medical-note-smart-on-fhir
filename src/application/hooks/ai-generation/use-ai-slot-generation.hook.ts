@@ -2,7 +2,7 @@
 // summary + safety alerts). One hook owns everything the two features had in
 // duplicate: model resolution (user pick → provider-key gating → free base
 // fallback, part of the slot key so every model keeps its OWN result /
-// loading / error slot), the patientId::audience::model slot key, encrypted
+// loading / error slot), the content-bound patient/audience/locale/model slot,
 // session-cache hydration, demo-snapshot seeding, the once-per-access-context
 // auto-run guard, and the generate run body (via runGenerationJob).
 //
@@ -12,7 +12,7 @@
 //
 // Adopting clinical insights later (features/clinical-insights/hooks/*): its
 // pipeline maps onto the same config — store = createAiResultStore<InsightsResult>,
-// slot key already patient+audience+model shaped, run = its stream+parse body,
+// slot key already patient/audience/model/context shaped, run = its stream+parse body,
 // demoSeed = its snapshot loader. The one divergence is its auto-run gate
 // (isAutoRunEligibleModel: base-or-own-key models only, so browsing the picker
 // never spends quota), which would arrive here as a config predicate like
@@ -22,9 +22,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
-import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
-import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -33,10 +30,6 @@ import { useAuth } from '@/src/application/providers/auth.provider'
 import type { Locale } from '@/src/shared/i18n/i18n.config'
 import { loadEncryptedCache } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { getModelDefinition, gateModel } from '@/src/shared/constants/ai-models.constants'
-import {
-  getSourceCatalog,
-  type SummaryCatalogInput,
-} from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { DEMO_PATIENT_ID } from '@/src/infrastructure/demo/demo-ai-snapshots'
 import {
@@ -46,20 +39,17 @@ import {
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
 import { runGenerationJob } from './run-generation-job'
 import type { AiResultStore } from './create-ai-result-store'
-import { useDataSelection } from '@/src/application/providers/data-selection.provider'
-import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
-import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
-
-type ClinicalDataInput = SummaryCatalogInput & {
-  isLoading?: boolean
-  error?: unknown
-  hasBlockingQueryIssues?: boolean
-}
+import {
+  useClinicalAiInput,
+  type ClinicalAiDataInput,
+} from './use-clinical-ai-input.hook'
+import { patientAiSlotKey } from './ai-slot-key'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
-  getFullClinicalContext: () => string
-  clinicalData: ClinicalDataInput | null
+  /** Exact text whose signature is part of this run's slot key. */
+  clinicalContext: string
+  clinicalData: ClinicalAiDataInput | null
   catalog: SummarySourceCatalogEntry[]
   locale: Locale
   audience: Audience
@@ -71,7 +61,7 @@ export interface AiSlotRunContext {
 export interface AiSlotDemoContext {
   audience: Audience
   catalog: SummarySourceCatalogEntry[]
-  clinicalData: ClinicalDataInput
+  clinicalData: ClinicalAiDataInput
 }
 
 export interface AiSlotGenerationConfig<T> {
@@ -81,11 +71,10 @@ export interface AiSlotGenerationConfig<T> {
   selectedModelId: string
   /** The persisted auto-run toggle. */
   autoRunEnabled: boolean
-  /** true (summary): a MANUAL generate() is also refused while clinical data is
-   *  still loading/errored. false (safety): the historical behavior — a manual
-   *  scan proceeds regardless. Catalog building and auto-run always wait for
-   *  dataReady in both features (a run over partial data would cache a
-   *  misleadingly thin result for 12h). */
+  /** When true, a MANUAL generate() is also refused until the patient and all
+   *  selected clinical data have settled. Catalog building and auto-run always
+   *  wait for dataReady (a run over partial data would cache a misleadingly
+   *  thin result for 12h). */
   requireDataReadyToGenerate: boolean
   /** Optional test seam checked before user pick (safety: window.__safetyModelId). */
   resolveModelOverride?: () => string | undefined
@@ -114,12 +103,12 @@ export interface AiSlotGenerationReturn<T> {
   dataReady: boolean
   slotKey: string
   resolvedModelId: string
-  clinicalData: ClinicalDataInput | null
+  clinicalData: ClinicalAiDataInput | null
   catalog: SummarySourceCatalogEntry[]
   result: T | undefined
   isRunning: boolean
   error: string | null
-  /** True once this exact patient+audience+model cache slot was restored. */
+  /** True once this exact content-bound cache slot was restored. */
   isHydrated: boolean
   generate: () => Promise<void>
 }
@@ -139,12 +128,14 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     demoSeed,
   } = config
 
-  const { patient } = usePatient()
-  // Same data-selection profile as insights — these pipelines are insight-family.
-  const { getFullClinicalContext, includedDocumentIds } = useClinicalContext('insights')
-  const clinicalData = useClinicalData() as unknown as ClinicalDataInput | null
-  const dataSelection = useDataSelection()
-  const insightsProfile = dataSelection.getProfile('insights')
+  const {
+    patientId,
+    dataReady,
+    clinicalContext,
+    inputSignature,
+    clinicalData: scopedClinicalData,
+    catalog,
+  } = useClinicalAiInput()
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
   // Auth must be resolved before an auto-run carries a Firebase token —
@@ -153,8 +144,6 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const { loading: authLoading, user, isAnonymous } = useAuth()
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
   const { audience } = useAudience()
-
-  const patientId = patient?.id ?? ''
 
   // The model actually used — test seam → user pick (key-gated → free base) →
   // default. A stranded premium pick falls back to the free base. It's part of
@@ -171,10 +160,18 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     return gateModel(selectedModelId, hasProviderKey, defaultModelId)
   }, [resolveModelOverride, selectedModelId, apiKey, geminiKey, claudeKey, defaultModelId])
 
-  // Cache scope = patient + audience + model: the medical and patient outputs
-  // differ, and each model generates independently; switching audience/model
-  // swaps to the matching slot (or generates it).
-  const slotKey = patientId ? `${patientId}::${audience}::${resolvedModelId}` : ''
+  // A cache/result slot is reusable only for the exact selected clinical
+  // input. While data is loading or background-fetching inputSignature is
+  // empty, so neither hydration nor generation can start from the patient card
+  // alone. Locale is explicit because the requested output language can change
+  // even when the FHIR input does not.
+  const slotKey = patientAiSlotKey({
+    patientId,
+    audience,
+    locale,
+    modelId: resolvedModelId,
+    inputSignature,
+  })
 
   const selectedModelProvider = getModelDefinition(selectedModelId)?.provider
   const hasSelectedProviderKey =
@@ -183,7 +180,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     selectedModelProvider === 'claude' ? !!claudeKey : false
   // A failed anonymous auto-run must become eligible again after login (or
   // after the user adds their own provider key). The result cache remains
-  // patient+audience+model scoped; only the once-per-access-context trigger
+  // content-bound; only the once-per-access-context trigger
   // guard needs this extra identity.
   const accessScope = hasSelectedProviderKey ? 'own-key' : user ? `user:${user.uid}` : isAnonymous ? 'anonymous' : 'no-session'
   const autoRunIdentity = slotKey ? `${slotKey}::${accessScope}` : ''
@@ -192,36 +189,6 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const setResult = store((s) => s.setResult)
   const isRunning = store((s) => (slotKey ? !!s.running[slotKey] : false))
   const error = store((s) => (slotKey ? s.errors[slotKey] ?? null : null))
-
-  // Never build a catalog from (or auto-run against) a bundle that is still
-  // loading or errored — a run over partial data would cache a misleadingly
-  // thin result for 12h.
-  const dataReady = !!clinicalData
-    && !clinicalData.isLoading
-    && !clinicalData.error
-    && !clinicalData.hasBlockingQueryIssues
-
-  const scopedClinicalData = useMemo(
-    () => (dataReady && clinicalData
-      ? scopeClinicalDataForAi(
-          clinicalData as unknown as Partial<ClinicalDataCollection>,
-          insightsProfile.selection,
-          insightsProfile.filters,
-          includedDocumentIds,
-        ) as ClinicalDataInput
-      : null),
-    [dataReady, clinicalData, insightsProfile.selection, insightsProfile.filters, includedDocumentIds],
-  )
-
-  // Deterministic citable-record catalog — fed to the prompt so replies can
-  // cite keys, and returned so the feature can resolve those keys into
-  // click-to-navigate citations. Recomputes only when the bundle changes.
-  const catalog = useMemo(
-    () => (scopedClinicalData
-      ? getSourceCatalog(scopedClinicalData)
-      : []),
-    [scopedClinicalData],
-  )
 
   // Guests auto-run too (v0.25.x): the onboarding step is an explicit opt-in
   // (with a PHI-upload note), the result is cached 12h per patient, and their
@@ -235,7 +202,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       cacheKey: cacheKeyFor(slotKey),
       produce: () =>
         run({
-          getFullClinicalContext,
+          clinicalContext,
           clinicalData: scopedClinicalData,
           catalog,
           locale,
@@ -244,7 +211,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           modelId: resolvedModelId,
         }),
     })
-  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, getFullClinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, clinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId])
 
   // Restore the persisted result on (re)load BEFORE auto-run can fire, so a
   // refresh on the same patient reuses the cached result instead of re-billing.
@@ -326,7 +293,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     setResult(slotKey, seeded)
   }, [demoSeed, slotKey, autoRunIdentity, result, hydrated, patientId, locale, catalog, audience, scopedClinicalData, setResult])
 
-  // Auto-run once per patient+audience+model+access-context after hydration; a
+  // Auto-run once per content-bound slot + access-context after hydration; a
   // failed attempt is NOT retried in a loop — the user regenerates manually.
   // The toggle is explicit authorization for every available selected model,
   // not only the Lite/base model: availability/key fallback has already been
