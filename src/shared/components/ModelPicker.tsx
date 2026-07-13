@@ -10,7 +10,7 @@
 // exactly like the stream adapter does; re-adding the key revives the pick.
 "use client"
 
-import { Check, ChevronDown, Lock } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Lock } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,9 +20,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { useModelSelection, type ModelEntry } from "@/src/application/hooks/useModelSelection"
 import {
+  gateModelForAgentSupport,
   gateModelForKeys,
   getModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
@@ -53,6 +55,7 @@ export function ModelPicker({
   compact = false,
 }: ModelPickerProps) {
   const { t } = useLanguage()
+  const { setActiveTab } = useRightPanel()
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
   const { gptModels, geminiModels, claudeModels, handleSelectModel } = useModelSelection(
     apiKey,
@@ -62,11 +65,14 @@ export function ModelPicker({
     onSelect,
   )
 
-  const effectiveModelId = gateModelForKeys(
+  const keyGatedModelId = gateModelForKeys(
     modelId,
     { openAiKey: apiKey, geminiKey, claudeKey },
     fallbackModelId,
   )
+  const effectiveModelId = agentModeActive
+    ? gateModelForAgentSupport(keyGatedModelId, fallbackModelId)
+    : keyGatedModelId
   const effectiveLabel = getModelDefinition(effectiveModelId)?.label ?? effectiveModelId
 
   const isAgentLocked = (id: string) =>
@@ -83,6 +89,7 @@ export function ModelPicker({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          data-testid="model-picker-trigger"
           title={tooltip}
           className={cn(
             "flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted",
@@ -113,7 +120,7 @@ export function ModelPicker({
           <ChevronDown className="h-3 w-3 shrink-0" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className="max-h-[60vh] w-60 overflow-y-auto">
+      <DropdownMenuContent align={align} className="max-h-[60vh] w-64 overflow-y-auto">
         {groups.map((group, groupIndex) => (
           <div key={group.label}>
             {groupIndex > 0 && <DropdownMenuSeparator />}
@@ -121,16 +128,43 @@ export function ModelPicker({
               {group.label}
             </DropdownMenuLabel>
             {group.items.map((entry) => {
-              const locked = entry.isLocked || isAgentLocked(entry.id)
+              const definition = getModelDefinition(entry.id)
+              const lockedByAgent = isAgentLocked(entry.id)
+              const lockedByApiKey = entry.isLocked
+                && !!definition?.requiresUserKey
+                && !definition.disabled
+                && !lockedByAgent
+              const locked = entry.isLocked || lockedByAgent
               return (
                 <DropdownMenuItem
                   key={entry.id}
-                  disabled={locked}
-                  onClick={() => handleSelectModel(entry.id)}
-                  className="cursor-pointer gap-2 text-xs"
+                  disabled={locked && !lockedByApiKey}
+                  onClick={() => {
+                    if (lockedByApiKey) {
+                      setActiveTab('settings', 'ai')
+                      return
+                    }
+                    handleSelectModel(entry.id)
+                  }}
+                  data-testid={lockedByApiKey ? `model-picker-key-link-${entry.id}` : undefined}
+                  aria-label={lockedByApiKey ? `${entry.label}，${t.modelPicker.configureApiKey}` : undefined}
+                  title={lockedByApiKey ? t.modelPicker.configureApiKey : undefined}
+                  className={cn(
+                    "cursor-pointer gap-2 text-xs",
+                    lockedByApiKey && "text-muted-foreground focus:bg-primary/10 focus:text-muted-foreground",
+                  )}
                 >
                   <span className="flex-1 truncate">{entry.label}</span>
-                  {locked ? (
+                  {lockedByApiKey ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.625rem] font-medium text-primary">
+                      <Lock
+                        className="h-3 w-3 text-muted-foreground"
+                        data-testid={`model-picker-key-lock-${entry.id}`}
+                      />
+                      {t.modelPicker.configureApiKey}
+                      <ChevronRight className="h-3 w-3 text-primary" />
+                    </span>
+                  ) : locked ? (
                     <Lock className="h-3 w-3 shrink-0 text-muted-foreground/60" />
                   ) : effectiveModelId === entry.id ? (
                     <Check className="h-3.5 w-3.5 shrink-0 text-primary" />

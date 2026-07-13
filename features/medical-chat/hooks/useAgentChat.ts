@@ -19,6 +19,7 @@ import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/ag
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
 import type { ChatReplyReference } from "@/src/core/entities/chat-message.entity"
+import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
@@ -41,6 +42,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const fhirTools = useFhirTools()
   const isLocalMode = shouldUseLocalBundle()
   const literatureTools = useLiteratureTools(perplexityKey)
+  const patientTextLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
 
   const tools = useMemo(() => {
     if (!fhirTools && !literatureTools) return undefined
@@ -58,7 +60,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
       // Graceful degradation: if the picked model needs a user key we don't have,
       // run on the free default instead of dead-ending with an error. Normal mode
-      // gates the same way inside the ai-sdk-stream adapter; deep mode runs its
+      // gates the same way inside the ai-sdk-stream adapter; agent chat runs its
       // own streamText loop (runDeepModeAgent), so it must gate here too.
       const effectiveModelId = gateModelForKeys(modelId, { openAiKey, geminiKey, claudeKey })
 
@@ -88,7 +90,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const abortController = new AbortController()
       abortControllerRef.current = abortController
       // Idle watchdog for every agent stream below: abort + surface a timeout
-      // error if a stream stalls (same anti-hang guard as normal mode). Idle-
+      // error if a stream stalls. Idle-
       // based, so legitimate long tool runs that keep emitting events are fine.
       const idleMs = resolveStreamIdleTimeoutMs()
 
@@ -110,7 +112,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           provider === 'claude' ? claudeKey :
           openAiKey
 
-        // Check if user can use deep mode
+        // Check if the user can access agent chat.
         if (!apiKey && !hasProxyAccess) {
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId ? { ...m, content: t.agent.apiKeyRequired } : m)
@@ -140,14 +142,13 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           useProxy,
         })
 
-        // Build enhanced system prompt using use case
-        // Note: Clinical context is no longer automatically included
-        // Users can choose to include it via the auto-include toggle (consistent with normal mode)
+        // Build the agent prompt without preloading a formatted patient record;
+        // the agent queries the bound FHIR tools only when the question needs it.
         // Literature search is available if user has Perplexity API key OR is authenticated (can use proxy)
         const hasLiteratureSearch = !!perplexityKey || hasProxyAccess
         const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
           baseSystemPrompt: systemPrompt,
-          clinicalContext: '', // Empty - let user control via toggle
+          clinicalContext: '',
           hasPatient: !!patient?.id,
           mode: isLocalMode ? 'local' : 'live',
           hasPerplexityKey: hasLiteratureSearch,
@@ -158,7 +159,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           { role: "system" as const, content: enhancedSystemPrompt },
           ...newMessages.map((m) => ({
             role: m.role as "user" | "assistant",
-            content: formatChatMessageContentForAi(m),
+            // Keep the original message in the UI/history, but mask identifying
+            // text in user-authored content before it leaves the browser.
+            content: m.role === "user"
+              ? scrubFreeText(formatChatMessageContentForAi(m), patientTextLiterals)
+              : formatChatMessageContentForAi(m),
           })),
         ]
 
@@ -279,7 +284,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
       }
     },
-    [chatMessages, modelId, openAiKey, geminiKey, claudeKey, patient, setChatMessages, systemPrompt, onInputClear, onStreamComplete, tools, hasProxyAccess, perplexityKey, t, isLocalMode]
+    [chatMessages, modelId, openAiKey, geminiKey, claudeKey, patient, patientTextLiterals, setChatMessages, systemPrompt, onInputClear, onStreamComplete, tools, hasProxyAccess, perplexityKey, t, isLocalMode]
   )
 
   const handleReset = useCallback(() => {

@@ -158,3 +158,16 @@ export function gateModelForKeys(
     keys.openAiKey
   return gateModel(modelId, !!key, fallback)
 }
+
+/**
+ * Agent-only consumers must never run a model with known tool-calling issues.
+ * The picker prevents new selections; this runtime gate also covers a model
+ * preference persisted before the model was marked incompatible.
+ */
+export function gateModelForAgentSupport(
+  modelId: string,
+  fallback: string = DEFAULT_MODEL_ID,
+): string {
+  const definition = getModelDefinition(modelId)
+  return !definition || definition.disableAgentMode ? fallback : modelId
+}

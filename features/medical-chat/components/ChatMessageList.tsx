@@ -334,7 +334,10 @@ export function ChatMessageList({ messages, isLoading, afterMessages, scrollSign
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-12 text-center">
             <div className="text-4xl mb-3 opacity-20">💬</div>
-            <div className="text-sm text-muted-foreground">
+            <div className="max-w-2xl text-sm font-medium leading-relaxed text-foreground">
+              {t.chat.emptyStateTitle}
+            </div>
+            <div className="mt-1.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
               {t.chat.emptyState}
             </div>
           </div>

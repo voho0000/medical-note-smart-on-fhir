@@ -10,11 +10,9 @@ import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { useEffectiveModel, useModelPref, useSetModelFor, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import {
-  useChatStore,
   useIsTemporaryMode,
   useSetIsTemporaryMode,
   useSetChatMessages,
-  useSetAutoIncludeContext,
 } from "@/src/application/stores/chat.store"
 import { useSetCurrentSessionId } from "@/src/application/stores/chat-history.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -33,11 +31,9 @@ import { ChatMessageList } from "./ChatMessageList"
 import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
 import { ChatTemplatesManagerDrawer } from "./ChatTemplatesManagerDrawer"
-import { ChatModeSelector } from "./ChatModeSelector"
 import { ChatInputArea } from "./ChatInputArea"
 import { SuggestionChips } from "./SuggestionChips"
 import { ExpandedOverlay } from '@/src/shared/components/ExpandedOverlay'
-import { useStreamingChat } from "../hooks/useStreamingChat"
 import { useAgentChat } from "../hooks/useAgentChat"
 import { useFollowupSuggestions } from "../hooks/useFollowupSuggestions"
 import { useVoiceRecording } from "../hooks/useVoiceRecording"
@@ -48,9 +44,7 @@ import { useImageUpload } from "../hooks/useImageUpload"
 import { useRecordingStatus } from "../hooks/useRecordingStatus"
 import { fileToBase64 } from "@/src/shared/utils/file-to-base64.utils"
 import type { ChatImage, ChatReplyReference } from "@/src/application/stores/chat.store"
-import { useAgentMode } from "../hooks/useAgentMode"
 import { useExpandable } from "@/src/shared/hooks/ui/use-expandable.hook"
-import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useTextareaAutoResize } from "../hooks/useTextareaAutoResize"
 import { useApiKeyValidation } from "../hooks/useApiKeyValidation"
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts"
@@ -64,7 +58,6 @@ import { PromptGalleryDialog } from "@/features/prompt-gallery"
 import type { SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { AuthDialog } from "@/features/auth"
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
 import { isQuotaExceededError } from "@/src/core/errors"
 
 export default function MedicalChat() {
@@ -78,36 +71,10 @@ export default function MedicalChat() {
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
-  const { getFullClinicalContext } = useClinicalContext('chat')
   const { addTemplate, updateTemplate, saveTemplates, maxTemplates, templates } = useChatTemplates()
   const input = useChatInput()
   const imageUpload = useImageUpload()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  
-  // Agent mode state (logically related: agent mode + API key warning)
-  const agentMode = useAgentMode()
-  const { isAgentMode, showApiKeyWarning } = agentMode
-  
-  // Check if current model supports agent mode
-  const currentModelDef = getModelDefinition(model)
-  const isAgentModeDisabled = currentModelDef?.disableAgentMode || false
-  
-  // Auto-disable agent mode when switching to unsupported model
-  useEffect(() => {
-    if (isAgentModeDisabled && isAgentMode) {
-      agentMode.setIsAgentMode(false)
-    }
-  }, [isAgentModeDisabled, isAgentMode, agentMode])
-
-  // "病歷自動載入" default follows the mode: deep mode pulls records on demand
-  // via tools, so it starts with auto-include OFF (leaner context); normal mode
-  // can't query, so it starts ON. Re-syncs on every mode change (incl. initial
-  // mount + the model-driven auto-disable above); the user can still flip the
-  // toggle manually within a mode — that holds until the next mode change.
-  const setAutoIncludeContext = useSetAutoIncludeContext()
-  useEffect(() => {
-    setAutoIncludeContext(!isAgentMode)
-  }, [isAgentMode, setAutoIncludeContext])
   
   // Expand/collapse state (independent UI state)
   const expandable = useExpandable()
@@ -132,7 +99,7 @@ export default function MedicalChat() {
   
   // FHIR error handling
   const { error: patientError } = usePatient()
-  const { error: clinicalDataError, isLoading: isLoadingClinicalData } = useClinicalData()
+  const { error: clinicalDataError } = useClinicalData()
   
   // Auto-save chat to Firestore (debounced)
   // Note: patientName is only used for UI display, never stored in Firestore
@@ -182,9 +149,9 @@ export default function MedicalChat() {
     }
   }, [input])
   
-  const normalChat = useStreamingChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
-  const agentChat = useAgentChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
-  const chat = isAgentMode ? agentChat : normalChat
+  // Clinical chat is a single agent path. The agent decides whether it needs
+  // FHIR or literature tools; there is no separate "normal" chat mode.
+  const chat = useAgentChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
 
   // "Next step" suggestion chips, generated after each answer completes.
   const {
@@ -223,8 +190,6 @@ export default function MedicalChat() {
   // to history, so we persist + start fresh silently; signed-out / temp-mode
   // chats would be lost, so confirm first.
   const handleNewConversation = useCallback(async () => {
-    // Every new conversation starts in deep mode (the assistant's primary mode).
-    agentMode.enableAgentMode()
     if (chatMessages.length === 0) {
       setReplyDraft(null)
       chat.handleReset()
@@ -242,14 +207,13 @@ export default function MedicalChat() {
       return
     }
     setShowNewChatConfirm(true)
-  }, [chatMessages.length, user, isTemporaryMode, forceSave, chat, t, agentMode])
+  }, [chatMessages.length, user, isTemporaryMode, forceSave, chat, t])
 
   const confirmNewConversation = useCallback(() => {
     setShowNewChatConfirm(false)
-    agentMode.enableAgentMode()
     setReplyDraft(null)
     chat.handleReset()
-  }, [chat, agentMode])
+  }, [chat])
   
   // Voice recording with callback to insert transcript into input
   const handleTranscriptReady = useCallback((text: string) => {
@@ -271,34 +235,15 @@ export default function MedicalChat() {
   // API key validation
   const { hasApiKey } = useApiKeyValidation(model, openAiKey, geminiKey)
 
-  // Show/hide warning based on API key status and login status.
-  // Deep mode runs through the Firebase proxy for ANY session — a real account
+  // Agent chat runs through the Firebase proxy for ANY session — a real account
   // OR an anonymous free-tier visitor (small Perplexity/chat quota) — or with
   // the user's own API key. Anonymous visitors have `user === null` by design
   // (login-gated features stay gated), so a plain `!user` check wrongly blocks
   // them; include `isAnonymous`. Only warn once auth has resolved and there is
   // genuinely no path (which means anonymous sign-in itself is unavailable).
   const apiKeyAvailable = hasApiKey()
-  const canUseDeepMode = apiKeyAvailable || !!user || isAnonymous
-  useEffect(() => {
-    if (isAgentMode && !canUseDeepMode && !authLoading) {
-      agentMode.showWarning()
-    } else {
-      agentMode.hideWarning()
-    }
-  }, [isAgentMode, canUseDeepMode, authLoading, agentMode])
-
-  // Handle agent mode toggle with API key check
-  const handleAgentModeToggle = useCallback((enabled: boolean) => {
-    // Show warning only when there's no deep-mode path at all (no key, no real
-    // account, no anonymous session — see canUseDeepMode above).
-    if (enabled && !canUseDeepMode) {
-      agentMode.showWarning()
-    } else {
-      agentMode.hideWarning()
-    }
-    agentMode.setIsAgentMode(enabled)
-  }, [canUseDeepMode, agentMode])
+  const canUseAgentChat = apiKeyAvailable || !!user || isAnonymous
+  const showApiKeyWarning = !authLoading && !canUseAgentChat
 
   // Clear images after sending message
   const clearImagesAfterSend = useCallback(() => {
@@ -316,20 +261,6 @@ export default function MedicalChat() {
     
     // Require either text or images
     if (!trimmed && !hasImages) return
-    
-    // Auto-include clinical context if enabled AND this is the first message in the conversation
-    // This prevents redundant context inclusion in follow-up questions
-    const autoIncludeContext = useChatStore.getState().autoIncludeContext
-    const isFirstMessage = chatMessages.length === 0
-    let messageToSend = trimmed
-    
-    if (autoIncludeContext && isFirstMessage) {
-      const context = getFullClinicalContext()
-      if (context.trim()) {
-        // Put user input first, then clinical context below
-        messageToSend = `${trimmed}\n\n${context}`
-      }
-    }
     
     // Convert File objects to ChatImage (base64) for API
     let chatImages: ChatImage[] | undefined
@@ -353,7 +284,7 @@ export default function MedicalChat() {
     
     // Pass images to chat handler (this will add user message to state)
     // Note: handleSend is async and will start streaming, but user message is added to state immediately
-    const sendPromise = chat.handleSend(messageToSend, chatImages, activeReply)
+    const sendPromise = chat.handleSend(trimmed, chatImages, activeReply)
     
     // Stage 1: Save user message immediately after it's added to state (prevent data loss)
     // This ensures user input is never lost even if AI response fails or gets interrupted
@@ -369,7 +300,7 @@ export default function MedicalChat() {
     // Wait for AI response to complete
     await sendPromise
     // Stage 2: AI response completion will trigger another forceSave to update with full conversation
-  }, [input, imageUpload.images, replyDraft, chat, getFullClinicalContext, chatMessages.length, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups])
+  }, [input, imageUpload.images, replyDraft, chat, clearImagesAfterSend, clearInputAndResetHeight, forceSave, clearFollowups])
 
   const handleReplyToSelection = useCallback((reply: ChatReplyReference) => {
     setReplyDraft(reply)
@@ -399,8 +330,8 @@ export default function MedicalChat() {
     const lastUser = userMessages[userMessages.length - 1]
     if (!lastUser) return
     lastSuggestedIdRef.current = last.id
-    generateFollowups(lastUser, content, { recentUserMessages: userMessages, isDeepMode: isAgentMode })
-  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups, isAgentMode])
+    generateFollowups(lastUser, content, { recentUserMessages: userMessages, isDeepMode: true })
+  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
@@ -414,11 +345,6 @@ export default function MedicalChat() {
       }, 0)
     }
   }, [])
-
-  const handleInsertContext = useCallback(() => {
-    input.insertText(getFullClinicalContext())
-    scrollTextareaToBottom()
-  }, [input, getFullClinicalContext, scrollTextareaToBottom])
 
   const handleInsertTemplate = useCallback(() => {
     const templateContent = template.selectedTemplate?.content?.trim()
@@ -508,7 +434,7 @@ export default function MedicalChat() {
               fallbackModelId={MODEL_PREF_DEFAULTS.chat}
               onSelect={(id) => setModelFor('chat', id)}
               tooltip={t.modelPicker.chatTooltip}
-              agentModeActive={isAgentMode}
+              agentModeActive
             />
             <button
               onClick={handleNewConversation}
@@ -550,7 +476,6 @@ export default function MedicalChat() {
             <div className="text-amber-700 dark:text-amber-300 text-xs">
               {patientError && <div>• {t.errors.fetchPatient}</div>}
               {clinicalDataError && <div>• {t.errors.fetchClinicalData}</div>}
-              {isAgentMode && <div className="mt-1">• {t.medicalChat.deepModeLimited}</div>}
             </div>
           </div>
         )}
@@ -571,30 +496,16 @@ export default function MedicalChat() {
 
       <CardFooter className="flex flex-col gap-2 border-t px-3 sm:px-6 !pt-2 pb-2 shrink-0">
         <div className="flex w-full flex-col gap-1">
-          {/* Single row; the neutral, condensed toolbar fits one line on phones.
-              overflow-x-auto is only a safety net for very narrow (<360px) devices. */}
-          <div className="flex items-center gap-1 overflow-x-auto">
-            <ChatModeSelector
-              isAgentMode={isAgentMode}
-              showApiKeyWarning={showApiKeyWarning}
-              onModeToggle={handleAgentModeToggle}
-              disabled={isAgentModeDisabled}
-              disabledReason={isAgentModeDisabled ? t.medicalChat.agentModeDisabledForModel : undefined}
-            />
-            <ChatToolbar
-              onInsertContext={handleInsertContext}
-              onInsertTemplate={handleInsertTemplate}
-              templates={template.templates}
-              selectedTemplateId={template.selectedTemplate?.id}
-              onTemplateChange={template.setSelectedTemplateId}
-              hasTemplateContent={!!template.selectedTemplate?.content?.trim()}
-              onOpenGallery={() => setShowPromptGallery(true)}
-              onManageTemplates={() => setShowTemplateManager(true)}
-              isLoadingClinicalData={isLoadingClinicalData}
-              agentModeActive={isAgentMode}
-              showModelPicker={isExpanded}
-            />
-          </div>
+          <ChatToolbar
+            onInsertTemplate={handleInsertTemplate}
+            templates={template.templates}
+            selectedTemplateId={template.selectedTemplate?.id}
+            onTemplateChange={template.setSelectedTemplateId}
+            hasTemplateContent={!!template.selectedTemplate?.content?.trim()}
+            onOpenGallery={() => setShowPromptGallery(true)}
+            onManageTemplates={() => setShowTemplateManager(true)}
+            showModelPicker={isExpanded}
+          />
           {showApiKeyWarning && (
             <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
               <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
@@ -667,7 +578,7 @@ export default function MedicalChat() {
             onStopGeneration={() => chat.stopGeneration()}
             voice={voice}
             images={imageUpload}
-            disabled={isAgentMode && !canUseDeepMode}
+            disabled={!canUseAgentChat}
             replyDraft={replyDraft}
             onCancelReply={() => setReplyDraft(null)}
           />

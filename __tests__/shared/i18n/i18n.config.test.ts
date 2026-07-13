@@ -16,6 +16,13 @@ describe('i18n.config', () => {
       expect(enKeys.length).toBeGreaterThan(0)
       expect(zhKeys.length).toBeGreaterThan(0)
     })
+
+    it('describes patient summary reruns as regeneration, not refresh', () => {
+      expect(locales['zh-TW'].medicalSummary.patient.regenerate).toBe('重新產生')
+      expect(locales.en.medicalSummary.patient.regenerate).toBe('Regenerate')
+      expect(locales['zh-TW'].safetyAlerts.patient.rescan).toBe('重新產生')
+      expect(locales.en.safetyAlerts.patient.rescan).toBe('Regenerate')
+    })
   })
 
   describe('defaultLocale', () => {

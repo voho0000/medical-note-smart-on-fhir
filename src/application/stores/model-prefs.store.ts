@@ -17,6 +17,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
   DEFAULT_MODEL_ID,
+  gateModelForAgentSupport,
   gateModelForKeys,
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
@@ -92,9 +93,12 @@ export const useSetModelFor = () => useModelPrefsStore((s) => s.setModelFor)
 export function useEffectiveModel(consumer: ModelPrefConsumer): string {
   const pref = useModelPref(consumer)
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
-  return gateModelForKeys(
+  const keyGatedModel = gateModelForKeys(
     pref,
     { openAiKey: apiKey, geminiKey, claudeKey },
     MODEL_PREF_DEFAULTS[consumer],
   )
+  return consumer === 'chat'
+    ? gateModelForAgentSupport(keyGatedModel, MODEL_PREF_DEFAULTS.chat)
+    : keyGatedModel
 }

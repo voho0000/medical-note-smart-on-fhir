@@ -119,7 +119,7 @@ export class AiProviderFactory {
     if (provider === 'gemini' && !ENV_CONFIG.hasGeminiProxy) {
       return {
         available: false,
-        error: 'Gemini models require an API key for deep mode. Please add your Gemini API key in Settings or switch to an OpenAI model.',
+        error: 'Gemini models require an API key for AI chat. Please add your Gemini API key in Settings or switch to an OpenAI model.',
       }
     }
 

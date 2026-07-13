@@ -1,7 +1,12 @@
 // gateModel is the single graceful-degradation rule every AI call relies on:
 // a key-required model the user has no key for must downgrade to the free,
 // proxy-eligible default model — never dead-end with "API key is missing".
-import { gateModel, gateModelForKeys, DEFAULT_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import {
+  gateModel,
+  gateModelForAgentSupport,
+  gateModelForKeys,
+  DEFAULT_MODEL_ID,
+} from '@/src/shared/constants/ai-models.constants'
 
 describe('gateModel — downgrade stranded premium models', () => {
   it('leaves a free (proxy-eligible) model untouched, with or without a key', () => {
@@ -31,11 +36,9 @@ describe('gateModel — downgrade stranded premium models', () => {
   })
 })
 
-// gateModelForKeys is what the deep-mode agent path (useAgentChat) calls: it owns
-// the user's three provider keys and must downgrade exactly like normal mode does
-// inside the stream adapter. This locks the fix for the "picked Opus, no key, deep
-// mode → AI 服務發生錯誤" bug — deep mode must run the free default, not dead-end.
-describe('gateModelForKeys — provider-key-aware gate (deep-mode path)', () => {
+// gateModelForKeys is what agent chat calls: it owns the user's three provider
+// keys and must downgrade exactly like the shared stream adapter does.
+describe('gateModelForKeys — provider-key-aware gate (agent chat)', () => {
   it('downgrades a key-required model to the free default when no matching key', () => {
     expect(gateModelForKeys('claude-opus-4-8', {})).toBe(DEFAULT_MODEL_ID)
     expect(gateModelForKeys('gemini-3.5-flash', {})).toBe(DEFAULT_MODEL_ID)
@@ -56,5 +59,12 @@ describe('gateModelForKeys — provider-key-aware gate (deep-mode path)', () => 
   it('leaves a free (proxy-eligible) model untouched regardless of keys', () => {
     expect(gateModelForKeys('gemini-3-flash-preview', {})).toBe('gemini-3-flash-preview')
     expect(gateModelForKeys('gemini-3.1-flash-lite', { claudeKey: 'k' })).toBe('gemini-3.1-flash-lite')
+  })
+})
+
+describe('gateModelForAgentSupport — tool-calling compatibility', () => {
+  it('keeps a supported model and rejects an unknown persisted id', () => {
+    expect(gateModelForAgentSupport('gemini-3-flash-preview')).toBe('gemini-3-flash-preview')
+    expect(gateModelForAgentSupport('removed-model')).toBe(DEFAULT_MODEL_ID)
   })
 })
