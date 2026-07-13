@@ -8,6 +8,7 @@ import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB
 import { CANONICAL_KEYS, CANONICAL_DISPLAY, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
+import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
 
 export interface LabCell {
   value: string
@@ -245,7 +246,14 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
       let cellValue = value
       let cellUnit = unit
       if (numericValue !== undefined) {
-        const norm = normalizeAnalyteUnit(testKey, numericValue, unit)
+        // Quantity.unit is human-readable and may use a local spelling such as
+        // "/cumm", while Quantity.code is the machine-processable UCUM form
+        // (for example "/uL"). Keep `unit` for raw display, but when the source
+        // explicitly declares UCUM, prefer its code for numeric conversion.
+        const conversionUnit = obs.valueQuantity?.system === FHIR_SYSTEMS.UCUM
+          ? obs.valueQuantity.code || unit
+          : unit
+        const norm = normalizeAnalyteUnit(testKey, numericValue, conversionUnit)
         if (norm) {
           cellValue = String(norm.value)
           cellUnit = norm.unit
