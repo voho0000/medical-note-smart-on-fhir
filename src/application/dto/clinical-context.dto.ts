@@ -4,17 +4,14 @@ import type { ClinicalContextSection } from '@/src/core/entities/clinical-contex
 export interface ClinicalContextDTO {
   sections: ClinicalContextSection[]
   formattedText: string
-  supplementaryNotes?: string
 }
 
 export function createClinicalContextDTO(
   sections: ClinicalContextSection[],
-  formattedText: string,
-  supplementaryNotes?: string
+  formattedText: string
 ): ClinicalContextDTO {
   return {
     sections,
-    formattedText,
-    supplementaryNotes
+    formattedText
   }
 }

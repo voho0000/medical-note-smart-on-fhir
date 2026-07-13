@@ -1,15 +1,12 @@
 // Application Provider: Data Selection
 //
-// Per-consumer profiles (audit: 對話/洞察/IPS). Each of the three clinical-data
-// consumers — chat (帶入病歷), clinical insights, and IPS export — owns its own
-// {selection, filters, supplementaryNotes, editedClinicalContext}. They're
-// seeded IDENTICALLY (the 初診 default), so out of the box all three behave the
-// same; the user can then fine-tune any one independently in the 資料選擇 tab.
+// Per-consumer profiles. Each clinical-data consumer owns its own {selection,
+// filters, documentMode, documentIds}. Profiles are seeded identically (the 初診
+// default), then the user can fine-tune the main summary/insights selection or
+// the independent IPS export selection.
 //
-// The data-selection UI edits ONE consumer at a time (`editingConsumer`); the
-// convenience getters/setters (selectedData / filters / updateSelection / …)
-// all target that consumer, so the editor UI stays simple. The actual consumers
-// read their own profile via getProfile(consumer).
+// The data-selection UI uses the convenience getters/setters below; consumers
+// read their resolved profile via getProfile(consumer).
 "use client"
 
 import { createContext, useContext, useEffect, useState, useMemo, useCallback, type ReactNode } from 'react'
@@ -36,23 +33,22 @@ ensureCategoriesInitialized()
 
 type DataType = keyof DataSelection
 export type DataConsumer = 'chat' | 'insights' | 'ips'
-// The 資料選擇 panel drives the "working" AI — chat + insights — as ONE selection,
-// always broadcast to both. IPS is configured independently on its own tab
-// (per-consumer setters below), so it no longer rides along with the panel.
+// Standard summary/insights use `insights`. The mirrored `chat` profile is kept
+// for stored-profile compatibility and the shared token meter; agent chat does
+// not preload either profile and queries FHIR tools on demand. IPS is configured
+// independently on its own tab.
 const MAIN_TARGETS: DataConsumer[] = ['chat', 'insights']
 
 export interface ConsumerProfile {
   selection: DataSelection
   filters: DataFilters
-  supplementaryNotes: string
-  editedClinicalContext: string | null
   /** Documents are picked per-document, not via scalar filters. */
   documentMode: DocumentMode
   documentIds: string[]
 }
 
 interface DataSelectionContextValue {
-  // ── 資料選擇 panel convenience — these edit the MAIN target (chat + insights) ──
+  // ── 資料選擇 panel convenience — edit the mirrored main AI profile ──
   selectedData: DataSelection
   setSelectedData: (next: DataSelection) => void
   updateSelection: (dataType: DataType, isSelected: boolean) => void
@@ -66,10 +62,6 @@ interface DataSelectionContextValue {
   filters: DataFilters
   setFilters: (next: DataFilters) => void
   isAnySelected: boolean
-  supplementaryNotes: string
-  setSupplementaryNotes: (notes: string) => void
-  editedClinicalContext: string | null
-  setEditedClinicalContext: (context: string | null) => void
 
   // Documents (per-document selection on the main target)
   documentMode: DocumentMode
@@ -80,8 +72,6 @@ interface DataSelectionContextValue {
   // ── Per-consumer accessors — the real consumers read these; the IPS tab uses
   //    the *For setters to edit ONLY the 'ips' profile, decoupled from the panel.
   getProfile: (consumer: DataConsumer) => ConsumerProfile
-  setNotesFor: (consumer: DataConsumer, notes: string) => void
-  setEditedContextFor: (consumer: DataConsumer, context: string | null) => void
   updateSelectionFor: (consumer: DataConsumer, dataType: DataType, value: boolean) => void
   setFiltersFor: (consumer: DataConsumer, next: DataFilters) => void
 }
@@ -113,8 +103,6 @@ function makeDefaultProfile(defaultFilters: DataFilters = DEFAULT_DATA_FILTERS):
   return {
     selection: { ...DEFAULT_DATA_SELECTION },
     filters: { ...defaultFilters },
-    supplementaryNotes: '',
-    editedClinicalContext: null,
     documentMode: 'latestAdmission',
     documentIds: [],
   }
@@ -152,9 +140,8 @@ export function coerceProfile(
     filters,
     // activePreset/presetMemory are no longer stored — the active-template
     // highlight is derived live from selection/filters. Any such keys on an old
-    // stored profile are simply ignored here.
-    supplementaryNotes: typeof saved.supplementaryNotes === 'string' ? saved.supplementaryNotes : '',
-    editedClinicalContext: typeof saved.editedClinicalContext === 'string' ? saved.editedClinicalContext : null,
+    // stored profile are simply ignored here. Legacy supplementaryNotes and
+    // editedClinicalContext keys are also intentionally dropped.
     documentMode: mode === 'all' || mode === 'custom' || mode === 'latestAdmission' || mode === 'recentAdmissions' ? mode : 'latestAdmission',
     documentIds: Array.isArray(saved.documentIds) ? saved.documentIds.filter((x): x is string => typeof x === 'string') : [],
   }
@@ -312,16 +299,6 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
     }
   }, [activePreset, patchTargets])
 
-  const setSupplementaryNotes = useCallback(
-    (notes: string) => patchTargets({ supplementaryNotes: notes }),
-    [patchTargets],
-  )
-
-  const setEditedClinicalContext = useCallback(
-    (context: string | null) => patchTargets({ editedClinicalContext: context }),
-    [patchTargets],
-  )
-
   const setDocumentMode = useCallback(
     (mode: DocumentMode) => patchTargets({ documentMode: mode }),
     [patchTargets],
@@ -330,16 +307,6 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
   const setDocumentIds = useCallback(
     (ids: string[]) => patchTargets({ documentIds: ids }),
     [patchTargets],
-  )
-
-  const setNotesFor = useCallback(
-    (consumer: DataConsumer, notes: string) => patchProfile(consumer, { supplementaryNotes: notes }),
-    [patchProfile],
-  )
-
-  const setEditedContextFor = useCallback(
-    (consumer: DataConsumer, context: string | null) => patchProfile(consumer, { editedClinicalContext: context }),
-    [patchProfile],
   )
 
   // Per-consumer editing — used by the IPS tab to edit ONLY the 'ips' profile,
@@ -372,24 +339,17 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       filters: current.filters,
       setFilters,
       isAnySelected: Object.values(current.selection).some(Boolean),
-      supplementaryNotes: current.supplementaryNotes,
-      setSupplementaryNotes,
-      editedClinicalContext: current.editedClinicalContext,
-      setEditedClinicalContext,
       documentMode: current.documentMode,
       documentIds: current.documentIds,
       setDocumentMode,
       setDocumentIds,
       getProfile,
-      setNotesFor,
-      setEditedContextFor,
       updateSelectionFor,
       setFiltersFor,
     }),
     [
       current, setSelectedData, updateSelection, resetToDefaults, applyPreset, selectAllData, activePreset,
-      setFilters, setSupplementaryNotes, setEditedClinicalContext, setDocumentMode, setDocumentIds,
-      getProfile, setNotesFor, setEditedContextFor, updateSelectionFor, setFiltersFor,
+      setFilters, setDocumentMode, setDocumentIds, getProfile, updateSelectionFor, setFiltersFor,
     ],
   )
 

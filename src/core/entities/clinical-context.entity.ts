@@ -84,5 +84,4 @@ export interface DataFilters {
 export interface ClinicalContextOptions {
   selection: DataSelection
   filters: DataFilters
-  supplementaryNotes?: string
 }

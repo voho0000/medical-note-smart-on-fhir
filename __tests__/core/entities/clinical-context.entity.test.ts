@@ -98,13 +98,5 @@ describe('clinical-context.entity', () => {
       expect(options.filters).toBeDefined()
     })
 
-    it('should support supplementary notes', () => {
-      const options: ClinicalContextOptions = {
-        selection: makeSelection(true),
-        filters: makeFilters('all'),
-        supplementaryNotes: 'Additional clinical notes'
-      }
-      expect(options.supplementaryNotes).toBe('Additional clinical notes')
-    })
   })
 })

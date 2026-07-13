@@ -45,4 +45,16 @@ describe('coerceProfile — schema migration preserves user choices', () => {
     expect(p.documentMode).toBe('custom')
     expect(p.documentIds).toEqual(['a', 'b'])
   })
+
+  it('drops legacy supplementary notes and manual context overrides', () => {
+    const legacy = {
+      supplementaryNotes: 'old note',
+      editedClinicalContext: 'old frozen context',
+    } as unknown as Parameters<typeof coerceProfile>[0]
+
+    const p = coerceProfile(legacy)
+
+    expect(p).not.toHaveProperty('supplementaryNotes')
+    expect(p).not.toHaveProperty('editedClinicalContext')
+  })
 })
