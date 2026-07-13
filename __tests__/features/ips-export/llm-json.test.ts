@@ -49,7 +49,6 @@ describe('parseInferenceResponse', () => {
     labelZh: '第二型糖尿病',
     labelEn: 'Type 2 diabetes',
     inferenceConfidence: 'high',
-    evidenceIcd10: 'E11.9',
     ...overrides,
   })
 
@@ -94,11 +93,13 @@ describe('parseInferenceResponse', () => {
     expect(rows.map((r) => r.labelEn)).toEqual(['Type 2 diabetes', 'CKD'])
   })
 
-  it('drops a row whose suggestedSnomed is malformed (missing code)', () => {
+  it('ignores unknown/legacy fields (e.g. a stray code) and keeps the labelled row', () => {
     const raw = JSON.stringify({
       problems: [one({ suggestedSnomed: { display: 'no code here' } })],
     })
-    expect(parseInferenceResponse(raw)).toHaveLength(0)
+    const rows = parseInferenceResponse(raw)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).not.toHaveProperty('suggestedSnomed')
   })
 
   it('returns [] on total garbage', () => {

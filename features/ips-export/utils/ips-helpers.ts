@@ -59,6 +59,19 @@ export function formatDate(value?: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** UTF-8 byte length of a serialized document (for the export size estimate). */
+export function utf8ByteLength(text: string): number {
+  if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(text).length
+  return text.length // ASCII-lower-bound fallback for exotic runtimes
+}
+
+/** Human-readable size for the export preview (KB below 1 MB, MB above). */
+export function formatByteSize(bytes: number): string {
+  const MB = 1024 * 1024
+  if (bytes >= MB) return `${(bytes / MB).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
+
 /** Compact YYYYMMDD stamp for filenames. */
 export function dateStampForFilename(d: Date = new Date()): string {
   const yyyy = d.getFullYear()

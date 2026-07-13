@@ -52,6 +52,21 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(cr).not.toContain('→')
   })
 
+  it("tolerates the IPS-only 'latestPerAnalyte' version value (falls back, no crash)", () => {
+    // 'latestPerAnalyte' 是 IPS 匯出專用語意;AI-context 的 lab category 不認得
+    // 它時走既有 fallback 分支(count → latest、context → 非-latest 分支),
+    // 不得 throw。渲染內容不在此鎖定 — 只鎖「不會炸掉」。
+    expect(() =>
+      labReportsCategory.getCount(data, { labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' } as any, all),
+    ).not.toThrow()
+    const s = labReportsCategory.getContextSection(
+      data,
+      { labReportVersion: 'latestPerAnalyte', labReportTimeRange: 'all' } as any,
+      all,
+    )
+    expect(s).toBeTruthy()
+  })
+
   it('includes standalone observations and narrative conclusions', () => {
     const s = section('all')
     const items = Array.isArray(s) ? [] : s?.items ?? []

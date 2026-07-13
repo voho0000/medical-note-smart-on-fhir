@@ -2,17 +2,15 @@
 //
 // The pipeline (all pure except the injected `llm`):
 //   buildEvidenceDigest(data)  → compact, de-identified evidence bundle
-//   buildInferencePrompt(...)  → house-style messages + embedded allowlist
+//   buildInferencePrompt(...)  → house-style messages
 //   llm(messages)              → JSON (injected; unit tests pass a canned fn)
 //   parseInferenceResponse     → validated candidate rows (llm-json.ts)
-//   resolveCoding(B/C/A/none)  → verified-allowlist SNOMED ladder
 //   inferredToCondition        → synthetic ConditionEntity for the bundle merge
 //
-// SAFETY (memory/feedback_snomed_ct_verification.md): "aggressive" governs only
-// the DIAGNOSIS inference. SNOMED CODING is never trusted from the LLM blind —
-// resolveCoding always runs the verified-allowlist ladder, and a code outside the
-// allowlist can never become high/medium-high confidence (Strategy A → low +
-// needsManualCoding, amber UI). Nothing here mutates source data, and synthetic
+// SAFETY: the problem list is TEXT-ONLY. The app deliberately does NOT generate
+// or attach any SNOMED CT coding — an inferred Condition.code carries only the
+// diagnosis label as free text (no invented/derived codes). "Aggressive" governs
+// only the DIAGNOSIS inference. Nothing here mutates source data, and synthetic
 // conditions only ever exist inside an IPS snapshot (never the React Query cache).
 
 import type {
@@ -23,26 +21,32 @@ import type {
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
-import {
-  normalizeIcd,
-  lookupSctForIcd,
-  verifiedSctByCode,
-  VERIFIED_SCT_LIST,
-  VERIFIED_SCT_CODES,
-  SCT_SYSTEM,
-  type VerifiedSct,
-  type ConditionSctAnnotation,
-} from './snomed-mapping'
-import { SYSTEM } from './ips-constants'
 import { decodeBase64Utf8 } from '@/src/shared/utils/base64.utils'
 import { checkReferenceRangeAbnormal } from '@/src/shared/utils/interpretation-helpers'
 import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
 import { parseInferenceResponse, type InferredProblemRaw } from './llm-json'
+import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
 import type {
   InferredProblem,
   ProblemEvidence,
-  CodingStrategy,
 } from './inferred-problems-types'
+
+/**
+ * Normalize an ICD-10 code for evidence grouping/display: uppercase, strip
+ * whitespace and a trailing dot, and insert the conventional dot after the
+ * 3-char category when a dotless extension is present ("e119" → "E11.9").
+ * (Kept local — the app no longer maps ICD-10 to SNOMED, but still groups
+ * Encounter.reasonCode ICDs by a normalized code in the evidence digest.)
+ */
+export function normalizeIcd(raw: string | undefined): string {
+  if (!raw) return ''
+  let s = raw.toUpperCase().replace(/\s+/g, '').replace(/\.+$/, '')
+  if (!s) return ''
+  if (!s.includes('.') && s.length > 3 && /^[A-Z]\d{2}[A-Z0-9]+$/.test(s)) {
+    s = `${s.slice(0, 3)}.${s.slice(3)}`
+  }
+  return s
+}
 
 /** LOINC for a hospital discharge summary (出院病摘) DocumentReference. */
 const DISCHARGE_SUMMARY_LOINC = '18842-5'
@@ -298,29 +302,21 @@ const SYSTEM_PROMPT = `You are a board-certified physician building a patient's 
 You will receive de-identified evidence from one patient: outpatient/inpatient ICD-10 diagnoses grouped by frequency, chronic (refillable) medications, discharge-summary excerpts, and a few abnormal lab values.
 
 Your task — clinical synthesis (be thorough/aggressive):
-- Infer the patient's genuinely ACTIVE problems. You MAY assert a problem that is strongly implied by a discharge narrative or a chronic-medication pattern even when no ICD code is present (e.g. an ACE-inhibitor + diuretic + recurrent high BP strongly implies hypertension).
+- Following the same rule as the in-app medical summary, ${PROBLEM_INFERENCE_SYNTHESIS_RULE}
+- You MAY assert a problem that is strongly implied by a discharge narrative or a chronic-medication pattern even when no ICD code is present (e.g. an ACE-inhibitor + diuretic + recurrent high BP strongly implies hypertension).
 - Abnormal labs are CORROBORATION ONLY: never make a lab the sole basis for a problem.
 - Prefer durable/chronic problems. Do NOT list transient acute events (a single URI, a resolved injury) unless they are clearly ongoing.
 - Merge duplicates: one problem per distinct clinical entity.
 
-SNOMED coding rules (two-tier — the system RE-VALIDATES every code you return, so you are never trusted blindly):
-- When the problem is anchored to an ICD-10 you can see in the evidence, return that code in "evidenceIcd10".
-- PREFER THE ALLOWLIST: if a concept in the ALLOWLIST provided in the user message matches the problem, return it verbatim in "suggestedSnomed". Allowlist codes are pre-verified.
-- If NO allowlist concept fits, you MAY return your single best-guess SNOMED CT concept id in "suggestedSnomed". Any non-allowlist code is treated as PROVISIONAL: the system flags it for MANDATORY human web-search verification on browser.ihtsdotools.org before it is trusted, and it can never be marked high-confidence. Offer a best-guess ONLY when you genuinely believe the concept id is correct and would expect to confirm it by web search; if you are unsure, return null instead of fabricating an id.
+Do NOT return any diagnosis codes (no SNOMED CT, no ICD). The problem list is text-only — return the diagnosis NAMES only.
 
 Output: a SINGLE JSON object, no prose, no markdown fences. Do not include patient identifiers.`
 
 /**
- * Build the chat messages for one inference run. Pure. The verified allowlist is
- * embedded so the model can execute Strategy C (pick-from-allowlist) — but
- * resolveCoding re-validates every pick, so a hallucinated code is still caught.
+ * Build the chat messages for one inference run. Pure. The model returns
+ * text-only diagnosis names (no codes are requested or trusted).
  */
-export function buildInferencePrompt(
-  digest: EvidenceDigest,
-  allowlist: ReadonlyArray<VerifiedSct> = VERIFIED_SCT_LIST,
-): AiMessage[] {
-  const allowlistText = allowlist.map((v) => `${v.code}\t${v.display}`).join('\n')
-
+export function buildInferencePrompt(digest: EvidenceDigest): AiMessage[] {
   const icdLines = digest.encounterIcds.length
     ? digest.encounterIcds
         .map(
@@ -362,8 +358,6 @@ export function buildInferencePrompt(
       "labelZh": "中文診斷名稱",
       "labelEn": "English diagnosis name",
       "inferenceConfidence": "high" | "medium" | "low",
-      "evidenceIcd10": "E11.9",            // OPTIONAL: the ICD-10 from the evidence this is anchored to
-      "suggestedSnomed": { "code": "44054006", "display": "Diabetes mellitus type II" } | null,  // PREFER the ALLOWLIST; a non-allowlist best-guess is allowed but flagged for human web-search verification
       "supportingEvidence": [
         { "kind": "encounter-icd" | "medication" | "discharge-excerpt" | "lab" | "composition", "label": "human-readable", "icd10": "E11.9", "date": "2025-01-01", "count": 4 }
       ],
@@ -386,10 +380,6 @@ ${dischargeLines}
 ## Abnormal labs (corroboration only)
 ${labLines}
 
-# SNOMED CT allowlist (PREFER these pre-verified concepts; a non-allowlist best-guess is allowed but will be flagged for verification)
-code\tdisplay
-${allowlistText}
-
 # Output contract
 ${contract}`
 
@@ -397,84 +387,6 @@ ${contract}`
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: userContent },
   ]
-}
-
-// ── Coding ladder ────────────────────────────────────────────────────────────
-
-export interface ResolvedCoding {
-  coding: ConditionSctAnnotation | null
-  strategy: CodingStrategy
-  needsManualCoding: boolean
-}
-
-/**
- * The B→C→A→none SNOMED ladder. NON-NEGOTIABLE: a code that is not in the
- * verified allowlist can NEVER be high or medium-high confidence.
- *   B (high):        evidenceIcd10 deterministically maps to a verified concept.
- *   C (medium-high): the model's suggestedSnomed.code is in the allowlist.
- *   A (low):         the model returned a code NOT in the allowlist → flag it.
- *   none:            no SNOMED at all (text/ICD-only problem).
- */
-export function resolveCoding(
-  raw: InferredProblemRaw,
-  allowlistSet: ReadonlySet<string> = VERIFIED_SCT_CODES,
-): ResolvedCoding {
-  // Strategy B — anchor to an evidence ICD-10 that hits the verified table.
-  const icd = normalizeIcd(raw.evidenceIcd10)
-  if (icd) {
-    const hit = lookupSctForIcd(icd)
-    if (hit) {
-      return {
-        coding: {
-          system: SCT_SYSTEM,
-          code: hit.code,
-          display: hit.display,
-          confidence: 'high',
-          icd10: icd,
-        },
-        strategy: 'B',
-        needsManualCoding: false,
-      }
-    }
-  }
-
-  const suggestedCode = raw.suggestedSnomed?.code?.trim()
-  if (suggestedCode) {
-    // Strategy C — the model picked from the verified allowlist. Canonicalize the
-    // display from our table (never trust the model's display string).
-    if (allowlistSet.has(suggestedCode)) {
-      const verified = verifiedSctByCode(suggestedCode)
-      if (verified) {
-        return {
-          coding: {
-            system: SCT_SYSTEM,
-            code: verified.code,
-            display: verified.display,
-            confidence: 'medium-high',
-            ...(icd ? { icd10: icd } : {}),
-          },
-          strategy: 'C',
-          needsManualCoding: false,
-        }
-      }
-    }
-    // Strategy A — free-generated code, NOT in the allowlist. Low + must review.
-    return {
-      coding: {
-        system: SCT_SYSTEM,
-        code: suggestedCode,
-        display: raw.suggestedSnomed?.display?.trim() || '',
-        confidence: 'low',
-        ...(icd ? { icd10: icd } : {}),
-        needsManualCoding: true,
-      },
-      strategy: 'A',
-      needsManualCoding: true,
-    }
-  }
-
-  // none — no SNOMED assigned (text / ICD-only problem).
-  return { coding: null, strategy: 'none', needsManualCoding: false }
 }
 
 // ── Orchestration ────────────────────────────────────────────────────────────
@@ -500,24 +412,23 @@ function toProblemEvidence(raw: InferredProblemRaw): ProblemEvidence[] {
 export interface RunProblemInferenceArgs {
   data: ClinicalDataCollection
   llm: InferenceLlm
-  allowlist?: ReadonlyArray<VerifiedSct>
   now?: Date
   maxDischargeChars?: number
 }
 
 /**
- * End-to-end inference run: digest → prompt → llm → parse → code → dedup.
+ * End-to-end inference run: digest → prompt → llm → parse → dedup.
  * Returns [] when there is no primary evidence or the model returns nothing
  * usable (never throws on a single bad candidate — llm-json drops those).
  */
 export async function runProblemInference(
   args: RunProblemInferenceArgs,
 ): Promise<InferredProblem[]> {
-  const { data, llm, allowlist = VERIFIED_SCT_LIST, now, maxDischargeChars } = args
+  const { data, llm, now, maxDischargeChars } = args
   const digest = buildEvidenceDigest(data, now, maxDischargeChars)
   if (!hasPrimaryEvidence(digest)) return []
 
-  const messages = buildInferencePrompt(digest, allowlist)
+  const messages = buildInferencePrompt(digest)
 
   let rawText: string
   try {
@@ -527,16 +438,12 @@ export async function runProblemInference(
   }
 
   const candidates = parseInferenceResponse(rawText)
-  const allowlistSet = new Set(allowlist.map((v) => v.code))
 
   const out: InferredProblem[] = []
   const seen = new Set<string>()
   candidates.forEach((raw, i) => {
-    const { coding, strategy, needsManualCoding } = resolveCoding(raw, allowlistSet)
-    // Dedup by SNOMED code when coded, else by normalized label.
-    const dedupKey = coding?.code
-      ? `sct:${coding.code}`
-      : `lbl:${(raw.labelEn || raw.labelZh).toLowerCase().trim()}`
+    // Dedup by normalized label (the problem list carries no codes).
+    const dedupKey = `lbl:${(raw.labelEn || raw.labelZh).toLowerCase().trim()}`
     if (seen.has(dedupKey)) return
     seen.add(dedupKey)
     out.push({
@@ -544,9 +451,6 @@ export async function runProblemInference(
       labelZh: raw.labelZh.trim(),
       labelEn: raw.labelEn.trim(),
       inferenceConfidence: raw.inferenceConfidence,
-      coding,
-      strategy,
-      needsManualCoding,
       evidence: toProblemEvidence(raw),
       rationale: raw.rationale?.trim() || undefined,
     })
@@ -558,31 +462,37 @@ export async function runProblemInference(
 
 /**
  * Convert a confirmed inferred problem into a synthetic ConditionEntity that
- * flows through the EXISTING IPS pipeline (problemCode dual-coding picks up
- * `_sct` exactly like a deterministic Strategy-B condition). Pure.
+ * flows through the EXISTING IPS pipeline. Pure.
+ *
+ * LLM / summary candidates are TEXT-ONLY: Condition.code carries just the
+ * diagnosis label — the app never generates or attaches SNOMED CT / guessed
+ * codes. The one exception is an `encounter-icd` candidate, which carries a REAL
+ * ICD-10 `sourceCoding` lifted verbatim from Encounter.reasonCode (a genuine
+ * source code, not an invented one); that coding is attached so a confirmed
+ * visit-ICD problem exports with its authentic code.
  *   - id is namespaced `urn:ips-inferred:` so it can never collide with a real id.
- *   - ICD-10 coding is carried when the problem was anchored to one (Strategy B,
- *     or any candidate that returned evidenceIcd10).
  *   - `_inferred` is the audit marker; ips-fhir-mappers turns it into a meta.tag.
  */
 export function inferredToCondition(p: InferredProblem): ConditionEntity {
-  const icd10 = p.coding?.icd10 || p.evidence.find((e) => e.icd10)?.icd10
-  const coding = icd10
-    ? [{ system: SYSTEM.icd10, code: icd10, display: p.labelEn || p.labelZh || undefined }]
-    : undefined
-
-  const condition: ConditionEntity = {
+  const text = p.labelZh || p.labelEn || undefined
+  return {
     id: `urn:ips-inferred:${p.id}`,
-    code: {
-      text: p.labelZh || p.labelEn || undefined,
-      ...(coding ? { coding } : {}),
-    },
+    code: p.sourceCoding
+      ? {
+          text,
+          coding: [
+            {
+              system: p.sourceCoding.system,
+              code: p.sourceCoding.code,
+              ...(p.sourceCoding.display ? { display: p.sourceCoding.display } : {}),
+            },
+          ],
+        }
+      : { text },
     clinicalStatus: 'active',
     verificationStatus: 'provisional',
     _inferred: {
-      strategy: p.strategy,
       inferenceConfidence: p.inferenceConfidence,
-      ...(p.needsManualCoding ? { needsManualCoding: true } : {}),
       evidence: p.evidence.map((e) => ({
         kind: e.kind,
         label: e.label,
@@ -594,6 +504,4 @@ export function inferredToCondition(p: InferredProblem): ConditionEntity {
       ...(p.rationale ? { rationale: p.rationale } : {}),
     },
   }
-  if (p.coding) condition._sct = p.coding
-  return condition
 }

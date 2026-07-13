@@ -41,13 +41,6 @@ describe('buildIpsMarkdown', () => {
           text: '第二型糖尿病',
           coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9', display: 'Type 2 diabetes mellitus' }],
         },
-        _sct: {
-          system: 'http://snomed.info/sct',
-          code: '44054006',
-          display: 'Diabetes mellitus type II',
-          confidence: 'high',
-          icd10: 'E11.9',
-        },
       },
     ]
     data.medications = [
@@ -79,8 +72,11 @@ describe('buildIpsMarkdown', () => {
     expect(md).toContain('## Patient')
     expect(md).toContain('- Name: Test Patient')
     expect(md).toContain('## Active Problems')
-    expect(md).toContain('Diabetes mellitus type II')
-    expect(md).toContain('SNOMED CT 44054006; ICD-10 E11.9')
+    // Problem label + Code column come from the SOURCE ICD-10 coding only — the
+    // app attaches no SNOMED CT.
+    expect(md).toContain('Type 2 diabetes mellitus')
+    expect(md).toContain('ICD-10 E11.9')
+    expect(md).not.toContain('SNOMED CT 44054006')
     expect(md).toContain('## Medication Summary')
     expect(md).toContain('Metformin 500mg')
     expect(md).toContain('## Diagnostic Results')
@@ -115,7 +111,6 @@ describe('buildIpsMarkdown', () => {
         clinicalStatus: 'active',
         code: { text: 'Chronic kidney disease' },
         _inferred: {
-          strategy: 'none',
           inferenceConfidence: 'medium',
           evidence: [{ kind: 'lab', label: 'eGFR low', sourceId: 'o1' }],
           rationale: 'Persistently reduced renal function.',

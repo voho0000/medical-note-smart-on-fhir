@@ -11,6 +11,9 @@ import type { DataCategory, FilterValue } from "@/src/core/interfaces/data-categ
 const VALUE_LABELS: Record<string, { zh: string; en: string }> = {
   latest: { zh: '最新', en: 'Latest' },
   all: { zh: '全部', en: 'All' },
+  // IPS 匯出專用的 labReportVersion 第三選項(只出現在 IPS scope panel 注入的
+  // options 裡;chat/insights 面板的選項清單不含此值)。
+  latestPerAnalyte: { zh: '每項目最近 3 筆', en: 'Latest 3 per test' },
   active: { zh: '作用中', en: 'Active' },
   chronic: { zh: '慢箋', en: 'Chronic' },
   acute: { zh: '急性', en: 'Acute' },

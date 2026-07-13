@@ -27,8 +27,10 @@ function getComposition(bundle: IpsBundle): FhirResource | undefined {
 }
 
 interface CompositionSection {
+  title?: string
   code?: { coding?: Array<{ code?: string }> }
   entry?: Array<{ reference?: string }>
+  emptyReason?: { coding?: Array<{ system?: string; code?: string }> }
 }
 
 function sectionLoincCodes(composition: FhirResource | undefined): Set<string> {
@@ -77,9 +79,31 @@ export function validateIpsBundle(bundle: IpsBundle): ValidationResult {
   add('section-allergies', 'Allergies section present', codes.has(IPS_SECTION.allergies.loinc))
   add('section-medications', 'Medication section present', codes.has(IPS_SECTION.medications.loinc))
 
-  // 5. Every section.entry reference resolves to a Bundle entry
-  const fullUrls = new Set((bundle.entry ?? []).map((e) => e.fullUrl))
+  // 5. Every section carries a code, and (ips-comp-1) has EITHER entries OR an
+  //    emptyReason — never neither, never both.
   const sections = (composition?.section as CompositionSection[] | undefined) ?? []
+  const sectionName = (s: CompositionSection, i: number) =>
+    s.title || s.code?.coding?.[0]?.code || `#${i + 1}`
+  const missingCode = sections
+    .filter((s) => !(s.code?.coding ?? []).some((c) => c.code))
+    .map(sectionName)
+  add('section-code', 'Every section carries a coded section.code', missingCode.length === 0, missingCode.slice(0, 3).join(', '))
+  const badEmptiness = sections
+    .filter((s) => {
+      const hasEntries = (s.entry?.length ?? 0) > 0
+      const hasEmptyReason = !!s.emptyReason
+      return hasEntries === hasEmptyReason // neither, or both
+    })
+    .map(sectionName)
+  add(
+    'section-entry-or-empty',
+    'Every section has entries or an emptyReason (ips-comp-1)',
+    badEmptiness.length === 0,
+    badEmptiness.slice(0, 3).join(', '),
+  )
+
+  // 6. Every section.entry reference resolves to a Bundle entry
+  const fullUrls = new Set((bundle.entry ?? []).map((e) => e.fullUrl))
   const dangling: string[] = []
   for (const s of sections) {
     for (const e of s.entry ?? []) {
@@ -88,7 +112,7 @@ export function validateIpsBundle(bundle: IpsBundle): ValidationResult {
   }
   add('refs-resolve', 'All section references resolve', dangling.length === 0, dangling.slice(0, 3).join(', '))
 
-  // 6. Every resource has a non-empty meta.profile
+  // 7. Every resource has a non-empty meta.profile
   const missingProfile = (bundle.entry ?? [])
     .filter((e) => !(e.resource?.meta?.profile?.length))
     .map((e) => e.resource?.resourceType ?? 'unknown')

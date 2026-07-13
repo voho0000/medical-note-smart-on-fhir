@@ -43,6 +43,7 @@ import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
+import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -801,9 +802,10 @@ const SHARED_RULES =
   'NOT every routine follow-up visit or repeat-prescription pickup. Aim for ~5–8 such events for a case like this (only a very complex multi-year, multi-hospital course justifies more). ' +
   'The timeline is the OBJECTIVE care journey, so choose the SAME significant events REGARDLESS of audience: the patient version changes only the WORDING of each label into plain language — it must NOT show more events, fewer events, or different events than the clinician version would. ' +
   'Curate — the full record list is already visible elsewhere; the app supplies date and hospital, you supply only the label. ' +
-  'For "problems", infer the patient\'s ACTIVE problem list by SYNTHESISING across ALL data — not just claim diagnosis codes: ' +
-  'coded diagnoses, ABNORMAL LAB patterns (e.g. repeatedly low Hb → 貧血), DISPENSED MEDICATIONS that imply a condition ' +
-  '(e.g. glaucoma eye drops → 青光眼, BPH drugs like Harnalidge/Detrusitol → 良性攝護腺增生), care plans, and discharge summaries. ' +
+  // The synthesis rule itself is shared verbatim with the IPS-export problem
+  // inference (problem-inference-principles.ts) so both features infer
+  // problems from 健保 data with the same semantics.
+  'For "problems", ' + PROBLEM_INFERENCE_SYNTHESIS_RULE + ' ' +
   'Each problem is a plain condition NAME (e.g. 第二型糖尿病) — do NOT include ICD or any other codes. ' +
   'Give each a SHORT "basis" phrase naming the evidence type and count (e.g. "5 次檢驗異常", "藥局調劑", "照護計畫", "6 次就診申報"), ' +
   'the matching "kind", and the catalog key(s) in "sources". Merge duplicates; order by clinical importance; at most ~12 problems. ' +

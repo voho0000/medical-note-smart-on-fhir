@@ -115,11 +115,14 @@ describe('buildIpsBundle — structure', () => {
     expect(allergies).toBeDefined()
     expect(meds).toBeDefined()
 
-    // Empty required sections carry an emptyReason and no entry.
+    // Empty required sections carry an emptyReason (IPS 2.0: list-empty-reason
+    // `unavailable`) and no entry.
+    const EMPTY_REASON_SYSTEM = 'http://terminology.hl7.org/CodeSystem/list-empty-reason'
     expect(problems?.entry).toBeUndefined()
-    expect(problems?.emptyReason?.coding?.[0]?.code).toBe('no-problem-info')
-    expect(allergies?.emptyReason?.coding?.[0]?.code).toBe('no-allergy-info')
-    expect(meds?.emptyReason?.coding?.[0]?.code).toBe('no-medication-info')
+    for (const section of [problems, allergies, meds]) {
+      expect(section?.emptyReason?.coding?.[0]?.system).toBe(EMPTY_REASON_SYSTEM)
+      expect(section?.emptyReason?.coding?.[0]?.code).toBe('unavailable')
+    }
   })
 
   it('omits optional sections when there is no data', () => {
@@ -585,8 +588,80 @@ describe('buildIpsBundle — populated data', () => {
   })
 })
 
-describe('buildIpsBundle — Problem List SNOMED CT dual-coding (Phase 2.1)', () => {
-  it('prepends the verified SNOMED coding while keeping the ICD-10 coding', () => {
+describe('buildIpsBundle — presentedForm image stripping (P1-1)', () => {
+  function reportWithAttachments(): ClinicalDataCollection {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      {
+        id: 'dr-mixed',
+        code: { text: '病理報告' },
+        conclusion: 'Specimen adequate.',
+        effectiveDateTime: '2026-06-01',
+        presentedForm: [
+          { title: 'Report text', contentType: 'text/plain', data: 'dGV4dA==' },
+          { title: 'Scan page 1', contentType: 'image/jpeg', data: 'aW1n', size: 2_500_000 },
+          // No inline data (blob moved to IndexedDB) → never exportable.
+          { title: 'Scan page 2', contentType: 'image/jpeg', _imageRef: 'blob-key-2' },
+        ],
+      },
+    ]
+    return data
+  }
+
+  const findReport = (bundle: ReturnType<typeof buildIpsBundle>) =>
+    bundle.entry.find((e) => e.resource.resourceType === 'DiagnosticReport')!.resource as {
+      conclusion?: string
+      presentedForm?: Array<{ contentType?: string; data?: string; _imageRef?: string }>
+    }
+
+  it('strips image/* attachments by default but keeps conclusion + text/* attachments', () => {
+    const bundle = buildIpsBundle({ patient: PATIENT, data: reportWithAttachments() })
+    const dr = findReport(bundle)
+    expect(dr.conclusion).toBe('Specimen adequate.')
+    expect(dr.presentedForm).toHaveLength(1)
+    expect(dr.presentedForm?.[0]?.contentType).toBe('text/plain')
+    expect(dr.presentedForm?.[0]?.data).toBe('dGV4dA==')
+  })
+
+  it('keeps image/* attachments (with inline data) when includeImageAttachments is opted in', () => {
+    const bundle = buildIpsBundle({
+      patient: PATIENT,
+      data: reportWithAttachments(),
+      includeImageAttachments: true,
+    })
+    const dr = findReport(bundle)
+    expect(dr.presentedForm?.map((a) => a.contentType)).toEqual(['text/plain', 'image/jpeg'])
+  })
+
+  it('never emits the app-local _imageRef field or data-less attachments', () => {
+    const bundle = buildIpsBundle({
+      patient: PATIENT,
+      data: reportWithAttachments(),
+      includeImageAttachments: true,
+    })
+    expect(JSON.stringify(bundle)).not.toContain('_imageRef')
+    expect(JSON.stringify(bundle)).not.toContain('blob-key-2')
+  })
+
+  it('omits presentedForm entirely when no attachment survives', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      {
+        id: 'dr-img-only',
+        code: { text: 'X-ray' },
+        conclusion: 'ok',
+        effectiveDateTime: '2026-06-01',
+        presentedForm: [{ title: 'frame', contentType: 'image/jpeg', data: 'aW1n' }],
+      },
+    ]
+    const bundle = buildIpsBundle({ patient: PATIENT, data })
+    const dr = findReport(bundle)
+    expect(dr.presentedForm).toBeUndefined()
+  })
+})
+
+describe('buildIpsBundle — Problem List is text-only (no generated SNOMED CT)', () => {
+  it('keeps the source ICD-10 coding and adds no SNOMED CT coding', () => {
     const data: ClinicalDataCollection = {
       ...emptyCollection(),
       conditions: [
@@ -597,43 +672,32 @@ describe('buildIpsBundle — Problem List SNOMED CT dual-coding (Phase 2.1)', ()
             text: '第二型糖尿病',
             coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9', display: 'Type 2 diabetes mellitus' }],
           },
-          // The curation step would attach this; set it directly for a unit test.
-          _sct: {
-            system: 'http://snomed.info/sct',
-            code: '44054006',
-            display: 'Diabetes mellitus type II',
-            confidence: 'high',
-            icd10: 'E11.9',
-          },
         },
       ],
     }
     const bundle = buildIpsBundle({ patient: PATIENT, data })
     const condition = bundle.entry.find((e) => e.resource.resourceType === 'Condition')!.resource
     const coding = (condition.code as { coding?: Array<{ system?: string; code?: string }> }).coding ?? []
-    // SNOMED first (IPS-preferred), ICD-10 retained.
-    expect(coding[0]).toMatchObject({ system: 'http://snomed.info/sct', code: '44054006' })
+    // Source ICD-10 preserved; NO SNOMED CT is ever prepended.
     expect(coding.some((c) => c.system === 'http://hl7.org/fhir/sid/icd-10' && c.code === 'E11.9')).toBe(true)
-
-    // Narrative prefers the verified SNOMED preferred term.
-    const problems = sectionByLoinc(bundle, IPS_SECTION.problemList.loinc)
-    expect(problems?.text?.div ?? '').toContain('Diabetes mellitus type II')
+    expect(coding.some((c) => c.system === 'http://snomed.info/sct')).toBe(false)
   })
 
-  it('leaves Condition.code as ICD-10-only when no _sct is present', () => {
+  it('leaves a text-only Condition.code with no coding when the source had none', () => {
     const data: ClinicalDataCollection = {
       ...emptyCollection(),
       conditions: [
         {
           id: 'plain',
           clinicalStatus: 'active',
-          code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9' }] },
+          code: { text: 'Chronic kidney disease' },
         },
       ],
     }
     const bundle = buildIpsBundle({ patient: PATIENT, data })
     const condition = bundle.entry.find((e) => e.resource.resourceType === 'Condition')!.resource
-    const coding = (condition.code as { coding?: Array<{ system?: string }> }).coding ?? []
-    expect(coding.some((c) => c.system === 'http://snomed.info/sct')).toBe(false)
+    const code = condition.code as { text?: string; coding?: Array<{ system?: string }> }
+    expect(code.text).toBe('Chronic kidney disease')
+    expect(code.coding).toBeUndefined()
   })
 })

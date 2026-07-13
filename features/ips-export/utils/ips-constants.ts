@@ -44,7 +44,7 @@ export const SYSTEM = {
   allergyClinical: 'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical',
   allergyVerification: 'http://terminology.hl7.org/CodeSystem/allergyintolerance-verification',
   observationCategory: 'http://terminology.hl7.org/CodeSystem/observation-category',
-  absentUnknown: 'http://hl7.org/fhir/uv/ips/CodeSystem/absent-unknown-uv-ips',
+  listEmptyReason: 'http://terminology.hl7.org/CodeSystem/list-empty-reason',
 } as const
 
 // Provenance tag for an LLM-INFERRED, user-confirmed problem (Phase 2.2). Emitted
@@ -83,10 +83,16 @@ export const IPS_SECTION = {
 
 export type IpsSectionKey = keyof typeof IPS_SECTION
 
-// IPS "no information" data-absent concepts, used to fill empty required
-// sections so the document stays IG-valid.
-export const ABSENT = {
-  noKnownAllergies: { system: SYSTEM.absentUnknown, code: 'no-allergy-info', display: 'No information about allergies' },
-  noKnownMedications: { system: SYSTEM.absentUnknown, code: 'no-medication-info', display: 'No information about medications' },
-  noKnownProblems: { system: SYSTEM.absentUnknown, code: 'no-problem-info', display: 'No information about problems' },
+// 匯出預覽的大小警示門檻:序列化後 > 2 MB 顯示黃色警示(部分交換管道 —
+// 郵件附件 / QR / 部分 FHIR server payload 上限 — 對大文件不友善)。
+export const IPS_SIZE_WARN_BYTES = 2 * 1024 * 1024
+
+// IPS 2.0 empty-section representation: an empty required section carries
+// `section.emptyReason` from the standard list-empty-reason code system
+// (ips-comp-1: a section SHALL have entries OR an emptyReason). The IPS 1.x
+// absent-unknown-uv-ips *entry resources* (no-problem-info …) are retired.
+export const SECTION_EMPTY_REASON = {
+  system: SYSTEM.listEmptyReason,
+  code: 'unavailable',
+  display: 'Unavailable',
 } as const

@@ -1,13 +1,10 @@
 import {
   buildEvidenceDigest,
   buildInferencePrompt,
-  resolveCoding,
   runProblemInference,
   hasPrimaryEvidence,
   type EvidenceDigest,
 } from '@/features/ips-export/utils/inference-engine'
-import { VERIFIED_SCT_CODES } from '@/features/ips-export/utils/snomed-mapping'
-import type { InferredProblemRaw } from '@/features/ips-export/utils/llm-json'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -40,16 +37,6 @@ function b64(s: string): string {
     bin += String.fromCharCode(b)
   })
   return btoa(bin)
-}
-
-function rawProblem(partial: Partial<InferredProblemRaw> = {}): InferredProblemRaw {
-  return {
-    labelZh: '第二型糖尿病',
-    labelEn: 'Type 2 diabetes',
-    inferenceConfidence: 'high',
-    supportingEvidence: [],
-    ...partial,
-  } as InferredProblemRaw
 }
 
 // ── buildEvidenceDigest ──────────────────────────────────────────────────────
@@ -261,62 +248,6 @@ describe('hasPrimaryEvidence', () => {
   })
 })
 
-// ── resolveCoding (the safety-critical ladder) ───────────────────────────────
-
-describe('resolveCoding — B/C/A/none ladder', () => {
-  it('Strategy B: evidence ICD-10 that hits the verified table → high', () => {
-    const r = resolveCoding(rawProblem({ evidenceIcd10: 'E11.9' }))
-    expect(r.strategy).toBe('B')
-    expect(r.coding?.confidence).toBe('high')
-    expect(r.coding?.code).toBe('44054006')
-    expect(r.needsManualCoding).toBe(false)
-  })
-
-  it('Strategy C: model picked a code from the allowlist → medium-high + canonical display', () => {
-    const r = resolveCoding(
-      rawProblem({ evidenceIcd10: undefined, suggestedSnomed: { code: '44054006', display: 'WRONG display' } }),
-    )
-    expect(r.strategy).toBe('C')
-    expect(r.coding?.confidence).toBe('medium-high')
-    expect(r.coding?.display).toBe('Diabetes mellitus type II') // canonicalized, not the model's
-    expect(r.needsManualCoding).toBe(false)
-  })
-
-  it('Strategy A: model code NOT in the allowlist → low + needsManualCoding', () => {
-    const r = resolveCoding(
-      rawProblem({ evidenceIcd10: undefined, suggestedSnomed: { code: '99999999', display: 'Made up' } }),
-    )
-    expect(r.strategy).toBe('A')
-    expect(r.coding?.confidence).toBe('low')
-    expect(r.coding?.needsManualCoding).toBe(true)
-    expect(r.needsManualCoding).toBe(true)
-  })
-
-  it('none: no ICD and no suggested code → null coding', () => {
-    const r = resolveCoding(rawProblem({ evidenceIcd10: undefined, suggestedSnomed: null }))
-    expect(r.strategy).toBe('none')
-    expect(r.coding).toBeNull()
-  })
-
-  it('SAFETY: an out-of-allowlist code can NEVER be high/medium-high', () => {
-    // junk ICD + junk SNOMED — must degrade to low.
-    const r = resolveCoding(
-      rawProblem({ evidenceIcd10: 'Z99.9', suggestedSnomed: { code: '12345', display: 'junk' } }),
-    )
-    expect(['high', 'medium-high']).not.toContain(r.coding?.confidence)
-    expect(r.coding?.confidence).toBe('low')
-    expect(VERIFIED_SCT_CODES.has(r.coding!.code)).toBe(false)
-  })
-
-  it('B wins over a competing allowlist pick when both are present', () => {
-    const r = resolveCoding(
-      rawProblem({ evidenceIcd10: 'I10', suggestedSnomed: { code: '44054006', display: 'DM2' } }),
-    )
-    expect(r.strategy).toBe('B')
-    expect(r.coding?.code).toBe('59621000') // Essential hypertension from I10
-  })
-})
-
 // ── runProblemInference (end-to-end with a mock LLM) ─────────────────────────
 
 describe('runProblemInference', () => {
@@ -326,53 +257,34 @@ describe('runProblemInference', () => {
     ],
   })
 
-  it('returns coded problems from the mock LLM output', async () => {
+  it('returns text-only problems (no coding) from the mock LLM output', async () => {
     const llm = jest.fn(async () =>
       JSON.stringify({
         problems: [
-          { labelZh: '第二型糖尿病', labelEn: 'Type 2 diabetes', inferenceConfidence: 'high', evidenceIcd10: 'E11.9' },
+          { labelZh: '第二型糖尿病', labelEn: 'Type 2 diabetes', inferenceConfidence: 'high' },
         ],
       }),
     )
     const out = await runProblemInference({ data, llm })
     expect(out).toHaveLength(1)
     expect(out[0].id).toBe('inferred-0')
-    expect(out[0].strategy).toBe('B')
-    expect(out[0].coding?.code).toBe('44054006')
+    expect(out[0].labelEn).toBe('Type 2 diabetes')
+    // The problem list carries no diagnosis codes.
+    expect(out[0]).not.toHaveProperty('coding')
+    expect(out[0]).not.toHaveProperty('strategy')
   })
 
-  it('dedups two candidates that resolve to the same SNOMED code', async () => {
+  it('dedups two candidates with the same normalized label', async () => {
     const llm = jest.fn(async () =>
       JSON.stringify({
         problems: [
-          { labelEn: 'Type 2 diabetes', inferenceConfidence: 'high', evidenceIcd10: 'E11.9' },
-          { labelEn: 'DM type 2', inferenceConfidence: 'medium', evidenceIcd10: 'E11.0' },
+          { labelEn: 'Type 2 diabetes', inferenceConfidence: 'high' },
+          { labelEn: 'Type 2 diabetes', inferenceConfidence: 'medium' },
         ],
       }),
     )
     const out = await runProblemInference({ data, llm })
     expect(out).toHaveLength(1)
-  })
-
-  it('flags a Strategy-A problem (out-of-allowlist code)', async () => {
-    const llm = jest.fn(async () =>
-      JSON.stringify({
-        problems: [
-          {
-            labelEn: 'Rare disease',
-            inferenceConfidence: 'low',
-            suggestedSnomed: { code: '88888888', display: 'Rare' },
-          },
-        ],
-      }),
-    )
-    const out = await runProblemInference({ data, llm })
-    expect(out[0].strategy).toBe('A')
-    expect(out[0].needsManualCoding).toBe(true)
-    // The best-guess code is preserved (so a human can web-search verify it) but
-    // can never be more than low confidence.
-    expect(out[0].coding?.code).toBe('88888888')
-    expect(out[0].coding?.confidence).toBe('low')
   })
 
   it('returns [] and does NOT call the LLM when there is no primary evidence', async () => {
@@ -398,7 +310,7 @@ describe('runProblemInference', () => {
 // ── buildInferencePrompt ─────────────────────────────────────────────────────
 
 describe('buildInferencePrompt', () => {
-  it('embeds the allowlist + digest and frames non-allowlist codes as provisional/verify', () => {
+  it('embeds the digest and instructs a text-only (no-code) problem list', () => {
     const digest = buildEvidenceDigest(
       makeData({
         encounters: [{ id: 'e1', reasonCode: [{ coding: [{ code: 'E11.9' }] }] }],
@@ -414,14 +326,15 @@ describe('buildInferencePrompt', () => {
     const [system, user] = buildInferencePrompt(digest)
     expect(system.role).toBe('system')
     expect(user.role).toBe('user')
-    // allowlist present
-    expect(user.content).toContain('44054006')
-    expect(user.content).toContain('Diabetes mellitus type II')
     // digest present
     expect(user.content).toContain('E11.9')
     expect(user.content).toContain('Metformin')
-    // allowlist-first + mandatory human web-search verification for best-guesses
-    expect(system.content.toLowerCase()).toContain('prefer the allowlist')
-    expect(system.content.toLowerCase()).toContain('browser.ihtsdotools.org')
+    // NO SNOMED allowlist / coding machinery
+    expect(user.content).not.toContain('44054006')
+    expect(user.content.toLowerCase()).not.toContain('allowlist')
+    expect(user.content.toLowerCase()).not.toContain('suggestedsnomed')
+    // system prompt asks for names only, no codes
+    expect(system.content.toLowerCase()).not.toContain('snomed ct concept')
+    expect(system.content.toLowerCase()).toContain('text-only')
   })
 })

@@ -83,6 +83,16 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   carePlanStatus: 'active',
 }
 
+// ── IPS 匯出 — 專屬預設 filters ──────────────────────────────────────────────
+// IPS 是「一份可攜帶的快照」，不是完整趨勢 dump：Results 區預設用
+// latestPerAnalyte（每個檢驗項目最近 3 筆、限最近 2 年；病人 2 年內無檢驗時
+// 自動放寬為每項目最近 1 筆、不限時間 — 見 ips-curation.ts）。
+// 只影響 'ips' consumer profile 的種子值；chat/insights 的 DEFAULT_DATA_FILTERS 不變。
+export const IPS_DEFAULT_DATA_FILTERS: DataFilters = {
+  ...DEFAULT_DATA_FILTERS,
+  labReportVersion: 'latestPerAnalyte',
+}
+
 // ── 全部資料 (everything) — for the 全選 button ──────────────────────────────
 // One-click "include everything": every category on, every time window opened
 // to all-time, every version at full detail, all lab panels, all documents.

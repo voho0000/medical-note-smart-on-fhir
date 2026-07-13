@@ -26,40 +26,19 @@ export interface ConditionEntity {
     reference?: string
   }
   /**
-   * IPS Phase 2 — verified SNOMED CT problem-list coding for this condition.
-   * Attached by the IPS curation step (annotateConditionsWithSct), NOT part of
-   * the raw FHIR shape, hence the underscore prefix. `confidence` follows the
-   * plan's ladder: 'high' = deterministic verified ICD-10→SCT lookup (Strategy
-   * B); 'medium-high'/'low' = LLM-assisted (Strategy C/A, Phase 2.2). The
-   * concrete shape lives in features/ips-export/utils/snomed-mapping.ts
-   * (ConditionSctAnnotation); inlined here to keep the core entity free of a
-   * feature-layer import cycle.
-   */
-  _sct?: {
-    system: string
-    code: string
-    display: string
-    confidence: 'high' | 'medium-high' | 'low'
-    icd10?: string
-    needsManualCoding?: boolean
-  }
-  /**
    * IPS Phase 2.2 — provenance marker for an LLM-INFERRED problem (a synthetic
    * Condition the app derived from discharge summaries / outpatient ICDs / meds,
    * NOT present in the source FHIR). Only ever set on app-synthesized conditions
    * and only after the user confirms the suggestion; source conditions never
-   * carry it. Like `_sct`, it is app-internal (underscore prefix) and never
-   * written back to the React Query cache — it lives only inside an IPS snapshot.
-   * `strategy` mirrors the SNOMED coding ladder that produced `_sct`
-   * ('B'=verified ICD→SCT, 'C'=LLM picked from allowlist, 'A'=LLM free-generated,
-   * 'none'=no SNOMED). Concrete shapes live in
+   * carry it. It is app-internal (underscore prefix) and never written back to
+   * the React Query cache — it lives only inside an IPS snapshot. The problem
+   * list is text-only: the app attaches NO SNOMED CT / ICD coding to inferred
+   * problems. Concrete shapes live in
    * features/ips-export/utils/inferred-problems-types.ts; inlined here to keep
    * the core entity free of a feature-layer import cycle.
    */
   _inferred?: {
-    strategy: 'B' | 'C' | 'A' | 'none'
     inferenceConfidence: 'high' | 'medium' | 'low'
-    needsManualCoding?: boolean
     evidence: Array<{
       kind: string
       label: string

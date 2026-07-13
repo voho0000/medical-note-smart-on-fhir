@@ -17,6 +17,7 @@ import { StorageService } from '@/src/shared/utils/storage.utils'
 import {
   DEFAULT_DATA_SELECTION,
   DEFAULT_DATA_FILTERS,
+  IPS_DEFAULT_DATA_FILTERS,
   ALL_DATA_SELECTION,
   ALL_DATA_FILTERS,
   CUSTOM_TEMPLATE_DEFAULT,
@@ -108,10 +109,10 @@ function cloneTemplate(template: DataSelectionTemplate): DataSelectionTemplate {
   }
 }
 
-function makeDefaultProfile(): ConsumerProfile {
+function makeDefaultProfile(defaultFilters: DataFilters = DEFAULT_DATA_FILTERS): ConsumerProfile {
   return {
     selection: { ...DEFAULT_DATA_SELECTION },
-    filters: { ...DEFAULT_DATA_FILTERS },
+    filters: { ...defaultFilters },
     supplementaryNotes: '',
     editedClinicalContext: null,
     documentMode: 'latestAdmission',
@@ -130,8 +131,14 @@ function coerceTemplate(saved: Partial<DataSelectionTemplate> | null | undefined
 
 // Exported for testing: merges a (possibly stale / partial) stored profile over
 // the current defaults without discarding the user's existing choices.
-export function coerceProfile(saved: Partial<ConsumerProfile> | undefined): ConsumerProfile {
-  const base = makeDefaultProfile()
+// `defaultFilters` lets a consumer seed different factory filters (IPS 匯出用
+// IPS_DEFAULT_DATA_FILTERS — labReportVersion:'latestPerAnalyte');已存檔的使用者
+// 選擇一律優先於預設值。
+export function coerceProfile(
+  saved: Partial<ConsumerProfile> | undefined,
+  defaultFilters: DataFilters = DEFAULT_DATA_FILTERS,
+): ConsumerProfile {
+  const base = makeDefaultProfile(defaultFilters)
   if (!saved) return base
   const mode = saved.documentMode
   // MERGE over defaults — a newly-added schema key gets its default while the
@@ -139,7 +146,7 @@ export function coerceProfile(saved: Partial<ConsumerProfile> | undefined): Cons
   // discarded the whole selection/filters → every toggle silently reset to
   // default after any schema change.)
   const selection = { ...DEFAULT_DATA_SELECTION, ...(isObject(saved.selection) ? saved.selection : {}) } as DataSelection
-  const filters = { ...DEFAULT_DATA_FILTERS, ...(isObject(saved.filters) ? saved.filters : {}) } as DataFilters
+  const filters = { ...defaultFilters, ...(isObject(saved.filters) ? saved.filters : {}) } as DataFilters
   return {
     selection,
     filters,
@@ -160,7 +167,7 @@ function getInitialProfiles(): ProfilesState {
   return {
     chat: coerceProfile(saved?.chat),
     insights: coerceProfile(saved?.insights),
-    ips: coerceProfile(saved?.ips),
+    ips: coerceProfile(saved?.ips, IPS_DEFAULT_DATA_FILTERS),
   }
 }
 

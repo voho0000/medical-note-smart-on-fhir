@@ -30,8 +30,8 @@ import type {
   TimeRange,
 } from '@/src/core/entities/clinical-context.entity'
 import { isChronicPrescription } from '@/src/shared/utils/fhir-display-helpers'
+import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
 import { orphanResultObservations } from './ips-helpers'
-import { findSctForCondition } from './snomed-mapping'
 
 export interface CurateForIpsInput {
   data: ClinicalDataCollection
@@ -144,18 +144,102 @@ function latestPerKey<T>(
   keyOf: (i: T) => string,
   dateOf: (i: T) => string | undefined,
 ): T[] {
+  return latestKPerKey(items, keyOf, dateOf, 1)
+}
+
+// --- latestPerAnalyte (IPS Results 預設語意) ---------------------------------
+// IPS 是「一份可攜快照」:每個檢驗項目保留最近 K 筆(看得出短期趨勢)、且只取
+// 最近 LOOKBACK_YEARS 年內的資料。若病人在該時間窗內完全沒有任何檢驗
+// (報告 + 單獨 observations 皆空),自動放寬為「每項目最近 1 筆、不限時間」,
+// 讓穩定病人的 IPS 仍帶有最後已知的檢驗值而不是空區段。
+
+/** latestPerAnalyte:每個檢驗項目保留的筆數。 */
+export const LATEST_PER_ANALYTE_K = 3
+/** latestPerAnalyte:只納入最近幾年內的檢驗。 */
+export const LOOKBACK_YEARS = 2
+
+function lookbackStart(now: Date): Date {
+  const d = new Date(now)
+  d.setFullYear(d.getFullYear() - LOOKBACK_YEARS)
+  return d
+}
+
+/** Keep only items dated within the latestPerAnalyte lookback window. */
+function withinLookback<T>(items: T[], now: Date, dateOf: (i: T) => string | undefined): T[] {
+  const startMs = lookbackStart(now).getTime()
+  return items.filter((i) => {
+    const ds = dateOf(i)
+    if (!ds) return false // undated items drop out of a bounded window
+    const t = new Date(ds).getTime()
+    return !Number.isNaN(t) && t >= startMs
+  })
+}
+
+/**
+ * Generalised latestPerKey: keep the most recent `k` items per key, newest
+ * first. Items with no key pass through untouched (kept distinct).
+ */
+function latestKPerKey<T>(
+  items: T[],
+  keyOf: (i: T) => string,
+  dateOf: (i: T) => string | undefined,
+  k: number,
+): T[] {
   const sorted = [...items].sort((a, b) => (dateOf(b) || '').localeCompare(dateOf(a) || ''))
-  const out = new Map<string, T>()
-  let nokey = 0
+  const counts = new Map<string, number>()
+  const out: T[] = []
   for (const it of sorted) {
-    const k = keyOf(it).trim()
-    if (!k) {
-      out.set(`__nokey_${nokey++}`, it)
+    const key = keyOf(it).trim()
+    if (!key) {
+      out.push(it)
       continue
     }
-    if (!out.has(k)) out.set(k, it)
+    const n = counts.get(key) ?? 0
+    if (n < k) {
+      out.push(it)
+      counts.set(key, n + 1)
+    }
   }
-  return Array.from(out.values())
+  return out
+}
+
+/** 影像類報告分流判定(P2:接上 imagingReports 開關)。 */
+function isImagingReport(r: DiagnosticReportEntity): boolean {
+  return inferGroupFromCategory(r.category) === 'imaging'
+}
+
+const reportDate = (r: DiagnosticReportEntity) => r.effectiveDateTime
+const obsDate = (o: ObservationEntity) => o.effectiveDateTime
+const reportKey = (r: DiagnosticReportEntity) => r.code?.text || ''
+const obsKey = (o: ObservationEntity) => o.code?.text || ''
+
+/**
+ * latestPerAnalyte 放寬判定 — 整體 Results(lab 報告 + orphan observations)在
+ * 「labReportTimeRange ∩ 最近 LOOKBACK_YEARS 年」的交集時間窗內完全為空時才放寬。
+ * 判定必須跨兩個集合一起做:若病人 2 年內只剩 orphan observations,報告區不該
+ * 把多年前的舊報告復活。
+ */
+function shouldRelaxLatestPerAnalyte(
+  data: ClinicalDataCollection,
+  selection: DataSelection,
+  filters: DataFilters,
+  now: Date,
+): boolean {
+  if (!selection.labReports || filters.labReportVersion !== 'latestPerAnalyte') return false
+  const labReports = data.diagnosticReports.filter((r) => !isImagingReport(r))
+  const windowedReports = withinLookback(
+    withinRange(labReports, filters.labReportTimeRange, now, reportDate),
+    now,
+    reportDate,
+  )
+  if (windowedReports.length > 0) return false
+  const orphans = orphanResultObservations(data.diagnosticReports, data.observations)
+  const windowedObs = withinLookback(
+    withinRange(orphans, filters.labReportTimeRange, now, obsDate),
+    now,
+    obsDate,
+  )
+  return windowedObs.length === 0
 }
 
 // --- Per-section curators ---------------------------------------------------
@@ -173,23 +257,10 @@ function curateConditions(
   // (e.g. non-bridge FHIR) so the IPS-required Problem List section isn't empty.
   const base = problemItems.length > 0 ? problemItems : data.conditions
   const byStatus = filters.problemListStatus === 'active' ? base.filter(isActiveCondition) : base
-  const filtered = withinRange(byStatus, filters.problemListTimeRange, now, (c) => c.recordedDate)
-  return annotateConditionsWithSct(filtered)
-}
-
-/**
- * IPS Phase 2.1 — attach a verified SNOMED CT problem-list code (`_sct`) to each
- * condition whose ICD-10 coding hits the deterministic allowlist (Strategy B,
- * confidence 'high'). Returns NEW condition objects (never mutates the input) so
- * the annotation is local to the IPS snapshot and doesn't leak into the shared
- * ClinicalDataCollection used elsewhere in the app. Conditions without a
- * verified mapping pass through unchanged (no SCT invented — that is Phase 2.2).
- */
-export function annotateConditionsWithSct(conditions: ConditionEntity[]): ConditionEntity[] {
-  return conditions.map((c) => {
-    const sct = findSctForCondition(c)
-    return sct ? { ...c, _sct: sct } : c
-  })
+  // The problem list is carried through as-is: the app attaches NO SNOMED CT
+  // coding. Source codings on Condition.code (ICD-10 etc.) are preserved
+  // downstream by the FHIR mapper.
+  return withinRange(byStatus, filters.problemListTimeRange, now, (c) => c.recordedDate)
 }
 
 function curateMedications(
@@ -247,25 +318,51 @@ function curateImmunizations(
   )
 }
 
-function curateDiagnosticReports(
+function curateLabReports(
+  data: ClinicalDataCollection,
+  selection: DataSelection,
+  filters: DataFilters,
+  now: Date,
+  relaxLatestPerAnalyte: boolean,
+): DiagnosticReportEntity[] {
+  if (!selection.labReports) return []
+  // 影像類報告由 curateImagingReports 分流處理(P2:imagingReports 開關)。
+  const labReports = data.diagnosticReports.filter((r) => !isImagingReport(r))
+  if (filters.labReportVersion === 'latestPerAnalyte') {
+    // 放寬:時間窗內整體無檢驗 → 每項目最近 1 筆、不限時間。
+    if (relaxLatestPerAnalyte) return latestKPerKey(labReports, reportKey, reportDate, 1)
+    const windowed = withinLookback(
+      withinRange(labReports, filters.labReportTimeRange, now, reportDate),
+      now,
+      reportDate,
+    )
+    return latestKPerKey(windowed, reportKey, reportDate, LATEST_PER_ANALYTE_K)
+  }
+  let reports = withinRange(labReports, filters.labReportTimeRange, now, reportDate)
+  if (filters.labReportVersion === 'latest') {
+    reports = latestPerKey(reports, reportKey, reportDate)
+  }
+  return reports
+}
+
+/**
+ * P2 快修 — imagingReports 死 toggle:curateForIps 以前從未讀 imagingReports 的
+ * selection/filters,影像類 DiagnosticReport 一律跟著 labReports 的開關與時間窗
+ * 走。現在依 category(inferGroupFromCategory)分流:影像報告由 imagingReports
+ * 開關 + imagingReportTimeRange / imagingReportVersion 控制,和 AI-context 的
+ * imaging-reports category 一致。
+ */
+function curateImagingReports(
   data: ClinicalDataCollection,
   selection: DataSelection,
   filters: DataFilters,
   now: Date,
 ): DiagnosticReportEntity[] {
-  if (!selection.labReports) return []
-  let reports = withinRange(
-    data.diagnosticReports,
-    filters.labReportTimeRange,
-    now,
-    (r) => r.effectiveDateTime,
-  )
-  if (filters.labReportVersion === 'latest') {
-    reports = latestPerKey(
-      reports,
-      (r) => r.code?.text || '',
-      (r) => r.effectiveDateTime,
-    )
+  if (!selection.imagingReports) return []
+  const imaging = data.diagnosticReports.filter(isImagingReport)
+  let reports = withinRange(imaging, filters.imagingReportTimeRange, now, reportDate)
+  if (filters.imagingReportVersion === 'latest') {
+    reports = latestPerKey(reports, reportKey, reportDate)
   }
   return reports
 }
@@ -275,6 +372,7 @@ function curateObservations(
   selection: DataSelection,
   filters: DataFilters,
   now: Date,
+  relaxLatestPerAnalyte: boolean,
 ): ObservationEntity[] {
   // Orphan / standalone lab observations ride WITH the lab Results section (no
   // separate toggle) — so they're in iff that section is, and gone when it's
@@ -285,13 +383,18 @@ function curateObservations(
   // Keep only the true orphans so the Results section doesn't show a value row
   // AND a "N observation(s)" report row for the same analyte.
   const orphans = orphanResultObservations(data.diagnosticReports, data.observations)
-  let obs = withinRange(orphans, filters.labReportTimeRange, now, (o) => o.effectiveDateTime)
-  if (filters.labReportVersion === 'latest') {
-    obs = latestPerKey(
-      obs,
-      (o) => o.code?.text || '',
-      (o) => o.effectiveDateTime,
+  if (filters.labReportVersion === 'latestPerAnalyte') {
+    if (relaxLatestPerAnalyte) return latestKPerKey(orphans, obsKey, obsDate, 1)
+    const windowed = withinLookback(
+      withinRange(orphans, filters.labReportTimeRange, now, obsDate),
+      now,
+      obsDate,
     )
+    return latestKPerKey(windowed, obsKey, obsDate, LATEST_PER_ANALYTE_K)
+  }
+  let obs = withinRange(orphans, filters.labReportTimeRange, now, obsDate)
+  if (filters.labReportVersion === 'latest') {
+    obs = latestPerKey(obs, obsKey, obsDate)
   }
   return obs
 }
@@ -357,14 +460,20 @@ function curateCarePlans(
 export function curateForIps(input: CurateForIpsInput): ClinicalDataCollection {
   const { data, selection, filters } = input
   const now = input.now ?? new Date()
+  // latestPerAnalyte 的放寬判定跨 lab 報告 + orphan observations 一起算一次,
+  // 兩個 curator 共用同一個結論(見 shouldRelaxLatestPerAnalyte)。
+  const relax = shouldRelaxLatestPerAnalyte(data, selection, filters, now)
   return {
     ...data,
     conditions: curateConditions(data, selection, filters, now),
     medications: curateMedications(data, selection, filters, now),
     allergies: selection.allergies ? data.allergies : [],
     immunizations: curateImmunizations(data, selection, filters, now),
-    diagnosticReports: curateDiagnosticReports(data, selection, filters, now),
-    observations: curateObservations(data, selection, filters, now),
+    diagnosticReports: [
+      ...curateLabReports(data, selection, filters, now, relax),
+      ...curateImagingReports(data, selection, filters, now),
+    ],
+    observations: curateObservations(data, selection, filters, now, relax),
     vitalSigns: curateVitalSigns(data, selection, filters, now),
     procedures: curateProcedures(data, selection, filters, now),
     consents: selection.advanceDirectives ? data.consents : [],

@@ -16,6 +16,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MarkdownRenderer } from '@/src/shared/components/MarkdownRenderer'
@@ -24,6 +25,8 @@ import { useExpandedOverlay } from '@/src/shared/hooks/ui/use-expanded-overlay.h
 import type { IpsExportFormat } from '../hooks/useIpsExport'
 import type { IpsBundle } from '../utils/ips-types'
 import type { ValidationResult } from '../utils/ips-lite-validator'
+import { IPS_SIZE_WARN_BYTES } from '../utils/ips-constants'
+import { formatByteSize, utf8ByteLength } from '../utils/ips-helpers'
 
 type PreviewFormat = IpsExportFormat
 type MarkdownView = 'rendered' | 'source'
@@ -35,6 +38,9 @@ interface IpsExportPreviewProps {
   copiedFormat: IpsExportFormat | null
   copyError: string | null
   markdownFilename: string
+  /** Opt-in: keep image/* presentedForm attachments in the FHIR export. */
+  includeImageAttachments: boolean
+  onToggleImageAttachments: (value: boolean) => void
   onDownloadJson: () => void
   onDownloadMarkdown: () => void
   onCopyJson: () => void
@@ -82,6 +88,8 @@ export function IpsExportPreview({
   copiedFormat,
   copyError,
   markdownFilename,
+  includeImageAttachments,
+  onToggleImageAttachments,
   onDownloadJson,
   onDownloadMarkdown,
   onCopyJson,
@@ -96,6 +104,9 @@ export function IpsExportPreview({
   const printSourceRef = useRef<HTMLDivElement>(null)
   const json = useMemo(() => JSON.stringify(bundle, null, 2), [bundle])
   const markdownParts = useMemo(() => splitFrontmatter(markdown), [markdown])
+  // 匯出大小預估:以下載時的 pretty-printed JSON 序列化長度估算(UTF-8 bytes)。
+  const jsonBytes = useMemo(() => utf8ByteLength(json), [json])
+  const entryCount = bundle.entry.length
   useExpandedOverlay({ isExpanded: expanded, onCollapse: () => setExpanded(false) })
 
   const isMarkdown = format === 'markdown'
@@ -309,6 +320,27 @@ export function IpsExportPreview({
                 </TooltipContent>
               </Tooltip>
             </div>
+          </div>
+
+          {/* Entry count + serialized-size estimate + image-attachment opt-in. */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-1 pt-2 text-[0.6875rem] text-muted-foreground">
+            <span>
+              {x.previewStats
+                .replace('{count}', String(entryCount))
+                .replace('{size}', formatByteSize(jsonBytes))}
+            </span>
+            {jsonBytes > IPS_SIZE_WARN_BYTES && (
+              <span className="font-medium text-amber-600 dark:text-amber-500">{x.sizeWarning}</span>
+            )}
+            <label className="ml-auto flex cursor-pointer items-center gap-1.5">
+              <Switch
+                checked={includeImageAttachments}
+                onCheckedChange={onToggleImageAttachments}
+                className="scale-75"
+                aria-label={x.includeImages}
+              />
+              <span>{x.includeImages}</span>
+            </label>
           </div>
 
           {showChecks && validation && (

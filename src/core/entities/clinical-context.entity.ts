@@ -53,7 +53,9 @@ export interface DataFilters {
   medicationTimeRange: TimeRange
 
   // Reports / observations
-  labReportVersion: 'latest' | 'all'
+  // 'latestPerAnalyte' 是 IPS 匯出專用語意（每個檢驗項目保留最近 K 筆、限最近
+  // N 年）；AI-context 的 lab category 不認得它時會退回既有分支，不會炸掉。
+  labReportVersion: 'latest' | 'all' | 'latestPerAnalyte'
   labReportTimeRange: TimeRange
   /** Max trend points per analyte in the lab context (full-trend mode). */
   labTrendPoints: '4' | '8' | '16'

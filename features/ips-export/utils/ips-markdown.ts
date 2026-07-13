@@ -132,12 +132,8 @@ function codingSystemLabel(system?: string): string {
 
 function codingSummary(
   concept?: { coding?: Array<{ system?: string; code?: string; display?: string }> },
-  extra?: { system?: string; code?: string },
 ): string {
-  const rows = [
-    ...(extra?.code ? [{ system: extra.system, code: extra.code }] : []),
-    ...(concept?.coding ?? []),
-  ]
+  const rows = [...(concept?.coding ?? [])]
   const seen = new Set<string>()
   const out: string[] = []
   for (const coding of rows) {
@@ -235,10 +231,10 @@ function problemsSection(title: string, rows: ConditionEntity[]): string {
     mdTable(
       ['Problem', 'Status', 'Onset / Recorded', 'Code', 'Source'],
       rows.map((c) => [
-        c._sct?.display || conceptLabelEn(c.code),
+        conceptLabelEn(c.code),
         c.clinicalStatus || '',
         formatDate(c.onsetDateTime) || formatDate(c.recordedDate),
-        codingSummary(c.code, c._sct),
+        codingSummary(c.code),
         sourceSummary(c, c._inferred),
       ]),
     ),

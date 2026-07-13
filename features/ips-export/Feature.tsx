@@ -12,7 +12,6 @@ import { useIpsExport } from './hooks/useIpsExport'
 import { useInferredProblems } from './hooks/useInferredProblems'
 import { inferredToCondition } from './utils/inference-engine'
 import { buildIpsMarkdown } from './utils/ips-markdown'
-import { IpsInferenceControls } from './components/IpsInferenceControls'
 import { IpsDataScopePanel } from './components/IpsDataScopePanel'
 import { IpsExportPreview } from './components/IpsExportPreview'
 import { InferredProblemsReview } from './components/InferredProblemsReview'
@@ -33,15 +32,17 @@ export default function IpsExportFeature() {
   // Phase 2.2b — async LLM problem-list inference runs as a side-channel. Only
   // the user-CONFIRMED suggestions are turned into synthetic conditions and
   // merged into the bundle; nothing reaches the export without a checkbox click.
-  const [llmEnabled, setLlmEnabled] = useState(false)
   const inferred = useInferredProblems()
   const confirmedConditions = useMemo(
     () => inferred.confirmed.map(inferredToCondition),
     [inferred.confirmed],
   )
 
+  // 影像附件預設剝除(每張健保存摺影像 2-3 MB);使用者可 opt-in 帶回。
+  const [includeImageAttachments, setIncludeImageAttachments] = useState(false)
+
   const { bundle, curatedData, patient, labels, validation, isLoading, error, hasPatient, resourceCount } =
-    useIpsBundle(confirmedConditions)
+    useIpsBundle(confirmedConditions, { includeImageAttachments })
 
   const markdown = useMemo(
     () => (curatedData ? buildIpsMarkdown({ patient, data: curatedData, labels }) : ''),
@@ -100,6 +101,8 @@ export default function IpsExportFeature() {
             copiedFormat={copiedFormat}
             copyError={copyError}
             markdownFilename={markdownFilename}
+            includeImageAttachments={includeImageAttachments}
+            onToggleImageAttachments={setIncludeImageAttachments}
             onDownloadJson={() => downloadJson(bundle)}
             onDownloadMarkdown={() => downloadMarkdown(markdown)}
             onCopyJson={() => copyJson(bundle)}
@@ -119,26 +122,28 @@ export default function IpsExportFeature() {
             </span>
           </div>
 
-          <IpsInferenceControls
-            llmEnabled={llmEnabled}
-            onToggleLlm={setLlmEnabled}
-            llmAvailable={inferred.available}
+          {/* Problem-list candidates review. No enable-switch: nothing runs
+              without an explicit button press (the press IS the consent), and
+              the ICD import is deterministic anyway. Confirmed rows become
+              extra conditions in the snapshot. */}
+          <InferredProblemsReview
+            status={inferred.status}
+            problems={inferred.problems}
+            confirmedIds={inferred.confirmedIds}
+            confirmedCount={inferred.confirmedCount}
+            available={inferred.available}
+            error={inferred.error}
+            onRun={inferred.run}
+            onToggle={inferred.toggleConfirm}
+            onSetAll={inferred.setAllConfirmed}
+            summaryCount={inferred.summaryProblemCount}
+            onImportEncounterIcds={inferred.importEncounterIcds}
+            onRemoveEncounterIcds={inferred.removeEncounterIcds}
+            onRemoveAiProblems={inferred.removeAiProblems}
+            encounterIcdCount={inferred.encounterIcdCount}
           />
 
-          {llmEnabled && (
-            <InferredProblemsReview
-              status={inferred.status}
-              problems={inferred.problems}
-              confirmedIds={inferred.confirmedIds}
-              confirmedCount={inferred.confirmedCount}
-              available={inferred.available}
-              error={inferred.error}
-              onRun={inferred.run}
-              onToggle={inferred.toggleConfirm}
-            />
-          )}
-
-          <IpsDataScopePanel bundle={bundle} />
+          <IpsDataScopePanel bundle={bundle} curatedData={curatedData} />
         </TabsContent>
       </Tabs>
     </div>

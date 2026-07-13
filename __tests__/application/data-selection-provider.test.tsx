@@ -2,7 +2,8 @@
 // IPS is configured independently on its own tab. These lock the decoupling:
 // panel edits never touch ips, and the per-consumer setters never touch the panel.
 import { renderHook, act } from '@testing-library/react'
-import { DataSelectionProvider, useDataSelection } from '@/src/application/providers/data-selection.provider'
+import { DataSelectionProvider, useDataSelection, coerceProfile } from '@/src/application/providers/data-selection.provider'
+import { IPS_DEFAULT_DATA_FILTERS } from '@/src/shared/constants/data-selection.constants'
 
 beforeEach(() => localStorage.clear())
 
@@ -90,6 +91,22 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
 
     act(() => result.current.applyPreset('custom'))
     expect(result.current.getProfile('chat').selection.problemList).toBe(false)
+  })
+
+  it('seeds the ips profile with latestPerAnalyte labs — chat/insights keep the working default', () => {
+    const { result } = setup()
+    expect(result.current.getProfile('ips').filters.labReportVersion).toBe('latestPerAnalyte')
+    expect(result.current.getProfile('chat').filters.labReportVersion).toBe('all')
+    expect(result.current.getProfile('insights').filters.labReportVersion).toBe('all')
+  })
+
+  it('coerceProfile keeps a stored labReportVersion choice over the ips seed', () => {
+    // 既有使用者在 IPS profile 存過 'all' → 升級後不得被 seed 蓋掉。
+    const kept = coerceProfile({ filters: { labReportVersion: 'all' } as never }, IPS_DEFAULT_DATA_FILTERS)
+    expect(kept.filters.labReportVersion).toBe('all')
+    // 沒存過 → 用 ips seed。
+    const seeded = coerceProfile(undefined, IPS_DEFAULT_DATA_FILTERS)
+    expect(seeded.filters.labReportVersion).toBe('latestPerAnalyte')
   })
 
   it('resetToDefaults restores the currently selected mode baseline', () => {

@@ -6,19 +6,10 @@
 // codes (門診 Encounter.reasonCode), medications, and corroborating lab/imaging.
 //
 // SAFETY: "aggressive" applies only to DIAGNOSIS INFERENCE (the clinical
-// reasoning the model does). SNOMED CODING always passes the verified-allowlist
-// ladder (see snomed-mapping.ts) — an LLM-generated SNOMED id is never trusted
-// blindly. These are *suggestions*: nothing reaches the exported bundle until the
-// user confirms it (per-item gating, plan decision).
-
-import type { ConditionSctAnnotation } from './snomed-mapping'
-
-/** Which rung of the coding ladder produced an inferred problem's SNOMED code. */
-export type CodingStrategy =
-  | 'B' // anchored to an evidence ICD-10 that hit the verified allowlist → high
-  | 'C' // LLM picked a code FROM the verified allowlist → medium-high
-  | 'A' // LLM free-generated, not in the allowlist → low + needsManualCoding
-  | 'none' // no SNOMED assigned (ICD/text-only problem)
+// reasoning the model does). The problem list is TEXT-ONLY — the app never
+// generates or attaches any SNOMED CT / ICD coding to an inferred problem.
+// These are *suggestions*: nothing reaches the exported bundle until the user
+// confirms it (per-item gating, plan decision).
 
 /** Where a piece of supporting evidence came from (for clinician audit). */
 export type EvidenceKind = 'encounter-icd' | 'medication' | 'discharge-excerpt' | 'lab' | 'composition'
@@ -45,16 +36,26 @@ export interface InferredProblem {
   /** Normalized diagnosis labels. */
   labelZh: string
   labelEn: string
-  /** Model's self-rated *clinical-inference* confidence (separate from coding confidence). */
+  /** Model's self-rated *clinical-inference* confidence. */
   inferenceConfidence: 'high' | 'medium' | 'low'
-  /** Coding result via the B/C/A ladder. null = no SNOMED assigned (text/ICD only). */
-  coding: ConditionSctAnnotation | null
-  /** Which ladder rung produced `coding`. */
-  strategy: CodingStrategy
-  /** True when the SNOMED code must be manually reviewed (Strategy A). Mirrors coding.needsManualCoding. */
-  needsManualCoding: boolean
   /** Evidence trail — enough for a clinician to verify the inference. */
   evidence: ProblemEvidence[]
   /** Optional one-line LLM rationale (shown in the disclosure). */
   rationale?: string
+  /** Provenance of the candidate — drives the origin badge and gate copy:
+   *   'summary'       Path A — imported from the Medical Summary problem list.
+   *   'encounter-icd' deterministic import of recent Encounter.reasonCode ICD-10
+   *                   codes (門診/就醫 ICD). These are BILLING codes, not
+   *                   confirmed diagnoses — flagged 「非確診」 in the UI and, like
+   *                   every candidate, default UNCHECKED behind the review gate.
+   *   undefined       the original LLM-inference path (Path B). */
+  origin?: 'summary' | 'encounter-icd'
+  /**
+   * REAL source coding carried by an `encounter-icd` candidate — the ICD-10 code
+   * as it appeared in Encounter.reasonCode (system faithful to the source). This
+   * is NOT an app-generated / LLM-guessed code; it flows into inferredToCondition
+   * so a confirmed visit-ICD problem exports with its genuine ICD-10 coding.
+   * Absent on text-only ('summary' / LLM) candidates, which stay code-free.
+   */
+  sourceCoding?: { system: string; code: string; display?: string }
 }

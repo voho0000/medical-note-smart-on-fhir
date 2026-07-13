@@ -32,10 +32,20 @@ export interface UseIpsBundleResult {
  * `extraConditions` lets a caller merge synthetic conditions (Phase 2.2 — the
  * user-CONFIRMED LLM-inferred problems) into the Problem List before the bundle
  * is built. They flow through the EXACT same mappers as source conditions
- * (dual-coding via `_sct`, `ai-inferred` meta.tag via `_inferred`), so there is
- * no FHIR-layer special-casing. Default `[]` ⇒ byte-identical to the pure path.
+ * (text-only Condition.code — no generated coding — plus the `ai-inferred`
+ * meta.tag via `_inferred`), so there is no FHIR-layer special-casing.
+ * Default `[]` ⇒ byte-identical to the pure path.
  */
-export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBundleResult {
+export interface UseIpsBundleOptions {
+  /** Opt-in: keep image/* presentedForm attachments (default: stripped). */
+  includeImageAttachments?: boolean
+}
+
+export function useIpsBundle(
+  extraConditions: ConditionEntity[] = [],
+  options: UseIpsBundleOptions = {},
+): UseIpsBundleResult {
+  const includeImageAttachments = !!options.includeImageAttachments
   const { t } = useLanguage()
   const { data, isLoading: dataLoading, error } = useClinicalDataQuery()
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
@@ -85,8 +95,8 @@ export function useIpsBundle(extraConditions: ConditionEntity[] = []): UseIpsBun
 
   const bundle = useMemo<IpsBundle | null>(() => {
     if (!curatedData) return null
-    return buildIpsBundle({ patient: patient ?? null, data: curatedData, labels })
-  }, [curatedData, patient, labels])
+    return buildIpsBundle({ patient: patient ?? null, data: curatedData, labels, includeImageAttachments })
+  }, [curatedData, patient, labels, includeImageAttachments])
 
   const validation = useMemo<ValidationResult | null>(
     () => (bundle ? validateIpsBundle(bundle) : null),

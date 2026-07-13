@@ -15,7 +15,7 @@ import type {
   SectionMapResult,
 } from './ips-types'
 import {
-  ABSENT,
+  SECTION_EMPTY_REASON,
   COMPOSITION_TYPE_LOINC,
   IPS_AUTHOR_DISPLAY,
   IPS_DOC_TITLE,
@@ -144,6 +144,12 @@ export interface BuildIpsOptions {
   labels?: Partial<IpsSectionLabels>
   /** Override the document timestamp / Composition.date (defaults to now). */
   now?: Date
+  /**
+   * Opt-in: keep image/* presentedForm attachments on DiagnosticReports.
+   * Default false — image attachments are stripped (text/* attachments and
+   * conclusions are always kept). See presentedFormFields in ips-fhir-mappers.
+   */
+  includeImageAttachments?: boolean
 }
 
 function loincCode(code: string, display: string): FhirCodeableConcept {
@@ -211,7 +217,7 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
       labels.problemList,
       mapProblemList(data.conditions, patientRef),
       narrativeProblemList(data.conditions),
-      { emptyReason: { coding: [ABSENT.noKnownProblems] }, emptyNarrativeText: labels.noInformation },
+      { emptyReason: { coding: [SECTION_EMPTY_REASON] }, emptyNarrativeText: labels.noInformation },
     ),
   )
   pushSection(
@@ -220,7 +226,7 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
       labels.allergies,
       mapAllergies(data.allergies, patientRef),
       narrativeAllergies(data.allergies),
-      { emptyReason: { coding: [ABSENT.noKnownAllergies] }, emptyNarrativeText: labels.noInformation },
+      { emptyReason: { coding: [SECTION_EMPTY_REASON] }, emptyNarrativeText: labels.noInformation },
     ),
   )
   pushSection(
@@ -229,7 +235,7 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
       labels.medications,
       mapMedications(data.medications, patientRef),
       narrativeMedications(data.medications, labels.medicationTable),
-      { emptyReason: { coding: [ABSENT.noKnownMedications] }, emptyNarrativeText: labels.noInformation },
+      { emptyReason: { coding: [SECTION_EMPTY_REASON] }, emptyNarrativeText: labels.noInformation },
     ),
   )
 
@@ -255,7 +261,9 @@ export function buildIpsBundle(opts: BuildIpsOptions): IpsBundle {
       ? assembleSection(
           IPS_SECTION.results.loinc,
           labels.results,
-          mapResults(data.diagnosticReports, resultObservations, patientRef),
+          mapResults(data.diagnosticReports, resultObservations, patientRef, {
+            includeImageAttachments: !!opts.includeImageAttachments,
+          }),
           narrativeResults(data.diagnosticReports, resultObservations, labels.resultsLab, labels.resultsImaging),
         )
       : null,

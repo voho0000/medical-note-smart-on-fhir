@@ -39,15 +39,6 @@ function makeProblem(partial: Partial<InferredProblem> = {}): InferredProblem {
     labelZh: '第二型糖尿病',
     labelEn: 'Type 2 diabetes',
     inferenceConfidence: 'high',
-    coding: {
-      system: SYSTEM.snomed,
-      code: '44054006',
-      display: 'Diabetes mellitus type II',
-      confidence: 'high',
-      icd10: 'E11.9',
-    },
-    strategy: 'B',
-    needsManualCoding: false,
     evidence: [
       { kind: 'encounter-icd', label: 'E11.9 第二型糖尿病', icd10: 'E11.9', count: 4, date: '2025-01-01' },
     ],
@@ -65,54 +56,25 @@ describe('inferredToCondition', () => {
     expect(c.code?.text).toBe('第二型糖尿病')
   })
 
-  it('carries the ICD-10 coding and attaches _sct only when coded', () => {
+  it('produces a TEXT-ONLY Condition.code — no coding, no _sct (app generates no codes)', () => {
     const c = inferredToCondition(makeProblem())
-    expect(c.code?.coding?.[0]).toEqual({
-      system: SYSTEM.icd10,
-      code: 'E11.9',
-      display: 'Type 2 diabetes',
-    })
-    expect(c._sct?.code).toBe('44054006')
-    expect(c._sct?.confidence).toBe('high')
-  })
-
-  it('omits _sct and ICD coding for an uncoded (text-only) problem', () => {
-    const c = inferredToCondition(
-      makeProblem({
-        coding: null,
-        strategy: 'none',
-        evidence: [{ kind: 'discharge-excerpt', label: 'narrative only' }],
-      }),
-    )
-    expect(c._sct).toBeUndefined()
     expect(c.code?.coding).toBeUndefined()
     expect(c.code?.text).toBe('第二型糖尿病')
+    // The removed `_sct` field never exists on an inferred condition.
+    expect((c as { _sct?: unknown })._sct).toBeUndefined()
   })
 
-  it('records the _inferred audit marker (strategy + evidence + rationale)', () => {
+  it('falls back to labelEn for the text when there is no Chinese label', () => {
+    const c = inferredToCondition(makeProblem({ labelZh: '' }))
+    expect(c.code?.coding).toBeUndefined()
+    expect(c.code?.text).toBe('Type 2 diabetes')
+  })
+
+  it('records the _inferred audit marker (confidence + evidence + rationale)', () => {
     const c = inferredToCondition(makeProblem())
-    expect(c._inferred?.strategy).toBe('B')
     expect(c._inferred?.inferenceConfidence).toBe('high')
     expect(c._inferred?.evidence[0]).toMatchObject({ kind: 'encounter-icd', icd10: 'E11.9', count: 4 })
     expect(c._inferred?.rationale).toContain('metformin')
-  })
-
-  it('flags needsManualCoding for a Strategy-A problem', () => {
-    const c = inferredToCondition(
-      makeProblem({
-        strategy: 'A',
-        needsManualCoding: true,
-        coding: {
-          system: SYSTEM.snomed,
-          code: '99999999',
-          display: 'Made up',
-          confidence: 'low',
-          needsManualCoding: true,
-        },
-      }),
-    )
-    expect(c._inferred?.needsManualCoding).toBe(true)
-    expect(c._sct?.confidence).toBe('low')
   })
 })
 
@@ -123,7 +85,7 @@ describe('inferredToCondition → buildIpsBundle (no FHIR special-casing)', () =
     return sections.find((s) => s.code?.coding?.some((c) => c.code === IPS_SECTION.problemList.loinc))
   }
 
-  it('dual-codes a confirmed inferred problem through the EXISTING pipeline', () => {
+  it('carries a text-only confirmed inferred problem through the EXISTING pipeline', () => {
     const condition = inferredToCondition(makeProblem())
     const bundle = buildIpsBundle({ patient: PATIENT, data: emptyCollection([condition]) })
 
@@ -136,12 +98,12 @@ describe('inferredToCondition → buildIpsBundle (no FHIR special-casing)', () =
     )
     expect(conditionEntry).toBeDefined()
     const resource = conditionEntry!.resource as FhirResource
-    const code = resource.code as { coding?: Array<{ system?: string; code?: string }> }
+    const code = resource.code as { text?: string; coding?: Array<{ system?: string; code?: string }> }
 
-    // Dual-coding: SNOMED prepended, ICD-10 kept — produced by the existing
-    // problemCode() with ZERO inference-specific branching.
-    expect(code.coding?.[0]).toMatchObject({ system: SYSTEM.snomed, code: '44054006' })
-    expect(code.coding?.some((c) => c.system === SYSTEM.icd10 && c.code === 'E11.9')).toBe(true)
+    // Text-only: the app attaches NO coding to an inferred problem — no SNOMED,
+    // and (since inferredToCondition drops it) no ICD either.
+    expect(code.text).toBe('第二型糖尿病')
+    expect(code.coding).toBeUndefined()
 
     // Auditability: the synthetic condition carries the `ai-inferred` meta.tag so
     // a downstream reader can distinguish AI-synthesized problems from ingested

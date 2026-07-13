@@ -25,20 +25,12 @@ const EvidenceSchema = z.object({
   count: z.number().optional(),
 })
 
-const SuggestedSnomedSchema = z.object({
-  code: z.string(),
-  display: z.string().optional(),
-})
-
-/** Schema for one candidate problem as the LLM is asked to return it. */
+/** Schema for one candidate problem as the LLM is asked to return it. The
+ * problem list is text-only — no diagnosis codes are requested or parsed. */
 const ProblemRawSchema = z.object({
   labelZh: z.string().optional().default(''),
   labelEn: z.string().optional().default(''),
   inferenceConfidence: z.enum(['high', 'medium', 'low']).optional().default('medium'),
-  /** ICD-10 the model found in the evidence (feeds Strategy B). */
-  evidenceIcd10: z.string().optional(),
-  /** SNOMED the model picked — MUST be from the allowlist or null (validated later). */
-  suggestedSnomed: SuggestedSnomedSchema.nullish(),
   supportingEvidence: z.array(EvidenceSchema).optional().default([]),
   rationale: z.string().optional(),
 })

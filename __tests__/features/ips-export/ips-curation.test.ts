@@ -1,4 +1,8 @@
-import { curateForIps } from '@/features/ips-export/utils/ips-curation'
+import {
+  curateForIps,
+  LATEST_PER_ANALYTE_K,
+  LOOKBACK_YEARS,
+} from '@/features/ips-export/utils/ips-curation'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import type { DataFilters, DataSelection } from '@/src/core/entities/clinical-context.entity'
 import {
@@ -83,6 +87,178 @@ describe('curateForIps — time-range curation (labs / reports)', () => {
       now: NOW,
     })
     expect(out.diagnosticReports).toHaveLength(0)
+  })
+})
+
+describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
+  it('exports the expected constants (K=3, lookback 2y)', () => {
+    expect(LATEST_PER_ANALYTE_K).toBe(3)
+    expect(LOOKBACK_YEARS).toBe(2)
+  })
+
+  it('keeps the latest 3 reports per analyte within the 2-year lookback', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      { id: 'cbc-1', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(5) },
+      { id: 'cbc-2', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(30) },
+      { id: 'cbc-3', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(90) },
+      { id: 'cbc-4', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(180) }, // 4th → dropped
+      { id: 'cbc-ancient', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(900) }, // > 2y → dropped
+      { id: 'lipid', code: { text: 'Lipid Panel' }, effectiveDateTime: isoDaysAgo(200) },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      now: NOW,
+    })
+    expect(out.diagnosticReports.map((r) => r.id).sort()).toEqual([
+      'cbc-1', 'cbc-2', 'cbc-3', 'lipid',
+    ])
+  })
+
+  it('applies the same latest-3 / 2-year semantics to orphan observations', () => {
+    const data = emptyCollection()
+    data.observations = [
+      { id: 'k-1', code: { text: 'K' }, effectiveDateTime: isoDaysAgo(1) },
+      { id: 'k-2', code: { text: 'K' }, effectiveDateTime: isoDaysAgo(10) },
+      { id: 'k-3', code: { text: 'K' }, effectiveDateTime: isoDaysAgo(20) },
+      { id: 'k-4', code: { text: 'K' }, effectiveDateTime: isoDaysAgo(40) }, // 4th → dropped
+      { id: 'k-old', code: { text: 'K' }, effectiveDateTime: isoDaysAgo(800) }, // > 2y → dropped
+      { id: 'na', code: { text: 'Na' }, effectiveDateTime: isoDaysAgo(3) },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      now: NOW,
+    })
+    expect(out.observations.map((o) => o.id).sort()).toEqual(['k-1', 'k-2', 'k-3', 'na'])
+  })
+
+  it('still honors a narrower labReportTimeRange (intersection with the lookback)', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      { id: 'recent', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(10) },
+      { id: 'outside-window', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(300) }, // < 2y but > 6m
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportTimeRange: '6m', labReportVersion: 'latestPerAnalyte' }),
+      now: NOW,
+    })
+    expect(out.diagnosticReports.map((r) => r.id)).toEqual(['recent'])
+  })
+
+  it('relaxes to latest-1-per-analyte / unbounded when NO labs fall within 2 years', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      { id: 'cbc-3y', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(1100) },
+      { id: 'cbc-4y', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(1500) },
+      { id: 'lipid-3y', code: { text: 'Lipid Panel' }, effectiveDateTime: isoDaysAgo(1200) },
+    ]
+    data.observations = [
+      { id: 'k-old', code: { text: 'K' }, effectiveDateTime: isoDaysAgo(1300) },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      now: NOW,
+    })
+    // 每項目最近 1 筆、不限時間。
+    expect(out.diagnosticReports.map((r) => r.id).sort()).toEqual(['cbc-3y', 'lipid-3y'])
+    expect(out.observations.map((o) => o.id)).toEqual(['k-old'])
+  })
+
+  it('does NOT relax when the 2-year window has ANY result (orphan obs only)', () => {
+    const data = emptyCollection()
+    // 報告都在 2 年前,但有一筆 2 年內的 orphan observation → 整體不為空,
+    // 不放寬:舊報告不得復活。
+    data.diagnosticReports = [
+      { id: 'cbc-old', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(1100) },
+    ]
+    data.observations = [
+      { id: 'k-recent', code: { text: 'K' }, effectiveDateTime: isoDaysAgo(30) },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      now: NOW,
+    })
+    expect(out.diagnosticReports).toHaveLength(0)
+    expect(out.observations.map((o) => o.id)).toEqual(['k-recent'])
+  })
+
+  it('yields nothing when the patient has no labs at all (no phantom relax)', () => {
+    const data = emptyCollection()
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportVersion: 'latestPerAnalyte' }),
+      now: NOW,
+    })
+    expect(out.diagnosticReports).toHaveLength(0)
+    expect(out.observations).toHaveLength(0)
+  })
+})
+
+describe('curateForIps — imaging reports honor the imagingReports toggle (P2)', () => {
+  const imagingReport = (id: string, daysAgo: number) => ({
+    id,
+    code: { text: 'Chest X-ray' },
+    category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }],
+    effectiveDateTime: isoDaysAgo(daysAgo),
+  })
+
+  it('drops imaging-category reports when imagingReports is OFF (labs unaffected)', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      imagingReport('xray', 10),
+      { id: 'cbc', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(10) },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection({ imagingReports: false }),
+      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'all' }),
+      now: NOW,
+    })
+    expect(out.diagnosticReports.map((r) => r.id)).toEqual(['cbc'])
+  })
+
+  it('filters imaging reports by the imaging time window, not the lab window', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      imagingReport('xray-recent', 30),
+      imagingReport('xray-old', 800), // outside imagingReportTimeRange 1y
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({
+        labReportTimeRange: 'all',
+        labReportVersion: 'all',
+        imagingReportTimeRange: '1y',
+        imagingReportVersion: 'all',
+      }),
+      now: NOW,
+    })
+    expect(out.diagnosticReports.map((r) => r.id)).toEqual(['xray-recent'])
+  })
+
+  it('excludes imaging reports from labReports gating and from latestPerAnalyte', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = [imagingReport('xray', 10)]
+    const out = curateForIps({
+      data,
+      selection: selection({ labReports: false, imagingReports: true }),
+      filters: filters({ labReportVersion: 'latestPerAnalyte' }),
+      now: NOW,
+    })
+    // labReports OFF 不影響影像報告。
+    expect(out.diagnosticReports.map((r) => r.id)).toEqual(['xray'])
   })
 })
 
@@ -222,8 +398,8 @@ describe('curateForIps — problem list', () => {
   })
 })
 
-describe('curateForIps — SNOMED CT problem-list annotation (Phase 2.1)', () => {
-  it('attaches a high-confidence _sct to conditions whose ICD-10 hits the allowlist', () => {
+describe('curateForIps — problem list is text-only (no generated SNOMED CT)', () => {
+  it('preserves source Condition.code coding and never attaches a derived _sct', () => {
     const data = emptyCollection()
     data.conditions = [
       {
@@ -250,31 +426,11 @@ describe('curateForIps — SNOMED CT problem-list annotation (Phase 2.1)', () =>
     })
     const dm = out.conditions.find((c) => c.id === 'dm')
     const uncoded = out.conditions.find((c) => c.id === 'uncoded')
-    expect(dm?._sct).toEqual({
-      system: 'http://snomed.info/sct',
-      code: '44054006',
-      display: 'Diabetes mellitus type II',
-      confidence: 'high',
-      icd10: 'E11.9',
-    })
-    expect(uncoded?._sct).toBeUndefined()
-  })
-
-  it('does not mutate the source condition objects', () => {
-    const data = emptyCollection()
-    const source = {
-      id: 'dm',
-      clinicalStatus: 'active',
-      code: { coding: [{ system: 'http://hl7.org/fhir/sid/icd-10', code: 'E11.9' }] },
-    }
-    data.conditions = [source]
-    curateForIps({
-      data,
-      selection: selection({ problemList: true }),
-      filters: filters({ problemListStatus: 'active' }),
-      now: NOW,
-    })
-    expect((source as { _sct?: unknown })._sct).toBeUndefined()
+    // No SNOMED CT annotation is ever added by curation.
+    expect((dm as { _sct?: unknown })?._sct).toBeUndefined()
+    expect((uncoded as { _sct?: unknown })?._sct).toBeUndefined()
+    // The real source ICD-10 coding is preserved untouched.
+    expect(dm?.code?.coding?.[0]).toMatchObject({ code: 'E11.9' })
   })
 })
 

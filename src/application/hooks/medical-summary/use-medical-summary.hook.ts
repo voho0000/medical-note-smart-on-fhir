@@ -27,7 +27,11 @@ import type {
   SummaryCoverageStats,
 } from '@/src/core/entities/medical-summary.entity'
 import { demoMedicalSummarySnapshots } from '@/src/infrastructure/demo/demo-ai-snapshots'
-import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
+import {
+  medicalSummaryStore,
+  summaryCacheKey,
+  SUMMARY_CACHE_MAX_AGE_MS,
+} from './medical-summary-store'
 import { createModelPrefsStore } from '@/src/application/hooks/ai-generation/create-model-prefs-store'
 import {
   useAiSlotGeneration,
@@ -35,10 +39,8 @@ import {
   type AiSlotRunContext,
 } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
 
-const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
-// v12: surface clinically meaningful treatment patterns and true overlapping
-// prescriptions from two non-pharmacy institutions. Older results regenerate.
-const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary12', scanKey)
+// Store + cache-key scheme live in medical-summary-store.ts so the IPS export
+// can peek at generated summaries without importing this full hook graph.
 // The v12 change is clinician-only. Patient summaries from v11/v10/v9/v8/v7/v6/v5 remain valid,
 // so retain them instead of making an audience switch lose its saved summary.
 const legacyPatientSummaryCacheKeys = (scanKey: string) => [
@@ -50,10 +52,6 @@ const legacyPatientSummaryCacheKeys = (scanKey: string) => [
   aiResultCacheKey('medsummary6', scanKey),
   aiResultCacheKey('medsummary5', scanKey),
 ]
-
-// Module-level per-slot result cache (survives tab switches; wiped on bundle
-// import so nothing stale renders against fresh clinical data).
-const medicalSummaryStore = createAiResultStore<MedicalSummaryResult>()
 
 interface SummaryPrefsStore {
   autoGenerate: boolean

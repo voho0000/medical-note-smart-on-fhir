@@ -266,26 +266,13 @@ export function mapMedications(medications: MedicationEntity[], patientRef: stri
 // ---------------------------------------------------------------------------
 
 /**
- * Build the IPS Condition.code. When the curation step attached a verified
- * SNOMED CT mapping (`_sct`, Phase 2.1), PREPEND it as the IPS-preferred coding
- * while KEEPING the original ICD-10 coding — dual-coding, so the machine-readable
- * resource carries both. The SNOMED preferred term doubles as the
- * CodeableConcept.text fallback so the resource stays self-describing even when
- * the source condition had no text.
+ * Build the IPS Condition.code. The problem list is text-only from the app's
+ * side: the app NEVER generates or attaches SNOMED CT codes. Any coding present
+ * on the source Condition.code (ICD-10 etc.) is preserved as-is; a condition
+ * with no source coding stays a text-only CodeableConcept.
  */
 function problemCode(c: ConditionEntity): FhirCodeableConcept {
-  const base =
-    toCodeableConcept(c.code, c._sct?.display ?? 'Unknown problem') ?? {
-      text: c._sct?.display ?? 'Unknown problem',
-    }
-  if (!c._sct) return base
-  return {
-    ...base,
-    coding: [
-      { system: c._sct.system, code: c._sct.code, display: c._sct.display },
-      ...(base.coding ?? []),
-    ],
-  }
+  return toCodeableConcept(c.code, 'Unknown problem') ?? { text: 'Unknown problem' }
 }
 
 export function mapProblemList(conditions: ConditionEntity[], patientRef: string): SectionMapResult {
@@ -445,10 +432,44 @@ function buildResultObservation(
   return makeEntry(resource).entry
 }
 
+export interface MapResultsOptions {
+  /** Opt-in: also carry image/* presentedForm attachments (default: stripped). */
+  includeImageAttachments?: boolean
+}
+
+/**
+ * DiagnosticReport.presentedForm for the IPS export.
+ *
+ * 預設剝除 image/* 附件(健保存摺 X 光/心電圖 base64 JPEG 每張 2-3 MB,會把
+ * IPS 撐到數十 MB),保留 conclusion 與 text/*(及其他非影像,如 PDF)附件 —
+ * Roche DIP 的 base64 text/plain 報告內文因此不會遺失。使用者可在匯出 tab 以
+ * 「包含影像附件」opt-in 帶回影像。
+ *
+ * 一律排除:沒有 inline `data` 的附件(本地匯入路徑會把 base64 搬進 IndexedDB
+ * 並以 app-local `_imageRef` 取代 — 匯出檔帶一個空殼附件沒有意義),以及
+ * `_imageRef` 這個 app-local 欄位本身(不是 FHIR Attachment 的欄位)。
+ */
+function presentedFormFields(
+  dr: DiagnosticReportEntity,
+  includeImageAttachments: boolean,
+): Record<string, unknown> {
+  const attachments = (dr.presentedForm ?? [])
+    .filter((a) => !!a?.data)
+    .filter((a) => includeImageAttachments || !(a.contentType ?? '').toLowerCase().startsWith('image/'))
+    .map((a) => ({
+      ...(a.contentType ? { contentType: a.contentType } : {}),
+      data: a.data,
+      ...(a.title ? { title: a.title } : {}),
+      ...(a.size != null ? { size: a.size } : {}),
+    }))
+  return attachments.length ? { presentedForm: attachments } : {}
+}
+
 export function mapResults(
   diagnosticReports: DiagnosticReportEntity[],
   labObservations: ObservationEntity[],
   patientRef: string,
+  options: MapResultsOptions = {},
 ): SectionMapResult {
   const entries: IpsBundleEntry[] = []
   const referencedOnly: IpsBundleEntry[] = []
@@ -481,8 +502,7 @@ export function mapResults(
       ...(dr.issued ? { issued: dr.issued } : {}),
       ...(dr.conclusion ? { conclusion: dr.conclusion } : {}),
       ...(resultRefs.length ? { result: resultRefs } : {}),
-      // NOTE: presentedForm (base64 imaging) is intentionally omitted — including
-      // it would bloat the IPS document to tens of MB. Images stay in the app.
+      ...presentedFormFields(dr, !!options.includeImageAttachments),
     }
     entries.push(makeEntry(resource).entry)
   }
