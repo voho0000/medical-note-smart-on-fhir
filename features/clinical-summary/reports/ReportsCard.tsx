@@ -12,7 +12,6 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { dateSearchTokens } from "@/src/shared/utils/date.utils"
-import { getAnalyteLabel } from "@/src/shared/utils/lab-normalize"
 import { useReportsData } from './hooks/useReportsData'
 import { useOrphanObservations } from './hooks/useOrphanObservations'
 import { useProcedureRows } from './hooks/useProcedureRows'
@@ -22,40 +21,12 @@ import { groupLabReportsByDay } from './utils/lab-day-grouping'
 import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
+import { rowInnerMatch } from './utils/report-search'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
 // referential equality on the prop.
 const EMPTY_EXPANDED_IDS: string[] = []
-
-// Does any observation (or component) in this row match the query — by analyte
-// NAME or by free-text result/narrative (valueString)? The valueString arm is
-// what makes imaging / ECG / pathology conclusions and text lab results
-// (cultures, "Target Not Detected") searchable by content, not just by title.
-// Shared by the filter and the auto-expand pass so the two never diverge.
-//
-// Names are matched BOTH ways: raw FHIR text (code.text / coding.display —
-// often Chinese from the bridge, e.g. 顏色) AND the canonical analyte label
-// (getAnalyteLabel → COLOR) — because the UI renders the canonical form
-// (ObservationBlock's getAnalyteDisplayForObs), users search what they SEE.
-// Without the canonical arm, searching "COLOR" missed the 顏色-coded row.
-function nameMatch(obsOrComponent: any, q: string): boolean {
-  const raw = (obsOrComponent?.code?.text || obsOrComponent?.code?.coding?.[0]?.display || '').toLowerCase()
-  if (raw.includes(q)) return true
-  const canonical = getAnalyteLabel(obsOrComponent)
-  return canonical !== '—' && canonical.toLowerCase().includes(q)
-}
-
-function rowInnerMatch(row: Row, q: string): boolean {
-  return row.obs.some((o: any) => {
-    if (nameMatch(o, q)) return true
-    if (typeof o?.valueString === 'string' && o.valueString.toLowerCase().includes(q)) return true
-    return Array.isArray(o?.component) && o.component.some((c: any) => {
-      if (nameMatch(c, q)) return true
-      return typeof c?.valueString === 'string' && c.valueString.toLowerCase().includes(q)
-    })
-  })
-}
 
 export function ReportsCard() {
   const { t } = useLanguage()
@@ -188,7 +159,7 @@ export function ReportsCard() {
       const dateStrs = dateSearchTokens(row.effectiveDate)
       // rowInnerMatch also looks inside accordion children — a multi-item panel
       // like "全套血液檢查Ⅰ（八項）" keeps its analytes (RBC, WBC…) in row.obs,
-      // and now the report narrative / text result (valueString) too.
+      // including numeric, coded, and free-text result values.
       return (
         row.title.toLowerCase().includes(q) ||
         row.meta.toLowerCase().includes(q) ||
@@ -410,7 +381,7 @@ export function ReportsCard() {
               data-lpignore="true"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜尋檢驗名稱、機構、日期..."
+              placeholder="搜尋檢驗名稱、結果、機構、日期..."
               className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
             />
             {searchQuery && (

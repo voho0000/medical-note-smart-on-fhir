@@ -30,6 +30,13 @@ test.describe('reports search (the v0.16.0 features)', () => {
     await expect(page.getByText(/顯示 [1-9]\d* \/ 共/)).toBeVisible()
   })
 
+  test('matches a lab by its numeric result value', async ({ page }) => {
+    const search = await openReportsSearch(page)
+    await search.fill('144')
+    await expect(page.getByText('144 mg/dL').first()).toBeVisible()
+    await expect(page.getByText(/顯示 1 \/ 共/)).toBeVisible()
+  })
+
   test('highlights the matched term in the row title', async ({ page }) => {
     const search = await openReportsSearch(page)
     await search.fill('Chest')
