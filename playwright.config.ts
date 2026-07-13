@@ -9,7 +9,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Keep local cold-start compilation from being saturated by every spec at
+  // once. Five parallel Chromium workers regularly pushed initial tab clicks
+  // past Playwright's 30s test timeout; two preserves parallel coverage without
+  // the false failures. CI remains deliberately serial for determinism.
+  workers: process.env.CI ? 1 : 2,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: 'http://localhost:3001',

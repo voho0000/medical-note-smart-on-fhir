@@ -62,6 +62,13 @@ export interface MockStreamOptions {
   stallAfter?: number
   /** Pin the client's stream idle-timeout (ms) for this page (test seam). */
   idleTimeoutMs?: number
+  /**
+   * Optional prompt-specific replies for pages that launch more than one AI
+   * pipeline at once (for example the unified summary + safety generation).
+   * The first request-body substring match wins; `markdown` remains the
+   * fallback for requests that do not match an entry.
+   */
+  replies?: Array<{ includes: string; markdown: string }>
 }
 
 /**
@@ -76,9 +83,10 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
   const delayMs = opts.delayMs ?? 8
   const stallAfter = opts.stallAfter ?? -1
   const idleTimeoutMs = opts.idleTimeoutMs ?? 0
+  const replies = opts.replies ?? []
 
   await page.addInitScript(
-    ({ model, markdown, marker, chunkSize, delayMs, stallAfter, idleTimeoutMs }) => {
+    ({ model, markdown, marker, chunkSize, delayMs, stallAfter, idleTimeoutMs, replies }) => {
       // 0) Optional: pin the client stream idle-timeout (anti-hang watchdog).
       if (idleTimeoutMs > 0) {
         ;(window as unknown as { __streamIdleTimeoutMs?: number }).__streamIdleTimeoutMs = idleTimeoutMs
@@ -112,7 +120,9 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
         /* longtask unsupported — assertion will simply see an empty list */
       }
 
-      // 3) Build the OpenAI Chat Completions SSE frames once.
+      // 3) Build OpenAI Chat Completions SSE frames for the selected reply.
+      // This happens per request because one user action can now launch the
+      // medical-summary and safety pipelines concurrently.
       const frame = (delta: Record<string, unknown>, finish: string | null = null) =>
         `data: ${JSON.stringify({
           id: 'chatcmpl-e2e',
@@ -121,12 +131,15 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
           model,
           choices: [{ index: 0, delta, finish_reason: finish }],
         })}\n\n`
-      const frames: string[] = [frame({ role: 'assistant', content: '' })]
-      for (let i = 0; i < markdown.length; i += chunkSize) {
-        frames.push(frame({ content: markdown.slice(i, i + chunkSize) }))
+      const buildFrames = (reply: string) => {
+        const frames: string[] = [frame({ role: 'assistant', content: '' })]
+        for (let i = 0; i < reply.length; i += chunkSize) {
+          frames.push(frame({ content: reply.slice(i, i + chunkSize) }))
+        }
+        frames.push(frame({}, 'stop'))
+        frames.push('data: [DONE]\n\n')
+        return frames
       }
-      frames.push(frame({}, 'stop'))
-      frames.push('data: [DONE]\n\n')
 
       // 4) Override fetch. Only the AI proxy POST is mocked; everything else
       //    (Firebase, assets) passes through.
@@ -140,6 +153,8 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
         const isChatCall = PROXY_HOSTS.test(url) && (body.includes(marker) || init?.method === 'POST')
         if (!isChatCall) return realFetch(input as RequestInfo, init)
         w.__chatCallCount = (w.__chatCallCount ?? 0) + 1
+        const selectedReply = replies.find((reply) => body.includes(reply.includes))?.markdown ?? markdown
+        const frames = buildFrames(selectedReply)
 
         const enc = new TextEncoder()
         const stream = new ReadableStream<Uint8Array>({
@@ -165,7 +180,16 @@ export async function mockAiStream(page: Page, opts: MockStreamOptions = {}) {
         })
       }
     },
-    { model, markdown, marker: STREAM_PROBE_MARKER, chunkSize, delayMs, stallAfter, idleTimeoutMs },
+    {
+      model,
+      markdown,
+      marker: STREAM_PROBE_MARKER,
+      chunkSize,
+      delayMs,
+      stallAfter,
+      idleTimeoutMs,
+      replies,
+    },
   )
 }
 
