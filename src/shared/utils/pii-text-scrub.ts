@@ -23,7 +23,10 @@ const TW_NATIONAL_ID = /\b[A-Z][1289]\d{8}\b/g
 const LABELED_CHART_NO = /(病歷號碼?|病歷號|Chart\s*(?:No\.?|Number)|MRN)(\s*[:：]?\s*)[A-Za-z0-9-]{3,}/gi
 
 // Values explicitly labeled as the patient's name.
-const LABELED_NAME = /(姓\s*名|Patient(?:'s)?\s*Name)(\s*[:：]\s*)[^\s,;，；、|/()（）]{1,30}/gi
+// Keep the fallback deliberately name-shaped. The former "anything until
+// whitespace" expression could swallow adjacent table cells such as
+// `姓名：王小明診斷：肺炎`, deleting clinical content after HTML tags were stripped.
+const LABELED_NAME = /(姓\s*名|Patient(?:'s)?\s*Name)(\s*[:：]\s*)([\p{Script=Han}○〇Ｏ*＊Xx·•．.]{2,8}|[A-Za-z](?:[A-Za-z .'-]{0,37}[A-Za-z])?)/giu
 
 const MASK = '[已遮蔽]'
 

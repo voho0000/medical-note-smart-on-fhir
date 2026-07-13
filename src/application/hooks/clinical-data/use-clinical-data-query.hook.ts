@@ -45,11 +45,33 @@ export function useClinicalDataQuery() {
         // Return an empty collection so panels render the empty state instead
         // of surfacing this as an error.
         if (error instanceof LocalBundleModeError) {
+          const unavailable = (resourceType: string) => ({
+            resourceType,
+            state: 'error' as const,
+            message: 'Clinical data source became unavailable before the query completed.',
+          })
           return {
             conditions: [], medications: [], allergies: [], observations: [],
             vitalSigns: [], diagnosticReports: [], imagingStudies: [], procedures: [], encounters: [],
             documentReferences: [], compositions: [], immunizations: [],
             consents: [], devices: [], carePlans: [],
+            resourceQueryStatus: {
+              Condition: unavailable('Condition'),
+              MedicationRequest: unavailable('MedicationRequest'),
+              AllergyIntolerance: unavailable('AllergyIntolerance'),
+              Observation: unavailable('Observation'),
+              'Observation:vital-signs': unavailable('Observation'),
+              DiagnosticReport: unavailable('DiagnosticReport'),
+              ImagingStudy: unavailable('ImagingStudy'),
+              Procedure: unavailable('Procedure'),
+              Encounter: unavailable('Encounter'),
+              DocumentReference: unavailable('DocumentReference'),
+              Composition: unavailable('Composition'),
+              Immunization: unavailable('Immunization'),
+              Consent: unavailable('Consent'),
+              Device: unavailable('Device'),
+              CarePlan: unavailable('CarePlan'),
+            },
           }
         }
         throw error

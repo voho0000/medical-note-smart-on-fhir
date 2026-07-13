@@ -10,6 +10,7 @@ import type {
   ClinicalContextOptions,
   TimeRange
 } from '@/src/core/entities/clinical-context.entity'
+import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
 
 export class GenerateClinicalContextUseCase {
   execute(
@@ -58,7 +59,10 @@ export class GenerateClinicalContextUseCase {
         if (activeMeds.length > 0) {
           items.push('Active Medications:')
           activeMeds.forEach(m => {
-            const name = m.medicationCodeableConcept?.text || 'Unknown medication'
+            const name = pickAiMedicationName(
+              m.medicationCodeableConcept,
+              m.medicationReference?.display,
+            ) || 'Unknown medication'
             const date = m.authoredOn ? ` (started: ${new Date(m.authoredOn).toLocaleDateString()})` : ''
             items.push(`  • ${name}${date}`)
           })
@@ -69,7 +73,10 @@ export class GenerateClinicalContextUseCase {
           if (items.length > 0) items.push('') // Add blank line separator
           items.push('Stopped Medications:')
           stoppedMeds.forEach(m => {
-            const name = m.medicationCodeableConcept?.text || 'Unknown medication'
+            const name = pickAiMedicationName(
+              m.medicationCodeableConcept,
+              m.medicationReference?.display,
+            ) || 'Unknown medication'
             const date = m.authoredOn ? ` (${new Date(m.authoredOn).toLocaleDateString()})` : ''
             const status = m.status ? ` [${m.status}]` : ''
             items.push(`  • ${name}${date}${status}`)
@@ -149,7 +156,9 @@ export class GenerateClinicalContextUseCase {
       .filter(section => section?.items?.length > 0)
       .map(section => {
         const title = section.title || 'Untitled'
-        const items = section.items.map(item => `- ${item}`).join('\n')
+        const items = section.items
+          .map(item => item.trim().length === 0 ? '' : `- ${item}`)
+          .join('\n')
         return `${title}:\n${items}`
       })
       .filter(Boolean)

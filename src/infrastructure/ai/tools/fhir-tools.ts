@@ -45,6 +45,7 @@ import {
 } from './_filter-helpers'
 import { scrubPii } from './_scrub-pii'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
+import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
 
 export interface AgentDataSource {
   patient: PatientEntity | null
@@ -126,7 +127,10 @@ function classifyEncounterType(enc: any):
 function dedupMedsByName(meds: any[]): Array<any & { refillCount: number }> {
   const byName = new Map<string, any & { refillCount: number }>()
   for (const m of meds) {
-    const name = pickName(m.medicationCodeableConcept) || 'Unknown'
+    const name = pickAiMedicationName(
+      m.medicationCodeableConcept,
+      m.medicationReference?.display,
+    ) || 'Unknown'
     const existing = byName.get(name)
     if (!existing) {
       byName.set(name, { ...m, refillCount: 1 })
@@ -353,7 +357,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
         }))
 
         const meds = collection.medications.filter((m: any) => matches(m.encounter)).map((m: any) => ({
-          medication: pickName(m.medicationCodeableConcept),
+          medication: pickAiMedicationName(
+            m.medicationCodeableConcept,
+            m.medicationReference?.display,
+          ),
           dosage: m.dosageInstruction?.[0]?.text,
           status: m.status,
           chronic: isChronicByCourseOfTherapy(m.courseOfTherapyType),
@@ -757,7 +764,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
           summary: `Found ${filtered.length} MedicationRequest record(s)`,
           count: filtered.length,
           data: capped.map((m: any) => ({
-            medication: pickName(m.medicationCodeableConcept),
+            medication: pickAiMedicationName(
+              m.medicationCodeableConcept,
+              m.medicationReference?.display,
+            ),
             status: m.status,
             authoredOn: m.authoredOn,
             dosageInstruction: m.dosageInstruction?.[0]?.text,
@@ -793,7 +803,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
           summary: `${deduped.length} active medication(s)`,
           count: deduped.length,
           data: deduped.map((m: any) => ({
-            medication: pickName(m.medicationCodeableConcept),
+            medication: pickAiMedicationName(
+              m.medicationCodeableConcept,
+              m.medicationReference?.display,
+            ),
             dosage: m.dosageInstruction?.[0]?.text,
             authoredOn: m.authoredOn,
             chronic: isChronicByCourseOfTherapy(m.courseOfTherapyType),

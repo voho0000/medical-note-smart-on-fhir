@@ -2,8 +2,9 @@
 import { useMemo } from "react"
 import type { ClinicalContextSection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import { makeTimeRangeTest } from "@/src/core/utils/date-filter.utils"
-import { formatNumberSmart } from "@/src/shared/utils/number-format.utils"
 import type { ClinicalData, Observation } from "./types"
+import { expandObservationValues, observationDisplayValue } from "@/src/core/utils/observation-value.utils"
+import { normalizeClinicalStatus } from "@/src/core/utils/clinical-context-selection.utils"
 
 export function useVitalSignsContext(
   includeObservations: boolean,
@@ -19,8 +20,16 @@ export function useVitalSignsContext(
       return []
     }
 
-    // Deduplicate by id
-    const uniqueVitalSigns = Array.from(new Map(allVitalSigns.map((v) => [v.id, v])).values())
+    // Deduplicate only when the FHIR id proves identity. Missing-id records are
+    // retained individually; keying all of them by `undefined` silently kept
+    // only the last measurement.
+    const seenIds = new Set<string>()
+    const uniqueVitalSigns = allVitalSigns.filter((v) => {
+      if (!v.id) return true
+      if (seenIds.has(v.id)) return false
+      seenIds.add(v.id)
+      return true
+    })
 
     const inWindow = makeTimeRangeTest(
       filters?.vitalSignsTimeRange ?? "all",
@@ -28,6 +37,7 @@ export function useVitalSignsContext(
     )
     const filteredVitalSigns = uniqueVitalSigns.filter((obs: Observation) =>
       inWindow(obs.effectiveDateTime)
+      && normalizeClinicalStatus((obs as any).status) !== 'entered-in-error'
     )
 
     if (filteredVitalSigns.length === 0) {
@@ -83,34 +93,17 @@ export function useVitalSignsContext(
             })
           : ''
         
-        // Handle component-based observations (e.g., Blood Pressure)
-        if (Array.isArray(obs.component) && obs.component.length > 0) {
-          const componentValues = obs.component
-            .map((comp: any) => {
-              const compValue = comp.valueQuantity?.value
-              const compUnit = comp.valueQuantity?.unit || ''
-              const compCode = comp.code?.text || comp.code?.coding?.[0]?.display || ''
-              if (compValue !== undefined && compValue !== null) {
-                const formattedValue = typeof compValue === 'number' ? formatNumberSmart(compValue) : compValue
-                return `${compCode}: ${formattedValue} ${compUnit}`.trim()
-              }
-              return null
-            })
-            .filter(Boolean)
-          
-          if (componentValues.length > 0) {
-            items.push(`${componentValues.join(', ')}${date ? ` (${date})` : ''}`)
-          }
-        } 
-        // Handle simple value observations
-        else {
-          const value = obs.valueQuantity?.value ?? obs.valueString
-          const unit = obs.valueQuantity?.unit ?? ""
-          if (value !== undefined && value !== null) {
-            const formattedValue = typeof value === 'number' ? formatNumberSmart(value) : value
-            items.push(`${String(formattedValue)} ${unit}${date ? ` (${date})` : ''}`.trim())
-          }
-        }
+        const status = normalizeClinicalStatus((obs as any).status) || 'unknown'
+        const statusPart = !['final', 'amended', 'corrected'].includes(status) ? ` [status: ${status}]` : ''
+        const values = expandObservationValues(obs).flatMap((valueObservation) => {
+          const display = observationDisplayValue(valueObservation)
+          if (!display) return []
+          const label = valueObservation === obs
+            ? ''
+            : `${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Component'}: `
+          return [`${label}${display.value}${display.unit ? ` ${display.unit}` : ''}`]
+        })
+        if (values.length > 0) items.push(`${values.join(', ')}${date ? ` (${date})` : ''}${statusPart}`)
       })
       
       if (items.length > 0) {

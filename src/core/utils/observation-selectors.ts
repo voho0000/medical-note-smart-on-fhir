@@ -112,10 +112,9 @@ function vitalIdSet(data: ObservationSource): Set<string | undefined> {
 }
 
 /**
- * Standalone result observations folded into Lab Reports: not a member of any
- * DiagnosticReport, not a vital sign, and not imaging. This intentionally also
- * captures previously "Other Observations" leftovers so the data-selection UI
- * does not need a separate low-signal category.
+ * Broad standalone result selector: not a member of any DiagnosticReport, not
+ * a vital sign, and not imaging. Callers should normally use the stricter lab
+ * or other selectors below so categories remain mutually intelligible.
  */
 export function selectStandaloneResultObservations(
   data?: ObservationSource | null,
@@ -131,9 +130,7 @@ export function selectStandaloneResultObservations(
 }
 
 /**
- * Standalone LAB observations only. Kept as a focused selector for callers/tests
- * that need the stricter boundary; the data-selection Lab Reports category now
- * uses selectStandaloneResultObservations().
+ * Standalone LAB observations only. These belong in Lab Reports.
  */
 export function selectLabOrphanObservations(
   data?: ObservationSource | null,
@@ -151,7 +148,9 @@ export function selectOtherObservations(
 ): ObservationEntity[] {
   if (!data) return []
   const vitals = vitalIdSet(data)
+  const memberIds = collectReportMemberIds(data.diagnosticReports)
   return (data.observations ?? []).filter((o) => {
+    if (o.id != null && memberIds.has(o.id)) return false
     if (isVitalObservation(o, vitals)) return false
     const group = inferGroupFromObservation(o)
     return group !== 'lab' && group !== 'imaging'

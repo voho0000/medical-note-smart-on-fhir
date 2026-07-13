@@ -2,6 +2,7 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { MedicationRequest } from '@/src/shared/types/fhir.types'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
+import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
 
 const isActiveMedication = (med: MedicationRequest): boolean => {
   return med.status === 'active' || med.status === 'completed'
@@ -106,7 +107,10 @@ export const medicationsCategory: DataCategory<MedicationRequest> = {
     if (activeMeds.length > 0) {
       items.push('Active Medications:')
       activeMeds.forEach((m: any) => {
-        const name = m.medicationCodeableConcept?.text || 'Unknown medication'
+        const name = pickAiMedicationName(
+          m.medicationCodeableConcept,
+          m.medicationReference?.display,
+        ) || 'Unknown medication'
         const chronicBadge = isChronicMedication(m) ? ' [慢箋]' : ''
         const date = m.authoredOn
           ? ` (started: ${new Date(m.authoredOn).toLocaleDateString()})`
@@ -119,7 +123,10 @@ export const medicationsCategory: DataCategory<MedicationRequest> = {
       if (items.length > 0) items.push('')
       items.push('Stopped Medications:')
       stoppedMeds.forEach((m: any) => {
-        const name = m.medicationCodeableConcept?.text || 'Unknown medication'
+        const name = pickAiMedicationName(
+          m.medicationCodeableConcept,
+          m.medicationReference?.display,
+        ) || 'Unknown medication'
         const chronicBadge = isChronicMedication(m) ? ' [慢箋]' : ''
         const date = m.authoredOn
           ? ` (${new Date(m.authoredOn).toLocaleDateString()})`

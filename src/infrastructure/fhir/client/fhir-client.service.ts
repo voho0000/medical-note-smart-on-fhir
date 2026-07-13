@@ -146,7 +146,8 @@ export class FhirClientService {
    * `entry[]`, so callers that do `response.entry?.map(...)` need no change.
    *
    * `maxPages` is a safety cap against a server returning an endless / cyclic
-   * next-link; if hit we log and stop with whatever we have (partial > hang).
+   * next-link. Hitting it is an explicit query failure: returning the partial
+   * entries as a successful Bundle made "all data" silently incomplete.
    */
   async requestAllPages<T = any>(query: string, maxPages = 50): Promise<T> {
     const client = await this.getClient()
@@ -162,13 +163,24 @@ export class FhirClientService {
       pages += 1
     }
     if (next) {
-      console.warn(`[FhirClient] Stopped paginating "${query.split('?')[0]}" at ${maxPages} pages; results may be truncated.`)
+      throw new FhirPaginationLimitError(query, maxPages, entries.length)
     }
     return { ...(first as object), entry: entries } as T
   }
 
   clearClient(): void {
     this.client = null
+  }
+}
+
+export class FhirPaginationLimitError extends Error {
+  constructor(
+    public readonly query: string,
+    public readonly maxPages: number,
+    public readonly loadedEntries: number,
+  ) {
+    super(`FHIR pagination limit reached for ${query.split('?')[0]} after ${maxPages} pages (${loadedEntries} entries); refusing to return partial data.`)
+    this.name = 'FhirPaginationLimitError'
   }
 }
 

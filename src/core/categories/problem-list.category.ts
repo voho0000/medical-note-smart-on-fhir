@@ -3,16 +3,22 @@
 // encounter-bound diagnoses).
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { Condition } from '@/src/shared/types/fhir.types'
-import { isWithinTimeRange } from '../utils/date-filter.utils'
+import { makeTimeRangeTest } from '../utils/date-filter.utils'
 
-const withinProblemRange = (conditions: Condition[], range: string): Condition[] =>
-  range === 'all'
-    ? conditions
-    : conditions.filter((c) => isWithinTimeRange((c as { recordedDate?: string }).recordedDate, range))
+const withinProblemRange = (
+  conditions: Condition[],
+  range: string,
+  clinicalData?: { encounters?: any[] } | null,
+): Condition[] => {
+  const inWindow = makeTimeRangeTest(range, clinicalData)
+  return conditions.filter((condition: any) =>
+    inWindow(condition.recordedDate || condition.onsetDateTime),
+  )
+}
 
 function isProblemListItem(cond: any): boolean {
   const categories = cond?.category
-  if (!Array.isArray(categories)) return false
+  if (!Array.isArray(categories) || categories.length === 0) return !cond?.encounter?.reference
   return categories.some((cat: any) =>
     Array.isArray(cat?.coding) &&
     cat.coding.some((c: any) => c?.code === 'problem-list-item')
@@ -20,6 +26,10 @@ function isProblemListItem(cond: any): boolean {
 }
 
 function isActiveCondition(condition: any): boolean {
+  const verification = typeof condition?.verificationStatus === 'string'
+    ? condition.verificationStatus.toLowerCase()
+    : (condition?.verificationStatus?.coding?.[0]?.code || condition?.verificationStatus?.text || '').toLowerCase()
+  if (verification === 'refuted' || verification === 'entered-in-error') return false
   const clinicalStatus = condition?.clinicalStatus
   if (!clinicalStatus) return true
   const statusStr = typeof clinicalStatus === 'string'
@@ -70,18 +80,18 @@ export const problemListCategory: DataCategory<Condition> = {
   extractData: (clinicalData) =>
     (clinicalData?.conditions || []).filter(isProblemListItem),
 
-  getCount: (data, filters) => {
+  getCount: (data, filters, allClinicalData) => {
     const byStatus = (filters?.problemListStatus ?? 'active') === 'active' ? data.filter(isActiveCondition) : data
-    return withinProblemRange(byStatus, (filters?.problemListTimeRange as string) ?? 'all').length
+    return withinProblemRange(byStatus, (filters?.problemListTimeRange as string) ?? 'all', allClinicalData).length
   },
 
-  getContextSection: (data, filters): ClinicalContextSection | null => {
+  getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
     if (data.length === 0) return null
 
     const byStatus = (filters?.problemListStatus ?? 'active') === 'active'
       ? data.filter(isActiveCondition)
       : data
-    const filtered = withinProblemRange(byStatus, (filters?.problemListTimeRange as string) ?? 'all')
+    const filtered = withinProblemRange(byStatus, (filters?.problemListTimeRange as string) ?? 'all', allClinicalData)
 
     if (filtered.length === 0) return null
 
@@ -94,7 +104,11 @@ export const problemListCategory: DataCategory<Condition> = {
         ? c.clinicalStatus
         : c.clinicalStatus?.coding?.[0]?.code || c.clinicalStatus?.text
       const statusLabel = status && !isActiveCondition(c) ? ` [${status}]` : ''
-      return `${name}${date}${statusLabel}`
+      const verification = typeof c.verificationStatus === 'string'
+        ? c.verificationStatus
+        : c.verificationStatus?.coding?.[0]?.code || c.verificationStatus?.text
+      const verificationLabel = verification ? ` [verification: ${verification}]` : ''
+      return `${name}${date}${statusLabel}${verificationLabel}`
     })
 
     if (items.length === 0) return null

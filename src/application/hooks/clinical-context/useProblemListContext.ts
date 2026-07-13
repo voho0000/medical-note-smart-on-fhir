@@ -6,10 +6,13 @@ import type { ClinicalData } from "./types"
 import { lookupIcd, buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { pickByLocale } from "@/src/shared/utils/fhir-display-helpers"
+import { makeTimeRangeTest } from "@/src/core/utils/date-filter.utils"
 
 function isProblemListItem(cond: any): boolean {
   const categories = cond?.category
-  if (!Array.isArray(categories)) return false
+  // FHIR allows category to be absent. A condition without category AND without
+  // an encounter link is a standing condition, not a visit billing diagnosis.
+  if (!Array.isArray(categories) || categories.length === 0) return !cond?.encounter?.reference
   return categories.some((cat: any) =>
     Array.isArray(cat?.coding) &&
     cat.coding.some((c: any) => c?.code === 'problem-list-item')
@@ -17,6 +20,10 @@ function isProblemListItem(cond: any): boolean {
 }
 
 function isActiveCondition(condition: any): boolean {
+  const verification = typeof condition?.verificationStatus === 'string'
+    ? condition.verificationStatus.toLowerCase()
+    : (condition?.verificationStatus?.coding?.[0]?.code || condition?.verificationStatus?.text || '').toLowerCase()
+  if (verification === 'refuted' || verification === 'entered-in-error') return false
   const clinicalStatus = condition?.clinicalStatus
   if (!clinicalStatus) return true
   const statusStr = typeof clinicalStatus === 'string'
@@ -37,9 +44,16 @@ export function useProblemListContext(
     const data = (clinicalData.conditions as any[]).filter(isProblemListItem)
     if (data.length === 0) return null
 
-    const filtered = (filters?.problemListStatus ?? 'active') === 'active'
+    const byStatus = (filters?.problemListStatus ?? 'active') === 'active'
       ? data.filter(isActiveCondition)
       : data
+    const inWindow = makeTimeRangeTest(
+      filters?.problemListTimeRange ?? 'all',
+      clinicalData as { encounters?: any[] },
+    )
+    const filtered = byStatus.filter((condition: any) =>
+      inWindow(condition.recordedDate || condition.onsetDateTime),
+    )
     if (filtered.length === 0) return null
 
     const icdDict = buildIcdDictionary(data, locale)
@@ -61,7 +75,11 @@ export function useProblemListContext(
         ? c.clinicalStatus
         : c.clinicalStatus?.coding?.[0]?.code || c.clinicalStatus?.text
       const statusLabel = status && !isActiveCondition(c) ? ` [${status}]` : ''
-      return `${name}${date}${statusLabel}`
+      const verification = typeof c.verificationStatus === 'string'
+        ? c.verificationStatus
+        : c.verificationStatus?.coding?.[0]?.code || c.verificationStatus?.text
+      const verificationLabel = verification ? ` [verification: ${verification}]` : ''
+      return `${name}${date}${statusLabel}${verificationLabel}`
     })
 
     if (items.length === 0) return null

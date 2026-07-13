@@ -7,35 +7,24 @@
 // a quick view of what the patient is on right now without having to scan
 // every visit.
 import { useMemo } from "react"
-import type { ClinicalContextSection, TimeRange } from "@/src/core/entities/clinical-context.entity"
+import type { ClinicalContextSection, DataFilters, TimeRange } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import { buildIcdDictionary, extractEncounterIcds } from "@/src/shared/utils/icd-lookup"
-import { makeTimeRangeTest } from "@/src/core/utils/date-filter.utils"
-import { partitionByEncounterLink } from "@/src/core/utils/encounter-link.utils"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
+import { pickAiMedicationName, pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
+import {
+  durationToDays,
+  filterEncounterRecords,
+  filterMedicationRecords,
+  filterProcedureRecords,
+  normalizeClinicalStatus,
+} from "@/src/core/utils/clinical-context-selection.utils"
+import { referenceId } from "@/src/core/utils/observation-selectors"
 import { useNow } from "@/src/shared/hooks/use-now.hook"
 
-const MAX_VISITS = 10
-
-function toDays(d: any): number | undefined {
-  const v = Number(d?.value)
-  if (!Number.isFinite(v) || v <= 0) return undefined
-  const u = String(d?.unit || d?.code || '').toLowerCase()
-  const f =
-    u.startsWith('d') ? 1 :
-    u.startsWith('w') ? 7 :
-    u.startsWith('mo') ? 30 :
-    u.startsWith('y') || u === 'a' ? 365 :
-    1
-  return Math.round(v * f)
-}
-
 function refId(ref: any): string | undefined {
-  const r = ref?.reference
-  if (!r) return undefined
-  return r.includes('/') ? r.split('/').pop() : r
+  return referenceId(ref?.reference)
 }
 
 function dateOnly(d: string | undefined): string | undefined {
@@ -44,12 +33,11 @@ function dateOnly(d: string | undefined): string | undefined {
 
 function summarizeMedLine(
   m: any,
-  audience: 'medical' | 'patient',
-  locale: string,
 ): string {
-  const name = pickLocalizedText(m.medicationCodeableConcept, audience, locale)
-    || m.medicationCodeableConcept?.text
-    || m.medicationCodeableConcept?.coding?.[0]?.display
+  const name = pickAiMedicationName(
+    m.medicationCodeableConcept,
+    m.medicationReference?.display,
+  )
     || 'Unknown'
   const dosage = m.dosageInstruction?.[0]
   const dose = dosage?.doseAndRate?.[0]?.doseQuantity
@@ -57,10 +45,18 @@ function summarizeMedLine(
     : undefined
   const freq = dosage?.text
   const route = dosage?.route?.text || dosage?.route?.coding?.[0]?.display
-  const days = toDays(m.dispenseRequest?.expectedSupplyDuration)
+  const days = durationToDays(m.dispenseRequest?.expectedSupplyDuration)
   const dosing = [dose, freq, route].filter(Boolean).join(', ')
   const dur = days ? ` × ${days}d` : ''
-  return `${name}${dosing ? ` (${dosing})` : ''}${dur}`
+  const status = normalizeClinicalStatus(m.status) || 'unknown'
+  const semantics = status === 'entered-in-error'
+    ? '; INVALIDATED—do not treat as a medication'
+    : status === 'draft'
+      ? '; DRAFT—not an active order'
+      : status === 'on-hold'
+        ? '; ON HOLD—not currently in use'
+        : ''
+  return `${name}${dosing ? ` (${dosing})` : ''}${dur} [status: ${status}${semantics}]`
 }
 
 function summarizeProcLine(
@@ -72,7 +68,13 @@ function summarizeProcLine(
     || p.code?.text
     || p.code?.coding?.[0]?.display
     || 'Procedure'
-  return title
+  const status = normalizeClinicalStatus(p.status) || 'unknown'
+  const semantics = status === 'not-done'
+    ? '; NOT PERFORMED'
+    : status === 'entered-in-error'
+      ? '; INVALIDATED—do not use as a clinical fact'
+      : ''
+  return `${title} [status: ${status}${semantics}]`
 }
 
 function diagnosesFromEncounter(enc: any, dict: Map<string, string>, locale: string): string[] {
@@ -83,49 +85,19 @@ function diagnosesFromEncounter(enc: any, dict: Map<string, string>, locale: str
   )
 }
 
-interface ActiveMed {
-  name: string
-  endDate: string
-  daysRemaining: number
-}
-
-function getCurrentlyActiveMeds(
-  meds: any[],
-  audience: 'medical' | 'patient',
-  locale: string,
-  nowMs: number,
-): ActiveMed[] {
-  const out: ActiveMed[] = []
-  for (const m of meds) {
-    const status = String(m.status || '').toLowerCase()
-    if (status === 'stopped' || status === 'completed' || status === 'cancelled') continue
-    const startedRaw = m.authoredOn || m.effectiveDateTime
-    const days = toDays(m.dispenseRequest?.expectedSupplyDuration)
-    if (!startedRaw || !days) continue
-    const start = new Date(startedRaw)
-    if (Number.isNaN(start.getTime())) continue
-    const end = new Date(start)
-    end.setDate(end.getDate() + days)
-    const daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
-    if (daysRemaining < 0) continue
-    const name = pickLocalizedText(m.medicationCodeableConcept, audience, locale)
-      || m.medicationCodeableConcept?.text
-      || m.medicationCodeableConcept?.coding?.[0]?.display
-      || 'Unknown'
-    out.push({ name, endDate: end.toISOString().slice(0, 10), daysRemaining })
-  }
-  return out.sort((a, b) => a.daysRemaining - b.daysRemaining)
-}
-
 export function useEncountersContext(
   includeEncounters: boolean,
   clinicalData: ClinicalData | null,
-  timeRange: TimeRange = 'all'
+  timeRange: TimeRange = 'all',
+  options?: {
+    includeMedications?: boolean
+    includeProcedures?: boolean
+    filters?: Partial<DataFilters>
+    nowMs?: number
+  },
 ): ClinicalContextSection | null {
   const { audience } = useAudience()
   const { locale } = useLanguage()
-  // See useNow: re-run when the day rolls over so the meds "Nd left" lines
-  // built here stay fresh on a long-lived tab.
   const nowMs = useNow()
   return useMemo(() => {
     if (!includeEncounters || !clinicalData) return null
@@ -133,8 +105,23 @@ export function useEncountersContext(
     if (encounters.length === 0) return null
 
     const conditions: any[] = (clinicalData.conditions as any[]) ?? []
-    const medications: any[] = (clinicalData.medications as any[]) ?? []
-    const procedures: any[] = (clinicalData.procedures as any[]) ?? []
+    const includeMedications = options?.includeMedications ?? true
+    const includeProcedures = options?.includeProcedures ?? true
+    const medications: any[] = includeMedications
+      ? filterMedicationRecords(
+          (clinicalData.medications as any[]) ?? [],
+          options?.filters,
+          clinicalData as { encounters?: any[] },
+          options?.nowMs ?? nowMs,
+        )
+      : []
+    const procedures: any[] = includeProcedures
+      ? filterProcedureRecords(
+          (clinicalData.procedures as any[]) ?? [],
+          options?.filters,
+          clinicalData as { encounters?: any[] },
+        )
+      : []
 
     // ICD descriptions follow UI language only (medical professionals
     // reading in zh-TW UI still get 中文 ICD descriptions because they're
@@ -165,47 +152,23 @@ export function useEncountersContext(
     medications.forEach((m) => push(refId(m.encounter), 'meds', m))
     procedures.forEach((p) => push(refId(p.encounter), 'procs', p))
 
-    // Sort encounters by date desc
-    const sorted = [...encounters]
-      .filter((e) => e.period?.start)
-      .sort((a, b) => (b.period?.start || '').localeCompare(a.period?.start || ''))
-
-    // Honour the user-selected time range (default 'all'). Keep the graceful
-    // fallback: if NO visit falls inside the range (e.g. a stable/elderly
-    // patient whose last visit predates it), show the most recent visits
-    // anyway rather than emitting an empty section.
-    const inWindow = makeTimeRangeTest(timeRange, clinicalData as { encounters?: any[] })
-    const inRange = timeRange === 'all'
-      ? sorted
-      : sorted.filter((e) => e.period?.start && inWindow(e.period.start))
-    const visitsToShow = (inRange.length > 0 ? inRange : sorted).slice(0, MAX_VISITS)
-    const omittedCount = sorted.length - visitsToShow.length
+    // Honour the selected visit window exactly. Undated encounters are retained
+    // in all-time mode and labelled explicitly instead of disappearing.
+    const visitsToShow = filterEncounterRecords(
+      encounters,
+      timeRange,
+      clinicalData as { encounters?: any[] },
+    )
 
     const items: string[] = []
 
-    // Top-level summary: currently active medications. Scoped to VISIT-LINKED
-    // meds only — orphan meds (e.g. pharmacy pickups) are owned by the
-    // Medications section, so including them here would double-list them.
-    const { linked: visitLinkedMeds } = partitionByEncounterLink(medications, encounters)
-    const activeMeds = getCurrentlyActiveMeds(visitLinkedMeds, audience, locale, nowMs)
-    if (activeMeds.length > 0) {
-      items.push(`Currently active medications (${activeMeds.length}):`)
-      activeMeds.slice(0, 15).forEach((m) => {
-        items.push(`  • ${m.name} — until ${m.endDate} (${m.daysRemaining}d left)`)
-      })
-      if (activeMeds.length > 15) {
-        items.push(`  …and ${activeMeds.length - 15} more`)
-      }
-      items.push('')
-    }
-
     // Per-visit details
-    items.push(`Recent visits (showing ${visitsToShow.length} of ${sorted.length}):`)
-    items.push("Note: ICD codes listed under each visit come from billing/dispensing records and may not represent confirmed diagnoses. See 'Patient's Conditions' for clinically confirmed diagnoses.")
+    items.push(`Recent visits (showing ${visitsToShow.length} of ${encounters.length}):`)
+    items.push("Note: ICD codes listed under each visit come from billing/dispensing records and may not represent confirmed diagnoses. See 'Problem List' for clinically confirmed diagnoses. 'Patient\'s Medications' is the authoritative regimen list; visit-linked medication rows below are chronology only. Medication/procedure records may be repeated in their standalone sections; do not double-count them.")
     items.push('')
 
     for (const enc of visitsToShow) {
-      const date = dateOnly(enc.period?.start) || ''
+      const date = dateOnly(enc.period?.start) || 'Unknown date'
       const dept = enc.type?.[0]?.coding?.[0]?.display || enc.type?.[0]?.text || enc.serviceType?.text || ''
       const physician = enc.participant?.[0]?.individual?.display || enc.participant?.[0]?.actor?.display || ''
       const classText = enc.class?.display || enc.class?.code || ''
@@ -221,7 +184,7 @@ export function useEncountersContext(
       }
       if (entry?.meds.length) {
         items.push(`    Medications:`)
-        entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m, audience, locale)}`))
+        entry.meds.forEach((m) => items.push(`      • ${summarizeMedLine(m)}`))
       }
       if (entry?.procs.length) {
         items.push(`    Procedures:`)
@@ -230,10 +193,6 @@ export function useEncountersContext(
       items.push('')
     }
 
-    if (omittedCount > 0) {
-      items.push(`(${omittedCount} earlier visits omitted for brevity)`)
-    }
-
     return { title: 'Visits & Treatment History', items }
-  }, [includeEncounters, clinicalData, timeRange, audience, locale, nowMs])
+  }, [includeEncounters, clinicalData, timeRange, audience, locale, options, nowMs])
 }

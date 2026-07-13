@@ -5,15 +5,6 @@ import type { DataCategory, ClinicalContextSection } from '../interfaces/data-ca
 import type { ImmunizationEntity } from '@/src/core/entities/clinical-data.entity'
 import { isWithinTimeRange } from '../utils/date-filter.utils'
 
-function vaccineKey(imm: any): string {
-  return (
-    imm?.vaccineCode?.coding?.[0]?.code ||
-    imm?.vaccineCode?.text ||
-    imm?.vaccineCode?.coding?.[0]?.display ||
-    ''
-  )
-}
-
 function vaccineName(imm: any): string {
   return (
     imm?.vaccineCode?.text ||
@@ -53,15 +44,11 @@ export const immunizationsCategory: DataCategory<ImmunizationEntity> = {
 
   getCount: (data, filters) => {
     const timeRange = (filters?.immunizationTimeRange as string) || 'all'
-    if (timeRange === 'all') {
-      const keys = new Set(data.map((imm: any) => vaccineKey(imm)).filter(Boolean))
-      return keys.size || data.length
-    }
+    if (timeRange === 'all') return data.length
     const filtered = data.filter((imm: any) =>
       isWithinTimeRange(imm.occurrenceDateTime, timeRange)
     )
-    const keys = new Set(filtered.map((imm: any) => vaccineKey(imm)).filter(Boolean))
-    return keys.size || filtered.length
+    return filtered.length
   },
 
   getContextSection: (data, filters): ClinicalContextSection | null => {
@@ -74,33 +61,20 @@ export const immunizationsCategory: DataCategory<ImmunizationEntity> = {
 
     if (filtered.length === 0) return null
 
-    const byKey = new Map<string, { name: string; latest?: string; count: number }>()
-    for (const imm of filtered as any[]) {
-      const key = vaccineKey(imm)
-      if (!key) continue
-      const name = vaccineName(imm)
-      const date = imm.occurrenceDateTime
-      const existing = byKey.get(key)
-      if (existing) {
-        existing.count += 1
-        if (date && (!existing.latest || date > existing.latest)) {
-          existing.latest = date
-        }
-      } else {
-        byKey.set(key, { name, latest: date, count: 1 })
-      }
-    }
-
-    if (byKey.size === 0) return null
-
-    const items = Array.from(byKey.values())
-      .sort((a, b) => (b.latest || '').localeCompare(a.latest || ''))
-      .map((v) => {
-        const datePart = v.latest
-          ? ` (last dose: ${new Date(v.latest).toLocaleDateString()})`
+    const items = [...filtered]
+      .sort((a, b) => (b.occurrenceDateTime || '').localeCompare(a.occurrenceDateTime || ''))
+      .map((imm) => {
+        const datePart = imm.occurrenceDateTime
+          ? ` (${new Date(imm.occurrenceDateTime).toLocaleDateString()})`
           : ''
-        const dosesPart = v.count > 1 ? `, ${v.count} doses` : ''
-        return `${v.name}${datePart}${dosesPart}`
+        const status = imm.status || 'unknown'
+        const invalid = status === 'entered-in-error' ? '; INVALIDATED—do not treat as administered' : ''
+        const meta = [
+          `status=${status}${invalid}`,
+          imm.lotNumber ? `lot=${imm.lotNumber}` : null,
+          imm.manufacturer?.display ? `manufacturer=${imm.manufacturer.display}` : null,
+        ].filter(Boolean).join('; ')
+        return `${vaccineName(imm)}${datePart} [${meta}]`
       })
 
     return { title: 'Immunizations', items }

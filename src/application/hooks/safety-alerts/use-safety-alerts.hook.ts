@@ -95,16 +95,17 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<SafetyScanResult | null> => {
     const clinicalContext = ctx.getFullClinicalContext()
-    // Pre-flight: this pipeline doesn't truncate, so warn (don't silently fail)
-    // when the selected context alone overruns the model's window.
-    const overflow = preflightContextWarning(clinicalContext, ctx.modelId, ctx.locale)
-    if (overflow) toast.warning(overflow)
     const messages = generateSafetyAlertsUseCase.buildMessages({
       clinicalContext,
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       catalog: ctx.catalog,
     })
+    const overflow = preflightContextWarning(messages.map((message) => message.content).join('\n\n'), ctx.modelId, ctx.locale)
+    if (overflow) {
+      toast.error(overflow)
+      throw new Error(overflow)
+    }
 
     let full = ''
     await ctx.ai.stream(messages, {
@@ -136,9 +137,9 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     defaultModelId: SAFETY_ALERTS_MODEL_ID,
     selectedModelId: modelId,
     autoRunEnabled: autoScan,
-    // Historical behavior: a MANUAL scan proceeds even mid-load (the catalog
-    // and auto-scan are still dataReady-gated inside the engine).
-    requireDataReadyToGenerate: false,
+    // A safety result over partial data is itself unsafe and may be cached for
+    // 12h, so manual and automatic scans share the same readiness gate.
+    requireDataReadyToGenerate: true,
     resolveModelOverride: resolveSafetyModelOverride,
     store: safetyAlertsStore,
     cacheKeyFor: safetyCacheKey,

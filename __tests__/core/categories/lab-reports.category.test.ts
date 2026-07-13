@@ -1,4 +1,5 @@
 import { labReportsCategory } from '@/src/core/categories/lab-reports.category'
+import { observationsCategory } from '@/src/core/categories/observations.category'
 
 // Creatinine measured 3× (trending up), Hemoglobin + CRP once, plus a narrative
 // microbiology report with no numeric result.
@@ -83,8 +84,8 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(items.some((i) => i.includes('No growth'))).toBe(true)
   })
 
-  it('folds legacy other standalone observations into lab reports', () => {
-    const extracted = labReportsCategory.extractData({
+  it('keeps non-lab standalone observations out of Lab Reports and in Other Observations', () => {
+    const clinicalData = {
       diagnosticReports: [],
       observations: [
         { id: 'other-1', code: { text: 'Free-text finding' }, valueString: 'present', effectiveDateTime: '2026-05-12' },
@@ -93,9 +94,12 @@ describe('labReportsCategory — per-analyte trend', () => {
       vitalSigns: [
         { id: 'vital-1', code: { text: 'Heart rate' }, valueQuantity: { value: 70, unit: '/min' }, effectiveDateTime: '2026-05-12' },
       ],
-    } as any) as any[]
+    } as any
+    const labs = labReportsCategory.extractData(clinicalData) as any[]
+    const others = observationsCategory.extractData(clinicalData) as any[]
 
-    expect(extracted.map((item) => item.id)).toEqual(['other-1'])
+    expect(labs.map((item) => item.id)).toEqual([])
+    expect(others.map((item) => item.id)).toEqual(['other-1'])
   })
 })
 

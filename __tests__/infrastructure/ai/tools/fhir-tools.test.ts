@@ -143,7 +143,7 @@ describe('createFhirTools (unified)', () => {
   describe('queryMedications', () => {
     it('chronic=true returns only continuous-therapy meds', async () => {
       const r = await call('queryMedications', { chronic: true })
-      // Both refill cycles of 通舒錠 are chronic
+      // Both refill cycles of Sotalol / 通舒錠 are chronic
       expect(r.count).toBe(2)
       expect(r.data.every((m: any) => m.chronic === true)).toBe(true)
     })
@@ -151,7 +151,7 @@ describe('createFhirTools (unified)', () => {
     it('chronic=false returns non-chronic', async () => {
       const r = await call('queryMedications', { chronic: false })
       expect(r.count).toBe(1)
-      expect(r.data[0].medication).toBe('普拿疼')
+      expect(r.data[0].medication).toBe('Acetaminophen')
     })
 
     it('status filter is case-insensitive', async () => {
@@ -264,7 +264,7 @@ describe('createFhirTools (unified)', () => {
     it('returns meds linked to that encounter', async () => {
       const r = await call('getEncounterDetails', { encounterId: 'enc-inpatient-1' })
       expect(r.data.medications.length).toBe(1)
-      expect(r.data.medications[0].medication).toBe('普拿疼')
+      expect(r.data.medications[0].medication).toBe('Acetaminophen')
     })
 
     it('returns diagnostic reports linked to encounter', async () => {
@@ -292,7 +292,7 @@ describe('createFhirTools (unified)', () => {
 
     it('tracks refillCount when same drug appears multiple times', async () => {
       const r = await call('getActiveMedicationList')
-      const sotalol = r.data.find((m: any) => m.medication === '通舒錠')
+      const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
       expect(sotalol?.refillCount).toBe(2)
     })
   })

@@ -35,7 +35,7 @@ export function DataSelectionPanel({
   showScopeDescription = true,
 }: DataSelectionPanelProps) {
   const { t } = useLanguage()
-  const { getFormattedClinicalContext } = useClinicalContext()
+  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext()
   const [activeTab, setActiveTab] = useState('selection')
   const { filterKey, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
   const dataCategories = useDataCategories(clinicalData, filterKey, filters)
@@ -81,6 +81,7 @@ export function DataSelectionPanel({
         <TabsContent value="preview">
           <PreviewTab
             formattedClinicalContext={activeTab === 'preview' ? getFormattedClinicalContext() : ''}
+            maskedClinicalContext={activeTab === 'preview' ? getFullClinicalContext() : ''}
           />
         </TabsContent>
       </Tabs>

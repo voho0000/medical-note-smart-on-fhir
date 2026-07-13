@@ -9,7 +9,8 @@
  * @returns true if date is within range or range is 'all'
  */
 export function isWithinTimeRange(dateString: string | undefined, range: string): boolean {
-  if (!dateString || range === 'all') return true
+  if (range === 'all') return true
+  if (!dateString) return false
   
   const date = new Date(dateString)
   if (Number.isNaN(date.getTime())) return false
@@ -19,15 +20,15 @@ export function isWithinTimeRange(dateString: string | undefined, range: string)
   const diffInDays = diffInMs / (1000 * 60 * 60 * 24)
   
   switch (range) {
-    case '24h': return diffInDays <= 1
-    case '3d': return diffInDays <= 3
-    case '1w': return diffInDays <= 7
-    case '1m': return diffInDays <= 30
-    case '3m': return diffInDays <= 90
-    case '6m': return diffInDays <= 180
-    case '1y': return diffInDays <= 365
-    case '3y': return diffInDays <= 365 * 3
-    case '5y': return diffInDays <= 365 * 5
+    case '24h': return diffInDays >= 0 && diffInDays <= 1
+    case '3d': return diffInDays >= 0 && diffInDays <= 3
+    case '1w': return diffInDays >= 0 && diffInDays <= 7
+    case '1m': return diffInDays >= 0 && diffInDays <= 30
+    case '3m': return diffInDays >= 0 && diffInDays <= 90
+    case '6m': return diffInDays >= 0 && diffInDays <= 180
+    case '1y': return diffInDays >= 0 && diffInDays <= 365
+    case '3y': return diffInDays >= 0 && diffInDays <= 365 * 3
+    case '5y': return diffInDays >= 0 && diffInDays <= 365 * 5
     default: return true
   }
 }
@@ -77,8 +78,8 @@ export function resolveSinceLastVisitCutoff(
 /**
  * Build a date predicate for a time-range filter value, resolving the
  * 'sinceLastVisit' cutoff ONCE (not per item). Falls back to the plain
- * wall-clock ranges for every other value. Mirrors isWithinTimeRange's
- * undated-item behavior (undated → included).
+ * wall-clock ranges for every other value. Bounded ranges exclude undated and
+ * future items; only explicit all-time mode retains undated records.
  */
 export function makeTimeRangeTest(
   range: string,
@@ -86,8 +87,9 @@ export function makeTimeRangeTest(
 ): (dateString: string | undefined) => boolean {
   if (range === SINCE_LAST_VISIT) {
     const cutoff = resolveSinceLastVisitCutoff(clinicalData?.encounters)
-    if (!cutoff) return () => true
-    return (dateString) => !dateString || dateString.slice(0, 10) >= cutoff
+    if (!cutoff) return () => false
+    const today = new Date().toISOString().slice(0, 10)
+    return (dateString) => !!dateString && dateString.slice(0, 10) >= cutoff && dateString.slice(0, 10) <= today
   }
   return (dateString) => isWithinTimeRange(dateString, range)
 }

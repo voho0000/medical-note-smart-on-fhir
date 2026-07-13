@@ -115,6 +115,17 @@ describe('Clinical Context Formatters', () => {
       expect(result).toContain('- WBC: 7.5 K/uL (Normal: 4-11)')
     })
 
+    it('should preserve blank separators without rendering an empty bullet', () => {
+      const sections: ClinicalContextSection[] = [
+        { title: 'Visits', items: ['First visit', '', 'Second visit'] }
+      ]
+
+      const result = formatClinicalContext(sections)
+
+      expect(result).toBe('Visits:\n- First visit\n\n- Second visit')
+      expect(result).not.toContain('\n- \n')
+    })
+
     it('should handle sections with special characters', () => {
       const sections: ClinicalContextSection[] = [
         { title: 'Notes & Comments', items: ['Patient reports 50% improvement'] }

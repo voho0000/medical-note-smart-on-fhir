@@ -72,6 +72,28 @@ export function pickByLocale(concept: any, locale: string): string {
 }
 
 /**
+ * Medication name sent to AI features.
+ *
+ * The bridge's `coding[].display` is the canonical English label and proved
+ * materially easier for the model to map to ingredients / pharmacologic
+ * classes than the localized zh-TW brand name in `text`. Keep this independent
+ * of UI locale and audience so summary, insights, safety, and agent tools all
+ * see the same drug identifier. Source text remains the fallback for bundles
+ * that do not provide an English display.
+ */
+export function pickAiMedicationName(
+  concept: any,
+  referenceDisplay?: string,
+): string {
+  const coded = concept?.coding?.find(
+    (coding: any) => typeof coding?.display === 'string' && coding.display.trim().length > 0,
+  )?.display?.trim()
+  const text = typeof concept?.text === 'string' ? concept.text.trim() : ''
+  const reference = typeof referenceDisplay === 'string' ? referenceDisplay.trim() : ''
+  return coded || text || reference || ''
+}
+
+/**
  * Returns true when the MedicationRequest's FHIR `courseOfTherapyType` marks
  * this order as a continuous / long-term therapy — i.e. the bridge classified
  * it as a NHI 慢性處方箋 (refillable chronic prescription).

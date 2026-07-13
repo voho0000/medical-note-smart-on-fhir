@@ -8,7 +8,9 @@ export function formatClinicalContext(sections: ClinicalContextSection[]): strin
     .filter((section) => section?.items?.length > 0)
     .map((section) => {
       const title = section.title || "Untitled"
-      const items = section.items.map((item) => `- ${item}`).join("\n")
+      const items = section.items
+        .map((item) => item.trim().length === 0 ? "" : `- ${item}`)
+        .join("\n")
       return `${title}:\n${items}`
     })
     .filter(Boolean)

@@ -17,7 +17,10 @@ import { useProblemListContext } from "./clinical-context/useProblemListContext"
 import type { ClinicalData } from "./clinical-context/types"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import { listClinicalDocuments, resolveSelectedDocuments, formatDocumentsSection } from "@/src/core/utils/clinical-documents.utils"
-import { scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
+import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
+import { buildClinicalContextCoverageSection } from "@/src/core/utils/clinical-context-coverage.utils"
+import { useNow } from "@/src/shared/hooks/use-now.hook"
 
 export type UseClinicalContextReturn = {
   getClinicalContext: () => ClinicalContextSection[]
@@ -39,12 +42,23 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
   const profile = ds.getProfile(activeConsumer)
   const selectedData = profile.selection
   const filters = profile.filters
+  const { patient } = usePatient()
+  const nowMs = useNow()
 
   const clinicalData = (useClinicalData() as ClinicalData | null) ?? null
 
   // Hook-driven sections (richer formatting than registry can provide)
   const patientSection = usePatientContext(selectedData.patientInfo ?? false)
-  const encountersSection = useEncountersContext(selectedData.encounters ?? false, clinicalData, filters.encounterTimeRange)
+  const encountersSection = useEncountersContext(
+    selectedData.encounters ?? false,
+    clinicalData,
+    filters.encounterTimeRange,
+    {
+      includeMedications: selectedData.medications ?? false,
+      includeProcedures: selectedData.procedures ?? false,
+      filters,
+    },
+  )
   const medicationsSection = useMedicationsContext(selectedData.medications ?? false, clinicalData, filters, selectedData.encounters ?? false)
   const allergiesSection = useAllergiesContext(selectedData.allergies ?? false, clinicalData)
   const proceduresSection = useProceduresContext(selectedData.procedures ?? false, clinicalData, filters, selectedData.encounters ?? false)
@@ -76,6 +90,11 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     if (!selectedData.imagingReports || !clinicalData) return null
     return dataCategoryRegistry.getCategoryContext('imagingReports', clinicalData, filters)
   }, [selectedData.imagingReports, clinicalData, filters])
+
+  const observationsSection = useMemo(() => {
+    if (!selectedData.observations || !clinicalData) return null
+    return dataCategoryRegistry.getCategoryContext('observations', clinicalData, filters)
+  }, [selectedData.observations, clinicalData, filters])
 
   const advanceDirectivesSection = useMemo(() => {
     if (!selectedData.advanceDirectives || !clinicalData) return null
@@ -118,6 +137,16 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     () => (selectedDocuments ?? []).map((document) => document.id),
     [selectedDocuments],
   )
+  const coverageSection = useMemo(
+    () => buildClinicalContextCoverageSection(
+      selectedData,
+      filters,
+      clinicalData as unknown as Parameters<typeof buildClinicalContextCoverageSection>[2],
+      includedDocumentIds,
+      nowMs,
+    ),
+    [selectedData, filters, clinicalData, includedDocumentIds, nowMs],
+  )
 
   const pushRegistrySection = useCallback(
     (
@@ -148,6 +177,7 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     // Reports group
     pushRegistrySection(sections, labReportsSection)
     pushRegistrySection(sections, imagingReportsSection)
+    pushRegistrySection(sections, observationsSection)
     if (proceduresSection) sections.push(proceduresSection)
 
     // Medication group
@@ -157,6 +187,10 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
 
     // Documents group
     pushRegistrySection(sections, documentsSection)
+
+    // Retrieval/coverage metadata belongs last: it informs absence semantics
+    // without interrupting the clinical chronology above.
+    pushRegistrySection(sections, coverageSection)
 
     return sections
   }, [
@@ -169,11 +203,13 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     encountersSection,
     labReportsSection,
     imagingReportsSection,
+    observationsSection,
     proceduresSection,
     medicationsSection,
     allergiesSection,
     immunizationsSection,
     documentsSection,
+    coverageSection,
     pushRegistrySection,
   ])
 
@@ -188,8 +224,8 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     // string goes to cloud LLMs (summary / safety / insights context) —
     // discharge-summary bodies included via 文件 selection are the main carrier.
     // Internal formatted-context consumers stay unmasked.
-    return scrubFreeText(full)
-  }, [getClinicalContext])
+    return scrubFreeText(full, buildPatientTextLiterals(patient))
+  }, [getClinicalContext, patient])
 
   return {
     getClinicalContext,

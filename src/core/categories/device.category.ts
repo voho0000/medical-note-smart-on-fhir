@@ -26,7 +26,7 @@ export const medicalDevicesCategory: DataCategory<DeviceEntity> = {
     if (data.length === 0) return null
     const items = data.map((d) => {
       const meta = [
-        d.status ? `status: ${d.status}` : null,
+        d.status ? `status: ${d.status}${d.status === 'entered-in-error' ? ' (INVALIDATED)' : ''}` : 'status: unknown',
         d.manufacturer ? `mfr: ${d.manufacturer}` : null,
         d.modelNumber ? `model: ${d.modelNumber}` : null,
       ].filter(Boolean).join(', ')

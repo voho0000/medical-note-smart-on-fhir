@@ -84,7 +84,7 @@ describe('buildSourceCatalog', () => {
     expect(byKey.get('C1')).toMatchObject({ resourceId: 'cond-1' })
   })
 
-  it('retains one citable chronic record per drug beyond the recent medication cap', () => {
+  it('keeps every selected medication citable without a hidden catalog cap', () => {
     const recentAcute = Array.from({ length: 41 }, (_, index) => ({
       id: `acute-${index}`,
       authoredOn: `2026-06-${String(30 - (index % 20)).padStart(2, '0')}`,
@@ -107,8 +107,22 @@ describe('buildSourceCatalog', () => {
       medications: [...recentAcute, oldChronic],
     }).filter((source) => source.resourceType.startsWith('Medication'))
 
-    expect(medicationSources).toHaveLength(41)
+    expect(medicationSources).toHaveLength(42)
     expect(medicationSources.some((source) => source.resourceId === 'old-chronic-forxiga')).toBe(true)
+  })
+
+  it('uses English medication coding displays in the AI source catalog', () => {
+    const [source] = buildSourceCatalog({
+      medications: [{
+        id: 'forxiga-bilingual',
+        medicationCodeableConcept: {
+          text: '福適佳膜衣錠10毫克',
+          coding: [{ display: 'Forxiga Film-coated Tablets 10mg' }],
+        },
+      }],
+    })
+
+    expect(source.display).toBe('Forxiga Film-coated Tablets 10mg')
   })
 })
 

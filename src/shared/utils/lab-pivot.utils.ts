@@ -11,10 +11,13 @@ import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers
 
 export interface LabCell {
   value: string
+  /** Every source value when multiple records share one analyte/day cell. */
+  allValues?: string[]
   unit?: string
   interpretationCode?: string  // 'H'|'L'|'N'|'A'|'AA'|'HH'|'LL' (HL7)
   isAbnormal?: boolean
   effectiveDateTime?: string
+  status?: string
 }
 
 export interface LabRow {
@@ -57,7 +60,7 @@ function isNumericCellValue(v: string | undefined): boolean {
 // Exported for unit-test access; the cumulative-report cell colouring
 // depends on its isAbnormal output, so we lock it down separately from
 // the React hook.
-export function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string } {
+export function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string; status?: string } {
   let value = '—'
   let unit: string | undefined
   let numericValue: number | undefined
@@ -77,7 +80,7 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   // source reference ranges may flag the value.
   const isAbnormal = isObservationAbnormal(obs)
 
-  return { value, unit, numericValue, isAbnormal, interpretationCode: interp }
+  return { value, unit, numericValue, isAbnormal, interpretationCode: interp, status: typeof obs.status === 'string' ? obs.status.toLowerCase() : undefined }
 }
 
 // NHI system URI used by the 健康存摺 bridge
@@ -218,7 +221,7 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
 
       const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
       const fv = formatValue(obs)
-      const { value, unit, numericValue, interpretationCode } = fv
+      const { value, unit, numericValue, interpretationCode, status } = fv
       const { isAbnormal } = fv
 
       if (!testMap.has(mapKey)) {
@@ -255,6 +258,7 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
         isAbnormal,
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
+        status,
       }
       // Same analyte, same day: default is last-write-wins (a revised result
       // supersedes the earlier one). EXCEPTION — a qualitative + quantitative
@@ -266,7 +270,17 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
       // day) still last-write-win rather than concatenating into garbage.
       const prev = row.values.get(date)
       const incomingNumeric = numericValue !== undefined
-      if (prev && incomingNumeric !== isNumericCellValue(prev.value)) {
+      if (prev?.allValues) {
+        const allValues = [...prev.allValues, cell.value]
+        row.values.set(date, {
+          ...prev,
+          value: allValues.join(' / '),
+          allValues,
+          isAbnormal: !!prev.isAbnormal || !!cell.isAbnormal,
+          interpretationCode: prev.interpretationCode || cell.interpretationCode,
+          status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,
+        })
+      } else if (prev && incomingNumeric !== isNumericCellValue(prev.value)) {
         const qual = incomingNumeric ? prev : cell
         const quant = incomingNumeric ? cell : prev
         row.values.set(date, {
@@ -274,6 +288,19 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
           isAbnormal: !!qual.isAbnormal || !!quant.isAbnormal,
           interpretationCode: qual.interpretationCode || quant.interpretationCode,
           effectiveDateTime: cell.effectiveDateTime || prev.effectiveDateTime,
+          status: qual.status === quant.status ? qual.status : [qual.status, quant.status].filter(Boolean).join('|') || undefined,
+        })
+      } else if (prev) {
+        // Never overwrite a same-analyte/same-day source record. A pivot cell is
+        // one visual slot, so retain every value explicitly inside that slot.
+        const allValues = [prev.value, cell.value]
+        row.values.set(date, {
+          ...cell,
+          value: allValues.join(' / '),
+          allValues,
+          isAbnormal: !!prev.isAbnormal || !!cell.isAbnormal,
+          interpretationCode: prev.interpretationCode || cell.interpretationCode,
+          status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,
         })
       } else {
         row.values.set(date, cell)
@@ -340,4 +367,3 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
 
   return result
 }
-

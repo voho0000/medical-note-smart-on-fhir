@@ -1,23 +1,31 @@
 "use client"
 
+import { useState } from "react"
 import { toast } from "sonner"
 import { Check, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 
 interface PreviewTabProps {
   formattedClinicalContext: string
+  maskedClinicalContext: string
 }
 
-export function PreviewTab({ formattedClinicalContext }: PreviewTabProps) {
+export function PreviewTab({ formattedClinicalContext, maskedClinicalContext }: PreviewTabProps) {
   const { t } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
   const { copied, copy } = useCopyToClipboard()
-  const preview = formattedClinicalContext.trim()
+  // Copy-to-external-AI is the original purpose of this preview. Default to
+  // the same outbound PII scrub used by in-app AI; raw export is still possible
+  // but requires an explicit user action in this tab.
+  const [maskIdentifiers, setMaskIdentifiers] = useState(true)
+  const textToCopy = maskIdentifiers ? maskedClinicalContext : formattedClinicalContext
+  const preview = textToCopy.trim()
 
   const handleCopy = async () => {
-    const ok = await copy(formattedClinicalContext)
+    const ok = await copy(textToCopy)
     if (!ok) toast.error(t.common.copyFailed)
   }
 
@@ -41,6 +49,22 @@ export function PreviewTab({ formattedClinicalContext }: PreviewTabProps) {
           {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? t.common.copied : t.common.copy}
         </Button>
+      </div>
+      <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2">
+        <div>
+          <label htmlFor="mask-clinical-identifiers" className="text-xs font-medium">
+            {ds.maskIdentifiers}
+          </label>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {maskIdentifiers ? ds.maskIdentifiersOn : ds.maskIdentifiersOff}
+          </p>
+        </div>
+        <Switch
+          id="mask-clinical-identifiers"
+          checked={maskIdentifiers}
+          onCheckedChange={setMaskIdentifiers}
+          aria-label={ds.maskIdentifiers}
+        />
       </div>
       <pre
         data-testid="clinical-context-preview"

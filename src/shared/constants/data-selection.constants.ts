@@ -25,7 +25,7 @@ export const DEFAULT_DATA_SELECTION: DataSelection = {
   labReports: true,
   imagingReports: true,
   procedures: true,
-  observations: false,     // Legacy hidden field; standalone results fold into labReports
+  observations: false,     // Optional low-signal Observation records outside labs/imaging/vitals
 
   // Medication group
   medications: true,
@@ -43,9 +43,9 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // active problems, not a recent-events window); the range is offered so it can
   // be narrowed when desired.
   problemListTimeRange: 'all',
-  // Visits default to the last 6 months (初診 snapshot). The hook still falls
-  // back to older visits when none fall inside the range, so stable/elderly
-  // patients aren't left with an empty visit history.
+  // Visits default to the last 6 months (初診 snapshot). Unlike labs, visits do
+  // not silently widen an empty bounded window; the coverage manifest retains
+  // the distinction between no selected visits and unavailable data.
   encounterTimeRange: '6m',
   medicationStatus: 'active',
   medicationChronic: 'all',
@@ -72,7 +72,7 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // procedure within the time range.
   procedureVersion: 'all',
   procedureTimeRange: 'all',
-  // Legacy hidden observation filters retained for saved-profile compatibility.
+  // Optional standalone-observation filters.
   observationVersion: 'latest',
   observationTimeRange: 'all',
   immunizationTimeRange: 'all',
@@ -106,7 +106,7 @@ export const ALL_DATA_SELECTION: DataSelection = {
   labReports: true,
   imagingReports: true,
   procedures: true,
-  observations: false, // hidden legacy field; standalone results fold into labReports
+  observations: true,  // every leftover Observation not owned by labs/imaging/vitals
   medications: true,
   allergies: true,
   immunizations: true,

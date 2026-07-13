@@ -9,18 +9,30 @@ import {
   formatImagingStudyMetadata,
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
+import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
+import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
+import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
+
+function presentedFormText(report: ImagingReportData): string[] {
+  return (report.presentedForm ?? []).map((attachment: any, index) => {
+    const contentType = String(attachment?.contentType || '').toLowerCase()
+    const label = attachment?.title || `Presented form ${index + 1}`
+    if (attachment?.data && (contentType.includes('text') || contentType.includes('html') || contentType.includes('xml') || !contentType)) {
+      const decoded = decodeBase64(attachment.data)
+      return decoded.trim()
+        ? `${label}: ${stripHtmlToText(decoded)}`
+        : `${label}: [base64 report attachment could not be decoded]`
+    }
+    if (attachment?.data) return `${label}: [binary report attachment not decoded; contentType=${contentType || 'unknown'}]`
+    if (attachment?.url) return `${label}: [URL-backed report attachment not resolved; contentType=${contentType || 'unknown'}]`
+    return `${label}: [attachment body unavailable]`
+  })
+}
 
 type ImagingReportData = DiagnosticReport & {
   _imagingStudyText?: string
   _imagingStudyIds?: string[]
 }
-
-// In 'all reports' mode a high-frequency-imaging patient (e.g. an oncology or
-// ICU case) can have many dozens of studies in a wide window. Cap the rendered
-// list at the most recent N so the context stays bounded; older ones collapse
-// to a summary line. 'latest' mode already dedups by name, so this only bites
-// the full-history view.
-const MAX_IMAGING_REPORTS = 25
 
 // Helper to get latest imaging reports by name
 const getLatestImagingReports = (reports: ImagingReportData[]): ImagingReportData[] => {
@@ -128,6 +140,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   getCount: (data, filters, allClinicalData) => {
     // Filter out reports without content (matching useReportsData logic)
     let filtered = data.filter(report => {
+      if (normalizeClinicalStatus(report.status) === 'entered-in-error') return false
       const hasObservations = report.result && report.result.length > 0
       const hasConclusion = !!report.conclusion
       const hasNotes = Array.isArray((report as any).note) && (report as any).note.length > 0
@@ -155,7 +168,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
     if (data.length === 0) return null
     
-    let filtered = data
+    let filtered = data.filter((report) => normalizeClinicalStatus(report.status) !== 'entered-in-error')
 
     const timeRange = filters.imagingReportTimeRange as string
     if (timeRange && timeRange !== 'all') {
@@ -171,16 +184,6 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
 
     if (filters.imagingReportVersion === 'latest') {
       filtered = getLatestImagingReports(filtered)
-    }
-
-    // Bound the full-history list to the most recent N studies.
-    let omittedImaging = 0
-    if (filtered.length > MAX_IMAGING_REPORTS) {
-      const byDateDesc = [...filtered].sort((a, b) =>
-        (b.effectiveDateTime || b.issued || '').localeCompare(a.effectiveDateTime || a.issued || '')
-      )
-      omittedImaging = filtered.length - MAX_IMAGING_REPORTS
-      filtered = byDateDesc.slice(0, MAX_IMAGING_REPORTS)
     }
 
     const observations = allClinicalData?.observations || []
@@ -200,19 +203,24 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
         ? ` (${new Date(report.effectiveDateTime).toLocaleDateString()})` 
         : ''
       
+      const reportStatus = normalizeClinicalStatus(report.status) || 'unknown'
+      const statusPart = ` [status: ${reportStatus}]`
+      const attachmentText = presentedFormText(report)
       if (reportObs.length > 0) {
-        items.push(`${report.code?.text || 'Imaging Study'}${datePart}`)
+        items.push(`${report.code?.text || 'Imaging Study'}${datePart}${statusPart}`)
         reportObs.forEach(obs => {
-          const value = obs.valueQuantity?.value ?? obs.valueString
-          const unit = obs.valueQuantity?.unit ? ` ${obs.valueQuantity.unit}` : ''
-          if (value !== undefined && value !== null) {
-            items.push(`  • ${obs.code?.text || 'Finding'}: ${value}${unit}`)
-          }
+          expandObservationValues(obs).forEach((valueObservation) => {
+            const display = observationDisplayValue(valueObservation)
+            if (display) {
+              items.push(`  • ${valueObservation.code?.text || valueObservation.code?.coding?.[0]?.display || 'Finding'}: ${display.value}${display.unit ? ` ${display.unit}` : ''} [status: ${normalizeClinicalStatus((obs as any).status) || 'unknown'}]`)
+            }
+          })
         })
         const reportText = [
           report.conclusion,
           ...(report.note ?? []).map((note) => note.text),
           report._imagingStudyText,
+          ...attachmentText,
         ].filter((text): text is string => !!text?.trim())
         reportText.forEach((text) => items.push(`  • ${text}`))
       } else {
@@ -220,18 +228,15 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
           report.conclusion,
           ...(report.note ?? []).map((note) => note.text),
           report._imagingStudyText,
+          ...attachmentText,
         ].filter((text): text is string => !!text?.trim()).join('\n')
         if (narrative) {
-          items.push(`${report.code?.text || 'Study'}${datePart}: ${narrative}`)
+          items.push(`${report.code?.text || 'Study'}${datePart}${statusPart}: ${narrative}`)
         }
       }
     })
     
     if (items.length === 0) return null
-
-    if (omittedImaging > 0) {
-      items.push(`…and ${omittedImaging} earlier imaging report(s) omitted for brevity.`)
-    }
 
     const title = filters.imagingReportVersion === 'latest'
       ? 'Imaging Reports (Latest Only)'

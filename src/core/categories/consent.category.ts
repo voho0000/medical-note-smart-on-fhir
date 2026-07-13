@@ -23,14 +23,16 @@ export const advanceDirectivesCategory: DataCategory<ConsentEntity> = {
 
   getContextSection: (data): ClinicalContextSection | null => {
     if (data.length === 0) return null
-    // A deny provision (DNR / refuse CPR) is the clinically load-bearing case.
+    // Preserve raw Consent semantics. `provision.type=deny` denies the provision's
+    // coded action; it does NOT universally mean the patient "declined the
+    // directive", so translating it to Declined/Agreed inverted some DNR data.
     const items = data.map((c) => {
       const label = directiveLabel(c)
-      const decision =
-        c.provision?.type === 'deny' ? 'Declined' :
-        c.provision?.type === 'permit' ? 'Agreed' : undefined
       const date = c.dateTime ? new Date(c.dateTime).toLocaleDateString() : undefined
-      const meta = [decision, date].filter(Boolean).join(', ')
+      const status = c.status || 'unknown'
+      const invalid = status === 'entered-in-error' ? 'INVALIDATED—do not use clinically' : undefined
+      const provision = c.provision?.type ? `provision=${c.provision.type} (applies to the coded action; not a generic yes/no)` : undefined
+      const meta = [`status=${status}`, invalid, provision, date].filter(Boolean).join(', ')
       return meta ? `${label} (${meta})` : label
     })
     return { title: 'Advance Directives', items }

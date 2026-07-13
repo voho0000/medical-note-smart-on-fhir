@@ -6,6 +6,8 @@ import { getUserErrorMessage } from '@/src/core/errors'
 import { useGenerateInsight } from '@/src/application/hooks/clinical-insights/use-generate-insight.hook'
 import { useInsightResponsesStore } from './useInsightResponsesStore'
 import type { ResponseEntry, PanelStatus } from '../types'
+import { preflightContextWarning } from '@/src/shared/utils/context-budget'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 interface Panel {
   id: string
@@ -36,6 +38,7 @@ export function useInsightGeneration({
   model,
 }: UseInsightGenerationProps): UseInsightGenerationReturn {
   const ai = useUnifiedAi()
+  const { locale } = useLanguage()
   const generateInsight = useGenerateInsight()
   // Responses/status live in a module-level store so they survive the panel
   // unmounting on tab switches (see useInsightResponsesStore). currentPanelId is
@@ -98,6 +101,12 @@ export function useInsightGeneration({
       }))
 
       try {
+        const overflow = preflightContextWarning(
+          messages.map((message) => message.content).join('\n\n'),
+          model,
+          locale,
+        )
+        if (overflow) throw new Error(overflow)
         // Use unified AI streaming
         await ai.stream(messages, {
           modelId: model,
@@ -155,7 +164,7 @@ export function useInsightGeneration({
         setCurrentPanelId(null)
       }
     },
-    [context, panels, prompts, model, ai, generateInsight, setResponses, setPanelStatus],
+    [context, panels, prompts, model, locale, ai, generateInsight, setResponses, setPanelStatus],
   )
 
   const stopPanel = useCallback(

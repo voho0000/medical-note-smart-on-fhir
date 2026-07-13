@@ -129,14 +129,14 @@ describe('hepatitis panel → BC肝 cumulative pivot', () => {
     expect(row!.values.get('2025-12-16')?.value).toBe('Non-reactive')
   })
 
-  it('two same-day NUMERIC results still last-write-win (no merge)', () => {
+  it('preserves two same-day numeric results instead of silently overwriting one', () => {
     const glucoseA = { resourceType: 'Observation', code: { coding: [{ system: 'http://loinc.org', code: '2345-7', display: 'Glucose' }], text: 'Glucose AC' }, effectiveDateTime: DATE, valueQuantity: { value: 95, unit: 'mg/dL' }, specimen: { display: 'Blood' } }
     const glucoseB = { ...glucoseA, valueQuantity: { value: 110, unit: 'mg/dL' } }
     const pivots = buildLabPivots([glucoseA, glucoseB])
     const glu = pivots['glucose']
     const row = glu.rows.find(r => r.values.get('2025-12-16'))
     expect(row).toBeDefined()
-    // last-write-wins → 110, and NOT a concatenation like "95 (110)"
-    expect(row!.values.get('2025-12-16')?.value).toBe('110')
+    expect(row!.values.get('2025-12-16')?.value).toBe('95 / 110')
+    expect(row!.values.get('2025-12-16')?.allValues).toEqual(['95', '110'])
   })
 })

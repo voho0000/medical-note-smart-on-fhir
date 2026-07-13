@@ -42,7 +42,9 @@ export function stripHtmlToText(html: string): string {
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<head[\s\S]*?<\/head>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(td|th)>/gi, '\t')
     .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+    .replace(/<\/table>/gi, '\n')
     .replace(/<li[^>]*>/gi, '• ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/gi, ' ')
@@ -59,7 +61,7 @@ function hasDischargeLoinc(coding?: Array<{ code?: string }>): boolean {
   return (coding ?? []).some((c) => c.code === DISCHARGE_SUMMARY_LOINC)
 }
 
-function decodeBase64(data?: string): string {
+export function decodeBase64(data?: string): string {
   if (!data) return ''
   try {
     if (typeof atob !== 'undefined') {
@@ -83,14 +85,16 @@ function decodeBase64(data?: string): string {
 // Decoding + HTML-stripping a discharge summary is expensive, and
 // listClinicalDocuments is invoked MANY times per UI interaction (several
 // consumers × React re-renders × StrictMode double-invoke). Cache the derived
-// text per document id so each document is decoded at most once per session,
+// text per resource object so each document is decoded at most once per bundle,
 // regardless of how often it gets re-listed — this is what keeps the
 // data-selection checkbox responsive on patients with many discharge summaries.
-const decodedTextCache = new Map<string, string>()
+// Cache by resource object identity, never by FHIR id. Resource ids are scoped
+// to one FHIR base and can repeat after patient/server/bundle switches.
+const decodedTextCache = new WeakMap<object, string>()
 
 function compositionText(c: CompositionEntity): string {
-  const key = c.id ? `c:${c.id}` : null
-  if (key) { const hit = decodedTextCache.get(key); if (hit !== undefined) return hit }
+  const hit = decodedTextCache.get(c as object)
+  if (hit !== undefined) return hit
   const result = (c.section ?? [])
     .map((s) => {
       const t = s.text?.div ? stripHtmlToText(s.text.div) : ''
@@ -99,24 +103,35 @@ function compositionText(c: CompositionEntity): string {
     })
     .filter(Boolean)
     .join('\n\n')
-  if (key) decodedTextCache.set(key, result)
+  decodedTextCache.set(c as object, result)
   return result
 }
 
 function documentReferenceText(d: DocumentReferenceEntity): string {
-  const key = d.id ? `d:${d.id}` : null
-  if (key) { const hit = decodedTextCache.get(key); if (hit !== undefined) return hit }
-  const att = d.content?.[0]?.attachment
-  const ct = att?.contentType?.toLowerCase() ?? ''
-  let result: string
-  // Discharge summaries ride in attachment.data as base64 text/html.
-  if (att?.data && (ct.includes('html') || ct.includes('text') || ct.includes('xml') || !ct)) {
-    const decoded = decodeBase64(att.data)
-    result = decoded.trim() ? stripHtmlToText(decoded) : (d.description || att?.title || '')
-  } else {
-    result = d.description || att?.title || ''
-  }
-  if (key) decodedTextCache.set(key, result)
+  const hit = decodedTextCache.get(d as object)
+  if (hit !== undefined) return hit
+  const attachmentTexts = (d.content ?? []).map((content, index) => {
+    const att = content.attachment
+    const ct = att?.contentType?.toLowerCase() ?? ''
+    const label = att?.title || `Attachment ${index + 1}`
+    if (att?.data && (ct.includes('html') || ct.includes('text') || ct.includes('xml') || !ct)) {
+      const decoded = decodeBase64(att.data)
+      return decoded.trim()
+        ? `${label}:\n${stripHtmlToText(decoded)}`
+        : `${label}: [base64 attachment could not be decoded]`
+    }
+    if (att?.data) {
+      return `${label}: [binary attachment not decoded; contentType=${ct || 'unknown'}; size=${att.size ?? 'unknown'}]`
+    }
+    if (att?.url) {
+      // Do not copy a possibly signed/identifying URL into a cloud prompt. Make
+      // the missing body explicit so it cannot be mistaken for an empty note.
+      return `${label}: [URL-backed attachment not resolved; contentType=${ct || 'unknown'}]`
+    }
+    return `${label}: [attachment has no inline data or URL]`
+  })
+  const result = attachmentTexts.filter(Boolean).join('\n\n') || d.description || ''
+  decodedTextCache.set(d as object, result)
   return result
 }
 
@@ -162,7 +177,6 @@ export function listClinicalDocuments(data?: DocumentSource | null): ClinicalDoc
  * - latestAdmission  → the single most recent 出院病摘 (fallback: latest doc)
  * - recentAdmissions → the most recent N 出院病摘 (fallback: N latest docs) —
  *                      covers a multi-admission treatment course without dumping
- *                      every discharge summary a frequent-flyer patient has.
  * - all              → every document
  * - custom           → exactly the ticked ids
  * Input is assumed newest-first (as `listClinicalDocuments` returns).
@@ -190,10 +204,17 @@ export function resolveSelectedDocuments(
 
 export function formatDocumentsSection(docs: ClinicalDocumentRef[]): ClinicalContextSection | null {
   if (docs.length === 0) return null
+  const escapeBoundaryToken = (value: string): string =>
+    value.replace(/<(BEGIN_DOCUMENT|END_DOCUMENT)\b/gi, '&lt;$1')
   const items = docs.map((d) => {
     const date = d.date ? new Date(d.date).toLocaleDateString() : ''
     const header = `${d.title}${date ? ` (${date})` : ''}`
-    return d.text ? `${header}\n${d.text}` : header
+    const body = escapeBoundaryToken(d.text || '[No document body was available]')
+    // Only a sanitized FHIR id is allowed in the delimiter. Document titles
+    // are untrusted source text and must not be able to close or mutate the
+    // boundary by injecting quotes / angle brackets into an attribute.
+    const boundaryId = d.id.replace(/[^A-Za-z0-9.-]/g, '_') || 'unknown'
+    return `<BEGIN_DOCUMENT id="${boundaryId}">\nDocument title: ${escapeBoundaryToken(header)}\n${body}\n<END_DOCUMENT id="${boundaryId}">`
   })
   return { title: 'Documents', items }
 }

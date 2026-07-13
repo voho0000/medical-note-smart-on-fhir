@@ -59,4 +59,23 @@ describe('imagingReportsCategory — ImagingStudy', () => {
     expect(data[0].resourceType).toBe('ImagingStudy')
     expect(imagingReportsCategory.getCount(data, filters, clinicalData)).toBe(1)
   })
+
+  it('includes every report when the user selects All Reports', () => {
+    const reports = Array.from({ length: 30 }, (_, index) => ({
+      id: `report-${index + 1}`,
+      status: 'final',
+      code: { text: `Imaging report ${index + 1}` },
+      effectiveDateTime: `2026-06-${String(index + 1).padStart(2, '0')}T00:00:00Z`,
+      conclusion: `Finding ${index + 1}`,
+    }))
+    const clinicalData = { observations: [], encounters: [] }
+
+    const section = imagingReportsCategory.getContextSection(reports as any, filters, clinicalData as any)
+    const items = section && !Array.isArray(section) ? section.items : []
+
+    expect(items).toHaveLength(30)
+    expect(items.join('\n')).toContain('Imaging report 1')
+    expect(items.join('\n')).toContain('Imaging report 30')
+    expect(items.some((item) => item.includes('omitted for brevity'))).toBe(false)
+  })
 })

@@ -38,14 +38,19 @@ describe('makeTimeRangeTest — sinceLastVisit', () => {
     expect(test('2025-06-01')).toBe(false) // well before
   })
 
-  it('includes undated items (mirrors isWithinTimeRange leniency)', () => {
+  it('does not claim an undated item belongs inside a bounded event window', () => {
     const test = makeTimeRangeTest(SINCE_LAST_VISIT, { encounters })
-    expect(test(undefined)).toBe(true)
+    expect(test(undefined)).toBe(false)
   })
 
-  it('with no encounters, imposes no window (everything passes)', () => {
+  it('with no encounters, does not silently turn the bounded filter into all-time', () => {
     const test = makeTimeRangeTest(SINCE_LAST_VISIT, { encounters: [] })
-    expect(test('2000-01-01')).toBe(true)
+    expect(test('2000-01-01')).toBe(false)
+  })
+
+  it('excludes future-dated data', () => {
+    const test = makeTimeRangeTest(SINCE_LAST_VISIT, { encounters })
+    expect(test('2999-01-01')).toBe(false)
   })
 
   it('falls through to wall-clock ranges for non-event values', () => {

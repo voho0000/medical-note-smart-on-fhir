@@ -5,11 +5,12 @@
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, Observation } from '@/src/shared/types/fhir.types'
 import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
-import { selectStandaloneResultObservations } from '@/src/core/utils/observation-selectors'
-import { formatNumberSmart } from '@/src/shared/utils/number-format.utils'
+import { selectLabOrphanObservations } from '@/src/core/utils/observation-selectors'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { categorizeObservation } from '@/src/shared/utils/lab-categories'
 import { buildLabPivots, type LabPivot, type LabRow } from '@/src/shared/utils/lab-pivot.utils'
+import { expandObservationValues, observationDisplayValue } from '@/src/core/utils/observation-value.utils'
+import { normalizeClinicalStatus } from '@/src/core/utils/clinical-context-selection.utils'
 
 // Union type for lab data (DiagnosticReport or standalone Observation)
 type LabData = DiagnosticReport | Observation
@@ -34,7 +35,9 @@ function trendPointsFrom(filters?: Record<string, unknown>): number {
 const FALLBACK_SAMPLING_DAYS = 3
 
 function isObservation(item: LabData): item is Observation {
-  return (item as any).resourceType === 'Observation' || !!(item as Observation).valueQuantity || !!(item as Observation).valueString
+  return (item as any).resourceType === 'Observation'
+    || !!observationDisplayValue(item)
+    || Array.isArray((item as Observation).component)
 }
 
 interface LabPoint {
@@ -43,6 +46,7 @@ interface LabPoint {
   value: string
   date?: string
   interp?: string
+  status?: string
   /** Owning lab panel id (cbc/chem/…) for panel-level sub-selection; '' if unknown. */
   panel: string
   /** Source observation — feeds the pivot builder for panel-categorized points. */
@@ -51,14 +55,15 @@ interface LabPoint {
 
 function obsToLabPoint(o: any): LabPoint | null {
   const name = o?.code?.text || o?.code?.coding?.[0]?.display || 'Lab'
-  const raw = o?.valueQuantity?.value ?? o?.valueString
-  if (raw === undefined || raw === null || raw === '') return null
-  const value = typeof raw === 'number' ? formatNumberSmart(raw) : String(raw)
-  const unit = o?.valueQuantity?.unit || ''
+  const display = observationDisplayValue(o)
+  if (!display || display.value === '') return null
+  const value = display.value
+  const unit = display.unit || ''
   const date = o?.effectiveDateTime
   const interp = o?.interpretation?.coding?.[0]?.code || o?.interpretation?.text || undefined
   const panel = categorizeObservation(o)?.id ?? ''
-  return { name, unit, value, date, interp, panel, obs: o }
+  const status = normalizeClinicalStatus(o?.status) || undefined
+  return { name, unit, value, date, interp, status, panel, obs: o }
 }
 
 /** Parse the labPanelIds CSV filter into a Set; empty Set = no restriction. */
@@ -70,6 +75,7 @@ function parsePanelFilter(filters?: Record<string, unknown>): Set<string> {
 interface NarrativeReport {
   text: string
   date?: string
+  status?: string
 }
 
 // Flatten lab data into individual analyte readings (+ narrative conclusions for
@@ -83,12 +89,16 @@ function collectLabPoints(
 
   for (const item of data) {
     if (isObservation(item)) {
-      const p = obsToLabPoint(item)
-      if (p) points.push(p)
+      if (normalizeClinicalStatus((item as any).status) === 'entered-in-error') continue
+      for (const valueObservation of expandObservationValues(item)) {
+        const p = obsToLabPoint(valueObservation)
+        if (p) points.push(p)
+      }
       continue
     }
 
     const report = item as DiagnosticReport
+    if (normalizeClinicalStatus(report.status) === 'entered-in-error') continue
     const resolved = (report.result ?? [])
       .map((r: any) => {
         const id = r?.reference?.split('/').pop()
@@ -98,16 +108,20 @@ function collectLabPoints(
 
     let added = 0
     for (const o of resolved) {
-      const p = obsToLabPoint(o)
-      if (p) {
-        points.push(p)
-        added++
+      if (normalizeClinicalStatus((o as any).status) === 'entered-in-error') continue
+      for (const valueObservation of expandObservationValues(o)) {
+        const p = obsToLabPoint(valueObservation)
+        if (p) {
+          points.push(p)
+          added++
+        }
       }
     }
     if (added === 0 && report.conclusion) {
       conclusions.push({
         text: `${report.code?.text || 'Report'}: ${report.conclusion}`,
         date: report.effectiveDateTime || report.issued,
+        status: normalizeClinicalStatus(report.status) || undefined,
       })
     }
   }
@@ -133,8 +147,27 @@ const MAX_KEY_TRENDS = 8
 function pivotCellText(row: LabRow, date: string): string {
   const cell = row.values.get(date)
   if (!cell) return '-'
-  if (!cell.isAbnormal) return cell.value
-  return `${cell.value} ${cell.interpretationCode || '*'}`
+  const status = cell.status && !['final', 'amended', 'corrected'].includes(cell.status)
+    ? ` {status:${cell.status}}`
+    : ''
+  if (!cell.isAbnormal) return `${cell.value}${status}`
+  return `${cell.value} ${cell.interpretationCode || '*'}${status}`
+}
+
+function capPointsPerAnalyte(points: LabPoint[], maxPoints: number): LabPoint[] {
+  if (!Number.isFinite(maxPoints)) return points
+  const groups = new Map<string, LabPoint[]>()
+  for (const point of points) {
+    const key = `${point.panel}|${point.name}|${point.unit}`
+    const group = groups.get(key)
+    if (group) group.push(point)
+    else groups.set(key, [point])
+  }
+  return [...groups.values()].flatMap((group) =>
+    [...group]
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      .slice(0, maxPoints),
+  )
 }
 
 function renderPivotTable(pivot: LabPivot): string[] {
@@ -277,13 +310,13 @@ export const labReportsCategory: DataCategory<LabData> = {
     const labReports = reports.filter((report: DiagnosticReport) =>
       inferGroupFromCategory(report.category) === 'lab'
     )
-    const standaloneResultObs = selectStandaloneResultObservations(clinicalData)
+    const standaloneResultObs = selectLabOrphanObservations(clinicalData)
     return [...labReports, ...standaloneResultObs] as unknown as LabData[]
   },
 
-  // 最新 → distinct analytes (one latest value each); 其他 depth → every reading
-  // in the window (the per-test cap only trims the rendered trend, not the
-  // badge). So the badge tracks the depth filter (matches Other Observations).
+  // Count source readings in the selected window. Rendering may group same-day
+  // readings into one cell and labDepth may cap the visible points per analyte;
+  // the coverage manifest labels these as source-record counts explicitly.
   getCount: (data, filters, allClinicalData) => {
     const { points, conclusions } = collectLabPoints(data, allClinicalData?.observations || [])
     const range = (filters?.labReportTimeRange as string) || 'all'
@@ -330,13 +363,17 @@ export const labReportsCategory: DataCategory<LabData> = {
         const head = `${name}${unit ? ` (${unit})` : ''}`
         const last = series[series.length - 1]
         const flag = last.interp ? ` [${last.interp}]` : ''
+        const status = last.status && !['final', 'amended', 'corrected'].includes(last.status)
+          ? ` {status:${last.status}}`
+          : ''
         const date = last.date ? ` (${shortDate(last.date)})` : ''
-        items.push(`${head}: ${last.value}${flag}${date}`)
+        items.push(`${head}: ${last.value}${flag}${status}${date}`)
       }
     } else {
       // Full-history mode: date × test pivot tables (per lab panel) + key-trend
       // appendix. See the pivot-rendering block above for the experiment basis.
-      const pivotable = inRange.filter((p) => p.panel && p.date)
+      const capped = capPointsPerAnalyte(inRange, maxTrendPoints)
+      const pivotable = capped.filter((p) => p.panel && p.date)
       const pivots = buildLabPivots(pivotable.map((p) => p.obs))
       for (const pivot of Object.values(pivots)) {
         items.push(...renderPivotTable(pivot))
@@ -361,7 +398,7 @@ export const labReportsCategory: DataCategory<LabData> = {
           const recent = series.slice(-maxTrendPoints)
           const omitted = series.length - recent.length
           const trend = recent
-            .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${p.date ? ` (${shortDate(p.date)})` : ''}`)
+            .map((p) => `${p.value}${p.interp ? `[${p.interp}]` : ''}${p.status && !['final', 'amended', 'corrected'].includes(p.status) ? `{status:${p.status}}` : ''}${p.date ? ` (${shortDate(p.date)})` : ''}`)
             .join(' → ')
           items.push(`${head}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${trend}`)
         }
@@ -377,7 +414,12 @@ export const labReportsCategory: DataCategory<LabData> = {
       if (items.length > 0) items.push('')
       inRangeConclusions
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-        .forEach((c) => items.push(`${c.text}${c.date ? ` (${shortDate(c.date)})` : ''}`))
+        .forEach((c) => {
+          const status = c.status && !['final', 'amended', 'corrected'].includes(c.status)
+            ? ` {status:${c.status}}`
+            : ''
+          items.push(`${c.text}${status}${c.date ? ` (${shortDate(c.date)})` : ''}`)
+        })
     }
 
     if (items.length === 0) return null

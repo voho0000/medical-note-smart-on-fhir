@@ -35,7 +35,6 @@ import { loadEncryptedCache } from '@/src/infrastructure/cache/encrypted-session
 import { getModelDefinition, gateModel } from '@/src/shared/constants/ai-models.constants'
 import {
   getSourceCatalog,
-  scopeDocumentSources,
   type SummaryCatalogInput,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
@@ -47,6 +46,9 @@ import {
 import { shouldAutoRunSummarySlot, shouldSeedDemoSlot } from './auto-run-policy'
 import { runGenerationJob } from './run-generation-job'
 import type { AiResultStore } from './create-ai-result-store'
+import { useDataSelection } from '@/src/application/providers/data-selection.provider'
+import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 
 type ClinicalDataInput = SummaryCatalogInput & {
   isLoading?: boolean
@@ -141,6 +143,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // Same data-selection profile as insights — these pipelines are insight-family.
   const { getFullClinicalContext, includedDocumentIds } = useClinicalContext('insights')
   const clinicalData = useClinicalData() as unknown as ClinicalDataInput | null
+  const dataSelection = useDataSelection()
+  const insightsProfile = dataSelection.getProfile('insights')
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
   // Auth must be resolved before an auto-run carries a Firebase token —
@@ -197,14 +201,26 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     && !clinicalData.error
     && !clinicalData.hasBlockingQueryIssues
 
+  const scopedClinicalData = useMemo(
+    () => (dataReady && clinicalData
+      ? scopeClinicalDataForAi(
+          clinicalData as unknown as Partial<ClinicalDataCollection>,
+          insightsProfile.selection,
+          insightsProfile.filters,
+          includedDocumentIds,
+        ) as ClinicalDataInput
+      : null),
+    [dataReady, clinicalData, insightsProfile.selection, insightsProfile.filters, includedDocumentIds],
+  )
+
   // Deterministic citable-record catalog — fed to the prompt so replies can
   // cite keys, and returned so the feature can resolve those keys into
   // click-to-navigate citations. Recomputes only when the bundle changes.
   const catalog = useMemo(
-    () => (dataReady && clinicalData
-      ? scopeDocumentSources(getSourceCatalog(clinicalData), includedDocumentIds)
+    () => (scopedClinicalData
+      ? getSourceCatalog(scopedClinicalData)
       : []),
-    [dataReady, clinicalData, includedDocumentIds],
+    [scopedClinicalData],
   )
 
   // Guests auto-run too (v0.25.x): the onboarding step is an explicit opt-in
@@ -220,7 +236,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       produce: () =>
         run({
           getFullClinicalContext,
-          clinicalData,
+          clinicalData: scopedClinicalData,
           catalog,
           locale,
           audience,
@@ -228,7 +244,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           modelId: resolvedModelId,
         }),
     })
-  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, getFullClinicalContext, clinicalData, catalog, locale, audience, ai, resolvedModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, getFullClinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId])
 
   // Restore the persisted result on (re)load BEFORE auto-run can fire, so a
   // refresh on the same patient reuses the cached result instead of re-billing.
@@ -303,12 +319,12 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       locale,
       hasCatalog: catalog.length > 0,
     })) return
-    if (!clinicalData) return
-    const seeded = demoSeed({ audience, catalog, clinicalData })
+    if (!scopedClinicalData) return
+    const seeded = demoSeed({ audience, catalog, clinicalData: scopedClinicalData })
     if (!seeded) return
     autoTriggeredRef.current = autoRunIdentity
     setResult(slotKey, seeded)
-  }, [demoSeed, slotKey, autoRunIdentity, result, hydrated, patientId, locale, catalog, audience, clinicalData, setResult])
+  }, [demoSeed, slotKey, autoRunIdentity, result, hydrated, patientId, locale, catalog, audience, scopedClinicalData, setResult])
 
   // Auto-run once per patient+audience+model+access-context after hydration; a
   // failed attempt is NOT retried in a loop — the user regenerates manually.
@@ -337,7 +353,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     dataReady,
     slotKey,
     resolvedModelId,
-    clinicalData,
+    clinicalData: scopedClinicalData,
     catalog,
     result,
     isRunning,

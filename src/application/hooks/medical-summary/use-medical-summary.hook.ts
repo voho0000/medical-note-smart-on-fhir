@@ -118,16 +118,17 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const clinicalContext = [ctx.getFullClinicalContext(), longitudinalInvestigationContext]
       .filter(Boolean)
       .join('\n\n')
-    // Pre-flight: this pipeline doesn't truncate, so warn (don't silently fail)
-    // when the selected context alone overruns the model's window.
-    const overflow = preflightContextWarning(clinicalContext, ctx.modelId, ctx.locale)
-    if (overflow) toast.warning(overflow)
     const messages = generateMedicalSummaryUseCase.buildMessages({
       clinicalContext,
       catalog: ctx.catalog,
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
     })
+    const overflow = preflightContextWarning(messages.map((message) => message.content).join('\n\n'), ctx.modelId, ctx.locale)
+    if (overflow) {
+      toast.error(overflow)
+      throw new Error(overflow)
+    }
 
     const streamOnce = async () => {
       let full = ''

@@ -137,6 +137,27 @@ describe('GenerateClinicalContextUseCase', () => {
       expect(medsSection?.items.some(item => item.includes('Lisinopril 10mg'))).toBe(true)
     })
 
+    it('should prefer English medication coding display over localized text', () => {
+      const bilingualData = {
+        ...mockClinicalData,
+        medications: [{
+          id: 'med-bilingual',
+          medicationCodeableConcept: {
+            text: '福適佳膜衣錠10毫克',
+            coding: [{ display: 'Forxiga Film-coated Tablets 10mg' }],
+          },
+          status: 'active',
+          intent: 'order',
+        }],
+      }
+
+      const result = useCase.execute(mockPatient, bilingualData, defaultOptions)
+      const context = result.find(section => section.title === "Patient's Medications")?.items.join('\n') ?? ''
+
+      expect(context).toContain('Forxiga Film-coated Tablets 10mg')
+      expect(context).not.toContain('福適佳膜衣錠10毫克')
+    })
+
     it('should filter medications by status', () => {
       const dataWithInactive = {
         ...mockClinicalData,
@@ -331,6 +352,15 @@ describe('GenerateClinicalContextUseCase', () => {
       const result = useCase.formatSections(null as any)
 
       expect(result).toBe('No clinical data available.')
+    })
+
+    it('should not turn blank separators into empty bullets', () => {
+      const result = useCase.formatSections([
+        { title: 'Visits', items: ['First visit', '', 'Second visit'] }
+      ])
+
+      expect(result).toBe('Visits:\n- First visit\n\n- Second visit')
+      expect(result).not.toContain('\n- \n')
     })
   })
 })

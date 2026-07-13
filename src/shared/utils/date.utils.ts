@@ -138,5 +138,5 @@ export function isWithinTimeRange(dateString: string | undefined, range: TimeRan
       return true
   }
 
-  return date >= startDate
+  return date >= startDate && date <= now
 }

@@ -85,7 +85,11 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   const { apiKey: openAiKey, geminiKey, claudeKey } = useAllApiKeys()
   const { user, isAnonymous, loading: authLoading } = useAuth()
   const { getFullClinicalContext } = useClinicalContext("insights")
-  const { isLoading: clinicalDataLoading, error: clinicalDataError } = useClinicalData()
+  const {
+    isLoading: clinicalDataLoading,
+    error: clinicalDataError,
+    hasBlockingQueryIssues,
+  } = useClinicalData()
   const { patient } = usePatient()
   const patientId = patient?.id ?? ""
   const model = useEffectiveModel("insights")
@@ -147,7 +151,8 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   }, [patientId, resetForPatient, stopAll])
 
   const contextSig = useMemo(() => contentSignature(context), [context])
-  const runtimeIdentity = patientId && context.trim()
+  const clinicalDataReady = !clinicalDataLoading && !clinicalDataError && !hasBlockingQueryIssues
+  const runtimeIdentity = patientId && context.trim() && clinicalDataReady
     ? `${patientId}:${contextSig}:${model}:${INSIGHTS_PIPELINE_VERSION}`
     : ""
 
@@ -238,7 +243,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
 
   useAutoGenerate({
     panels,
-    canGenerate: canGenerate && !authLoading && hydratedCacheIdentity === cacheIdentity,
+    canGenerate: canGenerate && clinicalDataReady && !authLoading && hydratedCacheIdentity === cacheIdentity,
     context,
     modelId: model,
     runPanel,
@@ -247,7 +252,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     runScope: autoRunScope,
   })
 
-  const hasData = !clinicalDataLoading && !clinicalDataError && context.trim().length > 0 && hydratedCacheIdentity === cacheIdentity
+  const hasData = clinicalDataReady && context.trim().length > 0 && hydratedCacheIdentity === cacheIdentity
 
   const value = useMemo<ClinicalInsightsRuntimeValue>(() => ({
     panels,

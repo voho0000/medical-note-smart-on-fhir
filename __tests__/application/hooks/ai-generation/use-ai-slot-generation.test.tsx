@@ -4,7 +4,11 @@ import { useAiSlotGeneration } from '@/src/application/hooks/ai-generation/use-a
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 let mockPatientId = 'demo-patient-1'
-let mockClinicalData: Record<string, unknown> = { isLoading: false, error: null, catalogReady: true }
+let mockClinicalData: Record<string, unknown> = {
+  isLoading: false,
+  error: null,
+  encounters: [{ id: 'demo-encounter-1' }],
+}
 let mockCachedResult: { headline: string } | null = null
 
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
@@ -22,6 +26,17 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
 jest.mock('@/src/application/hooks/ai/use-unified-ai.hook', () => ({
   useUnifiedAi: () => ({}),
 }))
+jest.mock('@/src/application/providers/data-selection.provider', () => {
+  const constants = jest.requireActual('@/src/shared/constants/data-selection.constants')
+  return {
+    useDataSelection: () => ({
+      getProfile: () => ({
+        selection: constants.ALL_DATA_SELECTION,
+        filters: constants.ALL_DATA_FILTERS,
+      }),
+    }),
+  }
+})
 jest.mock('@/src/application/stores/ai-config.store', () => ({
   useAllApiKeys: () => ({ apiKey: 'user-openai-key', geminiKey: '', claudeKey: '' }),
 }))
@@ -38,7 +53,7 @@ jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({
   loadEncryptedCache: jest.fn(async () => mockCachedResult),
 }))
 jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-case', () => ({
-  getSourceCatalog: (input: { catalogReady?: boolean }) => input.catalogReady === false
+  getSourceCatalog: (input: { encounters?: unknown[] }) => !input.encounters?.length
     ? []
     : [{
         key: 'E1',
@@ -52,7 +67,11 @@ jest.mock('@/src/core/use-cases/medical-summary/generate-medical-summary.use-cas
 describe('useAiSlotGeneration demo snapshot', () => {
   beforeEach(() => {
     mockPatientId = 'demo-patient-1'
-    mockClinicalData = { isLoading: false, error: null, catalogReady: true }
+    mockClinicalData = {
+      isLoading: false,
+      error: null,
+      encounters: [{ id: 'demo-encounter-1' }],
+    }
     mockCachedResult = null
   })
 
@@ -82,7 +101,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
   })
 
   it('waits for the demo catalog instead of auto-running AI against transient empty data', async () => {
-    mockClinicalData = { isLoading: false, error: null, catalogReady: false }
+    mockClinicalData = { isLoading: false, error: null, encounters: [] }
     const store = createAiResultStore<{ headline: string }>()
     const run = jest.fn(async () => ({ headline: 'live AI result from empty data' }))
     const demoSeed = jest.fn(() => ({ headline: 'pre-generated demo result' }))
@@ -103,7 +122,11 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.result).toBeUndefined()
     expect(run).not.toHaveBeenCalled()
 
-    mockClinicalData = { isLoading: false, error: null, catalogReady: true }
+    mockClinicalData = {
+      isLoading: false,
+      error: null,
+      encounters: [{ id: 'demo-encounter-1' }],
+    }
     rerender()
 
     await waitFor(() => {
@@ -143,7 +166,11 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     mockCachedResult = null
     mockPatientId = 'demo-patient-1'
-    mockClinicalData = { isLoading: false, error: null, bundle: 'demo' }
+    mockClinicalData = {
+      isLoading: false,
+      error: null,
+      encounters: [{ id: 'demo-encounter-1' }],
+    }
     rerender()
 
     await waitFor(() => {

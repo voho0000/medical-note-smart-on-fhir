@@ -6,12 +6,16 @@ import { useMemo } from "react"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalData } from "./types"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
-import { useAudience } from "@/src/application/providers/audience.provider"
-import { useLanguage } from "@/src/application/providers/language.provider"
-import { pickLocalizedText } from "@/src/shared/utils/fhir-display-helpers"
+import { pickAiMedicationName } from "@/src/shared/utils/fhir-display-helpers"
 import { routeAbbr } from "@/src/shared/utils/route-display"
-import { partitionByEncounterLink } from "@/src/core/utils/encounter-link.utils"
 import { useNow } from "@/src/shared/hooks/use-now.hook"
+import {
+  durationToDays,
+  filterMedicationRecords,
+  isChronicMedicationRecord,
+  isMedicationCurrentlyInUse,
+  normalizeClinicalStatus,
+} from "@/src/core/utils/clinical-context-selection.utils"
 
 const RECENTLY_ENDED_WINDOW_DAYS = 90
 
@@ -23,7 +27,8 @@ interface MedSummary {
   startedOn?: string
   endDate?: string
   daysRemaining?: number
-  isInactive: boolean
+  state: 'current' | 'ended' | 'other'
+  status: string
   isChronic: boolean
   /** Number of refill cycles collapsed into this row (>=1, only set when >1) */
   refillCount?: number
@@ -33,49 +38,14 @@ interface MedSummary {
   org?: string
 }
 
-function isChronicMedication(med: any): boolean {
-  const coding = med?.courseOfTherapyType?.coding
-  if (!Array.isArray(coding)) return false
-  return coding.some((c: any) => c?.code === 'continuous')
-}
-
-function isWithinTimeRangeDays(date: string | undefined, range: string, nowMs: number): boolean {
-  if (range === 'all' || !date) return true
-  const ms = Date.parse(date)
-  if (Number.isNaN(ms)) return false
-  const days =
-    range === '1m' ? 30 :
-    range === '3m' ? 90 :
-    range === '6m' ? 180 :
-    range === '1y' ? 365 :
-    Infinity
-  return nowMs - ms <= days * 86400000
-}
-
-function toDays(duration: any): number | undefined {
-  const value = Number(duration?.value)
-  if (!Number.isFinite(value) || value <= 0) return undefined
-  const unit = String(duration?.unit || duration?.code || '').toLowerCase()
-  const factor =
-    unit.startsWith('d') ? 1 :
-    unit.startsWith('w') ? 7 :
-    unit.startsWith('mo') || unit === 'month' || unit === 'months' ? 30 :
-    unit.startsWith('y') || unit === 'a' ? 365 :
-    unit === 'h' || unit.startsWith('hour') ? 1 / 24 :
-    1
-  return Math.round(value * factor)
-}
-
 function summarize(
   med: any,
-  audience: 'medical' | 'patient',
-  locale: string,
   nowMs: number,
 ): MedSummary {
-  const name = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
-    || med.medicationCodeableConcept?.text
-    || med.medicationCodeableConcept?.coding?.[0]?.display
-    || med.medicationReference?.display
+  const name = pickAiMedicationName(
+    med.medicationCodeableConcept,
+    med.medicationReference?.display,
+  )
     || 'Unknown medication'
 
   const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
@@ -90,8 +60,8 @@ function summarize(
     : undefined
 
   const startedRaw = med.authoredOn || med.effectiveDateTime
-  const days = toDays(med.dispenseRequest?.expectedSupplyDuration)
-    ?? toDays(dosage?.timing?.repeat?.boundsDuration)
+  const days = durationToDays(med.dispenseRequest?.expectedSupplyDuration)
+    ?? durationToDays(dosage?.timing?.repeat?.boundsDuration)
 
   let endDate: string | undefined
   let daysRemaining: number | undefined
@@ -105,9 +75,14 @@ function summarize(
     }
   }
 
-  const status = String(med.status || '').toLowerCase()
-  const statusInactive = status === 'stopped' || status === 'completed' || status === 'cancelled'
-  const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
+  const status = normalizeClinicalStatus(med.status) || 'unknown'
+  const current = isMedicationCurrentlyInUse(med, nowMs)
+  const endedByStatus = ['stopped', 'completed', 'cancelled', 'ended'].includes(status)
+  const state: MedSummary['state'] = current
+    ? 'current'
+    : endedByStatus || (daysRemaining !== undefined && daysRemaining < 0)
+      ? 'ended'
+      : 'other'
 
   return {
     name,
@@ -117,8 +92,9 @@ function summarize(
     startedOn: startedRaw ? String(startedRaw).slice(0, 10) : undefined,
     endDate,
     daysRemaining,
-    isInactive,
-    isChronic: isChronicMedication(med),
+    state,
+    status,
+    isChronic: isChronicMedicationRecord(med),
     org: med.requester?.display,
   }
 }
@@ -130,7 +106,7 @@ function isPharmacyOrg(org?: string): boolean {
   return /藥局|藥房/.test(org ?? '')
 }
 
-function formatLine(m: MedSummary, mode: 'active' | 'recent'): string {
+function formatLine(m: MedSummary, mode: 'active' | 'recent' | 'other'): string {
   const parts: string[] = [m.isChronic ? `${m.name} [慢箋]` : m.name]
   const dosing = [m.dose, m.frequency, m.route].filter(Boolean).join(', ')
   if (dosing) parts.push(`(${dosing})`)
@@ -140,13 +116,24 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent'): string {
     } else if (m.startedOn) {
       parts.push(`— since ${m.startedOn}`)
     }
-  } else {
+  } else if (mode === 'recent') {
     if (m.endDate) parts.push(`— last ended ${m.endDate}`)
     else if (m.startedOn) parts.push(`— ${m.startedOn}`)
+  } else {
+    if (m.startedOn) parts.push(`— recorded ${m.startedOn}`)
+    if (m.endDate) parts.push(`(calculated supply end ${m.endDate})`)
   }
   if (m.refillCount && m.refillCount > 1) {
     parts.push(`(${m.refillCount} refills)`)
   }
+  const statusSemantics = m.status === 'entered-in-error'
+    ? '; INVALIDATED—do not treat as a medication'
+    : m.status === 'draft'
+      ? '; DRAFT—not an active order'
+      : m.status === 'on-hold'
+        ? '; ON HOLD—not currently in use'
+        : ''
+  parts.push(`[status: ${m.status}${statusSemantics}]`)
   // Mark the source so the model can apply the duplicate rule: a pharmacy row
   // is a DISPENSING of an existing script, NOT a separate prescription.
   if (m.org) {
@@ -161,15 +148,19 @@ function formatLine(m: MedSummary, mode: 'active' | 'recent'): string {
  * can appear 5-6× in the same 90-day window — looks like the patient is
  * "starting and stopping" when they're actually on a stable regimen.
  *
- * Dedup key: drug name. Keep the latest endDate / daysRemaining; track total
- * refill count to surface as `(N refills)` in the prompt.
+ * Dedup key: drug + dose + route + schedule + organization + lifecycle status.
+ * Keep the latest endDate / daysRemaining; track total refill count to surface
+ * as `(N refills)` in the prompt.
  */
 function dedupByDrug(meds: MedSummary[]): MedSummary[] {
   const byName = new Map<string, MedSummary>()
   for (const m of meds) {
-    const existing = byName.get(m.name)
+    // Same display name is not enough: different strengths, routes, schedules,
+    // facilities or lifecycle statuses may represent a real regimen change.
+    const key = [m.name, m.dose, m.route, m.frequency, m.org, m.status].join('|')
+    const existing = byName.get(key)
     if (!existing) {
-      byName.set(m.name, { ...m, refillCount: 1 })
+      byName.set(key, { ...m, refillCount: 1 })
       continue
     }
     existing.refillCount = (existing.refillCount ?? 1) + 1
@@ -193,55 +184,42 @@ export function useMedicationsContext(
   includeMedications: boolean,
   clinicalData: ClinicalData | null,
   filters?: DataFilters,
-  // When 就診紀錄 is also shown, visit-linked meds are already listed under each
-  // visit there — so here we keep only orphan meds (e.g. pharmacy pickups) and
-  // flag the split with a note. Defaults false (medications owns everything).
-  encountersShown: boolean = false
+  // Retained for API compatibility. The medication section remains
+  // authoritative even when visit-linked records are repeated chronologically.
+  _encountersShown: boolean = false
 ): ClinicalContextSection | null {
-  const { audience } = useAudience()
-  const { locale } = useLanguage()
   // See useNow: re-run when the day rolls over so daysRemaining / recently-ended
   // windows fed to the AI don't go stale on a long-lived tab.
   const nowMs = useNow()
   return useMemo(() => {
     if (!includeMedications || !clinicalData?.medications?.length) return null
 
-    let meds = clinicalData.medications
+    // The medication section is the authoritative, filter-faithful list. Visit-
+    // linked records may also be repeated under their encounter for chronology;
+    // never remove them here, because the encounter and medication windows can
+    // differ and cross-section "dedup" previously made records disappear.
+    const meds = filterMedicationRecords(
+      clinicalData.medications,
+      filters,
+      clinicalData as { encounters?: any[] },
+      nowMs,
+    )
+    if (meds.length === 0) return null
 
-    // Only split when encounters is shown AND there are real encounters to host
-    // the visit-linked meds (otherwise the "see Visits above" note is a lie).
-    const encounters = (clinicalData as unknown as { encounters?: { id?: string }[] }).encounters
-    const onlyOrphans = encountersShown && (encounters?.length ?? 0) > 0
-    if (onlyOrphans) {
-      meds = partitionByEncounterLink(meds, encounters).orphan
-      if (meds.length === 0) return null
-    }
-
-    // Apply chronic / acute filter
-    const chronic = (filters?.medicationChronic as string) || 'all'
-    if (chronic === 'chronic') {
-      meds = meds.filter((m: any) => isChronicMedication(m))
-    } else if (chronic === 'acute') {
-      meds = meds.filter((m: any) => !isChronicMedication(m))
-    }
-
-    // Apply time-range filter on authoredOn
-    const timeRange = (filters?.medicationTimeRange as string) || 'all'
-    if (timeRange !== 'all') {
-      meds = meds.filter((m: any) => isWithinTimeRangeDays(m.authoredOn, timeRange, nowMs))
-    }
-
-    const summaries = meds.map((m: any) => summarize(m, audience, locale, nowMs))
+    const summaries = meds.map((m: any) => summarize(m, nowMs))
 
     const now = nowMs
     const recentThreshold = now - RECENTLY_ENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000
     const activeRaw: MedSummary[] = []
     const recentRaw: MedSummary[] = []
     const pastRaw: MedSummary[] = []
+    const otherRaw: MedSummary[] = []
 
     for (const s of summaries) {
-      if (!s.isInactive) {
+      if (s.state === 'current') {
         activeRaw.push(s)
+      } else if (s.state === 'other') {
+        otherRaw.push(s)
       } else if (s.endDate && new Date(s.endDate).getTime() >= recentThreshold) {
         recentRaw.push(s)
       } else {
@@ -255,9 +233,12 @@ export function useMedicationsContext(
     const active = dedupByDrug(activeRaw)
     const recent = dedupByDrug(recentRaw)
     const pastUnique = dedupByDrug(pastRaw)
+    const other = dedupByDrug(otherRaw)
 
     if (filters?.medicationStatus === 'active') {
+      recent.length = 0
       pastUnique.length = 0
+      other.length = 0
     }
 
     const items: string[] = []
@@ -277,17 +258,21 @@ export function useMedicationsContext(
 
     if (pastUnique.length > 0) {
       if (items.length > 0) items.push('')
-      items.push(`Past medications: ${pastUnique.length} drug(s) older than ${RECENTLY_ENDED_WINDOW_DAYS} days (omitted for brevity)`)
+      items.push(`Past medications (older than ${RECENTLY_ENDED_WINDOW_DAYS} days, ${pastUnique.length}):`)
+      pastUnique.sort((a, b) => (b.endDate || b.startedOn || '').localeCompare(a.endDate || a.startedOn || ''))
+      pastUnique.forEach((m) => items.push(`  • ${formatLine(m, 'recent')}`))
+    }
+
+    if (other.length > 0) {
+      if (items.length > 0) items.push('')
+      items.push(`Other medication records — not active (${other.length}):`)
+      other
+        .sort((a, b) => (b.startedOn || '').localeCompare(a.startedOn || ''))
+        .forEach((m) => items.push(`  • ${formatLine(m, 'other')}`))
     }
 
     if (items.length === 0) return null
-    if (onlyOrphans) {
-      // Tell the reader/AI this section is the supplement, not the full list.
-      items.unshift(
-        "Note: medications prescribed during a visit are listed under that visit in 'Visits & Treatment History' above and are NOT repeated here. The medications below are not linked to any visit (e.g. pharmacy refills).",
-        '',
-      )
-    }
+    items.push('', 'Record-fidelity note: visit-linked medication records may also appear under their visit; do not count repeated records as separate prescriptions.')
     return { title: "Patient's Medications", items }
-  }, [includeMedications, clinicalData, filters, audience, locale, encountersShown, nowMs])
+  }, [includeMedications, clinicalData, filters, nowMs])
 }

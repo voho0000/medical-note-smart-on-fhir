@@ -37,10 +37,7 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
     act(() => result.current.selectAllData())
     const chat = result.current.getProfile('chat')
     // every category on
-    expect(Object.values(chat.selection).every((v, i) =>
-      // observations is the hidden legacy field (stays false); everything else true
-      Object.keys(chat.selection)[i] === 'observations' ? v === false : v === true,
-    )).toBe(true)
+    expect(Object.values(chat.selection).every((value) => value === true)).toBe(true)
     // windows opened
     expect(chat.filters.labReportTimeRange).toBe('all')
     expect(chat.filters.encounterTimeRange).toBe('all')
