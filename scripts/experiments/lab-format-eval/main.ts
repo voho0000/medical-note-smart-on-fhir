@@ -88,7 +88,7 @@ function labObservations(loaded: Loaded): any[] {
 }
 
 // ── 兩個 context 臂 ──────────────────────────────────────────────────────────
-const TREND_FILTERS = { labReportVersion: 'all', labReportTimeRange: 'all', labTrendPoints: '16', labPanelIds: '' }
+const TREND_FILTERS = { labDepth: '16', labReportTimeRange: 'all', labPanelIds: '' }
 
 function buildTrendArm(loaded: Loaded): string {
   const data = labReportsCategory.extractData(loaded.collection)

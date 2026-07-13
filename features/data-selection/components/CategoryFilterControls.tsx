@@ -11,9 +11,6 @@ import type { DataCategory, FilterValue } from "@/src/core/interfaces/data-categ
 const VALUE_LABELS: Record<string, { zh: string; en: string }> = {
   latest: { zh: '最新', en: 'Latest' },
   all: { zh: '全部', en: 'All' },
-  // IPS 匯出專用的 labReportVersion 第三選項(只出現在 IPS scope panel 注入的
-  // options 裡;chat/insights 面板的選項清單不含此值)。
-  latestPerAnalyte: { zh: '每項目最近 3 筆', en: 'Latest 3 per test' },
   active: { zh: '作用中', en: 'Active' },
   chronic: { zh: '慢箋', en: 'Chronic' },
   acute: { zh: '急性', en: 'Acute' },
@@ -27,10 +24,17 @@ const VALUE_LABELS: Record<string, { zh: string; en: string }> = {
   '3y': { zh: '3 年', en: '3y' },
   '5y': { zh: '5 年', en: '5y' },
   sinceLastVisit: { zh: '上次就醫以來', en: 'Since last visit' },
-  // Lab trend-depth options (labTrendPoints)
-  '4': { zh: '4 點', en: '4 pts' },
-  '8': { zh: '8 點', en: '8 pts' },
-  '16': { zh: '16 點', en: '16 pts' },
+}
+
+// labDepth (每項目筆數) has its own labels: its 'latest'/'all' read differently
+// from the version selects that share those value strings ('最新（1 筆）' vs plain
+// '最新'), so it gets a dedicated map keyed by the same option values.
+const LAB_DEPTH_LABELS: Record<string, { zh: string; en: string }> = {
+  latest: { zh: '最新（1 筆）', en: 'Latest (1)' },
+  '3': { zh: '每項目 3 筆', en: '3 per test' },
+  '8': { zh: '每項目 8 筆', en: '8 per test' },
+  '16': { zh: '每項目 16 筆', en: '16 per test' },
+  all: { zh: '全部', en: 'All' },
 }
 
 interface CategoryFilterControlsProps {
@@ -42,8 +46,9 @@ interface CategoryFilterControlsProps {
 export function CategoryFilterControls({ category, filters, onFilterChange }: CategoryFilterControlsProps) {
   const { locale } = useLanguage()
   const isZh = locale.startsWith('zh')
-  const label = (value: string, fallback: string) => {
-    const entry = VALUE_LABELS[value]
+  const label = (filterKey: string, value: string, fallback: string) => {
+    const map = filterKey === 'labDepth' ? LAB_DEPTH_LABELS : VALUE_LABELS
+    const entry = map[value]
     return entry ? (isZh ? entry.zh : entry.en) : fallback
   }
 
@@ -60,12 +65,12 @@ export function CategoryFilterControls({ category, filters, onFilterChange }: Ca
             onValueChange={(v) => onFilterChange(filter.key, v)}
           >
             <SelectTrigger className="h-7 w-auto gap-1 rounded-full border-border/70 px-2.5 text-[0.6875rem] text-muted-foreground">
-              <span>{label(current, current)}</span>
+              <span>{label(filter.key, current, current)}</span>
             </SelectTrigger>
             <SelectContent align="start" className="text-xs">
               {(filter.options ?? []).map((opt) => (
                 <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                  {label(opt.value, opt.label)}
+                  {label(filter.key, opt.value, opt.label)}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -75,7 +75,7 @@ describe('data-selection.constants', () => {
       expect(DEFAULT_DATA_FILTERS.medicationStatus).toBe('active')
       expect(DEFAULT_DATA_FILTERS.medicationChronic).toBe('all')
       expect(DEFAULT_DATA_FILTERS.medicationTimeRange).toBe('6m')
-      expect(DEFAULT_DATA_FILTERS.labReportVersion).toBe('all')
+      expect(DEFAULT_DATA_FILTERS.labDepth).toBe('8')
       expect(DEFAULT_DATA_FILTERS.labReportTimeRange).toBe('6m')
       expect(DEFAULT_DATA_FILTERS.imagingReportVersion).toBe('latest')
       expect(DEFAULT_DATA_FILTERS.imagingReportTimeRange).toBe('1y')

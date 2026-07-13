@@ -46,7 +46,7 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
     expect(chat.filters.encounterTimeRange).toBe('all')
     expect(chat.filters.medicationTimeRange).toBe('all')
     expect(chat.filters.labPanelIds).toBe('')
-    expect(chat.filters.labTrendPoints).toBe('16')
+    expect(chat.filters.labDepth).toBe('all')
     expect(chat.documentMode).toBe('all')
     // broadcast to insights, never ips
     expect(result.current.getProfile('insights').filters.labReportTimeRange).toBe('all')
@@ -93,20 +93,36 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
     expect(result.current.getProfile('chat').selection.problemList).toBe(false)
   })
 
-  it('seeds the ips profile with latestPerAnalyte labs — chat/insights keep the working default', () => {
+  it('seeds the ips profile with 3-per-test labs — chat/insights keep the working default', () => {
     const { result } = setup()
-    expect(result.current.getProfile('ips').filters.labReportVersion).toBe('latestPerAnalyte')
-    expect(result.current.getProfile('chat').filters.labReportVersion).toBe('all')
-    expect(result.current.getProfile('insights').filters.labReportVersion).toBe('all')
+    expect(result.current.getProfile('ips').filters.labDepth).toBe('3')
+    expect(result.current.getProfile('chat').filters.labDepth).toBe('8')
+    expect(result.current.getProfile('insights').filters.labDepth).toBe('8')
   })
 
-  it('coerceProfile keeps a stored labReportVersion choice over the ips seed', () => {
-    // 既有使用者在 IPS profile 存過 'all' → 升級後不得被 seed 蓋掉。
+  it('coerceProfile migrates legacy lab keys and keeps the user choice over the ips seed', () => {
+    // 既有使用者在 IPS profile 存過舊的 labReportVersion:'all' → 遷移為 labDepth
+    // '8'(舊「全趨勢」的預設深度),不得被 ips seed('3')蓋掉;舊鍵一併移除。
     const kept = coerceProfile({ filters: { labReportVersion: 'all' } as never }, IPS_DEFAULT_DATA_FILTERS)
-    expect(kept.filters.labReportVersion).toBe('all')
-    // 沒存過 → 用 ips seed。
+    expect(kept.filters.labDepth).toBe('8')
+    expect((kept.filters as unknown as Record<string, unknown>).labReportVersion).toBeUndefined()
+    expect((kept.filters as unknown as Record<string, unknown>).labTrendPoints).toBeUndefined()
+    // 沒存過 → 用 ips seed(labDepth '3')。
     const seeded = coerceProfile(undefined, IPS_DEFAULT_DATA_FILTERS)
-    expect(seeded.filters.labReportVersion).toBe('latestPerAnalyte')
+    expect(seeded.filters.labDepth).toBe('3')
+  })
+
+  it('coerceProfile migrates each legacy labReportVersion/labTrendPoints combination', () => {
+    // latest → 'latest'
+    expect(coerceProfile({ filters: { labReportVersion: 'latest' } as never }).filters.labDepth).toBe('latest')
+    // latestPerAnalyte (IPS) → '3'
+    expect(coerceProfile({ filters: { labReportVersion: 'latestPerAnalyte' } as never }).filters.labDepth).toBe('3')
+    // all + trend points → the stored trend depth
+    expect(coerceProfile({ filters: { labReportVersion: 'all', labTrendPoints: '16' } as never }).filters.labDepth).toBe('16')
+    // legacy '4' points folds into the nearest new value '3'
+    expect(coerceProfile({ filters: { labReportVersion: 'all', labTrendPoints: '4' } as never }).filters.labDepth).toBe('3')
+    // all with no trend points → the '8' default
+    expect(coerceProfile({ filters: { labReportVersion: 'all' } as never }).filters.labDepth).toBe('8')
   })
 
   it('resetToDefaults restores the currently selected mode baseline', () => {

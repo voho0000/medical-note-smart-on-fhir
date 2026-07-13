@@ -16,11 +16,16 @@ type LabData = DiagnosticReport | Observation
 
 // Cap the trend at the most recent N readings per analyte to keep the context
 // bounded; older points are summarised as "…(N earlier)". User-tunable via the
-// labTrendPoints filter.
+// labDepth filter ('3'/'8'/'16' = cap K; 'all' = uncapped).
 const DEFAULT_TREND_POINTS = 8
 
+// Max trend points per analyte for the pivot / trend-line rendering, derived
+// from labDepth. 'all' → uncapped (Infinity); '3'/'8'/'16' → that many; the
+// 'latest' depth uses a separate compact branch and never reads this.
 function trendPointsFrom(filters?: Record<string, unknown>): number {
-  const n = Number(filters?.labTrendPoints)
+  const depth = String(filters?.labDepth ?? '')
+  if (depth === 'all') return Number.POSITIVE_INFINITY
+  const n = Number(depth)
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_TREND_POINTS
 }
 
@@ -231,14 +236,19 @@ export const labReportsCategory: DataCategory<LabData> = {
 
   filters: [
     {
-      key: 'labReportVersion',
+      // 每項目筆數 — 一顆下拉合併舊的「檢驗版本」+「趨勢深度」。'latest' = 每項目
+      // 最新 1 筆;'3'/'8'/'16' = 樞紐每項目上限 K;'all' = 每項目全部、不設上限。
+      key: 'labDepth',
       type: 'select',
-      label: 'Report Version',
+      label: 'Points per test',
       options: [
-        { value: 'latest', label: 'Latest value' },
-        { value: 'all', label: 'Full trend' },
+        { value: 'latest', label: 'Latest (1)' },
+        { value: '3', label: '3 per test' },
+        { value: '8', label: '8 per test' },
+        { value: '16', label: '16 per test' },
+        { value: 'all', label: 'All' },
       ],
-      defaultValue: 'all',
+      defaultValue: '8',
     },
     {
       key: 'labReportTimeRange',
@@ -254,17 +264,6 @@ export const labReportsCategory: DataCategory<LabData> = {
         { value: 'all', label: 'All Time' },
       ],
       defaultValue: '6m',
-    },
-    {
-      key: 'labTrendPoints',
-      type: 'select',
-      label: 'Trend Depth',
-      options: [
-        { value: '4', label: '4 points' },
-        { value: '8', label: '8 points' },
-        { value: '16', label: '16 points' },
-      ],
-      defaultValue: '8',
     },
   ],
 
@@ -282,8 +281,9 @@ export const labReportsCategory: DataCategory<LabData> = {
     return [...labReports, ...standaloneResultObs] as unknown as LabData[]
   },
 
-  // 最新 → distinct analytes (one latest value each); 全部 → every reading. So
-  // the badge tracks the version filter (matches Other Observations).
+  // 最新 → distinct analytes (one latest value each); 其他 depth → every reading
+  // in the window (the per-test cap only trims the rendered trend, not the
+  // badge). So the badge tracks the depth filter (matches Other Observations).
   getCount: (data, filters, allClinicalData) => {
     const { points, conclusions } = collectLabPoints(data, allClinicalData?.observations || [])
     const range = (filters?.labReportTimeRange as string) || 'all'
@@ -292,16 +292,16 @@ export const labReportsCategory: DataCategory<LabData> = {
     const kept = panels.size === 0
       ? windowed.points
       : windowed.points.filter((p) => panels.has(p.panel))
-    const version = (filters?.labReportVersion as string) || 'latest'
-    if (version === 'all') return kept.length
-    return new Set(kept.map((p) => p.name)).size
+    const depth = (filters?.labDepth as string) || 'latest'
+    if (depth === 'latest') return new Set(kept.map((p) => p.name)).size
+    return kept.length
   },
 
   getContextSection: (data, filters, allClinicalData): ClinicalContextSection | null => {
     if (data.length === 0) return null
 
     const range = (filters?.labReportTimeRange as string) || 'all'
-    const version = (filters?.labReportVersion as string) || 'latest'
+    const depth = (filters?.labDepth as string) || 'latest'
     const maxTrendPoints = trendPointsFrom(filters)
     const { points, conclusions } = collectLabPoints(data, allClinicalData?.observations || [])
 
@@ -316,7 +316,7 @@ export const labReportsCategory: DataCategory<LabData> = {
 
     const items: string[] = []
 
-    if (version === 'latest') {
+    if (depth === 'latest') {
       // Latest value per analyte — compact list, unchanged.
       const byName = new Map<string, LabPoint[]>()
       for (const p of inRange) {
@@ -389,7 +389,7 @@ export const labReportsCategory: DataCategory<LabData> = {
       )
     }
 
-    const title = version === 'latest'
+    const title = depth === 'latest'
       ? 'Lab Reports (latest value per test)'
       : 'Lab Reports (date × test pivot per panel, newest first; abnormal flagged H/L/*)'
     return { title, items }

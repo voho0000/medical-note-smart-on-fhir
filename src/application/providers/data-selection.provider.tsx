@@ -108,6 +108,25 @@ function makeDefaultProfile(defaultFilters: DataFilters = DEFAULT_DATA_FILTERS):
   }
 }
 
+// Migrate the two legacy lab filters (labReportVersion + labTrendPoints) into the
+// merged single `labDepth` key. Returns the migrated depth, or undefined when the
+// stored filters already use labDepth (or carry neither legacy key) — in which case
+// the caller keeps whatever is already there / the seeded default.
+//   latest          → 'latest' (每項目 1 筆)
+//   latestPerAnalyte → '3'      (IPS 每項目 3 筆)
+//   all / other      → 舊 labTrendPoints ('8'/'16');'4' 併入最接近的 '3';無則 '8'
+function migrateLabDepth(rawFilters: Record<string, unknown>): string | undefined {
+  if (rawFilters.labDepth !== undefined) return undefined
+  if (!('labReportVersion' in rawFilters) && !('labTrendPoints' in rawFilters)) return undefined
+  const version = rawFilters.labReportVersion
+  if (version === 'latest') return 'latest'
+  if (version === 'latestPerAnalyte') return '3'
+  const tp = String(rawFilters.labTrendPoints ?? '')
+  if (tp === '8' || tp === '16') return tp
+  if (tp === '4') return '3'
+  return '8'
+}
+
 function coerceTemplate(saved: Partial<DataSelectionTemplate> | null | undefined): DataSelectionTemplate {
   const base = cloneTemplate(CUSTOM_TEMPLATE_DEFAULT)
   if (!saved) return base
@@ -120,8 +139,7 @@ function coerceTemplate(saved: Partial<DataSelectionTemplate> | null | undefined
 // Exported for testing: merges a (possibly stale / partial) stored profile over
 // the current defaults without discarding the user's existing choices.
 // `defaultFilters` lets a consumer seed different factory filters (IPS 匯出用
-// IPS_DEFAULT_DATA_FILTERS — labReportVersion:'latestPerAnalyte');已存檔的使用者
-// 選擇一律優先於預設值。
+// IPS_DEFAULT_DATA_FILTERS — labDepth:'3');已存檔的使用者選擇一律優先於預設值。
 export function coerceProfile(
   saved: Partial<ConsumerProfile> | undefined,
   defaultFilters: DataFilters = DEFAULT_DATA_FILTERS,
@@ -134,7 +152,19 @@ export function coerceProfile(
   // discarded the whole selection/filters → every toggle silently reset to
   // default after any schema change.)
   const selection = { ...DEFAULT_DATA_SELECTION, ...(isObject(saved.selection) ? saved.selection : {}) } as DataSelection
-  const filters = { ...defaultFilters, ...(isObject(saved.filters) ? saved.filters : {}) } as DataFilters
+  // Migrate the legacy labReportVersion + labTrendPoints pair into the merged
+  // `labDepth` key before merging over defaults, then strip the old keys so a
+  // migrated profile carries only labDepth.
+  const rawFilters = isObject(saved.filters) ? saved.filters : {}
+  const migratedDepth = migrateLabDepth(rawFilters)
+  const merged: Record<string, unknown> = {
+    ...defaultFilters,
+    ...rawFilters,
+    ...(migratedDepth ? { labDepth: migratedDepth } : {}),
+  }
+  delete merged.labReportVersion
+  delete merged.labTrendPoints
+  const filters = merged as unknown as DataFilters
   return {
     selection,
     filters,

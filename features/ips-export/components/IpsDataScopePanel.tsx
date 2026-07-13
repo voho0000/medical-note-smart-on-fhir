@@ -20,7 +20,7 @@ import { orphanResultObservations } from '../utils/ips-helpers'
 import type { IpsBundle, IpsCompositionSection } from '../utils/ips-types'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import type { DataFilters } from '@/src/core/entities/clinical-context.entity'
-import type { DataCategory, FilterValue } from '@/src/core/interfaces/data-category.interface'
+import type { FilterValue } from '@/src/core/interfaces/data-category.interface'
 
 interface IpsDataScopePanelProps {
   bundle: IpsBundle
@@ -99,25 +99,9 @@ export function IpsDataScopePanel({ bundle, curatedData }: IpsDataScopePanelProp
   const adaptedFilters = ips.filters as unknown as Record<string, FilterValue>
   const catCount = (id: DataType) => dataCategories.find((c) => c.id === id)?.count ?? 0
 
-  // IPS 專屬:labReportVersion 多一個 'latestPerAnalyte' 選項。只注入到這個
-  // panel 用的 category 副本,chat/insights 的資料選擇面板不受影響(那邊直接
-  // 讀 registry 的原始 filters)。
-  const labCategoryForIps = useMemo<DataCategory | undefined>(() => {
-    const category = dataCategoryRegistry.get('labReports')
-    if (!category?.filters) return category
-    return {
-      ...category,
-      filters: category.filters.map((f) =>
-        f.key === 'labReportVersion'
-          ? { ...f, options: [...(f.options ?? []), { value: 'latestPerAnalyte', label: 'Latest 3 per test' }] }
-          : f,
-      ),
-    }
-  }, [])
-
   // P1-2 — labs 空窗回饋:labReports 已勾選、curation 後 Results 完全為空,但
   // 病人其實有檢驗資料 → 提示最近一筆檢驗日期 + 一鍵套用建議
-  // (labReportTimeRange 'all' + latestPerAnalyte)。
+  // (labReportTimeRange 'all' + labDepth '3';IPS curation 另套 2 年回溯/空窗放寬)。
   const labsEmptyFeedback = useMemo(() => {
     if (!ips.selection.labReports || !curatedData) return null
     const isImaging = (r: { category?: unknown }) => inferGroupFromCategory(r.category as never) === 'imaging'
@@ -138,7 +122,7 @@ export function IpsDataScopePanel({ bundle, curatedData }: IpsDataScopePanelProp
     setFiltersFor('ips', {
       ...ips.filters,
       labReportTimeRange: 'all',
-      labReportVersion: 'latestPerAnalyte',
+      labDepth: '3',
     })
 
   // Curated section narratives, keyed by LOINC (only the included, non-empty ones).
@@ -190,7 +174,7 @@ export function IpsDataScopePanel({ bundle, curatedData }: IpsDataScopePanelProp
       <div className="space-y-2">
         {IPS_SECTIONS.map((sec) => {
           const included = !!ips.selection[sec.selKey]
-          const category = sec.selKey === 'labReports' ? labCategoryForIps : dataCategoryRegistry.get(sec.selKey)
+          const category = dataCategoryRegistry.get(sec.selKey)
           const hasFilters = (category?.filters?.length ?? 0) > 0
           const curated = byLoinc[sec.loinc]
           const count = included && curated ? (curated.entry?.length ?? 0) : catCount(sec.selKey)

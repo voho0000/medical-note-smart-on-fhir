@@ -53,12 +53,13 @@ export interface DataFilters {
   medicationTimeRange: TimeRange
 
   // Reports / observations
-  // 'latestPerAnalyte' 是 IPS 匯出專用語意（每個檢驗項目保留最近 K 筆、限最近
-  // N 年）；AI-context 的 lab category 不認得它時會退回既有分支，不會炸掉。
-  labReportVersion: 'latest' | 'all' | 'latestPerAnalyte'
+  // 每項目筆數 — 一個檢驗項目最多納入幾筆數值（合併自舊的 labReportVersion +
+  // labTrendPoints 兩顆下拉）。'latest' = 每項目最新 1 筆（精簡列）;'3'/'8'/'16'
+  // = 樞紐表每項目上限 K 筆;'all' = 每項目全部、不設上限。時間範圍由
+  // labReportTimeRange 獨立控制。IPS 匯出額外套 2 年回溯 + 空窗放寬（見
+  // ips-curation.ts），與 depth 解耦。
+  labDepth: 'latest' | '3' | '8' | '16' | 'all'
   labReportTimeRange: TimeRange
-  /** Max trend points per analyte in the lab context (full-trend mode). */
-  labTrendPoints: '4' | '8' | '16'
   /**
    * CSV of lab panel ids (cbc/chem/coag/…) to restrict the lab context to.
    * Empty string = all panels. Stored as CSV (not string[]) so it flows through

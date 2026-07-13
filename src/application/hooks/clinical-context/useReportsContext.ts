@@ -59,8 +59,8 @@ export function useReportsContext(
       }
     })
 
-    const latestReports = filters?.labReportVersion === "latest" 
-      ? Array.from(reportsByPanel.values()) 
+    const latestReports = filters?.labDepth === "latest"
+      ? Array.from(reportsByPanel.values())
       : sortedReports
 
     // Format items
@@ -94,7 +94,7 @@ export function useReportsContext(
 
     return {
       section: {
-        title: `Diagnostic Reports${filters?.labReportVersion === "latest" ? " (Latest Versions Only)" : ""}`,
+        title: `Diagnostic Reports${filters?.labDepth === "latest" ? " (Latest Versions Only)" : ""}`,
         items
       },
       observationIdsInReports

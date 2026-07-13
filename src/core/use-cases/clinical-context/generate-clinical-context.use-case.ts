@@ -106,10 +106,10 @@ export class GenerateClinicalContextUseCase {
           items: ['No reports found within the selected time range.']
         })
       } else {
-        const items = this.formatDiagnosticReports(filtered, filters.labReportVersion === 'latest')
+        const items = this.formatDiagnosticReports(filtered, filters.labDepth === 'latest')
         if (items.length > 0) {
           context.push({
-            title: `Diagnostic Reports${filters.labReportVersion === 'latest' ? ' (Latest Versions Only)' : ''}`,
+            title: `Diagnostic Reports${filters.labDepth === 'latest' ? ' (Latest Versions Only)' : ''}`,
             items
           })
         }

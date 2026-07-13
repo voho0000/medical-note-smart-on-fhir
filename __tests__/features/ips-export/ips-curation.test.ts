@@ -54,7 +54,7 @@ describe('curateForIps — time-range curation (labs / reports)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportTimeRange: '6m', labReportVersion: 'all' }),
+      filters: filters({ labReportTimeRange: '6m', labDepth: 'all' }),
       now: NOW,
     })
     expect(out.diagnosticReports.map((r) => r.id)).toEqual(['recent'])
@@ -70,7 +70,7 @@ describe('curateForIps — time-range curation (labs / reports)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latest' }),
+      filters: filters({ labReportTimeRange: 'all', labDepth: 'latest' }),
       now: NOW,
     })
     const ids = out.diagnosticReports.map((r) => r.id).sort()
@@ -90,10 +90,47 @@ describe('curateForIps — time-range curation (labs / reports)', () => {
   })
 })
 
-describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
-  it('exports the expected constants (K=3, lookback 2y)', () => {
+describe('curateForIps — labDepth + 2-year lookback + relax (IPS Results 語意)', () => {
+  it('exports the expected constants (relax K=3, lookback 2y)', () => {
     expect(LATEST_PER_ANALYTE_K).toBe(3)
     expect(LOOKBACK_YEARS).toBe(2)
+  })
+
+  it('applies the 2-year lookback for ANY depth — decoupled from the depth value', () => {
+    // 解耦決策:回溯窗是 IPS 層機制,不綁 depth 值。即使 depth='all'(全部),
+    // 2 年前的報告仍被回溯窗剔除。
+    const data = emptyCollection()
+    data.diagnosticReports = [
+      { id: 'recent', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(30) },
+      { id: 'over-2y', code: { text: 'CBC' }, effectiveDateTime: isoDaysAgo(900) },
+    ]
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportTimeRange: 'all', labDepth: 'all' }),
+      now: NOW,
+    })
+    expect(out.diagnosticReports.map((r) => r.id)).toEqual(['recent'])
+  })
+
+  it('depth=8 keeps up to 8 reports per analyte within the lookback', () => {
+    const data = emptyCollection()
+    data.diagnosticReports = Array.from({ length: 10 }, (_, i) => ({
+      id: `cbc-${i}`,
+      code: { text: 'CBC' },
+      effectiveDateTime: isoDaysAgo(i * 10 + 1), // all within 2y
+    }))
+    const out = curateForIps({
+      data,
+      selection: selection(),
+      filters: filters({ labReportTimeRange: 'all', labDepth: '8' }),
+      now: NOW,
+    })
+    // 10 readings, capped to the newest 8.
+    expect(out.diagnosticReports).toHaveLength(8)
+    expect(out.diagnosticReports.map((r) => r.id)).toEqual(
+      ['cbc-0', 'cbc-1', 'cbc-2', 'cbc-3', 'cbc-4', 'cbc-5', 'cbc-6', 'cbc-7'],
+    )
   })
 
   it('keeps the latest 3 reports per analyte within the 2-year lookback', () => {
@@ -109,7 +146,7 @@ describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      filters: filters({ labReportTimeRange: 'all', labDepth: '3' }),
       now: NOW,
     })
     expect(out.diagnosticReports.map((r) => r.id).sort()).toEqual([
@@ -130,7 +167,7 @@ describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      filters: filters({ labReportTimeRange: 'all', labDepth: '3' }),
       now: NOW,
     })
     expect(out.observations.map((o) => o.id).sort()).toEqual(['k-1', 'k-2', 'k-3', 'na'])
@@ -145,7 +182,7 @@ describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportTimeRange: '6m', labReportVersion: 'latestPerAnalyte' }),
+      filters: filters({ labReportTimeRange: '6m', labDepth: '3' }),
       now: NOW,
     })
     expect(out.diagnosticReports.map((r) => r.id)).toEqual(['recent'])
@@ -164,7 +201,7 @@ describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      filters: filters({ labReportTimeRange: 'all', labDepth: '3' }),
       now: NOW,
     })
     // 每項目最近 1 筆、不限時間。
@@ -185,7 +222,7 @@ describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' }),
+      filters: filters({ labReportTimeRange: 'all', labDepth: '3' }),
       now: NOW,
     })
     expect(out.diagnosticReports).toHaveLength(0)
@@ -197,7 +234,7 @@ describe('curateForIps — latestPerAnalyte (IPS Results 預設語意)', () => {
     const out = curateForIps({
       data,
       selection: selection(),
-      filters: filters({ labReportVersion: 'latestPerAnalyte' }),
+      filters: filters({ labDepth: '3' }),
       now: NOW,
     })
     expect(out.diagnosticReports).toHaveLength(0)
@@ -222,7 +259,7 @@ describe('curateForIps — imaging reports honor the imagingReports toggle (P2)'
     const out = curateForIps({
       data,
       selection: selection({ imagingReports: false }),
-      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'all' }),
+      filters: filters({ labReportTimeRange: 'all', labDepth: 'all' }),
       now: NOW,
     })
     expect(out.diagnosticReports.map((r) => r.id)).toEqual(['cbc'])
@@ -239,7 +276,7 @@ describe('curateForIps — imaging reports honor the imagingReports toggle (P2)'
       selection: selection(),
       filters: filters({
         labReportTimeRange: 'all',
-        labReportVersion: 'all',
+        labDepth: 'all',
         imagingReportTimeRange: '1y',
         imagingReportVersion: 'all',
       }),
@@ -248,13 +285,13 @@ describe('curateForIps — imaging reports honor the imagingReports toggle (P2)'
     expect(out.diagnosticReports.map((r) => r.id)).toEqual(['xray-recent'])
   })
 
-  it('excludes imaging reports from labReports gating and from latestPerAnalyte', () => {
+  it('excludes imaging reports from labReports gating and from the lab depth path', () => {
     const data = emptyCollection()
     data.diagnosticReports = [imagingReport('xray', 10)]
     const out = curateForIps({
       data,
       selection: selection({ labReports: false, imagingReports: true }),
-      filters: filters({ labReportVersion: 'latestPerAnalyte' }),
+      filters: filters({ labDepth: '3' }),
       now: NOW,
     })
     // labReports OFF 不影響影像報告。
@@ -464,7 +501,7 @@ describe('curateForIps — Results observations (orphans only)', () => {
       data,
       // Orphan observations default OFF now — opt in for this dedup test
       selection: selection({ observations: true }),
-      filters: filters({ labReportTimeRange: 'all', labReportVersion: 'all' }),
+      filters: filters({ labReportTimeRange: 'all', labDepth: 'all' }),
       now: NOW,
     })
     expect(out.observations.map((o) => o.id)).toEqual(['orphan'])

@@ -147,16 +147,30 @@ function latestPerKey<T>(
   return latestKPerKey(items, keyOf, dateOf, 1)
 }
 
-// --- latestPerAnalyte (IPS Results 預設語意) ---------------------------------
-// IPS 是「一份可攜快照」:每個檢驗項目保留最近 K 筆(看得出短期趨勢)、且只取
-// 最近 LOOKBACK_YEARS 年內的資料。若病人在該時間窗內完全沒有任何檢驗
-// (報告 + 單獨 observations 皆空),自動放寬為「每項目最近 1 筆、不限時間」,
-// 讓穩定病人的 IPS 仍帶有最後已知的檢驗值而不是空區段。
+// --- IPS Results 檢驗語意(每項目筆數 + 2 年回溯 + 空窗放寬) -----------------
+// IPS 是「一份可攜快照」:每個檢驗項目保留最近 K 筆(看得出短期趨勢),K 由使用者
+// 的 labDepth 決定(latest→1、'3'/'8'/'16'→K、'all'→不限),且只取最近
+// LOOKBACK_YEARS 年內的資料。這裡的「2 年回溯 + 空窗放寬」是 IPS 層的獨立機制,
+// 與 depth *值* 解耦 — 不管使用者選哪個 depth,IPS 都套同一個回溯窗;若病人在該
+// 時間窗內完全沒有任何檢驗(報告 + 單獨 observations 皆空),自動放寬為
+// 「每項目最近 1 筆、不限時間」,讓穩定病人的 IPS 仍帶有最後已知的檢驗值而不是
+// 空區段。AI-context 側(lab category)不套這套回溯/放寬,只吃 labDepth 的筆數。
 
-/** latestPerAnalyte:每個檢驗項目保留的筆數。 */
+/** 空窗放寬時每個檢驗項目保留的筆數(每項目最近 1 筆)。 */
 export const LATEST_PER_ANALYTE_K = 3
-/** latestPerAnalyte:只納入最近幾年內的檢驗。 */
+/** IPS Results:只納入最近幾年內的檢驗。 */
 export const LOOKBACK_YEARS = 2
+
+/**
+ * labDepth → 每項目最多保留幾筆(K)。'latest'→1、'3'/'8'/'16'→該數、'all'→不限
+ * (Infinity)。缺值(舊資料 / 未設)退回 IPS 預設 K=3。
+ */
+function depthToK(depth: string | undefined): number {
+  if (depth === 'latest') return 1
+  if (depth === 'all') return Number.POSITIVE_INFINITY
+  const n = Number(depth)
+  return Number.isFinite(n) && n > 0 ? n : LATEST_PER_ANALYTE_K
+}
 
 function lookbackStart(now: Date): Date {
   const d = new Date(now)
@@ -164,7 +178,7 @@ function lookbackStart(now: Date): Date {
   return d
 }
 
-/** Keep only items dated within the latestPerAnalyte lookback window. */
+/** Keep only items dated within the IPS Results lookback window (LOOKBACK_YEARS). */
 function withinLookback<T>(items: T[], now: Date, dateOf: (i: T) => string | undefined): T[] {
   const startMs = lookbackStart(now).getTime()
   return items.filter((i) => {
@@ -214,18 +228,19 @@ const reportKey = (r: DiagnosticReportEntity) => r.code?.text || ''
 const obsKey = (o: ObservationEntity) => o.code?.text || ''
 
 /**
- * latestPerAnalyte 放寬判定 — 整體 Results(lab 報告 + orphan observations)在
+ * IPS Results 放寬判定 — 整體 Results(lab 報告 + orphan observations)在
  * 「labReportTimeRange ∩ 最近 LOOKBACK_YEARS 年」的交集時間窗內完全為空時才放寬。
  * 判定必須跨兩個集合一起做:若病人 2 年內只剩 orphan observations,報告區不該
- * 把多年前的舊報告復活。
+ * 把多年前的舊報告復活。此判定不看 labDepth — 回溯/放寬對所有 depth 一致(IPS 層
+ * 機制,與 depth 解耦)。
  */
-function shouldRelaxLatestPerAnalyte(
+function shouldRelaxLabWindow(
   data: ClinicalDataCollection,
   selection: DataSelection,
   filters: DataFilters,
   now: Date,
 ): boolean {
-  if (!selection.labReports || filters.labReportVersion !== 'latestPerAnalyte') return false
+  if (!selection.labReports) return false
   const labReports = data.diagnosticReports.filter((r) => !isImagingReport(r))
   const windowedReports = withinLookback(
     withinRange(labReports, filters.labReportTimeRange, now, reportDate),
@@ -323,26 +338,20 @@ function curateLabReports(
   selection: DataSelection,
   filters: DataFilters,
   now: Date,
-  relaxLatestPerAnalyte: boolean,
+  relaxLabWindow: boolean,
 ): DiagnosticReportEntity[] {
   if (!selection.labReports) return []
   // 影像類報告由 curateImagingReports 分流處理(P2:imagingReports 開關)。
   const labReports = data.diagnosticReports.filter((r) => !isImagingReport(r))
-  if (filters.labReportVersion === 'latestPerAnalyte') {
-    // 放寬:時間窗內整體無檢驗 → 每項目最近 1 筆、不限時間。
-    if (relaxLatestPerAnalyte) return latestKPerKey(labReports, reportKey, reportDate, 1)
-    const windowed = withinLookback(
-      withinRange(labReports, filters.labReportTimeRange, now, reportDate),
-      now,
-      reportDate,
-    )
-    return latestKPerKey(windowed, reportKey, reportDate, LATEST_PER_ANALYTE_K)
-  }
-  let reports = withinRange(labReports, filters.labReportTimeRange, now, reportDate)
-  if (filters.labReportVersion === 'latest') {
-    reports = latestPerKey(reports, reportKey, reportDate)
-  }
-  return reports
+  // 放寬:時間窗內整體無檢驗 → 每項目最近 1 筆、不限時間。
+  if (relaxLabWindow) return latestKPerKey(labReports, reportKey, reportDate, 1)
+  // labReportTimeRange ∩ 2 年回溯 → 每項目最近 K 筆(K 由 labDepth 決定)。
+  const windowed = withinLookback(
+    withinRange(labReports, filters.labReportTimeRange, now, reportDate),
+    now,
+    reportDate,
+  )
+  return latestKPerKey(windowed, reportKey, reportDate, depthToK(filters.labDepth))
 }
 
 /**
@@ -372,7 +381,7 @@ function curateObservations(
   selection: DataSelection,
   filters: DataFilters,
   now: Date,
-  relaxLatestPerAnalyte: boolean,
+  relaxLabWindow: boolean,
 ): ObservationEntity[] {
   // Orphan / standalone lab observations ride WITH the lab Results section (no
   // separate toggle) — so they're in iff that section is, and gone when it's
@@ -383,20 +392,13 @@ function curateObservations(
   // Keep only the true orphans so the Results section doesn't show a value row
   // AND a "N observation(s)" report row for the same analyte.
   const orphans = orphanResultObservations(data.diagnosticReports, data.observations)
-  if (filters.labReportVersion === 'latestPerAnalyte') {
-    if (relaxLatestPerAnalyte) return latestKPerKey(orphans, obsKey, obsDate, 1)
-    const windowed = withinLookback(
-      withinRange(orphans, filters.labReportTimeRange, now, obsDate),
-      now,
-      obsDate,
-    )
-    return latestKPerKey(windowed, obsKey, obsDate, LATEST_PER_ANALYTE_K)
-  }
-  let obs = withinRange(orphans, filters.labReportTimeRange, now, obsDate)
-  if (filters.labReportVersion === 'latest') {
-    obs = latestPerKey(obs, obsKey, obsDate)
-  }
-  return obs
+  if (relaxLabWindow) return latestKPerKey(orphans, obsKey, obsDate, 1)
+  const windowed = withinLookback(
+    withinRange(orphans, filters.labReportTimeRange, now, obsDate),
+    now,
+    obsDate,
+  )
+  return latestKPerKey(windowed, obsKey, obsDate, depthToK(filters.labDepth))
 }
 
 function curateVitalSigns(
@@ -460,9 +462,9 @@ function curateCarePlans(
 export function curateForIps(input: CurateForIpsInput): ClinicalDataCollection {
   const { data, selection, filters } = input
   const now = input.now ?? new Date()
-  // latestPerAnalyte 的放寬判定跨 lab 報告 + orphan observations 一起算一次,
-  // 兩個 curator 共用同一個結論(見 shouldRelaxLatestPerAnalyte)。
-  const relax = shouldRelaxLatestPerAnalyte(data, selection, filters, now)
+  // Results 空窗放寬判定跨 lab 報告 + orphan observations 一起算一次,兩個 curator
+  // 共用同一個結論(見 shouldRelaxLabWindow)。
+  const relax = shouldRelaxLabWindow(data, selection, filters, now)
   return {
     ...data,
     conditions: curateConditions(data, selection, filters, now),

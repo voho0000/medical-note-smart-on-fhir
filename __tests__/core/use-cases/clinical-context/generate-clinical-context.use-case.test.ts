@@ -100,9 +100,8 @@ describe('GenerateClinicalContextUseCase', () => {
       medicationStatus: 'all',
       medicationChronic: 'all',
       medicationTimeRange: 'all',
-      labReportVersion: 'all',
+      labDepth: '8',
       labReportTimeRange: 'all',
-      labTrendPoints: '8',
       labPanelIds: '',
       imagingReportVersion: 'all',
       imagingReportTimeRange: 'all',
@@ -279,7 +278,7 @@ describe('GenerateClinicalContextUseCase', () => {
 
       const options = {
         ...defaultOptions,
-        filters: { ...defaultOptions.filters, labReportVersion: 'latest' as const }
+        filters: { ...defaultOptions.filters, labDepth: 'latest' as const }
       }
 
       const result = useCase.execute(mockPatient, dataWithMultipleReports, options)

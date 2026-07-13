@@ -52,16 +52,12 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
   // Meds default to the last 6 months; the hook dedups by drug name so chronic
   // refills still collapse to one current row.
   medicationTimeRange: '6m',
-  // Labs default to the FULL trend ('all') so the AI sees trajectories
-  // (Cr 1.2 → 1.5 → 2.0 = worsening), bounded by the 6-month window. When the
-  // window is empty (a stable patient's last panel predates it), the lab
-  // category falls back to the most recent sampling days rather than an empty
-  // section — see applyLabWindow.
-  labReportVersion: 'all',
+  // 每項目筆數 — 8 筆的樞紐趨勢,讓 AI 看得到走勢(Cr 1.2 → 1.5 → 2.0 = 惡化),
+  // 由 6 個月窗界定。8 平衡趨勢與量;renal/HbA1c 長期趨勢可調高,token 吃緊可調
+  // 低或用「最新」。窗內為空時(穩定病人上一次 panel 早於窗)lab category 退回最近
+  // 採檢日而非空區段 — 見 applyLabWindow。
+  labDepth: '8',
   labReportTimeRange: '6m',
-  // Trend depth per analyte (full-trend mode). 8 balances trajectory vs volume;
-  // raise for long-term trending (renal/HbA1c), lower for token-tight cases.
-  labTrendPoints: '8',
   // Empty = include every lab panel. Narrow (e.g. 'cbc,chem') only for
   // analyte-dense patients where the full panel set overwhelms the context.
   labPanelIds: '',
@@ -84,13 +80,14 @@ export const DEFAULT_DATA_FILTERS: DataFilters = {
 }
 
 // ── IPS 匯出 — 專屬預設 filters ──────────────────────────────────────────────
-// IPS 是「一份可攜帶的快照」，不是完整趨勢 dump：Results 區預設用
-// latestPerAnalyte（每個檢驗項目最近 3 筆、限最近 2 年；病人 2 年內無檢驗時
-// 自動放寬為每項目最近 1 筆、不限時間 — 見 ips-curation.ts）。
+// IPS 是「一份可攜帶的快照」，不是完整趨勢 dump：Results 區預設 labDepth '3'
+// （每個檢驗項目最近 3 筆）。IPS curation 另外套 2 年回溯 + 空窗放寬（病人 2 年內
+// 無檢驗時自動放寬為每項目最近 1 筆、不限時間 — 見 ips-curation.ts），此回溯/放寬
+// 與 depth 值解耦、是 IPS 層獨立機制。
 // 只影響 'ips' consumer profile 的種子值；chat/insights 的 DEFAULT_DATA_FILTERS 不變。
 export const IPS_DEFAULT_DATA_FILTERS: DataFilters = {
   ...DEFAULT_DATA_FILTERS,
-  labReportVersion: 'latestPerAnalyte',
+  labDepth: '3',
 }
 
 // ── 全部資料 (everything) — for the 全選 button ──────────────────────────────
@@ -124,9 +121,8 @@ export const ALL_DATA_FILTERS: DataFilters = {
   medicationStatus: 'all',
   medicationChronic: 'all',
   medicationTimeRange: 'all',
-  labReportVersion: 'all',
+  labDepth: 'all',      // every reading per test — a complete history
   labReportTimeRange: 'all',
-  labTrendPoints: '16', // deepest trend for a complete history
   labPanelIds: '',      // all panels
   imagingReportVersion: 'all',
   imagingReportTimeRange: 'all',

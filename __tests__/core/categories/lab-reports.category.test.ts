@@ -18,16 +18,16 @@ const data = [
 ] as any
 
 const all = { observations }
-const section = (version: 'latest' | 'all') =>
-  labReportsCategory.getContextSection(data, { labReportVersion: version, labReportTimeRange: 'all' } as any, all)
+const section = (depth: 'latest' | '3' | '8' | '16' | 'all') =>
+  labReportsCategory.getContextSection(data, { labDepth: depth, labReportTimeRange: 'all' } as any, all)
 
 const lineFor = (items: string[], analyte: string) => items.find((i) => i.startsWith(analyte)) || ''
 
 describe('labReportsCategory — per-analyte trend', () => {
-  it('count tracks the version: latest = distinct analytes, all = every reading', () => {
-    const latest = labReportsCategory.getCount(data, { labReportTimeRange: 'all', labReportVersion: 'latest' } as any, all)
+  it('count tracks the depth: latest = distinct analytes, other = every reading', () => {
+    const latest = labReportsCategory.getCount(data, { labReportTimeRange: 'all', labDepth: 'latest' } as any, all)
     expect(latest).toBe(3) // Creatinine, Hemoglobin, CRP (narrative report not counted)
-    const allReadings = labReportsCategory.getCount(data, { labReportTimeRange: 'all', labReportVersion: 'all' } as any, all)
+    const allReadings = labReportsCategory.getCount(data, { labReportTimeRange: 'all', labDepth: 'all' } as any, all)
     expect(allReadings).toBe(5) // Creatinine ×3 + Hemoglobin + CRP
   })
 
@@ -52,18 +52,22 @@ describe('labReportsCategory — per-analyte trend', () => {
     expect(cr).not.toContain('→')
   })
 
-  it("tolerates the IPS-only 'latestPerAnalyte' version value (falls back, no crash)", () => {
-    // 'latestPerAnalyte' 是 IPS 匯出專用語意;AI-context 的 lab category 不認得
-    // 它時走既有 fallback 分支(count → latest、context → 非-latest 分支),
-    // 不得 throw。渲染內容不在此鎖定 — 只鎖「不會炸掉」。
+  it("depth='all' renders every reading uncapped (no …earlier elision)", () => {
+    // 'all' = 每項目全部、不設上限。Creatinine 有 3 筆,全數保留,無「…earlier」。
+    const s = section('all')
+    const items = Array.isArray(s) ? [] : s?.items ?? []
+    const cr = lineFor(items, 'Creatinine')
+    expect(cr).toContain('1.2')
+    expect(cr).toContain('1.5')
+    expect(cr).toContain('2.1')
+    expect(cr).not.toContain('earlier')
+  })
+
+  it("tolerates a missing labDepth (defaults to the latest branch, no crash)", () => {
     expect(() =>
-      labReportsCategory.getCount(data, { labReportTimeRange: 'all', labReportVersion: 'latestPerAnalyte' } as any, all),
+      labReportsCategory.getCount(data, { labReportTimeRange: 'all' } as any, all),
     ).not.toThrow()
-    const s = labReportsCategory.getContextSection(
-      data,
-      { labReportVersion: 'latestPerAnalyte', labReportTimeRange: 'all' } as any,
-      all,
-    )
+    const s = labReportsCategory.getContextSection(data, { labReportTimeRange: 'all' } as any, all)
     expect(s).toBeTruthy()
   })
 
@@ -107,7 +111,7 @@ describe('labReportsCategory — pivot rendering (full-history mode)', () => {
   const items = (() => {
     const s = labReportsCategory.getContextSection(
       mixed,
-      { labReportVersion: 'all', labReportTimeRange: 'all', labTrendPoints: '8' } as any,
+      { labDepth: '8', labReportTimeRange: 'all' } as any,
       { observations: [] },
     )
     return Array.isArray(s) ? [] : s?.items ?? []
@@ -153,7 +157,7 @@ describe('labReportsCategory — window fallback (empty range)', () => {
   it('falls back to recent sampling days instead of an empty section', () => {
     const s = labReportsCategory.getContextSection(
       oldData,
-      { labReportVersion: 'all', labReportTimeRange: '1w' } as any,
+      { labDepth: '8', labReportTimeRange: '1w' } as any,
       allOld,
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
@@ -164,7 +168,7 @@ describe('labReportsCategory — window fallback (empty range)', () => {
   it('getCount matches the fallback (non-zero) rather than reporting 0', () => {
     const count = labReportsCategory.getCount(
       oldData,
-      { labReportVersion: 'all', labReportTimeRange: '1w' } as any,
+      { labDepth: '8', labReportTimeRange: '1w' } as any,
       allOld,
     )
     expect(count).toBeGreaterThan(0)
@@ -179,10 +183,10 @@ describe('labReportsCategory — trend depth', () => {
     effectiveDateTime: `2026-${String(i + 1).padStart(2, '0')}-01`.replace('2026-13', '2026-12'),
   })) as any
 
-  const arrows = (points: string) => {
+  const arrows = (depth: string) => {
     const s = labReportsCategory.getContextSection(
       series,
-      { labReportVersion: 'all', labReportTimeRange: 'all', labTrendPoints: points } as any,
+      { labDepth: depth, labReportTimeRange: 'all' } as any,
       { observations: [] },
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
@@ -191,8 +195,10 @@ describe('labReportsCategory — trend depth', () => {
   }
 
   it('caps the rendered trend at the configured point count', () => {
-    // 4 points → 3 arrows (plus a "…earlier" arrow prefix when omitted)
-    expect(arrows('4')).toBeLessThan(arrows('16'))
+    // 3 per test → fewer arrows than 16; 'all' shows the full 12-point series.
+    expect(arrows('3')).toBeLessThan(arrows('16'))
+    expect(arrows('16')).toBeLessThanOrEqual(arrows('all'))
+    expect(arrows('all')).toBe(11) // 12 readings → 11 arrows, uncapped
   })
 })
 
@@ -206,7 +212,7 @@ describe('labReportsCategory — panel sub-selection', () => {
   it('empty labPanelIds includes every panel', () => {
     const s = labReportsCategory.getContextSection(
       mixed,
-      { labReportVersion: 'latest', labReportTimeRange: 'all', labPanelIds: '' } as any,
+      { labDepth: 'latest', labReportTimeRange: 'all', labPanelIds: '' } as any,
       { observations: [] },
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
@@ -217,7 +223,7 @@ describe('labReportsCategory — panel sub-selection', () => {
   it('restricting to cbc drops the chem analyte', () => {
     const s = labReportsCategory.getContextSection(
       mixed,
-      { labReportVersion: 'latest', labReportTimeRange: 'all', labPanelIds: 'cbc' } as any,
+      { labDepth: 'latest', labReportTimeRange: 'all', labPanelIds: 'cbc' } as any,
       { observations: [] },
     )
     const items = Array.isArray(s) ? [] : s?.items ?? []
@@ -228,7 +234,7 @@ describe('labReportsCategory — panel sub-selection', () => {
   it('getCount reflects the panel filter', () => {
     const cbcOnly = labReportsCategory.getCount(
       mixed,
-      { labReportVersion: 'latest', labReportTimeRange: 'all', labPanelIds: 'cbc' } as any,
+      { labDepth: 'latest', labReportTimeRange: 'all', labPanelIds: 'cbc' } as any,
       { observations: [] },
     )
     expect(cbcOnly).toBe(1)
