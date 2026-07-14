@@ -19,6 +19,8 @@ import { useAudience } from "@/src/application/providers/audience.provider"
 import { useLabPivot, type LabPivot } from "../hooks/useLabPivot"
 import { LAB_CATEGORIES, type LabSubgroup } from "@/src/shared/utils/lab-categories"
 import { getAnalyteDisplayParts } from "@/src/shared/utils/lab-normalize"
+import type { AnalyteNameMode } from "@/src/shared/utils/lab-normalize"
+import { useReportNameMode } from "../context/report-name-mode.context"
 
 interface CumulativeLabReportProps {
   observations: any[]
@@ -67,11 +69,13 @@ function LabPivotTable({
   fullHeight = false,
   focusAnalyteKey,
   focusNonce,
+  nameMode,
 }: {
   pivot: LabPivot
   fullHeight?: boolean
   focusAnalyteKey?: string
   focusNonce?: number
+  nameMode: AnalyteNameMode
 }) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
@@ -89,7 +93,7 @@ function LabPivotTable({
   // "(WBC) unit" below) instead of one wide string. Sort order is unaffected —
   // testKey-driven sorting upstream uses canonical keys.
   const columnParts = (testKey: string, displayName: string): { name: string; abbr: string | null } =>
-    audience === 'medical'
+    nameMode === 'original' || audience === 'medical'
       ? { name: displayName, abbr: null }
       : getAnalyteDisplayParts(testKey, audience, locale)
 
@@ -270,7 +274,8 @@ export function CumulativeLabReport({
   focusAnalyteKey,
   focusNonce,
 }: CumulativeLabReportProps) {
-  const pivots = useLabPivot(observations)
+  const nameMode = useReportNameMode()
+  const pivots = useLabPivot(observations, nameMode)
   const { t } = useLanguage()
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
 
@@ -333,52 +338,54 @@ export function CumulativeLabReport({
   return (
     <div className={fullHeight ? 'flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : 'space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
-        <TabsList className="!flex !flex-nowrap !justify-start w-full min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
-          {shownCats.map((p) => {
-            const label = categoryLabels[p.category.id] || p.category.id
-            return (
-              <TabsTrigger
-                key={p.category.id}
-                value={p.category.id}
-                className="!flex-none !min-w-fit text-xs h-7 px-2 whitespace-nowrap data-[state=active]:bg-background"
-              >
-                {label} ({p.dates.length})
-              </TabsTrigger>
-            )
-          })}
-          {/* 「查看更多」 dropdown — a picker over hiddenByDefault groups (blood
-              gas, and future extra groups). Selecting an item reveals it as a
-              real tab and switches to it; the button hides once every extra is
-              already shown. A dropdown (not an all-or-nothing toggle) so more
-              cumulative-report groups can be added without cluttering the bar. */}
-          {pickableHidden.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="!flex-none !min-w-fit inline-flex items-center gap-0.5 text-xs h-7 px-2 whitespace-nowrap rounded-sm text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+        <div className="flex min-w-0 items-center gap-2">
+          <TabsList className="!flex !flex-nowrap !justify-start flex-1 min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+            {shownCats.map((p) => {
+              const label = categoryLabels[p.category.id] || p.category.id
+              return (
+                <TabsTrigger
+                  key={p.category.id}
+                  value={p.category.id}
+                  className="!flex-none !min-w-fit text-xs h-7 px-2 whitespace-nowrap data-[state=active]:bg-background"
                 >
-                  {(t.reports as any).cumulativeShowMore || 'More'}
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[8rem]">
-                {pickableHidden.map((p) => {
-                  const label = categoryLabels[p.category.id] || p.category.id
-                  return (
-                    <DropdownMenuItem
-                      key={p.category.id}
-                      onSelect={() => revealCategory(p.category.id)}
-                      className="text-xs"
-                    >
-                      {label} ({p.dates.length})
-                    </DropdownMenuItem>
-                  )
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </TabsList>
+                  {label} ({p.dates.length})
+                </TabsTrigger>
+              )
+            })}
+            {/* 「查看更多」 dropdown — a picker over hiddenByDefault groups (blood
+                gas, and future extra groups). Selecting an item reveals it as a
+                real tab and switches to it; the button hides once every extra is
+                already shown. A dropdown (not an all-or-nothing toggle) so more
+                cumulative-report groups can be added without cluttering the bar. */}
+            {pickableHidden.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="!flex-none !min-w-fit inline-flex items-center gap-0.5 text-xs h-7 px-2 whitespace-nowrap rounded-sm text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+                  >
+                    {(t.reports as any).cumulativeShowMore || 'More'}
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[8rem]">
+                  {pickableHidden.map((p) => {
+                    const label = categoryLabels[p.category.id] || p.category.id
+                    return (
+                      <DropdownMenuItem
+                        key={p.category.id}
+                        onSelect={() => revealCategory(p.category.id)}
+                        className="text-xs"
+                      >
+                        {label} ({p.dates.length})
+                      </DropdownMenuItem>
+                    )
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </TabsList>
+        </div>
         {shownCats.map((p) => (
           <TabsContent
             key={p.category.id}
@@ -390,6 +397,7 @@ export function CumulativeLabReport({
               fullHeight={fullHeight}
               focusAnalyteKey={p.category.id === activeId ? focusAnalyteKey : undefined}
               focusNonce={focusNonce}
+              nameMode={nameMode}
             />
           </TabsContent>
         ))}

@@ -9,9 +9,10 @@ import { ObservationHistoryTable } from './ObservationHistoryTable'
 import { CompositeHistoryTable } from './CompositeHistoryTable'
 import { ReportHistoryList } from './ReportHistoryList'
 import type { Observation } from '../types'
-import { getAnalyteDisplayForObs, bpComponentAbbr } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForMode, getOriginalAnalyteDisplayForObs, bpComponentAbbr } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useReportNameMode } from '../context/report-name-mode.context'
 
 interface ObservationTrendDialogProps {
   observation: Observation | null
@@ -30,13 +31,16 @@ interface ObservationTrendDialogProps {
 export function ObservationTrendDialog({ observation, reportTitle, reportLookupTitle, open, onOpenChange }: ObservationTrendDialogProps) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
+  const nameMode = useReportNameMode()
   // History queries match against canonical via canonicalTestKeyFromString
   // internally — pass the raw bridge text here so cross-institution name
   // variants still collapse correctly. The dialog *title* below is audience-
   // aware (canonical short code for medical, long-form translation for
   // patient) so search and display can disagree without breaking either.
   const observationCode = observation?.code?.text || observation?.code?.coding?.[0]?.display
-  const dialogTitle = observation ? getAnalyteDisplayForObs(observation, audience, locale) : ''
+  const dialogTitle = observation
+    ? getAnalyteDisplayForMode(observation, audience, locale, nameMode)
+    : ''
   const isReportSummary = observation?.code?.text === 'Report Summary' && !!reportTitle
 
   // Text-based DiagnosticReport history (imaging, ECG, pathology) — chronological
@@ -69,10 +73,12 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
         (comp: any) => (comp.code?.text || comp.code?.coding?.[0]?.display) as string
       ),
       componentDisplayNames: sorted.map(
-        (comp: any) => bpComponentAbbr(comp) ?? ((comp.code?.text || comp.code?.coding?.[0]?.display) as string)
+        (comp: any) => nameMode === 'original'
+          ? getOriginalAnalyteDisplayForObs(comp)
+          : bpComponentAbbr(comp) ?? ((comp.code?.text || comp.code?.coding?.[0]?.display) as string)
       ),
     }
-  }, [observation, hasComponents])
+  }, [observation, hasComponents, nameMode])
 
   // raw component name → display label, for the chart (whose dataKey must stay
   // raw to match the series data, while the legend/tooltip show the label).

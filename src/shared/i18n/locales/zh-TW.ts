@@ -732,6 +732,11 @@ export const zhTW = {
     byCollectionDay: '依採檢日',
     byCollectionDayTooltip: '健保存摺同一天、同院所的單項報告合併為一張檢驗單（僅顯示層合併，原始報告內容不變）',
     flatList: '單項列表',
+    nameDisplay: {
+      label: '名稱顯示',
+      original: '原始名稱',
+      standardized: '標準化名稱',
+    },
     labDayCount: '{n} 項檢驗',
     abnormalCount: '{n} 異常',
     latest: '僅最新版本',

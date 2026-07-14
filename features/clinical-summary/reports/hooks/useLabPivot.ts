@@ -4,6 +4,7 @@
 // so existing feature/test imports keep working unchanged.
 import { useMemo } from 'react'
 import { buildLabPivots, type LabPivot } from '@/src/shared/utils/lab-pivot.utils'
+import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 
 export {
   buildLabPivots,
@@ -13,6 +14,9 @@ export {
   type LabPivot,
 } from '@/src/shared/utils/lab-pivot.utils'
 
-export function useLabPivot(observations: any[]): Record<string, LabPivot> {
-  return useMemo(() => buildLabPivots(observations), [observations])
+export function useLabPivot(
+  observations: any[],
+  nameMode: AnalyteNameMode = 'standardized',
+): Record<string, LabPivot> {
+  return useMemo(() => buildLabPivots(observations, { nameMode }), [observations, nameMode])
 }

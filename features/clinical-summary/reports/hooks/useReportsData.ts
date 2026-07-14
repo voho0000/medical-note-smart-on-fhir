@@ -3,7 +3,14 @@ import { useMemo } from 'react'
 import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromCategory } from '../utils/grouping-helpers'
-import { getAnalyteLabel, getAnalyteCanonicalKey, getAnalyteDisplayLabel, CANONICAL_DISPLAY } from '@/src/shared/utils/lab-normalize'
+import {
+  getAnalyteLabel,
+  getAnalyteCanonicalKey,
+  getAnalyteDisplayLabel,
+  getOriginalAnalyteDisplayForObs,
+  CANONICAL_DISPLAY,
+  type AnalyteNameMode,
+} from '@/src/shared/utils/lab-normalize'
 import {
   compareTestsByPreferred,
   CANONICAL_TO_CATEGORY,
@@ -54,7 +61,11 @@ function getDrDate(dr: any): string | undefined {
   return dr?.effectiveDateTime || dr?.issued
 }
 
-export function useReportsData(diagnosticReports: any[], imagingStudies: any[] = []) {
+export function useReportsData(
+  diagnosticReports: any[],
+  imagingStudies: any[] = [],
+  nameMode: AnalyteNameMode = 'standardized',
+) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
   return useMemo(() => {
@@ -504,6 +515,13 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
       //   3. Multi-analyte panel — keep bridge's panel name (e.g. "CBC",
       //      "白血球分類計數") because the analytes inside vary.
       const obsForTitle = summaryParts.length === 0 ? allObs : []
+      const originalNames = obsForTitle
+        .map((o) => getOriginalAnalyteDisplayForObs(o as any).trim())
+        .filter((name) => name && name !== '—')
+      const originalNameSet = new Set(originalNames)
+      const sharedOriginalTitle = originalNameSet.size === 1
+        ? [...originalNameSet][0]
+        : null
       // Dedup on canonical key so audience switching doesn't change which
       // groups collapse to a shared-analyte title. Only the rendered string
       // varies by audience — sort and grouping logic stay canonical.
@@ -557,7 +575,12 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
         ? NHI_ORDER_CODE_TO_ZH[orderCode]
         : undefined
       let displayTitle: string
-      if (officialZh) {
+      if (nameMode === 'original') {
+        // A single-analyte row should expose exactly what the source called
+        // the observation. Multi-analyte panels retain the source report title
+        // while their children reveal each original analyte name.
+        displayTitle = sharedOriginalTitle || groupText || derivePerDrTitle(head)
+      } else if (officialZh) {
         // Prefer the analyte-level canonical short code (AST, NA, …). Serology /
         // immunology orders (ANA, IgG, AMA …) often don't resolve to a canonical
         // analyte because the bridge sends bare Chinese order text with no LOINC,
@@ -643,5 +666,5 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
     }
 
     return { reportRows: rows, seenIds: seen }
-  }, [diagnosticReports, imagingStudies, audience, locale])
+  }, [diagnosticReports, imagingStudies, audience, locale, nameMode])
 }

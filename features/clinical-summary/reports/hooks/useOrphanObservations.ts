@@ -3,11 +3,15 @@ import { useMemo } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromObservation } from '../utils/grouping-helpers'
-import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForMode, type AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 
-export function useOrphanObservations(observations: any[], seenIds: Set<string>) {
+export function useOrphanObservations(
+  observations: any[],
+  seenIds: Set<string>,
+  nameMode: AnalyteNameMode = 'standardized',
+) {
   const { audience } = useAudience()
   const { locale } = useLanguage()
   return useMemo(() => {
@@ -54,7 +58,7 @@ export function useOrphanObservations(observations: any[], seenIds: Set<string>)
         // rows. Medical → canonical short code (Na / K / BUN / …); patient
         // → long-form translation in the active UI language. Non-canonical
         // orphans (cultures, free-text obs) keep their bridge-sent label.
-        title: getAnalyteDisplayForObs(first, audience, locale),
+        title: getAnalyteDisplayForMode(first, audience, locale, nameMode),
         meta: `Observation Group`,
         obs: lst,
         group: inferGroupFromObservation(first),
@@ -62,5 +66,5 @@ export function useOrphanObservations(observations: any[], seenIds: Set<string>)
         effectiveDate: first.effectiveDateTime,
       }
     })
-  }, [observations, seenIds, audience, locale])
+  }, [observations, seenIds, audience, locale, nameMode])
 }

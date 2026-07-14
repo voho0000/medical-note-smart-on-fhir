@@ -11,11 +11,61 @@ import {
   getAnalyteDisplayLabel,
   getAnalyteDisplayParts,
   getAnalyteDisplayForObs,
+  getAnalyteDisplayForMode,
+  getOriginalAnalyteDisplayForObs,
   getAnalyteCanonicalKey,
   bpComponentAbbr,
   CANONICAL_TO_LAY_ZH,
   CANONICAL_TO_LAY_EN,
 } from '@/src/shared/utils/lab-normalize'
+
+describe('report analyte name mode', () => {
+  const mistranslatedAtypicalLymphocyte = {
+    code: {
+      text: 'Lym',
+      coding: [
+        {
+          system: 'http://loinc.org',
+          code: '736-9',
+          display: 'Lymphocytes/Leukocytes in Blood by Automated count',
+        },
+        {
+          system: 'https://example.org/CodeSystem/his-local-lab',
+          code: 'ATY-LYM',
+          display: 'Atypical lym.',
+        },
+      ],
+    },
+  }
+
+  it('keeps the source label in original mode even when LOINC resolves to LYM', () => {
+    expect(getOriginalAnalyteDisplayForObs(mistranslatedAtypicalLymphocyte)).toBe('Atypical lym.')
+    expect(getAnalyteDisplayForMode(
+      mistranslatedAtypicalLymphocyte,
+      'medical',
+      'zh-TW',
+      'original',
+    )).toBe('Atypical lym.')
+    expect(getAnalyteDisplayForMode(
+      mistranslatedAtypicalLymphocyte,
+      'medical',
+      'zh-TW',
+      'standardized',
+    )).toBe('LYM')
+  })
+
+  it('prefers a non-LOINC source display when code.text is absent', () => {
+    const obs = {
+      code: {
+        coding: [
+          { system: 'http://loinc.org', code: '736-9', display: 'Lymphocytes/Leukocytes' },
+          { system: 'https://example.org/his-local-lab', code: 'ALYM', display: 'Atypical lym.' },
+        ],
+      },
+    }
+    expect(getOriginalAnalyteDisplayForObs(obs)).toBe('Atypical lym.')
+  })
+})
 
 describe('getAnalyteDisplayLabel', () => {
   describe('medical audience always returns canonical', () => {

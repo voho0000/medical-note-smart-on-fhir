@@ -2,13 +2,14 @@
 import { useState } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getValueWithUnit, getOriginalValueWithUnit, getReferenceRangeText } from '../utils/fhir-helpers'
-import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-normalize'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { getInterpretationTag, checkReferenceRangeAbnormal, isInterpretationAbnormal, isReferenceRangeAssessmentUnavailable } from '../utils/interpretation-helpers'
 import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
+import { useReportNameMode } from '../context/report-name-mode.context'
 
 interface ObservationBlockProps {
   observation: Observation
@@ -82,7 +83,8 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
   // reports) keep their bridge-sent text unchanged.
   const { audience } = useAudience()
   const { locale } = useLanguage()
-  const title = getAnalyteDisplayForObs(observation, audience, locale)
+  const nameMode = useReportNameMode()
+  const title = getAnalyteDisplayForMode(observation, audience, locale, nameMode)
   const interp = getInterpretationTag(observation.interpretation)
   const ref = getReferenceRangeText(observation.referenceRange)
   const hasComponents = Array.isArray(observation.component) && observation.component.length > 0
@@ -120,7 +122,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
               </div>
             )
           }
-          const cName = getAnalyteDisplayForObs(component, audience, locale)
+          const cName = getAnalyteDisplayForMode(component, audience, locale, nameMode)
           const cValue = component.valueQuantity
             ? getValueWithUnit(component.valueQuantity)
             : component.valueString || getCodeableConceptText(component.valueCodeableConcept) || '—'
@@ -166,7 +168,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
         {hasComponents && (
           <div className="ml-4 mt-0.5 space-y-0 border-l pl-1.5">
             {observation.component!.map((component, idx) => {
-              const cName = getAnalyteDisplayForObs(component, audience, locale)
+              const cName = getAnalyteDisplayForMode(component, audience, locale, nameMode)
               const cCoded = getCodeableConceptText(component.valueCodeableConcept)
               const cValue = component.valueQuantity
                 ? getValueWithUnit(component.valueQuantity)

@@ -24,10 +24,11 @@ import { AlertCircle, Building2, CalendarDays, ChevronDown } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
-import { getAnalyteDisplayForObs } from '@/src/shared/utils/lab-normalize'
+import { getAnalyteDisplayForMode } from '@/src/shared/utils/lab-normalize'
 import type { Row } from '../types'
 import { countAbnormalInRows } from '../utils/lab-day-grouping'
 import { ReportRow } from './ReportRow'
+import { useReportNameMode } from '../context/report-name-mode.context'
 
 interface LabDayGroupCardProps {
   row: Row
@@ -68,6 +69,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
   // clinicians, lay names for patients.
   const { audience } = useAudience()
   const { locale } = useLanguage()
+  const nameMode = useReportNameMode()
 
   // FLATTEN multi-analyte panels: a hospital lab report is a flat list of
   // analytes — "Creatinine, serum ▸ (CREA, EGFR)" as a box-inside-the-box
@@ -85,7 +87,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
         continue
       }
       m.obs.forEach((o, i) => {
-        const label = getAnalyteDisplayForObs(o, audience, locale)
+        const label = getAnalyteDisplayForMode(o, audience, locale, nameMode)
         out.push({
           ...m,
           id: `${m.id}::obs${i}`,
@@ -99,7 +101,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
       })
     }
     return out
-  }, [members, audience, locale])
+  }, [members, audience, locale, nameMode])
 
   // Opening the card opens EVERYTHING inside it. Rows mount when the card
   // opens, so their uncontrolled accordions / long-text states pick this up

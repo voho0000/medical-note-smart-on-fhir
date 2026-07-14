@@ -5,7 +5,16 @@
 // Groups observations by lab category, then pivots into test (row) × date (column).
 // Groups observations by lab category, then pivots into test (row) × date (column).
 import { categorizeObservation, getTestDisplayName, compareTestsByPreferred, LAB_CATEGORIES, type LabCategory } from '@/src/shared/utils/lab-categories'
-import { CANONICAL_KEYS, CANONICAL_DISPLAY, classifyGlucose, GLUCOSE_SUBTYPE_LABEL, canonicalKeyFromLoinc, canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
+import {
+  CANONICAL_KEYS,
+  CANONICAL_DISPLAY,
+  classifyGlucose,
+  GLUCOSE_SUBTYPE_LABEL,
+  canonicalKeyFromLoinc,
+  canonicalTestKeyFromString,
+  getOriginalAnalyteDisplayForObs,
+  type AnalyteNameMode,
+} from '@/src/shared/utils/lab-normalize'
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
@@ -129,8 +138,14 @@ function canonicalTestKey(obs: any): string {
 // categorization already told us it's a glucose measurement.
 const KNOWN_GLUCOSE_KEYS = new Set(['GLUCOSE', 'HBA1C', 'C-PEPTIDE', 'GLU,1HRPC', 'GLU,2HRPC', 'GLU,3HRPC'])
 
-function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKey: string; displayName: string } {
-  const raw = getTestDisplayName(obs)
+function buildTestEntry(
+  obs: any,
+  categoryId?: string,
+  nameMode: AnalyteNameMode = 'standardized',
+): { mapKey: string; testKey: string; displayName: string } {
+  const raw = nameMode === 'original'
+    ? getOriginalAnalyteDisplayForObs(obs)
+    : getTestDisplayName(obs)
   if (!raw) return { mapKey: 'UNKNOWN', testKey: 'UNKNOWN', displayName: 'UNKNOWN' }
 
   let testKey = canonicalTestKey(obs)
@@ -164,7 +179,14 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
 
   const nhiCoding = obs.code?.coding?.find((c: any) => c.system === NHI_LAB_SYSTEM)
   const nhiCode = nhiCoding?.code as string | undefined
-  const mapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
+  const canonicalMapKey = (nhiCode && KEEP_SEPARATE_BY_NHI.has(testKey)) ? `${nhiCode}:${testKey}` : testKey
+
+  // The audit view must not collapse different source labels merely because
+  // they share one (possibly wrong) LOINC. NFKC/case/whitespace folding avoids
+  // duplicate columns for typographic-only variants while preserving genuine
+  // differences such as "Atypical lym." versus "Lymphocytes %".
+  const originalMapKey = `source:${raw.normalize('NFKC').trim().toLocaleLowerCase()}`
+  const mapKey = nameMode === 'original' ? originalMapKey : canonicalMapKey
 
   // Column header preference:
   //   1. displayOverride (e.g. glucose subtypes) wins.
@@ -182,12 +204,18 @@ function buildTestEntry(obs: any, categoryId?: string): { mapKey: string; testKe
   const candidateDisplay = nhiDisplay || rawDisplay
   const isCanonical = CANONICAL_KEYS.has(testKey)
   const canonicalDisplay = CANONICAL_DISPLAY[testKey] || testKey
-  const displayName = displayOverride || (isCanonical ? canonicalDisplay : candidateDisplay)
+  const displayName = nameMode === 'original'
+    ? raw
+    : displayOverride || (isCanonical ? canonicalDisplay : candidateDisplay)
 
   return { mapKey, testKey, displayName }
 }
 
-export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
+export function buildLabPivots(
+  observations: any[],
+  options: { nameMode?: AnalyteNameMode } = {},
+): Record<string, LabPivot> {
+  const nameMode = options.nameMode ?? 'standardized'
   const result: Record<string, LabPivot> = {}
 
   // Initialize each category container
@@ -220,7 +248,7 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
       if (!date) continue
       dateSet.add(date)
 
-      const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id)
+      const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id, nameMode)
       const fv = formatValue(obs)
       const { value, unit, numericValue, interpretationCode, status } = fv
       const { isAbnormal } = fv
@@ -335,7 +363,7 @@ export function buildLabPivots(observations: any[]): Record<string, LabPivot> {
 
     // Inject stub rows for pinned columns not present in patient data.
     // Must check by testKey (not mapKey) since mapKey may include NHI prefix.
-    if (cat.pinnedColumns) {
+    if (nameMode === 'standardized' && cat.pinnedColumns) {
       const existingTestKeys = new Set([...testMap.values()].map(r => r.testKey))
       for (const pinKey of cat.pinnedColumns) {
         if (!existingTestKeys.has(pinKey)) {

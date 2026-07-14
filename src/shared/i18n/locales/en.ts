@@ -730,6 +730,11 @@ export const en = {
     byCollectionDay: 'By collection day',
     byCollectionDayTooltip: 'Single-item NHI reports from the same day and institution fold into one lab-sheet card (display-level only; the source reports are unchanged)',
     flatList: 'Flat list',
+    nameDisplay: {
+      label: 'Name display',
+      original: 'Original names',
+      standardized: 'Standardized names',
+    },
     labDayCount: '{n} tests',
     abnormalCount: '{n} abnormal',
     latest: 'Latest Versions Only',

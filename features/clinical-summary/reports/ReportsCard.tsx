@@ -23,6 +23,9 @@ import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
 import { rowInnerMatch } from './utils/report-search'
 import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
+import { ReportNameModeProvider } from './context/report-name-mode.context'
+import { ReportNameModeSwitch } from './components/ReportNameModeSwitch'
+import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
@@ -30,6 +33,7 @@ import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 const EMPTY_EXPANDED_IDS: string[] = []
 const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
+const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'vitals'])
 
 export function ReportsCard() {
   const { t } = useLanguage()
@@ -92,16 +96,24 @@ export function ReportsCard() {
   }
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
+  // The same preference follows the user across observation-based report
+  // views. Imaging and procedures have no matching control, so they retain
+  // their established standardized labels.
+  const effectiveNameMode: AnalyteNameMode = NAME_MODE_TABS.has(activeTab)
+    ? nameMode
+    : 'standardized'
 
   const { reportRows, seenIds } = useReportsData(
     rawReportsEnabled ? diagnosticReports : EMPTY_RESOURCES,
     rawReportsEnabled ? imagingStudies : EMPTY_RESOURCES,
+    effectiveNameMode,
   )
   const procedureRows = useProcedureRows(
     rawReportsEnabled ? procedures : EMPTY_RESOURCES,
     rawReportsEnabled ? observations : EMPTY_RESOURCES,
   )
-  
+
   // Mark procedure-category observations as seen so they don't appear as orphans
   const procedureObsIds = useMemo(() => {
     const ids = new Set<string>()
@@ -115,7 +127,7 @@ export function ReportsCard() {
       })
       if (isProcedureObs && obs.encounter?.reference) {
         // Check if this observation is linked to a procedure
-        const hasMatchingProcedure = procedures.some((proc: any) => 
+        const hasMatchingProcedure = procedures.some((proc: any) =>
           proc?.encounter?.reference === obs.encounter.reference
         )
         if (hasMatchingProcedure) {
@@ -125,16 +137,17 @@ export function ReportsCard() {
     })
     return ids
   }, [observations, procedures, rawReportsEnabled])
-  
+
   const allSeenIds = useMemo(() => {
     const combined = new Set(seenIds)
     procedureObsIds.forEach(id => combined.add(id))
     return combined
   }, [seenIds, procedureObsIds])
-  
+
   const orphanRows = useOrphanObservations(
     rawReportsEnabled ? observations : EMPTY_RESOURCES,
     allSeenIds,
+    effectiveNameMode,
   )
 
   // ── Resource navigation (cited DiagnosticReport/Observation in the
@@ -404,156 +417,182 @@ export function ReportsCard() {
   )
 
   const reportsContent = (
-    <Tabs value={activeTab} onValueChange={handleTabChange} className={expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'}>
-      {/* Desktop tabs */}
-      <TabsList className={`hidden md:!flex !justify-start shrink-0 mb-2 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
-        {tabConfigs.map((tab) => {
-          // Spinner appears on the tab the user is currently switching to,
-          // for the duration of useTransition's pending window. Tells the
-          // user "your click registered, content is being prepared" instead
-          // of leaving the UI looking frozen.
-          const showSpinner = pendingTab === tab.value
-          return (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className={`!flex-none !min-w-fit px-2 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
-            >
-              {showSpinner && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-              {tab.label}
-            </TabsTrigger>
-          )
-        })}
-      </TabsList>
-
-      {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
-      <div className="mb-2 md:hidden pr-12">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between">
-              <span className="truncate inline-flex items-center gap-1">
-                {pendingTab && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
-                {tabConfigs.find(t => t.value === (pendingTab ?? activeTab))?.label || tabConfigs[0]?.label}
-              </span>
-              <Menu className="ml-2 h-4 w-4 shrink-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
-            {tabConfigs.map((tab) => (
-              <DropdownMenuItem
+    <ReportNameModeProvider value={effectiveNameMode} onChange={setNameMode}>
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className={`${expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'} ${activeTab === 'cumulative' ? 'gap-0' : ''}`}
+      >
+        {/* Desktop tabs */}
+        <TabsList className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-1.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+          {tabConfigs.map((tab) => {
+            // Spinner appears on the tab the user is currently switching to,
+            // for the duration of useTransition's pending window. Tells the
+            // user "your click registered, content is being prepared" instead
+            // of leaving the UI looking frozen.
+            const showSpinner = pendingTab === tab.value
+            return (
+              <TabsTrigger
                 key={tab.value}
-                onClick={() => handleTabChange(tab.value)}
-                className={activeTab === tab.value ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : ""}
+                value={tab.value}
+                className={`!flex-none !min-w-fit px-2 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
               >
+                {showSpinner && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                 {tab.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
 
-      {/* Search bar — hidden on cumulative tab */}
-      {activeTab !== "cumulative" && (
-        <div className="mb-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <input
-              type="search"
-              inputMode="search"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              data-1p-ignore="true"
-              data-lpignore="true"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜尋檢驗名稱、結果、機構、日期..."
-              className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+        {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
+        <div className={`${activeTab === 'cumulative' ? 'mb-1.5' : 'mb-2'} md:hidden pr-12`}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                <span className="truncate inline-flex items-center gap-1">
+                  {pendingTab && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
+                  {tabConfigs.find(t => t.value === (pendingTab ?? activeTab))?.label || tabConfigs[0]?.label}
+                </span>
+                <Menu className="ml-2 h-4 w-4 shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
+              {tabConfigs.map((tab) => (
+                <DropdownMenuItem
+                  key={tab.value}
+                  onClick={() => handleTabChange(tab.value)}
+                  className={activeTab === tab.value ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : ""}
+                >
+                  {tab.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Cumulative-only utility row. Keeping it deliberately short avoids
+            the large empty band of the first iteration while preventing the
+            setting from competing with either level of navigation. */}
+        {activeTab === 'cumulative' && (
+          <div className="mb-1.5 flex h-7 shrink-0 items-center justify-end px-1">
+            <ReportNameModeSwitch />
+          </div>
+        )}
+
+        {/* Search bar — hidden on cumulative tab */}
+        {activeTab !== "cumulative" && (
+          <div className="mb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-0 flex-1 basis-72">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="search"
+                  inputMode="search"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜尋檢驗名稱、結果、機構、日期..."
+                  className="w-full rounded-md border border-input bg-background pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-search-cancel-button]:appearance-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {(activeTab === 'all' || activeTab === 'vitals') && (
+                <ReportNameModeSwitch className="shrink-0" />
+              )}
+            </div>
+            {searchQuery.trim() && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                顯示 {filteredRows.length} / 共 {rows.length} 筆
+              </p>
+            )}
+            {/* Lab view toggle — 依採檢日 folds the NHI one-DR-per-analyte
+                fragmentation into one card per (day × institution); 單項列表
+                is the original flat list. Lab tab only. */}
+            {activeTab === "lab" && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <ReportNameModeSwitch />
+
+                <span className="h-4 w-px bg-border" aria-hidden />
+
+                <div className="inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/40 p-0.5" role="group" aria-label={(t.reports as any).labViewLabel}>
+                  {([
+                    { byDay: true, label: (t.reports as any).byCollectionDay, title: (t.reports as any).byCollectionDayTooltip },
+                    { byDay: false, label: (t.reports as any).flatList, title: undefined },
+                  ] as const).map((opt) => (
+                    <button
+                      key={String(opt.byDay)}
+                      type="button"
+                      onClick={() => setLabByDay(opt.byDay)}
+                      title={opt.title}
+                      aria-pressed={labByDay === opt.byDay}
+                      className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                        labByDay === opt.byDay
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-          {searchQuery.trim() && (
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              顯示 {filteredRows.length} / 共 {rows.length} 筆
-            </p>
-          )}
-          {/* Lab view toggle — 依採檢日 folds the NHI one-DR-per-analyte
-              fragmentation into one card per (day × institution); 單項列表
-              is the original flat list. Lab tab only. */}
-          {activeTab === "lab" && (
-            <div className="mt-2 inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/40 p-0.5" role="group" aria-label={(t.reports as any).labViewLabel}>
-              {([
-                { byDay: true, label: (t.reports as any).byCollectionDay, title: (t.reports as any).byCollectionDayTooltip },
-                { byDay: false, label: (t.reports as any).flatList, title: undefined },
-              ] as const).map((opt) => (
-                <button
-                  key={String(opt.byDay)}
-                  type="button"
-                  onClick={() => setLabByDay(opt.byDay)}
-                  title={opt.title}
-                  aria-pressed={labByDay === opt.byDay}
-                  className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
-                    labByDay === opt.byDay
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        )}
 
-      {tabConfigs.map((tab) => {
-        // Only forceMount tabs the user has actually visited. Unvisited tabs
-        // fall back to Radix's default "render only when active", which means
-        // their 500+ rows aren't paid for on the initial mount of ReportsCard.
-        const keepMounted = visitedTabs.has(tab.value) || undefined
-        return tab.isCumulative ? (
-          <TabsContent
-            key={tab.value}
-            value={tab.value}
-            forceMount={keepMounted}
-            className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
-          >
-            <CumulativeLabReport
-              observations={observations}
+        {tabConfigs.map((tab) => {
+          // Only forceMount tabs the user has actually visited. Unvisited tabs
+          // fall back to Radix's default "render only when active", which means
+          // their 500+ rows aren't paid for on the initial mount of ReportsCard.
+          const keepMounted = visitedTabs.has(tab.value) || undefined
+          return tab.isCumulative ? (
+            <TabsContent
+              key={tab.value}
+              value={tab.value}
+              forceMount={keepMounted}
+              className={expanded ? 'mt-0 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-0 min-w-0 w-full max-w-full overflow-hidden'}
+            >
+              <CumulativeLabReport
+                observations={observations}
+                fullHeight={expanded}
+                activeCategoryId={cumulativeCategoryId}
+                onCategoryChange={handleCumulativeCategoryChange}
+                focusAnalyteKey={cumulativeFocus?.analyteKey}
+                focusNonce={cumulativeFocus?.nonce}
+              />
+            </TabsContent>
+          ) : (
+            <ReportsTabContent
+              key={tab.value}
+              value={tab.value}
+              rows={tab.rows}
+              isActive={activeTab === tab.value}
               fullHeight={expanded}
-              activeCategoryId={cumulativeCategoryId}
-              onCategoryChange={handleCumulativeCategoryChange}
-              focusAnalyteKey={cumulativeFocus?.analyteKey}
-              focusNonce={cumulativeFocus?.nonce}
+              forceMount={keepMounted}
+              defaultOpenIds={expandedRowIds}
+              searchActive={!!searchQuery.trim()}
+              query={searchQuery}
+              scrollToId={navTarget?.tab === tab.value ? navTarget.id : null}
+              scrollNonce={navTarget?.nonce}
+              onScrollResolved={resolveNavTarget}
             />
-          </TabsContent>
-        ) : (
-          <ReportsTabContent
-            key={tab.value}
-            value={tab.value}
-            rows={tab.rows}
-            isActive={activeTab === tab.value}
-            fullHeight={expanded}
-            forceMount={keepMounted}
-            defaultOpenIds={expandedRowIds}
-            searchActive={!!searchQuery.trim()}
-            query={searchQuery}
-            scrollToId={navTarget?.tab === tab.value ? navTarget.id : null}
-            scrollNonce={navTarget?.nonce}
-            onScrollResolved={resolveNavTarget}
-          />
-        )
-      })}
-    </Tabs>
+          )
+        })}
+      </Tabs>
+    </ReportNameModeProvider>
   )
 
   if (expanded) {

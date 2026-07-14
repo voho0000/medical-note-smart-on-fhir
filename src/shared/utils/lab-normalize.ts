@@ -1063,6 +1063,7 @@ export const CANONICAL_TO_LAY_EN: Record<string, string> = {
 
 export type AudienceMode = 'medical' | 'patient'
 export type DisplayLang = 'zh-TW' | 'en'
+export type AnalyteNameMode = 'standardized' | 'original'
 
 /**
  * Resolve the display label for a canonical analyte key based on audience
@@ -1252,6 +1253,63 @@ export function getAnalyteDisplayForObs(
   // method labels there, which is what disambiguates two eGFR rows.
   if (EGFR_FAMILY_KEYS.has(key)) return egfrDisplayForObs(obsOrComponent, audience, language)
   return getAnalyteDisplayLabel(key, audience, language)
+}
+
+/**
+ * The source-facing name used to audit terminology conversion. Newer bridge
+ * bundles retain the hospital assay label in a `his-local-lab` coding; prefer
+ * that when present because `code.text` may already be a bridge-normalized
+ * short label. Older bundles keep the source label in `code.text`, so that is
+ * the next fallback, followed by another non-LOINC display, LOINC display, and
+ * finally the raw code. No canonicalisation or audience translation is
+ * applied here — preserving mismatches is the point of this view.
+ */
+export function getOriginalAnalyteDisplayForObs(
+  obsOrComponent: { code?: any } | null | undefined,
+): string {
+  const code = obsOrComponent?.code
+  if (!code) return '—'
+
+  const codings: any[] = Array.isArray(code.coding) ? code.coding : []
+  const displayFor = (coding: any): string =>
+    typeof coding?.display === 'string' ? coding.display.trim() : ''
+  const isLoinc = (coding: any): boolean =>
+    typeof coding?.system === 'string' && coding.system.toLowerCase().includes('loinc')
+
+  for (const coding of codings) {
+    const system = typeof coding?.system === 'string' ? coding.system.toLowerCase() : ''
+    const display = displayFor(coding)
+    if (display && system.includes('his-local-lab')) return display
+  }
+
+  const text = typeof code.text === 'string' ? code.text.trim() : ''
+  if (text) return text
+
+  for (const coding of codings) {
+    const display = displayFor(coding)
+    if (display && !isLoinc(coding)) return display
+  }
+  for (const coding of codings) {
+    const display = displayFor(coding)
+    if (display) return display
+  }
+  for (const coding of codings) {
+    if (typeof coding?.code === 'string' && coding.code.trim()) return coding.code.trim()
+  }
+  return '—'
+}
+
+/** UI-only name selector. Standardized deliberately delegates to the existing
+ * resolver so the default reports experience remains byte-for-byte compatible. */
+export function getAnalyteDisplayForMode(
+  obsOrComponent: { code?: any } | null | undefined,
+  audience: AudienceMode,
+  language: DisplayLang,
+  mode: AnalyteNameMode = 'standardized',
+): string {
+  return mode === 'original'
+    ? getOriginalAnalyteDisplayForObs(obsOrComponent)
+    : getAnalyteDisplayForObs(obsOrComponent, audience, language)
 }
 
 const EGFR_FAMILY_KEYS = new Set(['EGFR', 'EGFR(M)', 'EGFR(EPI)'])
