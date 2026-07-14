@@ -30,6 +30,7 @@ const CSP_CONTENT = [
   "font-src 'self' data:",
   "connect-src 'self' https: wss: blob:",
   "media-src 'self' blob: data:",
+  "worker-src 'self' blob:",
   "frame-src https://*.firebaseapp.com https://accounts.google.com https://www.google.com",
   "object-src 'none'",
   "base-uri 'self'",
