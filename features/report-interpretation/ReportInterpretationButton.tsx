@@ -37,7 +37,7 @@ export function ReportInterpretationButton({
     // A real, self-evident button — visible border + tinted fill + primary
     // label even at rest (the old ghost styling read as a text link). Still
     // compact so a list of many reports doesn't get loud.
-    'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors cursor-pointer',
+    'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors cursor-pointer',
     active
       ? 'border-primary bg-primary/15 text-primary'
       : 'border-primary/40 bg-primary/5 text-primary hover:border-primary hover:bg-primary/10',
@@ -45,7 +45,7 @@ export function ReportInterpretationButton({
   )
   const inner = (
     <>
-      <Languages className="h-3.5 w-3.5" />
+      <Languages className="h-3.5 w-3.5 shrink-0" />
       {/* Full label on tablet/desktop; short label on phones — never icon-only. */}
       <span className="hidden sm:inline">{label}</span>
       <span className="sm:hidden">{shortLabel}</span>

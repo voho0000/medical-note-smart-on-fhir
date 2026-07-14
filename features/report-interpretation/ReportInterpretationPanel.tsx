@@ -108,7 +108,7 @@ export function ReportInterpretationPanel(props: ReportInterpretationPanelProps)
   return (
     <div
       className={cn(
-        'my-2 rounded-lg border border-primary/25 bg-primary/[0.03] px-3 py-2.5',
+        'my-2 min-w-0 max-w-full overflow-hidden rounded-lg border border-primary/25 bg-primary/[0.03] px-3 py-2.5',
         className,
       )}
     >

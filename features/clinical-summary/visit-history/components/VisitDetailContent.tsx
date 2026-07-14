@@ -58,7 +58,7 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 overflow-hidden">
       {/* Linked documents. Header says 「出院病摘」 only when a linked doc really
           is a discharge summary (LOINC 18842-5); otherwise the generic 「病摘」 so
           a TW-PAS 事前審查申請病摘 / IPS / outpatient note isn't mislabelled. The
@@ -143,9 +143,11 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
           count={details.reports.length}
           collapseThreshold={COLLAPSE_THRESHOLDS.procedures}
         >
-          <div className="grid gap-0 mt-2">
+          <div className="grid min-w-0 max-w-full gap-0 mt-2 overflow-hidden">
             {details.reports.map((report) => (
-              <ClinicalReportRow key={report.id} row={report.row} defaultOpen={[]} />
+              <div key={report.id} className="min-w-0 max-w-full overflow-hidden">
+                <ClinicalReportRow row={report.row} defaultOpen={[]} />
+              </div>
             ))}
           </div>
         </EncounterSection>

@@ -581,7 +581,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
         <>
           <div
             className={cn(
-              'rounded-md border bg-muted/40 px-2.5 py-1.5 transition-colors',
+              'w-full min-w-0 max-w-full overflow-hidden rounded-md border bg-muted/40 px-2.5 py-1.5 transition-colors',
               // 向右展開 active: tint the row so it's clear which report the
               // right pane is showing.
               isReportRightActive && 'border-primary/40 bg-primary/5',
@@ -589,7 +589,10 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
           >
             <div
               className={cn(
-                'mb-0.5 flex items-center justify-between gap-2 rounded-md transition-all outline-none',
+                'mb-0.5 flex rounded-md transition-all outline-none',
+                hasText
+                  ? 'flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2'
+                  : 'items-center justify-between gap-2',
                 hasText && 'cursor-pointer select-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50'
               )}
               role={hasText ? 'button' : undefined}
@@ -609,7 +612,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 }
               }}
             >
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <div className={cn('flex min-w-0 flex-1 items-center gap-1.5', hasText && 'w-full sm:w-auto')}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="text-sm font-semibold text-foreground truncate"><HighlightText text={row.title} query={query} /></span>
@@ -619,7 +622,14 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 {renderTrendButton()}
                 {hasImages && renderImageButton()}
               </div>
-              <div className="flex items-center gap-2">
+              <div
+                className={cn(
+                  'flex items-center',
+                  hasText
+                    ? 'min-w-0 flex-wrap justify-start gap-1.5 sm:flex-nowrap sm:justify-end sm:gap-2'
+                    : 'gap-2',
+                )}
+              >
                 {headerRight}
                 {row.isPossibleDuplicate && (
                   <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0">⚠ 可能重複</span>
@@ -877,7 +887,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       <Accordion
         type="multiple"
         defaultValue={defaultOpen.includes(row.id) ? [row.id] : []}
-        className="w-full"
+        className="w-full min-w-0 max-w-full"
       >
         <AccordionItem
           value={row.id}
@@ -888,7 +898,12 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
             isPanelRightActive && 'border-primary/40 bg-primary/5',
           )}
         >
-          <AccordionTrigger className="items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0">
+          <AccordionTrigger
+            className={cn(
+              'items-center justify-start gap-x-1.5 px-2.5 py-1.5 text-sm hover:no-underline [&>svg]:ml-0 [&>svg]:translate-y-0',
+              panelHasNarrative && 'flex-wrap gap-y-1 sm:flex-nowrap',
+            )}
+          >
             <div className="flex min-w-0 basis-[45%] shrink-0 grow-0 items-center gap-1.5">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -930,7 +945,12 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 date-only badge. Category/status (accordionMeta) live on the
                 badge's hover tooltip — no separate meta line, so nothing is
                 shown twice. */}
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div
+              className={cn(
+                'ml-auto flex shrink-0 items-center gap-2',
+                panelHasNarrative && 'order-last w-full min-w-0 flex-wrap justify-start gap-1.5 sm:order-none sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2',
+              )}
+            >
               {!hideMeta && row.institution && (
                 <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
                   <Building2 className="h-3 w-3 shrink-0" />

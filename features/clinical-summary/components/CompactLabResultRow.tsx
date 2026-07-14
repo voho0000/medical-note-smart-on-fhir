@@ -162,7 +162,7 @@ export function CompactLabResultRow({
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
-        "flex items-center gap-x-1.5 rounded-md border bg-muted/40 px-2.5 py-1.5",
+        "flex w-full min-w-0 max-w-full items-center gap-x-1.5 overflow-hidden rounded-md border bg-muted/40 px-2.5 py-1.5",
         abnormal && "border-red-200 bg-red-50/30 dark:border-red-800/50 dark:bg-red-950/10",
         className,
       )}

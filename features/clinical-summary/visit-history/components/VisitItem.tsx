@@ -94,7 +94,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
     <div
       ref={anchorRef}
       className={cn(
-        "rounded-lg border transition-colors",
+        "min-w-0 max-w-full overflow-hidden rounded-lg border transition-colors",
         // 向右展開 active: tint the whole row so it's clear which visit the
         // right pane is showing.
         isRightActive && "border-primary/40 bg-primary/5",
@@ -298,7 +298,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
       </div>
 
       {isExpanded && (
-        <div className="border-t bg-muted/30 px-3 py-3 text-sm">
+        <div className="min-w-0 max-w-full overflow-hidden border-t bg-muted/30 px-3 py-3 text-sm">
           <VisitDetailContent details={details} documents={documents} abnormalCount={abnormalCount} />
         </div>
       )}

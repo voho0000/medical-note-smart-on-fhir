@@ -36,11 +36,11 @@ export function EncounterSection({
   const [expanded, setExpanded] = useState(() => count <= collapseThreshold)
 
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 max-w-full space-y-1.5">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+        className="flex w-full min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
         aria-expanded={expanded}
       >
         <span>{title}</span>
@@ -56,7 +56,7 @@ export function EncounterSection({
           aria-hidden
         />
       </button>
-      {expanded && <div>{children}</div>}
+      {expanded && <div className="min-w-0 max-w-full">{children}</div>}
     </div>
   )
 }
