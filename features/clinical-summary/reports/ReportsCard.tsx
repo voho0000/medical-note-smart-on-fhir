@@ -424,7 +424,7 @@ export function ReportsCard() {
         className={`${expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'} ${activeTab === 'cumulative' ? 'gap-0' : ''}`}
       >
         {/* Desktop tabs */}
-        <TabsList className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-1.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+        <TabsList className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
             // Spinner appears on the tab the user is currently switching to,
             // for the duration of useTransition's pending window. Tells the
@@ -445,7 +445,7 @@ export function ReportsCard() {
         </TabsList>
 
         {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
-        <div className={`${activeTab === 'cumulative' ? 'mb-1.5' : 'mb-2'} md:hidden pr-12`}>
+        <div className={`${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} md:hidden pr-12`}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="w-full justify-between">
@@ -474,7 +474,7 @@ export function ReportsCard() {
             the large empty band of the first iteration while preventing the
             setting from competing with either level of navigation. */}
         {activeTab === 'cumulative' && (
-          <div className="mb-1.5 flex h-7 shrink-0 items-center justify-end px-1">
+          <div className="mb-0.5 flex h-7 shrink-0 items-center justify-end px-1">
             <ReportNameModeSwitch />
           </div>
         )}
