@@ -215,6 +215,7 @@ export const zhTW = {
     navInvestigations: '檢查趨勢',
     navMedications: '用藥整合',
     navCustomInsights: '自訂洞察',
+    cardNavigation: '摘要卡片導覽',
     medicationEducationTitle: '我的用藥與照護',
     medicationEducationSubtitle: '從您的紀錄挑出與目前照護較相關的藥物，先說明它能帶來的幫助，再整理實用提醒。',
     medicationBenefitLabel: '它如何幫助您',

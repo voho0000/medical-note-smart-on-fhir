@@ -28,6 +28,11 @@ export interface RightPanelFeatureConfig {
   forceMount?: boolean
   /** Optional: custom wrapper className for the tab content */
   contentClassName?: string
+  /**
+   * panel: let the whole right panel scroll, including its feature tabs.
+   * feature/default: keep scrolling inside the feature's own ScrollArea.
+   */
+  scrollMode?: 'panel' | 'feature'
 }
 
 /**
@@ -56,6 +61,9 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     // AI result + scroll position must survive tab switches (result is also
     // cached, but forceMount avoids re-running effects on every visit).
     forceMount: true,
+    // Let the outer panel own scrolling so the feature tabs leave the viewport
+    // while the summary's inner card-navigation bar can remain sticky.
+    scrollMode: 'panel',
     contentClassName: 'flex-1 mt-1',
   },
   {

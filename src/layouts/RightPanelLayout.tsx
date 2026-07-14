@@ -144,6 +144,17 @@ function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
     )
   }
 
+  // Medical summary intentionally scrolls with the entire right panel. This
+  // lets the top-level feature tabs leave the viewport while its card chips
+  // remain sticky against the panel's own scrollport.
+  if (feature.scrollMode === 'panel') {
+    return (
+      <div className="py-2 pr-2">
+        <Component />
+      </div>
+    )
+  }
+
   // Wrap with ScrollArea for non-chat features.
   //
   // Radix renders the viewport's content in a `display:table; min-width:100%`

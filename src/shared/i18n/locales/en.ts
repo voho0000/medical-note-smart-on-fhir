@@ -214,6 +214,7 @@ export const en = {
     navInvestigations: 'Test trends',
     navMedications: 'Medication review',
     navCustomInsights: 'Custom insights',
+    cardNavigation: 'Summary card navigation',
     medicationEducationTitle: 'My medicines and care',
     medicationEducationSubtitle: 'Medicines most relevant to your care, with their benefits explained first and a few practical reminders.',
     medicationBenefitLabel: 'How it may help you',

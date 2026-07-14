@@ -48,6 +48,10 @@ import {
   useMedicalSummaryCardLayout,
   type MedicalSummaryCardId,
 } from "./hooks/useMedicalSummaryCardLayout"
+import {
+  MedicalSummaryCardNav,
+  type MedicalSummaryCardNavItem,
+} from "./components/MedicalSummaryCardNav"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
 import type {
@@ -62,6 +66,18 @@ import type {
 } from "@/src/core/entities/medical-summary.entity"
 
 type SummaryView = "standard" | "custom"
+
+const CARD_NAV_ACTIVATION_OFFSET_PX = 48
+
+function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement
+  while (parent) {
+    const overflowY = window.getComputedStyle(parent).overflowY
+    if (/(auto|scroll|overlay)/.test(overflowY)) return parent
+    parent = parent.parentElement
+  }
+  return null
+}
 
 export default function MedicalSummaryFeature() {
   const { t } = useLanguage()
@@ -247,12 +263,8 @@ export default function MedicalSummaryFeature() {
 
   const [summarySettingsOpen, setSummarySettingsOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
-  const investigationsRef = useRef<HTMLDivElement>(null)
-  const safetyRef = useRef<HTMLDivElement>(null)
-  const decisionsRef = useRef<HTMLDivElement>(null)
-  const medicationsRef = useRef<HTMLDivElement>(null)
-  const problemsRef = useRef<HTMLDivElement>(null)
-  const timelineRef = useRef<HTMLDivElement>(null)
+  const [activeCardId, setActiveCardId] = useState<MedicalSummaryCardId | null>(null)
+  const cardRefs = useRef<Partial<Record<MedicalSummaryCardId, HTMLDivElement | null>>>({})
 
   const showSafetyCard = Boolean(safetyResult || (!safetyError && result))
   const availableCardIds = useMemo<MedicalSummaryCardId[]>(() => {
@@ -300,9 +312,109 @@ export default function MedicalSummaryFeature() {
     [cardLayout.orderedManageIds, cardMetadata],
   )
 
+  const cardCounts = useMemo<Partial<Record<MedicalSummaryCardId, number | undefined>>>(() => {
+    if (!result) {
+      return { safety: safetyResult?.alerts.length }
+    }
+    const medicationCount = isPatient
+      ? result.medicationEducation.length
+      : result.medicationReview.regimen.length
+        + result.medicationReview.changes.length
+        + result.medicationReview.reconciliation.length
+    return {
+      problems: result.problems.length,
+      timeline: result.timeline.length,
+      safety: safetyResult?.alerts.length,
+      decisions: result.decisions.length,
+      investigations: result.investigations.length,
+      medications: medicationCount,
+    }
+  }, [isPatient, result, safetyResult])
+
+  const cardNavItems = useMemo<MedicalSummaryCardNavItem[]>(
+    () => cardLayout.orderedVisibleIds.map((id) => ({
+      id,
+      label: cardMetadata[id].label,
+      description: cardMetadata[id].description,
+      count: cardCounts[id],
+    })),
+    [cardCounts, cardLayout.orderedVisibleIds, cardMetadata],
+  )
+
+  const navActiveCardId = activeCardId && cardLayout.orderedVisibleIds.includes(activeCardId)
+    ? activeCardId
+    : cardLayout.orderedVisibleIds[0]
+
+  useEffect(() => {
+    if (activeView !== "standard") return
+
+    const cards = cardLayout.orderedVisibleIds.flatMap((id) => {
+      const element = cardRefs.current[id]
+      return element ? [{ id, element }] : []
+    })
+    if (cards.length === 0) return
+
+    const scrollContainer = findVerticalScrollContainer(cards[0].element)
+    const scrollTarget: HTMLElement | Window = scrollContainer ?? window
+    let animationFrame = 0
+
+    const updateActiveCard = () => {
+      animationFrame = 0
+      const containerRect = scrollContainer?.getBoundingClientRect()
+      const viewportTop = containerRect?.top ?? 0
+      const viewportBottom = containerRect?.bottom ?? window.innerHeight
+      const activationLine = viewportTop + CARD_NAV_ACTIVATION_OFFSET_PX
+      const visibleCards = cards
+        .map(({ id, element }) => ({ id, rect: element.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.bottom > viewportTop && rect.top < viewportBottom)
+
+      if (visibleCards.length === 0) return
+
+      const isAtBottom = scrollContainer
+        ? Math.ceil(scrollContainer.scrollTop + scrollContainer.clientHeight)
+          >= scrollContainer.scrollHeight - 1
+        : Math.ceil(window.scrollY + window.innerHeight)
+          >= document.documentElement.scrollHeight - 1
+      const nextCardId = isAtBottom
+        ? visibleCards[visibleCards.length - 1].id
+        : visibleCards.find(({ rect }) => rect.top <= activationLine && rect.bottom > activationLine)?.id
+          ?? visibleCards.find(({ rect }) => rect.top > activationLine)?.id
+          ?? visibleCards[visibleCards.length - 1].id
+
+      setActiveCardId((current) => current === nextCardId ? current : nextCardId)
+    }
+
+    const scheduleUpdate = () => {
+      if (animationFrame !== 0) return
+      animationFrame = window.requestAnimationFrame(updateActiveCard)
+    }
+
+    scrollTarget.addEventListener("scroll", scheduleUpdate, { passive: true })
+    window.addEventListener("resize", scheduleUpdate)
+    scheduleUpdate()
+
+    return () => {
+      scrollTarget.removeEventListener("scroll", scheduleUpdate)
+      window.removeEventListener("resize", scheduleUpdate)
+      if (animationFrame !== 0) window.cancelAnimationFrame(animationFrame)
+    }
+  }, [activeView, cardLayout.orderedVisibleIds])
+
+  const jumpToCard = useCallback((id: MedicalSummaryCardId) => {
+    const target = cardRefs.current[id]
+    if (!target) return
+    setActiveCardId(id)
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" })
+  }, [])
+
   const summaryCards: Partial<Record<MedicalSummaryCardId, ReactNode>> = {
     problems: result ? (
-      <div ref={problemsRef} className="scroll-mt-2">
+      <div
+        id="medical-summary-card-problems"
+        ref={(node) => { cardRefs.current.problems = node }}
+        className="scroll-mt-12"
+      >
         <ProblemListCard
           result={result}
           title={ms.problemsTitle}
@@ -318,7 +430,11 @@ export default function MedicalSummaryFeature() {
       </div>
     ) : null,
     timeline: result?.timeline.length ? (
-      <div ref={timelineRef} className="scroll-mt-2">
+      <div
+        id="medical-summary-card-timeline"
+        ref={(node) => { cardRefs.current.timeline = node }}
+        className="scroll-mt-12"
+      >
         <CrossFacilityTimeline
           result={result}
           title={ms.timelineTitle}
@@ -336,7 +452,11 @@ export default function MedicalSummaryFeature() {
       </div>
     ) : null,
     safety: showSafetyCard ? (
-      <div ref={safetyRef} className="scroll-mt-2">
+      <div
+        id="medical-summary-card-safety"
+        ref={(node) => { cardRefs.current.safety = node }}
+        className="scroll-mt-12"
+      >
         <CareRemindersSafetyCard
           result={safetyResult}
           isScanning={isSafetyGenerating}
@@ -348,7 +468,11 @@ export default function MedicalSummaryFeature() {
       </div>
     ) : null,
     decisions: result?.decisions.length ? (
-      <div ref={decisionsRef} className="scroll-mt-2">
+      <div
+        id="medical-summary-card-decisions"
+        ref={(node) => { cardRefs.current.decisions = node }}
+        className="scroll-mt-12"
+      >
         <DecisionList
           result={result}
           title={ms.decisionsTitle}
@@ -365,7 +489,11 @@ export default function MedicalSummaryFeature() {
       </div>
     ) : null,
     investigations: result ? (
-      <div ref={investigationsRef} className="scroll-mt-2">
+      <div
+        id="medical-summary-card-investigations"
+        ref={(node) => { cardRefs.current.investigations = node }}
+        className="scroll-mt-12"
+      >
         <InvestigationTrendsCard
           result={result}
           title={ms.investigationsTitle}
@@ -381,7 +509,11 @@ export default function MedicalSummaryFeature() {
       </div>
     ) : null,
     medications: result ? (
-      <div ref={medicationsRef} className="scroll-mt-2">
+      <div
+        id="medical-summary-card-medications"
+        ref={(node) => { cardRefs.current.medications = node }}
+        className="scroll-mt-12"
+      >
         {isPatient ? (
           <MedicationEducationCard
             result={result}
@@ -631,6 +763,13 @@ export default function MedicalSummaryFeature() {
               ) : null}
             </div>
           ) : null}
+
+          <MedicalSummaryCardNav
+            items={cardNavItems}
+            ariaLabel={ms.cardNavigation}
+            activeId={navActiveCardId}
+            onJump={jumpToCard}
+          />
 
           {result ? (
             <CurrentPrioritiesCard

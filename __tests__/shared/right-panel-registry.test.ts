@@ -43,4 +43,13 @@ describe('right-panel registry', () => {
     ], {})
     expect(pluggedIn.overflowFeatures.map((feature) => feature.id)).toEqual(['future-feature'])
   })
+
+  it('lets medical summary scroll with the panel so only its card chips stay sticky', () => {
+    const medicalSummary = getEnabledRightPanelFeatures().find(
+      (feature) => feature.id === 'medical-summary',
+    )
+
+    expect(medicalSummary?.scrollMode).toBe('panel')
+    expect(medicalSummary?.contentClassName?.split(' ')).not.toContain('min-h-0')
+  })
 })
