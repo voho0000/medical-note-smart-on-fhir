@@ -1,102 +1,162 @@
 # 安全性指南 / Security Guide
 
-## 🔒 已實作的安全功能
+> 現行規格｜基準版本：v0.40.0｜最後核對：2026-07-14
 
-### 1. API Key 加密儲存
-- 使用 Web Crypto API (AES-GCM 256-bit)
-- PBKDF2 金鑰衍生（100,000 次迭代）
-- Session-based 加密密碼
-- 實作檔案：`src/shared/utils/crypto.utils.ts`
+本文件描述 app repo 已實作的控制與仍需由部署端承擔的責任。MediPrisma 是研究／教學用途軟體；本 repo 沒有宣稱已取得 HIPAA、GDPR、臺灣醫療器材或資安認證。
 
-### 2. 安全 Headers / CSP
-實作檔案：`next.config.ts`（`headers()`）
-- **Content-Security-Policy: frame-ancestors** — 白名單 `'self'` + 健保存摺 + `*.vghtpe.gov.tw` + 本機 mock-his。**刻意不設 X-Frame-Options**：其唯一的 allow-list 值（ALLOW-FROM）Chrome 已不支援，SAMEORIGIN 又會擋掉 EHR-FHIR Bridge 在 HIS 頁面內嵌本 app，故改用 CSP `frame-ancestors` 白名單。
-- X-Content-Type-Options: nosniff
-- X-XSS-Protection: 1; mode=block
-- Referrer-Policy: strict-origin-when-cross-origin
-- Permissions-Policy: camera=(), microphone=(self), geolocation=()
+## 保護目標
 
-> ⚠️ **重要限制**：`next.config.ts` 的 `headers()` 只在 Node 伺服器（`next dev` / `next start`）生效。正式部署在 **GitHub Pages（靜態 CDN）時這些 response header 不會送出**——嵌入防護需改由 CDN／反向代理層或實際的 Node 託管提供。
+- 病人 FHIR 原始資料不以明文長期留在共用工作站。
+- SMART token、user API key 與完整 Bundle 不交給 AI 模型。
+- AI 請求只帶完成當次功能所需的資料，並降低可識別資訊。
+- 使用者、病人與 FHIR server 的雲端資料互相隔離。
+- 生成內容可追溯來源，無來源或無法驗證時明確標示。
+- Static host、Node host 與外部 Firebase Functions 的責任不混淆。
 
-### 3. HTML Sanitization（DOMPurify）
-- FHIR 敘述性 XHTML（Composition / IPS narrative）注入前一律經 **DOMPurify 3.4.10** 淨化：`features/clinical-summary/document-summary/utils/sanitize-narrative.ts`、`features/ips-export/components/IpsSectionPreview.tsx`
-- 其餘字串移除危險的 script、iframe、事件處理器：`src/shared/utils/string.utils.ts`
+## 已實作控制
 
-### 4. 錯誤訊息過濾
-- 過濾 API keys、tokens 等敏感資訊
-- 實作檔案：AI service 層
+### SMART on FHIR
 
-### 5. SMART on FHIR 認證
-- OAuth 2.0 with PKCE（public client，無瀏覽器端 client secret）
-- 遵循 SMART on FHIR 授權模型
-- ⚠️ HIPAA／法規合規須由部署者自行評估，本專案不提供 BAA
+- Public client + OAuth 2.0 authorization code + S256 PKCE。
+- 不接受 client secret；`NEXT_PUBLIC_SMART_CLIENT_ID` 是公開識別碼。
+- EHR launch 與 standalone launch 使用不同 launch scope。
+- 有有效 SMART token 時優先於舊 local bundle。
+- 分頁搜尋超過 50 頁會明確失敗，不回傳靜默截斷的成功資料。
 
-### 6. Firebase Authentication
-- Google 登入、Email/密碼登入
-- Email 驗證機制
+### 本地 Bundle
 
-### 7. Firestore Security Rules
-- 使用者資料隔離
-- 僅作者可修改自己的資料
-- 規則原始碼位於 companion repo [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir) 的 `firestore.rules`（部署前請確認已套用）
+- Bundle 與 binary images 以 WebCrypto AES-GCM 加密後存 IndexedDB。
+- 每個 tab 產生 256-bit session key，只放在 `sessionStorage`。
+- 紀錄最多保留 12 小時；過期、無 key、解密失敗、清除資料或登出時刪除。
+- WebCrypto／storage 不可用時不降級成明文 persistence，只保留當次記憶體能力。
+- 舊版明文資料讀取後會嘗試原地加密 migration；加密不可用則不再持久保存。
 
-### 8. HTTPS 加密
-- 全站 HTTPS
-- GitHub Pages 自動提供
+### AI-derived cache
 
-## ⚠️ 建議改進
+- Medical Summary、Safety、Report Interpretation 等衍生結果使用與 Bundle 相同的 session key envelope。
+- 小型密文存在 localStorage，但新 tab 沒有 key，無法解密並會清除。
+- cache 有 12 小時上限，並以病人、資料、prompt、model／audience 等 identity 隔離。
+- 使用者清除本地資料時一併 purge `mediprisma:ai-result:*`。
 
-### 高優先級
-1. **正式部署的安全 Headers** — GitHub Pages 靜態部署不套用 `headers()`；CSP／嵌入防護需在 CDN／代理層補上（CSP、DOMPurify 本身已實作，見上方）
-2. **環境變數驗證** — 使用 zod 驗證
+### API keys
 
-> ✅ 已處理：feedback endpoint 改用 durable Firestore 限流（per-IP、fail-open；可再加 Turnstile / Firebase ID token 進一步強化）；SMART 移除瀏覽器端 client secret，改為 **public client + PKCE only**。
+- OpenAI、Gemini、Claude、Perplexity key 在寫入 storage 前加密。
+- 新使用者預設 `sessionStorage`，關閉視窗後消失；只有明確開啟「記住此裝置」才改為 localStorage。
+- key 做 trim 與 header-safe 驗證，避免錯誤內容進入 Authorization header。
+- provider user key 只在 direct-provider path 使用；proxy interceptor 會先移除 provider credential header。
 
-### 中優先級
-5. 更新測試
-6. 監控和日誌
-7. Subresource Integrity (SRI)
+瀏覽器端加密無法防禦已執行在同一 origin 的惡意 JavaScript／XSS；它主要降低 storage 被直接讀取或共用工作站殘留的風險。
 
-## 📋 安全檢查清單
+### Owner-funded AI proxy
 
-### 部署前
-- [x] API keys 加密儲存
-- [x] 基本安全 headers
-- [x] HTML sanitization
-- [x] 錯誤訊息過濾
-- [x] HTTPS
-- [x] SMART on FHIR OAuth
-- [x] Firebase Authentication
-- [x] Firestore Security Rules（位於 `firebase-smart-on-fhir` repo，需確認已 deploy）
-- [x] Content Security Policy（frame-ancestors；⚠️ GH Pages 靜態部署不套用，見上方）
-- [x] DOMPurify（FHIR narrative 淨化）
-- [ ] 所有測試通過
-- [ ] npm audit 無高危漏洞
+- Proxy request 需要 Firebase ID token；匿名 session 與登入 session 都可依後端 quota 使用。
+- 有設定時加入 Firebase App Check token。
+- `NEXT_PUBLIC_PROXY_KEY`／`x-proxy-key` 位於公開前端，不能當真正身分驗證；後端必須驗 ID token、App Check、quota、allowed model 與 CORS。
+- Upstream provider keys 只存在後端 secrets。
 
-### 定期檢查（每月）
-- [ ] 更新依賴套件
-- [ ] 執行 npm audit
-- [ ] 審查存取日誌
-- [ ] 檢查 Firebase 使用量
-- [ ] 審查 Firestore Security Rules
+### PII minimization
 
-## 🎯 總結
+- FHIR tools 不回傳 patient name、id、完整 birth date 或 provider display。
+- Tool payload 的每個字串會再做 patient literal／常見識別格式 scrub。
+- User message 在 UI／history 保留原文，但傳給 AI 的副本先遮罩已知病人識別文字。
+- 回饋表單不收 patientId；UI 提醒使用者不要輸入姓名、病歷號等資料。
+- Chat history 不儲存上傳圖片。
 
-已實作：
-✅ 資料加密（AES-GCM 256-bit）
-✅ 傳輸安全（HTTPS）
-✅ 認證授權（OAuth 2.0 + Firebase）
-✅ XSS 防護（DOMPurify narrative 淨化 + CSP frame-ancestors + 安全 Headers）
-✅ 資料隔離（Firestore Rules）
-✅ 錯誤處理（敏感資訊過濾）
-✅ AI 安全（客戶端 Tool Calling 限制）
+這些是 best-effort minimization，不是正式匿名化。病摘、影像文字或使用者自由輸入仍可能含未辨識的 PHI。
 
-建議改進：
-⚠️ 正式（GitHub Pages）部署補上 response-header 層級的 CSP／嵌入防護
-⚠️ feedback endpoint 改用 durable rate limit + Turnstile
-⚠️ SMART 改 public PKCE / BFF（勿在瀏覽器放 client secret）
+### HTML 與輸出
 
-## 📞 聯絡資訊
+- Markdown rendering 經 DOMPurify sanitization。
+- Feedback email 對所有 attacker-controlled 欄位做 HTML escape，badge class 使用 allowlist。
+- Structured Medical Summary 以 Zod 驗證固定 schema；來源 key 由 app 建立，日期／機構／resource type 由 app 端回填。
+- Unknown citation 顯示未驗證，不應被 UI 靜默包裝成可信來源。
 
-如發現安全問題，請立即聯絡 IT 安全團隊。
-**請勿公開揭露安全漏洞**
+### Feedback endpoint
+
+內建 `/api/feedback`：
+
+- 檢查 Origin／same-host。
+- 每個 server instance 對來源 IP 做每小時 5 次的記憶體 rate limit。
+- 驗證必要欄位、allowlist 類型與長度。
+- 對 caller 回傳 generic 500，詳細錯誤只留 server log。
+- 收件人由 `FEEDBACK_TO_EMAIL` 設定，不硬編個人信箱。
+
+限制：instance-local rate limit 不是分散式強制，也沒有登入驗證。正式 static deployment 應使用外部 Firebase Function，在後端加入 ID token、App Check 與集中式 rate limiting。
+
+### Browser security headers
+
+`next.config.ts` 在 Node host 提供：
+
+- `Content-Security-Policy: frame-ancestors ...`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(self), geolocation=()`
+- legacy `X-XSS-Protection`
+
+`X-Frame-Options` 刻意不用，因 app 需由 allowlisted HIS／Bridge iframe 嵌入；frame policy 由 CSP `frame-ancestors` 管理。
+
+GitHub Pages 不會執行 Next `headers()`，因此上述 header 不會由 static export 自動送出。若 production 必須強制 CSP，需在 CDN／reverse proxy 層設定或改用可控 header 的 host。
+
+### Quality controls
+
+- ESLint boundary rules 阻止主要跨層依賴回歸。
+- GitHub Actions 執行 typecheck、lint、Jest 與 static build。
+- CodeQL 在 push、PR 與每週排程分析 JavaScript／TypeScript。
+- Dependabot 監控 npm／Actions dependency。
+- Playwright 以合成資料測 client flows，另有 Firebase emulator chain。
+
+## 部署端責任
+
+### Firebase
+
+- 部署並版本控制 Auth policy、Firestore Rules、indexes、Functions CORS、quota 與 App Check enforcement。
+- 確認 Firebase Authorized Domains，repo 的 daily auth-domain guard 只做 drift detection。
+- 對 `users/{uid}` collection 強制 uid ownership。
+- 對 `sharedPrompts` 強制 author ownership、schema、長度與安全欄位。
+- 設定 data retention、刪除流程、audit log 與 incident response。
+
+### Secrets 與環境變數
+
+- 所有 `NEXT_PUBLIC_*` 都會進瀏覽器 bundle，不可放 server secret。
+- `RESEND_API_KEY`、AI provider proxy keys、service credentials 只能放 server／Functions secret store。
+- 輪替曾暴露或疑似外洩的 key，不以刪除 Git history 當成輪替替代品。
+- Production 與 dev proxy URL／CORS 應分離。
+
+### 組織政策
+
+- 在傳送真實病人資料給第三方 AI 前完成法務、資安、DPA／BAA、資料地區與保留政策審查。
+- 共用工作站仍應有 OS 帳號、螢幕鎖定、瀏覽器 profile 與 session timeout。
+- 將 AI 輸出定位為 decision support，要求臨床人員回查來源與確認。
+- 建立資料主體請求、匯出、刪除與 breach notification 程序。
+
+## 已知限制與剩餘風險
+
+- Client-side app 無法抵抗同 origin XSS、惡意 extension、已被控制的裝置或使用者主動外洩。
+- PII scrub 可能漏掉自由文字中的非典型姓名、院內編號或影像 burned-in annotation。
+- Firestore chat history 可能包含 PHI，內容目前不是 app-level end-to-end encryption。
+- Anonymous Firebase token 降低裸 API 濫用，但攻擊者仍可能自動建立 session；需 App Check、quota 與 rate limit 配合。
+- Static GitHub Pages 無自訂 response headers 與 server API route。
+- Source key 存在只證明引用可定位，不自動證明每一個自然語言 claim 完全由該來源支持。
+- 第三方 AI、Firebase、Resend、GitHub Pages 各有自己的處理條款與 availability。
+
+## 發布前檢查
+
+- [ ] `npm audit` 與 CodeQL findings 已檢視；風險有 owner／期限。
+- [ ] `npx tsc --noEmit`、`npm run lint`、Jest、E2E、build 通過。
+- [ ] Firebase Rules／indexes／Functions 與 app 版本相容。
+- [ ] Authorized domains、CORS、App Check、quota、allowed models 已驗證。
+- [ ] Production `NEXT_PUBLIC_FEEDBACK_URL` 指向真正可用的外部 endpoint。
+- [ ] CDN／host 的 CSP、HSTS、referrer、permissions headers 實際回應已檢查。
+- [ ] Demo Bundle 保持去識別化，未將 `.env.local`、真實 Bundle、trace、screenshots 加入 Git。
+- [ ] 隱私政策與 UI consent 反映實際啟用的 providers 與資料流。
+
+## 發現問題
+
+不要在公開 issue 放病人資料、token、key 或完整 request body。一般問題可用 GitHub Security Advisories／私密管道或聯絡 <voho0000@gmail.com>。
+
+## 相關文件
+
+- [Privacy Policy](../PRIVACY_POLICY.md)
+- [Architecture](ARCHITECTURE.md)
+- [AI Agent](AI_AGENT_IMPLEMENTATION.md)
+- [Feedback setup](FEEDBACK_SETUP.md)

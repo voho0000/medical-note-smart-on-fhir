@@ -1,7 +1,9 @@
 # Deep-mode harness ledger
 
+> 狀態：尚無可公開重現的 baseline｜app 基準：v0.40.0｜最後核對：2026-07-14
+
 成績單:每做一次 harness 改善,就在「迭代紀錄」加一列,量化「改了什麼層、正確率從多少 → 多少」。
-配套設計見眼前對話的 teacher-student 自動 eval 迴圈(Opus 4.8 oracle 產 gold answer → 生產模型 student 應答 → LLM-as-judge 評分 → 按 ETCLOVG 分層診斷 → scoped 修補 → 回歸重跑)。
+配套設計見 [DEEP-MODE-EVAL-LOOP.md](DEEP-MODE-EVAL-LOOP.md) 的 teacher-student 自動 eval 迴圈。真實 app loop 已抽成 `runDeepModeAgent()`，但公開 repo 尚未含完整 runner 與 baseline artifacts。
 
 紀錄規則:**只有「主指標上升」且「回歸數 ≤ 門檻」才保留 patch**,否則回退並照實記 reverted。數字一律來自實跑 eval,**禁止填估計值或編造**;尚未量到的填 `TBD`。
 
@@ -31,9 +33,9 @@ eval 集大小、judge 模型、student 模型每次都記在列上,因為換模
 | # | 日期 | 改的層 | 改了什麼 | 主指標 before→after | 受影響子指標 before→after | Regressions | 決定 |
 |---|---|---|---|---|---|---|---|
 | v0 | TBD | — | baseline(首次跑 eval,未改 harness) | — → TBD | — | — | baseline |
-| v1 | TBD | _e.g. Tooling_ | _e.g. 18 工具收斂分組 + output 後驗_ | TBD → TBD | tool precision TBD→TBD | TBD | kept / reverted |
+| v1 | TBD | _e.g. Tooling_ | _e.g. 候選 terminology tool A/B；填入 dataset/model/commit_ | TBD → TBD | tool precision TBD→TBD | TBD | kept / reverted |
 
-> 每列必填:eval 集大小、judge 模型、student 模型(寫在「改了什麼」欄或附註),否則跨列不可比。
+> 每列必填：commit、fixture／eval-set hash、題數、judge model、student models、prompt/tool schema identity 與 artifact 位置；否則跨列不可比。
 
 ---
 

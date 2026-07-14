@@ -1,660 +1,193 @@
-# 系統架構文件
+# MediPrisma 系統架構
 
-## 概述
+> 現行規格｜基準版本：v0.40.0｜最後核對：2026-07-14
 
-本應用程式採用 **Clean Architecture（整潔架構）** 和 **Pluggable Architecture（可插拔架構）**，確保系統的可維護性、可擴展性和可測試性。
+MediPrisma 是以 Next.js App Router 實作的 client-first SMART on FHIR 應用。它可從 SMART OAuth 或本地 FHIR Bundle 取得同一種領域資料，再由臨床資料面板、結構化 AI 摘要、Agent 對話、醫療計算機與 IPS 匯出共同使用。
 
----
+## 系統邊界
 
-## 🏗️ Clean Architecture
-
-### 架構層級
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      展示層 (Presentation)                    │
-│              app/ • features/ • components/                  │
-│                    UI 元件和頁面                              │
-├─────────────────────────────────────────────────────────────┤
-│                      應用層 (Application)                     │
-│                     src/application/                         │
-│           應用程式特定邏輯、hooks 和 providers                  │
-├─────────────────────────────────────────────────────────────┤
-│                      領域層 (Domain)                          │
-│                        src/core/                             │
-│                    業務實體和用例                              │
-├─────────────────────────────────────────────────────────────┤
-│                    基礎設施層 (Infrastructure)                 │
-│                    src/infrastructure/                       │
-│              外部服務整合（FHIR、AI）                          │
-└─────────────────────────────────────────────────────────────┘
+```text
+EHR / FHIR server ── SMART OAuth 2.0 + S256 PKCE ─┐
+                                                   ├─> ClinicalDataCollection
+FHIR Bundle JSON ─ AES-GCM / IndexedDB ───────────┘
+                                                          │
+                         ┌────────────────────────────────┼───────────────────────┐
+                         │                                │                       │
+                  左側臨床資料                     右側臨床功能             AI tool layer
+             patient/visits/reports/meds/docs   summary/chat/IPS/calc/settings   FHIR + literature
+                         │                                │                       │
+                         └──────────── source navigation / shared cache ──────────┘
 ```
 
-### 1. Presentation Layer（展示層）
+正式靜態部署在 GitHub Pages；同一輸出可用 `/app` base path 同步到 mediprisma.tw。Firebase 提供 Auth、Firestore 與 owner-funded AI／語音／回饋代理；Functions 與 Firestore Rules 位於獨立的 `firebase-smart-on-fhir` repo。
 
-**職責**：UI 元件、使用者互動、路由
+## 分層與依賴方向
 
-**目錄結構**：
-- `app/` - Next.js App Router、API routes
-- `features/` - 功能模組（可插拔）
-- `components/` - 可重複使用的 UI 元件
-
-**特點**：
-- 使用 React 和 Next.js 16
-- shadcn/ui 元件庫
-- Tailwind CSS 4 樣式
-- 響應式設計
-
-### 2. Application Layer（應用層）
-
-**職責**：應用程式特定邏輯、狀態管理、hooks
-
-**目錄結構**：
-```
-src/application/
-├── adapters/        # 外部服務適配器
-├── dto/             # 資料傳輸物件
-├── hooks/           # 自訂 React hooks
-├── providers/       # Context providers
-└── stores/          # Zustand stores
+```text
+src/core  <-  src/shared  <-  src/infrastructure  <-  src/application  <-  features  <-  app
 ```
 
-**關鍵元件**：
-- **Providers**：統一的狀態管理（Auth、FHIR、Language、Theme）
-- **Hooks**：封裝業務邏輯的可重用 hooks
-- **Stores**：Zustand 狀態管理（Chat、Chat History）
-
-### 3. Domain Layer（領域層）
-
-**職責**：核心業務邏輯、領域實體、用例
-
-**目錄結構**：
-```
-src/core/
-├── categories/      # 資料分類邏輯
-├── entities/        # 領域實體
-├── errors/          # 錯誤定義
-├── interfaces/      # 領域介面
-├── registry/        # 功能註冊表
-├── services/        # 領域服務
-├── use-cases/       # 業務邏輯用例
-└── utils/           # 工具函數
-```
-
-**Use Cases**：
-- `agent/` - AI Agent 用例
-- `ai/` - AI 生成用例
-- `chat/` - 對話管理用例
-- `clinical-context/` - 臨床上下文
-- `clinical-data/` - 臨床資料處理
-- `clinical-insights/` - 自訂摘要模組生成
-- `patient/` - 病人資料
-- `transcription/` - 語音轉錄
-
-### 4. Infrastructure Layer（基礎設施層）
-
-**職責**：外部服務整合、資料持久化
-
-**目錄結構**：
-```
-src/infrastructure/
-├── ai/              # AI 服務實作
-│   ├── services/    # OpenAI, Gemini, Perplexity
-│   ├── streaming/   # 串流處理
-│   └── tools/       # FHIR Tools for AI Agent
-├── fhir/            # FHIR 客戶端實作
-│   ├── client/      # FHIR 客戶端服務
-│   └── repositories/ # FHIR 資料存取
-└── firebase/        # Firebase 整合
-    └── repositories/ # Firestore repositories
-```
-
----
-
-## 🔌 Pluggable Architecture（可插拔架構）
-
-### 設計理念
-
-可插拔架構讓開發者可以輕鬆新增、替換或移除功能，而無需修改核心程式碼。
-
-### 左側 Panel（臨床摘要）
-
-**Registry 配置**：`src/shared/config/feature-registry.ts`
-
-**核心概念**：
-- **Tab 配置**：`LEFT_PANEL_TABS` 定義所有標籤
-- **功能配置**：`CLINICAL_SUMMARY_FEATURES` 定義所有功能
-- **動態渲染**：`LeftPanelLayout.tsx` 從 registry 讀取並渲染
-
-**新增功能步驟**：
-1. 建立功能元件（例如：`MyFeatureCard.tsx`）
-2. 在 `feature-registry.ts` 註冊
-3. 完成！無需修改 Layout
-
-**範例**：
-```typescript
-// 1. 建立功能元件
-export function MyFeatureCard() {
-  const { patient } = useFhirContext()
-  return <Card>...</Card>
-}
-
-// 2. 在 feature-registry.ts 註冊
-{
-  id: 'my-feature',
-  name: 'My Feature',
-  component: MyFeatureCard,
-  tab: 'patient',
-  order: 3,
-  enabled: true,
-}
-```
-
-**預設功能**（7 個）：
-- Patient Info - 病人基本資料
-- Vitals - 生命徵象
-- Diagnoses - 診斷
-- Reports - 診斷報告
-- Allergies - 過敏史
-- Medications - 用藥
-- Visit History - 就診紀錄
-
-### 右側 Panel（AI 功能）
-
-**Registry 配置**：`src/shared/config/right-panel-registry.ts`
-
-**核心概念**：
-- **功能配置**：`RIGHT_PANEL_FEATURES` 陣列
-- **元件映射**：`RightPanelLayout.tsx` 中的 `FEATURE_COMPONENTS`
-- **Provider 管理**：統一的 `RightPanelProviders` wrapper
-
-**新增功能步驟**：
-1. 建立功能元件
-2. 在 `right-panel-registry.ts` 註冊
-3. 在 `FEATURE_COMPONENTS` 加入映射
-4. 完成！
-
-**範例**：
-```typescript
-// 在 right-panel-registry.ts 註冊
-{
-  id: 'my-feature',
-  name: 'My Feature',
-  tabLabel: 'myFeature',
-  component: () => null,
-  order: 4,
-  enabled: true,
-}
-```
-
-**預設頂層功能**（5 個）：
-- Medical Summary - 固定核心摘要＋自訂摘要模組＋ AI 資料範圍 drawer
-- Medical Chat - 單一 AI Agent 對話（依需求自主調用 FHIR／文獻工具）
-- IPS Export - 匯出與獨立資料範圍
-- Medical Calculator - 醫療計算機
-- Settings - 設定
-
-### 架構優勢
-
-1. **低耦合**：功能之間互不依賴
-2. **高內聚**：每個功能自包含
-3. **易擴展**：透過 registry 輕鬆新增功能
-4. **易維護**：清楚的結構和文件
-5. **型別安全**：完整的 TypeScript 支援
-
-### 適用場景
-
-- **Fork 專案**：保留臨床資料顯示，替換 AI 功能
-- **客製化**：醫院可以根據需求新增專屬功能
-- **實驗性功能**：可以輕鬆啟用/停用功能測試
-- **多團隊開發**：不同團隊可以獨立開發功能
-
----
-
-## 🎯 關鍵設計模式
-
-### 1. Provider 模式
-
-**用途**：基於 Context 的狀態管理
-
-**實作**：
-```typescript
-// src/application/providers/app-providers.tsx
-export function AppProviders({ children }) {
-  return (
-    <AuthProvider>
-      <LanguageProvider>
-        <ThemeProvider>
-          <FhirProvider>
-            {children}
-          </FhirProvider>
-        </ThemeProvider>
-      </LanguageProvider>
-    </AuthProvider>
-  )
-}
-```
-
-**主要 Providers**：
-- `AuthProvider` - Firebase 使用者認證
-- `FhirProvider` - FHIR 資料和病人上下文
-- `LanguageProvider` - 多語言支援
-- `ThemeProvider` - 深色/亮色模式
-
-### 2. Repository 模式
-
-**用途**：資料存取抽象
-
-**實作**：
-```typescript
-// src/core/interfaces/repositories/
-interface IChatSessionRepository {
-  create(session: CreateChatSessionDto): Promise<string>
-  update(id: string, updates: UpdateChatSessionDto): Promise<void>
-  delete(id: string): Promise<void>
-  findById(id: string): Promise<ChatSessionEntity | null>
-  listByUser(userId: string): Promise<ChatSessionMetadata[]>
-}
-
-// src/infrastructure/firebase/repositories/
-class ChatSessionRepository implements IChatSessionRepository {
-  // Firestore 實作
-}
-```
-
-### 3. Use Case 模式
-
-**用途**：封裝業務邏輯
-
-**實作**：
-```typescript
-// src/core/use-cases/chat/save-chat-session.use-case.ts
-export class SaveChatSessionUseCase {
-  async execute(
-    dto: CreateChatSessionDto,
-    repository: IChatSessionRepository
-  ): Promise<string> {
-    // 業務邏輯
-    return await repository.create(dto)
-  }
-}
-```
-
-### 4. Registry 模式
-
-**用途**：可插拔功能架構
-
-**實作**：
-```typescript
-// src/shared/config/feature-registry.ts
-export const CLINICAL_SUMMARY_FEATURES: FeatureConfig[] = [
-  {
-    id: 'patient-info',
-    name: 'Patient Information',
-    component: PatientInfoCard,
-    tab: 'patient',
-    order: 0,
-    enabled: true,
-  },
-  // ...
-]
-
-// 輔助函數
-export function getEnabledFeatures(): FeatureConfig[]
-export function getFeaturesForTab(tabId: string): FeatureConfig[]
-export function registerFeature(feature: FeatureConfig): void
-```
-
-### 5. Adapter 模式
-
-**用途**：外部 API 整合
-
-**實作**：
-```typescript
-// src/application/adapters/
-export class OpenAIAdapter {
-  async generateCompletion(prompt: string): Promise<string> {
-    // 適配 OpenAI API
-  }
-}
-
-export class GeminiAdapter {
-  async generateCompletion(prompt: string): Promise<string> {
-    // 適配 Gemini API
-  }
-}
-```
-
----
-
-## 🔄 狀態管理策略
-
-### Single Source of Truth (SSOT)
-
-**原則**：每個狀態只有一個唯一的來源
-
-**實作範例**：
-```typescript
-// ✅ 正確：單一狀態源
-const { responses, setResponses } = useInsightGeneration()
-
-// ❌ 錯誤：重複狀態
-const [responses1] = useState()  // 來源 A
-const [responses2] = useState()  // 來源 B - 會導致不同步
-```
-
-### 狀態流程
-
-```
-用戶操作
-    ↓
-UI 元件 (Presentation)
-    ↓
-Hook (Application)
-    ↓
-Use Case (Domain)
-    ↓
-Repository (Infrastructure)
-    ↓
-外部服務 (FHIR/Firebase/AI)
-```
-
-### Context vs Zustand
-
-**使用 Context 的情境**：
-- 全域配置（語言、主題）
-- 使用者認證狀態
-- FHIR 上下文（病人資料）
-
-**使用 Zustand 的情境**：
-- 複雜的狀態邏輯
-- 需要跨元件共享的狀態
-- 對話訊息、對話歷史
-
----
-
-## 🔐 安全性架構
-
-### 1. 認證與授權
-
-**SMART on FHIR OAuth 2.0 + PKCE**：
-- 標準的 OAuth 2.0 流程
-- PKCE 增強安全性
-- Token 管理由 fhirclient 處理
-
-**Firebase Authentication**：
-- Google 登入
-- Email/密碼登入
-- Email 驗證機制
-
-### 2. API Key 管理
-
-**儲存策略**：
-- 僅存於瀏覽器 localStorage
-- 支援 AES-GCM 256-bit 加密（可選）
-- 不傳送到後端伺服器
-
-**使用方式**：
-```typescript
-// src/application/providers/api-key.provider.tsx
-const { apiKey, setApiKey, clearApiKey } = useApiKey()
-```
-
-### 3. AI Agent 安全性
-
-**限制**：
-- ✅ 僅限查詢當前病人的資料
-- ✅ 僅限讀取操作，無寫入權限
-- ✅ 使用 FHIR client 的權限控制
-- ✅ 客戶端執行，避免 Token 外洩
-
-**實作**：
-```typescript
-// 客戶端 Tool Calling
-const tools = createFhirTools(fhirClient, patientId)
-// patientId 由系統提供，AI 無法修改
-```
-
-### 4. 資料隔離
-
-**Firestore Security Rules**：
-```javascript
-match /users/{userId}/chats/{chatId} {
-  allow read, write: if request.auth != null 
-                     && request.auth.uid == userId;
-}
-```
-
----
-
-## 📦 Feature-based Organization
-
-### 目錄結構
-
-```
-features/
-├── auth/                    # 使用者認證
-│   ├── components/
-│   ├── hooks/
-│   └── index.ts            # 公開 API
-├── chat-history/           # 對話歷史
-├── clinical-insights/      # 自訂摘要模組 runtime 與管理 UI
-├── clinical-summary/       # 臨床摘要（7 個子功能）
-├── data-selection/         # 可重用的 AI 資料範圍功能與 drawer
-├── medical-chat/           # AI 對話
-├── prompt-gallery/         # 提示範本庫
-└── settings/               # 設定
-```
-
-### Barrel File 模式
-
-**每個 feature 都有 `index.ts` 定義公開 API**：
-
-```typescript
-// features/medical-chat/index.ts
-export { MedicalChatFeature } from './Feature'
-export { useChatStore } from './hooks/useChatStore'
-export type { ChatMessage } from './types'
-```
-
-**使用方式**：
-```typescript
-// ✅ 正確：使用 barrel file
-import { MedicalChatFeature } from '@/features/medical-chat'
-
-// ❌ 錯誤：直接存取內部檔案
-import MedicalChat from '@/features/medical-chat/components/MedicalChat'
-```
-
-### 優勢
-
-1. **封裝**：內部變更不影響使用者
-2. **清楚邊界**：明確的公開 vs 私有 API
-3. **重構安全**：可以重組內部結構
-4. **防止耦合**：強制功能獨立
-5. **Tree-shaking**：更好的打包優化
-
----
-
-## 🧪 測試策略
-
-### 測試層級
-
-```
-__tests__/
-├── application/     # 應用層測試
-├── core/            # 領域層測試
-├── fhir/            # FHIR 測試
-├── infrastructure/  # 基礎設施層測試
-└── shared/          # 共用工具測試
-```
-
-### 測試工具
-
-- **Jest 30**：測試框架
-- **React Testing Library**：元件測試
-- **@testing-library/jest-dom**：DOM 斷言
-
-### 測試原則
-
-1. **單元測試**：測試 use cases 和 utilities
-2. **整合測試**：測試 repositories 和 adapters
-3. **元件測試**：測試 UI 元件行為
-4. **E2E 測試**：測試完整使用者流程（未來）
-
----
-
-## 🔄 FHIR 資料映射
-
-### 概述
-
-本系統使用 **FHIR Mapper** 將 FHIR 資源轉換為應用程式的 Domain Entities，確保業務邏輯與外部資料格式解耦。
-
-### 架構設計
-
-```
-FHIR Server
-    ↓
-FHIR Resources (R4)
-    ↓
-FHIR Mapper (Infrastructure Layer)
-    ↓
-Domain Entities (Core Layer)
-    ↓
-Application Layer (Hooks & Stores)
-    ↓
-Presentation Layer (UI Components)
-```
-
-### 實作位置
-
-**Infrastructure Layer**：
-```
-src/infrastructure/fhir/
-├── mappers/
-│   ├── fhir.mapper.ts        # 主要 FHIR 資源映射
-│   └── patient.mapper.ts     # 病人資料映射
-└── repositories/
-    ├── clinical-data.repository.ts  # 使用 mapper 轉換資料
-    └── patient.repository.ts        # 使用 mapper 轉換病人資料
-```
-
-**Core Layer**：
-```
-src/core/entities/
-├── patient.entity.ts         # 病人實體
-├── observation.entity.ts     # 檢驗檢查實體
-├── medication.entity.ts      # 用藥實體
-├── condition.entity.ts       # 診斷實體
-└── ...                       # 其他臨床資料實體
-```
-
-### FHIR Mapper 功能
-
-**主要職責**：
-- 將 FHIR R4 資源轉換為 Domain Entities
-- 標準化資料格式（日期、狀態碼、單位等）
-- 處理 FHIR 資源的複雜結構
-- 提供類型安全的轉換
-
-**範例**：
-```typescript
-// src/infrastructure/fhir/mappers/fhir.mapper.ts
-export class FhirMapper {
-  mapObservation(fhirResource: fhir4.Observation): ObservationEntity {
-    return {
-      id: fhirResource.id,
-      code: fhirResource.code.coding?.[0]?.code,
-      displayName: fhirResource.code.coding?.[0]?.display,
-      status: fhirResource.status,
-      effectiveDate: new Date(fhirResource.effectiveDateTime),
-      value: this.extractValue(fhirResource.valueQuantity),
-      // ...
-    }
-  }
-}
-```
-
-### 優勢
-
-1. **解耦合** - 業務邏輯不依賴 FHIR 格式
-2. **可維護** - FHIR 版本更新只需修改 Mapper
-3. **類型安全** - TypeScript 確保轉換正確性
-4. **可測試** - Mapper 可獨立測試
-
----
-
-## 📚 相關文件
-
-- [FEATURES.md](./FEATURES.md) - Feature 模組架構
-- [AI_AGENT_IMPLEMENTATION.md](./AI_AGENT_IMPLEMENTATION.md) - AI Agent 實作
-- [MEDICAL_CHAT.md](./MEDICAL_CHAT.md) - Medical Chat 功能
-- [PROMPT_GALLERY.md](./PROMPT_GALLERY.md) - 提示範本庫
-- [SECURITY.md](./SECURITY.md) - 安全性指南
-- [Firebase Functions Repo](https://github.com/voho0000/firebase-smart-on-fhir) - Firebase 設定與部署
-- [SECURITY_IMPLEMENTATION.md](./SECURITY_IMPLEMENTATION.md) - 安全性實作
-
----
-
-## 🎯 最佳實踐
-
-### 1. 遵循 Clean Architecture
-
-- 依賴方向：外層依賴內層
-- 領域層不依賴外層
-- 使用介面抽象外部依賴
-
-### 2. 使用 TypeScript
-
-- 完整的型別定義
-- 避免使用 `any`
-- 使用 interface 和 type
-
-### 3. 功能獨立
-
-- 透過 Registry 註冊功能
-- 使用 barrel file 封裝
-- 避免功能間直接依賴
-
-### 4. 狀態管理
-
-- 遵循 SSOT 原則
-- 選擇適當的狀態管理工具
-- 避免狀態重複
-
-### 5. 測試覆蓋
-
-- 為核心邏輯撰寫測試
-- 測試邊界條件
-- 保持測試簡單明確
-
----
-
-## 🚀 未來發展
-
-### 短期目標
-
-- [ ] 完善 E2E 測試
-- [ ] 增加更多 AI Agent Tools
-- [ ] 優化效能和載入速度
-
-### 長期目標
-
-- [ ] 支援更多 FHIR 資源類型
-- [ ] 多租戶架構
-- [ ] 離線模式支援
-- [ ] 行動應用程式
-
----
-
-## 總結
-
-本系統採用 Clean Architecture 和 Pluggable Architecture，提供：
-
-✅ **可維護性**：清楚的層級和職責分離  
-✅ **可擴展性**：透過 Registry 輕鬆新增功能  
-✅ **可測試性**：完整的測試策略  
-✅ **型別安全**：TypeScript 完整支援  
-✅ **安全性**：多層安全防護  
-
-這個架構設計讓團隊能夠高效協作，快速迭代，並保持程式碼品質。
+| 層 | 目錄 | 責任 |
+|---|---|---|
+| Domain | `src/core/` | entities、interfaces、純 use cases、錯誤型別；不依賴 React 或具體 infrastructure |
+| Shared | `src/shared/` | 共用型別、常數、工具、UI primitives 與 build-time registries |
+| Infrastructure | `src/infrastructure/` | SMART/FHIR repositories、local bundle、AI providers、streaming、Firebase、cache |
+| Application | `src/application/` | composition roots、providers、React Query hooks、Zustand stores、跨功能 orchestration |
+| Feature | `features/` | 使用者可見功能與局部 UI／hooks；由 application/core 取得能力 |
+| Presentation | `app/`、`components/` | Next routes、整體版面與 shadcn/ui 元件 |
+
+`eslint.config.mjs` 以 `no-restricted-imports` 強制主要邊界，並逐檔列出目前仍允許的例外。新的 feature 不應直接依賴 infrastructure；需要具體實作時，在 application composition 或 hook 建立 facade。
+
+## Composition roots
+
+- `src/application/composition.ts`：依 SMART context 與 local bundle 狀態選擇 `FhirClinicalDataRepository` 或 `LocalBundleRepository`。有有效 SMART token 時，SMART 優先於先前匯入的 bundle。
+- `src/application/composition.chat.ts`：建立聊天 session repository，避免一般臨床資料 import graph 連帶初始化 Firebase。
+- `src/shared/config/feature-registry.ts`：左側 tabs 與 feature 元件。
+- `src/shared/config/right-panel-registry.ts`：右側功能順序、顯示、pin、force-mount 與 scroll mode。
+
+舊式 runtime registry mutator 已移除；registry 是 build-time 設定，修改陣列後重新建置。
+
+## 資料來源
+
+### SMART on FHIR
+
+入口為 `/smart/launch`，callback 為 `/smart/callback`。`buildSmartAuthorizeConfig()` 建立 public-client 設定：
+
+- EHR launch：`launch openid fhirUser patient/*.rs online_access`
+- Standalone：`launch/patient openid fhirUser patient/*.rs online_access`
+- PKCE：`required`，S256
+- 無 client secret
+
+FHIR 搜尋使用 `requestAllPages()` 跟隨 `Bundle.link[relation="next"]`，最多 50 頁；到達上限會丟出 `FhirPaginationLimitError`，不把不完整資料偽裝成成功結果。
+
+### 本地 FHIR Bundle
+
+`LocalBundleService` 接受標準 Bundle，並在 parse 階段：
+
+- 重新建立缺漏 id、正規化 `urn:uuid`／absolute reference。
+- 解析 Practitioner／Organization／Location 顯示值。
+- 展開 TW-PAS `Claim` 與 Roche DIP／mCODE contained resources。
+- 合併 `MedicationRequest` 與 `MedicationStatement` 的可讀形狀。
+- 將 report、observation、procedure、condition 等關聯回 encounter。
+
+完整 Bundle 與影像以 AES-GCM 寫入 IndexedDB；金鑰只存在 tab 的 `sessionStorage`。無法解密、超過 12 小時或使用者清除／登出時，資料會被清除。若 WebCrypto 或儲存不可用，流程不降級成明文持久化。
+
+### 統一領域資料
+
+兩種來源都輸出 `PatientEntity` 與 `ClinicalDataCollection`。React Query 提供查詢生命週期與快取，左側 UI、AI FHIR tools、計算機與 summary 共用同一份 collection，避免各功能自行重查與產生不同真相。
+
+## 畫面組成
+
+### 左側面板
+
+`LEFT_PANEL_TABS` 目前有五個分頁：
+
+1. Patient：病人資訊、生命徵象、問題清單、預立醫療決定、器材、照護計畫。
+2. Visits：就診歷史與 encounter detail。
+3. Reports：檢驗、累積報告、影像／病理／文件報告與 AI 解讀。
+4. Medications：用藥，並內嵌過敏與疫苗子分頁。
+5. Documents：FHIR `Composition` narrative。
+
+停用的 Diagnosis 舊卡與獨立 Allergies 卡仍保留在 registry，但不會重複 render。
+
+### 右側面板
+
+目前五個主要功能依序為：
+
+1. Medical Summary：預設 tab；force-mounted，外層面板負責捲動。
+2. Medical Chat：force-mounted，保留對話與串流狀態。
+3. Medical Calculator：57 個定義，分為 10 類，支援病人數值自動帶入。
+4. IPS Export：force-mounted，保留 AI 推論與人工確認狀態。
+5. Settings：固定在最右側且不可取消 pin。
+
+右側 tab pin 狀態由 `right-panel-tabs.store.ts` 管理。Medical Summary 內再以 drawer 提供資料範圍、自訂摘要模組與卡片版面管理。
+
+### Responsive layout
+
+- `<768px`：單欄，在臨床資料與功能間切換。
+- `>=768px`：可調寬的雙面板，可收合任一側。
+- Header 可收合；左側資源導航會自動切回可見面板。
+
+## AI 架構
+
+### Provider 與模型
+
+`ai-provider.factory.ts` 依 model registry 選擇 OpenAI、Gemini 或 Claude。沒有 user key 時，可走 Firebase Functions proxy；premium model 缺 key 時由 `gateModel*()` 降級至免費預設，UI 顯示實際執行模型。
+
+API key 預設加密存於 `sessionStorage`，使用者可切換為 `localStorage`。模型偏好與 key 分開儲存，各 AI surface 有自己的 model slot。
+
+### Structured Medical Summary
+
+Medical Summary 不是任意 Markdown，而是 Zod 驗證後的固定 schema：問題、時間軸、安全提醒、待決策事項、檢查趨勢、用藥核對／衛教與 coverage。主要原則：
+
+- app 建 source catalog 並發給模型短 key。
+- 日期、機構、resource type 與導覽目標由 app 端解析。
+- 引用可點回左側對應 FHIR resource；找不到會標成未驗證。
+- summary 與 safety 是獨立生成 slot，由 orchestrator 統一快取、重試與更新 UI。
+- 加密結果 cache 最長 12 小時，prompt／資料／病人／受眾／模型改變會換 key。
+
+### Medical Chat Agent
+
+聊天只有一條 Agent 路徑。`runDeepModeAgent()` 是 UI 與 headless eval 共用的核心：
+
+- Vercel AI SDK `streamText()` + `stepCountIs(10)`。
+- 第一輪可多步 tool calling；若只有 tool result 沒文字，進第二輪整理；必要時第三輪純文字 synthesis。
+- 每一輪都有 idle watchdog，預設 60 秒無 token／event 便 abort。
+- 16 個 FHIR tools 讀取共用 `ClinicalDataCollection`；另有 1 個 Perplexity 文獻工具。
+- Tool payload 會遮罩 id、DOB、provider display 與病人文字識別片段；使用者自由文字在送出前再 scrub。
+
+`clinical-skill-tools.ts` 的 eGFR 與 NLM terminology tools 是 eval 候選，尚未註冊到正式 app Agent。
+
+## 狀態與持久化
+
+| 資料 | 技術 | 生命週期 |
+|---|---|---|
+| Server/clinical queries | React Query | 記憶體快取；依 query key 與 data source 失效 |
+| UI 與生成狀態 | Zustand / Context | in-memory；部分偏好 localStorage |
+| Local FHIR bundle | IndexedDB + AES-GCM | tab session，且最多 12 小時 |
+| AI-derived cache | localStorage + session AES key | 不可跨 tab 解密，最多 12 小時 |
+| API keys | encrypted sessionStorage | 預設關窗清除；可明確改為 localStorage |
+| Chat history | Firestore `users/{uid}/chats` | 僅登入且非無痕對話；影像不儲存 |
+| User templates/modules | Firestore or localStorage | 登入時同步，訪客留在本機 |
+
+匯入／清除 bundle 會發出 `mediprisma:local-bundle-changed`，重設對話與病人衍生狀態，避免上一位病人的內容殘留。
+
+## Firebase 與 proxy
+
+啟動時可建立匿名 Firebase session，讓訪客在免費額度內使用代理；登入帳號解鎖跨裝置資料。代理請求移除 provider key，加入：
+
+- Firebase ID token：`Authorization: Bearer ...`
+- App Check token（有設定時）：`X-Firebase-AppCheck`
+- 公開 client marker（相容用途）：`x-proxy-key`
+
+真正的 quota、allowed model、CORS 與 Firestore Rules 必須由後端 repo 執行，不能只依賴前端。
+
+## 部署
+
+| 模式 | 指令 | 特性 |
+|---|---|---|
+| Local dev, Turbopack | `npm run dev` | port 3001；Next API route 可用 |
+| Local dev, webpack | `npm run dev:webpack` | port 3000 |
+| Node build | `npm run build` / `npm start` | `headers()` 與 `/api/feedback` 可用 |
+| GitHub Pages | `npm run build:gh` | static export、base path `/medical-note-smart-on-fhir` |
+| mediprisma mirror | `npm run build:mediprisma` | static export、base path `/app` |
+
+Static host 不會執行 `next.config.ts.headers()` 或 `/api/feedback`，因此正式回饋需設定 `NEXT_PUBLIC_FEEDBACK_URL` 指向外部 function。
+
+## 品質閘門
+
+- `npx tsc --noEmit`
+- `npm run lint`
+- `npm test`
+- `npm run test:e2e`
+- `npm run build:gh`
+
+CI 在 master 與 PR 執行 typecheck、lint、Jest 與 static build；E2E 另在 master 執行。CodeQL 每週與 push／PR 執行。`scripts/loop/gate.mjs` 將 typecheck、lint、test 與選用 build 串成可供本機迭代使用的 verifier。
+
+## 延伸閱讀
+
+- [Feature 模組](FEATURES.md)
+- [AI Agent](AI_AGENT_IMPLEMENTATION.md)
+- [Medical Chat](MEDICAL_CHAT.md)
+- [Security](SECURITY.md)
+- [文件索引](README.md)

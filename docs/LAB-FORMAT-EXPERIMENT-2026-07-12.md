@@ -1,5 +1,7 @@
 # 檢驗格式 A/B 實驗:樞紐表 (pivot) vs 趨勢行 (trend) — 2026-07-12
 
+> **文件性質：實驗與實作決策紀錄。** 實驗數字與結論保持原樣，不應被解讀為每個新模型／新資料集都會得到相同結果。v0.40.0 的 production 路徑以 `src/application/hooks/clinical-context/formatters.ts`、各 clinical-context hooks、`lab-normalize.ts`、`lab-pivot.utils.ts` 與 coverage manifest 為準；相關回歸測試位於 `__tests__/application/hooks/clinical-context/` 與 lab utility tests。最後核對：2026-07-14。
+
 **研究問題**:AI context 的檢驗段,改用匯出 tab 的「日期×項目 markdown 樞紐表」是否比現行「per-analyte 趨勢行」讓模型答得更準、引用更可靠、token 更省?
 
 **結論(預先登記門檻 +10pp,實測 +20pp → 達標)**:**pivot 全面勝出**——core 題全對率 65% vs 45%、引用有效率 77% vs 53%、幻覺 0.26 vs 1.08/題、token 0.53–0.83×;三個模型方向一致,資料越密差距越大(ICU 型病人 trend 全對率崩至 8%)。唯二例外:單項目趨勢判讀 (T3) 與找極值 (T4) trend 仍小勝 → 建議 pivot 為主、可留 trend 作為輔助選項。

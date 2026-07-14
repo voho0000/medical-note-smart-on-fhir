@@ -1,536 +1,200 @@
 # Medical Chat 功能指南
 
-> 包含 AI 對話、對話歷史、語音錄製等完整功能說明
+> 現行規格｜基準版本：v0.40.0｜最後核對：2026-07-14
 
-## 🎯 功能概述
+Medical Chat 是右側面板的臨床 Agent 對話。它沒有「普通模式／deep mode」切換：每一則訊息都走同一個 Agent loop，由模型自行決定直接回答、查 FHIR 或搜尋醫學文獻。
 
-Medical Chat 是本系統的核心 AI 功能，提供：
+## 使用者功能
 
-### AI Agent 對話
-- 單一 Agent 路徑，沒有一般／深入模式切換
-- AI 依問題自主決定是否調用 FHIR 查詢或醫學文獻搜尋工具
-- 病歷不會預先塞入對話；額外背景直接輸入對話框
-- 支援 OpenAI、Google Gemini、Perplexity 多種 AI 模型
+- 串流 Markdown 回覆，支援停止生成、複製與回覆特定訊息。
+- OpenAI、Gemini、Claude model picker；chat 的模型偏好獨立保存。
+- 16 個 FHIR tools 與 Perplexity 文獻搜尋。
+- `/` slash menu、內建／自訂 chat templates、Prompt Gallery。
+- 每次回答完成後產生可點選的下一步建議。
+- 語音錄音與 Whisper 轉錄。
+- 圖片上傳、預覽與送出前媒體同意。
+- 可編輯／重設 system prompt。
+- 可展開成全螢幕 overlay。
+- 登入後的對話自動保存與跨裝置 history。
+- 無痕對話不保存；訪客訊息只留在目前記憶體。
 
-### 對話歷史
-- 📝 依病人分類自動儲存對話
-- 🔍 查看特定病人的歷史對話
-- 🏥 支援多個 FHIR 沙盒/醫院環境
-- 🔄 即時同步對話更新
-- 🗑️ 刪除不需要的對話
+## 執行流程
 
-### 其他功能
-- 🎤 語音錄製和 Whisper 轉錄
-- 📋 提示範本快速套用
-- 🩺 AI Agent 依問題按需查詢 FHIR 資料
-
-## 核心設計理念
-
-### 1. 病人中心 (Patient-Centric) 設計
-
-與 ChatGPT 的時間軸設計不同，我們的 Chat History 是**以病人為中心**的：
-
-- ✅ **正確做法**：只顯示當前病人的歷史對話
-- ❌ **錯誤做法**：顯示所有對話（可能混淆不同病人）
-
-### 2. 多沙盒/多醫院支援
-
-**關鍵問題**：不同 FHIR 沙盒（如 Cerner、Epic）可能有相同的 Patient ID
-
-**解決方案**：使用 `fhirServerUrl` + `patientId` 的組合作為唯一識別
-
-```typescript
-// Firestore 查詢條件
-WHERE patientId == "123" 
-  AND fhirServerUrl == "https://fhir.epic.com/..."
+```text
+文字／語音／圖片
+  -> MedicalChat local UI state
+  -> useAgentChat
+  -> scrub user-authored text
+  -> runDeepModeAgent
+       -> direct response OR FHIR tools OR literature tool
+  -> throttled stream updates
+  -> final message + follow-up suggestions
+  -> Firestore autosave（登入且非無痕）
 ```
 
-這樣可以確保：
-- 在 Cerner 沙盒的病人 123 ≠ Epic 沙盒的病人 123
-- 同一個醫師在不同醫院工作時，資料不會混淆
+病人或本地 bundle 改變時，chat 會 abort 進行中的生成、清除訊息與目前 session pointer，避免上一位病人的內容留在下一個 context。
 
----
+## Model 與 API 存取
 
-## 🚀 快速開始
+模型清單以 `src/shared/constants/ai-models.constants.ts` 為準。Chat 在 feature header／expanded toolbar 內選 model，不在 Settings 選。
 
-### 1. 必要設定
+- 有該 provider 的 user key：瀏覽器直接呼叫 provider。
+- 無 key：有可用 Firebase 匿名／登入 session 時走 owner-funded proxy。
+- premium pick 沒有對應 key：執行時降級到免費 default，訊息保存實際 model id。
+- 沒有 user key、Firebase session 或 proxy URL：顯示設定提示，不啟動串流。
 
-#### Firestore Security Rules
+Settings 只管理 OpenAI、Gemini、Claude、Perplexity keys 與保存方式。新使用者預設存於加密的 `sessionStorage`；明確開啟「記住此裝置」才改用 `localStorage`。
 
-在 Firebase Console 中設定以下規則：
+## Agent tools
 
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Users collection
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // Chat sessions sub-collection
-      match /chats/{chatId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-    }
-  }
+FHIR tools 由 `useFhirTools()` 建立，讀取目前 React Query／local bundle 的 `ClinicalDataCollection`。工具包含病人總覽、就診、診斷、檢驗、報告、處置、用藥、過敏與疫苗等查詢。
+
+文獻工具由 `useLiteratureTools()` 建立，使用 Perplexity 並回傳來源 URL。搜尋失敗會要求模型明確告知失敗，不能捏造 citation。
+
+完整 loop 與 tool 清單見 [AI_AGENT_IMPLEMENTATION.md](AI_AGENT_IMPLEMENTATION.md)。
+
+## Templates 與 slash menu
+
+Chat templates 以 audience 分為 `medical` 與 `patient`，欄位為：
+
+```ts
+interface ChatTemplate {
+  id: string
+  label: string
+  content: string
+  shortcut?: string
+  order: number
+  audience: 'medical' | 'patient'
 }
 ```
 
-#### Firestore Indexes
+輸入 `/` 會依 shortcut 顯示 menu；選取後插入內容，不會自動送出。範本管理 drawer 可新增、編輯、排序、刪除與重設：
 
-建立複合索引以支援查詢：
+- 已登入：Firestore `users/{uid}/chatTemplates` 即時同步。
+- 未登入：localStorage。
+- 舊 localStorage 內容在登入後做一次 migration，成功後移除本機副本。
 
-**方法 1：自動建立**
-- 執行應用程式後，Firestore 會提示建立索引
-- 點擊連結自動建立
+Prompt Gallery 的 `chat` prompt 可加入個人模板；同時支援 `summary` 的 prompt 會在使用時要求選擇用途。
 
-**方法 2：手動建立**
-1. 前往 Firebase Console > Firestore > Indexes
-2. 建立複合索引：
-   - Collection: `users/{userId}/chats`
-   - Fields:
-     - `patientId` (Ascending)
-     - `fhirServerUrl` (Ascending)
-     - `updatedAt` (Descending)
+## 語音與圖片
 
-### 2. 使用流程
+### 語音
 
-1. **登入 Firebase Auth**：在應用程式右上角點擊登入按鈕
-2. **透過 SMART Launch 進入**：訪問 SMART Launch URL
-3. **開始對話**：在 "Note Chat" 標籤中與 AI 對話
-4. **自動儲存**：等待 5 秒，對話會自動儲存
-5. **查看歷史**：點擊聊天工具列的 **"History"** 按鈕
+`useVoiceRecording()` 經瀏覽器 MediaRecorder 錄音，`TranscriptionService` 使用 Whisper user key 或 proxy。完成後只把轉錄文字插入輸入框，由使用者確認後再送出。
 
----
+### 圖片
 
-## 📊 資料結構
+圖片轉成 chat image payload，只在本次 AI 請求使用。Firestore repository 明確不保存完整圖片或縮圖。首次傳送媒體前顯示同意對話框；這是資料告知，不等同 provider 的法規或保留政策保證。
 
-### Firestore Schema
+## 對話歷史
 
+### 儲存條件
+
+只有以下條件全部成立才自動保存：
+
+- 使用者以非匿名帳號登入。
+- 不在 temporary／incognito mode。
+- 至少有一則訊息。
+
+Auto-save 預設 debounce 5 秒，並等待 assistant 離開 thinking／tool 狀態。開始新對話前會先 best-effort force save。
+
+### Firestore 路徑與資料
+
+```text
+users/{userId}/chats/{chatId}
 ```
-/users/{userId}/chats/{chatId}
-```
 
-**欄位說明**：
-
-```typescript
-{
-  id: string                    // Firestore 自動生成的 Document ID
-  userId: string                // Firebase Auth User ID
-  fhirServerUrl: string         // FHIR 伺服器 URL (用於區分不同沙盒/醫院)
-  patientId: string             // FHIR Patient ID
-  patientName: string           // 病人姓名（冗餘欄位，方便顯示）
-  title: string                 // 對話標題（AI 自動生成或取前 50 字）
-  summary?: string              // 對話摘要（選填，未來可用 AI 生成）
-  messages: ChatMessage[]       // 完整對話內容
-  createdAt: Timestamp          // 建立時間
-  updatedAt: Timestamp          // 最後更新時間
-  messageCount: number          // 訊息數量
-  tags?: string[]               // 標籤（選填，如 "Medication", "Diagnosis"）
+```ts
+interface ChatSessionEntity {
+  id: string
+  userId: string
+  fhirServerUrl: string
+  patientId: string
+  title: string
+  summary?: string
+  messages: ChatMessage[]
+  createdAt: Date
+  updatedAt: Date
+  messageCount: number
+  tags?: string[]
 }
 ```
 
-### 文件範例
+Local bundle 對話使用 `local-bundle` 作為 server key，並相容舊版的 `no-fhir-server`。History query 同時以 user id、patient id、FHIR server key 隔離並按 `updatedAt` 排序。
 
-```json
-{
-  "id": "abc123",
-  "userId": "firebase-user-id",
-  "fhirServerUrl": "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4",
-  "patientId": "eVj5Y.E3TEecZF8RMv4Mag3",
-  "patientName": "John Doe",
-  "title": "高血壓藥物調整諮詢",
-  "messages": [
-    {
-      "id": "msg1",
-      "role": "user",
-      "content": "這位病人的血壓控制如何？",
-      "timestamp": 1705276800000
-    },
-    {
-      "id": "msg2",
-      "role": "assistant",
-      "content": "根據最近的生命徵象...",
-      "timestamp": 1705276805000
-    }
-  ],
-  "createdAt": "2024-01-15T00:00:00.000Z",
-  "updatedAt": "2024-01-15T00:05:00.000Z",
-  "messageCount": 2
-}
+保存的 message 欄位包含 id、role、content、timestamp、可選 modelId、agentStates 與 replyTo；影像不寫入 Firestore。
+
+### Firestore 規則與 index
+
+Rules 與 production index 不在本 repo，而在 `firebase-smart-on-fhir` 後端 repo。最低要求：
+
+- 使用者只能讀寫 `users/{uid}` 下與自己 uid 相同的資料。
+- `sharedPrompts` 的 create／update／delete 要驗證 author ownership 與必要欄位。
+- History composite query 需要支援 patientId、fhirServerUrl 與 updatedAt。
+
+不要把本文件的示意規則直接視為已部署狀態；以後端 repo 與 Firebase Console 為準。
+
+## 標題
+
+新 session 先以第一則 user message 產生截短標題（中文 20 字、英文 40 字）。第一輪回答後可由低成本 AI helper 產生更好的 title；只改 title 時不更新 `updatedAt`，避免對話排序因 cosmetic change 改變。
+
+## 隱私行為
+
+- UI 與 Firestore history 保留使用者輸入原文。
+- 送給 AI 的 user message 副本會依目前病人的姓名／id literals 做自由文字遮罩。
+- FHIR tool 回傳移除結構化 id、DOB、provider display，並 scrub report／document text。
+- History 可能包含 PHI；登入與 Firestore 同步前應讓使用者了解組織政策。
+- 無痕模式只避免 Firestore 保存，不會阻止訊息在當次請求傳到 AI provider。
+
+## 主要檔案
+
+| 檔案 | 責任 |
+|---|---|
+| `features/medical-chat/components/MedicalChat.tsx` | feature orchestration |
+| `features/medical-chat/hooks/useAgentChat.ts` | provider、prompt、Agent events 與 UI mapping |
+| `src/infrastructure/ai/agent/run-deep-mode-agent.ts` | headless multi-round loop |
+| `src/infrastructure/ai/tools/fhir-tools.ts` | FHIR tools |
+| `src/application/hooks/chat/use-auto-save-chat.hook.ts` | Firestore autosave |
+| `src/infrastructure/firebase/repositories/chat-session.repository.ts` | chat persistence |
+| `src/application/providers/chat-templates.provider.tsx` | template state／migration |
+| `src/infrastructure/firebase/template-sync.ts` | template Firestore sync |
+
+## 測試重點
+
+- Agent 只有單一路徑，model gating 正確。
+- SSE／provider stream 可逐步 render，idle timeout 會結束 spinner。
+- Tool call 與 literature citations 不因 follow-up round 遺失。
+- 切換病人／bundle 會 reset 並 abort。
+- 無痕或訪客不寫 Firestore。
+- History 依 patient/server 隔離，local legacy key 可讀。
+- Slash template、gallery、圖片 consent、語音錯誤與 responsive toolbar。
+
+```bash
+npm test -- --runInBand
+npm run test:e2e
 ```
 
----
+## 疑難排解
 
-## 🏗️ 架構設計
+### 一直停在思考中
 
-### 架構層級
+確認 proxy URL、Firebase session／App Check、user key 與瀏覽器網路。正式預設 idle timeout 60 秒；若沒有出現逾時訊息，檢查 stream 是否有持續發 event 但無正文。
 
-#### 1. Core Layer (核心層)
+### History 是空的
 
-**Entities** (`src/core/entities/chat-session.entity.ts`):
-- `ChatSessionEntity`: 完整的對話實體
-- `ChatSessionMetadata`: 對話元資料（不含完整訊息）
-- `CreateChatSessionDto`: 建立對話的 DTO
-- `UpdateChatSessionDto`: 更新對話的 DTO
+確認使用者不是匿名／訪客、沒有開無痕、已載入同一 patientId 與 FHIR server key，並檢查後端 Rules／index。
 
-**Interfaces** (`src/core/interfaces/repositories/`):
-- `IChatSessionRepository`: 定義 Repository 介面
+### 文獻搜尋不可用
 
-**Use Cases** (`src/core/use-cases/chat/`):
-- `SaveChatSessionUseCase`: 儲存新對話
-- `UpdateChatSessionUseCase`: 更新現有對話
-- `GetChatHistoryUseCase`: 取得歷史紀錄列表
-- `LoadChatSessionUseCase`: 載入完整對話
-- `DeleteChatSessionUseCase`: 刪除對話
-- `GenerateChatTitleUseCase`: AI 生成對話標題
+確認 Perplexity key 或可用的 proxy quota。一般 model 回答不代表即時搜尋成功；只有 tool 回傳的 URLs 才能當 live literature citation。
 
-#### 2. Infrastructure Layer (基礎設施層)
+### 圖片或語音失敗
 
-**Repository** (`src/infrastructure/firebase/repositories/chat-session.repository.ts`):
-- 實作 Firestore CRUD 操作
-- 處理 Timestamp 轉換
-- 提供 real-time subscription
+確認瀏覽器權限、媒體格式、HTTPS／localhost secure context，以及 whisper／model proxy 設定。
 
-#### 3. Application Layer (應用層)
+## 相關文件
 
-**Stores** (`src/application/stores/`):
-- `chat-history.store.ts`: 管理對話列表狀態
-- `chat.store.ts`: 管理當前對話訊息
-
-**Hooks** (`src/application/hooks/chat/`):
-- `use-chat-history.hook.ts`: 載入和管理歷史紀錄
-- `use-chat-session.hook.ts`: 載入特定對話
-- `use-auto-save-chat.hook.ts`: 自動儲存對話（防抖）
-- `use-fhir-context.hook.ts`: 取得 FHIR 上下文
-
-#### 4. Presentation Layer (展示層)
-
-**Components** (`features/chat-history/components/`):
-- `ChatHistoryDrawer.tsx`: 左側抽屜式歷史紀錄面板
-
-### 關鍵功能實作
-
-#### 1. 自動儲存 (Auto-save)
-
-**特點**：
-- 使用 **debounce** 機制，預設 5 秒後才儲存
-- 避免每次輸入都寫入 Firestore（節省成本）
-- 只在訊息數量變化時才觸發儲存
-
-**實作位置**：
-```typescript
-// features/medical-chat/components/MedicalChat.tsx
-useAutoSaveChat({
-  patientId,
-  patientName,
-  fhirServerUrl,
-  debounceMs: 5000,
-  enabled: !!user && !!patientId && !!fhirServerUrl,
-})
-```
-
-#### 2. Real-time 同步
-
-使用 Firestore `onSnapshot` 實現即時同步：
-
-```typescript
-// src/application/hooks/chat/use-chat-history.hook.ts
-useEffect(() => {
-  const unsubscribe = repository.subscribe(
-    userId,
-    patientId,
-    fhirServerUrl,
-    (updatedSessions) => {
-      setSessions(updatedSessions)
-    }
-  )
-  return () => unsubscribe()
-}, [userId, patientId, fhirServerUrl])
-```
-
-#### 3. 對話標題生成
-
-**預設行為**：取第一則使用者訊息的前 50 字
-
-**進階功能**（未來可實作）：
-```typescript
-// 使用 AI 生成簡短標題
-const title = await generateChatTitleUseCase.execute(messages, aiService)
-// 例如："高血壓藥物調整諮詢"
-```
-
----
-
-## 🎨 UI/UX 設計
-
-### 歷史紀錄面板
-
-**位置**：聊天工具列最左側的 "History" 按鈕
-
-**功能**：
-1. **新對話**：清空當前對話，開始新的對話
-2. **載入歷史**：點擊任一紀錄，載入該對話
-3. **刪除對話**：滑鼠懸停時顯示刪除按鈕
-4. **時間顯示**：智慧顯示相對時間（剛剛、5分鐘前、2小時前、3天前）
-
-**空狀態**：
-- 顯示提示訊息："尚無對話紀錄"
-- 引導使用者開始對話
-
-### 國際化 (i18n)
-
-**英文** (`src/shared/i18n/locales/en.ts`):
-```typescript
-chatHistory: {
-  title: 'Chat History',
-  description: 'View your previous conversations',
-  conversationsFor: 'Conversations for',
-  newChat: 'New Chat',
-  noHistory: 'No chat history yet',
-  startConversation: 'Start a conversation to see it here',
-  confirmDelete: 'Delete this conversation?',
-  justNow: 'Just now',
-  minutesAgo: 'm ago',
-  hoursAgo: 'h ago',
-  daysAgo: 'd ago',
-}
-```
-
-**繁體中文** (`src/shared/i18n/locales/zh-TW.ts`):
-```typescript
-chatHistory: {
-  title: '對話紀錄',
-  description: '查看您的歷史對話',
-  conversationsFor: '對話紀錄：',
-  newChat: '新對話',
-  noHistory: '尚無對話紀錄',
-  startConversation: '開始對話後將顯示在這裡',
-  confirmDelete: '確定要刪除此對話嗎？',
-  justNow: '剛剛',
-  minutesAgo: '分鐘前',
-  hoursAgo: '小時前',
-  daysAgo: '天前',
-}
-```
-
----
-
-## 🔧 開發者指南
-
-### 關鍵 Hooks
-
-```typescript
-// 取得 FHIR 上下文（病人 ID、伺服器 URL）
-const { patientId, patientName, fhirServerUrl } = useFhirContext()
-
-// 自動儲存對話
-useAutoSaveChat({
-  patientId,
-  patientName,
-  fhirServerUrl,
-  debounceMs: 5000,
-  enabled: !!user && !!patientId,
-})
-
-// 載入歷史紀錄
-const { sessions, isLoading, deleteSession } = useChatHistory(
-  patientId,
-  fhirServerUrl
-)
-
-// 載入特定對話
-const { loadSession, startNewSession } = useChatSession()
-```
-
-### 主要檔案
-
-**Core Layer:**
-- `src/core/entities/chat-session.entity.ts`
-- `src/core/use-cases/chat/*.use-case.ts`
-
-**Infrastructure:**
-- `src/infrastructure/firebase/repositories/chat-session.repository.ts`
-
-**Application:**
-- `src/application/stores/chat-history.store.ts`
-- `src/application/hooks/chat/use-chat-history.hook.ts`
-- `src/application/hooks/chat/use-auto-save-chat.hook.ts`
-
-**UI:**
-- `features/chat-history/components/ChatHistoryDrawer.tsx`
-- `features/medical-chat/components/ChatToolbar.tsx`
-
----
-
-## 🐛 常見問題排查
-
-### 問題 1: 對話沒有自動儲存
-
-**檢查項目:**
-- ✅ 使用者已登入 Firebase Auth
-- ✅ 有 FHIR 上下文（patientId 和 fhirServerUrl 不為 null）
-- ✅ 等待至少 5 秒（debounce 時間）
-- ✅ 瀏覽器 Console 沒有錯誤訊息
-
-**除錯方法:**
-```typescript
-// 在 MedicalChat.tsx 中加入 console.log
-console.log('[Chat History Debug]', {
-  user: !!user,
-  patientId,
-  fhirServerUrl,
-  messagesCount: messages.length
-})
-```
-
-### 問題 2: 歷史紀錄是空的
-
-**檢查項目:**
-- ✅ Firestore Security Rules 設定正確
-- ✅ Firestore Indexes 已建立
-- ✅ 使用者 ID 與儲存時的 ID 一致
-
-**除錯方法:**
-前往 Firebase Console > Firestore，檢查 `/users/{userId}/chats` 是否有資料。
-
-### 問題 3: 不同沙盒的對話混在一起
-
-**原因:** `fhirServerUrl` 沒有正確取得
-
-**解決方法:**
-檢查 `useFhirContext` hook 是否正確取得 `client.state.serverUrl`。
-
-### 問題 4: 點擊歷史紀錄沒有反應
-
-**檢查項目:**
-- ✅ `useChatSession` hook 正確整合
-- ✅ `useChatStore` 的 `setMessages` 函數正常運作
-
----
-
-## 🔒 安全性考量
-
-### 1. 資料隔離
-
-- 每個使用者只能存取自己的對話 (`/users/{userId}/chats`)
-- Firestore Security Rules 應設定為：
-
-```javascript
-match /users/{userId}/chats/{chatId} {
-  allow read, write: if request.auth != null && request.auth.uid == userId;
-}
-```
-
-### 2. 敏感資訊
-
-- 對話內容包含病人資料，必須遵守 HIPAA/GDPR
-- 建議：
-  - 使用 Firestore 的 encryption at rest
-  - 定期清理舊對話（例如 90 天後自動刪除）
-
----
-
-## ⚡ 效能優化
-
-### 1. 分頁載入
-
-目前實作載入最近 50 筆對話。未來可實作：
-
-```typescript
-async listByUser(userId: string, limit: number = 50, startAfter?: Date)
-```
-
-### 2. 快取策略
-
-- 使用 Zustand store 快取對話列表
-- 使用 Firestore 的 offline persistence
-
-### 3. 成本控制
-
-- 使用 debounce 減少寫入次數
-- 只儲存 metadata 在列表中，完整訊息在點擊時才載入
-
----
-
-## 🚀 未來擴充
-
-### 1. AI 摘要生成
-
-```typescript
-// 在對話結束時，自動生成摘要
-const summary = await generateSummaryUseCase.execute(messages)
-await updateChatSessionUseCase.execute(chatId, userId, { summary })
-```
-
-### 2. 標籤系統
-
-```typescript
-// 自動標記對話類型
-tags: ["Medication", "Lab Results", "Diagnosis"]
-```
-
-### 3. 搜尋功能
-
-```typescript
-// 在對話標題和內容中搜尋
-searchChats(userId: string, query: string)
-```
-
-### 4. 匯出功能
-
-```typescript
-// 匯出對話為 PDF 或文字檔
-exportChat(chatId: string, format: 'pdf' | 'txt')
-```
-
----
-
-## 📋 測試指南
-
-### 基本功能測試
-
-**測試步驟**：
-1. 登入 Firebase Auth
-2. 透過 SMART Launch 進入應用程式
-3. 開始一段對話（至少 2-3 則訊息）
-4. 等待 5 秒（auto-save debounce）
-5. 點擊 "History" 按鈕
-6. 確認對話出現在列表中
-
-**預期結果**：
-- ✅ 對話標題顯示正確
-- ✅ 訊息數量正確
-- ✅ 時間顯示正確
-
-### 多沙盒測試
-
-**測試步驟**：
-1. 在 Cerner 沙盒中，對病人 ID "123" 進行對話
-2. 在 Epic 沙盒中，對病人 ID "123" 進行對話
-3. 分別查看兩個沙盒的歷史紀錄
-
-**預期結果**：
-- ✅ 兩個沙盒的對話**不會混淆**
-- ✅ 每個沙盒只顯示該沙盒的對話
-
----
-
-## ✅ 部署檢查清單
-
-- [ ] Firebase Auth 已設定
-- [ ] Firestore Security Rules 已更新
-- [ ] Firestore Indexes 已建立
-- [ ] 測試基本儲存/載入功能
-- [ ] 測試多沙盒情境
-- [ ] 測試刪除功能
-- [ ] UI 在手機上正常顯示
-- [ ] i18n 翻譯完整
-
----
-
-## 📚 相關資源
-
-- [Firebase Firestore 文檔](https://firebase.google.com/docs/firestore)
-- [SMART on FHIR 規範](http://www.hl7.org/fhir/smart-app-launch/)
-- [Clean Architecture 指南](./ARCHITECTURE.md)
+- [AI Agent](AI_AGENT_IMPLEMENTATION.md)
+- [Prompt Gallery](PROMPT_GALLERY.md)
+- [Security](SECURITY.md)
+- [Privacy policy](../PRIVACY_POLICY.md)

@@ -1,322 +1,189 @@
 # MediPrisma 隱私權政策
 
-**最後更新日期：2025-01-29**
+**生效／最後更新：2026-07-14**
+**適用程式基準：v0.40.0**
 
-## 1. 前言
+本政策說明 MediPrisma 官方公開部署在目前 codebase 下如何處理資料。自行部署者會決定自己的 Firebase、FHIR、AI、郵件服務、保留政策與法規角色，應發布自己的政策；本文件不能代替部署者的法律評估。
 
-MediPrisma（以下簡稱「本服務」）致力於保護使用者的隱私權。本隱私權政策說明我們如何收集、使用、儲存和保護您的個人資訊及醫療資訊。
-
-本服務是基於 SMART on FHIR 標準開發的臨床決策支援工具，專為醫療專業人員設計。我們深知醫療資訊的敏感性，並採取嚴格的安全措施保護您的資料。
-
-## 2. 資訊收集
-
-### 2.1 我們收集的資訊類型
-
-#### 2.1.1 使用者帳號資訊
-- **Firebase Authentication 資訊**：
-  - Email 地址
-  - Google 帳號資訊（如使用 Google 登入）
-  - 使用者 ID（Firebase UID）
-
-#### 2.1.2 臨床資料（透過 SMART on FHIR）
-本服務透過 SMART on FHIR 標準從電子病歷系統（EHR）存取以下資料：
-- 病人基本資料（姓名、性別、出生日期）
-- 診斷資料（Conditions）
-- 用藥資料（Medications、Allergies）
-- 檢驗報告（Observations、DiagnosticReports）
-- 就診記錄（Encounters）
-- 處置記錄（Procedures）
-
-**重要說明**：
-- 這些資料**僅在您的瀏覽器中處理**，不會傳送到我們的伺服器
-- 資料存取需要您明確授權（OAuth 2.0 + PKCE）
-- 您可以隨時撤銷授權
-
-#### 2.1.3 AI 對話記錄
-- 您與 AI 的對話內容
-- 對話時間戳記
-- 使用的 AI 模型資訊
-- 對話所屬的病人 FHIR ID（用於分類）
-
-#### 2.1.4 使用者設定
-- Chat Templates（對話範本）
-- Clinical Insights Panels（臨床洞察面板）
-- AI 模型偏好設定
-- 介面語言偏好
-
-#### 2.1.5 技術資訊
-- 瀏覽器類型和版本
-- 作業系統
-- IP 地址（僅用於安全監控）
-- 存取時間和日期
-
-### 2.2 我們不收集的資訊
-
-- ❌ **API Keys**：您的 OpenAI、Gemini、Perplexity API 金鑰僅儲存在您的瀏覽器本地，**絕不傳送到我們的伺服器**
-- ❌ **完整病歷內容**：FHIR 資料僅在瀏覽器中處理，不儲存在我們的資料庫
-- ❌ **圖片檔案**：上傳的圖片僅用於 AI 分析，不儲存在 Firestore
-
-## 3. 資訊使用
-
-### 3.1 使用目的
-
-我們收集和使用您的資訊僅用於以下目的：
-
-#### 3.1.1 提供核心服務
-- 執行 SMART on FHIR 認證和授權
-- 提供 AI 對話和臨床洞察功能
-- 儲存和同步您的對話歷史
-- 保存您的個人化設定
+MediPrisma 為研究／教學用途，非醫療器材。本 repo 未宣稱已取得 HIPAA、GDPR、臺灣個資法或其他法規認證。
 
-#### 3.1.2 改善服務品質
-- 分析使用模式以改善功能
-- 偵測和修復技術問題
-- 優化系統效能
-
-#### 3.1.3 安全防護
-- 偵測和防止未授權存取
-- 監控異常活動
-- 確保資料完整性
-
-### 3.2 我們不會做的事
-
-- ❌ **出售您的資料**：我們絕不出售、出租或交易您的個人資訊
-- ❌ **用於行銷**：我們不會使用您的醫療資訊進行行銷
-- ❌ **與第三方共享**：除非法律要求或您明確同意，否則不會與第三方共享您的資料
-- ❌ **訓練 AI 模型**：您的對話內容不會用於訓練 AI 模型
+## 1. 資料來源與使用模式
 
-## 4. 資訊儲存與安全
+您可以用三種方式載入臨床資料：
 
-### 4.1 資料儲存位置
+1. **SMART on FHIR**：從 EHR 啟動，經 OAuth 2.0 + PKCE 授權後由瀏覽器讀取目前病人的 FHIR 資源。
+2. **本地匯入**：在瀏覽器選擇 FHIR Bundle JSON。
+3. **示範資料**：載入 app 內建的去識別化 demo Bundle。
 
-#### 4.1.1 Firebase Firestore（雲端）
-以下資料儲存在 Google Cloud Platform 的 Firebase Firestore：
-- 使用者帳號資訊
-- AI 對話歷史
-- Chat Templates 和 Clinical Insights 設定
+完整原始 Bundle 不會因載入畫面而自動上傳到 MediPrisma server。當您主動使用 AI、語音、雲端對話、共享範本或回饋功能時，相關資料會依下列說明送往對應服務。
 
-**安全措施**：
-- 資料加密傳輸（TLS 1.3）
-- 資料加密儲存（AES-256）
-- Firestore Security Rules 強制執行存取控制
-- 定期安全稽核
+## 2. 我們處理的資料
 
-#### 4.1.2 瀏覽器本地儲存（localStorage）
-以下資料僅儲存在您的瀏覽器 localStorage：
-- API Keys（使用 AES-GCM 256-bit 加密）
-- 加密金鑰（用於加密 API Keys）
-- 語言偏好設定
-- 深色模式設定
-- 暫存的 FHIR 資料
+### 2.1 FHIR 臨床資料
 
-**安全措施**：
-- API Keys 使用 AES-GCM 256-bit 加密儲存
-- 加密金鑰隨機生成並持久化在 localStorage
-- 資料僅存於本地，不傳送到伺服器
-- 使用者可隨時清除瀏覽器資料以移除所有本地儲存
+可能包含：病人基本資料、就診、診斷、用藥、過敏、疫苗、生命徵象、檢驗、影像／病理報告、處置、醫療器材、照護計畫、預立醫療決定與臨床文件。
 
-### 4.2 資料保留期限
+用途：呈現臨床資料、產生趨勢、AI 摘要／解讀／安全提醒、回答問題、帶入計算機與產生 IPS。
 
-| 資料類型 | 保留期限 | 刪除方式 |
-|---------|---------|---------|
-| 使用者帳號資訊 | 帳號存續期間 | 刪除帳號時自動刪除 |
-| AI 對話歷史 | 帳號存續期間 | 可手動刪除或刪除帳號時自動刪除 |
-| Chat Templates | 帳號存續期間 | 可手動刪除或刪除帳號時自動刪除 |
-| API Keys（加密） | 持久化在 localStorage | 使用者可在設定中刪除或清除瀏覽器資料 |
-| 加密金鑰 | 持久化在 localStorage | 清除瀏覽器資料時移除 |
-| FHIR 病人資料 | 加密暫存於本機 IndexedDB，最長 12 小時 | 以 AES-GCM（session 金鑰）加密；下次載入時自動清除超過 12 小時的紀錄、登出時清除，使用者亦可隨時手動「清除本地資料」。資料僅留在本機，不上傳伺服器。 |
-| 技術日誌 | 30 天 | 自動刪除 |
+### 2.2 Firebase session 與帳號
 
-### 4.3 安全措施
+為了讓沒有登入的訪客使用有限免費 proxy 額度，app 會嘗試建立 Firebase 匿名 session；匿名 uid 不會建立一般使用者 profile。
 
-我們採用多層安全防護：
+當您選擇 Google 或 Email/Password 登入時，app 會處理：
 
-#### 4.3.1 傳輸層安全
-- HTTPS/TLS 加密所有資料傳輸
-- 安全 Headers（CSP `frame-ancestors`、X-Content-Type-Options、Referrer-Policy、Permissions-Policy 等；於 Node 託管時由應用層送出，GitHub Pages 靜態部署則依 GitHub 平台預設）
+- Firebase uid
+- Email
+- Display name
+- Photo URL
+- Email verification 狀態
+- 帳號建立時間
 
-#### 4.3.2 認證與授權
-- OAuth 2.0 + PKCE 標準
-- Firebase Authentication 多因素認證支援
-- Session 管理與自動過期
+用途：驗證身分、同步對話與範本、顯示／執行每日服務額度。密碼由 Firebase Authentication 處理，app code 不讀取或保存可還原的密碼。
 
-#### 4.3.3 資料保護
-- API Key 加密（AES-GCM 256-bit）
-- HTML Sanitization 防止 XSS 攻擊
-- Firestore Security Rules 強制執行
+### 2.3 AI 請求
 
-#### 4.3.4 客戶端處理
-- Tool Calling 在瀏覽器執行
-- FHIR 資料不傳送到後端
-- 防止 API Token 外洩
+依功能可能傳送：
 
-## 5. 資料共享與揭露
+- 您輸入的問題、提示詞與對話上下文。
+- 您選擇的臨床資料摘要或 Agent tool 查詢結果。
+- 報告文字、summary source catalog、必要的檢驗／用藥資料。
+- 您主動附加的圖片。
+- 您主動錄製、送出轉錄的音訊。
+- 所選 model、語言、medical／patient audience 等執行參數。
 
-### 5.1 我們不會主動共享您的資料
+傳送目的僅是完成當次生成、搜尋或轉錄。FHIR tools 會移除一部分結構化識別欄位，並以已知病人文字做 best-effort 遮罩；這不是保證不可重新識別的正式匿名化。
 
-除以下情況外，我們不會與第三方共享您的個人資訊：
+### 2.4 對話與個人設定
 
-### 5.2 合法要求
-在以下情況下，我們可能需要揭露您的資訊：
-- 遵守法律義務（如法院命令、傳票）
-- 保護我們的權利和財產
-- 防止詐欺或安全威脅
-- 保護使用者或公眾的安全
+登入且非無痕模式時，文字對話會保存至 Firestore，包含：
 
-### 5.3 第三方服務提供商
+- user id、patient id、FHIR server key
+- title、文字訊息、時間、實際 model id
+- Agent 狀態、reply reference、message count、可選 tags／summary
 
-本服務使用以下第三方服務，這些服務有各自的隱私權政策：
+上傳圖片不保存到 chat history。無痕對話與訪客對話不寫入 Firestore。
 
-| 服務提供商 | 用途 | 資料類型 | 隱私權政策 |
-|-----------|------|---------|-----------|
-| Google Firebase | 認證、資料庫 | 帳號資訊、對話歷史 | [Firebase 隱私權政策](https://firebase.google.com/support/privacy) |
-| OpenAI | AI 模型（選用） | 對話內容 | [OpenAI 隱私權政策](https://openai.com/privacy/) |
-| Google Gemini | AI 模型（選用） | 對話內容 | [Google 隱私權政策](https://policies.google.com/privacy) |
-| Perplexity AI | 文獻搜尋（選用） | 搜尋查詢 | [Perplexity 隱私權政策](https://www.perplexity.ai/privacy) |
+登入使用者的 chat templates、custom summary modules 與其設定可能同步至 Firestore；訪客版本留在 localStorage。使用者分享至 Prompt Gallery 的內容、分類、受眾、作者顯示／匿名選項與 usage count 會存於 `sharedPrompts`，並可能讓其他使用者讀取。
 
-**重要說明**：
-- 您可以選擇使用自己的 API Key，此時資料直接傳送到 AI 服務提供商
-- 如使用我們提供的免費額度，資料會經過我們的 Firebase Functions 代理
-- 我們不會儲存或記錄傳送到 AI 服務的內容
+### 2.5 使用額度
 
-## 6. 您的權利
+Firebase／Functions 會以匿名或登入 uid 與日期記錄 AI chat、Perplexity、Whisper 等服務的使用次數，以執行與顯示每日 quota。實際後端欄位、期限與限制由 `firebase-smart-on-fhir` 部署設定決定。
 
-根據 GDPR 和相關隱私法規，您擁有以下權利：
+### 2.6 回饋
 
-### 6.1 存取權
-您有權要求查看我們持有的您的個人資訊。
+若您使用「回報問題」，會傳送：
 
-**如何行使**：
-- 登入您的帳號查看對話歷史和設定
-- 聯絡我們要求完整的資料副本
+- 您提供的 Email、問題類型、嚴重度、描述與重現步驟。
+- 時間、user agent、螢幕解析度、瀏覽器語言、目前 path 與 FHIR server URL。
 
-### 6.2 更正權
-您有權要求更正不正確或不完整的個人資訊。
+表單刻意不收 patientId，並提醒不要輸入姓名、病歷號等個資；自由文字仍由您控制。回饋可能經 Firebase Function 與 Resend 寄給維護者。
 
-**如何行使**：
-- 在設定頁面更新您的資訊
-- 聯絡我們協助更正
+### 2.7 一般裝置與網路資料
 
-### 6.3 刪除權（被遺忘權）
-您有權要求刪除您的個人資訊。
+Hosting、Firebase、AI provider、郵件服務或網路基礎設施通常會在安全與營運 log 中處理 IP、timestamp、request metadata、錯誤與 user agent。其實際內容與期限由各服務與部署者政策決定。
 
-**如何行使**：
-- 在設定頁面刪除特定對話或範本
-- 刪除您的帳號以移除所有資料
-- 聯絡我們協助完整刪除
+本 app code 雖可設定 Firebase measurement id，但目前沒有初始化 Firebase Analytics 或呼叫 analytics event API；若部署者另外加入 analytics，必須更新本政策與 consent。
 
-### 6.4 資料可攜權
-您有權以結構化、常用且機器可讀的格式接收您的資料。
+## 3. 瀏覽器端儲存
 
-**如何行使**：
-- 使用匯出功能下載您的對話歷史
-- 聯絡我們要求完整的資料匯出
+### 3.1 完整本地 Bundle 與影像
 
-### 6.5 反對權
-您有權反對我們處理您的個人資訊。
+- 儲存：IndexedDB 中的 AES-GCM 密文。
+- 金鑰：tab 的 `sessionStorage`。
+- 期限：最多 12 小時；無金鑰、過期、解密失敗、清除資料或登出時刪除。
+- 若加密或儲存不可用，不以明文 fallback 持久保存。
 
-**如何行使**：
-- 撤銷 SMART on FHIR 授權
-- 停止使用本服務
-- 刪除您的帳號
+### 3.2 AI 衍生結果
 
-### 6.6 限制處理權
-您有權要求限制我們處理您的個人資訊。
+Medical Summary、Safety、Report Interpretation 等結果可能以加密形式放在 localStorage，使 reload 後不需重付模型成本。它們使用 tab session key，最多 12 小時；新 session 無法解密時會清除。
 
-**如何行使**：
-- 聯絡我們說明您的需求
+### 3.3 API keys
 
-## 7. Cookie 和追蹤技術
+自備 OpenAI、Gemini、Claude 或 Perplexity key 會先加密：
 
-### 7.1 我們使用的 Cookie
+- 預設存在 `sessionStorage`，關閉視窗後消失。
+- 您可明確選擇「記住此裝置」，改存 localStorage。
+- 登出會清除 app 管理的 keys。
 
-| Cookie 類型 | 用途 | 保留期限 |
-|------------|------|---------|
-| 必要 Cookie | Firebase Authentication Session | Session |
-| 功能 Cookie | 語言偏好、深色模式 | 1 年 |
+瀏覽器端加密不能防禦同 origin 的惡意程式碼、惡意 extension 或已被控制的裝置。
 
-### 7.2 我們不使用的追蹤技術
+### 3.4 偏好與必要狀態
 
-- ❌ 廣告 Cookie
-- ❌ 第三方追蹤 Cookie
-- ❌ 社交媒體追蹤像素
-- ❌ 跨網站追蹤
+LocalStorage／sessionStorage 也會保存語言、受眾、主題、字級、onboarding、資料選擇、模型偏好、卡片版面、template、media consent 與 SMART OAuth session 等必要狀態。Firebase Auth／Firestore／App Check 也可能使用瀏覽器 storage、cookie 或 IndexedDB 維持 session 與防濫用。
 
-### 7.3 如何管理 Cookie
+## 4. 第三方與資料接收者
 
-您可以透過瀏覽器設定管理或刪除 Cookie。請注意，停用必要 Cookie 可能影響服務功能。
+只有啟用對應功能時才會使用相關服務：
 
-## 8. 兒童隱私
+| 類別 | 可能服務 | 目的 |
+|---|---|---|
+| EHR／FHIR | 啟動 MediPrisma 的醫療機構／FHIR server | 取得經授權的病人資料 |
+| 身分、同步、代理 | Google Firebase Auth、Firestore、Functions、App Check／reCAPTCHA | 登入、同步、quota、AI／語音代理、防濫用 |
+| AI | OpenAI、Google Gemini、Anthropic Claude | 生成摘要、解讀、對話 |
+| 文獻搜尋 | Perplexity | 即時醫學文獻／網路搜尋 |
+| 語音 | Whisper 相容 endpoint／proxy | 音訊轉文字 |
+| 回饋郵件 | Resend 與部署的 feedback function | 傳送問題回報 |
+| Hosting | GitHub Pages；可選 mediprisma.tw host | 提供靜態 app |
 
-本服務不針對 13 歲以下兒童設計，我們不會故意收集兒童的個人資訊。如果您發現我們無意中收集了兒童的資訊，請立即聯絡我們，我們將儘快刪除。
+自備 API key 的請求通常由瀏覽器直接送到該 provider；免費內建模型通常經 MediPrisma Firebase Functions proxy。第三方會依各自條款處理資料，部署者應確認資料地區、保留、訓練使用、subprocessor、刪除與契約條件。
 
-## 9. 國際資料傳輸
+我們不出售個人資料，也不以病人資料進行廣告 targeting。依法令、法院命令或保護權利／安全所必要時，部署者可能依法揭露資料。
 
-本服務使用 Google Cloud Platform，資料可能儲存在不同國家/地區的資料中心。我們確保所有資料傳輸符合適用的資料保護法規，包括：
+## 5. 保存期限與刪除
 
-- 歐盟標準契約條款（Standard Contractual Clauses）
-- 適當的技術和組織措施
-- GDPR 合規性
+| 資料 | 目前 app 行為 |
+|---|---|
+| Local Bundle／images | tab session 且最長 12 小時 |
+| 加密 AI cache | 最長 12 小時 |
+| Session API keys | 關閉 session 或登出 |
+| Remembered API keys | 直到清除、改保存模式、登出或瀏覽器資料被移除 |
+| Firestore chat history | 直到使用者在 history 刪除或依部署者政策刪除；codebase 無自動 TTL |
+| User templates／modules | 直到使用者刪除、重設或帳號資料依請求移除 |
+| Shared prompts | 直到作者／管理者刪除或依社群政策移除 |
+| Feedback email／service logs | 由部署者、Resend 與服務政策決定 |
 
-## 10. 隱私權政策變更
+點選「清除本地資料」可刪除 app 管理的 Bundle、影像與 AI result caches。清除瀏覽器網站資料也可移除 local storage；這不會自動刪除 Firestore 或第三方已收到的請求。
 
-我們可能會不時更新本隱私權政策。重大變更時，我們會：
+## 6. 您的選擇與權利
 
-1. 在本頁面頂部更新「最後更新日期」
-2. 在應用程式中顯示通知
-3. 透過 Email 通知您（如適用）
+依適用法律與部署者角色，您可能可要求存取、更正、刪除、限制處理、反對處理或取得資料副本。App 目前提供：
 
-建議您定期查看本隱私權政策以了解最新資訊。
+- 不登入仍可使用本地資料閱讀與自備 key 的部分能力。
+- 切換為無痕對話，避免新增 Firestore chat history。
+- 在 history 刪除個別對話。
+- 清除本地 Bundle／cache／keys。
+- 管理個人 chat templates、custom summary modules 與 shared prompts。
 
-## 11. 聯絡我們
+Codebase 尚未提供完整的「刪除 Firebase 帳號及所有子 collection」自助流程。如需帳號層級存取或刪除，請聯絡部署者；部署者必須核對身分、適用法律與第三方備份／保留限制。
 
-如果您對本隱私權政策有任何疑問、意見或要求，請透過以下方式聯絡我們：
+## 7. 資料安全
 
-- **GitHub Issues**（主要聯絡管道）：https://github.com/voho0000/medical-note-smart-on-fhir/issues
-- **App 內回報**：使用應用程式內的「回報問題」功能
+目前控制包括 SMART PKCE、本地 AES-GCM、session-scoped key、Firebase Auth token、可選 App Check、Firestore Rules（由後端 repo 部署）、PII minimization、DOMPurify、generic error、feedback HTML escaping／origin check／rate limit、CI、CodeQL 與 dependency monitoring。
 
-我們會盡力在合理時間內回覆。
+沒有任何系統能保證絕對安全。使用者與部署者應避免在未經授權的裝置、瀏覽器 extension 或網路環境處理真實病人資料，並建立事件應變與通知程序。更多限制見 [Security Guide](./docs/SECURITY.md)。
 
-## 12. 合規聲明
+## 8. 兒童與代理使用
 
-> ⚠️ **重要**：本專案為開源參考實作。以下技術能力**不構成 HIPAA／GDPR 合規認證，本專案亦不提供 BAA（Business Associate Agreement）**。是否符合 HIPAA、GDPR、台灣個資法等法規，須由**實際部署與營運的機構自行評估並負責**。
+本工具不是直接面向兒童的消費者服務。若處理兒童或無法自行同意者的資料，醫療機構／部署者必須確認合法基礎、監護人授權與必要保護。
 
-### 12.1 HIPAA（部署者責任）
-本程式提供下列技術能力，可作為合規評估的一部分（但不等同於合規）：
-- 傳輸加密（HTTPS／TLS）
-- 本機敏感資料加密（AES-GCM）
-- SMART on FHIR OAuth 2.0 + PKCE 存取控制
-- 回報與 AI 代理請求中不夾帶病人識別資訊
+## 9. 跨境處理
 
-### 12.2 GDPR（部署者責任）
-本程式的設計納入下列 GDPR 原則，實際合規仍由部署者負責：
-- 資料最小化原則
-- 目的限制原則
-- 資料主體權利保護的技術基礎
+Firebase、GitHub、AI providers、Perplexity、Resend 或其他 subprocessor 可能在您所在司法管轄區之外處理資料。部署者在啟用真實病人資料前應確認適用的傳輸機制、契約與資料地區設定。
 
-### 12.3 其他適用法規
-- 個人資料保護法（台灣）
-- 醫療法相關規定
-- 電子簽章法
+## 10. 法規角色與合規邊界
 
-## 13. 資料外洩通知
+法規角色取決於實際部署與資料用途，不由這份 open-source repo 自動決定。依官方資料：GDPR 的 controller 決定處理目的與方式，processor 代表 controller 處理；HIPAA Privacy Rule 適用於特定 covered entities，涉及 PHI 的受託服務可能需要 business associate 安排；臺灣個資法規範個人資料的蒐集、處理與利用。
 
-如果發生資料外洩事件，我們將：
+- [European Commission：controller／processor](https://commission.europa.eu/law/law-topic/data-protection/rules-business-and-organisations/obligations/controllerprocessor/what-data-controller-or-data-processor_en)
+- [U.S. HHS：HIPAA covered entities／business associates](https://aspe.hhs.gov/standards-privacy-individually-identifiable-health-information)
+- [臺灣法務部：Personal Data Protection Act](https://mojlaw.moj.gov.tw/NewsContentE.aspx?id=29&lan=E)
 
-1. **72 小時內**通知相關監管機關（如 GDPR 要求）
-2. **立即**通知受影響的使用者
-3. 採取適當的補救措施
-4. 進行事件調查和改善
+醫療機構或其他部署者應自行判定角色、合法基礎、notice／consent、DPA／BAA、DPIA、資料主體流程、保存與 breach notification；必要時諮詢合格法務與資安人員。
 
-## 14. 免責聲明
+## 11. 政策變更
 
-- 本服務是臨床決策支援工具，不能取代專業醫療判斷
-- AI 生成的內容僅供參考，最終決策由醫療專業人員負責
-- 我們不對 AI 生成內容的準確性、完整性或適用性提供保證
-- 使用者應自行驗證 AI 建議並參考實證醫學文獻
+當資料流、providers、保存期限或功能有重大改變時，應更新版本與日期。重大變更不應只靠 repo commit 隱性生效；正式部署者應以適當方式通知使用者。
 
----
+## 12. 聯絡方式
 
-**本隱私權政策自 2025-01-29 起生效。**
-
-如有任何疑問，請隨時聯絡我們。感謝您信任 MediPrisma！
+隱私或資料處理問題請聯絡：<voho0000@gmail.com>。若您使用的是第三方自行部署版本，請優先聯絡該部署者；其政策與本官方部署可能不同。

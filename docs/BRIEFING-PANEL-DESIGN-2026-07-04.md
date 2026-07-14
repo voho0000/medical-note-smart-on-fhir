@@ -1,5 +1,16 @@
 # 醫療摘要 tab（零點擊 AI 摘要）設計規劃
 
+> **文件性質：設計演進與實作後記。** 早期草案中的元件名稱、呼叫數與版面不一定代表 v0.40.0。現行入口是 `features/medical-summary/Feature.tsx`，由 `useMedicalSummaryOrchestrator()` 協調 summary／safety slots；右側 registry 將它設為預設、force-mounted、panel-scroll feature。最後核對：2026-07-14。
+
+## v0.40.0 現況摘要（2026-07-14）
+
+- 標準摘要已採固定 Zod schema，主要卡片為問題、時間軸、安全、決策、檢查趨勢與用藥；coverage 由 app deterministic 計算。
+- `DecisionList` 已接回正式畫面，不再是孤兒元件。
+- 新增 sticky card navigator、每受眾獨立的卡片排序／顯示管理，以及檢查趨勢跳至累積報告的 analyte focus。
+- 自訂摘要已成為同一 feature 內的第二種 reading mode，管理 drawer 可從 Prompt Gallery 加入 summary prompt。
+- 使用者仍可在 Medical Summary 內選 model；patient mode 保留 model picker 是目前產品決策，並有 E2E 保護。
+- 本節是目前實作索引；以下內容保留原始設計決策與逐版後記。
+
 日期：2026-07-04（v3——修正資料脈絡：健康存摺跨院資料，非院內資料）
 狀態：**已實作（2026-07-05，工作樹，未 release）**，實作過程中的設計演進見文末「實作後記」
 參考：外部 POC「caretrac-briefing」截圖；使用者核心需求：**「不想要有任何的點擊，盡量所有顯示的 AI 提醒、病程摘要重點提示都直接呈現」**

@@ -1,293 +1,175 @@
 # Prompt Gallery 功能說明
 
-## 概述
+> 現行規格｜基準版本：v0.40.0｜最後核對：2026-07-14
 
-Prompt Gallery 是 Prompt 範本的分享平台，整合目前產品中兩個真正的使用位置：**AI 對話範本**與**醫療摘要的自訂摘要模組**。舊的 Clinical Insights 頂層功能已移除，範本類型也從 `insight` 更名為 `summary`。
+Prompt Gallery 是 Firestore-backed 的共享提示詞目錄。相同 prompt 可用於 Medical Chat、Medical Summary 的自訂摘要模組，或同時支援兩者；Gallery 本身不執行 AI。
 
-## 功能特色
+## 目前能力
 
-### 1. 完整的分享功能
-- **匿名分享**：可選擇匿名或實名分享
-- **多類型支援**：對話、摘要或兩者皆可
-- **豐富的分類**：SOAP、入院、出院、安全警示、臨床摘要等
-- **科別標籤**：內科、外科、急診、小兒科等
-- **自訂標籤**：支援多個自訂標籤
-- **作者管理**：作者可刪除自己分享的 Prompt
+- 瀏覽全部範本與「我的範本」。
+- 依用途、類別、專科、受眾、關鍵字與標籤篩選。
+- 依最新或 usage count 排序，前端每頁顯示 8 筆。
+- 預覽 prompt 後加入 chat template 或 custom summary module。
+- 分享個人範本；可設定作者顯示或匿名。
+- 編輯／刪除自己分享的範本，並追蹤使用次數。
+- Medical／patient audience 自動套用到查詢。
+- 相容舊資料的 `insight` type，讀取時正規化成 `summary`。
 
-### 2. 強大的搜尋和篩選
-- **全文搜尋**：搜尋標題、描述、內容、作者和標籤
-- **類型篩選**：依對話／摘要篩選
-- **分類篩選**：依臨床分類篩選
-- **科別篩選**：依專科篩選
-- **排序功能**：最新優先或熱門優先（依使用次數）
+讀取上限目前為 100 筆；關鍵字、tags、audience 與部分複合 filter 在 client 端完成。
 
-### 3. 智能使用邏輯
-- **多類型選擇**：當 Prompt 有多個類型時，可選擇使用方式
-- **自動整合**：從對話範本管理器開啟時加入對話範本；從自訂摘要管理器開啟時加入醫療摘要
-- **使用統計**：追蹤每個 Prompt 的使用次數
-- **即時更新**：列表自動更新
+## 資料模型
 
-### 4. 登入保護機制
-- **分享功能**：需要登入才能分享範本
-- **儲存功能**：需要登入才能儲存模板到帳號
-- **友善提示**：未登入時顯示鎖圖示和說明
-- **無縫登入**：一鍵導航到登入對話框
-- **瀏覽開放**：所有人都可以瀏覽範本庫（包括未登入使用者）
+```ts
+type PromptType = 'chat' | 'summary'
+type PromptAudience = 'medical' | 'patient'
 
-## 使用方式
-
-### 分享範本
-
-#### 從 Chat Templates 分享
-1. 進入 Settings > Chat Templates
-2. 編輯您的模板
-3. 點擊「分享」按鈕（需要登入）
-4. 填寫標題、描述、選擇類型和分類
-5. 選擇是否匿名分享
-6. 點擊「分享」完成
-
-#### 從自訂摘要分享
-1. 進入「醫療摘要 > 自訂摘要 > 管理模組」
-2. 點擊「分享模板」按鈕（需要登入）
-3. 填寫相關資訊並分享
-
-### 瀏覽和使用 Prompt
-
-#### 從 Chat Templates 瀏覽
-1. 進入 Settings > Chat Templates
-2. 點擊「瀏覽範本庫」按鈕
-3. 使用搜尋和篩選找到合適的 Prompt
-4. 點擊「預覽」查看詳細內容
-5. 點擊「使用」，會自動建立一個新的 Chat Template
-
-#### 從自訂摘要瀏覽
-1. 進入「醫療摘要 > 自訂摘要 > 管理模組」
-2. 點擊「瀏覽範本庫」
-3. 選擇 Prompt 後會自動更新當前標籤的內容
-
-#### 多類型 Prompt 的使用
-當 Prompt 同時支援對話和摘要時：
-1. 點擊「使用」按鈕會顯示下拉選單
-2. 選擇「加入對話範本」或「加入自訂摘要」
-3. 系統會根據您的選擇自動整合到對應位置
-
-## 資料結構
-
-### SharedPrompt 類型
-
-```typescript
 interface SharedPrompt {
   id: string
   title: string
   description?: string
   prompt: string
-  
-  // 分類
-  types: ('chat' | 'summary')[]  // 支援多類型
-  category: 'soap' | 'admission' | 'discharge' | 'safety' | 'summary' | ...
-  specialty: ('general' | 'internal' | 'surgery' | 'emergency' | ...)[]
-  audience: ('medical' | 'patient')[]
+  types: PromptType[]
+  category: PromptCategory
+  specialty: PromptSpecialty[]
+  audience: PromptAudience[]
   tags: string[]
-  
-  // 作者資訊
-  authorId: string
-  authorName: string
-  isAnonymous: boolean  // 是否匿名分享
-  
-  // 元資料
   createdAt: Date
   updatedAt: Date
-  usageCount: number
+  authorId?: string
+  authorName?: string
+  isAnonymous?: boolean
+  usageCount?: number
 }
 ```
 
-## Firestore 結構
+用途：
 
-### Collection: `sharedPrompts`
+- `chat`：加入／套用 Medical Chat template。
+- `summary`：加入 Medical Summary 的自訂摘要模組。
+- 同時包含兩者：使用者在目標不明時選擇用途。
 
-```
-sharedPrompts/
-  {promptId}/
-    title: string
-    description?: string
-    prompt: string
-    types: string[]  // ['chat', 'summary']
-    category: string
-    specialty: string[]
-    audience: string[]
-    tags: string[]
-    authorId: string
-    authorName: string
-    isAnonymous: boolean
-    createdAt: Timestamp
-    updatedAt: Timestamp
-    usageCount: number
+分類 `category`：`soap`、`admission`、`discharge`、`safety`、`summary`、`progress`、`consult`、`procedure`、`other`。
+
+專科 `specialty` 支援 general、內外科、急診、小兒、婦產、精神、神經、復健、麻醉、眼科、皮膚、泌尿、骨科、耳鼻喉、放射診斷／腫瘤、病理、核醫、整外、家醫與 other。
+
+## Firestore
+
+Collection：
+
+```text
+sharedPrompts/{promptId}
 ```
 
-## 元件架構
+寫入時使用 Firestore `Timestamp`，usage 以 atomic `increment(1)` 增加。Gallery service 提供：
 
-```
-features/prompt-gallery/
-├── types/
-│   └── prompt.types.ts              # 類型定義
-├── services/
-│   └── prompt-gallery.service.ts    # Firestore CRUD 操作
-├── hooks/
-│   └── usePromptGallery.ts          # 狀態管理 Hook
-├── components/
-│   ├── PromptCard.tsx               # Prompt 卡片元件
-│   ├── PromptFilters.tsx            # 篩選和排序控制
-│   ├── PromptPreviewDialog.tsx      # 預覽對話框
-│   ├── PromptGalleryDialog.tsx      # 主對話框（整合所有功能）
-│   ├── SharePromptDialog.tsx        # 分享範本對話框
-│   ├── LoginRequiredDialog.tsx      # 登入提示對話框
-│   └── index.ts                     # 元件匯出
-└── index.ts                         # 功能匯出
-```
+- `getSharedPrompts(filter?, sort?)`
+- `getMySharedPrompts(userId, filter?, sort?)`
+- `getSharedPrompt(id)`
+- `createSharedPrompt(prompt)`
+- `updateSharedPrompt(id, updates)`
+- `deleteSharedPrompt(id)`
+- `incrementPromptUsage(id)`
 
-## API 說明
+`usePromptGallery()` 管理 loading、error、filter、sort、refetch 與本地 usage count 更新。
 
-### Service Functions
+## 查詢限制與相容層
 
-#### `getSharedPrompts(filter?, sort?)`
-取得所有符合條件的 Prompts
+Firestore 一個 query 只能使用一個 `array-contains`。目前策略：
 
-#### `getSharedPrompt(id)`
-取得單一 Prompt
+- 一般 type 優先在 server filter。
+- `summary` 為了相容舊 `insight` 與 upgraded built-ins，先廣泛讀取再 client filter。
+- type 已占用 `array-contains` 時，specialty 在 client filter。
+- audience、search、tags 在 client filter。
 
-#### `createSharedPrompt(prompt)`
-建立新的 Prompt
+舊資料規則：
 
-#### `updateSharedPrompt(id, updates)`
-更新 Prompt
+- `types: ['insight']` 讀成 `summary`。
+- 缺少／空的 audience 讀成 `['medical']`。
+- 一組早期內建 patient prompts 會依 id 補上 `summary`，不需先做 production migration。
 
-#### `deleteSharedPrompt(id)`
-刪除 Prompt
+新的文件只寫 `chat`／`summary`，不得再寫 `insight`。
 
-#### `incrementPromptUsage(id)`
-增加使用次數
+## UI 整合
 
-### Hook: usePromptGallery
+### Medical Chat
 
-```typescript
-const {
-  prompts,           // Prompt 列表
-  loading,           // 載入狀態
-  error,             // 錯誤訊息
-  filter,            // 目前篩選條件
-  sort,              // 目前排序
-  updateFilter,      // 更新篩選
-  clearFilter,       // 清除篩選
-  updateSort,        // 更新排序
-  fetchPrompts,      // 重新取得
-  trackUsage,        // 追蹤使用
-} = usePromptGallery(initialFilter?)
-```
+`PromptGalleryDialog` 以 `mode="chat"` 開啟。選取後可立即插入或加入個人 template；template 的 Firestore／localStorage 行為見 [MEDICAL_CHAT.md](MEDICAL_CHAT.md)。
 
-## 整合說明
+### Medical Summary
 
-### 整合到新的元件
+自訂摘要管理 drawer 以 `mode="summary"` 開啟。選取 prompt 後建立 custom module，使用者可控制名稱、順序、auto-generate 與是否顯示在 summary。
 
-```typescript
-import { PromptGalleryDialog } from '@/features/prompt-gallery'
-import type { SharedPrompt } from '@/features/prompt-gallery'
+Gallery 的 shared prompt 與使用者自己的 module 是不同資料：前者是公開目錄，後者儲存在使用者 collection／localStorage，修改 module 不會回寫 shared prompt。
 
-function MyComponent() {
-  const [showGallery, setShowGallery] = useState(false)
-  
-  const handleSelectPrompt = (prompt: SharedPrompt) => {
-    // 處理選擇的 Prompt
-    console.log(prompt.prompt)
-  }
-  
-  return (
-    <>
-      <Button onClick={() => setShowGallery(true)}>
-        開啟 Prompt Gallery
-      </Button>
-      
-      <PromptGalleryDialog
-        open={showGallery}
-        onOpenChange={setShowGallery}
-        mode="chat" // 或 "summary" 或 "all"
-        onSelectPrompt={handleSelectPrompt}
-      />
-    </>
-  )
-}
+## 權限與安全
+
+前端 login guard 只改善 UX，不是存取控制。正式 Firestore Rules 必須：
+
+- 公開 read 的範圍符合產品政策。
+- create 時 `authorId == request.auth.uid`。
+- update／delete 僅允許原作者或管理者。
+- 限制可寫欄位、型別、字串長度、array 大小與 usageCount 變更方式。
+- 禁止在 prompt／description 放入病人識別資訊。
+
+Rules 位於獨立 `firebase-smart-on-fhir` repo；本 app repo 的 TypeScript 型別不能取代 server-side validation。
+
+## 新增整合點
+
+```tsx
+<PromptGalleryDialog
+  open={open}
+  onOpenChange={setOpen}
+  mode="chat"
+  onSelectPrompt={(prompt, useAs) => {
+    // 將 prompt.prompt 轉成目標 feature 的本地資料
+  }}
+/>
 ```
 
-## 未來擴展
+整合時：
 
-目前實作不包含社群功能，但架構已預留擴展空間：
+1. 明確指定 `mode`，避免不相容 prompt。
+2. 用目前 audience 初始化 filter。
+3. 在真正採用 prompt 時呼叫 `trackUsage()`，不是只在 preview 時增加。
+4. 若目標需要登入，顯示 `LoginRequiredDialog`，不要讓 Firestore error 當流程控制。
 
-### Phase 2: 社群功能（未實作）
-- 使用者分享範本
-- 評分和評論系統
-- 點讚和收藏
-- 檢舉機制
+## 主要檔案
 
-### Phase 3: 進階功能（未實作）
-- Prompt 版本控制
-- 協作編輯
-- AI 推薦相似 Prompts
-- 使用分析和統計
+| 檔案 | 責任 |
+|---|---|
+| `types/prompt.types.ts` | schema type 與 legacy normalization |
+| `services/prompt-gallery.service.ts` | Firestore CRUD／query |
+| `hooks/usePromptGallery.ts` | UI state 與 service facade |
+| `components/PromptGalleryDialog.tsx` | tabs、filter、sort、pagination |
+| `components/PromptPreviewDialog.tsx` | 預覽與使用 |
+| `components/SharePromptDialog.tsx` | 分享表單 |
 
-## Firestore 安全規則
+## 測試重點
 
-```javascript
-match /sharedPrompts/{promptId} {
-  // 所有人可以讀取（包括未登入使用者）
-  allow read: if true;
-  
-  // 只有登入使用者可以建立
-  allow create: if request.auth != null;
-  
-  // 只有作者可以更新
-  allow update: if request.auth != null && request.auth.uid == resource.data.authorId;
-  
-  // 只有作者可以刪除
-  allow delete: if request.auth != null && request.auth.uid == resource.data.authorId;
-}
-```
-
-## 注意事項
-
-1. **隱私保護**：確保分享的 Prompt 不包含病人資訊
-2. **權限控制**：
-   - 所有人都可以瀏覽範本庫（包括未登入使用者）
-   - 只有登入使用者可以分享範本
-   - 只有作者可以修改或刪除自己的 Prompt
-3. **資料驗證**：建立 Prompt 時應驗證必填欄位
-4. **效能考量**：使用 Firestore 查詢限制（limit: 100）
-5. **匿名分享**：即使匿名分享，仍保留 authorId 用於刪除權限
-
-## 測試
-
-建議測試項目：
-
-1. ✅ 開啟 Gallery Dialog
-2. ✅ 搜尋功能（標題、描述、內容、作者、標籤）
-3. ✅ 篩選功能（類型、分類、科別）
-4. ✅ 排序功能（最新優先、熱門優先）
-5. ✅ 預覽 Prompt
-6. ✅ 分享範本（匿名/實名）
-7. ✅ 選擇 Prompt（Chat 模式）
-8. ✅ 選擇 Prompt（Summary 模式）
-9. ✅ 多類型 Prompt 的使用選擇
-10. ✅ 使用次數追蹤
-11. ✅ 作者刪除功能
-12. ✅ 未登入鎖定功能（分享、儲存）
-13. ✅ 登入對話框導航
-14. ✅ 響應式設計（手機、平板、桌面）
+- legacy `insight` 與 missing audience normalization。
+- type + specialty 的 client/server filter 組合。
+- audience 切換後結果更新。
+- 搜尋涵蓋 title、description、prompt、author、tags。
+- 未登入時「我的範本」與分享流程正確受限。
+- 同時支援 chat／summary 的 prompt 使用目標正確。
+- usage increment 失敗不阻斷主要使用流程。
 
 ## 疑難排解
 
-### Firestore 權限錯誤
-確保 Firestore 規則允許讀取 `sharedPrompts` collection
+### Gallery 空白
 
-### 無法載入 Prompts
-檢查 Firebase 配置和網路連線
+檢查 Firebase public config、Firestore Rules、collection 名稱與瀏覽器 console。若只有 summary 空白，確認舊資料 types 是否可由 normalization 讀取。
 
-### 類型錯誤
-確保 TypeScript 版本和相依套件版本正確
+### Compound query 需要 index
+
+依 Firebase 回傳連結在後端 repo 建立 index；不要移除必要 filter 來繞過權限或資料隔離。
+
+### 新分享沒有出現在目前頁面
+
+確認目前 audience／type／category／specialty filter，並呼叫 `fetchPrompts()`；Gallery 不是 `onSnapshot` 即時 subscription。
+
+## 相關文件
+
+- [Medical Chat](MEDICAL_CHAT.md)
+- [Feature modules](FEATURES.md)
+- [Security](SECURITY.md)

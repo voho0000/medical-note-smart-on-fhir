@@ -1,162 +1,158 @@
-# AI Agent Implementation Guide
+# AI Agent 實作指南
 
-## 概述
+> 現行規格｜基準版本：v0.40.0｜最後核對：2026-07-14
 
-實作了 AI Agent 功能，讓 AI 可以自動調用 FHIR API 查詢病人資料。使用 **客戶端 tool calling** 架構，在瀏覽器端執行 FHIR 查詢。
+Medical Chat 只有一條 Agent 路徑。模型依使用者問題決定直接回答、查詢目前病人的 FHIR 資料，或搜尋即時醫學文獻。工具在瀏覽器端執行，讀取與畫面相同的 `ClinicalDataCollection`；FHIR access token、完整 Bundle 與 provider key 不交給模型。
 
-## 核心架構設計
+## 元件關係
 
-### 為什麼使用客戶端 Tool Calling？
-
-SMART on FHIR 的 `fhirclient` 庫是專門為瀏覽器設計的，它依賴：
-- `window` 對象
-- `sessionStorage` 來管理 OAuth Token
-- 瀏覽器的 OAuth2 flow
-
-因此，FHIR client **只能在瀏覽器環境中運行**，無法在 Next.js API Route (Node.js) 中使用。
-
-### 解決方案：客戶端執行 Tools
-
-使用 Vercel AI SDK 的 `streamText` **直接在瀏覽器端執行**：
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser (useAgentChat Hook)                                │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  1. streamText({ model, messages, tools })             │ │
-│  │     ↓                                                   │ │
-│  │  2. AI 決定要調用 queryConditions                       │ │
-│  │     ↓                                                   │ │
-│  │  3. 在瀏覽器執行 tool.execute()                         │ │
-│  │     ↓                                                   │ │
-│  │  4. FHIR.oauth2.ready() ✓ (有 sessionStorage)          │ │
-│  │     ↓                                                   │ │
-│  │  5. 獲取 FHIR 資料                                      │ │
-│  │     ↓                                                   │ │
-│  │  6. 回傳給 AI 繼續生成回答                              │ │
-│  └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+```text
+MedicalChat
+  -> useAgentChat
+       -> buildAgentSystemPromptUseCase
+       -> aiProviderFactory
+       -> runDeepModeAgent
+            -> Vercel AI SDK streamText
+            -> FHIR tools (local/shared clinical snapshot)
+            -> literature tool (Perplexity)
+       -> UI events / chat store / Firestore autosave
 ```
 
-## 架構組件
+| 層 | 位置 | 責任 |
+|---|---|---|
+| UI | `features/medical-chat/` | 輸入、串流訊息、停止、範本、追問、history |
+| Application | `src/application/hooks/ai/` | 將 clinical collection 與 auth 組成 tools |
+| Core | `src/core/use-cases/agent/` | system prompt 與 tool result 後處理 |
+| Infrastructure | `src/infrastructure/ai/agent/run-deep-mode-agent.ts` | headless agent loop、streaming、trajectory |
+| Infrastructure | `src/infrastructure/ai/tools/` | tool schema、filter、execute、PII scrub |
+| Infrastructure | `src/infrastructure/ai/factories/ai-provider.factory.ts` | model 到 OpenAI／Gemini／Claude provider 的選擇 |
 
-### 1. Use Case 層
-- `@/src/core/use-cases/agent/query-fhir-data.use-case.ts`
-  - 封裝 FHIR 查詢邏輯
-  - 支援所有主要 FHIR 資源類型
+## 為什麼在 client 執行 tools
 
-### 2. Infrastructure 層
-- `@/src/infrastructure/ai/tools/fhir-tools.ts`
-  - 定義 6 個 FHIR tools 供 AI 調用
-  - **在瀏覽器端執行**，可以訪問 fhirClient
-  - 使用 zod 進行參數驗證
+- SMART access token 留在 `fhirclient` 的瀏覽器 session。
+- Local Bundle 只存在使用者裝置，沒有 server 可查。
+- UI 與 Agent 共用同一份 React Query／local collection，答案不會因重查時點不同而漂移。
+- Tool 回傳可以在送往模型前統一刪除 PII。
 
-### 3. Application 層
-- `@/features/medical-chat/hooks/useAgentChat.ts`
-  - **客戶端 tool calling** 實作
-  - 使用 AI SDK 的 `streamText` 在瀏覽器執行
-  - 創建 FHIR tools 並傳遞給 AI
-  - 處理 streaming 響應
+這不代表資料不會離開裝置：tool 的去識別化結果與使用者問題仍會傳到所選 AI provider 或 MediPrisma proxy。UI 必須讓使用者知道這個邊界。
 
-### 4. UI 層
-- `@/features/medical-chat/components/MedicalChat.tsx`
-  - 單一 Agent 對話路徑
-  - AI 自主決定是否調用 FHIR／文獻工具
+## Agent loop
 
-## 可用的 FHIR Tools
+`runDeepModeAgent()` 是 React UI 與 headless eval 共用的核心函式。每次執行最多三個 round：
 
-1. **queryConditions** - 查詢診斷/病況
-   - 參數：category, clinicalStatus
-   
-2. **queryMedications** - 查詢用藥
-   - 參數：status
-   
-3. **queryAllergies** - 查詢過敏史
-   - 參數：type
-   
-4. **queryObservations** - 查詢檢驗/生命徵象
-   - 參數：category, code
-   
-5. **queryProcedures** - 查詢手術/處置
-   - 參數：status
-   
-6. **queryEncounters** - 查詢就診紀錄
-   - 參數：class
+1. Main：`streamText()` 設定 `stopWhen: stepCountIs(10)`，AI SDK 自動把 tool result 回送模型，可連續呼叫多個工具。
+2. Follow-up：若有 tool result 但模型沒有輸出文字，將結果整理成摘要後要求回答；此 round 仍可呼叫更多工具。
+3. Synthesis：若 follow-up 又只有 tool result，最後用無 tools 的純文字 round 合成答案。
 
-## 使用方式
+每個 round 都經 `withIdleTimeout()`；預設 60 秒沒有新 token／event 便 abort。UI 的停止按鈕與病人／bundle 切換共用同一個 `AbortController`。
 
-### 在 Medical Chat 中使用
+核心回傳：
 
-1. 輸入問題，例如：
-   - "這個病人有什麼診斷？"
-   - "最近的檢驗結果是什麼？"
-   - "病人有哪些用藥？"
-   - "有過敏史嗎？"
+```ts
+interface RunDeepModeAgentResult {
+  answer: string
+  toolCalls: string[]
+  citations: string[]
+  trajectory: AgentTrajectoryStep[]
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+  }
+}
+```
 
-2. AI 會自動：
-   - 判斷需要查詢哪些資料
-   - 調用對應的 FHIR tools
-   - 整合查詢結果
-   - 生成回答
+UI 另外接收 `status`、`content`、`tool-call`、`tool-result` 與 `final` events，將高頻文字更新節流到 100ms。
 
-### 示例對話
+## 正式 tools
 
-**User**: "這個病人有什麼慢性病？"
+### FHIR tools（16 個）
 
-**AI**: 
-1. 調用 `queryConditions` tool
-2. 獲取病人的 Condition 資料
-3. 分析並回答
+| 群組 | Tools |
+|---|---|
+| 病人／總覽 | `queryPatientInfo`, `getDataOverview` |
+| 就診 | `queryEncounters`, `getRecentVisits`, `getEncounterDetails`, `listEncounterDepartments` |
+| 診斷 | `queryConditions` |
+| 報告與處置 | `queryObservations`, `queryDiagnosticReports`, `searchObservationByName`, `listAvailableObservationCodes`, `queryProcedures` |
+| 用藥與免疫 | `queryMedications`, `getActiveMedicationList`, `queryAllergies`, `queryImmunizations` |
 
-## 安全性
+工具定義在 `src/infrastructure/ai/tools/fhir-tools.ts`，schema 在 `fhir-tool-schemas.ts`。它們支援日期、狀態、類別、部門、院所、異常值與 limit 等 filter；回傳結構化的 `{ success, summary, count, data }`。
 
-- ✅ 僅限查詢當前病人的資料（patientId 由系統提供）
-- ✅ 僅限讀取操作，無寫入權限
-- ✅ 使用 FHIR client 的權限控制
+`queryPatientInfo` 只回傳性別與年齡，不回傳姓名、id 或完整生日。其他 tools 會在回傳前經 `scrubPii()` 與 `scrubFreeText()`。
 
-## 已知問題
+### 文獻 tool（1 個）
 
-### TypeScript 類型錯誤
-`src/infrastructure/ai/tools/fhir-tools.ts` 中有 TypeScript 類型警告，這是因為：
-- AI SDK v6.0.6 的 `tool` 函數類型定義較嚴格
-- 不影響運行時功能
-- 可以通過以下方式解決：
-  1. 升級到最新版 AI SDK
-  2. 或使用 `// @ts-ignore` 暫時忽略
+`searchMedicalLiterature` 使用 Perplexity：
 
-## 測試建議
+- 支援 `basic`／`advanced` 搜尋深度。
+- 回傳內容與 citation URLs。
+- 搜尋失敗時明確要求模型不要用訓練記憶假裝成即時搜尋。
+- 可使用自備 Perplexity key，或在可用的 Firebase session 下走 proxy／quota。
 
-1. **基本功能測試**
-   - 詢問病人的診斷、用藥、檢驗等
-   - 確認 AI 能正確調用 tools
+### 尚未上線的 eval 候選 tools
 
-2. **錯誤處理測試**
-   - 沒有 patient ID 時的錯誤處理
-   - API key 缺失時的錯誤處理
-   - FHIR 查詢失敗時的錯誤處理
+`clinical-skill-tools.ts` 目前包含 CKD-EPI 2021 eGFR 與 NLM terminology resolver。這兩個工具只供 private eval harness A/B，未加入正式 `createFhirTools()`；文件與 UI 不應宣稱已提供。
 
-3. **Agent 路徑測試**
-   - 一般問題不應被強迫查詢 FHIR
-   - 病人問題應使用正確的 FHIR tool
+## Provider 與存取路徑
 
-## 未來改進
+模型清單由 `src/shared/constants/ai-models.constants.ts` 管理。流程：
 
-1. **增強 Tools**
-   - 加入更多 FHIR 資源類型
-   - 支援更複雜的查詢參數
-   - 加入資料聚合功能
+1. 使用者在 chat 內選 model；偏好存入 chat slot。
+2. `gateModelForKeys()` 檢查該 provider 的 user key。
+3. premium model 缺 key 時降級至 `DEFAULT_MODEL_ID`。
+4. 有 user key：瀏覽器直接呼叫 provider。
+5. 無 user key：`aiProviderFactory` 走對應 Firebase proxy；請求加入 Firebase ID token 與可用的 App Check token。
 
-2. **UI 改進**
-   - 顯示 tool calling 過程
-   - 顯示查詢到的資料摘要
-   - 加入 loading 狀態指示
+Agent mode 與一般 summary 共用 provider factory，但 Agent 自己掌控 multi-step stream，因此 model gating 也在 `useAgentChat` 額外執行。
 
-3. **效能優化**
-   - 快取查詢結果
-   - 批次查詢優化
-   - Token 使用優化
+## 隱私與安全邊界
 
-4. **文獻搜尋**
-   - 整合 PubMed API
-   - 整合 Semantic Scholar
-   - 結合 FHIR 資料和文獻進行分析
+送出前依序處理：
+
+- 使用者訊息：保留畫面與 history 原文；送往 AI 的副本以載入病人的姓名／id literals 遮罩。
+- Tool payload：移除 id、birthDate、provider display 等結構欄位，再清理 report／document 內的自由文字識別內容。
+- Proxy：移除 upstream provider Authorization／API key header，改用 Firebase token；自備 key 模式不經 owner-funded proxy。
+- Firestore history：不儲存圖片 data，只保存文字訊息、model id、agent states 與 reply reference。
+
+剩餘限制：自由文字去識別化是 best-effort，不能保證找出所有 PHI；使用者不得把不必要的識別資料輸入 AI。
+
+## 新增或修改 tool
+
+1. 在 `fhir-tool-schemas.ts` 建立嚴格且有描述的 Zod input schema。
+2. 在 `createFhirTools()` 新增 tool，盡量使用 `ClinicalDataCollection` 而非重新打 FHIR server。
+3. 回傳前必須經 `scrub()`。
+4. 更新 `AGENT_TOOL_NAMES` 與中英文 i18n display name。
+5. 在 system prompt 說明何時使用、何時不要使用。
+6. 補純函式 filter／tool execute 測試；日期、limit、無資料與錯誤都要覆蓋。
+7. 執行 Agent regression／eval，確認 tool precision、hallucination 與 latency 沒有退步。
+
+## 測試
+
+- Unit：`__tests__/infrastructure/ai/tools/`、`__tests__/core/use-cases/agent/`。
+- Hook／UI：medical-chat、chat store、autosave 與 model gating tests。
+- E2E：`ai-chat-agent-only.spec.ts`、`ai-chat-stream.spec.ts` 使用攔截的 deterministic stream，不打真實模型。
+- Headless eval：規格見 [DEEP-MODE-EVAL-LOOP.md](DEEP-MODE-EVAL-LOOP.md)，ledger 不得填未實測數字。
+
+常用驗證：
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm test -- --runInBand
+npm run test:e2e
+```
+
+## 已知限制
+
+- Tool 結果來自已載入 collection；資料本來缺漏時，Agent 不能補出不存在的紀錄。
+- Local 與 SMART 都受 mapper／FHIR server 資料品質影響。
+- 文獻工具是搜尋與摘要服務，不等同系統性文獻回顧。
+- 目前最多 10 AI SDK steps，另有 follow-up／synthesis round；複雜問題可能需拆問。
+- Tool-level PII scrub 是降低風險，不是正式匿名化認證。
+
+## 相關文件
+
+- [Medical Chat](MEDICAL_CHAT.md)
+- [Architecture](ARCHITECTURE.md)
+- [Security](SECURITY.md)
+- [Deep-mode eval](DEEP-MODE-EVAL-LOOP.md)

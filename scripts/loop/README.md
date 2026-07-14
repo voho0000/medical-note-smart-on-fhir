@@ -1,5 +1,7 @@
 # Loop engineering — workstream A scaffold
 
+> Current developer guide｜v0.40.0｜Reviewed 2026-07-14
+
 The verifier gate + goal contract that lets the app **self-iterate**: an agent
 runs `reason → act → observe → verify` against a written `/goal` until a real
 gate says done. Background and the three-workstream split live in
@@ -49,6 +51,10 @@ Exit `0` = all gates passed, `1` = at least one failed. Verdict shape:
 iterations: **unchanged twice = no progress → abort** (the agent is stuck
 retrying the same broken approach).
 
+`gate.mjs` only records the signature and exits pass/fail. The external loop
+driver is responsible for comparing iterations and enforcing max-iteration,
+time, token, and no-progress stop conditions.
+
 ## Monitoring console
 
 ```bash
@@ -85,6 +91,9 @@ automatically — no need to log those.
 
 To reset the console between runs: `rm -f .loop/journal.jsonl .loop/history.jsonl`.
 
+The dashboard binds to `127.0.0.1`, not all interfaces. Override its port with
+`node scripts/loop/dashboard.mjs --port=5000`.
+
 ## Stop conditions (layered exits)
 
 The loop must never spin forever. In priority order:
@@ -115,10 +124,9 @@ what the command does. Enable it per goal with `external-gate: true`.
 
 ## Workstream B — telemetry seeds (later, not now)
 
-B (runtime self-improvement) needs usage signal as fuel and a **human review
-gate** for safety. It's premature while users are few. Start collecting now so
-there's data to learn from later. Minimum fields worth capturing (storage TBD —
-keep PHI out):
+B (runtime self-improvement) would need usage signals and a **human review
+gate** for safety. It is not implemented. If this workstream is later approved,
+the minimum candidate fields are below (storage TBD — keep PHI out):
 
 - `event`: feature invoked / result shown / result dismissed
 - `outcome`: adopted / edited / rejected by the clinician (proxy for usefulness)
@@ -127,3 +135,5 @@ keep PHI out):
 - `ts`, anonymised session id — **no PHI, no raw note content**
 
 These map onto the verdict-style structured logging the gate already models.
+They remain design seeds only; the shipped app does not currently emit this
+runtime product telemetry.

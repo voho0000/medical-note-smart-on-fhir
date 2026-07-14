@@ -1,5 +1,7 @@
 # Loop Engineering 研究 × 開發流程檢視報告
 
+> **文件性質：2026-07-12 的研究與流程快照。** 引用的數量、流程缺口與外部生態資訊屬當時觀察。到 v0.40.0（2026-07-14），repo 已有 CI typecheck／lint／Jest／static build gate、獨立 Playwright workflow、CodeQL、Dependabot、`scripts/loop/gate.mjs` structured verdict、dashboard／journal，以及供 UI 與 eval 共用的 headless `runDeepModeAgent()`；尚未量化完成的 deep-mode baseline 仍維持 TBD。
+
 寫於 2026-07-12。三部分：(1) 「loop engineering」詞源與定義、(2) agentic coding 社群最佳實踐共識、(3) 本專案過去六週開發流程的量化診斷與改善建議。
 
 ---

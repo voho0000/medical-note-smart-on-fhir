@@ -1,5 +1,7 @@
 # NHI-FHIR-Bridge 需求單:醫療計算機所需 Observation LOINC
 
+> **文件性質：資料契約歷史紀錄。** 本清單保留 2026-07-03 對 Bridge 提出的需求，不代表每個 LOINC 已在 production Bundle 穩定供應。v0.40.0 app 端以 `use-lab-autofill.hook.ts`、`autofill-compute.ts`、calculator definitions、LOINC／specimen／unit dimension 共同判斷；無法唯一、安全對應時維持手動輸入。最後核對：2026-07-14。
+
 - **日期**：2026-07-03
 - **提出者**：MediPrisma（SMART on FHIR app）端
 - **背景**：app 端新增 MDCalc 式醫療計算機，輸入值自動帶入病人 FHIR `Observation`。以下分析物是計算機需要、但目前 bundle 尚未穩定提供（或需確認）的項目。

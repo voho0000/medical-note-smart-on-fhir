@@ -1,5 +1,7 @@
 # 醫療摘要（AI Summary）功能稽核報告 — 2026-07-12
 
+> **文件性質：v0.34.0 稽核快照，不是 v0.40.0 現況清單。** 下列編號、嚴重度與行號保留當時證據；修復與後續產品決策不回寫成「當時已完成」。截至 2026-07-14，至少已可從 codebase 確認：Decision card 已接線、summary card navigation／版面管理已上線、investigation 可安全解析並跳到累積報告、生成 slots 已收斂到共用 `ai-generation` primitives，且 medical-summary use case 有持續擴充的回歸測試。A1/A3 等 claim-level grounding 議題仍應以目前程式與新稽核重新判定，不能只看本表。
+
 > 稽核範圍：醫療摘要 tab 全鏈路（v0.34.0 working tree, commit `1d27080` 之後）。
 > 四個面向：A 輸出正確性、B 資料選擇、C UI/UX（醫事人員＋民眾）、D 程式碼品質。
 > 各發現有編號（A1…D6），方便像上次 AUDIT-2026-06-12 一樣逐項認領修復。

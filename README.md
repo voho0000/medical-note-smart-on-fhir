@@ -1,5 +1,7 @@
 # 醫析 MediPrisma · SMART on FHIR
 
+> 文件基準：v0.40.0（2026-07-14）｜程式行為以 registry、composition root 與測試為準。
+
 > 語言 / Language: [**中文**](#中文) ｜ [**English**](#english)
 
 基於 **Next.js 16** 與 **SMART on FHIR** 的臨床資料整合與閱讀工具：集中呈現跨院就診、用藥、檢驗趨勢與臨床文件，並以可回查來源的 AI 摘要、安全提醒與報告解讀協助快速掌握重點。
@@ -17,10 +19,10 @@
 - **醫療摘要**（開啟病人後的預設分頁）：**零點擊 AI 簡報**——跨院病程摘要（關鍵片語標示＋可點擊的來源引用，逐筆對回 FHIR 資源，查無來源標「未驗證」）、主動用藥安全警示、需要決定的事、跨院時間軸與資料涵蓋卡；民眾版另有固定的「我的用藥與照護」Card，以藥物帶來的幫助為主、搭配平實注意事項，且每項必須對應原始 Medication FHIR 紀錄。醫療人員版／民眾版各自生成，結果快取 12 小時。
 - **AI 協助**：
   - **臨床 AI Agent 對話**：依問題自主決定是否以 tool calling 查詢 FHIR 資源（病人／診斷／用藥／過敏／檢驗報告／生命徵象／處置／就診）或搜尋醫學文獻（Perplexity）；輸入 `/` 可快速套用提示模板，每次回答後提供可點選的追問建議。
-  - **臨床洞察**：自訂提示詞的並行分析工作台——每個標籤一個提示詞，載入病人後可自動生成、結果可手動編輯（主動用藥安全警示已移至**醫療摘要**內嵌呈現；民眾受眾為白話的**健康提醒**版本）。
+  - **自訂摘要模組**：嵌入**醫療摘要**的提示詞工作台；每個模組可排序、隱藏、手動執行或設定自動生成，也可從提示範本庫加入。主動安全警示由固定摘要流程獨立生成，不屬於自訂模組。
   - **語音口述**：Whisper 轉錄。
 - **AI 資料範圍**：從醫療摘要的側邊 panel 調整要納入摘要與自訂摘要的 FHIR 資料（門診／檢驗／用藥…），並預覽 AI 主要收到的內容；臨床對話改由 Agent 按需查詢。
-- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、50+ 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製。
+- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、57 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製。
 - **匯出（IPS）**：組出 International Patient Summary FHIR 文件，附可直接複製的 Markdown 預覽與 AI 問題清單推論（逐項確認後才納入）。
 - **提示範本庫**：社群共享的提示範本。
 - **雙受眾**：首次使用可選擇醫療人員或民眾身份；藥名、檢驗名稱、臨床代碼與 AI 輸出會配合調整，並可隨時切換。
@@ -34,10 +36,10 @@
 
 ## 隱私與安全
 
-- **病人 FHIR 原始資料儲存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。使用 AI 時，產生內容所需的選取資料會傳送至所選的雲端 AI 服務；內建模型可能經由 MediPrisma Firebase Functions 代理。
-- **API 金鑰**：預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。金鑰一律留在瀏覽器，不上雲端。
+- **本地匯入的完整 FHIR Bundle 儲存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。使用 AI 時，產生內容所需的選取資料會傳送至所選的雲端 AI 服務；內建模型可能經由 MediPrisma Firebase Functions 代理。
+- **API 金鑰**：預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。自備金鑰由瀏覽器直接送往對應 provider，不會送給 MediPrisma 的 owner-funded proxy。
 - **對話紀錄**：登入後，一般對話會儲存於 Firestore 並跨裝置同步；「無痕對話」不會儲存，訪客對話不會同步。
-- **回饋**：刻意不收集病人識別資訊。
+- **回饋**：表單不自動附加 patientId，並提醒不要在自由文字輸入病人識別資訊；FHIR server URL 仍可能透露機構。
 - 詳見 [SECURITY.md](./docs/SECURITY.md)、[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)。
 
 ## 線上展示
@@ -108,7 +110,7 @@ npm run test:coverage
 
 > 注意：`next.config.ts` 的 `headers()`（CSP `frame-ancestors` 等）只在 Node 託管（`next start` / Vercel）生效；GitHub Pages 為靜態 CDN，這些 response header 不會送出。
 
-環境變數（皆為 `NEXT_PUBLIC_`，建置時注入）：
+環境變數以 [`.env.example`](./.env.example) 為準。`NEXT_PUBLIC_` 變數會在建置時進入瀏覽器 bundle，不可放入密鑰；`RESEND_API_KEY` 等伺服器端變數只適用於 `next dev`／Node 託管，不會被 GitHub Pages 靜態站使用。
 
 ```
 # AI / 語音 / 回饋 代理（選用）
@@ -119,6 +121,7 @@ NEXT_PUBLIC_PERPLEXITY_PROXY_URL=...
 NEXT_PUBLIC_WHISPER_URL=...
 NEXT_PUBLIC_FEEDBACK_URL=...
 NEXT_PUBLIC_PROXY_KEY=...
+NEXT_PUBLIC_STREAM_IDLE_TIMEOUT_MS=60000
 
 # Firebase（選用：登入、對話歷史、提示範本庫、免費額度）
 NEXT_PUBLIC_FIREBASE_API_KEY=...
@@ -128,9 +131,22 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 NEXT_PUBLIC_FIREBASE_APP_ID=...
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
+NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY=...
+NEXT_PUBLIC_APPCHECK_DEBUG=...
+NEXT_PUBLIC_FIREBASE_EMULATOR=...
 
-# SMART（選用；公開 client id，預設 my_web_app）
+# SMART（選用；client id 是公開識別碼，預設 my_web_app）
 NEXT_PUBLIC_SMART_CLIENT_ID=...
+NEXT_PUBLIC_SMART_ALLOWED_ISS=...
+
+# 靜態部署
+GITHUB_PAGES=...
+NEXT_PUBLIC_BASE_PATH=/medical-note-smart-on-fhir
+DEPLOY_BASE_PATH=...
+
+# Node 託管的內建 feedback route（伺服器端，靜態站不使用）
+RESEND_API_KEY=...
+FEEDBACK_TO_EMAIL=...
 ```
 
 ## 架構
@@ -151,6 +167,7 @@ Clean Architecture 分層：
 
 ## 文件
 
+- [docs/README.md](./docs/README.md) — 文件入口、維護規則與歷史文件索引
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — 系統架構
 - [docs/AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md) — AI Agent 實作
 - [docs/MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md) — 對話功能
@@ -176,6 +193,8 @@ Clean Architecture 分層：
 
 A clinical-data integration and reading tool built on **Next.js 16** and **SMART on FHIR**: it brings cross-facility visits, medications, test trends, and clinical documents together, with source-linked AI summaries, safety reminders, and report explanations to help users find the key points.
 
+Documentation baseline: v0.40.0 (2026-07-14). Runtime registries, composition roots, and tests are authoritative.
+
 > ⚠️ For research/education only — not a medical device. Output is for reference; clinical decisions remain the clinician's.
 
 ## What it does
@@ -188,7 +207,7 @@ A clinical-data integration and reading tool built on **Next.js 16** and **SMART
   - **Custom summary modules**: reusable prompt templates embedded in **Medical Summary**; users can add, order, preview, manually run, or auto-generate selected modules without switching tabs.
   - **Voice dictation**: Whisper transcription.
 - **AI data scope**: a reusable drawer inside Medical Summary for selecting and previewing the main FHIR context supplied to standard and custom summaries; agent chat queries FHIR on demand.
-- **Medical Calculator**: MDCalc-style clinical scores/formulas (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65… — 50+ across 10 categories) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy.
+- **Medical Calculator**: 57 MDCalc-style clinical scores/formulas across 10 categories (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65…) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy.
 - **Export (IPS)**: builds an International Patient Summary FHIR document, with a copy-ready Markdown preview and AI problem-list inference (each suggestion confirmed before inclusion).
 - **Prompt Gallery**: community-shared prompt templates.
 - **Two audiences**: choose healthcare-professional or patient/citizen; medication names, test labels, clinical codes, and AI output adapt, and the audience can be switched at any time.
@@ -202,10 +221,10 @@ A clinical-data integration and reading tool built on **Next.js 16** and **SMART
 
 ## Privacy & security
 
-- **Source FHIR data is stored locally**: AES-GCM-encrypted in IndexedDB, kept at most **12 hours**, purged on next load when expired and on logout; users can "clear local data" anytime. When AI is used, the selected data needed to generate the content is sent to the chosen cloud AI service; built-in models may route through the MediPrisma Firebase Functions proxy.
-- **API keys**: by default kept only for the current browser session (cleared when you close the window); a "remember on this device" toggle in Settings makes them persist. Keys never leave the browser.
+- **A locally imported full FHIR Bundle stays on the device**: it is AES-GCM-encrypted in IndexedDB, kept at most **12 hours**, purged on next load when expired and on logout; users can "clear local data" anytime. When AI is used, the selected data needed to generate the content is sent to the chosen cloud AI service; built-in models may route through the MediPrisma Firebase Functions proxy.
+- **API keys**: by default kept only for the current browser session (cleared when you close the window); a "remember on this device" toggle in Settings makes them persist. A user-supplied key is sent directly from the browser to its provider, not to MediPrisma's owner-funded proxy.
 - **Conversation history**: after sign-in, regular conversations are stored in Firestore and synced across devices; temporary conversations are not saved, and guest conversations are not synced.
-- **Feedback** deliberately collects no patient identifiers.
+- **Feedback** does not automatically attach a patient ID and warns users not to enter identifiers in free text; the FHIR server URL may still reveal the institution.
 - See [SECURITY.md](./docs/SECURITY.md) and [PRIVACY_POLICY.md](./PRIVACY_POLICY.md).
 
 ## Live demo
@@ -276,7 +295,7 @@ Register the app in your FHIR sandbox/server (**public client + PKCE**):
 
 > Note: `next.config.ts`'s `headers()` (CSP `frame-ancestors`, etc.) only takes effect on a Node host (`next start` / Vercel); GitHub Pages is a static CDN and won't send those response headers.
 
-Env vars are all `NEXT_PUBLIC_` (injected at build) — see the Chinese section above for the full list (AI/voice/feedback proxies, Firebase, optional SMART).
+See [`.env.example`](./.env.example) and the Chinese section above for the full list. Values prefixed with `NEXT_PUBLIC_` are injected into the browser bundle and must not contain secrets; server-only feedback variables apply only to `next dev` or a Node host.
 
 ## Architecture
 
@@ -294,7 +313,7 @@ Pluggable via registries:
 
 ## Docs
 
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md), [docs/AI_AGENT_IMPLEMENTATION.md](./docs/AI_AGENT_IMPLEMENTATION.md), [docs/MEDICAL_CHAT.md](./docs/MEDICAL_CHAT.md), [docs/PROMPT_GALLERY.md](./docs/PROMPT_GALLERY.md), [docs/FEEDBACK_SETUP.md](./docs/FEEDBACK_SETUP.md), [docs/FEATURES.md](./docs/FEATURES.md), [docs/SECURITY.md](./docs/SECURITY.md), [PRIVACY_POLICY.md](./PRIVACY_POLICY.md)
+- [Documentation index](./docs/README.md), [architecture](./docs/ARCHITECTURE.md), [AI agent](./docs/AI_AGENT_IMPLEMENTATION.md), [medical chat](./docs/MEDICAL_CHAT.md), [prompt gallery](./docs/PROMPT_GALLERY.md), [feedback](./docs/FEEDBACK_SETUP.md), [feature modules](./docs/FEATURES.md), [security](./docs/SECURITY.md), [privacy policy](./PRIVACY_POLICY.md)
 - Backend: [firebase-smart-on-fhir](https://github.com/voho0000/firebase-smart-on-fhir)
 
 ## Author & contact

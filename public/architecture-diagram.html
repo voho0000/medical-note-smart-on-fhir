@@ -318,45 +318,45 @@
 
   <!-- Header -->
   <div class="header">
-    <div class="brand">SMART on FHIR Clinical Assistant</div>
+    <div class="brand">MediPrisma v0.40.0 · Updated 2026-07-14</div>
     <h1 data-lang="zh">醫析 MediPrisma 系統架構</h1>
     <h1 data-lang="en">MediPrisma System Architecture</h1>
-    <div class="subtitle" data-lang="zh">整合 AI Agent、語音轉錄與雲端同步的新世代臨床文件助理</div>
-    <div class="subtitle" data-lang="en">Next-generation clinical documentation assistant with AI Agent, voice transcription &amp; cloud sync</div>
+    <div class="subtitle" data-lang="zh">SMART／本地 FHIR 整合、可回查 AI 摘要、Agent 與臨床工具</div>
+    <div class="subtitle" data-lang="en">SMART and local FHIR, source-linked AI summaries, agents, and clinical tools</div>
   </div>
 
   <div class="flow">
 
-    <!-- STEP 1: User Input -->
-    <div class="section-label blue" data-lang="zh">STEP 1 &mdash; 使用者輸入</div>
-    <div class="section-label blue" data-lang="en">STEP 1 &mdash; USER INPUT</div>
+    <!-- STEP 1: Inputs -->
+    <div class="section-label blue" data-lang="zh">STEP 1 &mdash; 資料與使用者輸入</div>
+    <div class="section-label blue" data-lang="en">STEP 1 &mdash; DATA &amp; USER INPUT</div>
     <div class="row-3">
       <div class="card user">
         <span class="step-badge">1a</span>
-        <div class="card-icon">🎤</div>
-        <h3 data-lang="zh">語音輸入</h3>
-        <h3 data-lang="en">Voice Input</h3>
-        <p data-lang="zh">透過 Whisper 模型將語音即時轉錄為文字，支援中英文臨床口述</p>
-        <p data-lang="en">Real-time speech-to-text via Whisper model, supporting bilingual clinical dictation</p>
-        <span class="tag">Voice-to-Text</span>
+        <div class="card-icon">🏥</div>
+        <h3 data-lang="zh">SMART EHR Launch</h3>
+        <h3 data-lang="en">SMART EHR Launch</h3>
+        <p data-lang="zh">由 EHR 建立病人 context，使用 public client、OAuth 2.0 與 S256 PKCE</p>
+        <p data-lang="en">Patient context from an EHR via a public client, OAuth 2.0, and S256 PKCE</p>
+        <span class="tag">SMART App Launch 2.x</span>
       </div>
       <div class="card user">
         <span class="step-badge">1b</span>
-        <div class="card-icon">📝</div>
-        <h3 data-lang="zh">文字輸入 / 範本</h3>
-        <h3 data-lang="en">Text Input / Templates</h3>
-        <p data-lang="zh">直接輸入問題或從提示詞範本庫選用社群共享的常用臨床範本</p>
-        <p data-lang="en">Type queries directly or select from the community-shared prompt template gallery</p>
-        <span class="tag">Prompt Gallery</span>
+        <div class="card-icon">📦</div>
+        <h3 data-lang="zh">本地 Bundle / Demo</h3>
+        <h3 data-lang="en">Local Bundle / Demo</h3>
+        <p data-lang="zh">匯入 FHIR JSON 或載入去識別 demo；完整資料以 session key 加密留在裝置</p>
+        <p data-lang="en">Import FHIR JSON or de-identified demo data; the full chart stays encrypted on-device</p>
+        <span class="tag">AES-GCM · IndexedDB</span>
       </div>
       <div class="card user">
         <span class="step-badge">1c</span>
-        <div class="card-icon">🔄</div>
-        <h3 data-lang="zh">歷史對話</h3>
-        <h3 data-lang="en">Chat History</h3>
-        <p data-lang="zh">從 Firestore 雲端載入過往對話紀錄，依病人分類，跨裝置同步</p>
-        <p data-lang="en">Load past conversations from Firestore cloud, organized by patient, synced across devices</p>
-        <span class="tag">Cloud Sync</span>
+        <div class="card-icon">💬</div>
+        <h3 data-lang="zh">問題、範本與媒體</h3>
+        <h3 data-lang="en">Questions, Templates &amp; Media</h3>
+        <p data-lang="zh">文字、slash templates、Prompt Gallery、圖片與 Whisper 語音轉錄</p>
+        <p data-lang="en">Text, slash templates, Prompt Gallery, images, and Whisper transcription</p>
+        <span class="tag">User-directed AI</span>
       </div>
     </div>
 
@@ -367,27 +367,27 @@
       </svg>
     </div>
 
-    <!-- STEP 2: SMART on FHIR Auth -->
-    <div class="section-label purple" data-lang="zh">STEP 2 &mdash; SMART on FHIR 安全認證</div>
-    <div class="section-label purple" data-lang="en">STEP 2 &mdash; SMART on FHIR AUTHENTICATION</div>
+    <!-- STEP 2: Client data plane -->
+    <div class="section-label purple" data-lang="zh">STEP 2 &mdash; Client-first 資料層</div>
+    <div class="section-label purple" data-lang="en">STEP 2 &mdash; CLIENT-FIRST DATA PLANE</div>
     <div class="row-1">
       <div class="card auth">
         <span class="step-badge">2</span>
         <div class="card-icon">🔐</div>
-        <h3>SMART on FHIR OAuth 2.0 + PKCE</h3>
-        <p data-lang="zh">安全連接醫院電子病歷系統，取得授權後即時擷取病人完整臨床資料</p>
-        <p data-lang="en">Securely connect to hospital EHR systems and retrieve complete patient clinical data upon authorization</p>
+        <h3>Unified ClinicalDataCollection</h3>
+        <p data-lang="zh">SMART 與本地 Bundle 經同一領域模型供畫面、AI tools、計算機與 IPS 使用</p>
+        <p data-lang="en">SMART and local Bundles converge on one domain model shared by UI, AI tools, calculators, and IPS</p>
         <ul class="feature-list">
-          <li data-lang="zh">OAuth 2.0 授權碼流程 + PKCE 加密驗證</li>
-          <li data-lang="en">OAuth 2.0 authorization code flow + PKCE verification</li>
-          <li data-lang="zh">自動取得病人 Condition / Medication / Observation / Encounter 等 FHIR 資源</li>
-          <li data-lang="en">Auto-retrieve patient Condition / Medication / Observation / Encounter FHIR resources</li>
-          <li data-lang="zh">符合 HL7 FHIR R4 國際互通標準</li>
-          <li data-lang="en">Compliant with HL7 FHIR R4 international interoperability standard</li>
+          <li data-lang="zh">FHIR 搜尋自動讀取分頁，超過安全上限明確失敗</li>
+          <li data-lang="en">FHIR searches follow pagination and fail explicitly at the safety cap</li>
+          <li data-lang="zh">正規化 references，展開 TW-PAS Claim 與 Roche DIP 資料</li>
+          <li data-lang="en">Normalize references and expand TW-PAS Claim and Roche DIP data</li>
+          <li data-lang="zh">React Query 快取讓畫面與 Agent 讀到同一份資料</li>
+          <li data-lang="en">React Query keeps the UI and agent on the same clinical snapshot</li>
         </ul>
-        <span class="tag">HL7 FHIR R4</span>
-        <span class="tag" style="margin-left:6px;">OAuth 2.0</span>
-        <span class="tag" style="margin-left:6px;">PKCE</span>
+        <span class="tag">FHIR R4</span>
+        <span class="tag" style="margin-left:6px;">React Query</span>
+        <span class="tag" style="margin-left:6px;">12h Session</span>
       </div>
     </div>
 
@@ -404,37 +404,35 @@
     <div class="row-2">
       <div class="card ai">
         <span class="step-badge">3a</span>
-        <div class="card-icon">💬</div>
-        <h3 data-lang="zh">AI Agent 對話</h3>
-        <h3 data-lang="en">AI Agent Chat</h3>
-        <p data-lang="zh">單一臨床對話路徑，依問題自主決定是否查詢工具</p>
-        <p data-lang="en">One clinical-chat path that decides when query tools are needed</p>
+        <div class="card-icon">✨</div>
+        <h3 data-lang="zh">結構化醫療摘要</h3>
+        <h3 data-lang="en">Structured Medical Summary</h3>
+        <p data-lang="zh">固定 schema 的問題、時間軸、安全、決策、趨勢與用藥卡</p>
+        <p data-lang="en">Schema-validated problem, timeline, safety, decision, trend, and medication cards</p>
         <ul class="feature-list">
-          <li data-lang="zh">GPT-5 / Gemini 3 多模型支援</li>
-          <li data-lang="en">Multi-model support: GPT-5 / Gemini 3</li>
-          <li data-lang="zh">額外背景直接輸入對話框</li>
-          <li data-lang="en">Extra context entered directly in chat</li>
-          <li data-lang="zh">即時串流回應</li>
-          <li data-lang="en">Real-time streaming responses</li>
+          <li data-lang="zh">App 建立 source catalog，引用可跳回 FHIR 資源</li>
+          <li data-lang="en">App-built source catalog with navigation back to FHIR records</li>
+          <li data-lang="zh">Summary / Safety 獨立生成，由單一 orchestrator 協調</li>
+          <li data-lang="en">Independent Summary and Safety slots under one orchestrator</li>
+          <li data-lang="zh">卡片導覽、排序與 12 小時加密快取</li>
+          <li data-lang="en">Card navigation, layout controls, and a 12-hour encrypted cache</li>
         </ul>
-        <span class="tag">Agent Streaming</span>
+        <span class="tag">Zod · Source-linked</span>
       </div>
       <div class="card ai">
         <span class="step-badge">3b</span>
         <div class="card-icon">🤖</div>
-        <h3 data-lang="zh">臨床與文獻查詢工具</h3>
-        <h3 data-lang="en">Clinical & Literature Tools</h3>
-        <p data-lang="zh">AI 透過 Tool Calling 即時查詢 FHIR 資料與醫學文獻</p>
-        <p data-lang="en">FHIR data and medical literature are queried on demand via Tool Calling</p>
+        <h3 data-lang="zh">Medical Chat Agent</h3>
+        <h3 data-lang="en">Medical Chat Agent</h3>
+        <p data-lang="zh">單一路徑 Agent 依問題決定直接回答、查 FHIR 或搜尋文獻</p>
+        <p data-lang="en">One agent path chooses direct response, FHIR tools, or literature search</p>
         <ul class="feature-list">
-          <li data-lang="zh">客戶端 Tool Calling 架構</li>
-          <li data-lang="en">Client-side Tool Calling architecture</li>
-          <li data-lang="zh">16 種 FHIR 資源查詢工具</li>
-          <li data-lang="en">16 FHIR query tools</li>
-          <li data-lang="zh">Perplexity 醫學文獻即時搜尋</li>
-          <li data-lang="en">Perplexity medical literature real-time search</li>
-          <li data-lang="zh">AI 自動分析需求並調用對應工具</li>
-          <li data-lang="en">AI automatically analyzes needs and invokes corresponding tools</li>
+          <li data-lang="zh">16 個 FHIR tools + 1 個 Perplexity 文獻 tool</li>
+          <li data-lang="en">16 FHIR tools plus one Perplexity literature tool</li>
+          <li data-lang="zh">共用 headless loop、最多 10 steps、follow-up / synthesis</li>
+          <li data-lang="en">Shared headless loop, up to 10 steps, follow-up and synthesis</li>
+          <li data-lang="zh">PII 最小化、即時串流、停止與 idle timeout</li>
+          <li data-lang="en">PII minimization, streaming, cancellation, and idle timeout</li>
         </ul>
         <span class="tag">AI Agent</span>
         <span class="tag" style="margin-left:6px;">Tool Calling</span>
@@ -455,29 +453,29 @@
       <div class="card output">
         <span class="step-badge">4a</span>
         <div class="card-icon">💬</div>
-        <h3 data-lang="zh">AI 對話回應</h3>
-        <h3 data-lang="en">AI Chat Response</h3>
-        <p data-lang="zh">根據臨床資料與使用者問題，即時串流生成回應，支援 Markdown 格式顯示</p>
-        <p data-lang="en">Stream real-time responses based on clinical data and user queries, rendered in Markdown</p>
-        <span class="tag">Streaming Response</span>
+        <h3 data-lang="zh">臨床資料閱讀</h3>
+        <h3 data-lang="en">Clinical Data Reading</h3>
+        <p data-lang="zh">病人、就診、報告／累積趨勢、用藥與 Composition 文件</p>
+        <p data-lang="en">Patient, visits, reports and cumulative trends, medications, and Composition documents</p>
+        <span class="tag">Five Left-panel Tabs</span>
       </div>
       <div class="card output">
         <span class="step-badge">4b</span>
         <div class="card-icon">💡</div>
-        <h3 data-lang="zh">臨床洞察面板</h3>
-        <h3 data-lang="en">Clinical Insights Panel</h3>
-        <p data-lang="zh">可自訂的洞察面板，內建 Safety Flag、What's Changed 等範本，使用者可自行新增或修改</p>
-        <p data-lang="en">Customizable insight panels with built-in templates like Safety Flag &amp; What's Changed; users can add or modify panels</p>
-        <span class="tag">Customizable Insights</span>
+        <h3 data-lang="zh">臨床工具與可攜輸出</h3>
+        <h3 data-lang="en">Clinical Tools &amp; Portable Output</h3>
+        <p data-lang="zh">57 個計算機、報告 AI 解讀、Prompt Gallery 與人工確認的 IPS 匯出</p>
+        <p data-lang="en">57 calculators, report interpretation, Prompt Gallery, and human-confirmed IPS export</p>
+        <span class="tag">Calculator · IPS</span>
       </div>
       <div class="card output">
         <span class="step-badge">4c</span>
         <div class="card-icon">💾</div>
-        <h3 data-lang="zh">雲端儲存 & 同步</h3>
-        <h3 data-lang="en">Cloud Storage &amp; Sync</h3>
-        <p data-lang="zh">對話自動儲存至 Firebase，依病人分類管理，支援跨裝置存取歷史紀錄</p>
-        <p data-lang="en">Conversations auto-saved to Firebase, organized by patient, accessible across devices</p>
-        <span class="tag">Firestore</span>
+        <h3 data-lang="zh">選用雲端服務</h3>
+        <h3 data-lang="en">Optional Cloud Services</h3>
+        <p data-lang="zh">Firebase Auth／Firestore 同步與 ID token／App Check 保護的 AI、語音、回饋代理</p>
+        <p data-lang="en">Firebase Auth and Firestore sync plus ID-token and App-Check protected AI, voice, and feedback proxies</p>
+        <span class="tag">Firebase · BYOK</span>
       </div>
     </div>
 
@@ -494,8 +492,8 @@
         <span class="tech-tag">shadcn/ui</span>
         <span class="tech-tag">Zustand</span>
       </div>
-      <div class="credit" data-lang="zh">醫析 MediPrisma &copy; 2025 &mdash; SMART on FHIR 臨床文件助理 &mdash; Open Source</div>
-      <div class="credit" data-lang="en">MediPrisma &copy; 2025 &mdash; SMART on FHIR Clinical Documentation Assistant &mdash; Open Source</div>
+      <div class="credit" data-lang="zh">醫析 MediPrisma &copy; 2026 &mdash; SMART on FHIR 臨床智能助理 &mdash; Apache-2.0</div>
+      <div class="credit" data-lang="en">MediPrisma &copy; 2026 &mdash; SMART on FHIR Clinical Intelligence Assistant &mdash; Apache-2.0</div>
     </div>
 
   </div>

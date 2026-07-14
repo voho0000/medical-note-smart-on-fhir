@@ -1,203 +1,131 @@
 # 問題回報功能設定指南
 
-## 功能概述
+> 現行規格｜基準版本：v0.40.0｜最後核對：2026-07-14
 
-問題回報功能允許使用者直接從應用程式介面回報遇到的問題，系統會自動收集相關資訊並發送郵件到指定信箱。
+Feedback UI 位於 header overflow menu。前端會優先 POST 到 `NEXT_PUBLIC_FEEDBACK_URL`；未設定時 fallback 到同 origin `/api/feedback`。
 
-## UI 位置
+## 部署模式
 
-問題回報按鈕位於**右上角 header 的最左邊**，按鈕順序為：
-```
-[問題回報] [FHIR 資訊] [主題切換] [語言切換] [登入/登出]
-```
+| 部署 | Endpoint | 建議 |
+|---|---|---|
+| `next dev`／`next start`／Vercel Node | 內建 `/api/feedback` 可用 | 設定 Resend server env，或只做本機接收測試 |
+| GitHub Pages／其他 static export | 沒有 Next API route | 必須設定 `NEXT_PUBLIC_FEEDBACK_URL` 指向外部 HTTPS function |
+| Firebase Functions | 獨立後端 repo | 正式環境建議；加入 ID token、App Check、集中式 rate limit |
 
-## 功能特點
+若 static build 未設定外部 URL，前端會呼叫不存在的 `<basePath>/api/feedback` 而失敗。
 
-### 使用者填寫資訊
-- ✅ **回報者電子郵件**（必填）- 用於聯繫和追蹤
-- ✅ **問題類型**（必填）- 功能錯誤/UI問題/效能問題/功能建議/其他
-- ✅ **嚴重程度**（必填）- 低/中/高/緊急
-- ✅ **問題描述**（必填，至少 20 字元）
-- ✅ **重現步驟**（選填）
+## 前端 payload
 
-### 自動收集的系統資訊
-- 時間戳記
-- 瀏覽器版本
-- 螢幕解析度
-- 使用者語言設定
-- 當前頁面路徑
-- FHIR Server URL（如有連線）
-- 患者 ID（如有）
-
-## 郵件服務配置
-
-### 選項 1: 使用 Resend（推薦）
-
-1. **註冊 Resend 帳號**
-   - 前往 https://resend.com
-   - 註冊並驗證您的帳號
-
-2. **驗證域名**
-   - 在 Resend Dashboard 中新增並驗證您的域名
-   - 或使用 Resend 提供的測試域名（僅限開發環境）
-
-3. **取得 API Key**
-   - 在 Resend Dashboard 建立 API Key
-   - 複製 API Key
-
-4. **設定環境變數**
-   
-   在專案根目錄建立 `.env.local` 檔案：
-   ```bash
-   RESEND_API_KEY=re_your_api_key_here
-   # 回報信的收件地址（必填，否則只會收到回報但不寄信）
-   FEEDBACK_TO_EMAIL=you@example.com
-   ```
-
-5. **更新發件人地址**
-
-   編輯 `app/api/feedback/route.ts`，將 `from:` 發件人地址改為您驗證過的網域：
-   ```typescript
-   from: "MediPrisma <noreply@yourdomain.com>", // 改為您的域名
-   ```
-
-### 選項 2: 使用其他郵件服務
-
-如果您想使用其他郵件服務（如 SendGrid、Mailgun、Nodemailer + SMTP），請修改 `app/api/feedback/route.ts` 中的郵件發送邏輯。
-
-#### 使用 Nodemailer 範例：
-
-1. **安裝依賴**
-   ```bash
-   npm install nodemailer
-   npm install -D @types/nodemailer
-   ```
-
-2. **更新 API route**
-   ```typescript
-   import nodemailer from 'nodemailer'
-   
-   const transporter = nodemailer.createTransport({
-     host: process.env.SMTP_HOST,
-     port: parseInt(process.env.SMTP_PORT || '587'),
-     secure: false,
-     auth: {
-       user: process.env.SMTP_USER,
-       pass: process.env.SMTP_PASS,
-     },
-   })
-   
-   await transporter.sendMail({
-     from: process.env.SMTP_FROM,
-     to: process.env.FEEDBACK_TO_EMAIL,
-     replyTo: email,
-     subject: `[問題回報] ${getIssueTypeLabel(issueType)}`,
-     html: emailContent,
-     text: plainTextContent,
-   })
-   ```
-
-3. **設定環境變數**
-   ```bash
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=587
-   SMTP_USER=your-email@gmail.com
-   SMTP_PASS=your-app-password
-   SMTP_FROM=MediPrisma <your-email@gmail.com>
-   ```
-
-## 開發環境測試
-
-在沒有配置 `RESEND_API_KEY` 的情況下：
-- 系統會記錄回報內容到控制台
-- 前端會顯示成功訊息
-- 不會實際發送郵件
-
-這樣可以在開發環境中測試功能而不需要配置郵件服務。
-
-## 郵件內容範例
-
-系統會發送格式化的 HTML 郵件，包含：
-
-```
-主旨：[問題回報] 功能錯誤 (Bug) - 高 (High)
-
-內容：
-- 回報者 Email: user@example.com
-- 問題類型: 功能錯誤 (Bug)
-- 嚴重程度: 高 (High)
-- 問題描述: [使用者輸入的描述]
-- 重現步驟: [使用者輸入的步驟]
-- 系統資訊:
-  * 時間: 2026-01-22 23:20:30
-  * 瀏覽器: Chrome 120.0.0
-  * FHIR Server: https://...
-  * 患者 ID: 12345
-  * 當前頁面: /smart/callback
+```ts
+interface FeedbackRequest {
+  email: string
+  issueType: 'bug' | 'ui' | 'performance' | 'feature' | 'other'
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  description: string
+  steps?: string
+  systemInfo: {
+    timestamp: string
+    userAgent: string
+    screenResolution: string
+    language: string
+    currentPath: string
+    fhirServerUrl: string
+  }
+}
 ```
 
-## 多語系支援
+`patientId` 刻意不收集。FHIR server URL 仍可能透露機構，description／steps 也可能由使用者輸入 PHI；UI 會提示不要加入姓名或病歷號。
 
-問題回報功能支援繁體中文和英文：
-- 繁體中文：`src/shared/i18n/locales/zh-TW.ts`
-- 英文：`src/shared/i18n/locales/en.ts`
+## 內建 Next route
 
-## 隱私考量
+`app/api/feedback/route.ts` 提供：
 
-- ✅ 僅收集患者 ID，不收集患者姓名
-- ✅ 使用者需主動提供自己的電子郵件
-- ✅ 所有資料僅用於問題診斷
-- ✅ 建議使用者在截圖前移除敏感資訊
+- 必要欄位與 payload length 驗證。
+- issue type／severity allowlist。
+- HTML email escaping。
+- Production origin／same-host 檢查。
+- 每 instance、每 IP、每小時 5 次的記憶體 rate limit。
+- Generic client error；詳細錯誤只寫 server log。
+- `RESEND_API_KEY` 與 `FEEDBACK_TO_EMAIL` server-side config。
 
-## 檔案結構
+限制：沒有登入驗證，rate limit 不跨 serverless instances，也沒有 durable queue。正式環境應把相同 validation 放到外部 function 並加上 Firebase ID token／App Check。
 
+## 環境變數
+
+### 前端／build-time
+
+```bash
+NEXT_PUBLIC_FEEDBACK_URL=https://your-function.example/feedback
+NEXT_PUBLIC_PROXY_KEY=public-client-marker
 ```
-app/api/feedback/
-  └── route.ts                    # API endpoint
 
-src/shared/components/
-  ├── FeedbackButton.tsx          # 問題回報按鈕
-  ├── FeedbackDialog.tsx          # 問題回報對話框
-  └── index.ts                    # 元件匯出
+`NEXT_PUBLIC_PROXY_KEY` 會公開在 client bundle，不能當 secret 或唯一驗證。
 
-src/shared/i18n/locales/
-  ├── en.ts                       # 英文翻譯
-  └── zh-TW.ts                    # 繁體中文翻譯
+### 內建 Node route
 
-app/page.tsx                      # 整合到 header
+```bash
+RESEND_API_KEY=re_...
+FEEDBACK_TO_EMAIL=team@example.org
 ```
+
+這兩個值不可使用 `NEXT_PUBLIC_` 前綴。未設定時，內建 route 仍回 `success: true, emailSent: false`，但不寄信；只適合 local development。
+
+## Resend 設定
+
+1. 建立 Resend API key 並放入 server secret store。
+2. 設定 `FEEDBACK_TO_EMAIL`。
+3. Production 應驗證自己的寄件 domain，並把 route 的 `from` 從 `onboarding@resend.dev` 改成已驗證地址。
+4. 確認 reply-to 使用回報者 Email，收件人不是寫死在 source。
+5. 依組織政策設定郵件保留與刪除。
+
+## 本機測試
+
+```bash
+npm run dev
+```
+
+在 `http://localhost:3001` 開啟回饋表單：
+
+- 沒有 Resend env：應顯示送出成功，server log 只記未設定與 issue metadata，不印 description。
+- 有 Resend env：應回 `emailSent: true` 並收到 HTML＋plain text 郵件。
+- 必填、Email 格式、description 至少 20 字元由前端驗證。
+- 大於 server 上限、非法 origin 與第 6 次請求要分別回 413、403、429。
+
+也可針對 route 寫 request test，至少覆蓋 HTML injection、缺少 `systemInfo`、Resend failure 與錯誤資訊不外洩。
+
+## 外部 Function 契約
+
+外部 endpoint 應接受同一 JSON schema，並：
+
+- 只允許已知 production origins。
+- 驗 Firebase ID token 與 App Check。
+- 使用集中式 quota／rate limit。
+- 再次做 allowlist、size validation 與 HTML escape。
+- 不記錄 request body、token 或 patient identifiers。
+- 回傳穩定的 2xx／4xx／5xx 與 generic message。
+
+前端若設定 `NEXT_PUBLIC_PROXY_KEY` 會附上 `X-Client-Key`，但外部 Function 不得只靠它授權。
 
 ## 疑難排解
 
-### 郵件發送失敗
+### GitHub Pages 404
 
-1. **檢查 API Key**
-   - 確認 `.env.local` 中的 `RESEND_API_KEY` 正確
-   - 確認 API Key 有發送郵件的權限
+確認 Actions build 有注入 `NEXT_PUBLIC_FEEDBACK_URL`，且 URL 不含錯誤 base path。Static export 沒有 `/api/feedback`。
 
-2. **檢查域名驗證**
-   - 確認 Resend 中的域名已完成驗證
-   - 確認發件人地址使用已驗證的域名
+### UI 成功但沒收到信
 
-3. **檢查控制台錯誤**
-   - 開啟瀏覽器開發者工具
-   - 查看 Network 標籤中的 `/api/feedback` 請求
-   - 查看伺服器控制台的錯誤訊息
+內建 route 在缺少 server env 時會回 `emailSent: false`；目前 UI 只以 HTTP success 顯示成功。檢查 server response／log、Resend domain、收件信箱與 spam。
 
-### 表單驗證問題
+### 403 Forbidden
 
-- 電子郵件格式錯誤：確認輸入有效的 email 格式
-- 問題描述太短：至少需要 20 個字元
-- 未選擇問題類型：必須選擇一個類型
+更新外部 Function 的 CORS／origin allowlist；若使用內建 route，確認 `Origin` 與 `Host` 相符或在 `ALLOWED_ORIGINS`。
 
-## 未來改進建議
+### 429 Too Many Requests
 
-- [ ] 加入截圖上傳功能
-- [ ] 整合 Firebase Storage 儲存附件
-- [ ] 加入問題追蹤編號
-- [ ] 建立管理後台查看回報
-- [ ] 加入自動回覆郵件功能
+等待一小時或在 local dev 重啟 instance。正式分散式 quota 的重設方式由後端實作決定。
 
-## 技術支援
+## 相關文件
 
-如有任何問題，請開 [GitHub Issue](https://github.com/voho0000/medical-note-smart-on-fhir/issues)。
+- [Feature implementation](../features/feedback/README.md)
+- [Security](SECURITY.md)
+- [Privacy policy](../PRIVACY_POLICY.md)
