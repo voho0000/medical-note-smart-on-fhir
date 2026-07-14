@@ -12,6 +12,9 @@ import { CompactLabResultRow } from '@/features/clinical-summary/components/Comp
 
 interface ObservationBlockProps {
   observation: Observation
+  /** Visually marks this observation as a child of a report header while
+   * keeping the value/reference columns aligned with the rest of the table. */
+  nested?: boolean
 }
 
 function ObsRow({
@@ -24,6 +27,7 @@ function ObsRow({
   onTrendClick,
   isLongText,
   refRangeAbnormal,
+  nested,
 }: {
   name: string
   value: string
@@ -34,6 +38,7 @@ function ObsRow({
   onTrendClick?: () => void
   isLongText?: boolean
   refRangeAbnormal?: boolean
+  nested?: boolean
 }) {
   // Interpretation wins when present; the structured-range flag is only a
   // fallback for when the source shipped no interpretation at all.
@@ -48,6 +53,7 @@ function ObsRow({
       rangeUnassessed={rangeUnassessed}
       valueMaxWidthClassName={isLongText ? "max-w-[12rem]" : "max-w-[9rem]"}
       className="rounded-none border-0 bg-transparent px-2.5 py-1.5 hover:bg-muted/60"
+      titleColumnClassName={nested ? "pl-4" : undefined}
       titleActions={onTrendClick ? (
           <button
             type="button"
@@ -65,7 +71,7 @@ function ObsRow({
   )
 }
 
-export function ObservationBlock({ observation }: ObservationBlockProps) {
+export function ObservationBlock({ observation, nested = false }: ObservationBlockProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   // Display label is audience-aware: medical → canonical short code
   // (Na / K / BUN …); patient → long-form name in the active UI language
@@ -108,7 +114,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
             return (
               <div
                 key={idx}
-                className="mt-2 border-t pt-2 px-2 text-sm font-semibold text-foreground"
+                className={`mt-2 border-t pt-2 pr-2 text-sm font-semibold text-foreground ${nested ? 'pl-6' : 'pl-2'}`}
               >
                 {heading}
               </div>
@@ -118,7 +124,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
           const cValue = component.valueQuantity
             ? getValueWithUnit(component.valueQuantity)
             : component.valueString || getCodeableConceptText(component.valueCodeableConcept) || '—'
-          return <ObsRow key={idx} name={cName || '—'} value={cValue} originalValue={cValue} interp={null} refText="" />
+          return <ObsRow key={idx} name={cName || '—'} value={cValue} originalValue={cValue} interp={null} refText="" nested={nested} />
         })}
       </div>
     )
@@ -127,7 +133,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
   // Report Summary block: show as plain text, no trend
   if (isReportSummary) {
     return (
-      <div className="text-xs text-muted-foreground px-2 py-1 whitespace-pre-wrap leading-relaxed">
+      <div className={`text-xs text-muted-foreground py-1 whitespace-pre-wrap leading-relaxed ${nested ? 'pl-6 pr-2' : 'px-2'}`}>
         {observation.valueString}
         {Array.isArray(observation.component) && observation.component.map((c, i) => (
           <div key={i} className="mt-1">
@@ -153,6 +159,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
           isLongText={isLongText}
           refRangeAbnormal={checkReferenceRangeAbnormal(observation)}
           rangeUnassessed={isReferenceRangeAssessmentUnavailable(observation)}
+          nested={nested}
         />
 
         {/* Component sub-rows */}
@@ -179,6 +186,7 @@ export function ObservationBlock({ observation }: ObservationBlockProps) {
                   refText={cRef}
                   refRangeAbnormal={checkReferenceRangeAbnormal(component)}
                   rangeUnassessed={isReferenceRangeAssessmentUnavailable(component)}
+                  nested={nested}
                 />
               )
             })}

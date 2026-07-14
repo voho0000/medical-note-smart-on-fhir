@@ -1012,6 +1012,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 <ObservationBlock
                   key={obs.id ? `obs-${obs.id}` : `obs-${i}`}
                   observation={obs}
+                  nested
                 />
               ))}
             </div>
