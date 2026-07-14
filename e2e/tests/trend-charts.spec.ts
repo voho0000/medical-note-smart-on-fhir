@@ -24,7 +24,12 @@ test.describe('trend charts (v0.15.18–v0.16.0 features)', () => {
     // The 檢驗 tab defaults to 依採檢日 day-cards (one card per day×institution);
     // the per-analyte 查看趨勢 trend lives in the 單項列表 flat view.
     await page.getByRole('button', { name: '單項列表' }).click()
-    await page.getByRole('button', { name: '查看趨勢', exact: true }).first().click()
+    // Select the fixture analyte that owns the asserted range/value. Using the
+    // first trend button is order-dependent and can open Sodium (no range).
+    await page.getByRole('searchbox', { name: '搜尋檢驗名稱、結果、機構、日期...' }).fill('Albumin')
+    const albuminRow = page.locator('[data-row-id]').filter({ hasText: '4.3 g/dL' })
+    await expect(albuminRow).toBeVisible()
+    await albuminRow.getByRole('button', { name: '查看趨勢', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await dialog.getByRole('tab', { name: '趨勢圖表' }).click()
