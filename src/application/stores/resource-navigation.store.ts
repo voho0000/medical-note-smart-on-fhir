@@ -24,6 +24,7 @@ export function leftTabForResourceType(resourceType: string): string | null {
     case 'Encounter':
       return 'visits'
     case 'DiagnosticReport':
+    case 'ImagingStudy':
     case 'Observation':
       return 'reports'
     case 'MedicationRequest':
@@ -45,7 +46,10 @@ export function leftTabForResourceType(resourceType: string): string | null {
   }
 }
 
-export const NAV_CLAIM_TIMEOUT_MS = 800
+// Raw reports are mounted through a virtualized list. Allow that pipeline to
+// finish before telling the user pinpoint navigation failed; 800ms was short
+// enough to race normal first-open rendering.
+export const NAV_CLAIM_TIMEOUT_MS = 2500
 
 interface ResourceNavigationStore {
   pending: ResourceNavTarget | null

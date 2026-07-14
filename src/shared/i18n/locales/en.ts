@@ -183,7 +183,7 @@ export const en = {
     timelineDropped: '{count} AI-picked event(s) hidden — they could not be matched to the source data.',
     timelineShowEarlier: '{count} earlier event(s)',
     timelineShowLess: 'Hide earlier events',
-    navFallback: 'Switched to the matching tab — look for: {label}',
+    navFallback: 'Could not pinpoint this source. Please find it manually in the left data tabs by date or name: {label}',
     coverageRange: 'Coverage {start} – {end}',
     coverageOrgs: '{count} facilities',
     coverageEncounters: '{count} visits',

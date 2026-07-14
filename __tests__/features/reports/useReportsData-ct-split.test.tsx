@@ -53,6 +53,27 @@ function run(drs: any[]) {
 }
 
 describe('useReportsData — CT multi-region split', () => {
+  it('keeps an index-only imaging DiagnosticReport navigable without inventing findings', () => {
+    const rows = run([
+      dr({
+        id: 'dr-index-only',
+        codeText: '超音波導引(為組織切片，抽吸、注射等)',
+        conclusion: '',
+        _observations: [],
+      }),
+    ])
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].id).toBe('dr-index-only')
+    expect(rows[0].diagnosticReportIds).toEqual(['dr-index-only'])
+    expect(rows[0].obs).toEqual([
+      expect.objectContaining({
+        code: { text: 'Report Metadata' },
+        valueString: '來源未提供報告內文或結果',
+      }),
+    ])
+  })
+
   it('A. single CT DR collapses to one row (no group)', () => {
     const rows = run([dr({ id: 'd1', conclusion: HEAD_NECK })])
     expect(rows).toHaveLength(1)
@@ -94,6 +115,7 @@ describe('useReportsData — CT multi-region split', () => {
     ])
     expect(rows).toHaveLength(1)
     expect(rows[0].groupedRows).toBeUndefined()
+    expect(rows[0].diagnosticReportIds).toEqual(['d1', 'd2', 'd3'])
   })
 
   it('C-ext: Abdomen CT with run-on words vs spaced version (bridge dup, 2/8/2025) MERGES', () => {

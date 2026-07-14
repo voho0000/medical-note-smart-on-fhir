@@ -11,7 +11,7 @@
 //   with the report list instead of staying pinned above an internal scroller.
 // - fullscreen mode keeps the old internal scroll because the overlay itself is
 //   fixed-height.
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { TabsContent } from "@/components/ui/tabs"
 import type { Row } from '../types'
@@ -45,6 +45,8 @@ interface ReportsTabContentProps {
   scrollToId?: string | null
   /** Bump to re-trigger the scroll for the same id. */
   scrollNonce?: number
+  /** Called only after the target row is actually mounted and highlighted. */
+  onScrollResolved?: (nonce?: number) => void
 }
 
 // Stable fallback so referential equality holds when no expand list is
@@ -58,21 +60,29 @@ const EMPTY_OPEN_IDS: string[] = []
 const ESTIMATED_ROW_HEIGHT = 56
 
 function findExternalScrollElement(el: HTMLElement): HTMLElement | null {
-  const radixViewport = el.closest<HTMLElement>(
-    '[data-slot="scroll-area-viewport"], [data-radix-scroll-area-viewport]'
-  )
-  if (radixViewport) return radixViewport
-
+  // Do not blindly trust the nearest Radix viewport. In the split-panel
+  // layout that viewport can expand to the full report-list height, leaving
+  // `scrollHeight === clientHeight`; the *outer* panel <section> is then the
+  // element that actually scrolls. Treating the inert viewport as the target
+  // makes scrollToIndex a no-op, yet the requested row is still mounted and
+  // was previously (incorrectly) acknowledged as successfully navigated.
+  let lastOverflowCandidate: HTMLElement | null = null
   let parent = el.parentElement
   while (parent) {
     const overflowY = window.getComputedStyle(parent).overflowY
-    if (/(auto|scroll|overlay)/.test(overflowY)) return parent
+    if (/(auto|scroll|overlay)/.test(overflowY)) {
+      lastOverflowCandidate = parent
+      if (parent.scrollHeight > parent.clientHeight + 1) return parent
+    }
     parent = parent.parentElement
   }
-  return null
+  // During the first layout pass JSDOM and some browsers may not have final
+  // scroll metrics yet. The outermost overflow ancestor is the safest retry
+  // target: once the virtual spacer is measured it becomes the real scroller.
+  return lastOverflowCandidate
 }
 
-function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce }: ReportsTabContentProps) {
+function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = false, forceMount, defaultOpenIds, searchActive, query, scrollToId, scrollNonce, onScrollResolved }: ReportsTabContentProps) {
   // The navigation target opens like a search hit — the user asked to SEE
   // this report, not to find its collapsed shell.
   const openIds = useMemo(() => {
@@ -91,6 +101,12 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
   const [listEl, setListEl] = useState<HTMLDivElement | null>(null)
   const [externalScrollEl, setExternalScrollEl] = useState<HTMLElement | null>(null)
   const [externalScrollMargin, setExternalScrollMargin] = useState(0)
+  const [flashId, setFlashId] = useState<string | null>(null)
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+  }, [])
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual owns its mutable measurement callbacks here.
   const virtualizer = useVirtualizer({
@@ -139,21 +155,55 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
   // the virtualizer a beat to mount the scrolled-to row.
   useEffect(() => {
     if (!isActive || !scrollToId) return
+    // In normal-card mode the virtualizer cannot scroll until its external
+    // ScrollArea viewport is known. Previously this effect ran once with a
+    // null viewport, the scroll became a no-op, and it never retried when the
+    // viewport attached because externalScrollEl was not a dependency.
+    if (!fullHeight && !externalScrollEl) return
     const rowContainer = fullHeight ? scrollEl : listEl
     if (!rowContainer) return
     const index = rows.findIndex((r) => r.id === scrollToId)
     if (index < 0) return
     virtualizer.scrollToIndex(index, { align: 'center' })
-    const timer = setTimeout(() => {
+    const scrollBounds = fullHeight ? scrollEl : externalScrollEl
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let attempts = 0
+    const confirmVisible = () => {
       const el = rowContainer.querySelector(`[data-row-id="${CSS.escape(scrollToId)}"]`)
       if (el) {
-        el.classList.add('resource-flash')
-        setTimeout(() => el.classList.remove('resource-flash'), 2000)
+        const rowRect = el.getBoundingClientRect()
+        const boundsRect = scrollBounds?.getBoundingClientRect()
+        const hasLayoutMetrics = rowRect.height > 0 || (boundsRect?.height ?? 0) > 0
+        const visibleTop = Math.max(boundsRect?.top ?? 0, 0)
+        const visibleBottom = Math.min(boundsRect?.bottom ?? window.innerHeight, window.innerHeight)
+        const isActuallyVisible = !hasLayoutMetrics
+          || (rowRect.bottom > visibleTop && rowRect.top < visibleBottom)
+
+        if (isActuallyVisible) {
+          setFlashId(scrollToId)
+          if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+          flashTimerRef.current = setTimeout(() => {
+            setFlashId((current) => current === scrollToId ? null : current)
+            flashTimerRef.current = null
+          }, 2000)
+          onScrollResolved?.(scrollNonce)
+          return
+        }
       }
-    }, 200)
-    return () => clearTimeout(timer)
+
+      // Dynamic measurement and accordion expansion may take more than one
+      // paint. Retry briefly, but never acknowledge an off-screen row; if it
+      // remains invisible the store request stays pending and the caller's
+      // fallback toast tells the user to locate the report manually.
+      attempts += 1
+      if (attempts < 18) timer = setTimeout(confirmVisible, 100)
+    }
+    timer = setTimeout(confirmVisible, 100)
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- virtualizer is a fresh object each render
-  }, [isActive, scrollToId, scrollNonce, fullHeight, scrollEl, listEl, rows])
+  }, [isActive, scrollToId, scrollNonce, onScrollResolved, fullHeight, scrollEl, listEl, externalScrollEl, rows])
 
   return (
     <TabsContent
@@ -196,6 +246,7 @@ function ReportsTabContentImpl({ value, rows, isActive = true, fullHeight = fals
                   ref={virtualizer.measureElement}
                   data-index={virtualRow.index}
                   data-row-id={row.id}
+                  className={flashId === row.id ? 'resource-flash' : undefined}
                   style={{
                     position: 'absolute',
                     top: 0,

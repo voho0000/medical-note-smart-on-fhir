@@ -4,6 +4,7 @@ describe('leftTabForResourceType', () => {
   it('maps each resource type to the left-panel tab that renders it', () => {
     expect(leftTabForResourceType('Encounter')).toBe('visits')
     expect(leftTabForResourceType('DiagnosticReport')).toBe('reports')
+    expect(leftTabForResourceType('ImagingStudy')).toBe('reports')
     expect(leftTabForResourceType('Observation')).toBe('reports')
     expect(leftTabForResourceType('MedicationRequest')).toBe('meds')
     expect(leftTabForResourceType('MedicationStatement')).toBe('meds')

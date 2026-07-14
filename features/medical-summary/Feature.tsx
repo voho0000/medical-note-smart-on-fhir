@@ -216,7 +216,9 @@ export default function MedicalSummaryFeature() {
         if (s.pending && s.seq === mySeq) {
           s.consume()
           const what = [target.date, target.display].filter(Boolean).join(" ")
-          toast.info(navFallbackMsg.replace("{label}", what || target.resourceType))
+          toast.warning(navFallbackMsg.replace("{label}", what || target.resourceType), {
+            duration: 6000,
+          })
         }
       }, NAV_CLAIM_TIMEOUT_MS)
     },

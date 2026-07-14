@@ -184,7 +184,7 @@ export const zhTW = {
     timelineDropped: '另有 {count} 筆 AI 選取事件因無法對應原始資料而未顯示。',
     timelineShowEarlier: '更早 {count} 筆事件',
     timelineShowLess: '收合較早事件',
-    navFallback: '已切換至對應分頁，請於清單中尋找：{label}',
+    navFallback: '無法自動定位這筆來源，請在左側資料分頁依日期或名稱手動尋找：{label}',
     coverageRange: '涵蓋 {start} ~ {end}',
     coverageOrgs: '院所 {count}',
     coverageEncounters: '就醫 {count}',

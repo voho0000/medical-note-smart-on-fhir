@@ -1,7 +1,7 @@
 // Refactored ReportsCard Component
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
@@ -102,6 +102,12 @@ export function ReportsCard() {
   // navigation itself: pick the sub-tab containing the row, then hand the
   // row id to ReportsTabContent which scrolls/expands/flashes it.
   const [navTarget, setNavTarget] = useState<{ id: string; tab: string; nonce: number } | null>(null)
+  const resolveNavTarget = useCallback((nonce?: number) => {
+    if (nonce === undefined) return
+    const state = useResourceNavigationStore.getState()
+    if (state.pending && state.seq === nonce) state.consume()
+    setNavTarget((current) => current?.nonce === nonce ? null : current)
+  }, [])
 
   const rows: Row[] = useMemo(() => {
     const all: Row[] = [...reportRows, ...orphanRows, ...procedureRows] as Row[]
@@ -244,26 +250,28 @@ export function ReportsCard() {
   // order stays stable across loading states.
   const navPending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
-  const consumeNav = useResourceNavigationStore((s) => s.consume)
   useEffect(() => {
     if (!navPending) return
     if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
     const hit = rows.find(
       (r) => r.id === navPending.resourceId
+        || r.diagnosticReportIds?.includes(navPending.resourceId)
         || r.imagingStudyIds?.includes(navPending.resourceId)
         || r.obs.some((o) => o?.id === navPending.resourceId),
     )
     if (!hit) return // unclaimed → the generic fallback toast explains
     const tab = tabConfigs.find((c) => !c.isCumulative && c.rows.some((r) => r.id === hit.id))
     if (!tab) return
-    consumeNav()
-    setSearchQuery('')
-    // Direct state set (not handleTabChange) — its rAF phase never fires in
-    // backgrounded tabs, and there's no click to give spinner feedback for.
-    setActiveTab(tab.value)
-    setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
-    setNavTarget({ id: hit.id, tab: tab.value, nonce: navSeq })
-  }, [navPending, navSeq, rows, tabConfigs, consumeNav])
+    // Do not use handleTabChange: requestAnimationFrame is frozen in
+    // backgrounded tabs. A timer preserves that behaviour while keeping the
+    // external-store effect free of synchronous local-state cascades.
+    setTimeout(() => {
+      setSearchQuery('')
+      setActiveTab(tab.value)
+      setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
+      setNavTarget({ id: hit.id, tab: tab.value, nonce: navSeq })
+    }, 0)
+  }, [navPending, navSeq, rows, tabConfigs])
 
   if (isLoading) {
     return (
@@ -460,6 +468,7 @@ export function ReportsCard() {
             query={searchQuery}
             scrollToId={navTarget?.tab === tab.value ? navTarget.id : null}
             scrollNonce={navTarget?.nonce}
+            onScrollResolved={resolveNavTarget}
           />
         )
       })}

@@ -153,6 +153,10 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
     }
     const groups = new Map<string, DiagnosticReport[]>()
     const groupOrder: string[] = []
+    // Rendering may deduplicate or merge several DiagnosticReports into one
+    // row. Keep every original id (including ids of dropped duplicate copies)
+    // so a medical-summary citation can still navigate to the rendered row.
+    const diagnosticReportIdsByKey = new Map<string, string[]>()
     const pushAsOwnGroup = (dr: DiagnosticReport) => {
       // Suffix with DR id so each split group gets a distinct key — keeps
       // the map insertion order stable and avoids accidental re-merging.
@@ -161,6 +165,7 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
       const inst = (getDrInstitution(dr) || '').trim()
       const key = `${text}|${date}|${inst}|${dr.id || Math.random().toString(36)}`
       groups.set(key, [dr])
+      diagnosticReportIdsByKey.set(key, dr.id ? [dr.id] : [])
       groupOrder.push(key)
     }
 
@@ -236,6 +241,10 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
       } else {
         const { drs: deduped, dupCount } = dedupGroupByNarrative(grp)
         groups.set(key, deduped)
+        diagnosticReportIdsByKey.set(
+          key,
+          grp.flatMap((report) => report.id ? [report.id] : []),
+        )
         groupOrder.push(key)
         if (dupCount > 0) dupCountByKey.set(key, dupCount)
       }
@@ -384,8 +393,6 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
         )
       }
 
-      if (allObs.length === 0 && summaryParts.length === 0 && attachments.length === 0 && images.length === 0) continue
-
       // NOTE: Do NOT add UI dedup here even when bridge double-emits the same
       // measurement (e.g. 長庚嘉義 emitting both '鈉' + 'Na' for one source
       // row — see bridge report 2026-05-29). Masking it on the app side
@@ -465,6 +472,23 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
           component: summaryComponents,
         }
         obsWithSummary.unshift(summaryObservation)
+      } else if (allObs.length === 0) {
+        // Some NHI DiagnosticReports are index-only records: the source gives
+        // an order name/date/facility but no Observation, conclusion, note,
+        // attachment, image, or ImagingStudy content. These records are still
+        // citable in Medical Summary, so dropping them here leaves no DOM row
+        // for source navigation. Render an explicit metadata-only row instead
+        // of inventing report findings or silently falling back to the list.
+        obsWithSummary.unshift({
+          resourceType: 'Observation',
+          id: head.id ? `dr-metadata-${head.id}` : `dr-metadata-${groupOrder.indexOf(key) + 1}`,
+          code: { text: 'Report Metadata' },
+          valueString: locale === 'zh-TW'
+            ? '來源未提供報告內文或結果'
+            : 'The source did not provide report text or results',
+          effectiveDateTime: rawDate,
+          status: head.status,
+        })
       }
 
       // Canonical DR title selection:
@@ -584,6 +608,7 @@ export function useReportsData(diagnosticReports: any[], imagingStudies: any[] =
         // omits the field entirely.
         bridgeDupCount: dupCountByKey.get(key),
         imagingStudyIds: rowStudyIds.size > 0 ? [...rowStudyIds] : undefined,
+        diagnosticReportIds: diagnosticReportIdsByKey.get(key),
       })
     }
 

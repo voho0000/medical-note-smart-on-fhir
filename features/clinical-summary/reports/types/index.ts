@@ -88,4 +88,8 @@ export type Row = {
    * DiagnosticReport keeps its own id as the row id, so these ids are retained
    * separately for source navigation and deduplication. */
   imagingStudyIds?: string[]
+  /** DiagnosticReport resources represented by this row. Report rendering may
+   * merge same-code/same-day records into one row, so `id` alone is not enough
+   * to resolve source citations back to every original report. */
+  diagnosticReportIds?: string[]
 }
