@@ -110,6 +110,16 @@ describe('canonicalTestKeyFromString — Chinese display-name aliases', () => {
     })
   })
 
+  describe('comparison normalization', () => {
+    it.each([
+      ['ＭＣＶ', 'MCV'],
+      ['m.c.v.', 'MCV'],
+      ['mcv(平均紅血球容積)', 'MCV'],
+    ])('%s → %s', (input, expected) => {
+      expect(canonicalTestKeyFromString(input)).toBe(expected)
+    })
+  })
+
   // ── Safety: don't mask bridge LOINC mis-tagging ─────────────────────────
   // Bridge v0.11.9/v0.11.10 sometimes attaches LOINC 770-8 (Neutrophils
   // automated) to a band-form row (display "帶狀嗜中性白血球"). We resolve

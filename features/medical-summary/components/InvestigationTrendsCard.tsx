@@ -9,9 +9,11 @@ import {
   ChevronDown,
   FlaskConical,
   Images,
+  Loader2,
   Microscope,
   Minus,
   Shuffle,
+  Table2,
   TrendingDown,
   TrendingUp,
 } from "lucide-react"
@@ -23,6 +25,8 @@ import type {
   ResolvedSourceRef,
 } from "@/src/core/entities/medical-summary.entity"
 import type { ResourceNavTarget } from "@/src/application/stores/resource-navigation.store"
+import { limitInvestigationTrendPoints } from "@/src/shared/utils/investigation-trend.utils"
+import type { InvestigationCumulativeTarget } from "../utils/investigation-cumulative-target"
 import { SourceSup } from "./SourceSup"
 
 const DIRECTION_STYLE: Record<
@@ -78,6 +82,11 @@ interface InvestigationTrendsCardProps {
   unverifiedLabel: string
   showMoreLabel: string
   showLessLabel: string
+  openCumulativeLabel: string
+  openingCumulativeLabel: string
+  cumulativeTargets?: Array<InvestigationCumulativeTarget | null>
+  openingCumulativeTarget?: InvestigationCumulativeTarget | null
+  onOpenCumulative?: (target: InvestigationCumulativeTarget) => void
   onNavigate?: (target: ResourceNavTarget) => void
 }
 
@@ -93,6 +102,11 @@ export function InvestigationTrendsCard({
   unverifiedLabel,
   showMoreLabel,
   showLessLabel,
+  openCumulativeLabel,
+  openingCumulativeLabel,
+  cumulativeTargets,
+  openingCumulativeTarget,
+  onOpenCumulative,
   onNavigate,
 }: InvestigationTrendsCardProps) {
   const [showAll, setShowAll] = useState(false)
@@ -117,6 +131,14 @@ export function InvestigationTrendsCard({
           const style = DIRECTION_STYLE[item.direction]
           const DirectionIcon = style.icon
           const KindIcon = KIND_ICON[item.kind]
+          const cumulativeTarget = cumulativeTargets?.[index] ?? null
+          const isOpeningCumulative = Boolean(
+            cumulativeTarget
+              && openingCumulativeTarget
+              && cumulativeTarget.categoryId === openingCumulativeTarget.categoryId
+              && cumulativeTarget.resourceType === openingCumulativeTarget.resourceType
+              && cumulativeTarget.resourceId === openingCumulativeTarget.resourceId,
+          )
           const sources = item.sourceKeys
             .map((key) => byKey.get(key))
             .filter((source): source is ResolvedSourceRef => source !== undefined)
@@ -136,7 +158,7 @@ export function InvestigationTrendsCard({
                     />
                   </p>
                   <p className="mt-0.5 text-[0.8125rem] font-medium leading-snug tabular-nums text-foreground/90">
-                    {item.trend}
+                    {limitInvestigationTrendPoints(item.trend)}
                   </p>
                 </div>
                 <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-px text-[0.625rem] font-semibold", style.badge)}>
@@ -144,11 +166,29 @@ export function InvestigationTrendsCard({
                   {directionLabel(item.direction)}
                 </span>
               </div>
-              <div className="mt-1 flex items-start gap-1.5 pl-5 text-[0.65rem] leading-snug text-muted-foreground">
+              <div className="mt-1 flex flex-wrap items-start gap-1.5 pl-5 text-[0.65rem] leading-snug text-muted-foreground">
                 <span className="shrink-0 rounded bg-background/70 px-1.5 py-px font-medium">
                   {kindLabel(item.kind)}
                 </span>
-                <p className="min-w-0 pt-px">{item.interpretation}</p>
+                <p className="min-w-[12rem] flex-1 pt-px">{item.interpretation}</p>
+                {cumulativeTarget && onOpenCumulative ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenCumulative(cumulativeTarget)}
+                    disabled={isOpeningCumulative}
+                    aria-busy={isOpeningCumulative}
+                    aria-label={`${isOpeningCumulative ? openingCumulativeLabel : openCumulativeLabel}: ${item.label}`}
+                    title={`${openCumulativeLabel}: ${item.label}`}
+                    className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-teal-200 bg-background/80 px-1.5 py-0.5 font-medium text-teal-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800 disabled:cursor-wait disabled:opacity-80 dark:border-teal-700/60 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                  >
+                    {isOpeningCumulative ? (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Table2 className="h-3 w-3" aria-hidden="true" />
+                    )}
+                    {isOpeningCumulative ? openingCumulativeLabel : openCumulativeLabel}
+                  </button>
+                ) : null}
               </div>
             </article>
           )

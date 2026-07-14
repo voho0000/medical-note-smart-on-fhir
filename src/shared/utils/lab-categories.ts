@@ -396,7 +396,7 @@ export const LAB_CATEGORIES: LabCategory[] = [
 ]
 
 function normalize(s: string): string {
-  return s.trim().toUpperCase()
+  return s.normalize('NFKC').trim().toUpperCase()
 }
 
 /**

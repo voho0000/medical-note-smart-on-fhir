@@ -16,6 +16,12 @@ export interface ResourceNavTarget {
   /** For the fallback toast ("2026-06-02 胸腔檢查"). */
   display?: string
   date?: string
+  /** Reports-card destination beyond the owning top-level tab. */
+  reportView?: 'cumulative'
+  /** Cumulative lab sub-panel (cbc, chem, tumor, …). */
+  cumulativeCategoryId?: string
+  /** Canonical cumulative column to reveal after the panel opens. */
+  cumulativeAnalyteKey?: string
 }
 
 /** resourceType → left-panel tab id (feature-registry ids). */
@@ -46,15 +52,17 @@ export function leftTabForResourceType(resourceType: string): string | null {
   }
 }
 
-// Raw reports are mounted through a virtualized list. Allow that pipeline to
-// finish before telling the user pinpoint navigation failed; 800ms was short
-// enough to race normal first-open rendering.
+// Raw reports are built lazily and then mounted through a virtualized list.
+// Allow that pipeline to finish before telling the user pinpoint navigation
+// failed; 800ms was short enough to race normal first-open rendering.
 export const NAV_CLAIM_TIMEOUT_MS = 2500
 
 interface ResourceNavigationStore {
   pending: ResourceNavTarget | null
   /** Monotonic nonce so re-navigating to the SAME target re-triggers effects. */
   seq: number
+  /** Latest request acknowledged by its destination (or fallback timeout). */
+  consumedSeq: number
   navigate: (target: ResourceNavTarget) => void
   consume: () => void
 }
@@ -62,6 +70,7 @@ interface ResourceNavigationStore {
 export const useResourceNavigationStore = create<ResourceNavigationStore>((set) => ({
   pending: null,
   seq: 0,
+  consumedSeq: 0,
   navigate: (target) => set((s) => ({ pending: target, seq: s.seq + 1 })),
-  consume: () => set({ pending: null }),
+  consume: () => set((s) => ({ pending: null, consumedSeq: s.seq })),
 }))

@@ -1,4 +1,7 @@
-import { leftTabForResourceType } from '@/src/application/stores/resource-navigation.store'
+import {
+  leftTabForResourceType,
+  useResourceNavigationStore,
+} from '@/src/application/stores/resource-navigation.store'
 
 describe('leftTabForResourceType', () => {
   it('maps each resource type to the left-panel tab that renders it', () => {
@@ -18,5 +21,20 @@ describe('leftTabForResourceType', () => {
 
   it('returns null for an unknown type (caller falls back to a toast)', () => {
     expect(leftTabForResourceType('Practitioner')).toBeNull()
+  })
+
+  it('records which navigation request the destination consumed', () => {
+    useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })
+    const store = useResourceNavigationStore.getState()
+
+    store.navigate({ resourceType: 'Observation', resourceId: 'obs-1' })
+    expect(useResourceNavigationStore.getState().seq).toBe(1)
+    useResourceNavigationStore.getState().consume()
+
+    expect(useResourceNavigationStore.getState()).toMatchObject({
+      pending: null,
+      seq: 1,
+      consumedSeq: 1,
+    })
   })
 })

@@ -115,6 +115,8 @@ export const en = {
     narrativeTitle: 'Cross-hospital course summary',
     investigationsTitle: 'Key test & imaging trends',
     investigationsSubtitle: 'The most relevant labs, pathology and imaging for the current problems; a single result is never presented as a trend.',
+    openCumulativeReport: 'View cumulative report',
+    openingCumulativeReport: 'Opening…',
     decisionsTitle: 'Other items to confirm',
     timelineTitle: 'Cross-hospital timeline',
     intro: 'AI condenses cross-hospital visits, medications and labs into a one-page briefing: narrative, safety alerts, pending decisions and a timeline.',

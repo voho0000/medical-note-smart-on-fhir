@@ -49,6 +49,10 @@ import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { isChronicPrescription, pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
 import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-inference/problem-inference-principles'
+import {
+  limitInvestigationTrendPoints,
+  MAX_INVESTIGATION_TREND_POINTS,
+} from '@/src/shared/utils/investigation-trend.utils'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -56,9 +60,9 @@ import { PROBLEM_INFERENCE_SYNTHESIS_RULE } from '@/src/core/use-cases/problem-i
 export const MEDICAL_SUMMARY_MODEL_ID = 'gemini-3.1-flash-lite'
 
 const LONGITUDINAL_MAX_LAB_SERIES = 16
-const LONGITUDINAL_MAX_LAB_POINTS = 8
+const LONGITUDINAL_MAX_LAB_POINTS = MAX_INVESTIGATION_TREND_POINTS
 const LONGITUDINAL_MAX_IMAGING_SERIES = 8
-const LONGITUDINAL_MAX_IMAGING_POINTS = 5
+const LONGITUDINAL_MAX_IMAGING_POINTS = MAX_INVESTIGATION_TREND_POINTS
 
 // Highlight guardrail bounds (see finalizeResult). 24 chars fits a zh
 // diagnosis name or a value trend like "HbA1c 7.2→8.4"; a whole sentence
@@ -646,11 +650,10 @@ function formatLongitudinalLabLines(points: LongitudinalLabPoint[]): string[] {
     .map((series) => {
       const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
       const recent = sorted.slice(-LONGITUDINAL_MAX_LAB_POINTS)
-      const omitted = sorted.length - recent.length
       const seq = recent
         .map((p) => `${p.value}${p.abnormal ? `[${p.abnormal}]` : ''} (${p.date}; ${p.sourceKey})`)
         .join(' → ')
-      return `- ${sorted[0].label}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${seq}`
+      return `- ${sorted[0].label}: ${seq}`
     })
 }
 
@@ -672,11 +675,10 @@ function formatLongitudinalImagingLines(points: LongitudinalImagingPoint[]): str
     .map((series) => {
       const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date))
       const recent = sorted.slice(-LONGITUDINAL_MAX_IMAGING_POINTS)
-      const omitted = sorted.length - recent.length
       const seq = recent
         .map((p) => `${p.date}; ${p.sourceKey}: ${p.finding}`)
         .join(' → ')
-      return `- ${sorted[0].label}: ${omitted > 0 ? `…(${omitted} earlier) → ` : ''}${seq}`
+      return `- ${sorted[0].label}: ${seq}`
     })
 }
 
@@ -698,7 +700,7 @@ export function buildLongitudinalInvestigationContext(
 
   const sections = [
     '## Longitudinal Investigation Evidence (app-derived from selected DiagnosticReports)',
-    'Use this section for the medical-summary "investigations" card. If a topic below has 2+ dated points/reports, it is NOT a single result; use the sequence and cite the shown L keys.',
+    `Use this section for the medical-summary "investigations" card. Show at most the latest ${MAX_INVESTIGATION_TREND_POINTS} dated points/reports. If a topic below has 2+ points, it is NOT a single result; use the sequence and cite the shown L keys.`,
   ]
   if (labLines.length > 0) {
     sections.push('### Serial lab values (oldest → newest)', ...labLines)
@@ -787,7 +789,7 @@ const SHARED_RULES =
   'NEVER call a worsening value 穩定/stable; in patient language prefer calm-but-true phrasing (e.g. 數值逐漸下降，醫師正在追蹤) over false reassurance. ' +
   'For "investigations", create a disease-oriented overview of the 3–6 MOST clinically relevant laboratory, pathology, and imaging topics for THIS patient, not a dump of every test. ' +
   'Choose topics from the active clinical context: for a cancer patient prioritize documented tumor markers, pathology, and serial imaging; for diabetes prioritize HbA1c, renal function/eGFR, and urine albumin when present; adapt similarly for other conditions. ' +
-  'Each item must cite the DiagnosticReport source(s) that contain the stated values/findings. Put the actual data sequence in "trend" (include units when present) and a concise patient-specific meaning in "interpretation". ' +
+  `Each item must cite the DiagnosticReport source(s) that contain the stated values/findings. Put at most the latest ${MAX_INVESTIGATION_TREND_POINTS} points/reports in "trend" (include units when present) and a concise patient-specific meaning in "interpretation". ` +
   'Use "direction" for CLINICAL direction, not numeric direction (e.g. falling eGFR is "worsening"). Claim a trend only with at least 2 comparable time points; with one report use "single" and explicitly say it is a single result. ' +
   'If the Longitudinal Investigation Evidence section lists 2+ dated points/reports for a topic, NEVER label that topic "single" and NEVER write "single result" for it; summarize the serial pattern instead. ' +
   'Never infer stability from one value, never invent a test that is absent, never mix non-comparable units/methods into one sequence, and do not repeat routine normal tests unless they materially answer an active problem. ' +
@@ -1166,7 +1168,7 @@ export class GenerateMedicalSummaryUseCase {
       label: item.label,
       kind: normaliseInvestigationKind(item.kind),
       direction: guardedInvestigationDirection(item.direction, item.label, item.sources, byKey, catalog),
-      trend: item.trend,
+      trend: limitInvestigationTrendPoints(item.trend),
       interpretation: item.interpretation,
       sourceKeys: (item.sources ?? []).map(registerKey),
     }))

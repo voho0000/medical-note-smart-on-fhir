@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { ComponentType, ReactNode } from "react"
+import { ComponentType, memo, ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { MoreHorizontal, SlidersHorizontal } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -133,7 +133,12 @@ export default function RightPanelLayout() {
 // ============================================================================
 // TAB CONTENT RENDERER - Renders individual feature content
 // ============================================================================
-function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
+// The force-mounted panels preserve clinically reviewed state, but a top-level
+// tab change used to re-render every hidden feature before the selected panel
+// could paint. Feature config objects are registry constants, so memoization
+// safely lets Radix toggle only the outer TabsContent visibility while each
+// feature keeps its existing render tree.
+const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
   const Component = FEATURE_COMPONENTS[feature.id]
   
   if (!Component) {
@@ -178,7 +183,7 @@ function FeatureTabContent({ feature }: { feature: RightPanelFeatureConfig }) {
       <Component />
     </div>
   )
-}
+})
 
 // ============================================================================
 // RIGHT PANEL CONTENT - Dynamic tab rendering from registry

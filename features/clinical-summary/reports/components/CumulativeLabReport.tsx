@@ -5,7 +5,7 @@
 // Categories tabs: CBC, 生化, 血糖, 癌症指數, 尿液.
 // Expand/fullscreen is handled at the parent level (ReportsCard) so the
 // whole Reports section can be enlarged, not just this view.
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -30,6 +30,10 @@ interface CumulativeLabReportProps {
    *  omitted the component falls back to its own internal state. */
   activeCategoryId?: string
   onCategoryChange?: (id: string) => void
+  /** Canonical test key to horizontally reveal (e.g. CRP) after navigation. */
+  focusAnalyteKey?: string
+  /** Re-triggers focus when the same analyte is requested again. */
+  focusNonce?: number
 }
 
 function formatDateLabel(d: string): string {
@@ -58,9 +62,20 @@ function EmptyCell({ mapKey, label }: { mapKey: string; label: string }) {
   )
 }
 
-function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHeight?: boolean }) {
+function LabPivotTable({
+  pivot,
+  fullHeight = false,
+  focusAnalyteKey,
+  focusNonce,
+}: {
+  pivot: LabPivot
+  fullHeight?: boolean
+  focusAnalyteKey?: string
+  focusNonce?: number
+}) {
   const { t, locale } = useLanguage()
   const { audience } = useAudience()
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
   const subgroupLabels = (t.reports as any).cumulativeSubgroups || {}
   const categoryLabel = categoryLabels[pivot.category.id] || pivot.category.id
@@ -77,6 +92,21 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
     audience === 'medical'
       ? { name: displayName, abbr: null }
       : getAnalyteDisplayParts(testKey, audience, locale)
+
+  useEffect(() => {
+    if (!focusAnalyteKey) return
+    const container = scrollContainerRef.current
+    if (!container) return
+    const header = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-lab-test-key]'),
+    ).find((element) => element.dataset.labTestKey === focusAnalyteKey)
+    if (!header) return
+
+    const centeredLeft = header.offsetLeft
+      - (container.clientWidth / 2)
+      + (header.offsetWidth / 2)
+    container.scrollTo({ left: Math.max(0, centeredLeft), behavior: 'smooth' })
+  }, [focusAnalyteKey, focusNonce, pivot.category.id, pivot.rows])
   // When there are no columns at all (no pinned columns and no data) show the
   // empty-state message. If there are columns but no data dates, fall through
   // so the column headers still render with a "no data" body row.
@@ -110,6 +140,7 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
 
   return (
     <div
+      ref={scrollContainerRef}
       className={`w-full max-w-full overflow-x-auto overflow-y-auto ${heightClass} rounded-md border [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/30`}
       style={{ scrollbarWidth: 'thin' }}
     >
@@ -158,10 +189,14 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
             )}
             {flatTests.map((test) => {
               const { name, abbr } = columnParts(test.testKey, test.displayName)
+              const isFocused = test.testKey === focusAnalyteKey
               return (
                 <th
                   key={test.mapKey}
-                  className="bg-muted/80 backdrop-blur border-b border-l px-1 py-1.5 text-center font-medium align-bottom min-w-[46px]"
+                  data-lab-test-key={test.testKey}
+                  className={isFocused
+                    ? "bg-teal-100 text-teal-900 ring-2 ring-inset ring-teal-500 border-b border-l px-1 py-1.5 text-center font-semibold align-bottom min-w-[46px] dark:bg-teal-950/60 dark:text-teal-100"
+                    : "bg-muted/80 backdrop-blur border-b border-l px-1 py-1.5 text-center font-medium align-bottom min-w-[46px]"}
                 >
                   <div className="mx-auto max-w-[4.5rem] leading-tight break-words">{name}</div>
                   {(abbr || test.unit) && (
@@ -227,7 +262,14 @@ function LabPivotTable({ pivot, fullHeight = false }: { pivot: LabPivot; fullHei
   )
 }
 
-export function CumulativeLabReport({ observations, fullHeight = false, activeCategoryId, onCategoryChange }: CumulativeLabReportProps) {
+export function CumulativeLabReport({
+  observations,
+  fullHeight = false,
+  activeCategoryId,
+  onCategoryChange,
+  focusAnalyteKey,
+  focusNonce,
+}: CumulativeLabReportProps) {
   const pivots = useLabPivot(observations)
   const { t } = useLanguage()
   const categoryLabels = (t.reports as any).cumulativeCategories || {}
@@ -343,7 +385,12 @@ export function CumulativeLabReport({ observations, fullHeight = false, activeCa
             value={p.category.id}
             className={fullHeight ? 'mt-1 flex-1 min-h-0 min-w-0 w-full max-w-full overflow-hidden' : 'mt-1 min-w-0 w-full max-w-full overflow-hidden'}
           >
-            <LabPivotTable pivot={p} fullHeight={fullHeight} />
+            <LabPivotTable
+              pivot={p}
+              fullHeight={fullHeight}
+              focusAnalyteKey={p.category.id === activeId ? focusAnalyteKey : undefined}
+              focusNonce={focusNonce}
+            />
           </TabsContent>
         ))}
       </Tabs>

@@ -22,20 +22,50 @@ import { ReportsTabContent } from './components/ReportsTabContent'
 import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
 import { rowInnerMatch } from './utils/report-search'
+import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
 // referential equality on the prop.
 const EMPTY_EXPANDED_IDS: string[] = []
+const EMPTY_RESOURCES: any[] = []
+const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
 
 export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], imagingStudies = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
+  // The cumulative destination only needs Observation pivots. Defer the much
+  // heavier raw-report pipeline (DR grouping, narrative dedup, orphan rows,
+  // day grouping) until a raw tab is actually requested.
+  const [rawReportsEnabled, setRawReportsEnabled] = useState(() => {
+    const pending = useResourceNavigationStore.getState().pending
+    return Boolean(pending && pending.reportView !== 'cumulative')
+  })
   // Lifted here (not inside CumulativeLabReport) so the selected cumulative
   // sub-category (生化 …) survives the fullscreen toggle, which remounts the
   // reports content under a different parent.
-  const [cumulativeCategoryId, setCumulativeCategoryId] = useState<string | undefined>(undefined)
+  const [cumulativeCategoryId, setCumulativeCategoryId] = useState<string | undefined>(() => {
+    const pending = useResourceNavigationStore.getState().pending
+    const categoryId = pending?.reportView === 'cumulative'
+      ? pending.cumulativeCategoryId
+      : undefined
+    return categoryId && CUMULATIVE_CATEGORY_IDS.has(categoryId) ? categoryId : undefined
+  })
+  const [cumulativeFocus, setCumulativeFocus] = useState<{
+    analyteKey: string
+    nonce: number
+  } | null>(() => {
+    const state = useResourceNavigationStore.getState()
+    const analyteKey = state.pending?.reportView === 'cumulative'
+      ? state.pending.cumulativeAnalyteKey
+      : undefined
+    return analyteKey ? { analyteKey, nonce: state.seq } : null
+  })
+  const handleCumulativeCategoryChange = (categoryId: string) => {
+    setCumulativeCategoryId(categoryId)
+    setCumulativeFocus(null)
+  }
   // Tabs the user has visited at least once in this session. We forceMount
   // only these so the *first* paint of ReportsCard (e.g. when the user
   // switches from "病人資訊" to "報告") doesn't have to mount 500+ rows of
@@ -54,6 +84,7 @@ export function ReportsCard() {
     setSearchQuery("")
     setPendingTab(val)
     requestAnimationFrame(() => {
+      if (val !== 'cumulative') setRawReportsEnabled(true)
       setActiveTab(val)
       setVisitedTabs(prev => prev.has(val) ? prev : new Set(prev).add(val))
       setPendingTab(null)
@@ -62,12 +93,19 @@ export function ReportsCard() {
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
 
-  const { reportRows, seenIds } = useReportsData(diagnosticReports, imagingStudies)
-  const procedureRows = useProcedureRows(procedures, observations)
+  const { reportRows, seenIds } = useReportsData(
+    rawReportsEnabled ? diagnosticReports : EMPTY_RESOURCES,
+    rawReportsEnabled ? imagingStudies : EMPTY_RESOURCES,
+  )
+  const procedureRows = useProcedureRows(
+    rawReportsEnabled ? procedures : EMPTY_RESOURCES,
+    rawReportsEnabled ? observations : EMPTY_RESOURCES,
+  )
   
   // Mark procedure-category observations as seen so they don't appear as orphans
   const procedureObsIds = useMemo(() => {
     const ids = new Set<string>()
+    if (!rawReportsEnabled) return ids
     observations.forEach((obs: any) => {
       if (!obs?.category || !obs?.id) return
       const categories = Array.isArray(obs.category) ? obs.category : [obs.category]
@@ -86,7 +124,7 @@ export function ReportsCard() {
       }
     })
     return ids
-  }, [observations, procedures])
+  }, [observations, procedures, rawReportsEnabled])
   
   const allSeenIds = useMemo(() => {
     const combined = new Set(seenIds)
@@ -94,7 +132,10 @@ export function ReportsCard() {
     return combined
   }, [seenIds, procedureObsIds])
   
-  const orphanRows = useOrphanObservations(observations, allSeenIds)
+  const orphanRows = useOrphanObservations(
+    rawReportsEnabled ? observations : EMPTY_RESOURCES,
+    allSeenIds,
+  )
 
   // ── Resource navigation (cited DiagnosticReport/Observation in the
   // Medical Summary tab) ────────────────────────────────────────────────
@@ -220,18 +261,21 @@ export function ReportsCard() {
   const tabConfigs = useMemo(() => {
     const { tabs: reportTabs } = t.reports
     const cumulativeLabel = (reportTabs as any).cumulative || 'Cumulative'
+    const withCount = (label: string, count: number) => rawReportsEnabled
+      ? `${label} (${count})`
+      : label
     const configs = [
       { value: "cumulative", label: cumulativeLabel, rows: [] as Row[], isCumulative: true },
-      { value: "all", label: `${reportTabs.all} (${groupedRows.all.length})`, rows: groupedRows.all, isCumulative: false },
+      { value: "all", label: withCount(reportTabs.all, groupedRows.all.length), rows: groupedRows.all, isCumulative: false },
       // Badge count follows the active view (day groups vs single items),
       // matching the imaging precedent: the number shown = cards clickable.
-      { value: "lab", label: `${reportTabs.lab} (${labRows.length})`, rows: labRows, isCumulative: false },
+      { value: "lab", label: withCount(reportTabs.lab, labRows.length), rows: labRows, isCumulative: false },
       // Tab badge count reflects the post-grouping list (a 6-row multi-region
       // CT now reads as 1 row in the badge), so the number a user sees and
       // the cards they can click on match.
-      { value: "imaging", label: `${reportTabs.imaging} (${imagingRows.length})`, rows: imagingRows, isCumulative: false },
-      { value: "vitals", label: `${reportTabs.vitals} (${groupedRows.vitals.length})`, rows: groupedRows.vitals, isCumulative: false },
-      { value: "procedures", label: `${reportTabs.procedures} (${groupedRows.procedures.length})`, rows: groupedRows.procedures, isCumulative: false },
+      { value: "imaging", label: withCount(reportTabs.imaging, imagingRows.length), rows: imagingRows, isCumulative: false },
+      { value: "vitals", label: withCount(reportTabs.vitals, groupedRows.vitals.length), rows: groupedRows.vitals, isCumulative: false },
+      { value: "procedures", label: withCount(reportTabs.procedures, groupedRows.procedures.length), rows: groupedRows.procedures, isCumulative: false },
     ]
     // Always show Cumulative, All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
     return configs.filter((config) =>
@@ -242,7 +286,7 @@ export function ReportsCard() {
       config.value === "vitals" ||
       config.rows.length > 0
     )
-  }, [groupedRows, imagingRows, labRows, t])
+  }, [groupedRows, imagingRows, labRows, rawReportsEnabled, t])
 
   // Claim DiagnosticReport / Observation navigations. Row.id is the DR id;
   // orphan-observation rows carry the obs id, so match either directly or
@@ -250,8 +294,35 @@ export function ReportsCard() {
   // order stays stable across loading states.
   const navPending = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
+  const consumeNav = useResourceNavigationStore((s) => s.consume)
+  useEffect(() => {
+    if (!navPending || navPending.reportView === 'cumulative' || rawReportsEnabled) return
+    if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
+    const timer = window.setTimeout(() => setRawReportsEnabled(true), 0)
+    return () => window.clearTimeout(timer)
+  }, [navPending, rawReportsEnabled])
+
   useEffect(() => {
     if (!navPending) return
+    if (navPending.reportView === 'cumulative') {
+      const categoryId = navPending.cumulativeCategoryId
+      if (!categoryId || !CUMULATIVE_CATEGORY_IDS.has(categoryId)) return
+      consumeNav()
+      // Consuming the store request re-runs this effect immediately. Schedule
+      // the local view switch independently so that rerender cannot cancel it.
+      setTimeout(() => {
+        setSearchQuery('')
+        setPendingTab(null)
+        setActiveTab('cumulative')
+        setVisitedTabs((prev) => prev.has('cumulative') ? prev : new Set(prev).add('cumulative'))
+        setCumulativeCategoryId(categoryId)
+        setCumulativeFocus(navPending.cumulativeAnalyteKey
+          ? { analyteKey: navPending.cumulativeAnalyteKey, nonce: navSeq }
+          : null)
+        setNavTarget(null)
+      }, 0)
+      return
+    }
     if (!['DiagnosticReport', 'ImagingStudy', 'Observation'].includes(navPending.resourceType)) return
     const hit = rows.find(
       (r) => r.id === navPending.resourceId
@@ -271,7 +342,7 @@ export function ReportsCard() {
       setVisitedTabs((prev) => (prev.has(tab.value) ? prev : new Set(prev).add(tab.value)))
       setNavTarget({ id: hit.id, tab: tab.value, nonce: navSeq })
     }, 0)
-  }, [navPending, navSeq, rows, tabConfigs])
+  }, [navPending, navSeq, rows, tabConfigs, consumeNav])
 
   if (isLoading) {
     return (
@@ -299,7 +370,15 @@ export function ReportsCard() {
     )
   }
 
-  if (rows.length === 0) {
+  // `rows` is intentionally empty while raw-report work is deferred on the
+  // cumulative tab. It is therefore NOT a valid empty-data signal. Check the
+  // underlying clinical resources instead so lazy loading cannot hide the
+  // entire ReportsCard (including the cumulative Observation pivot).
+  const hasReportResources = diagnosticReports.length > 0
+    || imagingStudies.length > 0
+    || observations.length > 0
+    || procedures.length > 0
+  if (!hasReportResources) {
     return (
       <Card className={CARD_BORDER_CLASSES.clinical}>
         <CardHeader>
@@ -363,7 +442,7 @@ export function ReportsCard() {
             {tabConfigs.map((tab) => (
               <DropdownMenuItem
                 key={tab.value}
-                onClick={() => setActiveTab(tab.value)}
+                onClick={() => handleTabChange(tab.value)}
                 className={activeTab === tab.value ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : ""}
               >
                 {tab.label}
@@ -452,7 +531,9 @@ export function ReportsCard() {
               observations={observations}
               fullHeight={expanded}
               activeCategoryId={cumulativeCategoryId}
-              onCategoryChange={setCumulativeCategoryId}
+              onCategoryChange={handleCumulativeCategoryChange}
+              focusAnalyteKey={cumulativeFocus?.analyteKey}
+              focusNonce={cumulativeFocus?.nonce}
             />
           </TabsContent>
         ) : (

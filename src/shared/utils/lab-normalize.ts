@@ -14,7 +14,7 @@ export const TEST_ALIASES: Record<string, string> = {
   // Creatinine
   CREATININE: 'CREA', CREAT: 'CREA', 'CREAT.': 'CREA', CREA: 'CREA',
   // Hemoglobin / Hematocrit
-  HB: 'HB', HGB: 'HB', HEMOGLOBIN: 'HB',
+  HB: 'HB', HGB: 'HB', HEMOGLOBIN: 'HB', '血紅素': 'HB', '血色素': 'HB',
   HCT: 'HCT', HEMATOCRIT: 'HCT',
   // White blood cell
   WBC: 'WBC', 'WBC COUNT': 'WBC', 'WBC CCOUNT': 'WBC', LEUKOCYTE: 'WBC', LEUKOCYTES: 'WBC', 'WHITE BLOOD CELL': 'WBC', 'WHITE BLOOD CELLS': 'WBC',
@@ -39,7 +39,7 @@ export const TEST_ALIASES: Record<string, string> = {
   PLASMACELL: 'PLASMA-CELL', PLASMACELLS: 'PLASMA-CELL', 'PLASMA CELL': 'PLASMA-CELL', 'PLASMA CELLS': 'PLASMA-CELL',
   PS: 'PS', 'P/S': 'PS', 'PS AUTO DC': 'PS', PSAUTODC: 'PS',
   // RBC indices
-  MCV: 'MCV', MCH: 'MCH', MCHC: 'MCHC',
+  MCV: 'MCV', 'M.C.V': 'MCV', MCH: 'MCH', 'M.C.H': 'MCH', MCHC: 'MCHC', 'M.C.H.C': 'MCHC',
   RDW: 'RDW', 'RDW-CV': 'RDW', 'RDW.CV': 'RDW',
   MPV: 'MPV',
   // Coagulation
@@ -85,7 +85,7 @@ export const TEST_ALIASES: Record<string, string> = {
   'D.BILI': 'D.BILI', DBILI: 'D.BILI', 'DIRECT BILIRUBIN': 'D.BILI',
   // Protein
   TP: 'TP', 'TOTAL PROTEIN': 'TP',
-  ALB: 'ALB', ALBUMIN: 'ALB',
+  ALB: 'ALB', ALBUMIN: 'ALB', '白蛋白': 'ALB',
   // BUN
   BUN: 'BUN', 'UREA NITROGEN': 'BUN', UREA: 'BUN',
   // Uric acid
@@ -124,7 +124,7 @@ export const TEST_ALIASES: Record<string, string> = {
   HBA1: 'HBA1C', A1C: 'HBA1C',
   'HEMOGLOBIN A1C': 'HBA1C', 'HEMOGLOBINA1C': 'HBA1C',
   'GLYCATED HEMOGLOBIN': 'HBA1C', GLYCATEDHEMOGLOBIN: 'HBA1C',
-  'GLYCOHEMOGLOBIN': 'HBA1C',
+  'GLYCOHEMOGLOBIN': 'HBA1C', '糖化血色素': 'HBA1C', '糖化血紅素': 'HBA1C',
   // Glucose variants
   'GLU-AC': 'GLUCOSE', GLUAC: 'GLUCOSE', 'GLUCOSE AC': 'GLUCOSE', GLUCOSEAC: 'GLUCOSE',
   'GLUCOSE(AC)': 'GLUCOSE', 'GLU(AC)': 'GLUCOSE',
@@ -228,6 +228,8 @@ export const TEST_ALIASES: Record<string, string> = {
   '肌酐、尿': 'CREA', 'Urine Creatinine': 'CREA', 'URINE CREATININE': 'CREA', 'URINECREATININE': 'CREA',
   // Microalbumin / Micro Albumin / MALB(U)
   'Micro Albumin:': 'MALB', 'MICRO ALBUMIN:': 'MALB', 'Micro Albumin': 'MALB', 'MICRO ALBUMIN': 'MALB',
+  MICROALBUMIN: 'MALB', MICROALB: 'MALB', '微小白蛋白': 'MALB', '微白蛋白': 'MALB',
+  '微量白蛋白': 'MALB', '尿微量白蛋白': 'MALB', '尿白蛋白': 'MALB',
   'MALB(U)(半定量)': 'MALB', 'MALB(U)': 'MALB',
   // Urine protein / 尿蛋白
   'Urine Protein': 'PROT', 'URINE PROTEIN': 'PROT', 'URINEPROTEIN': 'PROT', '尿蛋白': 'PROT',
@@ -558,7 +560,10 @@ export function canonicalKeyFromLoinc(obs: any): string | null {
 // Normalize a raw test display name: strips parens, CJK, prefixes, then
 // returns both a stripped form and a fully collapsed (no separators) form.
 export function normalizeTestName(raw: string): { stripped: string; collapsed: string } {
-  let s = raw.trim()
+  // NFKC folds fullwidth ASCII (e.g. ＭＣＶ) and compatibility punctuation
+  // into the same representation used by the alias table. The source display
+  // remains untouched; this normalization is only for comparison.
+  let s = raw.normalize('NFKC').trim()
   s = s.replace(/\s*[\(\[（［].*$/, '')
   s = s.replace(/\s*[一-鿿].*$/, '')
   s = s.replace(/[.…]+\s*$/, '').trim()
@@ -698,8 +703,9 @@ export function getAnalyteCanonicalKey(
 // in useLabPivot so both pathways agree.
 export function canonicalTestKeyFromString(raw: string): string {
   if (!raw) return 'UNKNOWN'
-  if (TEST_ALIASES[raw]) return TEST_ALIASES[raw]
-  const rawUpper = raw.toUpperCase()
+  const normalizedRaw = raw.normalize('NFKC')
+  if (TEST_ALIASES[normalizedRaw]) return TEST_ALIASES[normalizedRaw]
+  const rawUpper = normalizedRaw.toUpperCase()
   if (TEST_ALIASES[rawUpper]) return TEST_ALIASES[rawUpper]
   const { stripped, collapsed } = normalizeTestName(raw)
   if (TEST_ALIASES[stripped]) return TEST_ALIASES[stripped]

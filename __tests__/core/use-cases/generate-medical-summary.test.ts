@@ -220,6 +220,20 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-old' }],
         },
         {
+          id: 'a1c-mid-1',
+          category: [{ text: 'Laboratory' }],
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2026-03-10',
+          result: [{ reference: 'Observation/obs-a1c-mid-1' }],
+        },
+        {
+          id: 'a1c-mid-2',
+          category: [{ text: 'Laboratory' }],
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2026-01-08',
+          result: [{ reference: 'Observation/obs-a1c-mid-2' }],
+        },
+        {
           id: 'psa-new',
           category: [{ text: 'Laboratory' }],
           code: { text: 'PSA' },
@@ -262,6 +276,18 @@ describe('buildLongitudinalInvestigationContext', () => {
           valueQuantity: { value: 6.7, unit: '%' },
         },
         {
+          id: 'obs-a1c-mid-1',
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2026-03-10',
+          valueQuantity: { value: 6.8, unit: '%' },
+        },
+        {
+          id: 'obs-a1c-mid-2',
+          code: { text: 'HbA1c' },
+          effectiveDateTime: '2026-01-08',
+          valueQuantity: { value: 7.0, unit: '%' },
+        },
+        {
           id: 'obs-psa-new',
           code: { text: 'PSA' },
           effectiveDateTime: '2026-06-02',
@@ -279,7 +305,9 @@ describe('buildLongitudinalInvestigationContext', () => {
     const context = buildLongitudinalInvestigationContext(input as never, catalog)
 
     expect(context).toContain('NOT a single result')
-    expect(context).toContain('HbA1c: 6.7 % (2025-12-09;')
+    expect(context).not.toContain('6.7 % (2025-12-09;')
+    expect(context).toContain('HbA1c: 7 % (2026-01-08;')
+    expect(context).toContain('6.8 % (2026-03-10;')
     expect(context).toContain('6.6 % (2026-06-02;')
     expect(context).toContain('PSA: 1.32 ng/mL (2025-02-10;')
     expect(context).toContain('0.64 ng/mL (2026-06-02;')
@@ -637,7 +665,7 @@ describe('finalizeResult', () => {
           label: 'HbA1c',
           kind: 'lab',
           direction: 'worsening',
-          trend: '7.2% → 8.4%',
+          trend: '6.8% → 7.2% → 7.9% → 8.4%',
           interpretation: '血糖控制變差',
           sources: ['L1', 'L99'],
         },
@@ -658,6 +686,7 @@ describe('finalizeResult', () => {
     expect(result.investigations[0]).toMatchObject({
       kind: 'lab',
       direction: 'worsening',
+      trend: '7.2% → 7.9% → 8.4%',
       sourceKeys: ['L1', 'L99'],
     })
     expect(result.investigations[1]).toMatchObject({ kind: 'other', direction: 'unknown' })

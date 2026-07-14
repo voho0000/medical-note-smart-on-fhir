@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AlertCircle, ClipboardList, Database, LayoutList, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
+import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useMedicalSummaryOrchestrator } from "@/src/application/hooks/medical-summary/use-medical-summary-orchestrator.hook"
 import {
@@ -52,6 +53,10 @@ import {
   MedicalSummaryCardNav,
   type MedicalSummaryCardNavItem,
 } from "./components/MedicalSummaryCardNav"
+import {
+  buildInvestigationCumulativeTargets,
+  type InvestigationCumulativeTarget,
+} from "./utils/investigation-cumulative-target"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
 import type {
@@ -82,6 +87,7 @@ function findVerticalScrollContainer(element: HTMLElement): HTMLElement | null {
 export default function MedicalSummaryFeature() {
   const { t } = useLanguage()
   const { audience } = useAudience()
+  const { diagnosticReports, observations } = useClinicalData()
   const base = t.medicalSummary
   const isPatient = audience === "patient"
   // Patient keys override the clinician base set (same pattern as safety).
@@ -223,6 +229,58 @@ export default function MedicalSummaryFeature() {
       }, NAV_CLAIM_TIMEOUT_MS)
     },
     [navFallbackMsg],
+  )
+
+  const investigationCumulativeTargets = useMemo(
+    () => result
+      ? buildInvestigationCumulativeTargets(result, diagnosticReports, observations)
+      : [],
+    [diagnosticReports, observations, result],
+  )
+  const [openingCumulativeTarget, setOpeningCumulativeTarget] = useState<InvestigationCumulativeTarget | null>(null)
+  const openingCumulativeNavSeqRef = useRef<number | null>(null)
+  const openingCumulativeTimerRef = useRef<number | null>(null)
+  const consumedNavSeq = useResourceNavigationStore((state) => state.consumedSeq)
+
+  useEffect(() => () => {
+    if (openingCumulativeTimerRef.current !== null) {
+      window.clearTimeout(openingCumulativeTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    const openingSeq = openingCumulativeNavSeqRef.current
+    if (openingSeq === null || consumedNavSeq < openingSeq) return
+    openingCumulativeNavSeqRef.current = null
+    setOpeningCumulativeTarget(null)
+  }, [consumedNavSeq])
+
+  const openCumulativeReport = useCallback(
+    (target: InvestigationCumulativeTarget) => {
+      setOpeningCumulativeTarget(target)
+      openingCumulativeNavSeqRef.current = null
+      if (openingCumulativeTimerRef.current !== null) {
+        window.clearTimeout(openingCumulativeTimerRef.current)
+      }
+
+      // Give React one paint to show the spinner before mounting the reports
+      // feature. A local bundle can make that first mount CPU-heavy; starting
+      // it in the same click task makes the button look unresponsive.
+      openingCumulativeTimerRef.current = window.setTimeout(() => {
+        openingCumulativeTimerRef.current = null
+        navigateToResource({
+          resourceType: target.resourceType,
+          resourceId: target.resourceId,
+          display: target.display,
+          date: target.date,
+          reportView: 'cumulative',
+          cumulativeCategoryId: target.categoryId,
+          cumulativeAnalyteKey: target.analyteKey,
+        })
+        openingCumulativeNavSeqRef.current = useResourceNavigationStore.getState().seq
+      }, 50)
+    },
+    [navigateToResource],
   )
 
   // Render a safety alert's cited source keys as a navigable citation — the
@@ -506,6 +564,11 @@ export default function MedicalSummaryFeature() {
           unverifiedLabel={ms.unverified}
           showMoreLabel={ms.showMoreItems}
           showLessLabel={ms.showLessItems}
+          openCumulativeLabel={ms.openCumulativeReport}
+          openingCumulativeLabel={ms.openingCumulativeReport}
+          cumulativeTargets={investigationCumulativeTargets}
+          openingCumulativeTarget={openingCumulativeTarget}
+          onOpenCumulative={openCumulativeReport}
           onNavigate={navigateToResource}
         />
       </div>

@@ -116,6 +116,8 @@ export const zhTW = {
     narrativeTitle: '跨院病程摘要',
     investigationsTitle: '關鍵檢驗與檢查趨勢',
     investigationsSubtitle: '依目前問題挑選最相關的檢驗、病理與影像；單次結果不會誤判為趨勢。',
+    openCumulativeReport: '查看累積報告',
+    openingCumulativeReport: '正在開啟…',
     decisionsTitle: '其他待確認事項',
     timelineTitle: '跨院時間軸',
     intro: '由 AI 將跨院就醫、用藥與檢驗彙整成一頁摘要：病程敘事、安全警示、待決事項與時間軸。',
