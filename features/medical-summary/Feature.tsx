@@ -630,24 +630,29 @@ export default function MedicalSummaryFeature() {
         }}
         className="gap-2"
       >
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 @min-[36rem]:flex-nowrap">
         <ClipboardList className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
-        <h2 className="text-base font-semibold text-foreground">{ms.title}</h2>
-        <span className="rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
+        <h2 className="shrink-0 text-base font-semibold text-foreground">{ms.title}</h2>
+        <span className="shrink-0 rounded-md bg-teal-100 px-2 py-0.5 text-[0.6875rem] font-medium text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
           {ms.badge}
         </span>
         <TabsList className="h-7 w-auto rounded-lg p-0.5 shadow-none">
-          <TabsTrigger value="standard" className="min-w-20 rounded-md px-2.5 py-0.5 text-xs">
-            {ms.standardSummaryTab}
+          <TabsTrigger
+            value="standard"
+            aria-label={ms.standardSummaryTab}
+            className="min-w-14 rounded-md px-2 py-0.5 text-xs focus-visible:border-teal-500 focus-visible:ring-teal-400/40 data-[state=active]:border-teal-300 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800 dark:data-[state=active]:border-teal-700 dark:data-[state=active]:bg-teal-950/70 dark:data-[state=active]:text-teal-200"
+          >
+            {ms.standardSummaryTabShort}
           </TabsTrigger>
           <TabsTrigger
             value="custom"
             title={ms.customInsightsSubtitle}
-            className="relative min-w-20 rounded-md px-2.5 py-0.5 text-xs"
+            aria-label={ms.customSummaryTab}
+            className="group relative min-w-16 rounded-md px-2 py-0.5 text-xs focus-visible:border-violet-500 focus-visible:ring-violet-400/40 data-[state=active]:border-violet-300 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:border-violet-700 dark:data-[state=active]:bg-violet-950/70 dark:data-[state=active]:text-violet-200"
           >
-            <span>{ms.customSummaryTab}</span>
+            <span>{ms.customSummaryTabShort}</span>
             {visibleInsightCount > 0 ? (
-              <span className="rounded-full bg-muted px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground">
+              <span className="rounded-full bg-muted px-1.5 py-0 text-[0.625rem] tabular-nums text-muted-foreground group-data-[state=active]:bg-violet-200 group-data-[state=active]:text-violet-800 dark:group-data-[state=active]:bg-violet-800 dark:group-data-[state=active]:text-violet-100">
                 {visibleInsightCount}
               </span>
             ) : null}
@@ -662,7 +667,7 @@ export default function MedicalSummaryFeature() {
             ) : null}
           </TabsTrigger>
         </TabsList>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        <div className="ml-auto flex min-w-0 flex-nowrap items-center justify-end gap-1.5">
           {activeView === "standard" ? (
             <ModelPicker
               modelId={model}
@@ -683,7 +688,15 @@ export default function MedicalSummaryFeature() {
           )}
           {activeView === "standard" ? (
             hasPatient && dataReady ? (
-              <Button onClick={() => void generate()} size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-xs" disabled={isBusy || isRestoring}>
+              <Button
+                onClick={() => void generate()}
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 px-2 text-xs"
+                disabled={isBusy || isRestoring}
+                title={hasAnyResult ? ms.regenerate : undefined}
+                aria-label={hasAnyResult ? ms.regenerate : undefined}
+              >
                 {isBusy ? (
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                 ) : hasAnyResult ? (
@@ -712,13 +725,14 @@ export default function MedicalSummaryFeature() {
             <PopoverTrigger asChild>
               <Button
                 type="button"
-                size="icon"
-                variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "ghost"}
-                className="h-7 w-7 text-muted-foreground"
+                size="sm"
+                variant={summarySettingsOpen || dataScopeOpen ? "secondary" : "outline"}
+                className="h-7 gap-1 px-2 text-xs"
                 title={ms.summaryControls}
                 aria-label={ms.summaryControls}
               >
                 <Settings2 className="h-3.5 w-3.5" />
+                {t.tabs.settings}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-64 space-y-1 p-2">
