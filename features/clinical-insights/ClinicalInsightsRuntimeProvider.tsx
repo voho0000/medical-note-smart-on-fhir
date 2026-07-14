@@ -119,6 +119,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
 
   const {
     runPanel,
+    runPanels,
     stopPanel,
     stopAll,
     responses,
@@ -250,7 +251,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     canGenerate: canGenerate && clinicalDataReady && !authLoading && hydratedCacheIdentity === cacheIdentity,
     context,
     modelId: model,
-    runPanel,
+    runPanels,
     responses,
     panelStatus,
     runScope: autoRunScope,

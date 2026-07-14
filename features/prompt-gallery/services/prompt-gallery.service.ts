@@ -20,7 +20,12 @@ import {
   QueryConstraint,
 } from 'firebase/firestore'
 import { db } from '@/src/shared/config/firebase.config'
-import type { SharedPrompt, PromptGalleryFilter, PromptGallerySort } from '../types/prompt.types'
+import {
+  normalizePromptTypes,
+  type SharedPrompt,
+  type PromptGalleryFilter,
+  type PromptGallerySort,
+} from '../types/prompt.types'
 
 const COLLECTION_NAME = 'sharedPrompts'
 
@@ -37,7 +42,7 @@ function convertToSharedPrompt(id: string, data: any): SharedPrompt {
     title: data.title,
     description: data.description,
     prompt: data.prompt,
-    types: data.types || [],
+    types: normalizePromptTypes(id, data.types),
     category: data.category,
     specialty: data.specialty || [],
     audience,
@@ -46,6 +51,7 @@ function convertToSharedPrompt(id: string, data: any): SharedPrompt {
     updatedAt: data.updatedAt?.toDate() || new Date(),
     authorId: data.authorId,
     authorName: data.authorName,
+    isAnonymous: data.isAnonymous === true,
     usageCount: data.usageCount || 0,
   }
 }
@@ -60,17 +66,22 @@ export async function getSharedPrompts(
   try {
     const constraints: QueryConstraint[] = []
 
-    // Apply filters
-    // Note: Firestore allows only one array-contains per query
-    // Priority: types > specialty (specialty will be filtered client-side if both exist)
-    if (filter?.type) {
+    // `summary` replaced the stored `insight` value. Fetch that type broadly
+    // and normalize/filter below so both legacy Insight records and the
+    // upgraded built-in templates are discoverable without a database flag day.
+    const filterSummaryClientSide = filter?.type === 'summary'
+
+    // Apply filters. Firestore allows only one array-contains per query.
+    // Priority: server-side type > specialty.
+    if (filter?.type && !filterSummaryClientSide) {
       constraints.push(where('types', 'array-contains', filter.type))
     }
     if (filter?.category) {
       constraints.push(where('category', '==', filter.category))
     }
-    // Only add specialty to Firestore query if types is not present
-    if (filter?.specialty && !filter?.type) {
+    // Summary type filtering happens client-side, so specialty can still use
+    // the one available array-contains slot in that case.
+    if (filter?.specialty && (!filter?.type || filterSummaryClientSide)) {
       constraints.push(where('specialty', 'array-contains', filter.specialty))
     }
 
@@ -91,7 +102,12 @@ export async function getSharedPrompts(
       convertToSharedPrompt(doc.id, doc.data())
     )
 
-    // Client-side filtering for search query, tags, and specialty (when types is also present)
+    if (filterSummaryClientSide) {
+      prompts = prompts.filter((prompt) => prompt.types.includes('summary'))
+    }
+
+    // Client-side filtering for search query, tags, and specialty (when type
+    // filtering already consumed Firestore's array-contains slot).
     if (filter?.searchQuery) {
       const searchLower = filter.searchQuery.toLowerCase()
       prompts = prompts.filter(
@@ -112,7 +128,7 @@ export async function getSharedPrompts(
 
     // Filter by specialty on client-side if types filter is also present
     // (to avoid Firestore's limitation of one array-contains per query)
-    if (filter?.specialty && filter?.type) {
+    if (filter?.specialty && filter?.type && !filterSummaryClientSide) {
       prompts = prompts.filter((p) => p.specialty.includes(filter.specialty!))
     }
 
@@ -256,17 +272,17 @@ export async function getMySharedPrompts(
     // Filter by author
     constraints.push(where('authorId', '==', userId))
 
-    // Apply additional filters
-    // Note: Firestore allows only one array-contains per query
-    // Priority: types > specialty (specialty will be filtered client-side if both exist)
-    if (filter?.type) {
+    const filterSummaryClientSide = filter?.type === 'summary'
+
+    // Apply additional filters. See getSharedPrompts for the legacy
+    // insight-to-summary compatibility rationale.
+    if (filter?.type && !filterSummaryClientSide) {
       constraints.push(where('types', 'array-contains', filter.type))
     }
     if (filter?.category) {
       constraints.push(where('category', '==', filter.category))
     }
-    // Only add specialty to Firestore query if types is not present
-    if (filter?.specialty && !filter?.type) {
+    if (filter?.specialty && (!filter?.type || filterSummaryClientSide)) {
       constraints.push(where('specialty', 'array-contains', filter.specialty))
     }
 
@@ -287,7 +303,12 @@ export async function getMySharedPrompts(
       convertToSharedPrompt(doc.id, doc.data())
     )
 
-    // Client-side filtering for search query, tags, and specialty (when types is also present)
+    if (filterSummaryClientSide) {
+      prompts = prompts.filter((prompt) => prompt.types.includes('summary'))
+    }
+
+    // Client-side filtering for search query, tags, and specialty (when the
+    // type filter already consumed Firestore's array-contains slot).
     if (filter?.searchQuery) {
       const searchLower = filter.searchQuery.toLowerCase()
       prompts = prompts.filter(
@@ -306,7 +327,7 @@ export async function getMySharedPrompts(
     }
 
     // Filter by specialty on client-side if types filter is also present
-    if (filter?.specialty && filter?.type) {
+    if (filter?.specialty && filter?.type && !filterSummaryClientSide) {
       prompts = prompts.filter((p) => p.specialty.includes(filter.specialty!))
     }
 

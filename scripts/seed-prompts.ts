@@ -16,6 +16,11 @@
  *
  * 預設只 seed「民眾版（patient）」起始模板 —— 醫療版假設線上已存在（當初已 seed），
  * 重複 seed 會產生重複資料。使用確定性的 doc id + setDoc，所以可安全重跑（upsert）。
+ *
+ * 範本類型只對應目前產品的兩個使用位置：
+ *   - chat：AI 對話範本
+ *   - summary：醫療摘要裡的自訂摘要模組
+ * 舊的 insight 類型已退場，App 讀取舊資料時會相容轉為 summary。
  */
 
 import { initializeApp } from 'firebase/app'
@@ -41,16 +46,19 @@ interface SeedPrompt {
   title: string
   description: string
   prompt: string
-  types: ('chat' | 'insight')[]
+  types: ('chat' | 'summary')[]
   category: string
   specialty: string[]
   audience: ('medical' | 'patient')[]
   tags: string[]
 }
 
-// 通用安全語：每個民眾版 prompt 都帶上，確保 AI 不會叫病人自行調藥、且鼓勵與醫療團隊確認。
+// 通用接地與安全語：範本不論是放進對話或自訂摘要，都必須能獨立、
+// 可重複執行，且不能用常識補齊健康存摺沒有的資料。
 const PATIENT_SAFETY_NOTE =
-  '\n\n（重要：以上內容僅供參考與衛教，實際判斷請以您的醫療團隊為準；' +
+  '\n\n（請只根據我已匯入的健康資料整理；資料中沒有的日期、症狀、診斷、劑量或醫囑，' +
+  '請清楚標示「資料未提供／請向醫療團隊確認」，不要臆測。\n' +
+  '重要：以上內容僅供參考與衛教，實際判斷請以您的醫療團隊為準；' +
   '請勿自行開始、停止或調整任何藥物，任何調整都請先與您的醫師或藥師確認。）'
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -68,7 +76,7 @@ const patientPrompts: SeedPrompt[] = [
       '3. 哪些項目建議回哪一科進一步追蹤\n\n' +
       '請避免艱深術語，重點放在我看得懂、用得上。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'summary',
     specialty: ['general'],
     audience: ['patient'],
@@ -86,7 +94,7 @@ const patientPrompts: SeedPrompt[] = [
       '4. 回家後要特別注意什麼、大約何時回診\n\n' +
       '請避免醫學術語，必要時用括號簡單說明。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'summary',
     specialty: ['general'],
     audience: ['patient'],
@@ -103,7 +111,7 @@ const patientPrompts: SeedPrompt[] = [
       '3. 服用時要注意什麼（例如飯前/飯後、要避免與什麼一起吃）\n\n' +
       '請用條列、好閱讀的方式呈現。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'other',
     specialty: ['general'],
     audience: ['patient'],
@@ -120,7 +128,7 @@ const patientPrompts: SeedPrompt[] = [
       '3. 回診前可以先準備或記錄的事項\n\n' +
       '這是一般性建議，實際請依您的主治醫師安排。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'other',
     specialty: ['general'],
     audience: ['patient'],
@@ -137,7 +145,7 @@ const patientPrompts: SeedPrompt[] = [
       '3. 生活、飲食、後續追蹤相關\n\n' +
       '請用簡單、口語的方式條列，讓我可以直接拿去問。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'other',
     specialty: ['general'],
     audience: ['patient'],
@@ -154,7 +162,7 @@ const patientPrompts: SeedPrompt[] = [
       '3. 哪些習慣對我的狀況特別重要\n\n' +
       '請用白話、可執行的方式說明。若您有特殊飲食限制或正在控制特定疾病，請以醫療團隊指示為準。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'other',
     specialty: ['general'],
     audience: ['patient'],
@@ -172,7 +180,7 @@ const patientPrompts: SeedPrompt[] = [
       '🟢 下次回診再提即可：（輕微、可先觀察的變化）\n\n' +
       '若無法確定屬於哪一類，請寧可提早就醫。緊急狀況請直接撥打 119 或前往急診。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'safety',
     specialty: ['general'],
     audience: ['patient'],
@@ -191,7 +199,7 @@ const patientPrompts: SeedPrompt[] = [
       '4. 搭配的生活習慣重點\n\n' +
       '請用白話、條列、好執行的方式說明。數值目標與用藥請以您的醫師為準。' +
       PATIENT_SAFETY_NOTE,
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'other',
     specialty: ['general'],
     audience: ['patient'],
@@ -242,7 +250,7 @@ const medicalPrompts: SeedPrompt[] = [
       '請檢查以下安全事項並標記需要注意的項目：\n\n' +
       '1. 藥物交互作用\n2. 過敏史衝突\n3. 異常檢驗值\n' +
       '4. 重複用藥\n5. 劑量異常\n6. 禁忌症\n\n請列出所有發現的安全警示。',
-    types: ['insight'],
+    types: ['summary'],
     category: 'safety',
     specialty: ['general'],
     audience: ['medical'],
@@ -255,7 +263,7 @@ const medicalPrompts: SeedPrompt[] = [
     prompt:
       '請總結病人的臨床狀況：\n\n' +
       '1. 主要診斷\n2. 目前治療\n3. 近期變化\n4. 待辦事項\n5. 追蹤計畫',
-    types: ['chat', 'insight'],
+    types: ['chat', 'summary'],
     category: 'summary',
     specialty: ['general', 'internal'],
     audience: ['medical'],
@@ -283,7 +291,7 @@ const medicalPrompts: SeedPrompt[] = [
       '請撰寫出院摘要：\n\n' +
       '1. 入院日期與主訴\n2. 住院期間診斷與治療\n3. 出院時狀況\n' +
       '4. 出院用藥\n5. 追蹤計畫\n6. 衛教事項',
-    types: ['chat'],
+    types: ['chat', 'summary'],
     category: 'discharge',
     specialty: ['general', 'internal', 'surgery'],
     audience: ['medical'],

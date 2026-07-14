@@ -1,6 +1,6 @@
 // Custom Hook: Insight Generation State Management
 // Business logic delegated to Use Case
-import { useCallback, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { getUserErrorMessage } from '@/src/core/errors'
 import { useGenerateInsight } from '@/src/application/hooks/clinical-insights/use-generate-insight.hook'
@@ -24,6 +24,7 @@ interface UseInsightGenerationProps {
 
 interface UseInsightGenerationReturn {
   runPanel: (panelId: string, options?: { force?: boolean }) => Promise<void>
+  runPanels: (panelIds: string[], options?: { force?: boolean }) => Promise<void>
   stopPanel: (panelId: string) => void
   stopAll: () => void
   responses: Record<string, ResponseEntry>
@@ -41,155 +42,135 @@ export function useInsightGeneration({
   const { locale } = useLanguage()
   const generateInsight = useGenerateInsight()
   // Responses/status live in a module-level store so they survive the panel
-  // unmounting on tab switches (see useInsightResponsesStore). currentPanelId is
-  // only meaningful during an active stream, so it stays local.
+  // unmounting on tab switches (see useInsightResponsesStore).
   const responses = useInsightResponsesStore((s) => s.responses)
   const setResponses = useInsightResponsesStore((s) => s.setResponses)
   const panelStatus = useInsightResponsesStore((s) => s.panelStatus)
   const setPanelStatus = useInsightResponsesStore((s) => s.setPanelStatus)
-  const [, setCurrentPanelId] = useState<string | null>(null)
-  const runPanel = useCallback(
-    async (panelId: string, options?: { force?: boolean }) => {
+  const completeBatch = useInsightResponsesStore((s) => s.completeBatch)
+  // Incremented for every new batch and cancellation. A superseded request may
+  // still finish at the transport layer, but it can never publish stale data.
+  const runIdRef = useRef(0)
+
+  const runPanels = useCallback(
+    async (panelIds: string[], options?: { force?: boolean }) => {
       const force = options?.force ?? false
-      const panel = panels.find((item) => item.id === panelId)
-      if (!panel) return
+      const uniquePanelIds = [...new Set(panelIds)]
+      const prepared = uniquePanelIds.flatMap((panelId) => {
+        const panel = panels.find((item) => item.id === panelId)
+        if (!panel) return []
 
-      const prompt = prompts[panelId] ?? panel.prompt
-      // Read through the store, NOT the subscribed `responses` — with it in the
-      // dependency array this callback (and every memo built on it) was rebuilt
-      // on each streamed chunk, re-rendering all panels while one streamed.
-      const responseEntry = useInsightResponsesStore.getState().responses[panelId]
+        // Read through the store so this callback does not depend on every
+        // completed result. Edited modules remain protected unless forced.
+        const responseEntry = useInsightResponsesStore.getState().responses[panelId]
+        if (!force && responseEntry?.isEdited) return []
 
-      // Skip if already edited (unless forced)
-      if (!force && responseEntry?.isEdited) {
-        return
-      }
-
-      // Use Use Case to validate and build messages
-      const input = {
-        prompt,
-        clinicalContext: context,
-        modelId: model,
-      }
-
-      const validation = generateInsight.validate(input)
-      if (!validation.valid) {
-        console.warn(`Validation failed: ${validation.error}`)
-        return
-      }
-
-      const messages = generateInsight.buildMessages(input)
+        const input = {
+          prompt: prompts[panelId] ?? panel.prompt,
+          clinicalContext: context,
+          modelId: model,
+        }
+        const validation = generateInsight.validate(input)
+        if (!validation.valid) {
+          console.warn(`Validation failed: ${validation.error}`)
+          return []
+        }
+        return [{ panel, messages: generateInsight.buildMessages(input) }]
+      })
+      if (prepared.length === 0) return
 
       // The responses store + ai instance survive patient switches (module
       // store, forceMounted tab), but panel ids are stable across patients — a
-      // stream still running when the patient changes would write the OLD
+      // request still running when the patient changes could write the OLD
       // patient's text into the NEW patient's panel (and it would then be
       // persisted into the new patient's cache). Remember who this run belongs
       // to and drop every write once the owner changes.
       const owner = useInsightResponsesStore.getState().ownerPatientId
       const ownerChanged = () => useInsightResponsesStore.getState().ownerPatientId !== owner
+      // Custom summaries are intentionally single-batch. Starting another run
+      // cancels the prior transport and invalidates every pending write.
+      ai.stop()
+      const runId = ++runIdRef.current
+      const activePanelIds = prepared.map(({ panel }) => panel.id)
 
-      // State management: Set loading state
-      setCurrentPanelId(panelId)
-      setResponses((prev) => ({
-        ...prev,
-        [panelId]: { text: "", isEdited: false, metadata: prev[panelId]?.metadata },
-      }))
+      // Keep any previous complete result in place while regenerating. For a
+      // first run the cards show only a loading state. No partial response is
+      // written at any point.
       setPanelStatus((prev) => ({
-        ...prev,
-        [panelId]: { isLoading: true, error: null },
+        ...Object.fromEntries(
+          Object.entries(prev).map(([id, status]) => [
+            id,
+            status.isLoading ? { ...status, isLoading: false } : status,
+          ]),
+        ),
+        ...Object.fromEntries(
+          activePanelIds.map((panelId) => [panelId, { isLoading: true, error: null }]),
+        ),
       }))
 
-      try {
-        const overflow = preflightContextWarning(
-          messages.map((message) => message.content).join('\n\n'),
-          model,
-          locale,
-        )
-        if (overflow) throw new Error(overflow)
-        // Use unified AI streaming
-        await ai.stream(messages, {
-          modelId: model,
-          onChunk: (chunk) => {
-            if (ownerChanged()) return
-            // State management: Update response during streaming
-            setResponses((prev) => ({
-              ...prev,
-              [panelId]: { 
-                text: chunk, 
-                isEdited: false, 
-                metadata: prev[panelId]?.metadata 
-              },
-            }))
-          },
-          onComplete: (fullText) => {
-            if (ownerChanged()) return
-            // Use Use Case to build metadata
-            const metadata = generateInsight.buildMetadata(model)
+      const entries: Record<string, ResponseEntry> = {}
+      const errors: Record<string, Error> = {}
 
-            // State management: Final update
-            setResponses((prev) => ({
-              ...prev,
-              [panelId]: { 
-                text: fullText, 
-                isEdited: false, 
-                metadata 
-              },
-            }))
+      // Keep calls sequential to avoid a burst of simultaneous model requests,
+      // but stage every completed result locally. completeBatch publishes the
+      // whole set through one store update only after the final call settles.
+      for (const { panel, messages } of prepared) {
+        if (runIdRef.current !== runId || ownerChanged()) return
+        try {
+          const overflow = preflightContextWarning(
+            messages.map((message) => message.content).join('\n\n'),
+            model,
+            locale,
+          )
+          if (overflow) throw new Error(overflow)
+          const fullText = await ai.query(messages, { modelId: model })
+          if (runIdRef.current !== runId || ownerChanged()) return
+          entries[panel.id] = {
+            text: fullText,
+            isEdited: false,
+            metadata: generateInsight.buildMetadata(model),
           }
-        })
-        
-        // State management: Clear loading state
-        if (!ownerChanged()) {
-          setPanelStatus((prev) => ({
-            ...prev,
-            [panelId]: { isLoading: false, error: null },
-          }))
+        } catch (error) {
+          if (runIdRef.current !== runId || ownerChanged()) return
+          const errorMessage = getUserErrorMessage(error)
+          console.error(`Failed to generate custom summary for ${panel.title}:`, errorMessage, error)
+          errors[panel.id] = new Error(errorMessage)
         }
-      } catch (error) {
-        const errorMessage = getUserErrorMessage(error)
-        console.error(`Failed to generate insight for ${panel.title}:`, errorMessage, error)
-
-        // State management: Set error state
-        if (!ownerChanged()) {
-          setPanelStatus((prev) => ({
-            ...prev,
-            [panelId]: {
-              isLoading: false,
-              error: new Error(errorMessage),
-            },
-          }))
-        }
-      } finally {
-        setCurrentPanelId(null)
       }
+
+      if (runIdRef.current !== runId || ownerChanged()) return
+      completeBatch(activePanelIds, entries, errors)
     },
-    [context, panels, prompts, model, locale, ai, generateInsight, setResponses, setPanelStatus],
+    [ai, completeBatch, context, generateInsight, locale, model, panels, prompts, setPanelStatus],
+  )
+
+  const runPanel = useCallback(
+    (panelId: string, options?: { force?: boolean }) => runPanels([panelId], options),
+    [runPanels],
   )
 
   const stopPanel = useCallback(
-    (panelId: string) => {
-      // Stop streaming using unified AI
+    (_panelId: string) => {
+      // Unified AI cancellation is batch-wide; invalidate every pending write
+      // and clear every loading indicator together.
+      runIdRef.current += 1
       ai.stop()
-
-      // Update panel status to not loading
-      setPanelStatus((prev) => ({
-        ...prev,
-        [panelId]: { isLoading: false, error: null },
-      }))
-
-      // Clear current panel ID
-      setCurrentPanelId(null)
+      setPanelStatus((prev) => Object.fromEntries(
+        Object.entries(prev).map(([id, status]) => [
+          id,
+          status.isLoading ? { isLoading: false, error: null } : status,
+        ]),
+      ))
     },
     [ai, setPanelStatus]
   )
 
-  // Abort every in-flight stream (patient switch: their output must not reach
+  // Abort every in-flight request (patient switch: its output must not reach
   // the next patient's panels, and the tokens are wasted anyway).
   const stopAll = useCallback(() => {
+    runIdRef.current += 1
     ai.stop()
-    setCurrentPanelId(null)
   }, [ai])
 
-  return { runPanel, stopPanel, stopAll, responses, panelStatus, setResponses }
+  return { runPanel, runPanels, stopPanel, stopAll, responses, panelStatus, setResponses }
 }

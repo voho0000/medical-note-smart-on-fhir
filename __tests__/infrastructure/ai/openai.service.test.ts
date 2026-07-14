@@ -123,6 +123,23 @@ describe('OpenAiService', () => {
       await expect(service.query(mockRequest)).rejects.toThrow()
     })
 
+    it('should forward caller cancellation to the non-streaming request', async () => {
+      mockFetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal
+        signal.addEventListener('abort', () => {
+          const error = new Error('The operation was aborted')
+          error.name = 'AbortError'
+          reject(error)
+        }, { once: true })
+      }))
+      const controller = new AbortController()
+      const pending = service.query({ ...mockRequest, signal: controller.signal })
+
+      controller.abort()
+
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    })
+
     it('should set temperature to 1 for gpt-5-mini', async () => {
       // Reset mock to clear any leftover mock implementations
       mockFetch.mockReset()

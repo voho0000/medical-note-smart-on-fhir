@@ -16,7 +16,7 @@ interface UseAutoGenerateProps {
   canGenerate: boolean
   context: string
   modelId: string
-  runPanel: (panelId: string) => Promise<void>
+  runPanels: (panelIds: string[]) => Promise<void>
   /** Current responses — a panel that already has output (this session OR
    *  restored from cache on reload) is NOT auto-run again. */
   responses?: Record<string, { text?: string } | undefined>
@@ -58,7 +58,7 @@ export function useAutoGenerate({
   canGenerate,
   context,
   modelId,
-  runPanel,
+  runPanels,
   responses,
   panelStatus,
   runScope,
@@ -94,11 +94,9 @@ export function useAutoGenerate({
     // Mark these panels as auto-run
     panelIds.forEach((panelId) => autoRunPanels.current.add(panelId))
 
-    const autoRun = async () => {
-      // Run one card at a time. This keeps streaming state independent and
-      // avoids a burst of simultaneous background model calls on patient load.
-      for (const panelId of panelIds) await runPanel(panelId)
-    }
+    // The generation hook keeps requests sequential internally, then publishes
+    // every completed module in one atomic batch after all calls settle.
+    const autoRun = async () => runPanels(panelIds)
 
     autoRun().catch((error) => {
       const errorMessage = getUserErrorMessage(error)
@@ -106,7 +104,7 @@ export function useAutoGenerate({
       // Remove failed panels from the set so they can be retried
       panelIds.forEach((panelId) => autoRunPanels.current.delete(panelId))
     })
-  }, [canGenerate, context, modelId, panelStatus, panels, runPanel, responses, runScope])
+  }, [canGenerate, context, modelId, panelStatus, panels, runPanels, responses, runScope])
 
   return { autoRunPanels }
 }

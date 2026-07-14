@@ -2,13 +2,13 @@
 
 ## 概述
 
-Prompt Gallery 是一個完整的 Prompt 範本分享平台，讓使用者可以分享、瀏覽和使用 Prompt 範本。此功能整合了 Chat Templates 和 Clinical Insights，提供一致且友善的使用體驗。
+Prompt Gallery 是 Prompt 範本的分享平台，整合目前產品中兩個真正的使用位置：**AI 對話範本**與**醫療摘要的自訂摘要模組**。舊的 Clinical Insights 頂層功能已移除，範本類型也從 `insight` 更名為 `summary`。
 
 ## 功能特色
 
 ### 1. 完整的分享功能
 - **匿名分享**：可選擇匿名或實名分享
-- **多類型支援**：Chat、Insight 或兩者皆可
+- **多類型支援**：對話、摘要或兩者皆可
 - **豐富的分類**：SOAP、入院、出院、安全警示、臨床摘要等
 - **科別標籤**：內科、外科、急診、小兒科等
 - **自訂標籤**：支援多個自訂標籤
@@ -16,19 +16,19 @@ Prompt Gallery 是一個完整的 Prompt 範本分享平台，讓使用者可以
 
 ### 2. 強大的搜尋和篩選
 - **全文搜尋**：搜尋標題、描述、內容、作者和標籤
-- **類型篩選**：依 Chat/Insight 篩選
+- **類型篩選**：依對話／摘要篩選
 - **分類篩選**：依臨床分類篩選
 - **科別篩選**：依專科篩選
 - **排序功能**：最新優先或熱門優先（依使用次數）
 
 ### 3. 智能使用邏輯
 - **多類型選擇**：當 Prompt 有多個類型時，可選擇使用方式
-- **自動整合**：選擇後自動加入 Chat Templates 或 Clinical Insights
+- **自動整合**：從對話範本管理器開啟時加入對話範本；從自訂摘要管理器開啟時加入醫療摘要
 - **使用統計**：追蹤每個 Prompt 的使用次數
 - **即時更新**：列表自動更新
 
 ### 4. 登入保護機制
-- **分享功能**：需要登入才能分享 Prompt
+- **分享功能**：需要登入才能分享範本
 - **儲存功能**：需要登入才能儲存模板到帳號
 - **友善提示**：未登入時顯示鎖圖示和說明
 - **無縫登入**：一鍵導航到登入對話框
@@ -36,7 +36,7 @@ Prompt Gallery 是一個完整的 Prompt 範本分享平台，讓使用者可以
 
 ## 使用方式
 
-### 分享 Prompt
+### 分享範本
 
 #### 從 Chat Templates 分享
 1. 進入 Settings > Chat Templates
@@ -46,8 +46,8 @@ Prompt Gallery 是一個完整的 Prompt 範本分享平台，讓使用者可以
 5. 選擇是否匿名分享
 6. 點擊「分享」完成
 
-#### 從 Clinical Insights 分享
-1. 進入 Settings > Clinical Insights 或 Clinical Insights 頁面
+#### 從自訂摘要分享
+1. 進入「醫療摘要 > 自訂摘要 > 管理模組」
 2. 點擊「分享模板」按鈕（需要登入）
 3. 填寫相關資訊並分享
 
@@ -60,15 +60,15 @@ Prompt Gallery 是一個完整的 Prompt 範本分享平台，讓使用者可以
 4. 點擊「預覽」查看詳細內容
 5. 點擊「使用」，會自動建立一個新的 Chat Template
 
-#### 從 Clinical Insights 瀏覽
-1. 進入 Settings > Clinical Insights 或 Clinical Insights 頁面
+#### 從自訂摘要瀏覽
+1. 進入「醫療摘要 > 自訂摘要 > 管理模組」
 2. 點擊「瀏覽範本庫」
 3. 選擇 Prompt 後會自動更新當前標籤的內容
 
 #### 多類型 Prompt 的使用
-當 Prompt 同時支援 Chat 和 Insight 時：
+當 Prompt 同時支援對話和摘要時：
 1. 點擊「使用」按鈕會顯示下拉選單
-2. 選擇「使用為 Chat Template」或「使用為 Clinical Insight」
+2. 選擇「加入對話範本」或「加入自訂摘要」
 3. 系統會根據您的選擇自動整合到對應位置
 
 ## 資料結構
@@ -83,9 +83,10 @@ interface SharedPrompt {
   prompt: string
   
   // 分類
-  types: ('chat' | 'insight')[]  // 支援多類型
+  types: ('chat' | 'summary')[]  // 支援多類型
   category: 'soap' | 'admission' | 'discharge' | 'safety' | 'summary' | ...
-  specialties: ('general' | 'internal' | 'surgery' | 'emergency' | ...)[]
+  specialty: ('general' | 'internal' | 'surgery' | 'emergency' | ...)[]
+  audience: ('medical' | 'patient')[]
   tags: string[]
   
   // 作者資訊
@@ -110,9 +111,10 @@ sharedPrompts/
     title: string
     description?: string
     prompt: string
-    types: string[]  // ['chat', 'insight']
+    types: string[]  // ['chat', 'summary']
     category: string
-    specialties: string[]
+    specialty: string[]
+    audience: string[]
     tags: string[]
     authorId: string
     authorName: string
@@ -137,7 +139,7 @@ features/prompt-gallery/
 │   ├── PromptFilters.tsx            # 篩選和排序控制
 │   ├── PromptPreviewDialog.tsx      # 預覽對話框
 │   ├── PromptGalleryDialog.tsx      # 主對話框（整合所有功能）
-│   ├── SharePromptDialog.tsx        # 分享 Prompt 對話框
+│   ├── SharePromptDialog.tsx        # 分享範本對話框
 │   ├── LoginRequiredDialog.tsx      # 登入提示對話框
 │   └── index.ts                     # 元件匯出
 └── index.ts                         # 功能匯出
@@ -207,7 +209,7 @@ function MyComponent() {
       <PromptGalleryDialog
         open={showGallery}
         onOpenChange={setShowGallery}
-        mode="chat" // 或 "insight" 或 "all"
+        mode="chat" // 或 "summary" 或 "all"
         onSelectPrompt={handleSelectPrompt}
       />
     </>
@@ -220,7 +222,7 @@ function MyComponent() {
 目前實作不包含社群功能，但架構已預留擴展空間：
 
 ### Phase 2: 社群功能（未實作）
-- 使用者分享 Prompt
+- 使用者分享範本
 - 評分和評論系統
 - 點讚和收藏
 - 檢舉機制
@@ -254,7 +256,7 @@ match /sharedPrompts/{promptId} {
 1. **隱私保護**：確保分享的 Prompt 不包含病人資訊
 2. **權限控制**：
    - 所有人都可以瀏覽範本庫（包括未登入使用者）
-   - 只有登入使用者可以分享 Prompt
+   - 只有登入使用者可以分享範本
    - 只有作者可以修改或刪除自己的 Prompt
 3. **資料驗證**：建立 Prompt 時應驗證必填欄位
 4. **效能考量**：使用 Firestore 查詢限制（limit: 100）
@@ -269,9 +271,9 @@ match /sharedPrompts/{promptId} {
 3. ✅ 篩選功能（類型、分類、科別）
 4. ✅ 排序功能（最新優先、熱門優先）
 5. ✅ 預覽 Prompt
-6. ✅ 分享 Prompt（匿名/實名）
+6. ✅ 分享範本（匿名/實名）
 7. ✅ 選擇 Prompt（Chat 模式）
-8. ✅ 選擇 Prompt（Insight 模式）
+8. ✅ 選擇 Prompt（Summary 模式）
 9. ✅ 多類型 Prompt 的使用選擇
 10. ✅ 使用次數追蹤
 11. ✅ 作者刪除功能

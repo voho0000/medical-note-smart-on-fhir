@@ -1,9 +1,50 @@
 /**
  * Prompt Gallery Types
- * Unified data structure for both Chat prompts and Clinical Insights
+ * Unified data structure for Chat templates and custom Summary modules.
  */
 
-export type PromptType = 'chat' | 'insight'
+export type PromptType = 'chat' | 'summary'
+
+/**
+ * The original gallery stored custom-summary templates as `insight` records.
+ * Keep the compatibility rule at the data boundary so the retired product
+ * term never leaks back into components or newly written Firestore records.
+ *
+ * The seeded citizen prompts predate custom modules in Medical Summary. They
+ * are all self-contained, record-grounded outputs, so they can safely serve
+ * both as chat shortcuts and as reusable summary modules. Adding `summary`
+ * here makes existing seeded documents upgrade without requiring a production
+ * Firestore migration before the refreshed gallery can render correctly.
+ */
+const BUILT_IN_SUMMARY_PROMPT_IDS = new Set([
+  'patient-explain-labs',
+  'patient-admission-for-family',
+  'patient-medication-info',
+  'patient-which-specialty',
+  'patient-questions-for-doctor',
+  'patient-lifestyle-diet',
+  'patient-warning-signs',
+  'patient-self-care-monitoring',
+  'medical-discharge',
+])
+
+export function normalizePromptTypes(promptId: string, rawTypes: unknown): PromptType[] {
+  const normalized: PromptType[] = []
+  const add = (type: PromptType) => {
+    if (!normalized.includes(type)) normalized.push(type)
+  }
+
+  if (Array.isArray(rawTypes)) {
+    for (const type of rawTypes) {
+      if (type === 'chat') add('chat')
+      if (type === 'summary' || type === 'insight') add('summary')
+    }
+  }
+
+  if (BUILT_IN_SUMMARY_PROMPT_IDS.has(promptId)) add('summary')
+  if (normalized.length === 0) add('chat')
+  return normalized
+}
 
 export type PromptAudience = 'medical' | 'patient'
 
@@ -49,7 +90,7 @@ export interface SharedPrompt {
   prompt: string
   
   // Classification
-  types: PromptType[]  // Changed from single type to array
+  types: PromptType[]
   category: PromptCategory
   specialty: PromptSpecialty[]
   audience: PromptAudience[]  // Audiences this prompt is suitable for. Empty array treated as ['medical'] for backward compatibility.

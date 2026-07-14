@@ -105,7 +105,8 @@ import { MedicalChatFeature } from '@/features/medical-chat'
 - 直接呈現在 Medical Summary 固定卡片下方，不需要切換分頁
 - 在醫療摘要內的管理 drawer 新增、重新命名、排序及調整提示詞
 - 可從 Prompt Gallery 匯入或分享模板
-- 每張模組獨立生成與快取；最多顯示 5 張、自動生成 2 張
+- 每張模組獨立快取；生成改用非串流查詢，同一批模組全部完成後才一次顯示完整結果
+- 最多顯示 5 張、自動生成 2 張
 - 內建範本：變化摘要（What's Changed）、臨床快照（Clinical Snapshot）
 
 > 舊 Clinical Insights tab 與 Settings 內的重複管理入口已移除；底層模板同步、生成與快取能力保留。
@@ -131,7 +132,7 @@ import { DataSelectionDrawer } from '@/features/data-selection'
 - 互動式資料選擇介面
 - 篩選臨床資料
 - 提供情境感知的 AI 回應
-- 管理要納入 AI 摘要／洞察的 FHIR 資料範圍，並提供唯讀 context 預覽；不提供手動覆寫
+- 管理要納入 AI 對話／自訂摘要的 FHIR 資料範圍，並提供唯讀 context 預覽；不提供手動覆寫
 - 臨床對話會按問題自行查詢 FHIR；系統外背景直接輸入對話框即可
 
 ---
@@ -151,7 +152,9 @@ import {
 
 **功能**：
 - 瀏覽社群共享的提示範本
-- 依類型、專科、標籤篩選
+- 依對話／摘要類型、專科、標籤篩選
+- 範本可加入 AI 對話，或成為醫療摘要的自訂摘要模組
+- 舊 `insight` 資料讀取時自動轉為 `summary`
 - 分享自己的提示範本
 - 使用計數追蹤
 

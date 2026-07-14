@@ -43,6 +43,7 @@ export class ClaudeService {
       })),
       ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
       ...(request.maxTokens !== undefined ? { maxOutputTokens: request.maxTokens } : {}),
+      ...(request.signal ? { abortSignal: request.signal } : {}),
     })
 
     return {

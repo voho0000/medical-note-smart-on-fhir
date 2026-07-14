@@ -83,6 +83,9 @@ export class OpenAiService {
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 60000)
+    const forwardAbort = () => controller.abort()
+    if (request.signal?.aborted) controller.abort()
+    else request.signal?.addEventListener('abort', forwardAbort, { once: true })
 
     try {
       const response = await fetch(targetUrl, {
@@ -126,6 +129,7 @@ export class OpenAiService {
       }
     } finally {
       clearTimeout(timeoutId)
+      request.signal?.removeEventListener('abort', forwardAbort)
     }
   }
 

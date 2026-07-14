@@ -42,7 +42,7 @@ export function PromptFilters({
   // Medical categories and specialties don't apply to patient-facing prompts.
   const showMedicalFilters = audience === 'medical'
 
-  const types: (PromptType | 'all')[] = ['all', 'chat', 'insight']
+  const types: (PromptType | 'all')[] = ['all', 'chat', 'summary']
   const categories: (PromptCategory | 'all')[] = [
     'all',
     'soap',
@@ -72,8 +72,8 @@ export function PromptFilters({
     switch (type) {
       case 'chat':
         return t.promptGallery.typeChat
-      case 'insight':
-        return t.promptGallery.typeInsight
+      case 'summary':
+        return t.promptGallery.typeSummary
       default:
         return type
     }

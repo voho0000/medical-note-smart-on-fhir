@@ -43,11 +43,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
   const defaultModel = DEFAULT_MODEL_ID
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // A Set, not a single ref: one hook instance can have several streams in
-  // flight (e.g. insights auto-generating multiple panels). With a single ref,
-  // a newer stream overwrote the older one's controller — and the older
-  // stream's `finally` then nulled the newer one's — so stop() silently missed
-  // streams. stop() must abort ALL of them.
+  // A Set, not a single ref: one hook instance can have several requests in
+  // flight. stop() must abort every non-streaming query and stream owned by
+  // this hook instance.
   const abortControllersRef = useRef<Set<AbortController>>(new Set())
 
   // Cache AI service instance to avoid recreating on every call
@@ -75,6 +73,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
     async (messages: AiMessage[], queryOptions?: QueryOptions): Promise<string> => {
       setIsLoading(true)
       setError(null)
+      const abortController = new AbortController()
+      abortControllersRef.current.add(abortController)
 
       try {
         const result = await queryUseCase.execute({
@@ -83,17 +83,20 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           temperature: queryOptions?.temperature,
           maxTokens: queryOptions?.maxTokens,
           responseFormat: queryOptions?.responseFormat,
+          signal: abortController.signal,
         })
 
         options.onSuccess?.(result.text)
         return result.text
       } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') throw err
         const errorMessage = getUserErrorMessage(err)
         setError(errorMessage)
         options.onError?.(errorMessage)
         throw err
       } finally {
         setIsLoading(false)
+        abortControllersRef.current.delete(abortController)
       }
     },
     [queryUseCase, defaultModel, options]
@@ -151,7 +154,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
   )
 
   /**
-   * Stop streaming — aborts every in-flight stream started by this hook instance.
+   * Stop AI work — aborts every in-flight query or stream started by this hook instance.
    */
   const stop = useCallback(() => {
     for (const controller of abortControllersRef.current) controller.abort()

@@ -26,6 +26,8 @@ export interface AiQueryRequest {
   modelId: string
   temperature?: number
   maxTokens?: number
+  /** Optional caller cancellation for non-streaming requests. */
+  signal?: AbortSignal
   /**
    * Phase 2.2 — ask the model to return a strict JSON object.
    * Best-effort: maps to OpenAI `response_format: {type:'json_object'}` and

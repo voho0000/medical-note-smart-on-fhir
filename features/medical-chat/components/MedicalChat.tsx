@@ -55,7 +55,7 @@ import { ChatHistoryDrawer } from "@/features/chat-history"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { PromptGalleryDialog } from "@/features/prompt-gallery"
-import type { SharedPrompt } from "@/features/prompt-gallery"
+import type { PromptType, SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { AuthDialog } from "@/features/auth"
 import { isQuotaExceededError } from "@/src/core/errors"
@@ -355,13 +355,13 @@ export default function MedicalChat() {
   }, [input, template.selectedTemplate, scrollTextareaToBottom])
 
   // Handle prompt selection from gallery
-  const handleSelectPrompt = useCallback((prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
+  const handleSelectPrompt = useCallback((prompt: SharedPrompt, useAs?: PromptType) => {
     // Insert prompt content into chat input
     input.insertTextWithTrim(prompt.prompt)
     scrollTextareaToBottom()
     
     // Also add to chat templates if useAs is 'chat' or undefined
-    if (useAs !== 'insight' && templates.length < maxTemplates) {
+    if (useAs !== 'summary' && templates.length < maxTemplates) {
       const newTemplateId = addTemplate()
       if (newTemplateId) {
         updateTemplate(newTemplateId, {

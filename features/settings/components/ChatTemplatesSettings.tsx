@@ -30,7 +30,7 @@ import { cn } from "@/src/shared/utils/cn.utils"
 import { InfoHint } from "@/src/shared/components/InfoHint"
 import { TemplateEditor } from "./TemplateEditor"
 import { PromptGalleryDialog, SharePromptDialog } from "@/features/prompt-gallery"
-import type { SharedPrompt } from "@/features/prompt-gallery"
+import type { PromptType, SharedPrompt } from "@/features/prompt-gallery"
 import { useTemplateSelector } from "@/features/medical-chat/hooks/useTemplateSelector"
 
 interface ChatTemplatesSettingsProps {
@@ -89,8 +89,8 @@ export function ChatTemplatesSettings({ initialTemplateId }: ChatTemplatesSettin
     moveTemplate(currentIndex, targetIndex)
   }
 
-  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: "chat" | "insight") => {
-    if (useAs === "insight" || !canAddTemplate) return
+  const handleSelectPrompt = (prompt: SharedPrompt, useAs?: PromptType) => {
+    if (useAs === "summary" || !canAddTemplate) return
     const newTemplateId = addTemplate()
     if (!newTemplateId) return
     updateTemplate(newTemplateId, { label: prompt.title, content: prompt.prompt })

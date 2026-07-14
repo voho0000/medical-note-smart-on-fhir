@@ -62,6 +62,9 @@ export class GeminiService {
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 60000)
+    const forwardAbort = () => controller.abort()
+    if (request.signal?.aborted) controller.abort()
+    else request.signal?.addEventListener('abort', forwardAbort, { once: true })
 
     try {
       const response = await fetch(targetUrl, {
@@ -90,6 +93,7 @@ export class GeminiService {
       }
     } finally {
       clearTimeout(timeoutId)
+      request.signal?.removeEventListener('abort', forwardAbort)
     }
   }
 

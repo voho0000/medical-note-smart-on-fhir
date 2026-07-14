@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, X, Library, User } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Library, Share2, User } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -38,8 +38,8 @@ import { useAuth } from '@/src/application/providers/auth.provider'
 interface PromptGalleryDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  mode?: 'chat' | 'insight' | 'all'
-  onSelectPrompt: (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => void
+  mode?: 'chat' | 'summary' | 'all'
+  onSelectPrompt: (prompt: SharedPrompt, useAs?: PromptType) => void
 }
 
 export function PromptGalleryDialog({
@@ -64,7 +64,7 @@ export function PromptGalleryDialog({
   const initialFilter = useMemo(() => {
     const base: { type?: PromptType; audience: typeof audience } = { audience }
     if (mode === 'chat') return { ...base, type: 'chat' as PromptType }
-    if (mode === 'insight') return { ...base, type: 'insight' as PromptType }
+    if (mode === 'summary') return { ...base, type: 'summary' as PromptType }
     return base
   }, [mode, audience])
 
@@ -94,7 +94,7 @@ export function PromptGalleryDialog({
     if (open) {
       fetchPrompts()
     }
-  }, [open, activeTab])
+  }, [open, activeTab, fetchPrompts])
 
   // Sync filter.audience when the global audience switches.
   // For patient audience, also clear category/specialty filters (they don't apply to citizen-facing prompts).
@@ -121,7 +121,7 @@ export function PromptGalleryDialog({
     setPreviewOpen(true)
   }
 
-  const handleUse = (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => {
+  const handleUse = (prompt: SharedPrompt, useAs?: PromptType) => {
     onSelectPrompt(prompt, useAs)
     trackUsage(prompt.id)
   }
@@ -164,9 +164,26 @@ export function PromptGalleryDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-5xl h-[85vh]! w-[85vw] flex! flex-col!">
-          <DialogHeader>
-            <DialogTitle>{t.promptGallery.title}</DialogTitle>
-            <DialogDescription>{t.promptGallery.description}</DialogDescription>
+          <DialogHeader className="pr-10">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2">
+                <DialogTitle>{t.promptGallery.title}</DialogTitle>
+                <DialogDescription>{t.promptGallery.description}</DialogDescription>
+              </div>
+              {user && (
+                <Button
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => {
+                    setSharePrompt(null)
+                    setShareOpen(true)
+                  }}
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  {t.promptGallery.sharePrompt}
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
@@ -218,7 +235,7 @@ export function PromptGalleryDialog({
                   )}
                   {filter.type && (
                     <Badge variant="secondary" className="text-xs">
-                      {filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeInsight}
+                      {filter.type === 'chat' ? t.promptGallery.typeChat : t.promptGallery.typeSummary}
                       <X
                         className="ml-1 h-3 w-3 cursor-pointer"
                         onClick={() => handleFilterChange({ type: undefined })}
@@ -310,7 +327,10 @@ export function PromptGalleryDialog({
                       <Button 
                         variant="outline" 
                         className="mt-4"
-                        onClick={() => setShareOpen(true)}
+                        onClick={() => {
+                          setSharePrompt(null)
+                          setShareOpen(true)
+                        }}
                       >
                         {t.promptGallery.shareFirstPrompt}
                       </Button>
@@ -372,6 +392,7 @@ export function PromptGalleryDialog({
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         onUse={handleUse}
+        useMode={mode}
         onShare={handleShare}
         onDelete={fetchPrompts}
       />
@@ -381,6 +402,7 @@ export function PromptGalleryDialog({
         open={shareOpen}
         onOpenChange={setShareOpen}
         initialTitle={sharePrompt?.title}
+        initialDescription={sharePrompt?.description}
         initialPrompt={sharePrompt?.prompt}
         initialType={sharePrompt?.types[0] || 'chat'}
         onSuccess={fetchPrompts}

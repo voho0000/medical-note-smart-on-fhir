@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Calendar, TrendingUp, Trash2 } from 'lucide-react'
-import type { SharedPrompt } from '../types/prompt.types'
+import type { PromptType, SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { deleteSharedPrompt } from '../services/prompt-gallery.service'
@@ -43,7 +43,8 @@ interface PromptPreviewDialogProps {
   prompt: SharedPrompt | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onUse: (prompt: SharedPrompt, useAs?: 'chat' | 'insight') => void
+  onUse: (prompt: SharedPrompt, useAs?: PromptType) => void
+  useMode?: PromptType | 'all'
   onShare?: (prompt: SharedPrompt) => void
   onDelete?: () => void
 }
@@ -53,6 +54,7 @@ export function PromptPreviewDialog({
   open,
   onOpenChange,
   onUse,
+  useMode = 'all',
   onDelete,
 }: PromptPreviewDialogProps) {
   const { t } = useLanguage()
@@ -61,18 +63,19 @@ export function PromptPreviewDialog({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
-  const [pendingAction, setPendingAction] = useState<{ prompt: SharedPrompt; useAs?: 'chat' | 'insight' } | null>(null)
+  const [pendingAction, setPendingAction] = useState<{ prompt: SharedPrompt; useAs?: PromptType } | null>(null)
 
   if (!prompt) return null
 
   const isAuthor = user?.uid && prompt.authorId === user.uid
+  const isPatientOnly = prompt.audience.includes('patient') && !prompt.audience.includes('medical')
 
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'chat':
         return t.promptGallery.typeChat
-      case 'insight':
-        return t.promptGallery.typeInsight
+      case 'summary':
+        return t.promptGallery.typeSummary
       default:
         return type
     }
@@ -90,7 +93,7 @@ export function PromptPreviewDialog({
     }).format(date)
   }
 
-  const handleUse = (useAs?: 'chat' | 'insight') => {
+  const handleUse = (useAs?: PromptType) => {
     // Check if user is logged in
     if (!user) {
       // Store the pending action and show login dialog
@@ -156,14 +159,16 @@ export function PromptPreviewDialog({
         <ScrollArea className="max-h-[50vh] pr-4">
           <div className="space-y-4">
             {/* Metadata */}
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{getCategoryLabel(prompt.category)}</Badge>
-              {prompt.specialty.map((spec) => (
-                <Badge key={spec} variant="outline">
-                  {t.promptGallery.specialties[spec as keyof typeof t.promptGallery.specialties] || spec}
-                </Badge>
-              ))}
-            </div>
+            {!isPatientOnly && (
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">{getCategoryLabel(prompt.category)}</Badge>
+                {prompt.specialty.map((spec) => (
+                  <Badge key={spec} variant="outline">
+                    {t.promptGallery.specialties[spec as keyof typeof t.promptGallery.specialties] || spec}
+                  </Badge>
+                ))}
+              </div>
+            )}
 
             {/* Tags */}
             {prompt.tags.length > 0 && (
@@ -238,7 +243,7 @@ export function PromptPreviewDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 {t.common.close}
               </Button>
-              {prompt.types.length > 1 ? (
+              {useMode === 'all' && prompt.types.length > 1 ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button>
@@ -249,18 +254,24 @@ export function PromptPreviewDialog({
                   <DropdownMenuContent align="end">
                     {prompt.types.includes('chat') && (
                       <DropdownMenuItem onClick={() => handleUse('chat')}>
-                        使用為 Chat Template
+                        {t.promptGallery.useInChat}
                       </DropdownMenuItem>
                     )}
-                    {prompt.types.includes('insight') && (
-                      <DropdownMenuItem onClick={() => handleUse('insight')}>
-                        使用為 Clinical Insight
+                    {prompt.types.includes('summary') && (
+                      <DropdownMenuItem onClick={() => handleUse('summary')}>
+                        {t.promptGallery.addToSummary}
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button onClick={() => handleUse()}>{t.promptGallery.use}</Button>
+                <Button onClick={() => handleUse(useMode === 'all' ? prompt.types[0] : useMode)}>
+                  {useMode === 'chat'
+                    ? t.promptGallery.useInChat
+                    : useMode === 'summary'
+                      ? t.promptGallery.addToSummary
+                      : t.promptGallery.use}
+                </Button>
               )}
             </div>
           </div>

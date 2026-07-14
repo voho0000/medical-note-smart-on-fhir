@@ -91,6 +91,23 @@ describe('GeminiService', () => {
       expect(result.metadata.tokensUsed).toBe(25)
     })
 
+    it('should forward caller cancellation to the non-streaming request', async () => {
+      mockFetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal
+        signal.addEventListener('abort', () => {
+          const error = new Error('The operation was aborted')
+          error.name = 'AbortError'
+          reject(error)
+        }, { once: true })
+      }))
+      const controller = new AbortController()
+      const pending = service.query({ ...mockRequest, signal: controller.signal })
+
+      controller.abort()
+
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    })
+
     it('should throw error when API key is missing', async () => {
       // Arrange
       const service = new GeminiService(null)

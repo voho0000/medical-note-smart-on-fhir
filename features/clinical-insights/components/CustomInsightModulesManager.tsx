@@ -40,7 +40,7 @@ import {
 import { cn } from "@/src/shared/utils/cn.utils"
 import { CustomInsightModuleEditor } from "./CustomInsightModuleEditor"
 import { SharePromptDialog, PromptGalleryDialog } from "@/features/prompt-gallery"
-import type { SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
+import type { PromptType, SharedPrompt } from "@/features/prompt-gallery/types/prompt.types"
 
 interface CustomInsightModulesManagerProps {
   initialPanelId?: string
@@ -105,12 +105,12 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
     reorderPanels(orderedIds)
   }
 
-  const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: "chat" | "insight") => {
+  const handleSelectPrompt = async (prompt: SharedPrompt, useAs?: PromptType) => {
     if (useAs === "chat" || !canAddPanel) return
     const newPanelId = addPanel({
       title: prompt.title,
       prompt: prompt.prompt,
-      showInSummary: false,
+      showInSummary: summaryModuleCount < MAX_SUMMARY_INSIGHT_MODULES,
       autoGenerate: false,
     })
     if (!newPanelId) return
@@ -302,13 +302,13 @@ export function CustomInsightModulesManager({ initialPanelId }: CustomInsightMod
         onOpenChange={setShowShareDialog}
         initialTitle={promptToShare?.title || ""}
         initialPrompt={promptToShare?.prompt || ""}
-        initialType="insight"
+        initialType="summary"
       />
 
       <PromptGalleryDialog
         open={showGalleryDialog}
         onOpenChange={setShowGalleryDialog}
-        mode="insight"
+        mode="summary"
         onSelectPrompt={handleSelectPrompt}
       />
     </div>

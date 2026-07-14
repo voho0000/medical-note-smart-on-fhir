@@ -5,7 +5,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Flame, MessageSquare, Lightbulb } from 'lucide-react'
+import { ClipboardList, Flame, MessageSquare } from 'lucide-react'
 import type { SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 
@@ -22,10 +22,10 @@ const TYPE_COLORS = {
     badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
     icon: MessageSquare,
   },
-  insight: {
-    border: 'border-l-violet-500',
-    badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300',
-    icon: Lightbulb,
+  summary: {
+    border: 'border-l-teal-500',
+    badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300',
+    icon: ClipboardList,
   },
 }
 
@@ -36,6 +36,10 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
   const { t } = useLanguage()
   const isMyPrompt = currentUserId && prompt.authorId === currentUserId
   const isPopular = (prompt.usageCount || 0) >= POPULAR_THRESHOLD
+  const isPatientOnly = prompt.audience.includes('patient') && !prompt.audience.includes('medical')
+  const patientTopicTags = prompt.tags
+    .filter((tag) => tag !== '衛教' && tag !== '民眾版')
+    .slice(0, 2)
   
   // Get primary type for border color (first type in array)
   const primaryType = prompt.types[0] || 'chat'
@@ -45,8 +49,8 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
     switch (type) {
       case 'chat':
         return t.promptGallery.typeChat
-      case 'insight':
-        return t.promptGallery.typeInsight
+      case 'summary':
+        return t.promptGallery.typeSummary
       default:
         return type
     }
@@ -98,22 +102,32 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
 
       <CardContent className="!pb-2 !pt-2 !px-3 flex flex-col gap-1">
         <p className="text-[0.6875rem] text-muted-foreground line-clamp-2 leading-tight h-[30px]">
-          {prompt.prompt}
+          {prompt.description || prompt.prompt}
         </p>
 
         <div className="flex flex-wrap gap-1 min-h-[18px]">
-          <Badge variant="secondary" className="text-[0.625rem] px-1.5 py-0">
-            {getCategoryLabel(prompt.category)}
-          </Badge>
-          {prompt.specialty.slice(0, 1).map((spec) => (
-            <Badge key={spec} variant="outline" className="text-[0.625rem] px-1 py-0">
-              {t.promptGallery.specialties[spec as keyof typeof t.promptGallery.specialties] || spec}
-            </Badge>
-          ))}
-          {prompt.specialty.length > 1 && (
-            <Badge variant="outline" className="text-[0.625rem] px-1 py-0">
-              +{prompt.specialty.length - 1}
-            </Badge>
+          {isPatientOnly ? (
+            patientTopicTags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-[0.625rem] px-1.5 py-0">
+                {tag}
+              </Badge>
+            ))
+          ) : (
+            <>
+              <Badge variant="secondary" className="text-[0.625rem] px-1.5 py-0">
+                {getCategoryLabel(prompt.category)}
+              </Badge>
+              {prompt.specialty.slice(0, 1).map((spec) => (
+                <Badge key={spec} variant="outline" className="text-[0.625rem] px-1 py-0">
+                  {t.promptGallery.specialties[spec as keyof typeof t.promptGallery.specialties] || spec}
+                </Badge>
+              ))}
+              {prompt.specialty.length > 1 && (
+                <Badge variant="outline" className="text-[0.625rem] px-1 py-0">
+                  +{prompt.specialty.length - 1}
+                </Badge>
+              )}
+            </>
           )}
         </div>
 
