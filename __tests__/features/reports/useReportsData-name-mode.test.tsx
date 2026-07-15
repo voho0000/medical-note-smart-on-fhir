@@ -42,6 +42,19 @@ const report = {
   _observations: [atypicalLymphocyte],
 }
 
+const chestXrayReport = {
+  resourceType: 'DiagnosticReport',
+  id: 'dr-chest-xray',
+  status: 'final',
+  code: {
+    text: '胸部檢查',
+    coding: [{ system: 'https://www.nhi.gov.tw', code: '32001C' }],
+  },
+  category: [{ coding: [{ code: 'RAD' }], text: 'Imaging' }],
+  effectiveDateTime: '2026-07-15',
+  conclusion: 'No acute cardiopulmonary abnormality.',
+}
+
 function run(nameMode: AnalyteNameMode) {
   const { result } = renderHook(
     () => useReportsData([report], [], nameMode),
@@ -57,5 +70,19 @@ describe('useReportsData report name mode', () => {
 
   it('shows the hospital source display in original mode', () => {
     expect(run('original').title).toBe('Atypical lym.')
+  })
+
+  it('switches an imaging order between the source and normalized titles', () => {
+    const standardized = renderHook(
+      () => useReportsData([chestXrayReport], [], 'standardized'),
+      { wrapper: Wrapper },
+    ).result.current.reportRows[0]
+    const original = renderHook(
+      () => useReportsData([chestXrayReport], [], 'original'),
+      { wrapper: Wrapper },
+    ).result.current.reportRows[0]
+
+    expect(standardized.title).toBe('Chest X-ray')
+    expect(original.title).toBe('胸部檢查')
   })
 })

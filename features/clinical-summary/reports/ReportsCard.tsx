@@ -33,7 +33,7 @@ import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 const EMPTY_EXPANDED_IDS: string[] = []
 const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
-const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'vitals'])
+const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'vitals'])
 
 export function ReportsCard() {
   const { t } = useLanguage()
@@ -97,9 +97,9 @@ export function ReportsCard() {
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
-  // The same preference follows the user across observation-based report
-  // views. Imaging and procedures have no matching control, so they retain
-  // their established standardized labels.
+  // The same preference follows the user across report views whose titles can
+  // be normalized. Procedures have no matching control, so they retain their
+  // established standardized labels.
   const effectiveNameMode: AnalyteNameMode = NAME_MODE_TABS.has(activeTab)
     ? nameMode
     : 'standardized'
@@ -509,7 +509,7 @@ export function ReportsCard() {
                   </button>
                 )}
               </div>
-              {(activeTab === 'all' || activeTab === 'vitals') && (
+              {(activeTab === 'all' || activeTab === 'imaging' || activeTab === 'vitals') && (
                 <ReportNameModeSwitch className="shrink-0" />
               )}
             </div>

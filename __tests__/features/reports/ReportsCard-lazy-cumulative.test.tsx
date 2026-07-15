@@ -121,7 +121,7 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(screen.queryByText('在選定的時間範圍內未找到報告。')).not.toBeInTheDocument()
   })
 
-  it('shares the name mode across applicable tabs but keeps Imaging standardized', async () => {
+  it('shares the name mode across cumulative, all, lab, imaging, and vitals tabs', async () => {
     useResourceNavigationStore.setState({ pending: null, seq: 0, consumedSeq: 0 })
     render(<ReportsCard />)
 
@@ -135,10 +135,9 @@ describe('ReportsCard lazy cumulative loading', () => {
     expect(activeNameSwitches()[0]).not.toBeChecked()
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: /影像/ }), { button: 0, ctrlKey: false })
-    expect(activeNameSwitches()).toHaveLength(0)
-    await waitFor(() => {
-      expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'standardized')
-    })
+    await waitFor(() => expect(activeNameSwitches()).toHaveLength(1))
+    expect(activeNameSwitches()[0]).not.toBeChecked()
+    expect(mockUseReportsData).toHaveBeenLastCalledWith([], [], 'original')
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: /檢驗/ }), { button: 0, ctrlKey: false })
     await waitFor(() => expect(activeNameSwitches()).toHaveLength(1))
