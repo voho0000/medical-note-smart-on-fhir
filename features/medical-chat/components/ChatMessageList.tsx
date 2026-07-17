@@ -19,6 +19,9 @@ import { Check, Copy, Reply, Sparkles } from "lucide-react"
 interface ChatMessageListProps {
   messages: ChatMessage[]
   isLoading: boolean
+  /** Local OpenAI-compatible models receive a fixed clinical snapshot and do
+   * not have access to the Agent's FHIR or literature tools. */
+  isStandardChatMode?: boolean
   /** Rendered at the very bottom of the thread, under the last message (e.g. the
    *  follow-up suggestion chips) — so it scrolls with the conversation like ChatGPT. */
   afterMessages?: ReactNode
@@ -296,7 +299,14 @@ const MessageItem = memo(function MessageItem({
          prevProps.replyDisabled === nextProps.replyDisabled
 })
 
-export function ChatMessageList({ messages, isLoading, afterMessages, scrollSignal, onReplyToSelection }: ChatMessageListProps) {
+export function ChatMessageList({
+  messages,
+  isLoading,
+  isStandardChatMode = false,
+  afterMessages,
+  scrollSignal,
+  onReplyToSelection,
+}: ChatMessageListProps) {
   const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const prevMessagesLengthRef = useRef(0)
@@ -335,10 +345,14 @@ export function ChatMessageList({ messages, isLoading, afterMessages, scrollSign
           <div className="flex flex-col items-center justify-center h-full py-12 text-center">
             <div className="text-4xl mb-3 opacity-20">💬</div>
             <div className="max-w-2xl text-sm font-medium leading-relaxed text-foreground">
-              {t.chat.emptyStateTitle}
+              {isStandardChatMode
+                ? t.chat.localEmptyStateTitle
+                : t.chat.emptyStateTitle}
             </div>
             <div className="mt-1.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-              {t.chat.emptyState}
+              {isStandardChatMode
+                ? t.chat.localEmptyState
+                : t.chat.emptyState}
             </div>
           </div>
         ) : (

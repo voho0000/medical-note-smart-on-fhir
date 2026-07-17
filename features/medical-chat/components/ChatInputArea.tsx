@@ -44,6 +44,8 @@ interface ChatInputAreaProps {
     clearError: () => void
   }
   disabled?: boolean
+  /** Custom hospital endpoint: no owner proxy/history helper receives chat data. */
+  isPrivateEndpoint?: boolean
   replyDraft?: ChatReplyReference | null
   onCancelReply?: () => void
 }
@@ -57,6 +59,7 @@ export function ChatInputArea({
   voice,
   images,
   disabled = false,
+  isPrivateEndpoint = false,
   replyDraft,
   onCancelReply,
 }: ChatInputAreaProps) {
@@ -223,6 +226,7 @@ export function ChatInputArea({
           startRecordingRef={voice.startRecordingRef}
           stopRecordingRef={voice.stopRecordingRef}
           onStreamChange={setAudioStream}
+          disabled={disabled}
         />
         {isLoading ? (
           <button
@@ -243,24 +247,27 @@ export function ChatInputArea({
         )}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[0.625rem] text-muted-foreground/70">
-        {/* Cloud-AI disclosure: passive notice so users can see, at a glance,
-            that their messages + selected clinical data are sent to a cloud
-            LLM. No consent gate — just visible transparency. */}
+        {/* Route-aware disclosure: the selected model decides the recipient. */}
         <span className="inline-flex items-center gap-1">
           <Zap className="h-3 w-3" />
-          {(t.chat as any).cloudAiNotice ?? 'AI 為雲端服務（OpenAI / Gemini）· 請勿輸入高度敏感個資'}
-          {' · '}
-          {/* Privacy policy lives on GitHub — single source of truth with
-              the markdown rendered there. The in-app /privacy route still
-              works for now but we don't link to it any more. */}
-          <a
-            href="https://github.com/voho0000/medical-note-smart-on-fhir/blob/master/PRIVACY_POLICY.md"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-foreground"
-          >
-            {(t.chat as any).cloudAiNoticeLink ?? '隱私說明'}
-          </a>
+          {isPrivateEndpoint ? (
+            t.chat.privateAiNotice
+          ) : (
+            <>
+              {(t.chat as any).cloudAiNotice ?? 'AI 為雲端服務（OpenAI / Gemini）· 請勿輸入高度敏感個資'}
+              {' · '}
+              {/* Privacy policy lives on GitHub — single source of truth with
+                  the markdown rendered there. */}
+              <a
+                href="https://github.com/voho0000/medical-note-smart-on-fhir/blob/master/PRIVACY_POLICY.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                {(t.chat as any).cloudAiNoticeLink ?? '隱私說明'}
+              </a>
+            </>
+          )}
         </span>
         {(input.input.length > 0 || hasImages) && (
           <span>

@@ -5,20 +5,25 @@ import { ALL_MODELS, getModelDefinition } from '@/src/shared/constants/ai-models
 import { OpenAiService } from './openai.service'
 import { GeminiService } from './gemini.service'
 import { ClaudeService } from './claude.service'
+import { OpenAiCompatibleService } from './openai-compatible.service'
+import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 
 export class AiService implements IAiService {
   private openAiService: OpenAiService
   private geminiService: GeminiService
   private claudeService: ClaudeService
+  private openAiCompatibleService: OpenAiCompatibleService
 
   constructor(
     private openAiApiKey: string | null = null,
     private geminiApiKey: string | null = null,
-    private claudeApiKey: string | null = null
+    private claudeApiKey: string | null = null,
+    private openAiCompatibleConfig: OpenAiCompatibleConfig | null = null,
   ) {
     this.openAiService = new OpenAiService(openAiApiKey)
     this.geminiService = new GeminiService(geminiApiKey)
     this.claudeService = new ClaudeService(claudeApiKey)
+    this.openAiCompatibleService = new OpenAiCompatibleService(openAiCompatibleConfig)
   }
 
   setOpenAiApiKey(apiKey: string | null): void {
@@ -36,8 +41,16 @@ export class AiService implements IAiService {
     this.claudeService.setApiKey(apiKey)
   }
 
+  setOpenAiCompatibleConfig(config: OpenAiCompatibleConfig | null): void {
+    this.openAiCompatibleConfig = config
+    this.openAiCompatibleService.setConfig(config)
+  }
+
   isAvailable(): boolean {
-    return this.openAiService.isAvailable() || this.geminiService.isAvailable() || this.claudeService.isAvailable()
+    return this.openAiService.isAvailable() ||
+      this.geminiService.isAvailable() ||
+      this.claudeService.isAvailable() ||
+      this.openAiCompatibleService.isAvailable()
   }
 
   getSupportedModels(): AiModelDefinition[] {
@@ -54,6 +67,8 @@ export class AiService implements IAiService {
       return await this.geminiService.query(request)
     } else if (provider === 'claude') {
       return await this.claudeService.query(request)
+    } else if (provider === 'custom') {
+      return await this.openAiCompatibleService.query(request)
     }
 
     throw new Error(`Unsupported AI provider: ${provider}`)

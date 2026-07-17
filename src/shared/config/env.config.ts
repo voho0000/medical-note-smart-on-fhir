@@ -1,5 +1,9 @@
 // Environment Configuration
 export const ENV_CONFIG = {
+  // Air-gapped deployment: do not initialize Firebase/Auth/App Check and do
+  // not advertise owner-funded proxy availability. Build with
+  // NEXT_PUBLIC_OFFLINE_MODE=1 behind the hospital HTTPS gateway.
+  offlineMode: process.env.NEXT_PUBLIC_OFFLINE_MODE === '1',
   // AI Proxy URLs
   chatProxyUrl: process.env.NEXT_PUBLIC_CHAT_URL || '',
   whisperProxyUrl: process.env.NEXT_PUBLIC_WHISPER_URL || '',
@@ -8,10 +12,10 @@ export const ENV_CONFIG = {
   proxyClientKey: process.env.NEXT_PUBLIC_PROXY_KEY || '',
   
   // Feature flags
-  hasChatProxy: Boolean(process.env.NEXT_PUBLIC_CHAT_URL),
-  hasWhisperProxy: Boolean(process.env.NEXT_PUBLIC_WHISPER_URL),
-  hasGeminiProxy: Boolean(process.env.NEXT_PUBLIC_GEMINI_URL),
-  hasClaudeProxy: Boolean(process.env.NEXT_PUBLIC_CLAUDE_URL),
+  hasChatProxy: process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' && Boolean(process.env.NEXT_PUBLIC_CHAT_URL),
+  hasWhisperProxy: process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' && Boolean(process.env.NEXT_PUBLIC_WHISPER_URL),
+  hasGeminiProxy: process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' && Boolean(process.env.NEXT_PUBLIC_GEMINI_URL),
+  hasClaudeProxy: process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' && Boolean(process.env.NEXT_PUBLIC_CLAUDE_URL),
   
   // Streaming watchdog: abort a chat stream that produces no new token for this
   // long (ms), so a stalled/never-closing upstream stream surfaces a timeout

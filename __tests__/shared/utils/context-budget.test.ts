@@ -46,6 +46,39 @@ describe('preflightContextWarning', () => {
     const zh = preflightContextWarning(huge, GPT, 'zh-TW')
     const en = preflightContextWarning(huge, GPT, 'en')
     expect(zh).toContain('超過')
-    expect(en).toContain('context limit')
+    expect(en).toContain('input budget')
+  })
+
+  it('distinguishes selected records from the complete request and explains the usable budget', () => {
+    // CJK estimate: 1 token / 1.5 chars. This models the reported case:
+    // ~4.6k selected records inside a ~13k complete request on the 15k custom
+    // model, whose usable input budget is 11k after reserving a 4k reply.
+    const selectedContext = '病'.repeat(6900)
+    const completeRequest = '病'.repeat(19500)
+    const warning = preflightContextWarning(
+      completeRequest,
+      'openai-compatible-custom',
+      'zh-TW',
+      { selectedContext },
+    )
+
+    expect(warning).toContain('完整輸入約 13k tokens')
+    expect(warning).toContain('選取的病歷約 4.6k tokens')
+    expect(warning).toContain('約 11k tokens 的可用輸入空間')
+    expect(warning).toContain('總內容視窗約 15k')
+    expect(warning).toContain('保留 4k 供模型回覆')
+    expect(warning).not.toContain('選取的病歷資料約 13k')
+  })
+
+  it('uses a custom endpoint context-window override', () => {
+    const selectedContext = '病'.repeat(6900)
+    const completeRequest = '病'.repeat(19500)
+
+    expect(preflightContextWarning(
+      completeRequest,
+      'openai-compatible-custom',
+      'zh-TW',
+      { selectedContext, contextLimit: 32768 },
+    )).toBeNull()
   })
 })

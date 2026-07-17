@@ -18,7 +18,7 @@ import {
  * uses. Fails closed: any error → no chips, never blocks chat. Stale-guarded so
  * a newer request always wins.
  */
-export function useFollowupSuggestions() {
+export function useFollowupSuggestions(modelId?: string) {
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const ai = useUnifiedAi()
@@ -48,7 +48,9 @@ export function useFollowupSuggestions() {
         recentUserMessages: opts?.recentUserMessages,
       })
       const full = await streamRef.current(messages, {
-        modelId: FOLLOWUP_MODEL_ID,
+        // Hospital/private mode keeps this auxiliary generation on the same
+        // endpoint instead of leaking the exchange to the owner-funded helper.
+        modelId: modelId || FOLLOWUP_MODEL_ID,
         temperature: 0.7,
       })
       if (reqId !== reqRef.current) return // a newer request superseded us
@@ -57,7 +59,7 @@ export function useFollowupSuggestions() {
       // Fail closed — suggestions are a nice-to-have, never surface an error.
       if (reqId === reqRef.current) setSuggestions([])
     }
-  }, [locale, audience])
+  }, [locale, audience, modelId])
 
   const clear = useCallback(() => {
     reqRef.current++ // invalidate any in-flight request

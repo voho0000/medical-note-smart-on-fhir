@@ -24,11 +24,14 @@ import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { useModelSelection, type ModelEntry } from "@/src/application/hooks/useModelSelection"
 import {
+  CUSTOM_OPENAI_MODEL_ID,
   gateModelForAgentSupport,
   gateModelForKeys,
   getModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
+import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
@@ -56,8 +59,8 @@ export function ModelPicker({
 }: ModelPickerProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
-  const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
-  const { gptModels, geminiModels, claudeModels, handleSelectModel } = useModelSelection(
+  const { apiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
+  const { gptModels, geminiModels, claudeModels, customModels, handleSelectModel } = useModelSelection(
     apiKey,
     geminiKey,
     claudeKey,
@@ -67,18 +70,24 @@ export function ModelPicker({
 
   const keyGatedModelId = gateModelForKeys(
     modelId,
-    { openAiKey: apiKey, geminiKey, claudeKey },
+    {
+      openAiKey: apiKey,
+      geminiKey,
+      claudeKey,
+      customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+    },
     fallbackModelId,
   )
   const effectiveModelId = agentModeActive
     ? gateModelForAgentSupport(keyGatedModelId, fallbackModelId)
     : keyGatedModelId
-  const effectiveLabel = getModelDefinition(effectiveModelId)?.label ?? effectiveModelId
+  const effectiveLabel = modelDisplayLabel(effectiveModelId, openAiCompatible)
 
   const isAgentLocked = (id: string) =>
     agentModeActive && !!getModelDefinition(id)?.disableAgentMode
 
   const groups: Array<{ label: string; items: ModelEntry[] }> = [
+    { label: t.settings.openAiCompatibleGroupLabel, items: customModels },
     { label: "Gemini", items: geminiModels },
     { label: "GPT", items: gptModels },
     { label: "Claude", items: claudeModels },
@@ -117,6 +126,11 @@ export function ModelPicker({
           >
             {effectiveLabel}
           </span>
+          {agentModeActive && effectiveModelId === CUSTOM_OPENAI_MODEL_ID ? (
+            <span className="hidden shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300 sm:inline">
+              {t.modelPicker.standardChatMode}
+            </span>
+          ) : null}
           <ChevronDown className="h-3 w-3 shrink-0" />
         </button>
       </DropdownMenuTrigger>
@@ -130,38 +144,48 @@ export function ModelPicker({
             {group.items.map((entry) => {
               const definition = getModelDefinition(entry.id)
               const lockedByAgent = isAgentLocked(entry.id)
-              const lockedByApiKey = entry.isLocked
-                && !!definition?.requiresUserKey
-                && !definition.disabled
+              const usesStandardChat = agentModeActive && entry.id === CUSTOM_OPENAI_MODEL_ID
+              const configureRequired = entry.isLocked
+                && (entry.configureInSettings || !!definition?.requiresUserKey)
+                && !definition?.disabled
                 && !lockedByAgent
               const locked = entry.isLocked || lockedByAgent
               return (
                 <DropdownMenuItem
                   key={entry.id}
-                  disabled={locked && !lockedByApiKey}
+                  disabled={locked && !configureRequired}
                   onClick={() => {
-                    if (lockedByApiKey) {
+                    if (configureRequired) {
                       setActiveTab('settings', 'ai')
                       return
                     }
                     handleSelectModel(entry.id)
                   }}
-                  data-testid={lockedByApiKey ? `model-picker-key-link-${entry.id}` : undefined}
-                  aria-label={lockedByApiKey ? `${entry.label}，${t.modelPicker.configureApiKey}` : undefined}
-                  title={lockedByApiKey ? t.modelPicker.configureApiKey : undefined}
+                  data-testid={configureRequired ? `model-picker-key-link-${entry.id}` : undefined}
+                  aria-label={configureRequired ? `${entry.label}，${entry.configureInSettings ? t.modelPicker.configureEndpoint : t.modelPicker.configureApiKey}` : undefined}
+                  title={configureRequired
+                    ? (entry.configureInSettings ? t.modelPicker.configureEndpoint : t.modelPicker.configureApiKey)
+                    : usesStandardChat
+                      ? t.modelPicker.standardChatDescription
+                      : undefined}
                   className={cn(
                     "cursor-pointer gap-2 text-xs",
-                    lockedByApiKey && "text-muted-foreground focus:bg-primary/10 focus:text-muted-foreground",
+                    configureRequired && "text-muted-foreground focus:bg-primary/10 focus:text-muted-foreground",
                   )}
                 >
                   <span className="flex-1 truncate">{entry.label}</span>
-                  {lockedByApiKey ? (
+                  {usesStandardChat && !configureRequired ? (
+                    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                      {t.modelPicker.standardChatMode}
+                    </span>
+                  ) : null}
+                  {configureRequired ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.625rem] font-medium text-primary">
                       <Lock
                         className="h-3 w-3 text-muted-foreground"
                         data-testid={`model-picker-key-lock-${entry.id}`}
                       />
-                      {t.modelPicker.configureApiKey}
+                      {entry.configureInSettings ? t.modelPicker.configureEndpoint : t.modelPicker.configureApiKey}
                       <ChevronRight className="h-3 w-3 text-primary" />
                     </span>
                   ) : locked ? (

@@ -20,6 +20,7 @@ interface UseInsightGenerationProps {
   prompts: Record<string, string>
   context: string
   model: string
+  contextLimit: number
 }
 
 interface UseInsightGenerationReturn {
@@ -37,6 +38,7 @@ export function useInsightGeneration({
   prompts,
   context,
   model,
+  contextLimit,
 }: UseInsightGenerationProps): UseInsightGenerationReturn {
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
@@ -121,6 +123,7 @@ export function useInsightGeneration({
             messages.map((message) => message.content).join('\n\n'),
             model,
             locale,
+            { selectedContext: context, contextLimit },
           )
           if (overflow) throw new Error(overflow)
           const fullText = await ai.query(messages, { modelId: model })
@@ -141,7 +144,7 @@ export function useInsightGeneration({
       if (runIdRef.current !== runId || ownerChanged()) return
       completeBatch(activePanelIds, entries, errors)
     },
-    [ai, completeBatch, context, generateInsight, locale, model, panels, prompts, setPanelStatus],
+    [ai, completeBatch, context, contextLimit, generateInsight, locale, model, panels, prompts, setPanelStatus],
   )
 
   const runPanel = useCallback(

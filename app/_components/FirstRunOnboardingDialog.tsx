@@ -19,6 +19,7 @@ import { Stethoscope, User, Sparkles, LogIn, Lock } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useSafetyPrefsStore } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import { useSummaryPrefsStore } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
@@ -67,7 +68,7 @@ export function FirstRunOnboardingDialog() {
     if (open && steps === null) {
       const s: StepId[] = ['welcome', 'audience']
       s.push('autoScan')
-      if (!user) s.push('signIn')
+      if (!user && !ENV_CONFIG.offlineMode) s.push('signIn')
       setSteps(s)
       setStepIndex(0)
     }

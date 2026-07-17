@@ -1,4 +1,4 @@
-export type ModelProvider = "openai" | "gemini" | "claude"
+export type ModelProvider = "openai" | "gemini" | "claude" | "custom"
 
 export interface ModelDefinition {
   id: string
@@ -48,10 +48,28 @@ export const CLAUDE_MODELS = [
   { id: "claude-fable-5", label: "Claude Fable 5", provider: "claude", requiresUserKey: true, disabled: true, contextLimit: 180000 },
 ] as const satisfies readonly ModelDefinition[]
 
+/**
+ * Stable logical id for a browser-configured OpenAI-compatible endpoint. The
+ * actual upstream model id lives in ai-config.store; keeping this id static lets
+ * persisted per-feature preferences survive arbitrary local model names.
+ */
+export const CUSTOM_OPENAI_MODEL_ID = "openai-compatible-custom" as const
+
+export const CUSTOM_MODELS = [
+  {
+    id: CUSTOM_OPENAI_MODEL_ID,
+    label: "OpenAI-compatible",
+    provider: "custom",
+    // Conservative floor for local models whose context size is unknown.
+    contextLimit: 15000,
+  },
+] as const satisfies readonly ModelDefinition[]
+
 export type GptModelId = (typeof GPT_MODELS)[number]["id"]
 export type GeminiModelId = (typeof GEMINI_MODELS)[number]["id"]
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]["id"]
-export type ModelId = GptModelId | GeminiModelId | ClaudeModelId
+export type CustomModelId = (typeof CUSTOM_MODELS)[number]["id"]
+export type ModelId = GptModelId | GeminiModelId | ClaudeModelId | CustomModelId
 
 export const DEFAULT_MODEL_ID: GeminiModelId = "gemini-3-flash-preview"
 
@@ -60,7 +78,13 @@ export const GEMINI_MODEL_IDS = new Set<GeminiModelId>(GEMINI_MODELS.map((model)
 export const CLAUDE_MODEL_IDS = new Set<ClaudeModelId>(CLAUDE_MODELS.map((model) => model.id))
 
 // All models including internal ones (for validation and lookups)
-export const ALL_MODELS: readonly ModelDefinition[] = [...INTERNAL_MODELS, ...GPT_MODELS, ...GEMINI_MODELS, ...CLAUDE_MODELS]
+export const ALL_MODELS: readonly ModelDefinition[] = [
+  ...INTERNAL_MODELS,
+  ...GPT_MODELS,
+  ...GEMINI_MODELS,
+  ...CLAUDE_MODELS,
+  ...CUSTOM_MODELS,
+]
 const ALL_MODEL_ID_LIST = ALL_MODELS.map((model) => model.id) as ModelId[]
 export const ALL_MODEL_IDS = new Set<ModelId>(ALL_MODEL_ID_LIST)
 
@@ -91,6 +115,7 @@ const PROVIDER_MODELS: Record<ModelProvider, readonly ModelDefinition[]> = {
   openai: GPT_MODELS,
   gemini: GEMINI_MODELS,
   claude: CLAUDE_MODELS,
+  custom: CUSTOM_MODELS,
 }
 
 export function getBaseModelIdForProvider(provider: ModelProvider): string | undefined {
@@ -109,6 +134,10 @@ export function getBaseModelIdForProvider(provider: ModelProvider): string | und
 export function isAutoRunEligibleModel(modelId: string): boolean {
   const def = getModelDefinition(modelId)
   if (!def) return false
+  // A configured custom endpoint is the user's/institution's own resource; it
+  // does not consume the owner-funded proxy quota. Runtime readiness is gated
+  // separately before an auto-run can start.
+  if (def.provider === 'custom') return true
   if (def.requiresUserKey) return true
   return modelId === getBaseModelIdForProvider(def.provider)
 }
@@ -148,10 +177,19 @@ export function gateModel(
  */
 export function gateModelForKeys(
   modelId: string,
-  keys: { openAiKey?: string | null; geminiKey?: string | null; claudeKey?: string | null },
+  keys: {
+    openAiKey?: string | null
+    geminiKey?: string | null
+    claudeKey?: string | null
+    customAvailable?: boolean
+  },
   fallback: string = DEFAULT_MODEL_ID,
 ): string {
   const provider = getModelDefinition(modelId)?.provider ?? 'openai'
+  // Custom endpoints fail closed when their browser profile is unavailable.
+  // Never silently turn a persisted hospital-model choice into an owner-proxy
+  // request; runtime/UI readiness checks surface the missing configuration.
+  if (provider === 'custom') return modelId
   const key =
     provider === 'gemini' ? keys.geminiKey :
     provider === 'claude' ? keys.claudeKey :

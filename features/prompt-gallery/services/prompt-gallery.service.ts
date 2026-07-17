@@ -63,6 +63,7 @@ export async function getSharedPrompts(
   filter?: PromptGalleryFilter,
   sort?: PromptGallerySort
 ): Promise<SharedPrompt[]> {
+  if (!db) return []
   try {
     const constraints: QueryConstraint[] = []
 
@@ -148,6 +149,7 @@ export async function getSharedPrompts(
  * Get a single shared prompt by ID
  */
 export async function getSharedPrompt(id: string): Promise<SharedPrompt | null> {
+  if (!db) return null
   try {
     const docRef = doc(db, COLLECTION_NAME, id)
     const docSnap = await getDoc(docRef)
@@ -215,6 +217,7 @@ export async function createSharedPrompt(
  * Delete a shared prompt
  */
 export async function deleteSharedPrompt(id: string): Promise<void> {
+  if (!db) throw new Error('Firestore database is not initialized')
   try {
     const docRef = doc(db, COLLECTION_NAME, id)
     await deleteDoc(docRef)
@@ -231,6 +234,7 @@ export async function updateSharedPrompt(
   id: string,
   updates: Partial<Omit<SharedPrompt, 'id' | 'createdAt' | 'updatedAt'>>
 ): Promise<void> {
+  if (!db) throw new Error('Firestore database is not initialized')
   try {
     const docRef = doc(db, COLLECTION_NAME, id)
     await updateDoc(docRef, {
@@ -247,6 +251,7 @@ export async function updateSharedPrompt(
  * Increment usage count for a prompt
  */
 export async function incrementPromptUsage(id: string): Promise<void> {
+  if (!db) return
   try {
     const docRef = doc(db, COLLECTION_NAME, id)
     await updateDoc(docRef, {
@@ -266,6 +271,7 @@ export async function getMySharedPrompts(
   filter?: Omit<PromptGalleryFilter, 'authorId'>,
   sort?: PromptGallerySort
 ): Promise<SharedPrompt[]> {
+  if (!db) return []
   try {
     const constraints: QueryConstraint[] = []
 

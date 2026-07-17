@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { useMedicalSummaryOrchestrator } from '@/src/application/hooks/medical-summary/use-medical-summary-orchestrator.hook'
 import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
+import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 
 jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', () => ({
   useMedicalSummary: jest.fn(),
@@ -89,6 +90,34 @@ describe('useMedicalSummaryOrchestrator', () => {
     await act(async () => result.current.generate())
     expect(summaryGenerate).toHaveBeenCalledTimes(1)
     expect(safetyGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs local summary and safety requests sequentially', async () => {
+    const order: string[] = []
+    summaryGenerate.mockImplementationOnce(async () => {
+      order.push('summary:start')
+      await Promise.resolve()
+      order.push('summary:end')
+    })
+    safetyGenerate.mockImplementationOnce(async () => {
+      order.push('safety:start')
+      await Promise.resolve()
+      order.push('safety:end')
+    })
+    arrange({
+      summaryModel: CUSTOM_OPENAI_MODEL_ID,
+      safetyModel: CUSTOM_OPENAI_MODEL_ID,
+    })
+
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    await act(async () => result.current.generate())
+
+    expect(order).toEqual([
+      'summary:start',
+      'summary:end',
+      'safety:start',
+      'safety:end',
+    ])
   })
 
   it('retries only the failed pipeline', async () => {

@@ -8,7 +8,8 @@ const isGhPages = process.env.GITHUB_PAGES === "true";
 // Any non-empty value turns on the same static export + basePath wiring
 // that GitHub Pages uses, just under a different subpath.
 const deployBasePath = process.env.DEPLOY_BASE_PATH || "";
-const isStaticExport = isGhPages || deployBasePath !== "";
+const isIntranetStaticExport = process.env.INTRANET_STATIC_EXPORT === "true";
+const isStaticExport = isGhPages || deployBasePath !== "" || isIntranetStaticExport;
 
 const basePath = deployBasePath
   ? deployBasePath

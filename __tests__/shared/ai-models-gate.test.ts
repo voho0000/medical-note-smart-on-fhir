@@ -6,6 +6,7 @@ import {
   gateModelForAgentSupport,
   gateModelForKeys,
   DEFAULT_MODEL_ID,
+  CUSTOM_OPENAI_MODEL_ID,
 } from '@/src/shared/constants/ai-models.constants'
 
 describe('gateModel — downgrade stranded premium models', () => {
@@ -59,6 +60,10 @@ describe('gateModelForKeys — provider-key-aware gate (agent chat)', () => {
   it('leaves a free (proxy-eligible) model untouched regardless of keys', () => {
     expect(gateModelForKeys('gemini-3-flash-preview', {})).toBe('gemini-3-flash-preview')
     expect(gateModelForKeys('gemini-3.1-flash-lite', { claudeKey: 'k' })).toBe('gemini-3.1-flash-lite')
+  })
+
+  it('keeps a hospital-model choice fail-closed instead of falling back to a proxy model', () => {
+    expect(gateModelForKeys(CUSTOM_OPENAI_MODEL_ID, {})).toBe(CUSTOM_OPENAI_MODEL_ID)
   })
 })
 

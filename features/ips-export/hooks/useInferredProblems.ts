@@ -32,6 +32,8 @@ import { runProblemInference, type InferenceLlm } from '../utils/inference-engin
 import { mapSummaryProblemsToIpsCandidates } from '../utils/summary-problems-mapper'
 import { buildEncounterIcdCandidates } from '../utils/encounter-icd-candidates'
 import type { InferredProblem } from '../utils/inferred-problems-types'
+import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
 
 export type InferenceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -72,15 +74,19 @@ export interface UseInferredProblemsResult {
 }
 
 /** True when at least one LLM provider is usable. */
-function computeAvailable(apiKey: string | null, geminiKey: string | null): boolean {
-  return Boolean(apiKey || geminiKey || ENV_CONFIG.hasChatProxy)
+function computeAvailable(
+  apiKey: string | null,
+  geminiKey: string | null,
+  customAvailable: boolean,
+): boolean {
+  return Boolean(customAvailable || apiKey || geminiKey || ENV_CONFIG.hasChatProxy)
 }
 
 export function useInferredProblems(): UseInferredProblemsResult {
   const { data } = useClinicalDataQuery()
   const { data: patient } = usePatientQuery()
   const { query } = useUnifiedAi()
-  const { apiKey, geminiKey } = useAllApiKeys()
+  const { apiKey, geminiKey, openAiCompatible } = useAllApiKeys()
   const { locale, t } = useLanguage()
 
   const [status, setStatus] = useState<InferenceStatus>('idle')
@@ -88,7 +94,8 @@ export function useInferredProblems(): UseInferredProblemsResult {
   const [confirmedIds, setConfirmedIds] = useState<ReadonlySet<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
-  const available = computeAvailable(apiKey, geminiKey)
+  const customAvailable = isOpenAiCompatibleReady(openAiCompatible)
+  const available = computeAvailable(apiKey, geminiKey, customAvailable)
 
   // Read-only peek at the generated Medical Summary (medical audience, any
   // model slot). Slot keys are built from patient.id, so use that here too.
@@ -197,7 +204,11 @@ export function useInferredProblems(): UseInferredProblemsResult {
     let llmError: unknown = null
     const llm: InferenceLlm = async (messages) => {
       try {
-        return await query(messages, { responseFormat: 'json', temperature: 0.2 })
+        return await query(messages, {
+          modelId: customAvailable ? CUSTOM_OPENAI_MODEL_ID : undefined,
+          responseFormat: 'json',
+          temperature: 0.2,
+        })
       } catch (e) {
         llmError = e
         throw e
@@ -217,7 +228,7 @@ export function useInferredProblems(): UseInferredProblemsResult {
       setError(getUserErrorMessage(e))
       setStatus('error')
     }
-  }, [available, data, query, replaceOriginRows])
+  }, [available, customAvailable, data, query, replaceOriginRows])
 
   const run = useCallback(async () => {
     if (summaryProblemCount > 0) return runFromSummary()

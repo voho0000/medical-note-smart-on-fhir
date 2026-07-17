@@ -35,7 +35,8 @@ export function DataSelectionPanel({
   showScopeDescription = true,
 }: DataSelectionPanelProps) {
   const { t } = useLanguage()
-  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext()
+  // Preview the same summary/insights scope that this panel edits.
+  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext('insights')
   const [activeTab, setActiveTab] = useState('selection')
   const { filterKey, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
   const dataCategories = useDataCategories(clinicalData, filterKey, filters)

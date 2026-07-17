@@ -21,8 +21,14 @@ import {
   useClinicalInsightsConfig,
   type InsightPanelConfig,
 } from "@/src/application/providers/clinical-insights-config.provider"
-import { hasChatProxy } from "@/src/shared/config/env.config"
+import { hasChatProxy, hasClaudeProxy, hasGeminiProxy } from "@/src/shared/config/env.config"
 import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import {
+  hasDirectModelAccess,
+  modelContextLimit,
+  modelRuntimeIdentity,
+} from '@/src/shared/utils/model-access.utils'
+import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
 import {
   aiResultCacheKey,
   contentSignature,
@@ -82,7 +88,7 @@ function panelCacheKey(patientId: string, panelId: string): string {
 export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactNode }) {
   const { panels } = useClinicalInsightsConfig()
   const { audience } = useAudience()
-  const { apiKey: openAiKey, geminiKey, claudeKey } = useAllApiKeys()
+  const { apiKey: openAiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
   const { user, isAnonymous, loading: authLoading } = useAuth()
   const { getFullClinicalContext } = useClinicalContext("insights")
   const {
@@ -99,12 +105,21 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
 
   const { prompts, handlePromptChange } = useInsightPanels(panels)
   const context = useMemo(() => getFullClinicalContext(), [getFullClinicalContext])
-  const canGenerate = Boolean(openAiKey || geminiKey || claudeKey) || hasChatProxy
   const modelProvider = getModelDefinition(model)?.provider
-  const hasModelProviderKey =
-    modelProvider === "openai" ? !!openAiKey :
-    modelProvider === "gemini" ? !!geminiKey :
-    modelProvider === "claude" ? !!claudeKey : false
+  const hasModelProviderKey = hasDirectModelAccess(
+    model,
+    { openAiKey, geminiKey, claudeKey },
+    openAiCompatible,
+  )
+  const hasModelProxy =
+    modelProvider === 'gemini' ? hasGeminiProxy :
+    modelProvider === 'claude' ? hasClaudeProxy :
+    modelProvider === 'openai' ? hasChatProxy : false
+  const canGenerate = modelProvider === 'custom'
+    ? isOpenAiCompatibleReady(openAiCompatible)
+    : hasModelProviderKey || hasModelProxy
+  const runtimeModelId = modelRuntimeIdentity(model, openAiCompatible)
+  const contextLimit = modelContextLimit(model, openAiCompatible)
   const autoRunScope = authLoading
     ? "auth-loading"
     : hasModelProviderKey
@@ -125,7 +140,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     responses,
     panelStatus,
     setResponses,
-  } = useInsightGeneration({ panels, prompts, context, model })
+  } = useInsightGeneration({ panels, prompts, context, model, contextLimit })
 
   const handleResponseChange = useCallback((panelId: string, value: string) => {
     setResponses((previous) => ({
@@ -158,7 +173,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     && !clinicalDataError
     && !hasBlockingQueryIssues
   const runtimeIdentity = patientId && context.trim() && clinicalDataReady
-    ? `${patientId}:${contextSig}:${model}:${INSIGHTS_PIPELINE_VERSION}`
+    ? `${patientId}:${contextSig}:${runtimeModelId}:${INSIGHTS_PIPELINE_VERSION}`
     : ""
 
   // A model or source-context change invalidates every module for this patient.
@@ -209,7 +224,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
       if (
         cached.promptSig !== panel.promptSig ||
         cached.contextSig !== contextSig ||
-        cached.modelId !== model ||
+        cached.modelId !== runtimeModelId ||
         cached.pipelineVersion !== INSIGHTS_PIPELINE_VERSION
       ) return null
       return [panel.id, cached.entry] as const
@@ -221,7 +236,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     })
 
     return () => { cancelled = true }
-  }, [audience, cacheIdentity, contextSig, model, panelPromptIdentity, patientId, runtimeIdentity, setResponses])
+  }, [audience, cacheIdentity, contextSig, runtimeModelId, panelPromptIdentity, patientId, runtimeIdentity, setResponses])
 
   // Persist each completed card separately; one slow or failed module never
   // blocks another module from becoming reusable on refresh.
@@ -239,12 +254,12 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
         entry,
         promptSig: promptSig(panel.id),
         contextSig,
-        modelId: model,
+        modelId: runtimeModelId,
         pipelineVersion: INSIGHTS_PIPELINE_VERSION,
       }
       void saveEncryptedCache(key, cached)
     }
-  }, [cacheIdentity, contextSig, hydratedCacheIdentity, model, panelStatus, panels, patientId, promptSig, responses, runtimeIdentity])
+  }, [cacheIdentity, contextSig, hydratedCacheIdentity, runtimeModelId, panelStatus, panels, patientId, promptSig, responses, runtimeIdentity])
 
   useAutoGenerate({
     panels,

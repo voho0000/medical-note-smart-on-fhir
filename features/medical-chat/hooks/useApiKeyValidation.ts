@@ -1,17 +1,22 @@
 // API Key Validation Hook
 import { useCallback } from 'react'
-import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { hasDirectModelAccess } from '@/src/shared/utils/model-access.utils'
 
 export function useApiKeyValidation(
   model: string,
   openAiKey: string | null,
-  geminiKey: string | null
+  geminiKey: string | null,
+  claudeKey: string | null,
+  openAiCompatible: OpenAiCompatibleConfig,
 ) {
   const hasApiKey = useCallback(() => {
-    const modelDef = getModelDefinition(model)
-    const provider = modelDef?.provider ?? "openai"
-    return provider === "openai" ? !!openAiKey : !!geminiKey
-  }, [model, openAiKey, geminiKey])
+    return hasDirectModelAccess(
+      model,
+      { openAiKey, geminiKey, claudeKey },
+      openAiCompatible,
+    )
+  }, [model, openAiKey, geminiKey, claudeKey, openAiCompatible])
 
   return { hasApiKey }
 }

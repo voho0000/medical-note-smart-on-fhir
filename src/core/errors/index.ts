@@ -58,6 +58,10 @@ const ERROR_MAPPINGS: ErrorMapping[] = [
   },
   // Timeout
   {
+    pattern: /openai-compatible local model response timed out/i,
+    message: '⏰ 地端模型回應逾時 - 請縮小「資料選擇」範圍、改用較快的模型，或確認地端模型仍在運作'
+  },
+  {
     pattern: /timeout|timed out/i,
     message: '⏰ 請求逾時 - 請檢查網路連線或稍後再試'
   },

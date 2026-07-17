@@ -70,6 +70,23 @@ describe('truncateToContextWindow', () => {
     expect(out).toEqual([])
   })
 
+  it('uses a dynamic custom-model context limit when provided', () => {
+    const messages = [msg('user', 'x'.repeat(48000))] // about 12k tokens
+
+    expect(truncateToContextWindow(messages, {
+      modelId: 'openai-compatible-custom',
+      systemPrompt: 'sys',
+      maxResponseTokens: 4000,
+    })).toEqual([])
+
+    expect(truncateToContextWindow(messages, {
+      modelId: 'openai-compatible-custom',
+      systemPrompt: 'sys',
+      maxResponseTokens: 4000,
+      contextLimit: 32768,
+    })).toEqual(messages)
+  })
+
   // The interaction the audit flagged: truncate returns [], and the caller must
   // NOT end up sending the whole history.
   it('integrates with selectMessagesToSend so an empty truncation sends one turn, not all', () => {

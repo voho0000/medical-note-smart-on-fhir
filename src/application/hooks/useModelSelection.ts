@@ -6,17 +6,21 @@ import {
   GPT_MODELS,
   GEMINI_MODELS,
   CLAUDE_MODELS,
+  CUSTOM_OPENAI_MODEL_ID,
   getModelDefinition,
   isModelId,
   ModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
 import { hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
+import { useOpenAiCompatibleConfig } from '@/src/application/stores/ai-config.store'
+import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
 
 export interface ModelEntry {
   id: string
   label: string
   description: string
   isLocked: boolean
+  configureInSettings?: boolean
 }
 
 export function useModelSelection(
@@ -27,6 +31,7 @@ export function useModelSelection(
   setModel: (model: string) => void
 ) {
   const { t } = useLanguage()
+  const openAiCompatible = useOpenAiCompatibleConfig()
   const gptModels = useMemo(() => {
     return GPT_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
@@ -69,10 +74,27 @@ export function useModelSelection(
     })
   }, [claudeKey, t.settings.modelDescriptions])
 
+  const customModels = useMemo((): ModelEntry[] => [{
+    id: CUSTOM_OPENAI_MODEL_ID,
+    label: openAiCompatible.modelId.trim() || t.settings.openAiCompatibleModelLabel,
+    description: openAiCompatible.baseUrl || t.settings.openAiCompatibleNotConfigured,
+    isLocked: !isOpenAiCompatibleReady(openAiCompatible),
+    configureInSettings: !isOpenAiCompatibleReady(openAiCompatible),
+  }], [openAiCompatible, t.settings.openAiCompatibleModelLabel, t.settings.openAiCompatibleNotConfigured])
+
   const handleSelectModel = (candidate: string) => {
     if (!isModelId(candidate)) return
     const definition = getModelDefinition(candidate)
     if (!definition) return
+
+    if (definition.provider === 'custom') {
+      if (!isOpenAiCompatibleReady(openAiCompatible)) {
+        toast.error(t.settings.openAiCompatibleNotConfigured)
+        return
+      }
+      setModel(candidate)
+      return
+    }
 
     if (definition.disabled) {
       toast.error(t.settings.modelUnavailable)
@@ -110,6 +132,12 @@ export function useModelSelection(
   const getModelStatus = (definition: ModelDefinition) => {
     if (definition.disabled) return t.settings.modelUnavailable
 
+    if (definition.provider === 'custom') {
+      return isOpenAiCompatibleReady(openAiCompatible)
+        ? t.settings.openAiCompatibleDirectStatus
+        : t.settings.openAiCompatibleNotConfigured
+    }
+
     if (definition.provider === "openai") {
       if (definition.requiresUserKey) {
         return apiKey ? t.settings.usingPersonalOpenAiKey : t.settings.requiresOpenAiKey
@@ -144,6 +172,7 @@ export function useModelSelection(
     gptModels,
     geminiModels,
     claudeModels,
+    customModels,
     handleSelectModel,
     getModelStatus,
   }

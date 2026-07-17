@@ -12,6 +12,7 @@ import {
   ReCaptchaV3Provider,
   type AppCheck,
 } from 'firebase/app-check'
+import { ENV_CONFIG } from './env.config'
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -25,12 +26,12 @@ const firebaseConfig = {
 }
 
 // Initialize Firebase (only once)
-let app: FirebaseApp
-let auth: Auth
-let db: Firestore
+let app: FirebaseApp | undefined
+let auth: Auth | undefined
+let db: Firestore | undefined
 let appCheck: AppCheck | undefined
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && !ENV_CONFIG.offlineMode) {
   // Client-side initialization
   if (!getApps().length) {
     app = initializeApp(firebaseConfig)

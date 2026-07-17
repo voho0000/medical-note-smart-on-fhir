@@ -108,6 +108,8 @@ npm run test:coverage
 
 **GitHub Pages（靜態，目前正式環境）**：push 到 `master` → CI 通過後自動部署。手動：`npm run deploy`。
 
+**院內 HTTPS／純內網**：執行 `npm run build:intranet` 產生 root-path `out/`，再由院內 Caddy／Nginx 提供靜態 App，並將同源 `/ai/v1` 反向代理到院內 OpenAI-compatible model server。此 build 會停用 Firebase 與所有 owner-funded cloud proxy。完整設定、TLS、CORS 與防火牆說明見 [院內 HTTPS 部署指南](./docs/INTRANET_HTTPS.md)。
+
 > 注意：`next.config.ts` 的 `headers()`（CSP `frame-ancestors` 等）只在 Node 託管（`next start` / Vercel）生效；GitHub Pages 為靜態 CDN，這些 response header 不會送出。
 
 環境變數以 [`.env.example`](./.env.example) 為準。`NEXT_PUBLIC_` 變數會在建置時進入瀏覽器 bundle，不可放入密鑰；`RESEND_API_KEY` 等伺服器端變數只適用於 `next dev`／Node 託管，不會被 GitHub Pages 靜態站使用。
@@ -292,6 +294,8 @@ Register the app in your FHIR sandbox/server (**public client + PKCE**):
 ## Deployment
 
 **GitHub Pages (static, current production)**: push to `master` → auto-deploys after CI. Manual: `npm run deploy`.
+
+**Hospital HTTPS / air-gapped**: run `npm run build:intranet` for a root-path `out/` artifact, serve it through an internal Caddy/Nginx host, and reverse-proxy same-origin `/ai/v1` to the hospital OpenAI-compatible model server. This build disables Firebase and every owner-funded cloud proxy. See the [intranet HTTPS deployment guide](./docs/INTRANET_HTTPS.md).
 
 > Note: `next.config.ts`'s `headers()` (CSP `frame-ancestors`, etc.) only takes effect on a Node host (`next start` / Vercel); GitHub Pages is a static CDN and won't send those response headers.
 

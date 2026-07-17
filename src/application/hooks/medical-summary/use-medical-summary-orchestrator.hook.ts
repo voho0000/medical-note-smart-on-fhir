@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
+import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 
 function createBatchId(sequence: number) {
   return `${Date.now().toString(36)}-${sequence.toString(36)}`
@@ -67,21 +68,36 @@ export function useMedicalSummaryOrchestrator() {
     return id
   }, [result, safetyResult])
 
+  const runPipelines = useCallback(async (jobs: Array<() => Promise<void>>) => {
+    if (model === CUSTOM_OPENAI_MODEL_ID) {
+      // A small local model commonly runs on one GPU/CPU worker. Starting the
+      // two large structured prompts together makes one request queue behind
+      // the other (or forces both to compete for memory), which used to trip
+      // the cloud-oriented idle watchdog. Run local summary jobs one at a time;
+      // cloud providers can continue to execute them concurrently.
+      for (const job of jobs) {
+        await job().catch(() => undefined)
+      }
+      return
+    }
+    await Promise.allSettled(jobs.map((job) => job()))
+  }, [model])
+
   const generate = useCallback(async () => {
     beginBatch()
-    await Promise.allSettled([generateSummary(), generateSafety()])
-  }, [beginBatch, generateSafety, generateSummary])
+    await runPipelines([generateSummary, generateSafety])
+  }, [beginBatch, generateSafety, generateSummary, runPipelines])
 
   // Retry only the failed/missing pipeline so a successful safety scan or
   // summary is not billed twice. It still belongs to one visible batch.
   const retryFailed = useCallback(async () => {
     beginBatch()
-    const jobs: Promise<void>[] = []
-    if (summaryError || !result) jobs.push(generateSummary())
-    if (safetyError || !safetyResult) jobs.push(generateSafety())
-    if (jobs.length === 0) jobs.push(generateSummary(), generateSafety())
-    await Promise.allSettled(jobs)
-  }, [beginBatch, generateSafety, generateSummary, result, safetyError, safetyResult, summaryError])
+    const jobs: Array<() => Promise<void>> = []
+    if (summaryError || !result) jobs.push(generateSummary)
+    if (safetyError || !safetyResult) jobs.push(generateSafety)
+    if (jobs.length === 0) jobs.push(generateSummary, generateSafety)
+    await runPipelines(jobs)
+  }, [beginBatch, generateSafety, generateSummary, result, runPipelines, safetyError, safetyResult, summaryError])
 
   const isGenerating = isSummaryGenerating || isSafetyGenerating
 

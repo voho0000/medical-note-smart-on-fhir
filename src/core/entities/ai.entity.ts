@@ -1,6 +1,6 @@
 // Core Domain Entities: AI & LLM
 
-export type AiProvider = 'openai' | 'gemini' | 'claude'
+export type AiProvider = 'openai' | 'gemini' | 'claude' | 'custom'
 
 export type AiMessageRole = 'user' | 'assistant' | 'system'
 

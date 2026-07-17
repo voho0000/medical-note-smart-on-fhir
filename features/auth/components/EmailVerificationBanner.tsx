@@ -24,7 +24,7 @@ export function EmailVerificationBanner() {
   }
 
   const handleResendEmail = async () => {
-    if (!auth.currentUser) return
+    if (!auth?.currentUser) return
     
     setSending(true)
     try {
@@ -39,7 +39,7 @@ export function EmailVerificationBanner() {
   }
 
   const handleCheckVerification = async () => {
-    if (!auth.currentUser) return
+    if (!auth?.currentUser) return
     
     setChecking(true)
     try {

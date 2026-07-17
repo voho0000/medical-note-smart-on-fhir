@@ -18,7 +18,9 @@ export const metadata: Metadata = {
 //   is blocking script loads from every OTHER origin — DOMPurify remains the
 //   defense for inline injection; CSP removes the remote-script blast radius.
 // - connect-src stays broad (https:) because SMART on FHIR must reach an
-//   arbitrary `iss` FHIR server chosen at launch time.
+//   arbitrary `iss` FHIR server chosen at launch time. HTTP is limited to
+//   loopback hosts so a production static build can still test a model running
+//   on the same workstation without opening arbitrary clear-text egress.
 // - frame-ancestors CANNOT be set via <meta> (per spec) — embedding control
 //   stays in next.config.ts headers() / the mediprisma.tw web server.
 // - Production only: `next dev` needs eval/websockets for HMR.
@@ -28,7 +30,7 @@ const CSP_CONTENT = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https: wss: blob:",
+  "connect-src 'self' https: wss: blob: http://localhost:* http://127.0.0.1:* http://[::1]:*",
   "media-src 'self' blob: data:",
   "worker-src 'self' blob:",
   "frame-src https://*.firebaseapp.com https://accounts.google.com https://www.google.com",

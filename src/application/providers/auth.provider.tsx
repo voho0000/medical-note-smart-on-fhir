@@ -102,14 +102,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Handle redirect result on mount (for mobile Google sign-in)
   useEffect(() => {
-    if (!auth) return
+    const firebaseAuth = auth
+    if (!firebaseAuth) return
     
     const handleRedirect = async () => {
       try {
         // 不 log URL（redirect 期間可能含 auth code）與 email/UID — 共用工作站的 console 會留存
-        await setPersistence(auth, browserLocalPersistence)
+        await setPersistence(firebaseAuth, browserLocalPersistence)
 
-        const result = await getRedirectResult(auth)
+        const result = await getRedirectResult(firebaseAuth)
         if (result) {
           // User successfully signed in via redirect
           // onAuthStateChanged will handle the rest
@@ -125,12 +126,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Firebase Auth state listener
   useEffect(() => {
-    if (!auth) {
+    const firebaseAuth = auth
+    if (!firebaseAuth) {
       setLoading(false)
       return
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       if (firebaseUser && !firebaseUser.isAnonymous) {
         // Real signed-in account
         setIsAnonymous(false)
@@ -171,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setDailyUsage(0)
         setPerplexityUsage(0)
         setWhisperUsage(0)
-        signInAnonymously(auth).catch((error: { code?: string }) => {
+        signInAnonymously(firebaseAuth).catch((error: { code?: string }) => {
           // auth/operation-not-allowed = Anonymous sign-in not enabled in the
           // Firebase Console (Authentication → Sign-in method). The app still
           // works with a user's own API key; the free proxy just won't.

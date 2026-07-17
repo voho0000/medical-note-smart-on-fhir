@@ -5,6 +5,11 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shared/config/env.config"
 import { getProxyAuthHeaders } from "@/src/infrastructure/ai/utils/proxy-auth"
+import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import {
+  isOpenAiCompatibleReady,
+  openAiCompatibleEndpointUrl,
+} from '@/src/shared/utils/openai-compatible.utils'
 
 /**
  * Voice Recording Hook - 語音錄製與轉錄
@@ -19,7 +24,10 @@ import { getProxyAuthHeaders } from "@/src/infrastructure/ai/utils/proxy-auth"
  * - onRecordingStart: 傳給 ReactMediaRecorder 的 onStart
  * - onRecordingStop: 傳給 ReactMediaRecorder 的 onStop（會自動轉錄）
  */
-export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
+export function useVoiceRecording(
+  onTranscriptReady?: (text: string) => void,
+  openAiCompatible?: OpenAiCompatibleConfig | null,
+) {
   const { isAsrLoading, setIsAsrLoading } = useAsr()
   const { t } = useLanguage()
   const apiKey = useAiConfigStore((state) => state.apiKey)
@@ -59,9 +67,10 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
     async (audioBlob: Blob): Promise<string | null> => {
       if (audioBlob.size === 0) return null
 
-      const useProxy = !apiKey && hasWhisperProxy
+      const useCustomEndpoint = isOpenAiCompatibleReady(openAiCompatible)
+      const useProxy = !useCustomEndpoint && !apiKey && hasWhisperProxy
 
-      if (!apiKey && !useProxy) {
+      if (!useCustomEndpoint && !apiKey && !useProxy) {
         toast.error(t.chat.voiceNeedsApiKey)
         return null
       }
@@ -74,10 +83,18 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
       formData.append("model", "whisper-1")
 
       try {
-        const targetUrl = useProxy ? WHISPER_PROXY_URL : "https://api.openai.com/v1/audio/transcriptions"
+        const targetUrl = useCustomEndpoint
+          ? openAiCompatibleEndpointUrl(openAiCompatible.baseUrl, 'audio/transcriptions')
+          : useProxy
+            ? WHISPER_PROXY_URL
+            : "https://api.openai.com/v1/audio/transcriptions"
         const headers: Record<string, string> = {}
 
-        if (useProxy) {
+        if (useCustomEndpoint) {
+          if (openAiCompatible.apiKey) {
+            headers.Authorization = `Bearer ${openAiCompatible.apiKey}`
+          }
+        } else if (useProxy) {
           if (!WHISPER_PROXY_URL) {
             throw new Error("Whisper proxy URL is not configured")
           }
@@ -93,6 +110,8 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
           method: "POST",
           headers,
           body: formData,
+          credentials: useCustomEndpoint ? 'omit' : undefined,
+          referrerPolicy: useCustomEndpoint ? 'no-referrer' : undefined,
         })
 
         if (!response.ok) {
@@ -124,14 +143,14 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
         setIsAsrLoading(false)
       }
     },
-    [apiKey, setIsAsrLoading, t]
+    [apiKey, openAiCompatible, setIsAsrLoading, t]
   )
 
   // Start recording - 開始錄音（內部使用）
   const handleStartRecording = useCallback(() => {
     if (isAsrLoading) return
 
-    if (!apiKey && !hasWhisperProxy) {
+    if (!isOpenAiCompatibleReady(openAiCompatible) && !apiKey && !hasWhisperProxy) {
       toast.error(t.chat.voiceNeedsApiKey)
       return
     }
@@ -139,7 +158,7 @@ export function useVoiceRecording(onTranscriptReady?: (text: string) => void) {
     setAsrError(null)
     setSeconds(0)
     startRecordingRef.current()
-  }, [apiKey, isAsrLoading, t])
+  }, [apiKey, openAiCompatible, isAsrLoading, t])
 
   // Stop recording - 停止錄音（內部使用）
   const handleStopRecording = useCallback(() => {

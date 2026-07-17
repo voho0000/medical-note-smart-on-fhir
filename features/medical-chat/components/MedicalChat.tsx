@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { AlertCircle, Maximize2, MessageSquareDashed, SquarePen, X } from "lucide-react"
+import { AlertCircle, Info, Maximize2, MessageSquareDashed, SquarePen, X } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
@@ -59,6 +59,7 @@ import type { PromptType, SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { AuthDialog } from "@/features/auth"
 import { isQuotaExceededError } from "@/src/core/errors"
+import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -70,6 +71,12 @@ export default function MedicalChat() {
   const setModelFor = useSetModelFor()
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
+  const claudeKey = useAiConfigStore((state) => state.claudeKey)
+  const openAiCompatible = useAiConfigStore((state) => state.openAiCompatible)
+  const isCustomEndpoint = model === CUSTOM_OPENAI_MODEL_ID
+  // Selecting the hospital endpoint is also a privacy boundary: chat messages
+  // must not be copied to Firestore or title/suggestion helper proxies.
+  const cloudChatHistoryEnabled = !!user && !isCustomEndpoint
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { addTemplate, updateTemplate, saveTemplates, maxTemplates, templates } = useChatTemplates()
   const input = useChatInput()
@@ -82,6 +89,7 @@ export default function MedicalChat() {
   
   // Header visibility state (default collapsed for more chat space)
   const [showHeader, setShowHeader] = useState(false)
+  const [localModeNoticeDismissed, setLocalModeNoticeDismissed] = useState(false)
   
   // Prompt Gallery state
   const [showPromptGallery, setShowPromptGallery] = useState(false)
@@ -108,11 +116,11 @@ export default function MedicalChat() {
     patientId: patientId || undefined,
     fhirServerUrl: fhirServerUrl || undefined,
     debounceMs: 5000,
-    enabled: !!user,
+    enabled: cloudChatHistoryEnabled,
   })
 
   // AI smart title generation (after first response)
-  useSmartTitleGeneration()
+  useSmartTitleGeneration({ enabled: cloudChatHistoryEnabled })
 
   // Temporary / incognito chat mode (ChatGPT-style)
   const isTemporaryMode = useIsTemporaryMode()
@@ -149,8 +157,9 @@ export default function MedicalChat() {
     }
   }, [input])
   
-  // Clinical chat is a single agent path. The agent decides whether it needs
-  // FHIR or literature tools; there is no separate "normal" chat mode.
+  // Mode follows the selected model. Cloud/tool-capable models use the deep
+  // agent path; a hospital/local endpoint automatically takes the tool-less
+  // standard path over the user-selected clinical snapshot.
   const chat = useAgentChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
 
   // "Next step" suggestion chips, generated after each answer completes.
@@ -158,7 +167,7 @@ export default function MedicalChat() {
     suggestions: followupSuggestions,
     generate: generateFollowups,
     clear: clearFollowups,
-  } = useFollowupSuggestions()
+  } = useFollowupSuggestions(isCustomEndpoint ? model : undefined)
   
   // Ensure chat.messages is always an array
   const chatMessages = useMemo(() => (
@@ -195,7 +204,7 @@ export default function MedicalChat() {
       chat.handleReset()
       return
     }
-    if (user && !isTemporaryMode) {
+    if (cloudChatHistoryEnabled && !isTemporaryMode) {
       try {
         await forceSave()
       } catch {
@@ -207,7 +216,7 @@ export default function MedicalChat() {
       return
     }
     setShowNewChatConfirm(true)
-  }, [chatMessages.length, user, isTemporaryMode, forceSave, chat, t])
+  }, [chatMessages.length, cloudChatHistoryEnabled, isTemporaryMode, forceSave, chat, t])
 
   const confirmNewConversation = useCallback(() => {
     setShowNewChatConfirm(false)
@@ -229,11 +238,20 @@ export default function MedicalChat() {
     }
   }, [input])
   
-  const voice = useVoiceRecording(handleTranscriptReady)
+  const voice = useVoiceRecording(
+    handleTranscriptReady,
+    isCustomEndpoint ? openAiCompatible : null,
+  )
   const recordingStatus = useRecordingStatus(voice)
 
   // API key validation
-  const { hasApiKey } = useApiKeyValidation(model, openAiKey, geminiKey)
+  const { hasApiKey } = useApiKeyValidation(
+    model,
+    openAiKey,
+    geminiKey,
+    claudeKey,
+    openAiCompatible,
+  )
 
   // Agent chat runs through the Firebase proxy for ANY session — a real account
   // OR an anonymous free-tier visitor (small Perplexity/chat quota) — or with
@@ -242,8 +260,10 @@ export default function MedicalChat() {
   // them; include `isAnonymous`. Only warn once auth has resolved and there is
   // genuinely no path (which means anonymous sign-in itself is unavailable).
   const apiKeyAvailable = hasApiKey()
-  const canUseAgentChat = apiKeyAvailable || !!user || isAnonymous
-  const showApiKeyWarning = !authLoading && !canUseAgentChat
+  const canUseChat = isCustomEndpoint
+    ? apiKeyAvailable
+    : apiKeyAvailable || !!user || isAnonymous
+  const showApiKeyWarning = !authLoading && !canUseChat
 
   // Clear images after sending message
   const clearImagesAfterSend = useCallback(() => {
@@ -330,8 +350,11 @@ export default function MedicalChat() {
     const lastUser = userMessages[userMessages.length - 1]
     if (!lastUser) return
     lastSuggestedIdRef.current = last.id
-    generateFollowups(lastUser, content, { recentUserMessages: userMessages, isDeepMode: true })
-  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups])
+    generateFollowups(lastUser, content, {
+      recentUserMessages: userMessages,
+      isDeepMode: !isCustomEndpoint,
+    })
+  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups, isCustomEndpoint])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
@@ -433,7 +456,9 @@ export default function MedicalChat() {
               modelId={chatModelPref}
               fallbackModelId={MODEL_PREF_DEFAULTS.chat}
               onSelect={(id) => setModelFor('chat', id)}
-              tooltip={t.modelPicker.chatTooltip}
+              tooltip={isCustomEndpoint
+                ? t.medicalChat.localStandardModeTitle
+                : t.modelPicker.chatTooltip}
               agentModeActive
             />
             <button
@@ -482,6 +507,7 @@ export default function MedicalChat() {
         <ChatMessageList
           messages={chatMessages}
           isLoading={chat.isLoading}
+          isStandardChatMode={isCustomEndpoint}
           scrollSignal={followupSuggestions.length}
           onReplyToSelection={handleReplyToSelection}
           afterMessages={
@@ -510,23 +536,55 @@ export default function MedicalChat() {
             <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
               <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
               <div className="flex-1 text-amber-800 dark:text-amber-200">
-                <div className="font-medium mb-1">{t.medicalChat.apiKeyWarningTitle}</div>
+                <div className="font-medium mb-1">
+                  {isCustomEndpoint
+                    ? t.settings.openAiCompatibleNotConfigured
+                    : t.medicalChat.apiKeyWarningTitle}
+                </div>
                 <div className="text-amber-700 dark:text-amber-300">
-                  {t.medicalChat.apiKeyWarningMessage.split(t.medicalChat.loginLink).map((part, index, array) => (
-                    index < array.length - 1 ? (
-                      <span key={index}>
-                        {part}
-                        <button
-                          onClick={() => setShowAuthDialog(true)}
-                          className="underline hover:text-amber-900 dark:hover:text-amber-100 font-medium"
-                        >
-                          {t.medicalChat.loginLink}
-                        </button>
-                      </span>
-                    ) : part
-                  ))}
+                  {isCustomEndpoint
+                    ? t.settings.openAiCompatibleConfigureToUse
+                    : t.medicalChat.apiKeyWarningMessage.split(t.medicalChat.loginLink).map((part, index, array) => (
+                        index < array.length - 1 ? (
+                          <span key={index}>
+                            {part}
+                            <button
+                              onClick={() => setShowAuthDialog(true)}
+                              className="underline hover:text-amber-900 dark:hover:text-amber-100 font-medium"
+                            >
+                              {t.medicalChat.loginLink}
+                            </button>
+                          </span>
+                        ) : part
+                      ))}
                 </div>
               </div>
+            </div>
+          )}
+          {isCustomEndpoint && canUseChat && !localModeNoticeDismissed && (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/35 dark:text-sky-100"
+            >
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
+              <div className="min-w-0 flex-1">
+                <div className="font-medium">{t.medicalChat.localStandardModeTitle}</div>
+                <div className="mt-0.5 leading-relaxed text-sky-800/90 dark:text-sky-200/85">
+                  {t.medicalChat.localStandardModeDescription}
+                </div>
+                <div className="mt-1 font-medium text-sky-700 dark:text-sky-300">
+                  {t.medicalChat.localStandardModeSwitchHint}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLocalModeNoticeDismissed(true)}
+                aria-label={t.common.close}
+                title={t.common.close}
+                className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sky-700/70 transition-colors hover:bg-sky-100 hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-sky-200/70 dark:hover:bg-sky-900/60 dark:hover:text-sky-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
           {isQuotaExceededError(chat.error) && (
@@ -578,7 +636,8 @@ export default function MedicalChat() {
             onStopGeneration={() => chat.stopGeneration()}
             voice={voice}
             images={imageUpload}
-            disabled={!canUseAgentChat}
+            disabled={!canUseChat}
+            isPrivateEndpoint={isCustomEndpoint}
             replyDraft={replyDraft}
             onCancelReply={() => setReplyDraft(null)}
           />

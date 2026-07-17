@@ -7,13 +7,24 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
-import { getModelDefinition, type ModelProvider } from '@/src/shared/constants/ai-models.constants'
+import {
+  CUSTOM_OPENAI_MODEL_ID,
+  getModelDefinition,
+  type ModelProvider,
+} from '@/src/shared/constants/ai-models.constants'
+import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { isOpenAiCompatibleReady, resolveOpenAiCompatibleBaseUrl } from '@/src/shared/utils/openai-compatible.utils'
 import { proxyFetchInterceptor } from '../interceptors/proxy-fetch.interceptor'
+import {
+  createOpenAiCompatibleFetch,
+  openAiCompatibleSdkKey,
+} from '../openai-compatible/openai-compatible.client'
 
 export interface ProviderConfig {
   modelId: string
   apiKey?: string
   useProxy: boolean
+  openAiCompatible?: OpenAiCompatibleConfig | null
 }
 
 export interface ProviderResult {
@@ -26,6 +37,9 @@ export class AiProviderFactory {
    * Create AI provider with appropriate configuration
    */
   create(config: ProviderConfig): ProviderResult {
+    if (config.modelId === CUSTOM_OPENAI_MODEL_ID) {
+      return this.createOpenAiCompatibleProvider(config.openAiCompatible)
+    }
     const provider = this.providerOf(config.modelId)
 
     if (config.useProxy) {
@@ -51,6 +65,9 @@ export class AiProviderFactory {
    * Create provider with proxy configuration
    */
   private createProxyProvider(modelId: string, provider: ModelProvider): ProviderResult {
+    if (provider === 'custom') {
+      throw new Error('OpenAI-compatible endpoints must be called directly from the browser')
+    }
     const proxyUrl =
       provider === 'gemini' ? ENV_CONFIG.geminiProxyUrl :
       provider === 'claude' ? ENV_CONFIG.claudeProxyUrl :
@@ -93,6 +110,9 @@ export class AiProviderFactory {
    * Create provider with direct API access
    */
   private createDirectProvider(modelId: string, apiKey: string, provider: ModelProvider): ProviderResult {
+    if (provider === 'custom') {
+      throw new Error('OpenAI-compatible connection profile is missing')
+    }
     if (provider === 'gemini') {
       const sdk = createGoogleGenerativeAI({ apiKey })
       return { model: sdk(modelId), isGemini: true }
@@ -110,11 +130,35 @@ export class AiProviderFactory {
     return { model: sdk.chat(modelId), isGemini: false }
   }
 
+  private createOpenAiCompatibleProvider(
+    config: OpenAiCompatibleConfig | null | undefined,
+  ): ProviderResult {
+    if (!isOpenAiCompatibleReady(config)) {
+      throw new Error('OpenAI-compatible endpoint is not configured')
+    }
+    const sdk = createOpenAI({
+      baseURL: resolveOpenAiCompatibleBaseUrl(config.baseUrl),
+      apiKey: openAiCompatibleSdkKey(config.apiKey),
+      fetch: createOpenAiCompatibleFetch(config.apiKey),
+    })
+    // Chat Completions is the compatibility contract used by vLLM, Ollama,
+    // LM Studio and hospital gateways. The user's real upstream id is sent;
+    // the logical sentinel never leaves the browser.
+    return { model: sdk.chat(config.modelId), isGemini: false }
+  }
+
   /**
    * Validate proxy availability
    */
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
     const provider = this.providerOf(modelId)
+
+    if (provider === 'custom') {
+      return {
+        available: false,
+        error: 'OpenAI-compatible endpoints do not use the MediPrisma proxy.',
+      }
+    }
 
     if (provider === 'gemini' && !ENV_CONFIG.hasGeminiProxy) {
       return {

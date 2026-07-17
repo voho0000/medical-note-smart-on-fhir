@@ -40,6 +40,7 @@ interface VoiceRecorderProps {
   stopRecordingRef: React.MutableRefObject<() => void>
   /** Receives the live audio stream while recording (null when stopped) */
   onStreamChange?: (stream: MediaStream | null) => void
+  disabled?: boolean
 }
 
 export function VoiceRecorder({
@@ -51,6 +52,7 @@ export function VoiceRecorder({
   startRecordingRef,
   stopRecordingRef,
   onStreamChange,
+  disabled = false,
 }: VoiceRecorderProps) {
   const { t } = useLanguage()
   
@@ -61,7 +63,7 @@ export function VoiceRecorder({
         variant={isRecording ? "destructive" : "outline"}
         size="icon"
         onClick={onToggleRecording}
-        disabled={isLoading}
+        disabled={disabled || isLoading}
         className="h-10 w-10 shrink-0"
         aria-label={isRecording ? t.chat.stopRecording : isLoading ? t.chat.processing : t.chat.recordVoice}
         aria-pressed={isRecording}

@@ -65,6 +65,10 @@ export function useAutoSaveChat({
   }, [currentSessionId])
 
   const saveSession = useCallback(async (force: boolean = false) => {
+    // Custom hospital-model mode disables cloud history. forceSave must honor
+    // the same gate; otherwise send/completion callbacks would still upload the
+    // conversation even though the debounced effect was disabled.
+    if (!enabled) return
     // Get fresh messages from store to avoid closure issues
     const { messages: currentMessages, isTemporaryMode } = useChatStore.getState()
     const { currentSessionId } = useChatHistoryStore.getState()
@@ -162,6 +166,7 @@ export function useAutoSaveChat({
     addSession,
     updateSession,
     locale,
+    enabled,
   ])
   
   useEffect(() => {

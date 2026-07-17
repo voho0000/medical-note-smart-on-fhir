@@ -9,16 +9,32 @@
 
 import { streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
-import { getModelDefinition, gateModel } from "@/src/shared/constants/ai-models.constants"
+import {
+  CUSTOM_OPENAI_MODEL_ID,
+  getModelDefinition,
+  gateModel,
+} from "@/src/shared/constants/ai-models.constants"
+import type { OpenAiCompatibleConfig } from "@/src/shared/types/openai-compatible.types"
+import { isOpenAiCompatibleReady } from "@/src/shared/utils/openai-compatible.utils"
 import { aiProviderFactory } from "../factories/ai-provider.factory"
-import { withIdleTimeout, resolveStreamIdleTimeoutMs } from "./stream-idle-timeout"
+import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "../services/openai-compatible.service"
+import { AiError, AiErrorCode } from "@/src/core/errors"
+import {
+  StreamIdleTimeoutError,
+  withIdleTimeout,
+  resolveStreamIdleTimeoutMs,
+} from "./stream-idle-timeout"
 
 export interface StreamConfig {
   messages: { role: string; content: string; images?: { data: string }[] }[]
   model: string
   apiKey: string | null
+  openAiCompatible?: OpenAiCompatibleConfig | null
   signal: AbortSignal
   onChunk: (content: string) => void
+  /** Optional per-request idle window. Slow local models need longer for the
+   *  first token after evaluating a large selected clinical context. */
+  idleTimeoutMs?: number
 }
 
 export class AiSdkStreamAdapter {
@@ -28,12 +44,19 @@ export class AiSdkStreamAdapter {
     // provider's free, proxy-eligible base model so the call rides the proxy
     // instead of dead-ending on a missing key (e.g. a model that used to be free
     // and became key-gated). No caller can bypass this.
-    const modelId = gateModel(config.model, !!config.apiKey)
+    const isCustom = config.model === CUSTOM_OPENAI_MODEL_ID
+    if (isCustom && !isOpenAiCompatibleReady(config.openAiCompatible)) {
+      throw new Error('OpenAI-compatible endpoint is not configured')
+    }
+    const modelId = isCustom
+      ? config.model
+      : gateModel(config.model, !!config.apiKey)
     const useProxy = this.shouldUseProxy(config.apiKey, modelId)
     const { model } = aiProviderFactory.create({
       modelId,
       apiKey: config.apiKey ?? undefined,
       useProxy,
+      openAiCompatible: config.openAiCompatible,
     })
 
     // Drive the SDK off our OWN controller so the idle watchdog can abort a
@@ -60,11 +83,20 @@ export class AiSdkStreamAdapter {
     // withIdleTimeout aborts + throws StreamIdleTimeoutError if no token arrives
     // for streamIdleTimeoutMs — so a stalled upstream surfaces a timeout error
     // (getUserErrorMessage maps it) instead of hanging the UI forever.
+    // Local 7B-class models can need more than the cloud default just to load
+    // and evaluate a clinical prompt before their first token. Every custom
+    // streaming feature (summary, safety scan, insights and chat) therefore
+    // receives the same ten-minute local-model window by default.
+    const idleTimeoutMs = config.idleTimeoutMs ?? (
+      isCustom
+        ? OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS
+        : resolveStreamIdleTimeoutMs()
+    )
     let fullText = ""
     try {
       for await (const delta of withIdleTimeout(
         result.textStream,
-        resolveStreamIdleTimeoutMs(),
+        idleTimeoutMs,
         () => controller.abort(),
       )) {
         fullText += delta
@@ -74,6 +106,14 @@ export class AiSdkStreamAdapter {
       // User pressed stop → end cleanly (the old adapters swallowed abort too).
       // A StreamIdleTimeoutError is NOT a user abort, so it propagates.
       if (config.signal.aborted) return
+      if (isCustom && error instanceof StreamIdleTimeoutError) {
+        const minutes = Math.max(1, Math.round(idleTimeoutMs / 60_000))
+        throw new AiError(
+          `OpenAI-compatible local model response timed out after ${minutes} minutes`,
+          AiErrorCode.TIMEOUT,
+          { modelId: config.openAiCompatible?.modelId, timeoutMs: idleTimeoutMs },
+        )
+      }
       throw error
     } finally {
       config.signal.removeEventListener("abort", onExternalAbort)
@@ -87,6 +127,7 @@ export class AiSdkStreamAdapter {
   }
 
   private shouldUseProxy(apiKey: string | null, model: string): boolean {
+    if (model === CUSTOM_OPENAI_MODEL_ID) return false
     if (apiKey) return false
     const provider = getModelDefinition(model)?.provider ?? "openai"
     const hasProxy =

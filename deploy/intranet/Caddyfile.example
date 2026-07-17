@@ -1,0 +1,32 @@
+# Replace the hostname and upstream with values owned by the hospital.
+# Prefer a hospital DNS name over a raw IP so certificate renewal stays stable.
+mediprisma.intra.example.org {
+    # Pilot / managed-device option: Caddy issues from its offline internal CA.
+    # Install Caddy's root CA in every client trust store (for example by GPO).
+    tls internal
+
+    # Production AD CS / hospital-PKI alternative:
+    # tls /etc/caddy/certs/mediprisma.crt /etc/caddy/certs/mediprisma.key
+
+    encode zstd gzip
+
+    # Browser calls https://mediprisma.../ai/v1. handle_path removes /ai,
+    # so the model server receives /v1/chat/completions and /v1/models.
+    handle_path /ai/* {
+        reverse_proxy http://10.20.30.40:8000
+    }
+
+    handle {
+        root * /srv/mediprisma
+        try_files {path} {path}.html {path}/index.html /index.html
+        file_server
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(self), geolocation=()"
+        Strict-Transport-Security "max-age=31536000"
+        -Server
+    }
+}

@@ -13,9 +13,15 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { useEffectiveModel } from "@/src/application/stores/model-prefs.store"
-import { gateModelForKeys, getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { gateModelForKeys } from "@/src/shared/constants/ai-models.constants"
 import { estimateTokens } from "@/src/shared/utils/token-estimator"
-import { evaluateContextBudget, type ContextBudgetLevel } from "@/src/shared/utils/context-budget"
+import {
+  DEFAULT_RESPONSE_RESERVE,
+  evaluateContextBudget,
+  type ContextBudgetLevel,
+} from "@/src/shared/utils/context-budget"
+import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { modelContextLimit, modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 
 const LEVEL_BAR: Record<ContextBudgetLevel, string> = {
   ok: "bg-emerald-500",
@@ -40,13 +46,21 @@ interface ContextTokenMeterProps {
 export function ContextTokenMeter({ modelId, fallbackModelId }: ContextTokenMeterProps) {
   const { t } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
-  const { getClinicalContext, formatClinicalContext } = useClinicalContext()
+  // The main Data Selection drawer edits the summary/insights profile. Read
+  // that exact consumer here too so a stale legacy chat profile cannot make
+  // the meter disagree with the subsequent summary request.
+  const { getClinicalContext, formatClinicalContext } = useClinicalContext('insights')
   const defaultModelId = useEffectiveModel("insights")
-  const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
+  const { apiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
   const effectiveModelId = modelId
     ? gateModelForKeys(
         modelId,
-        { openAiKey: apiKey, geminiKey, claudeKey },
+        {
+          openAiKey: apiKey,
+          geminiKey,
+          claudeKey,
+          customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+        },
         fallbackModelId ?? defaultModelId,
       )
     : defaultModelId
@@ -68,27 +82,39 @@ export function ContextTokenMeter({ modelId, fallbackModelId }: ContextTokenMete
         tokens: estimateTokens(formatClinicalContext([s])),
       }))
       setSections(perSection)
-      setTotal(perSection.reduce((sum, s) => sum + s.tokens, 0))
+      // Estimate the same single formatted string used by summary generation;
+      // summing separately formatted sections introduces small rounding and
+      // empty-section discrepancies.
+      setTotal(estimateTokens(formatClinicalContext(secs)))
     }, 400)
     return () => {
       if (rafRef.current) clearTimeout(rafRef.current)
     }
   }, [getClinicalContext, formatClinicalContext])
 
-  const budget = useMemo(() => evaluateContextBudget(total, effectiveModelId), [total, effectiveModelId])
+  const contextLimit = modelContextLimit(effectiveModelId, openAiCompatible)
+  const budget = useMemo(
+    () => evaluateContextBudget(
+      total,
+      effectiveModelId,
+      DEFAULT_RESPONSE_RESERVE,
+      contextLimit,
+    ),
+    [total, effectiveModelId, contextLimit],
+  )
   const topSections = useMemo(
     () => [...sections].sort((a, b) => b.tokens - a.tokens).slice(0, 3).filter((s) => s.tokens > 0),
     [sections],
   )
 
-  const modelLabel = getModelDefinition(effectiveModelId)?.label ?? effectiveModelId
+  const modelLabel = modelDisplayLabel(effectiveModelId, openAiCompatible)
   const pct = Math.round(budget.fraction * 100)
 
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[0.6875rem] font-medium text-muted-foreground">
-          {ds.tokenMeterLabel ?? "內容量"}
+          {ds.tokenMeterLabel ?? "已選病歷內容"}
         </span>
         <span className={`text-[0.6875rem] tabular-nums ${LEVEL_TEXT[budget.level]}`}>
           ~{fmt(total)} / {fmt(budget.usable)} tok · {pct}%
@@ -110,9 +136,12 @@ export function ContextTokenMeter({ modelId, fallbackModelId }: ContextTokenMete
           </span>
         )}
       </div>
+      <p className="mt-1 text-[0.625rem] leading-snug text-muted-foreground">
+        {ds.tokenMeterRequestHint ?? "產生摘要時還會加入 AI 指令、輸出格式與來源索引；送出前會顯示完整輸入量。"}
+      </p>
       {budget.level === "over" && (
         <p className="mt-1 text-[0.625rem] text-red-600 dark:text-red-400">
-          {ds.tokenMeterOver ?? "已超過此模型的內容上限,送出前部分較舊對話會被截斷;建議縮小文件/檢驗範圍,或改用更大內容視窗的模型。"}
+          {ds.tokenMeterOver ?? "已選病歷本身已超過此模型的可用輸入空間；建議縮小文件或檢驗範圍，或改用內容視窗更大的模型。"}
         </p>
       )}
     </div>

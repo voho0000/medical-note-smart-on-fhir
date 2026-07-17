@@ -10,6 +10,7 @@
     "start": "next start",
     "build:gh": "node scripts/build-gh.mjs",
     "build:mediprisma": "node scripts/build-mediprisma.mjs",
+    "build:intranet": "node scripts/build-intranet.mjs",
     "build:demo": "node scripts/build-demo-bundle.mjs",
     "deploy": "npm run build:gh && gh-pages -d out -b gh-pages",
     "test": "TZ=Asia/Taipei jest",

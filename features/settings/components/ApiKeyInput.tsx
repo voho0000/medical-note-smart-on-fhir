@@ -76,7 +76,7 @@ export function ApiKeyInput({
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={showPassword ? "隱藏 API key" : "顯示 API key"}
+            aria-label={showPassword ? t.settings.hideKey : t.settings.showKey}
           >
             {showPassword ? (
               <EyeOff className="h-4 w-4" />

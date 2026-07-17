@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { AuthDialog } from './AuthDialog'
-import { LogIn, LogOut, User, Info, Gift } from 'lucide-react'
+import { LogIn, LogOut, User, Info, Gift, ShieldCheck } from 'lucide-react'
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import {
   Tooltip,
   TooltipContent,
@@ -45,6 +46,22 @@ export function AuthStatus() {
     whisperLimit,
   } = useAuth()
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+
+  if (ENV_CONFIG.offlineMode) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+        <div className="flex items-start gap-2">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
+          <div>
+            <h3 className="text-sm font-medium">{t.settings.openAiCompatibleGroupLabel}</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t.settings.openAiCompatibleDirectStatus}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

@@ -10,17 +10,19 @@ export interface ContextWindowConfig {
   modelId: string
   systemPrompt: string
   maxResponseTokens?: number // Reserve tokens for AI response
+  /** Dynamic window for a browser-configured OpenAI-compatible model. */
+  contextLimit?: number
 }
 
 /**
  * Truncate messages to fit within model's context window
  * Strategy: Keep system prompt + recent messages that fit within limit
  */
-export function truncateToContextWindow(
-  messages: Message[],
+export function truncateToContextWindow<T extends Message>(
+  messages: T[],
   config: ContextWindowConfig
-): Message[] {
-  const contextLimit = getContextLimit(config.modelId)
+): T[] {
+  const contextLimit = config.contextLimit ?? getContextLimit(config.modelId)
   const maxResponseTokens = config.maxResponseTokens || 4000
   const availableTokens = contextLimit - maxResponseTokens
   
@@ -34,7 +36,7 @@ export function truncateToContextWindow(
   }
   
   // Start from most recent messages and work backwards
-  const truncatedMessages: Message[] = []
+  const truncatedMessages: T[] = []
   let currentTokens = 0
   
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -74,7 +76,7 @@ export function wouldExceedContextWindow(
   messages: Message[],
   config: ContextWindowConfig
 ): boolean {
-  const contextLimit = getContextLimit(config.modelId)
+  const contextLimit = config.contextLimit ?? getContextLimit(config.modelId)
   const systemTokens = estimateTokens(config.systemPrompt)
   const messagesTokens = estimateMessagesTokens(messages)
   const maxResponseTokens = config.maxResponseTokens || 4000
@@ -97,7 +99,7 @@ export function getTokenStats(
   remainingTokens: number
   utilizationPercent: number
 } {
-  const contextLimit = getContextLimit(config.modelId)
+  const contextLimit = config.contextLimit ?? getContextLimit(config.modelId)
   const systemTokens = estimateTokens(config.systemPrompt)
   const messagesTokens = estimateMessagesTokens(messages)
   const totalTokens = systemTokens + messagesTokens

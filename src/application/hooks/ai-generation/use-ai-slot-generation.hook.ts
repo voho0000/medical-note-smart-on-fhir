@@ -29,7 +29,7 @@ import { useAudience, type Audience } from '@/src/application/providers/audience
 import { useAuth } from '@/src/application/providers/auth.provider'
 import type { Locale } from '@/src/shared/i18n/i18n.config'
 import { loadEncryptedCache } from '@/src/infrastructure/cache/encrypted-session-cache'
-import { getModelDefinition, gateModel } from '@/src/shared/constants/ai-models.constants'
+import { getModelDefinition, gateModelForKeys } from '@/src/shared/constants/ai-models.constants'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { DEMO_PATIENT_ID } from '@/src/infrastructure/demo/demo-ai-snapshots'
 import {
@@ -44,6 +44,12 @@ import {
   type ClinicalAiDataInput,
 } from './use-clinical-ai-input.hook'
 import { patientAiSlotKey } from './ai-slot-key'
+import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  hasDirectModelAccess,
+  modelContextLimit,
+  modelRuntimeIdentity,
+} from '@/src/shared/utils/model-access.utils'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
@@ -56,6 +62,8 @@ export interface AiSlotRunContext {
   ai: ReturnType<typeof useUnifiedAi>
   /** The gated model this run actually streams on. */
   modelId: string
+  /** Full context window, including the dynamic custom-endpoint setting. */
+  contextLimit: number
 }
 
 export interface AiSlotDemoContext {
@@ -142,7 +150,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // firing before the (possibly anonymous) session resolves would race
   // getProxyIdToken / the auth listener and get rejected.
   const { loading: authLoading, user, isAnonymous } = useAuth()
-  const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
+  const { apiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
   const { audience } = useAudience()
 
   // The model actually used — test seam → user pick (key-gated → free base) →
@@ -153,12 +161,26 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const resolvedModelId = useMemo(() => {
     const override = resolveModelOverride?.()
     if (typeof override === 'string' && override) return override
-    const def = getModelDefinition(selectedModelId)
-    const hasProviderKey = def
-      ? def.provider === 'openai' ? !!apiKey : def.provider === 'gemini' ? !!geminiKey : !!claudeKey
-      : false
-    return gateModel(selectedModelId, hasProviderKey, defaultModelId)
-  }, [resolveModelOverride, selectedModelId, apiKey, geminiKey, claudeKey, defaultModelId])
+    return gateModelForKeys(
+      selectedModelId,
+      {
+        openAiKey: apiKey,
+        geminiKey,
+        claudeKey,
+        customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+      },
+      defaultModelId,
+    )
+  }, [resolveModelOverride, selectedModelId, apiKey, geminiKey, claudeKey, openAiCompatible, defaultModelId])
+
+  const runtimeModelId = useMemo(
+    () => modelRuntimeIdentity(resolvedModelId, openAiCompatible),
+    [resolvedModelId, openAiCompatible],
+  )
+  const resolvedContextLimit = useMemo(
+    () => modelContextLimit(resolvedModelId, openAiCompatible),
+    [resolvedModelId, openAiCompatible],
+  )
 
   // A cache/result slot is reusable only for the exact selected clinical
   // input. While data is loading or background-fetching inputSignature is
@@ -169,15 +191,17 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     patientId,
     audience,
     locale,
-    modelId: resolvedModelId,
+    modelId: runtimeModelId,
     inputSignature,
   })
 
   const selectedModelProvider = getModelDefinition(selectedModelId)?.provider
-  const hasSelectedProviderKey =
-    selectedModelProvider === 'openai' ? !!apiKey :
-    selectedModelProvider === 'gemini' ? !!geminiKey :
-    selectedModelProvider === 'claude' ? !!claudeKey : false
+  const hasSelectedProviderKey = hasDirectModelAccess(
+    selectedModelId,
+    { openAiKey: apiKey, geminiKey, claudeKey },
+    openAiCompatible,
+  )
+  const selectedModelReady = selectedModelProvider !== 'custom' || isOpenAiCompatibleReady(openAiCompatible)
   // A failed anonymous auto-run must become eligible again after login (or
   // after the user adds their own provider key). The result cache remains
   // content-bound; only the once-per-access-context trigger
@@ -190,9 +214,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const isRunning = store((s) => (slotKey ? !!s.running[slotKey] : false))
   const error = store((s) => (slotKey ? s.errors[slotKey] ?? null : null))
 
-  // Guests auto-run too (v0.25.x): the onboarding step is an explicit opt-in
-  // (with a PHI-upload note), the result is cached 12h per patient, and their
-  // 50/day free quota is still enforced server-side.
+  // Guests auto-run too (v0.25.x): callers apply the source-aware real-data
+  // consent gate, results are cached 12h per patient, and the 50/day free quota
+  // is still enforced server-side.
   const generate = useCallback(async () => {
     if (!slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
@@ -209,9 +233,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           audience,
           ai,
           modelId: resolvedModelId,
+          contextLimit: resolvedContextLimit,
         }),
     })
-  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, clinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, clinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedContextLimit])
 
   // Restore the persisted result on (re)load BEFORE auto-run can fire, so a
   // refresh on the same patient reuses the cached result instead of re-billing.
@@ -300,7 +325,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // applied in resolvedModelId.
   useEffect(() => {
     if (!shouldAutoRunSummarySlot({
-      enabled: autoRunEnabled && !bundleTransitionActive && !demoSnapshotExpected,
+      enabled: autoRunEnabled && selectedModelReady && !bundleTransitionActive && !demoSnapshotExpected,
       authLoading,
       slotKey,
       busy: isRunning,
@@ -312,7 +337,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     })) return
     autoTriggeredRef.current = autoRunIdentity
     void generate()
-  }, [autoRunEnabled, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isRunning, result, dataReady, hydrated, generate])
+  }, [autoRunEnabled, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isRunning, result, dataReady, hydrated, generate])
 
   return {
     patientId,

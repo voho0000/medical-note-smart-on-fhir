@@ -44,6 +44,17 @@
 - 新使用者預設 `sessionStorage`，關閉視窗後消失；只有明確開啟「記住此裝置」才改為 localStorage。
 - key 做 trim 與 header-safe 驗證，避免錯誤內容進入 Authorization header。
 - provider user key 只在 direct-provider path 使用；proxy interceptor 會先移除 provider credential header。
+- 院內 OpenAI-compatible key 與其他 provider key 使用相同的 session-first、加密 browser storage；optional key 只送往使用者設定的 endpoint。
+
+### 院內 OpenAI-compatible endpoint
+
+- 接受 HTTPS hostname、IPv4／IPv6、port 與同源 `/ai/v1`；HTTP 僅允許 loopback 開發環境。
+- 拒絕 URL userinfo、query、fragment、非 HTTP(S) scheme 與誤填的完整 `/chat/completions`。
+- 連線測試完全在 browser 執行，不提供 server-side arbitrary-URL fetch，因此不建立 SSRF primitive。
+- 自訂模型使用固定 logical model id，實際 upstream model id 只在 direct request body；endpoint／model fingerprint 納入 AI cache identity。
+- 自訂 endpoint unavailable 時 fail closed，不 fallback 到 owner proxy。
+- 院內模式停用 Firestore chat auto-save／smart title、移除 Perplexity tool，follow-up 與可支援的語音功能改走相同 endpoint。
+- `NEXT_PUBLIC_OFFLINE_MODE=1` 不初始化 Firebase/Auth/App Check；`build:intranet` 另會清空所有 cloud proxy URL。
 
 瀏覽器端加密無法防禦已執行在同一 origin 的惡意 JavaScript／XSS；它主要降低 storage 被直接讀取或共用工作站殘留的風險。
 

@@ -12,7 +12,8 @@ import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 
 const repository = getChatSessionRepository()
 
-export function useSmartTitleGeneration() {
+export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
+  const enabled = options.enabled ?? true
   const { user } = useAuth()
   const { locale } = useLanguage()
   const { patientId, fhirServerUrl } = useFhirContext()
@@ -28,6 +29,7 @@ export function useSmartTitleGeneration() {
 
   // Reset message count when session changes
   useEffect(() => {
+    if (!enabled) return
     if (currentSessionId !== prevSessionIdRef.current) {
       prevMessageCountRef.current = messages.length
       prevSessionIdRef.current = currentSessionId
@@ -79,7 +81,7 @@ export function useSmartTitleGeneration() {
       locale,
       apiKey
     )
-  }, [messages, currentSessionId, user?.uid, locale, apiKey])
+  }, [enabled, messages, currentSessionId, user?.uid, locale, apiKey])
 
   const generateSmartTitle = async (
     sessionId: string,

@@ -17,6 +17,13 @@ describe('ai-config.store', () => {
       geminiKey: null,
       perplexityKey: null,
       claudeKey: null,
+      openAiCompatible: {
+        enabled: false,
+        baseUrl: '',
+        modelId: '',
+        apiKey: null,
+        contextWindowTokens: 15000,
+      },
       storageType: 'localStorage',
     })
 
@@ -32,6 +39,7 @@ describe('ai-config.store', () => {
       expect(state.geminiKey).toBeNull()
       expect(state.perplexityKey).toBeNull()
       expect(state.claudeKey).toBeNull()
+      expect(state.openAiCompatible.enabled).toBe(false)
     })
   })
 
@@ -99,6 +107,74 @@ describe('ai-config.store', () => {
       setStorageType('localStorage')
 
       expect(useAiConfigStore.getState().storageType).toBe('localStorage')
+    })
+  })
+
+  describe('OpenAI-compatible profile', () => {
+    it('normalizes, stores, disables, and removes a hospital endpoint', () => {
+      const state = useAiConfigStore.getState()
+      state.setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1/',
+        modelId: ' local-model ',
+        apiKey: ' local-key ',
+      })
+
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual({
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'local-model',
+        apiKey: 'local-key',
+        contextWindowTokens: 15000,
+      })
+
+      useAiConfigStore.getState().setOpenAiCompatibleEnabled(false)
+      expect(useAiConfigStore.getState().openAiCompatible.enabled).toBe(false)
+
+      useAiConfigStore.getState().clearOpenAiCompatibleConfig()
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual({
+        enabled: false,
+        baseUrl: '',
+        modelId: '',
+        apiKey: null,
+        contextWindowTokens: 15000,
+      })
+    })
+
+    it('clearAllKeys removes the custom key but preserves a keyless-capable profile', () => {
+      useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: '/ai/v1',
+        modelId: 'hospital-model',
+        apiKey: 'secret',
+      })
+      useAiConfigStore.getState().clearAllKeys()
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual({
+        enabled: true,
+        baseUrl: '/ai/v1',
+        modelId: 'hospital-model',
+        apiKey: null,
+        contextWindowTokens: 15000,
+      })
+    })
+
+    it('migrates a Qwen endpoint to its known context window unless explicitly overridden', () => {
+      useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        modelId: 'qwen2.5:1.5b',
+        apiKey: null,
+      })
+      expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(32768)
+
+      useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        modelId: 'qwen2.5:1.5b',
+        apiKey: null,
+        contextWindowTokens: 24576,
+      })
+      expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(24576)
     })
   })
 

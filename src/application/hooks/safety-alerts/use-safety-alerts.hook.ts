@@ -101,7 +101,15 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       catalog: ctx.catalog,
     })
-    const overflow = preflightContextWarning(messages.map((message) => message.content).join('\n\n'), ctx.modelId, ctx.locale)
+    const overflow = preflightContextWarning(
+      messages.map((message) => message.content).join('\n\n'),
+      ctx.modelId,
+      ctx.locale,
+      {
+        selectedContext: ctx.clinicalContext,
+        contextLimit: ctx.contextLimit,
+      },
+    )
     if (overflow) {
       toast.error(overflow)
       throw new Error(overflow)

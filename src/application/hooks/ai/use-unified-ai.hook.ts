@@ -10,8 +10,9 @@ import { AiService } from '@/src/infrastructure/ai/services/ai.service'
 import { QueryAiUseCase } from '@/src/core/use-cases/ai/query-ai.use-case'
 import { StreamOrchestrator } from '@/src/infrastructure/ai/streaming/stream-orchestrator'
 import { getUserErrorMessage } from '@/src/core/errors'
-import { DEFAULT_MODEL_ID, getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import { DEFAULT_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 import type { AiMessage } from '@/src/core/entities/ai.entity'
+import { apiKeyForModel } from '@/src/shared/utils/model-access.utils'
 
 interface UseUnifiedAiOptions {
   defaultModel?: string
@@ -36,7 +37,7 @@ interface StreamOptions extends QueryOptions {
  * Consolidates AI query and streaming functionality
  */
 export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
-  const { apiKey: openAiKey, geminiKey, claudeKey } = useAllApiKeys()
+  const { apiKey: openAiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
   // Callers with a model preference pass modelId explicitly (chat/insights/
   // summary/safety); the rest (e.g. IPS problem inference) land on the free
   // default. The former global picked-model no longer exists.
@@ -50,8 +51,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
   // Cache AI service instance to avoid recreating on every call
   const aiService = useMemo(
-    () => new AiService(openAiKey, geminiKey, claudeKey),
-    [openAiKey, geminiKey, claudeKey]
+    () => new AiService(openAiKey, geminiKey, claudeKey, openAiCompatible),
+    [openAiKey, geminiKey, claudeKey, openAiCompatible]
   )
 
   // Cache use case instance
@@ -113,11 +114,11 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       abortControllersRef.current.add(abortController)
 
       const modelId = streamOptions?.modelId || options.defaultModel || defaultModel
-      const provider = getModelDefinition(modelId)?.provider ?? 'openai'
-      const apiKey =
-        provider === 'gemini' ? geminiKey :
-        provider === 'claude' ? claudeKey :
-        openAiKey
+      const apiKey = apiKeyForModel(
+        modelId,
+        { openAiKey, geminiKey, claudeKey },
+        openAiCompatible,
+      )
 
       let fullText = ''
 
@@ -126,6 +127,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           messages,
           model: modelId,
           apiKey,
+          openAiCompatible,
           signal: abortController.signal,
           onChunk: (chunk: string) => {
             fullText = chunk
@@ -150,7 +152,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         abortControllersRef.current.delete(abortController)
       }
     },
-    [streamOrchestrator, openAiKey, geminiKey, claudeKey, defaultModel, options]
+    [streamOrchestrator, openAiKey, geminiKey, claudeKey, openAiCompatible, defaultModel, options]
   )
 
   /**

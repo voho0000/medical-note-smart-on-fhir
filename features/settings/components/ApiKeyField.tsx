@@ -1,27 +1,164 @@
-// API-key settings. Model picking moved in-panel (shared ModelPicker in each
-// AI feature) — Settings now only manages provider keys + persistence.
+// AI connection settings. Models are selected where they are used; this page
+// progressively discloses the connection profiles, credentials and persistence
+// policy that make those models available.
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import {
+  BookOpen,
+  ChevronDown,
+  Cloud,
+  KeyRound,
+  LockKeyhole,
+  Server,
+  ShieldCheck,
+} from "lucide-react"
 import { toast } from "sonner"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { useModelPrefsStore } from "@/src/application/stores/model-prefs.store"
 import { useSummaryPrefsStore } from "@/src/application/hooks/medical-summary/use-medical-summary.hook"
 import { useSafetyPrefsStore } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
+import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
+import { isOpenAiCompatibleReady } from "@/src/shared/utils/openai-compatible.utils"
+import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
+import { cn } from "@/src/shared/utils/cn.utils"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import { Badge } from "@/components/ui/badge"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
-import { ApiKeyInput } from './ApiKeyInput'
-import { AuthStatus } from '@/features/auth'
+import { ApiKeyInput } from "./ApiKeyInput"
+import { AuthStatus } from "@/features/auth"
+import { OpenAiCompatibleSettings } from "./OpenAiCompatibleSettings"
 
-export function ModelAndKeySettings() {
+type StatusTone = "success" | "muted" | "warning"
+
+function statusClass(tone: StatusTone): string {
+  if (tone === "success") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+  }
+  if (tone === "warning") {
+    return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+  }
+  return "border-border bg-muted/40 text-muted-foreground"
+}
+
+function endpointLabel(baseUrl: string): string {
+  if (!baseUrl) return ""
+  if (baseUrl.startsWith("/")) return baseUrl
+  try {
+    return new URL(baseUrl).host
+  } catch {
+    return baseUrl
+  }
+}
+
+function StatusBadge({ label, tone }: { label: string; tone: StatusTone }) {
+  return (
+    <Badge variant="outline" className={cn("text-[0.625rem]", statusClass(tone))}>
+      {label}
+    </Badge>
+  )
+}
+
+function SectionTriggerContent({
+  icon,
+  title,
+  description,
+  status,
+  tone,
+}: {
+  icon: ReactNode
+  title: string
+  description: string
+  status: string
+  tone: StatusTone
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 items-start gap-2.5 pr-2">
+      <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{title}</span>
+          <StatusBadge label={status} tone={tone} />
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground">
+          {description}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function CredentialDisclosure({
+  title,
+  configured,
+  configuredLabel,
+  notConfiguredLabel,
+  children,
+}: {
+  title: string
+  configured: boolean
+  configuredLabel: string
+  notConfiguredLabel: string
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="rounded-md border bg-background/70">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 text-sm font-medium">{title}</span>
+            <StatusBadge
+              label={configured ? configuredLabel : notConfiguredLabel}
+              tone={configured ? "success" : "muted"}
+            />
+            <ChevronDown className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180",
+            )} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="border-t p-3">{children}</div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  )
+}
+
+interface ModelAndKeySettingsProps {
+  /** Test/deployment seam; production follows the build-time offline mode. */
+  offlineMode?: boolean
+}
+
+export function ModelAndKeySettings({
+  offlineMode = ENV_CONFIG.offlineMode,
+}: ModelAndKeySettingsProps = {}) {
   const { t } = useLanguage()
+  const { user, isAnonymous } = useAuth()
   const apiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const perplexityKey = useAiConfigStore((state) => state.perplexityKey)
   const claudeKey = useAiConfigStore((state) => state.claudeKey)
+  const openAiCompatible = useAiConfigStore((state) => state.openAiCompatible)
   const setApiKey = useAiConfigStore((state) => state.setApiKey)
   const setGeminiKey = useAiConfigStore((state) => state.setGeminiKey)
   const setPerplexityKey = useAiConfigStore((state) => state.setPerplexityKey)
@@ -33,27 +170,61 @@ export function ModelAndKeySettings() {
   const [perplexityValue, setPerplexityValue] = useState(perplexityKey)
   const [claudeValue, setClaudeValue] = useState(claudeKey)
 
+  // Encrypted credentials hydrate asynchronously after the component mounts;
+  // keep each editable draft synchronized with that external store update.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenAiValue(apiKey)
   }, [apiKey])
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setGeminiValue(geminiKey)
   }, [geminiKey])
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPerplexityValue(perplexityKey)
   }, [perplexityKey])
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setClaudeValue(claudeKey)
   }, [claudeKey])
 
-  // Reject a non-empty value that isn't header-safe (e.g. pasted text/Chinese) —
-  // it would crash the provider SDK's Headers construction. Returns true if bad.
+  const localConfigured = Boolean(openAiCompatible.baseUrl && openAiCompatible.modelId)
+  const localReady = isOpenAiCompatibleReady(openAiCompatible)
+  const localStatus = localReady
+    ? t.settings.openAiCompatibleEnabled
+    : localConfigured
+      ? t.settings.openAiCompatibleDisabled
+      : t.settings.openAiCompatibleNotConfigured
+  const localTone: StatusTone = localReady ? "success" : localConfigured ? "warning" : "muted"
+  const localDetail = localConfigured
+    ? `${openAiCompatible.modelId} · ${endpointLabel(openAiCompatible.baseUrl)}`
+    : t.settings.openAiCompatibleDescription
+
+  const cloudKeyCount = [apiKey, geminiKey, claudeKey].filter((key) => Boolean(key?.trim())).length
+  const cloudDetail = t.settings.cloudKeyCount.replace("{count}", String(cloudKeyCount))
+  const toolsConfigured = Boolean(perplexityKey?.trim())
+  const sectionTouchedRef = useRef(false)
+  const [openSection, setOpenSection] = useState(() => (
+    useAiConfigStore.persist.hasHydrated() && localConfigured ? "" : "local"
+  ))
+
+  useEffect(() => {
+    const syncInitialSection = () => {
+      if (sectionTouchedRef.current) return
+      const config = useAiConfigStore.getState().openAiCompatible
+      setOpenSection(config.baseUrl && config.modelId ? "" : "local")
+    }
+
+    // Hydration may finish between the first render and this subscription.
+    // Synchronize immediately as well as listening for a later completion.
+    if (useAiConfigStore.persist.hasHydrated()) syncInitialSection()
+    return useAiConfigStore.persist.onFinishHydration(syncInitialSection)
+  }, [])
+
   const rejectIfInvalidKey = (value: string | null | undefined): boolean => {
     if (value && value.trim() && !isUsableApiKey(value)) {
-      toast.error(t.settings.invalidApiKey ?? "API 金鑰格式不正確（含非 ASCII 字元），請確認貼上的是金鑰")
+      toast.error(t.settings.invalidApiKey)
       return true
     }
     return false
@@ -64,10 +235,6 @@ export function ModelAndKeySettings() {
     setApiKey(openAiValue.trim())
   }
 
-  // Model prefs live per feature now (chat / insights / medical-summary /
-  // safety-alerts) and are key-gated at read time — removing a key silently
-  // lands every stranded premium pick on that feature's free default. If any
-  // pref would be stranded by clearing this provider's key, tell the user.
   const notifyIfDowngraded = (provider: ModelProvider) => {
     const modelPrefs = useModelPrefsStore.getState().prefs
     const prefsInUse = [
@@ -80,9 +247,7 @@ export function ModelAndKeySettings() {
       const def = getModelDefinition(id)
       return def?.provider === provider && def.requiresUserKey
     })
-    if (strandsAPick) {
-      toast.info(t.settings.modelDowngradedToFree)
-    }
+    if (strandsAPick) toast.info(t.settings.modelDowngradedToFree)
   }
 
   const handleClearOpenAiKey = () => {
@@ -102,11 +267,6 @@ export function ModelAndKeySettings() {
     setGeminiKey(null)
   }
 
-  const handleSavePerplexityKey = async () => {
-    if (!perplexityValue || rejectIfInvalidKey(perplexityValue)) return
-    setPerplexityKey(perplexityValue.trim())
-  }
-
   const handleSaveClaudeKey = async () => {
     if (!claudeValue || rejectIfInvalidKey(claudeValue)) return
     setClaudeKey(claudeValue.trim())
@@ -118,104 +278,198 @@ export function ModelAndKeySettings() {
     setClaudeKey(null)
   }
 
+  const handleSavePerplexityKey = async () => {
+    if (!perplexityValue || rejectIfInvalidKey(perplexityValue)) return
+    setPerplexityKey(perplexityValue.trim())
+  }
+
   const handleClearPerplexityKey = () => {
     setPerplexityValue("")
     setPerplexityKey(null)
   }
 
   return (
-    <div className="space-y-6">
-      {/* Models are picked where they're used (chat / insights / summary
-          headers) — point users there instead of a global grid. */}
-      <p className="text-xs text-muted-foreground">{t.settings.modelsMovedNote}</p>
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">{t.settings.modelsMovedNoteShort}</p>
 
-      {/* Authentication Status - Free Quota */}
-      <AuthStatus />
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
+      {offlineMode ? (
+        <div className="flex items-start gap-2.5 rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2.5 dark:border-emerald-900 dark:bg-emerald-950/20">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium">{t.settings.offlineDeployment}</p>
+            <p className="text-[0.6875rem] text-muted-foreground">
+              {t.settings.offlineDeploymentDescription}
+            </p>
+          </div>
+          <StatusBadge label={t.settings.offlineOnly} tone="success" />
         </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">
-            {t.common.or || '或'}
-          </span>
-        </div>
-      </div>
+      ) : null}
 
-      {/* Persistence toggle — keys default to session-only (cleared when the
-          window closes) for shared-workstation safety. This was the missing
-          piece behind "my saved key disappeared on reopen": there was no way
-          to opt into persistence. Flipping it migrates any saved keys via
-          setStorageType. */}
-      <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
-        <div className="min-w-0 space-y-0.5">
-          <Label htmlFor="remember-keys" className="text-sm font-medium">
-            {t.settings.rememberKeyOnDevice}
-          </Label>
-          <p className="text-xs text-muted-foreground">{t.settings.rememberKeyHint}</p>
-        </div>
-        <Switch
-          id="remember-keys"
-          className="shrink-0"
-          checked={storageType === 'localStorage'}
-          onCheckedChange={(checked) =>
-            setStorageType(checked ? 'localStorage' : 'sessionStorage')
-          }
-        />
-      </div>
+      <Accordion
+        type="single"
+        collapsible
+        value={openSection}
+        onValueChange={(value) => {
+          sectionTouchedRef.current = true
+          setOpenSection(value)
+        }}
+        className="overflow-hidden rounded-lg border bg-background"
+      >
+        <AccordionItem value="local" className="px-3">
+          <AccordionTrigger className="py-3 hover:no-underline">
+            <SectionTriggerContent
+              icon={<Server className="h-4 w-4" />}
+              title={t.settings.localModelSection}
+              description={localDetail}
+              status={localStatus}
+              tone={localTone}
+            />
+          </AccordionTrigger>
+          <AccordionContent
+            forceMount
+            hidden={openSection !== "local"}
+            className="pb-3 data-[state=closed]:hidden"
+          >
+            <div className="rounded-md border border-emerald-200 bg-emerald-50/30 p-3 dark:border-emerald-900 dark:bg-emerald-950/15">
+              <OpenAiCompatibleSettings />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* OpenAI API Key */}
-      <ApiKeyInput
-        id="openai-key"
-        label={t.settings.personalOpenAiKey}
-        placeholder="sk-..."
-        value={openAiValue || ''}
-        onChange={setOpenAiValue}
-        onSave={handleSaveOpenAiKey}
-        onClear={handleClearOpenAiKey}
-        helpText={t.settings.openAiKeyHelp}
-        clearWarning={t.settings.clearOpenAiKeyWarning}
-      />
+        {!offlineMode ? (
+          <AccordionItem value="cloud" className="px-3">
+            <AccordionTrigger className="py-3 hover:no-underline">
+              <SectionTriggerContent
+                icon={<Cloud className="h-4 w-4" />}
+                title={t.settings.cloudAiSection}
+                description={t.settings.cloudAiDescription}
+                status={cloudDetail}
+                tone={cloudKeyCount > 0 || (user && !isAnonymous) ? "success" : "muted"}
+              />
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3 pb-3">
+              <AuthStatus />
+              <div className="space-y-2">
+                <CredentialDisclosure
+                  title="OpenAI"
+                  configured={Boolean(apiKey?.trim())}
+                  configuredLabel={t.settings.configured}
+                  notConfiguredLabel={t.settings.notConfigured}
+                >
+                  <ApiKeyInput
+                    id="openai-key"
+                    label={t.settings.personalOpenAiKey}
+                    placeholder="sk-..."
+                    value={openAiValue || ""}
+                    onChange={setOpenAiValue}
+                    onSave={handleSaveOpenAiKey}
+                    onClear={handleClearOpenAiKey}
+                    helpText={t.settings.openAiKeyHelp}
+                    clearWarning={t.settings.clearOpenAiKeyWarning}
+                  />
+                </CredentialDisclosure>
+                <CredentialDisclosure
+                  title="Gemini"
+                  configured={Boolean(geminiKey?.trim())}
+                  configuredLabel={t.settings.configured}
+                  notConfiguredLabel={t.settings.notConfigured}
+                >
+                  <ApiKeyInput
+                    id="gemini-key"
+                    label={t.settings.personalGeminiKey}
+                    placeholder="AIza..."
+                    value={geminiValue || ""}
+                    onChange={setGeminiValue}
+                    onSave={handleSaveGeminiKey}
+                    onClear={handleClearGeminiKey}
+                    helpText={t.settings.geminiKeyHelp}
+                    clearWarning={t.settings.clearGeminiKeyWarning}
+                  />
+                </CredentialDisclosure>
+                <CredentialDisclosure
+                  title="Claude"
+                  configured={Boolean(claudeKey?.trim())}
+                  configuredLabel={t.settings.configured}
+                  notConfiguredLabel={t.settings.notConfigured}
+                >
+                  <ApiKeyInput
+                    id="claude-key"
+                    label={t.settings.personalClaudeKey}
+                    placeholder="sk-ant-..."
+                    value={claudeValue || ""}
+                    onChange={setClaudeValue}
+                    onSave={handleSaveClaudeKey}
+                    onClear={handleClearClaudeKey}
+                    helpText={t.settings.claudeKeyHelp}
+                    clearWarning={t.settings.clearClaudeKeyWarning}
+                  />
+                </CredentialDisclosure>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ) : null}
 
-      {/* Gemini API Key */}
-      <ApiKeyInput
-        id="gemini-key"
-        label={t.settings.personalGeminiKey}
-        placeholder="AIza..."
-        value={geminiValue || ''}
-        onChange={setGeminiValue}
-        onSave={handleSaveGeminiKey}
-        onClear={handleClearGeminiKey}
-        helpText={t.settings.geminiKeyHelp}
-        clearWarning={t.settings.clearGeminiKeyWarning}
-      />
+        {!offlineMode ? (
+          <AccordionItem value="tools" className="px-3">
+            <AccordionTrigger className="py-3 hover:no-underline">
+              <SectionTriggerContent
+                icon={<BookOpen className="h-4 w-4" />}
+                title={t.settings.deepChatToolsSection}
+                description={t.settings.deepChatToolsDescription}
+                status={toolsConfigured ? t.settings.configured : t.settings.notConfigured}
+                tone={toolsConfigured ? "success" : "muted"}
+              />
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <div className="rounded-md border bg-muted/15 p-3">
+                <ApiKeyInput
+                  id="perplexity-key"
+                  label={t.settings.personalPerplexityKey}
+                  placeholder="pplx-..."
+                  value={perplexityValue || ""}
+                  onChange={setPerplexityValue}
+                  onSave={handleSavePerplexityKey}
+                  onClear={handleClearPerplexityKey}
+                  helpText={t.settings.perplexityKeyHelp}
+                  clearWarning={t.settings.clearPerplexityKeyWarning}
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ) : null}
 
-      {/* Claude API Key */}
-      <ApiKeyInput
-        id="claude-key"
-        label={t.settings.personalClaudeKey}
-        placeholder="sk-ant-..."
-        value={claudeValue || ''}
-        onChange={setClaudeValue}
-        onSave={handleSaveClaudeKey}
-        onClear={handleClearClaudeKey}
-        helpText={t.settings.claudeKeyHelp}
-        clearWarning={t.settings.clearClaudeKeyWarning}
-      />
-
-      {/* Perplexity API Key */}
-      <ApiKeyInput
-        id="perplexity-key"
-        label={t.settings.personalPerplexityKey}
-        placeholder="pplx-..."
-        value={perplexityValue || ''}
-        onChange={setPerplexityValue}
-        onSave={handleSavePerplexityKey}
-        onClear={handleClearPerplexityKey}
-        helpText={t.settings.perplexityKeyHelp}
-        clearWarning={t.settings.clearPerplexityKeyWarning}
-      />
+        <AccordionItem value="privacy" className="px-3">
+          <AccordionTrigger className="py-3 hover:no-underline">
+            <SectionTriggerContent
+              icon={<LockKeyhole className="h-4 w-4" />}
+              title={t.settings.privacyStorageSection}
+              description={t.settings.privacyStorageDescription}
+              status={storageType === "localStorage"
+                ? t.settings.savedOnDevice
+                : t.settings.currentSessionOnly}
+              tone={storageType === "localStorage" ? "warning" : "success"}
+            />
+          </AccordionTrigger>
+          <AccordionContent className="pb-3">
+            <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-3">
+              <div className="min-w-0 space-y-0.5">
+                <Label htmlFor="remember-ai-connections" className="text-sm font-medium">
+                  {t.settings.rememberKeyOnDevice}
+                </Label>
+                <p className="text-xs text-muted-foreground">{t.settings.rememberKeyHint}</p>
+              </div>
+              <Switch
+                id="remember-ai-connections"
+                className="shrink-0"
+                checked={storageType === "localStorage"}
+                onCheckedChange={(checked) =>
+                  setStorageType(checked ? "localStorage" : "sessionStorage")
+                }
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   )
 }

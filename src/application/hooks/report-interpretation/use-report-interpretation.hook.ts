@@ -28,6 +28,10 @@ import type {
   ReportInterpretation,
   ReportInterpretationMode,
 } from '@/src/core/entities/report-interpretation.entity'
+import { useOpenAiCompatibleConfig } from '@/src/application/stores/ai-config.store'
+import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
 
 // Persist a completed interpretation so a page reload reuses it instead of
 // re-billing. Same lifecycle/key discipline as the safety scan cache.
@@ -77,6 +81,11 @@ export function useReportInterpretation(
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
   const { audience } = useAudience()
+  const openAiCompatible = useOpenAiCompatibleConfig()
+  const effectiveModelId = isOpenAiCompatibleReady(openAiCompatible)
+    ? CUSTOM_OPENAI_MODEL_ID
+    : REPORT_INTERPRETATION_MODEL_ID
+  const runtimeModelId = modelRuntimeIdentity(effectiveModelId, openAiCompatible)
 
   const targetLocale: 'en' | 'zh-TW' = locale === 'zh-TW' ? 'zh-TW' : 'en'
   const targetAudience: 'medical' | 'patient' = audience === 'patient' ? 'patient' : 'medical'
@@ -89,13 +98,14 @@ export function useReportInterpretation(
   const compositeKey = useMemo(() => {
     if (!hasText) return ''
     const { text } = prepareReportText(clean, mode)
-    return buildReportInterpretationCompositeKey({
+    const contentKey = buildReportInterpretationCompositeKey({
       mode,
       audience: targetAudience,
       locale: targetLocale,
       preparedText: text,
     })
-  }, [hasText, clean, mode, targetAudience, targetLocale])
+    return `${runtimeModelId}::${contentKey}`
+  }, [hasText, clean, mode, targetAudience, targetLocale, runtimeModelId])
 
   const result = useStore((s) => (compositeKey ? s.byKey[compositeKey] : undefined))
   const setResult = useStore((s) => s.setResult)
@@ -152,7 +162,7 @@ export function useReportInterpretation(
           })
           let full = ''
           await ai.stream(messages, {
-            modelId: REPORT_INTERPRETATION_MODEL_ID,
+            modelId: effectiveModelId,
             onChunk: (chunk: string) => {
               full = chunk
             },
@@ -165,7 +175,7 @@ export function useReportInterpretation(
         },
       })
     },
-    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, ai, clearSlot],
+    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, ai, clearSlot, effectiveModelId],
   )
 
   const generate = useCallback(() => run(false), [run])

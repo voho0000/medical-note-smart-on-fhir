@@ -124,7 +124,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
     })
-    const overflow = preflightContextWarning(messages.map((message) => message.content).join('\n\n'), ctx.modelId, ctx.locale)
+    const overflow = preflightContextWarning(
+      messages.map((message) => message.content).join('\n\n'),
+      ctx.modelId,
+      ctx.locale,
+      {
+        selectedContext: ctx.clinicalContext,
+        contextLimit: ctx.contextLimit,
+      },
+    )
     if (overflow) {
       toast.error(overflow)
       throw new Error(overflow)

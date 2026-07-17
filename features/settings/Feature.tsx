@@ -2,7 +2,6 @@
 
 import { useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES, CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -51,15 +50,6 @@ export function SettingsFeature() {
           </Card>
         </TabsContent>
       </Tabs>
-      <Separator />
-      <div className="space-y-2 text-xs text-muted-foreground">
-        <p>
-          {t.settings.builtInModelsNote}
-        </p>
-        <p>
-          {t.settings.personalKeyNote}
-        </p>
-      </div>
     </div>
   )
 }

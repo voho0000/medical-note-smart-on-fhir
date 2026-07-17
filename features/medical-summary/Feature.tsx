@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { AlertCircle, ClipboardList, Database, LayoutList, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react"
+import { ClipboardList, Database, LayoutList, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
@@ -37,6 +37,7 @@ import { CareRemindersSafetyCard } from "./components/CareRemindersSafetyCard"
 import { ProblemListCard } from "./components/ProblemListCard"
 import { CrossFacilityTimeline } from "./components/CrossFacilityTimeline"
 import { CoverageCard } from "./components/CoverageCard"
+import { GenerationErrorBanner } from "./components/GenerationErrorBanner"
 import { SourceSup } from "./components/SourceSup"
 import { CustomInsightModulesSection } from "./components/CustomInsightModulesSection"
 import { CustomInsightModulesManagerDrawer } from "./components/CustomInsightModulesManagerDrawer"
@@ -824,23 +825,15 @@ export default function MedicalSummaryFeature() {
       ) : (
         <>
           {generationErrors.length > 0 ? (
-            <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{ms.partialGenerationError}</p>
-                {generationErrors.map((item) => (
-                  <p key={item.label} className="mt-0.5 text-xs">
-                    <span className="font-medium">{item.label}：</span>{item.message}
-                  </p>
-                ))}
-              </div>
-              {!isBusy ? (
-                <Button onClick={() => void retryFailed()} size="sm" variant="outline" className="h-7 shrink-0 gap-1 px-2 text-xs">
-                  <RefreshCw className="h-3 w-3" />
-                  {t.errors.retry}
-                </Button>
-              ) : null}
-            </div>
+            <GenerationErrorBanner
+              key={generationErrors.map((item) => `${item.label}:${item.message}`).join("|")}
+              title={ms.partialGenerationError}
+              errors={generationErrors}
+              retryLabel={t.errors.retry}
+              closeLabel={t.common.close}
+              isBusy={isBusy}
+              onRetry={() => void retryFailed()}
+            />
           ) : null}
 
           <MedicalSummaryCardNav

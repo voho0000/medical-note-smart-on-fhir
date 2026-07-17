@@ -25,12 +25,31 @@ export interface ContextBudget {
   level: ContextBudgetLevel
 }
 
+export interface PreflightContextWarningOptions {
+  /** The clinical context selected in the Data Selection panel. The complete
+   *  request may additionally contain system instructions, an output schema,
+   *  source indexes, and app-derived helpers. */
+  selectedContext?: string
+  /** Dynamic override for a browser-configured OpenAI-compatible model. */
+  contextLimit?: number
+}
+
+/** Compact, human-readable token count shared by diagnostics and tests. */
+export function formatApproxTokenCount(tokens: number): string {
+  if (tokens < 1000) return `${Math.max(0, Math.round(tokens))}`
+  const value = tokens / 1000
+  return `${value < 10 ? value.toFixed(1).replace(/\.0$/, '') : Math.round(value)}k`
+}
+
 export function evaluateContextBudget(
   tokens: number,
   modelId: string,
   responseReserve: number = DEFAULT_RESPONSE_RESERVE,
+  contextLimitOverride?: number,
 ): ContextBudget {
-  const limit = getContextLimit(modelId)
+  const limit = contextLimitOverride && contextLimitOverride > 0
+    ? Math.round(contextLimitOverride)
+    : getContextLimit(modelId)
   const usable = Math.max(1, limit - responseReserve)
   const fraction = tokens / usable
   const level: ContextBudgetLevel =
@@ -43,27 +62,52 @@ export function evaluateContextText(
   text: string,
   modelId: string,
   responseReserve: number = DEFAULT_RESPONSE_RESERVE,
+  contextLimitOverride?: number,
 ): ContextBudget {
-  return evaluateContextBudget(estimateTokens(text), modelId, responseReserve)
+  return evaluateContextBudget(
+    estimateTokens(text),
+    modelId,
+    responseReserve,
+    contextLimitOverride,
+  )
 }
 
 /**
  * Pre-flight check for the background AI consumers (medical summary / safety
- * alerts). Returns a localized, actionable warning string when the clinical
- * context alone overruns the model's usable window — else null. These
- * pipelines don't truncate, so an overflow otherwise surfaces only as a failed
- * / malformed generation. Bilingual inline (these hooks don't carry the i18n t).
+ * alerts). `requestText` is the COMPLETE outbound prompt, not only the selected
+ * record text. Returns a localized, actionable warning when that request
+ * overruns the model's usable input window. These pipelines don't truncate, so
+ * an overflow otherwise surfaces only as a failed / malformed generation.
+ * Bilingual inline (these hooks don't carry the i18n t).
  */
 export function preflightContextWarning(
-  clinicalContext: string,
+  requestText: string,
   modelId: string,
   locale: string,
+  options: PreflightContextWarningOptions = {},
 ): string | null {
-  const budget = evaluateContextText(clinicalContext, modelId)
+  const budget = evaluateContextText(
+    requestText,
+    modelId,
+    DEFAULT_RESPONSE_RESERVE,
+    options.contextLimit,
+  )
   if (budget.level !== 'over') return null
-  const approxK = Math.round(budget.tokens / 1000)
-  const limitK = Math.round(budget.limit / 1000)
+
+  const requestTokens = formatApproxTokenCount(budget.tokens)
+  const usableTokens = formatApproxTokenCount(budget.usable)
+  const limitTokens = formatApproxTokenCount(budget.limit)
+  const reserveTokens = formatApproxTokenCount(budget.limit - budget.usable)
+  const selectedTokens = options.selectedContext === undefined
+    ? null
+    : estimateTokens(options.selectedContext)
+  const selectedBreakdown = selectedTokens !== null && selectedTokens < budget.tokens
+    ? locale === 'zh-TW'
+      ? `（你選取的病歷約 ${formatApproxTokenCount(selectedTokens)} tokens；其餘為 AI 指令、輸出格式與來源索引等必要內容）`
+      : ` (about ${formatApproxTokenCount(selectedTokens)} tokens are your selected records; the rest is required AI instructions, output formatting, and source indexing)`
+    : ''
+
   return locale === 'zh-TW'
-    ? `選取的病歷資料約 ${approxK}k tokens,超過此模型約 ${limitK}k 的內容上限,結果可能不完整。請在「資料選擇」縮小文件或檢驗範圍,或改用內容視窗更大的模型。`
-    : `The selected records are ~${approxK}k tokens, over this model’s ~${limitK}k context limit; the result may be incomplete. Narrow the documents or lab scope under Data Selection, or switch to a larger-context model.`
+    ? `準備送給模型的完整輸入約 ${requestTokens} tokens${selectedBreakdown}，超過此模型約 ${usableTokens} tokens 的可用輸入空間（總內容視窗約 ${limitTokens}，已保留 ${reserveTokens} 供模型回覆）。為避免結果被截斷，本次未送出；請在「資料選擇」縮小範圍，或改用內容視窗更大的模型。`
+    : `The prepared complete model input is about ${requestTokens} tokens${selectedBreakdown}, over this model’s ${usableTokens}-token input budget (the full context window is about ${limitTokens}, with ${reserveTokens} reserved for the reply). The request was not sent to avoid a truncated result. Narrow the scope under Data Selection or switch to a larger-context model.`
 }
