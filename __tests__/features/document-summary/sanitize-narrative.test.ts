@@ -13,6 +13,7 @@
 import {
   sanitizeNarrative,
   hasNarrativeContent,
+  isNarrativeImageSourceAllowedOnPrem,
 } from '@/features/clinical-summary/document-summary/utils/sanitize-narrative'
 
 describe('sanitizeNarrative', () => {
@@ -95,6 +96,23 @@ describe('sanitizeNarrative', () => {
     expect(out).not.toContain('<style')
     expect(out).not.toContain('display:none')
     expect(out).toContain('safe')
+  })
+})
+
+describe('on-prem narrative image policy', () => {
+  const origin = 'https://mediprisma.intra.example'
+
+  it('allows same-origin and embedded images', () => {
+    expect(isNarrativeImageSourceAllowedOnPrem('/attachments/x.png', origin)).toBe(true)
+    expect(isNarrativeImageSourceAllowedOnPrem('data:image/png;base64,AA==', origin)).toBe(true)
+    expect(isNarrativeImageSourceAllowedOnPrem('blob:https://mediprisma.intra.example/id', origin)).toBe(true)
+  })
+
+  it('rejects cross-origin and malformed image URLs', () => {
+    expect(isNarrativeImageSourceAllowedOnPrem('https://tracking.example/pixel', origin)).toBe(false)
+    expect(isNarrativeImageSourceAllowedOnPrem('//tracking.example/pixel', origin)).toBe(false)
+    expect(isNarrativeImageSourceAllowedOnPrem('blob:https://tracking.example/id', origin)).toBe(false)
+    expect(isNarrativeImageSourceAllowedOnPrem('', origin)).toBe(false)
   })
 })
 

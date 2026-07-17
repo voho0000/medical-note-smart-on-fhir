@@ -9,6 +9,11 @@ import {
   resolveModelTemperature,
 } from '@/src/shared/constants/ai-models.constants'
 import { AiError, AiErrorCode } from '@/src/core/errors'
+import {
+  assertCloudCapabilityAllowed,
+  DEPLOYMENT_CONFIG,
+} from '@/src/shared/config/deployment-profile.config'
+import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
 
 export class OpenAiService {
   readonly name = 'openai'
@@ -20,10 +25,11 @@ export class OpenAiService {
   }
 
   isAvailable(): boolean {
-    return Boolean(this.apiKey || ENV_CONFIG.hasChatProxy)
+    return DEPLOYMENT_CONFIG.allowsCloudAi && Boolean(this.apiKey || ENV_CONFIG.hasChatProxy)
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
+    assertCloudCapabilityAllowed('OpenAI')
     const modelDef = getModelDefinitionOrThrow(request.modelId)
     if (modelDef.provider !== 'openai') {
       throw new Error(`Model ${request.modelId} is not an OpenAI model`)
@@ -60,8 +66,8 @@ export class OpenAiService {
     const targetUrl = shouldUseProxy
       ? ENV_CONFIG.chatProxyUrl
       : modelDef.apiSurface === 'openai-responses'
-        ? 'https://api.openai.com/v1/responses'
-        : 'https://api.openai.com/v1/chat/completions'
+        ? CLOUD_AI_ENDPOINTS.openAiResponses
+        : CLOUD_AI_ENDPOINTS.openAiChatCompletions
     
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

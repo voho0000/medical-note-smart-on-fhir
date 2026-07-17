@@ -9,7 +9,7 @@ import {
   getSharedPrompts,
   getMySharedPrompts,
   incrementPromptUsage,
-} from '../services/prompt-gallery.service'
+} from '@/features/prompt-gallery/services/prompt-gallery.service'
 
 interface UsePromptGalleryOptions {
   initialFilter?: PromptGalleryFilter

@@ -2,6 +2,7 @@ import {
   formatOpenAiCompatibleChatCompletionsUrl,
   normalizeOpenAiCompatibleBaseUrl,
   isOpenAiCompatibleRuntimeReady,
+  isOnPremOpenAiCompatibleOriginAllowed,
   openAiCompatibleCacheIdentity,
   openAiCompatibleEndpointUrl,
   OpenAiCompatibleUrlError,
@@ -147,6 +148,29 @@ describe('OpenAI-compatible URL validation', () => {
       'https://ai.j3soon.com/v1/chat/completions',
       'models',
     )).toBe('https://ai.j3soon.com/v1/models')
+  })
+
+  it('allows only same-origin, loopback, or explicitly configured onprem origins', () => {
+    expect(isOnPremOpenAiCompatibleOriginAllowed(
+      'https://mediprisma.intra/ai/v1',
+      'https://mediprisma.intra',
+      '',
+    )).toBe(true)
+    expect(isOnPremOpenAiCompatibleOriginAllowed(
+      'http://127.0.0.1:11434/v1',
+      'https://mediprisma.intra',
+      '',
+    )).toBe(true)
+    expect(isOnPremOpenAiCompatibleOriginAllowed(
+      'https://llm.intra.example/v1',
+      'https://mediprisma.intra',
+      'https://llm.intra.example, https://other.intra',
+    )).toBe(true)
+    expect(isOnPremOpenAiCompatibleOriginAllowed(
+      'https://api.openai.com/v1',
+      'https://mediprisma.intra',
+      'https://llm.intra.example',
+    )).toBe(false)
   })
 
   it('isolates caches by transport, endpoint, and model without including the key', () => {

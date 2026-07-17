@@ -51,7 +51,7 @@ import { useAudience } from '@/src/application/providers/audience.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { cn } from '@/src/shared/utils/cn.utils'
-import { createSharedPrompt } from '../services/prompt-gallery.service'
+import { createSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import type { PromptCategory, PromptSpecialty, PromptType } from '../types/prompt.types'
 
 const TITLE_MAX_LENGTH = 100

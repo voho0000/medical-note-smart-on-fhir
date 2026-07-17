@@ -19,6 +19,7 @@ import { ENV_CONFIG, hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/
 import { useOpenAiCompatibleProfiles } from '@/src/application/stores/ai-config.store'
 import { isOpenAiCompatibleReady, isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 export interface ModelEntry {
   id: string
@@ -158,6 +159,10 @@ export function useModelSelection(
     if (!isModelId(candidate)) return
     const definition = getModelDefinition(candidate)
     if (!definition) return
+
+    if (DEPLOYMENT_CONFIG.isOnPrem && definition.provider !== 'custom') {
+      return
+    }
 
     if (definition.provider === 'custom') {
       const customProfile = customProfileForModel(candidate)

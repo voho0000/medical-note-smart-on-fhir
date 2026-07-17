@@ -4,7 +4,7 @@ import { FontSizeProvider } from './font-size.provider'
 import { LanguageProvider } from './language.provider'
 import { AudienceProvider } from './audience.provider'
 import { QueryProvider } from './query-provider'
-import { AuthProvider } from './auth.provider'
+import { AuthProvider } from '@/src/application/providers/auth.provider'
 import { RightPanelProvider } from './right-panel.provider'
 
 interface AppProvidersProps {

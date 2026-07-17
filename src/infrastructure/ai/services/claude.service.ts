@@ -13,6 +13,10 @@ import {
   resolveModelTemperature,
 } from '@/src/shared/constants/ai-models.constants'
 import type { AiProviderFactory } from '../factories/ai-provider.factory'
+import {
+  assertCloudCapabilityAllowed,
+  DEPLOYMENT_CONFIG,
+} from '@/src/shared/config/deployment-profile.config'
 
 export class ClaudeService {
   constructor(
@@ -25,10 +29,11 @@ export class ClaudeService {
   }
 
   isAvailable(): boolean {
-    return Boolean(this.apiKey) || ENV_CONFIG.hasClaudeProxy
+    return DEPLOYMENT_CONFIG.allowsCloudAi && (Boolean(this.apiKey) || ENV_CONFIG.hasClaudeProxy)
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
+    assertCloudCapabilityAllowed('Claude')
     const modelDef = getModelDefinitionOrThrow(request.modelId)
     if (modelDef.provider !== 'claude') {
       throw new Error(`Model ${request.modelId} is not a Claude model`)

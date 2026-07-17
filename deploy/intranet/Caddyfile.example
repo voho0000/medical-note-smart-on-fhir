@@ -23,6 +23,9 @@ mediprisma.intra.example.org {
     }
 
     header {
+        # Keep connect-src aligned with the hospital SMART/FHIR origins in
+        # .env.intranet. /ai/v1 is same-origin and therefore covered by 'self'.
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://fhir.intra.example.org; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://ehr.intra.example.org"
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
         Permissions-Policy "camera=(), microphone=(self), geolocation=()"

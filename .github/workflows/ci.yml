@@ -1,11 +1,12 @@
 # CI for MediPrisma (SMART app side).
 #
-# Three independent checks run on every push to master and on every PR:
+# Four independent checks run on every push to master and on every PR:
 #   1. typecheck — catches type drift before deploy
 #   2. test — runs the Jest suite with --ci flag so any flaky tests fail
 #             clearly instead of retrying silently
-#   3. build — full Next static-export build, smoke-tests that the app
+#   3. cloud build — full Next static-export build, smoke-tests that the app
 #              still compiles end-to-end with all GH-Pages env wiring
+#   4. on-prem build — Firebase-free static export plus forbidden-domain audit
 #
 # gh-pages.yml's `build` job depends on this workflow passing first
 # (`needs: ci`), so a red test blocks deploy. Solo-dev master pushes
@@ -82,3 +83,8 @@ jobs:
           NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
           NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
         run: npm run build:gh
+
+      - name: Build on-prem artifact (Firebase/public-egress audit)
+        env:
+          TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+        run: npm run build:onprem

@@ -8,6 +8,11 @@ import {
   modelRequiresUserKey,
   resolveModelTemperature,
 } from '@/src/shared/constants/ai-models.constants'
+import {
+  assertCloudCapabilityAllowed,
+  DEPLOYMENT_CONFIG,
+} from '@/src/shared/config/deployment-profile.config'
+import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
 
 export class GeminiService {
   constructor(private apiKey: string | null = null) {}
@@ -17,10 +22,11 @@ export class GeminiService {
   }
 
   isAvailable(): boolean {
-    return Boolean(this.apiKey || ENV_CONFIG.hasGeminiProxy)
+    return DEPLOYMENT_CONFIG.allowsCloudAi && Boolean(this.apiKey || ENV_CONFIG.hasGeminiProxy)
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
+    assertCloudCapabilityAllowed('Gemini')
     const modelDef = getModelDefinitionOrThrow(request.modelId)
     if (modelDef.provider !== 'gemini') {
       throw new Error(`Model ${request.modelId} is not a Gemini model`)
@@ -115,7 +121,7 @@ export class GeminiService {
   }
 
   private buildDirectApiUrl(modelId: string): string {
-    return `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
+    return `${CLOUD_AI_ENDPOINTS.geminiApiBase}/models/${modelId}:generateContent`
   }
 
   private extractGeminiContent(data: any, shouldUseProxy: boolean): string {

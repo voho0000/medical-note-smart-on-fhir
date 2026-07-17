@@ -1,6 +1,7 @@
 // Perplexity API Service - Direct API calls with user-provided key
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
-import { getProxyAuthHeaders } from '../utils/proxy-auth'
+import { getProxyAuthHeaders } from '@/src/infrastructure/ai/utils/proxy-auth'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 export class PerplexityService {
   async searchLiterature(
@@ -13,6 +14,13 @@ export class PerplexityService {
     citations?: string[]
     error?: string
   }> {
+    if (!DEPLOYMENT_CONFIG.allowsCloudAi) {
+      return {
+        success: false,
+        content: '',
+        error: 'Literature search is disabled by the onprem deployment profile.',
+      }
+    }
     // Every call goes through the owner's Firebase proxy. Browser-direct calls
     // to api.perplexity.ai are blocked at Perplexity's CDN (Cloudflare
     // bot-mitigation) — even though the API itself returns
@@ -39,7 +47,7 @@ export class PerplexityService {
     citations?: string[]
     error?: string
   }> {
-    const proxyUrl = process.env.NEXT_PUBLIC_PERPLEXITY_PROXY_URL
+    const proxyUrl = ENV_CONFIG.perplexityProxyUrl
 
     if (!proxyUrl) {
       return {

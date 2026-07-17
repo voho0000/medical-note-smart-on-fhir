@@ -40,7 +40,12 @@ if (existsSync(API_DIR)) {
 try {
   execSync('next build', {
     stdio: 'inherit',
-    env: { ...process.env, GITHUB_PAGES: 'true' },
+    env: {
+      ...process.env,
+      GITHUB_PAGES: 'true',
+      NEXT_PUBLIC_DEPLOYMENT_PROFILE: 'cloud',
+      NEXT_PUBLIC_OFFLINE_MODE: '0',
+    },
   })
 } finally {
   if (stashed) {

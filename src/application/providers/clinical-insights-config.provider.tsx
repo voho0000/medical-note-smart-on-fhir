@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useLanguage } from "./language.provider"
 import { useAudience, type Audience } from "./audience.provider"
-import { useAuth } from "./auth.provider"
+import { useAuth } from "@/src/application/providers/auth.provider"
 import {
   subscribeToClinicalInsightPanels,
   batchSaveClinicalInsightPanels,

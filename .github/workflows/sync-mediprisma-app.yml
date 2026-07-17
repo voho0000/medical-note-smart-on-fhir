@@ -63,6 +63,8 @@ jobs:
         run: npm run build:mediprisma
         env:
           TAILWIND_DISABLE_LIGHTNINGCSS: "true"
+          NEXT_PUBLIC_DEPLOYMENT_PROFILE: "cloud"
+          NEXT_PUBLIC_OFFLINE_MODE: "0"
           NEXT_PUBLIC_CHAT_URL: ${{ secrets.NEXT_PUBLIC_CHAT_URL }}
           NEXT_PUBLIC_WHISPER_URL: ${{ secrets.NEXT_PUBLIC_WHISPER_URL }}
           NEXT_PUBLIC_GEMINI_URL: ${{ secrets.NEXT_PUBLIC_GEMINI_URL }}

@@ -7,6 +7,7 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 import {
   getModelDefinitionOrThrow,
   isProxyEligibleModel,
@@ -39,7 +40,13 @@ export class AiProviderFactory {
    * Create AI provider with appropriate configuration
    */
   create(config: ProviderConfig): ProviderResult {
-    if (isCustomOpenAiModelId(config.modelId)) {
+    const isCustom = isCustomOpenAiModelId(config.modelId)
+    if (DEPLOYMENT_CONFIG.isOnPrem && !isCustom) {
+      throw new Error(
+        `Model ${config.modelId} is disabled by the onprem deployment profile`,
+      )
+    }
+    if (isCustom) {
       return this.createOpenAiCompatibleProvider(config.openAiCompatible)
     }
     const definition = getModelDefinitionOrThrow(config.modelId)
@@ -158,6 +165,15 @@ export class AiProviderFactory {
    * Validate proxy availability
    */
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
+    if (DEPLOYMENT_CONFIG.isOnPrem) {
+      return {
+        available: false,
+        error: isCustomOpenAiModelId(modelId)
+          ? 'OpenAI-compatible endpoints do not use the MediPrisma proxy.'
+          : 'Cloud AI is disabled by the onprem deployment profile.',
+      }
+    }
+
     let definition: ModelDefinition
     try {
       definition = getModelDefinitionOrThrow(modelId)

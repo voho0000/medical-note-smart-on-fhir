@@ -7,6 +7,7 @@
 // The output is intended for `dangerouslySetInnerHTML` — never feed it
 // raw text from any other source through this helper.
 import DOMPurify from 'dompurify'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 // Allowed tags per the FHIR Narrative XHTML subset, minus form/script/style
 // elements that have no place in a clinical narrative.
@@ -59,7 +60,21 @@ export function sanitizeNarrative(rawXhtml?: string): string {
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
   })
-  return injectTableColgroups(cleaned)
+  return postProcessNarrative(cleaned)
+}
+
+export function isNarrativeImageSourceAllowedOnPrem(
+  source: string,
+  appOrigin: string,
+): boolean {
+  const trimmed = source.trim()
+  if (!trimmed) return false
+  if (trimmed.startsWith('data:image/')) return true
+  try {
+    return new URL(trimmed, appOrigin).origin === new URL(appOrigin).origin
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -72,10 +87,24 @@ export function sanitizeNarrative(rawXhtml?: string): string {
  * `<colgroup>` with the first `<col>` at 80px (≈ 5 CJK chars in 12pt) and
  * the rest auto. Tables with a single column are left alone — no benefit.
  */
-function injectTableColgroups(html: string): string {
-  if (!html || !html.includes('<table')) return html
+function postProcessNarrative(html: string): string {
+  if (!html) return html
   const wrapper = document.createElement('div')
   wrapper.innerHTML = html
+
+  // A FHIR narrative may contain an attacker- or vendor-authored remote image.
+  // Merely rendering it leaks the workstation IP/referrer and can create
+  // Internet egress without an explicit user action. On-prem keeps same-origin
+  // and embedded images only; Caddy CSP is the second line of defence.
+  if (DEPLOYMENT_CONFIG.isOnPrem) {
+    for (const image of Array.from(wrapper.querySelectorAll('img'))) {
+      if (!isNarrativeImageSourceAllowedOnPrem(image.getAttribute('src') || '', window.location.origin)) {
+        image.remove()
+      }
+    }
+  }
+
+  if (!html.includes('<table')) return wrapper.innerHTML
   for (const table of Array.from(wrapper.querySelectorAll('table'))) {
     if (table.querySelector(':scope > colgroup')) continue // already has one
     // Pass 1: find max column count across all rows (sum colspans per row).

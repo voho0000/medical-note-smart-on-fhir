@@ -20,6 +20,7 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAppVersion } from '@/src/shared/hooks/use-app-version.hook'
 import { useFhirContext, LOCAL_BUNDLE_FHIR_URL } from '@/src/application/hooks/chat/use-fhir-context.hook'
 import { FeedbackDialog } from '@/features/feedback/components/FeedbackDialog'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 const REPO = 'voho0000/medical-note-smart-on-fhir'
 
@@ -126,16 +127,18 @@ export function DisplaySettings() {
         </div>
       )}
 
-      {/* Feedback */}
-      <div className="space-y-3">
-        <Label className="text-xs uppercase text-muted-foreground">
-          {t.feedback?.title ?? '問題回報'}
-        </Label>
-        <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)} className="gap-2">
-          <Bug className="h-4 w-4" />
-          {(t.settings as any).openFeedback ?? '開啟回報表單'}
-        </Button>
-      </div>
+      {/* The hosted feedback sink does not exist in a static on-prem build. */}
+      {DEPLOYMENT_CONFIG.isCloud ? (
+        <div className="space-y-3">
+          <Label className="text-xs uppercase text-muted-foreground">
+            {t.feedback?.title ?? '問題回報'}
+          </Label>
+          <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)} className="gap-2">
+            <Bug className="h-4 w-4" />
+            {(t.settings as any).openFeedback ?? '開啟回報表單'}
+          </Button>
+        </div>
+      ) : null}
 
       {/* About */}
       <div className="space-y-3">
@@ -153,32 +156,36 @@ export function DisplaySettings() {
               "隱私政策" jumps to the markdown file on GitHub (rendered
               there) so we don't have to keep the in-app /privacy route
               in sync — single source of truth in the repo. */}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild className="gap-2">
-              <a
-                href={`https://github.com/${REPO}/releases`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {(t.settings as any).allReleases ?? '所有版本'}
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild className="gap-2">
-              <a
-                href={`https://github.com/${REPO}/blob/master/PRIVACY_POLICY.md`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {(t.settings as any).privacyPolicy ?? '隱私政策'}
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </Button>
-          </div>
+          {DEPLOYMENT_CONFIG.isCloud ? (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" asChild className="gap-2">
+                <a
+                  href={`https://github.com/${REPO}/releases`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {(t.settings as any).allReleases ?? '所有版本'}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </Button>
+              <Button variant="outline" size="sm" asChild className="gap-2">
+                <a
+                  href={`https://github.com/${REPO}/blob/master/PRIVACY_POLICY.md`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {(t.settings as any).privacyPolicy ?? '隱私政策'}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      {DEPLOYMENT_CONFIG.isCloud ? (
+        <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      ) : null}
     </div>
   )
 }

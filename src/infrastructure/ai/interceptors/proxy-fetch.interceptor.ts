@@ -4,8 +4,8 @@
  */
 
 import { openAIRequestTransformer } from '../transformers/openai-request.transformer'
-import { getProxyIdToken } from '../utils/proxy-auth'
-import { getAppCheckToken } from '../utils/app-check'
+import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
+import { getAppCheckToken } from '@/src/infrastructure/ai/utils/app-check'
 
 export interface ProxyFetchConfig {
   proxyUrl: string

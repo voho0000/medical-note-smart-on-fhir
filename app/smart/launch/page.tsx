@@ -1,42 +1,22 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
 import { buildSmartAuthorizeConfig } from "@/src/infrastructure/fhir/client/smart-launch-config"
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { CLOUD_SMART_CONFIG } from '@/src/shared/config/cloud-smart.config'
+import { isTrustedSmartIssuer } from '@/src/shared/config/smart-issuer-policy'
 
-// Trusted SMART `iss` origins — launches against these authorize immediately.
-// Anything else shows an explicit confirmation naming the target server first:
-// `iss` comes straight off the URL, so anyone can craft a link that points
-// this app's REAL domain at an attacker-controlled FHIR server (its
+// In cloud builds an untrusted SMART `iss` shows an explicit confirmation.
+// In on-prem builds it is rejected: a confirmation click must never widen the
+// build-time hospital issuer allowlist. `iss` comes straight off the URL, so
+// anyone can craft a link that points this app's REAL domain at an
+// attacker-controlled FHIR server (its
 // .well-known/smart-configuration then redirects the clinician to a phishing
 // "login" page, and afterwards the app would faithfully render attacker-
-// authored FHIR data as a real chart). The interstitial keeps arbitrary
-// sandboxes usable (one click) while making the target server impossible to
-// miss. Extra trusted origins can be added at build time via
+// authored FHIR data as a real chart). The cloud interstitial keeps arbitrary
+// sandboxes usable while making the target impossible to miss. Extra trusted
+// origins can be added at build time via
 // NEXT_PUBLIC_SMART_ALLOWED_ISS (comma-separated origins).
-const TRUSTED_ISS_ORIGINS = new Set(
-  [
-    "https://launch.smarthealthit.org",
-    "http://localhost",
-    "http://127.0.0.1",
-    ...(process.env.NEXT_PUBLIC_SMART_ALLOWED_ISS || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-  ].map((origin) => origin.replace(/\/+$/, "")),
-)
-
-function isTrustedIss(iss: string): boolean {
-  try {
-    const url = new URL(iss)
-    if (TRUSTED_ISS_ORIGINS.has(url.origin)) return true
-    // localhost entries match any port (mock-his:5001, bridge dev servers).
-    return (
-      (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
-      TRUSTED_ISS_ORIGINS.has(`${url.protocol}//${url.hostname}`)
-    )
-  } catch {
-    return false
-  }
-}
 
 async function authorize(iss: string, launch: string | undefined) {
   const FHIR = (await import("fhirclient")).default
@@ -49,7 +29,7 @@ async function authorize(iss: string, launch: string | undefined) {
   const redirectUri = `${baseUrl}/smart/callback` // 無結尾斜線（和 Pages 設定一致）
 
   const authConfig = buildSmartAuthorizeConfig({
-    clientId: (process.env.NEXT_PUBLIC_SMART_CLIENT_ID || "my_web_app").trim(),
+    clientId: ENV_CONFIG.smartClientId,
     redirectUri,
     iss,
     launch,
@@ -69,6 +49,7 @@ export default function SmartLaunchPage() {
   // awaiting the user's explicit confirmation.
   const [pendingIss, setPendingIss] = useState<string | null>(null)
   const [pendingLaunch, setPendingLaunch] = useState<string | undefined>(undefined)
+  const [launchError, setLaunchError] = useState<string | null>(null)
 
   useEffect(() => {
     (async () => {
@@ -76,23 +57,39 @@ export default function SmartLaunchPage() {
       const iss = url.searchParams.get("iss") || undefined
       const launch = url.searchParams.get("launch") || undefined
 
-      // 如果沒有參數，重定向到預設的完整 URL（方便評審直接使用）
+      // Cloud keeps the convenient public demo. An on-prem artifact must be
+      // launched by the hospital EHR and never invent a public issuer.
       if (!iss && !launch) {
+        if (DEPLOYMENT_CONFIG.isOnPrem) {
+          setLaunchError('缺少院內 SMART issuer（iss）。請從院內 EHR 重新啟動應用程式。')
+          return
+        }
         const prefix = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "")
         const baseUrl = `${window.location.origin}${prefix}`.replace(/\/+$/, "")
-        const defaultUrl = `${baseUrl}/smart/launch?iss=https%3A%2F%2Flaunch.smarthealthit.org%2Fv%2Fr4%2Ffhir&launch=WzAsIjJjZGE1YWFkLWU0MDktNDA3MC05YTE1LWUxYzM1YzQ2ZWQ1YSIsIjFlMzhiNzcxLWVhODctNDM0My1hNWE4LTYwMDIyMzc0Y2JhYSIsIlByYWN0aXRpb25lci81MjkxOTA5OS02YTdhLTQ0MmMtYjBkNS0yYjAyYzBkZDRiNzQiLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0`
+        const defaultUrl = `${baseUrl}/smart/launch${CLOUD_SMART_CONFIG.demoLaunchSearch}`
         window.location.href = defaultUrl
         return
       }
 
-      if (iss && !isTrustedIss(iss)) {
+      if (!iss) {
+        setLaunchError('SMART launch 缺少必要的 issuer（iss）。')
+        return
+      }
+
+      if (!isTrustedSmartIssuer(iss)) {
+        if (DEPLOYMENT_CONFIG.isOnPrem) {
+          setLaunchError(`此 FHIR issuer 不在院內允許清單：${iss}`)
+          return
+        }
         setPendingIss(iss)
         setPendingLaunch(launch)
         return
       }
 
-      await authorize(iss as string, launch)
-    })()
+      await authorize(iss, launch)
+    })().catch((error) => {
+      setLaunchError(error instanceof Error ? error.message : String(error))
+    })
   }, [])
 
   const confirmPending = useCallback(() => {
@@ -101,6 +98,20 @@ export default function SmartLaunchPage() {
     setPendingIss(null)
     void authorize(iss, pendingLaunch)
   }, [pendingIss, pendingLaunch])
+
+  if (launchError) {
+    return (
+      <div className="mx-auto max-w-xl p-6 text-sm">
+        <h1 className="mb-3 text-base font-semibold text-destructive">
+          SMART 啟動已拒絕 / SMART launch blocked
+        </h1>
+        <p className="mb-4 text-muted-foreground">
+          此部署只允許管理員設定的院內 FHIR issuer。請從院內 EHR 重新啟動應用程式，或聯絡系統管理員檢查 allowlist。
+        </p>
+        <p className="break-all rounded border bg-muted p-3 font-mono text-xs">{launchError}</p>
+      </div>
+    )
+  }
 
   if (pendingIss) {
     return (

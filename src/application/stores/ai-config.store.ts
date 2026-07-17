@@ -29,6 +29,7 @@ import {
   suggestedOpenAiCompatibleContextWindow,
 } from '@/src/shared/types/openai-compatible.types'
 import { normalizeOpenAiCompatibleBaseUrl } from '@/src/shared/utils/openai-compatible.utils'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 type StorageType = 'localStorage' | 'sessionStorage'
 
@@ -114,6 +115,21 @@ const createStaleOperationError = () => {
   const error = new Error('A newer credential operation replaced this save')
   error.name = 'AbortError'
   return error
+}
+
+const CLOUD_CREDENTIAL_STORAGE_KEYS = [
+  STORAGE_KEYS.OPENAI_API_KEY,
+  STORAGE_KEYS.GEMINI_API_KEY,
+  STORAGE_KEYS.PERPLEXITY_API_KEY,
+  STORAGE_KEYS.CLAUDE_API_KEY,
+] as const
+
+/** Remove credentials that could enable public AI in an on-prem artifact. */
+const clearStoredCloudCredentials = () => {
+  if (typeof window === 'undefined' || DEPLOYMENT_CONFIG.allowsCloudAi) return
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    for (const key of CLOUD_CREDENTIAL_STORAGE_KEYS) storage.removeItem(key)
+  }
 }
 
 // Helper to get storage
@@ -614,6 +630,12 @@ export const useAiConfigStore = create<AiConfigState>()(
       // pref is key-gated at read time (useEffectiveModel / resolvedModelId),
       // so stranded premium picks land on the feature's free default.
       setApiKey: (key) => {
+        if (!DEPLOYMENT_CONFIG.allowsCloudAi) {
+          bumpCredentialRevision('apiKey')
+          set({ apiKey: null })
+          clearStoredCloudCredentials()
+          return
+        }
         const revision = bumpCredentialRevision('apiKey')
         const clean = sanitizeApiKey(key)
         const storageType = get().storageType
@@ -627,6 +649,12 @@ export const useAiConfigStore = create<AiConfigState>()(
       },
 
       setGeminiKey: (key) => {
+        if (!DEPLOYMENT_CONFIG.allowsCloudAi) {
+          bumpCredentialRevision('geminiKey')
+          set({ geminiKey: null })
+          clearStoredCloudCredentials()
+          return
+        }
         const revision = bumpCredentialRevision('geminiKey')
         const clean = sanitizeApiKey(key)
         const storageType = get().storageType
@@ -640,6 +668,12 @@ export const useAiConfigStore = create<AiConfigState>()(
       },
 
       setPerplexityKey: (key) => {
+        if (!DEPLOYMENT_CONFIG.allowsCloudAi) {
+          bumpCredentialRevision('perplexityKey')
+          set({ perplexityKey: null })
+          clearStoredCloudCredentials()
+          return
+        }
         const revision = bumpCredentialRevision('perplexityKey')
         const clean = sanitizeApiKey(key)
         const storageType = get().storageType
@@ -653,6 +687,12 @@ export const useAiConfigStore = create<AiConfigState>()(
       },
 
       setClaudeKey: (key) => {
+        if (!DEPLOYMENT_CONFIG.allowsCloudAi) {
+          bumpCredentialRevision('claudeKey')
+          set({ claudeKey: null })
+          clearStoredCloudCredentials()
+          return
+        }
         const revision = bumpCredentialRevision('claudeKey')
         const clean = sanitizeApiKey(key)
         const storageType = get().storageType
@@ -781,6 +821,22 @@ export const useAiConfigStore = create<AiConfigState>()(
         // values here would erase them. The Settings UI is disabled as well,
         // but keep the action safe for programmatic callers.
         const currentState = get()
+        if (!DEPLOYMENT_CONFIG.allowsCloudAi) {
+          clearStoredCloudCredentials()
+          bumpAllCredentialRevisions()
+          storageTypeRevision += 1
+          set({
+            apiKey: null,
+            geminiKey: null,
+            perplexityKey: null,
+            claudeKey: null,
+            storageType: type,
+          })
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(STORAGE_KEYS.STORAGE_TYPE, type)
+          }
+          return
+        }
         if (
           currentState.credentialsHydrating ||
           currentState.storageTypeChanging ||
@@ -1032,6 +1088,8 @@ export const useAiConfigStore = create<AiConfigState>()(
 
       rehydrateFromBrowserStorage: async () => {
         if (typeof window === 'undefined') return
+
+        clearStoredCloudCredentials()
 
         const hydrationRevision = ++aiConfigHydrationRevision
         const fieldRevisions = { ...credentialRevisions }

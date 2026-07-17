@@ -18,7 +18,12 @@ const customJestConfig = {
     '**/__tests__/**/*.test.tsx',
   ],
   // Without this, stale copies under .claude/worktrees/ get picked up and fail the run
-  testPathIgnorePatterns: ['/node_modules/', '/.claude/', '/out/', '/coverage/'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '<rootDir>/.claude/',
+    '<rootDir>/out/',
+    '<rootDir>/coverage/',
+  ],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     'features/**/*.{ts,tsx}',

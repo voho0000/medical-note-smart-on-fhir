@@ -14,6 +14,7 @@ import {
   customOpenAiModelIdForProfile,
   isCustomOpenAiModelId,
 } from '@/src/shared/constants/ai-models.constants'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 const CONTROL_OR_WHITESPACE = /[\u0000-\u0020\u007f]/
 const FULL_COMPLETIONS_PATH = /\/chat\/completions\/?$/i
@@ -28,6 +29,7 @@ export type OpenAiCompatibleUrlErrorCode =
   | 'URL_CREDENTIALS'
   | 'URL_QUERY'
   | 'URL_FRAGMENT'
+  | 'ORIGIN_NOT_ALLOWED'
 
 export class OpenAiCompatibleUrlError extends Error {
   constructor(
@@ -42,6 +44,35 @@ export class OpenAiCompatibleUrlError extends Error {
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '')
   return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1'
+}
+
+export function isOnPremOpenAiCompatibleOriginAllowed(
+  resolvedUrl: string,
+  appOrigin: string | undefined,
+  configuredOrigins: string = process.env.NEXT_PUBLIC_ONPREM_AI_ALLOWED_ORIGINS || '',
+): boolean {
+  const endpoint = new URL(resolvedUrl)
+  if (isLoopbackHost(endpoint.hostname)) return true
+
+  if (appOrigin) {
+    try {
+      if (endpoint.origin === new URL(appOrigin).origin) return true
+    } catch {
+      // Invalid app origins do not widen the allowlist.
+    }
+  }
+
+  return configuredOrigins
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .some((entry) => {
+      try {
+        return endpoint.origin === new URL(entry).origin
+      } catch {
+        return false
+      }
+    })
 }
 
 function stripTrailingSlashes(value: string): string {
@@ -147,14 +178,26 @@ export function resolveOpenAiCompatibleBaseUrl(
   origin: string | undefined = globalThis.location?.origin,
 ): string {
   const normalized = normalizeOpenAiCompatibleBaseUrl(baseUrl)
-  if (!normalized.startsWith('/')) return normalized
-  if (!origin) {
+  if (normalized.startsWith('/') && !origin) {
     throw new OpenAiCompatibleUrlError(
       'INVALID_URL',
       'A same-origin endpoint URL can only be resolved in a browser',
     )
   }
-  return stripTrailingSlashes(new URL(normalized, origin).toString())
+  const resolved = normalized.startsWith('/')
+    ? stripTrailingSlashes(new URL(normalized, origin).toString())
+    : normalized
+
+  if (
+    DEPLOYMENT_CONFIG.isOnPrem
+    && !isOnPremOpenAiCompatibleOriginAllowed(resolved, origin)
+  ) {
+    throw new OpenAiCompatibleUrlError(
+      'ORIGIN_NOT_ALLOWED',
+      'This AI endpoint origin is not allowed by the onprem deployment profile',
+    )
+  }
+  return resolved
 }
 
 export function openAiCompatibleEndpointUrl(

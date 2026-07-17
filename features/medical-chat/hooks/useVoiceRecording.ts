@@ -13,6 +13,7 @@ import {
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
 
 interface RecordingSession {
   customModelId: string | null
@@ -172,7 +173,7 @@ export function useVoiceRecording(
           ? openAiCompatibleEndpointUrl(openAiCompatible.baseUrl, 'audio/transcriptions')
           : useProxy
             ? WHISPER_PROXY_URL
-            : "https://api.openai.com/v1/audio/transcriptions"
+            : CLOUD_AI_ENDPOINTS.openAiTranscriptions
         const headers: Record<string, string> = {}
 
         if (useCustomEndpoint) {

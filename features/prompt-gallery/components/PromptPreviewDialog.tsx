@@ -18,7 +18,7 @@ import { Calendar, TrendingUp, Trash2 } from 'lucide-react'
 import type { PromptType, SharedPrompt } from '../types/prompt.types'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAuth } from '@/src/application/providers/auth.provider'
-import { deleteSharedPrompt } from '../services/prompt-gallery.service'
+import { deleteSharedPrompt } from '@/features/prompt-gallery/services/prompt-gallery.service'
 import { useState } from 'react'
 import { LoginRequiredDialog } from './LoginRequiredDialog'
 import {

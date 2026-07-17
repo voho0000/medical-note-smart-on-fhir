@@ -2,7 +2,12 @@
 import type { ITranscriptionService } from '@/src/core/interfaces/services/transcription.service.interface'
 import type { TranscriptionRequest, TranscriptionResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
-import { getProxyAuthHeaders } from '../utils/proxy-auth'
+import { getProxyAuthHeaders } from '@/src/infrastructure/ai/utils/proxy-auth'
+import {
+  assertCloudCapabilityAllowed,
+  DEPLOYMENT_CONFIG,
+} from '@/src/shared/config/deployment-profile.config'
+import { CLOUD_AI_ENDPOINTS } from '@/src/shared/config/cloud-ai-endpoints.config'
 
 export class TranscriptionService implements ITranscriptionService {
   constructor(private apiKey: string | null = null) {}
@@ -12,10 +17,11 @@ export class TranscriptionService implements ITranscriptionService {
   }
 
   isAvailable(): boolean {
-    return Boolean(this.apiKey || ENV_CONFIG.hasWhisperProxy)
+    return DEPLOYMENT_CONFIG.allowsCloudAi && Boolean(this.apiKey || ENV_CONFIG.hasWhisperProxy)
   }
 
   async transcribe(request: TranscriptionRequest): Promise<TranscriptionResponse> {
+    assertCloudCapabilityAllowed('Cloud transcription')
     const useProxy = !this.apiKey && ENV_CONFIG.hasWhisperProxy
 
     if (!this.apiKey && !useProxy) {
@@ -26,7 +32,9 @@ export class TranscriptionService implements ITranscriptionService {
     formData.append('file', request.audioBlob, 'audio.webm')
     formData.append('model', request.model || 'whisper-1')
 
-    const targetUrl = useProxy ? ENV_CONFIG.whisperProxyUrl : 'https://api.openai.com/v1/audio/transcriptions'
+    const targetUrl = useProxy
+      ? ENV_CONFIG.whisperProxyUrl
+      : CLOUD_AI_ENDPOINTS.openAiTranscriptions
     const headers: Record<string, string> = {}
 
     if (useProxy) {

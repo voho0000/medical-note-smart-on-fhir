@@ -37,6 +37,7 @@ import {
   resolveOpenAiCompatibleConversationMode,
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
+import { DEPLOYMENT_CONFIG } from '@/src/shared/config/deployment-profile.config'
 
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
@@ -101,12 +102,15 @@ export function ModelPicker({
     ) === 'standard'
   }
 
-  const groups: Array<{ label: string; items: ModelEntry[]; custom?: boolean }> = [
-    { label: t.settings.openAiCompatibleGroupLabel, items: customModels, custom: true },
-    { label: "Gemini", items: geminiModels },
-    { label: "GPT", items: gptModels },
-    { label: "Claude", items: claudeModels },
-  ]
+  const groups: Array<{ label: string; items: ModelEntry[]; custom?: boolean }> =
+    DEPLOYMENT_CONFIG.isOnPrem
+    ? [{ label: t.settings.openAiCompatibleGroupLabel, items: customModels, custom: true }]
+    : [
+        { label: t.settings.openAiCompatibleGroupLabel, items: customModels, custom: true },
+        { label: "Gemini", items: geminiModels },
+        { label: "GPT", items: gptModels },
+        { label: "Claude", items: claudeModels },
+      ]
 
   return (
     <DropdownMenu>
