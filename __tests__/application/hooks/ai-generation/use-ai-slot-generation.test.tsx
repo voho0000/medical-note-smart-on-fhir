@@ -1,7 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { useAiSlotGeneration } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
-import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import {
+  BUNDLE_CHANGED_EVENT,
+  BUNDLE_CHANGE_SETTLED_EVENT,
+} from '@/src/shared/utils/reset-on-bundle-change'
 
 let mockPatientId = 'demo-patient-1'
 let mockClinicalContext = 'demo context'
@@ -26,7 +29,7 @@ jest.mock('@/src/application/hooks/clinical-data/use-clinical-data-query.hook', 
   useClinicalData: () => mockClinicalData,
 }))
 jest.mock('@/src/application/hooks/ai/use-unified-ai.hook', () => ({
-  useUnifiedAi: () => ({}),
+  useUnifiedAi: () => ({ stop: () => undefined }),
 }))
 jest.mock('@/src/application/providers/data-selection.provider', () => {
   const constants = jest.requireActual('@/src/shared/constants/data-selection.constants')
@@ -257,5 +260,62 @@ describe('useAiSlotGeneration demo snapshot', () => {
     })
     expect(result.current.slotKey).not.toBe(firstSlot)
     expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('auto-runs again when the same patient and content are re-imported', async () => {
+    mockPatientId = 'smart-patient-1'
+    const store = createAiResultStore<{ headline: string }>()
+    let runCount = 0
+    const run = jest.fn(async () => ({ headline: `result ${++runCount}` }))
+
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: 'gemini-3.1-flash-lite',
+      autoRunEnabled: true,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(result.current.result).toEqual({ headline: 'result 1' }))
+
+    act(() => {
+      window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT))
+      window.dispatchEvent(new Event(BUNDLE_CHANGE_SETTLED_EVENT))
+    })
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(result.current.result).toEqual({ headline: 'result 2' }))
+  })
+
+  it('drops a late reply from the Bundle that was replaced mid-generation', async () => {
+    mockPatientId = 'smart-patient-1'
+    const store = createAiResultStore<{ headline: string }>()
+    let resolveRun!: (value: { headline: string }) => void
+    const run = jest.fn(() => new Promise<{ headline: string }>((resolve) => {
+      resolveRun = resolve
+    }))
+
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: 'gemini-3.1-flash-lite',
+      autoRunEnabled: true,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    act(() => window.dispatchEvent(new Event(BUNDLE_CHANGED_EVENT)))
+    await act(async () => { resolveRun({ headline: 'stale patient result' }) })
+
+    expect(result.current.result).toBeUndefined()
+    expect(store.getState().byKey).toEqual({})
+    expect(store.getState().running).toEqual({})
   })
 })

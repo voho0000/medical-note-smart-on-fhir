@@ -12,9 +12,16 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { LocalBundleService, DEMO_FLAG_KEY } from '@/src/infrastructure/fhir/services/local-bundle.service'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
+import {
+  clearLocalImportAiConsent,
+  markLocalImportAiConsentReady,
+  startLocalImportAiConsent,
+} from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { generateId } from '@/src/shared/utils/id.utils'
+import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services/local-bundle-mutation-queue'
 import {
   BUNDLE_CHANGED_EVENT,
   notifyBundleChangeSettled,
@@ -52,7 +59,7 @@ export function useImportBundle(): UseImportBundleReturn {
     const sync = () => {
       setHasBundle(LocalBundleService.hasData())
       setBundleIsActive(shouldUseLocalBundle())
-      setIsDemo(localStorage.getItem(DEMO_FLAG_KEY) === '1')
+      setIsDemo(LocalBundleService.isDemoData())
     }
     sync() // initial
     window.addEventListener(BUNDLE_CHANGED_EVENT, sync)
@@ -69,9 +76,18 @@ export function useImportBundle(): UseImportBundleReturn {
     if (!parsed) {
       throw new Error('Bundle must contain at least one Patient resource')
     }
-    await LocalBundleService.save(bundle)
-    if (demo) localStorage.setItem(DEMO_FLAG_KEY, '1')
-    else localStorage.removeItem(DEMO_FLAG_KEY)
+    // Close the background-AI gate BEFORE publishing a newly imported real
+    // bundle. The local save/query refresh still completes normally (the bridge
+    // waits for that settled signal), while the contextual consent dialog can be
+    // answered afterwards. Demo data uses audited snapshots and must never carry
+    // a previous real-import authorization forward.
+    // Real and demo imports both enter the non-answerable transition lock. For
+    // demo we clear it only after React Query has published the audited data;
+    // clearing earlier would briefly expose the old real patient under demo's
+    // automatic-snapshot policy.
+    const localImportId = generateId()
+    const localImportConsent = startLocalImportAiConsent(localImportId)
+    await LocalBundleService.save(bundle, { importId: localImportId, demo })
     // Importing NEW data must not leave the PREVIOUS bundle's derived results
     // around, or the render goes inconsistent (old AI summary / safety scan /
     // report interpretation shown against new clinical data — worst when the two
@@ -85,6 +101,11 @@ export function useImportBundle(): UseImportBundleReturn {
     notifyBundleChanged()
     try {
       await queryClient.invalidateQueries()
+      if (demo) {
+        clearLocalImportAiConsent()
+      } else if (localImportConsent) {
+        markLocalImportAiConsentReady(localImportConsent.importId)
+      }
     } finally {
       notifyBundleChangeSettled()
     }
@@ -94,7 +115,10 @@ export function useImportBundle(): UseImportBundleReturn {
     setLoading(true)
     setError(null)
     try {
-      await persistBundle(JSON.parse(await file.text()), false)
+      await serializeLocalBundleMutation(async () => {
+        const bundle = JSON.parse(await file.text())
+        await persistBundle(bundle, false)
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'
       setError(msg)
@@ -108,12 +132,14 @@ export function useImportBundle(): UseImportBundleReturn {
     setLoading(true)
     setError(null)
     try {
-      const base = process.env.NEXT_PUBLIC_BASE_PATH || ''
-      // Default caching (revalidates against the server) — NOT force-cache, so a
-      // re-published demo bundle (e.g. after a privacy fix) is never served stale.
-      const res = await fetch(`${base}/demo/demo-bundle.json`)
-      if (!res.ok) throw new Error(`Failed to load demo data (${res.status})`)
-      await persistBundle(await res.json(), true)
+      await serializeLocalBundleMutation(async () => {
+        const base = process.env.NEXT_PUBLIC_BASE_PATH || ''
+        // Default caching (revalidates against the server) — NOT force-cache,
+        // so a re-published demo bundle is never served stale.
+        const res = await fetch(`${base}/demo/demo-bundle.json`)
+        if (!res.ok) throw new Error(`Failed to load demo data (${res.status})`)
+        await persistBundle(await res.json(), true)
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load demo data'
       setError(msg)
@@ -124,20 +150,23 @@ export function useImportBundle(): UseImportBundleReturn {
   }, [persistBundle])
 
   const clear = useCallback(async () => {
-    await LocalBundleService.clear() // also removes the demo flag
-    // Clearing the bundle must also drop cached AI results (safety scan,
-    // insights) so re-importing the same patient starts fresh, not stale.
-    purgeAiResultCaches()
-    setHasBundle(false)
-    setBundleIsActive(false)
-    setIsDemo(false)
-    setError(null)
-    notifyBundleChanged()
-    try {
-      await queryClient.invalidateQueries()
-    } finally {
-      notifyBundleChangeSettled()
-    }
+    await serializeLocalBundleMutation(async () => {
+      clearLocalImportAiConsent()
+      await LocalBundleService.clear() // also removes the demo flag
+      // Clearing the bundle must also drop cached AI results (safety scan,
+      // insights) so re-importing the same patient starts fresh, not stale.
+      purgeAiResultCaches()
+      setHasBundle(false)
+      setBundleIsActive(false)
+      setIsDemo(false)
+      setError(null)
+      notifyBundleChanged()
+      try {
+        await queryClient.invalidateQueries()
+      } finally {
+        notifyBundleChangeSettled()
+      }
+    })
   }, [queryClient])
 
   return { importFile, loadDemo, clear, loading, error, hasBundle, bundleIsActive, isDemo }

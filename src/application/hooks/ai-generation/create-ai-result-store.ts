@@ -7,6 +7,10 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
 
 export interface AiResultStoreState<T> {
+  /** Monotonic Bundle epoch. A run captures this before streaming and may
+   * commit only if it still matches, so an old patient's late reply cannot
+   * repopulate state/cache after an import reset. */
+  bundleRevision: number
   // Keyed by the feature's slot key (e.g. the content-bound
   // patientId::audience::locale::model::ctx-signature for patient-scoped
   // pipelines, mode::audience::locale::contentSig for report
@@ -33,6 +37,7 @@ export type AiResultStore<T> = UseBoundStore<StoreApi<AiResultStoreState<T>>>
 /** Create a module-level AI result store wired to reset on bundle change. */
 export function createAiResultStore<T>(): AiResultStore<T> {
   const store = create<AiResultStoreState<T>>((set) => ({
+    bundleRevision: 0,
     byKey: {},
     running: {},
     errors: {},
@@ -50,8 +55,12 @@ export function createAiResultStore<T>(): AiResultStore<T> {
   }))
   // Importing a new bundle must wipe the previous bundle's results so nothing
   // stale renders — especially wrong when two bundles share a patient id.
-  resetOnBundleChange(() =>
-    store.setState({ byKey: {}, running: {}, errors: {}, hydrated: {} }),
-  )
+  resetOnBundleChange(() => store.setState((state) => ({
+    bundleRevision: state.bundleRevision + 1,
+    byKey: {},
+    running: {},
+    errors: {},
+    hydrated: {},
+  })))
   return store
 }

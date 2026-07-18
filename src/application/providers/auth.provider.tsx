@@ -26,6 +26,8 @@ import { clearSessionKey } from '@/src/shared/utils/crypto.utils'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { notifyBundleChanged } from '@/src/shared/utils/reset-on-bundle-change'
+import { clearLocalImportAiConsent } from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services/local-bundle-mutation-queue'
 
 export interface User {
   uid: string
@@ -303,14 +305,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // stored images + demo flag) and cached AI results would otherwise
       // survive logout and be fully readable by the next person at the
       // workstation.
-      await LocalBundleService.clear()
-      purgeAiResultCaches()
-      // Same signal an import/clear dispatches — resets in-memory AI-result
-      // stores and lets every useImportBundle instance drop its state.
-      notifyBundleChanged()
-      // Drop the React-Query-cached chart so the UI stops showing the
-      // previous patient immediately, not just after a reload.
-      await queryClient.invalidateQueries()
+      await serializeLocalBundleMutation(async () => {
+        clearLocalImportAiConsent()
+        await LocalBundleService.clear()
+        purgeAiResultCaches()
+        // Same signal an import/clear dispatches — resets in-memory AI-result
+        // stores and lets every useImportBundle instance drop its state.
+        notifyBundleChanged()
+        // Drop the React-Query-cached chart so the UI stops showing the
+        // previous patient immediately, not just after a reload.
+        await queryClient.invalidateQueries()
+      })
     } finally {
       setLoading(false)
     }

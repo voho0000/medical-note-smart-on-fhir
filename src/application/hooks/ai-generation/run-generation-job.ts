@@ -20,11 +20,14 @@ export async function runGenerationJob<T>(options: {
   const { store, key, cacheKey, produce } = options
   // Never double-start the same slot's generation.
   if (store.getState().running[key]) return
+  const bundleRevision = store.getState().bundleRevision
+  const isCurrentBundle = () => store.getState().bundleRevision === bundleRevision
   const { setRunning, setError, setResult } = store.getState()
   setRunning(key, true)
   setError(key, null)
   try {
     const parsed = await produce()
+    if (!isCurrentBundle()) return
     if (!parsed) {
       setError(key, 'PARSE_FAILED')
       return
@@ -34,8 +37,8 @@ export async function runGenerationJob<T>(options: {
     setResult(key, parsed)
     void saveEncryptedCache(cacheKey, parsed)
   } catch (err) {
-    setError(key, getUserErrorMessage(err))
+    if (isCurrentBundle()) setError(key, getUserErrorMessage(err))
   } finally {
-    setRunning(key, false)
+    if (isCurrentBundle()) setRunning(key, false)
   }
 }

@@ -6,7 +6,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
+import {
+  recordAutoAiRealDataDecision,
+  recordLocalImportAiDecision,
+  markLocalImportAiConsentReady,
+  startLocalImportAiConsent,
+  useAutoAiConsentState,
+} from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { generateId } from '@/src/shared/utils/id.utils'
 
 function createBatchId(sequence: number) {
   return `${Date.now().toString(36)}-${sequence.toString(36)}`
@@ -39,6 +47,7 @@ export function useMedicalSummaryOrchestrator() {
     scan: generateSafety,
     resolveSource: resolveSafetySource,
   } = useSafetyAlerts()
+  const autoAiConsent = useAutoAiConsentState()
   const sequenceRef = useRef(0)
   const activeBatchRef = useRef<string | null>(null)
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null)
@@ -122,9 +131,39 @@ export function useMedicalSummaryOrchestrator() {
   }, [setSafetyModel, setSummaryModel])
 
   const setAutoGenerate = useCallback((value: boolean) => {
+    if (autoAiConsent.source === 'local') {
+      // A real/demo import transition has closed the gate but has not yet
+      // published its Bundle. Ignore controls still visible for the previous
+      // patient; they must not make the new scope answerable early.
+      if (autoAiConsent.decision === 'preparing') return
+      if (value && autoAiConsent.decision !== 'auto') {
+        // Turning auto-run on for a local Bundle reopens the same contextual
+        // confirmation. Do not flip the persisted preference until it is
+        // accepted, or the old preference could race the dialog.
+        const pending = startLocalImportAiConsent(autoAiConsent.importId ?? generateId())
+        if (pending) markLocalImportAiConsentReady(pending.importId)
+        return
+      }
+      if (!value && autoAiConsent.importId) {
+        recordLocalImportAiDecision(autoAiConsent.importId, 'manual')
+      }
+      return
+    }
+    if (autoAiConsent.source === 'demo') {
+      // Demo snapshots are source-driven and must not alter SMART preferences.
+      return
+    }
+    // SMART/other real data keeps the browser-wide preference.
+    recordAutoAiRealDataDecision(value ? 'auto' : 'manual')
     setSummaryAutoGenerate(value)
     setAutoScan(value)
-  }, [setAutoScan, setSummaryAutoGenerate])
+  }, [autoAiConsent, setAutoScan, setSummaryAutoGenerate])
+
+  const effectiveAutoGenerate = autoAiConsent.source === 'demo'
+    ? true
+    : autoAiConsent.source === 'local'
+      ? autoAiConsent.decision === 'auto'
+      : autoGenerate
 
   const preferencesSynced = safetyModel === model && autoScan === autoGenerate
   const isRestoring = hasPatient && dataReady && (
@@ -144,7 +183,7 @@ export function useMedicalSummaryOrchestrator() {
     hasPatient,
     dataReady,
     model,
-    autoGenerate,
+    autoGenerate: effectiveAutoGenerate,
     setModel,
     setAutoGenerate,
     generate,

@@ -12,6 +12,7 @@ describe('useOnboarding', () => {
   it('reports not-completed for a fresh visitor (no flag)', () => {
     const { result } = renderHook(() => useOnboarding())
     // After the mount effect reads localStorage, a brand-new user is pending.
+    expect(result.current.ready).toBe(true)
     expect(result.current.completed).toBe(false)
   })
 

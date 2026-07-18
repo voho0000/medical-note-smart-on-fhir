@@ -43,6 +43,7 @@ import {
 // still hold a full bundle JSON written by an older build (migrated on read).
 const STORAGE_KEY = 'fhir_bundle_override'
 const MARKER = '1'
+const IMPORT_MARKER_PREFIX = 'import:'
 
 // Set while the loaded bundle is the bundled demo patient (試用資料). Owned
 // here so every bundle wipe (import-bundle clear, logout PHI wipe) removes it
@@ -64,6 +65,32 @@ const IMG_STORE = 'images'
 // Session cache: avoids re-reading IndexedDB on every query. Module-level so it
 // is shared across all hook instances in the same tab.
 let memBundle: object | null = null
+let memBundleImportId: string | null = null
+let memBundleIsDemo = false
+
+interface PersistedBundleEnvelope {
+  __mediprismaBundle: 1
+  importId: string
+  demo: boolean
+  bundle: object
+}
+
+function importIdFromMarker(raw: string | null): string | null {
+  if (!raw?.startsWith(IMPORT_MARKER_PREFIX)) return null
+  const importId = raw.slice(IMPORT_MARKER_PREFIX.length).trim()
+  return importId || null
+}
+
+function isPersistedBundleEnvelope(value: unknown): value is PersistedBundleEnvelope {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const candidate = value as Partial<PersistedBundleEnvelope>
+  return candidate.__mediprismaBundle === 1
+    && typeof candidate.importId === 'string'
+    && candidate.importId.trim().length > 0
+    && typeof candidate.demo === 'boolean'
+    && !!candidate.bundle
+    && typeof candidate.bundle === 'object'
+}
 
 // Even within a live tab session, a bundle older than this is purged on read —
 // a workstation left logged-in overnight shouldn't still expose yesterday's
@@ -470,6 +497,33 @@ export const LocalBundleService = {
     return !!localStorage.getItem(STORAGE_KEY)
   },
 
+  /** Import identity of the Bundle this JS realm is actually serving. The
+   * in-memory identity wins over the origin-wide marker because another tab
+   * may overwrite IndexedDB while this tab legitimately keeps its own copy. */
+  getActiveImportId(): string | null {
+    if (memBundle !== null) return memBundleImportId
+    if (typeof window === 'undefined') return null
+    try {
+      return importIdFromMarker(localStorage.getItem(STORAGE_KEY))
+    } catch {
+      return null
+    }
+  },
+
+  /** Source classification bound to the same Bundle identity. This prevents a
+   * demo loaded in another tab from making this tab's real patient look demo. */
+  isDemoData(): boolean {
+    if (memBundle !== null) return memBundleIsDemo
+    if (typeof window === 'undefined') return false
+    try {
+      const demoMarker = localStorage.getItem(DEMO_FLAG_KEY)
+      const importId = importIdFromMarker(localStorage.getItem(STORAGE_KEY))
+      return importId ? demoMarker === importId : demoMarker === MARKER
+    } catch {
+      return false
+    }
+  },
+
   // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
   // Blob store (off-heap) — `extractAndStoreImages` mutates `bundle` in place so
   // the retained copies (memBundle + the JSON in IndexedDB) stay small. Only a
@@ -477,7 +531,14 @@ export const LocalBundleService = {
   // stripped bundle, so no image base64 lingers in the JS heap.
   // Everything persisted is ciphertext; if encryption is unavailable the bundle
   // lives in memory only for this session — never plaintext at rest.
-  async save(bundle: object): Promise<void> {
+  async save(
+    bundle: object,
+    options: { importId?: string; demo?: boolean } = {},
+  ): Promise<void> {
+    const importId = typeof options.importId === 'string' && options.importId.trim()
+      ? options.importId.trim()
+      : null
+    const demo = options.demo === true
     if (typeof window !== 'undefined') {
       try {
         await extractAndStoreImages(bundle)
@@ -487,18 +548,29 @@ export const LocalBundleService = {
       }
     }
     memBundle = bundle
+    memBundleImportId = importId
+    memBundleIsDemo = demo
     if (typeof window === 'undefined') return
     try {
       const key = await getSessionBundleKey({ create: true })
       if (!key) throw new Error('bundle session key unavailable')
-      await idbPut(await encryptJson(key, bundle))
-      localStorage.setItem(STORAGE_KEY, MARKER)
+      const persisted: object = importId
+        ? { __mediprismaBundle: 1, importId, demo, bundle } satisfies PersistedBundleEnvelope
+        : bundle
+      await idbPut(await encryptJson(key, persisted))
+      localStorage.setItem(
+        STORAGE_KEY,
+        importId ? `${IMPORT_MARKER_PREFIX}${importId}` : MARKER,
+      )
+      if (demo) localStorage.setItem(DEMO_FLAG_KEY, importId ?? MARKER)
+      else localStorage.removeItem(DEMO_FLAG_KEY)
     } catch {
       // Could not persist ciphertext — make sure no stale marker/payload from a
       // previous import survives pointing at the wrong data. The current import
       // still works from the in-memory cache for this session.
       try {
         localStorage.removeItem(STORAGE_KEY)
+        localStorage.removeItem(DEMO_FLAG_KEY)
         await idbDelete()
       } catch {
         // Best-effort cleanup.
@@ -508,6 +580,8 @@ export const LocalBundleService = {
 
   async clear(): Promise<void> {
     memBundle = null
+    memBundleImportId = null
+    memBundleIsDemo = false
     if (typeof window === 'undefined') return
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(DEMO_FLAG_KEY)
@@ -565,8 +639,23 @@ export const LocalBundleService = {
           return null
         }
         try {
-          const bundle = await decryptJson<object>(key, fromIdb)
+          const decrypted = await decryptJson<unknown>(key, fromIdb)
+          if (isPersistedBundleEnvelope(decrypted)) {
+            memBundle = decrypted.bundle
+            memBundleImportId = decrypted.importId
+            memBundleIsDemo = decrypted.demo
+            localStorage.setItem(
+              STORAGE_KEY,
+              `${IMPORT_MARKER_PREFIX}${decrypted.importId}`,
+            )
+            if (decrypted.demo) localStorage.setItem(DEMO_FLAG_KEY, decrypted.importId)
+            else localStorage.removeItem(DEMO_FLAG_KEY)
+            return decrypted.bundle
+          }
+          const bundle = decrypted as object
           memBundle = bundle
+          memBundleImportId = null
+          memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           return bundle
         } catch {
           await this.clear()
@@ -577,6 +666,8 @@ export const LocalBundleService = {
         // Plaintext bundle written by an older build — serve it this once and
         // immediately re-encrypt in place so it stops existing as plaintext.
         memBundle = fromIdb as object
+        memBundleImportId = null
+        memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
         try {
           const key = await getSessionBundleKey({ create: true })
           if (key) await idbPut(await encryptJson(key, fromIdb))
@@ -592,11 +683,13 @@ export const LocalBundleService = {
 
     // Migration path: older builds stored the full bundle JSON under STORAGE_KEY.
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw && raw !== MARKER) {
+    if (raw && raw !== MARKER && !raw.startsWith(IMPORT_MARKER_PREFIX)) {
       try {
         const parsed = JSON.parse(raw)
         if (parsed && (parsed.resourceType === 'Bundle' || Array.isArray(parsed.entry))) {
           memBundle = parsed
+          memBundleImportId = null
+          memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           // Move it (encrypted) to IndexedDB and shrink the marker so we don't
           // re-migrate.
           try {

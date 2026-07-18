@@ -44,6 +44,11 @@ import type { PanelStatus, ResponseEntry } from "./types"
 import {
   getDemoClinicalInsightSnapshot,
 } from "@/src/infrastructure/demo/demo-ai-snapshots"
+import {
+  canAutoRunAi,
+  useAutoAiConsentState,
+} from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 const INSIGHTS_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 const INSIGHTS_PIPELINE_VERSION = "custom-summary-modules-v1"
@@ -100,7 +105,9 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   const { patient } = usePatient()
   const patientId = patient?.id ?? ""
   const model = useEffectiveModel("insights")
+  const autoAiConsent = useAutoAiConsentState()
   const [hydratedCacheIdentity, setHydratedCacheIdentity] = useState<string | null>(null)
+  const [bundleRevision, setBundleRevision] = useState(0)
   const previousRuntimeIdentity = useRef<string | null>(null)
 
   const { prompts, handlePromptChange } = useInsightPanels(panels)
@@ -142,6 +149,23 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     setResponses,
   } = useInsightGeneration({ panels, prompts, context, model, contextLimit })
 
+  // A new local Bundle is a new authorization and result scope even when it has
+  // the same patient id and formatted clinical context as the previous import.
+  // Clear custom-module state on the shared import signal so an old response
+  // cannot suppress or masquerade as the newly authorized run.
+  useEffect(() => {
+    const resetForBundle = () => {
+      stopAll()
+      previousRuntimeIdentity.current = null
+      setHydratedCacheIdentity(null)
+      setResponses({})
+      setPanelStatus({})
+      setBundleRevision((revision) => revision + 1)
+    }
+    window.addEventListener(BUNDLE_CHANGED_EVENT, resetForBundle)
+    return () => window.removeEventListener(BUNDLE_CHANGED_EVENT, resetForBundle)
+  }, [setPanelStatus, setResponses, stopAll])
+
   const handleResponseChange = useCallback((panelId: string, value: string) => {
     setResponses((previous) => ({
       ...previous,
@@ -173,7 +197,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     && !clinicalDataError
     && !hasBlockingQueryIssues
   const runtimeIdentity = patientId && context.trim() && clinicalDataReady
-    ? `${patientId}:${contextSig}:${runtimeModelId}:${INSIGHTS_PIPELINE_VERSION}`
+    ? `${bundleRevision}:${patientId}:${contextSig}:${runtimeModelId}:${INSIGHTS_PIPELINE_VERSION}`
     : ""
 
   // A model or source-context change invalidates every module for this patient.
@@ -263,13 +287,17 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
 
   useAutoGenerate({
     panels,
-    canGenerate: canGenerate && clinicalDataReady && !authLoading && hydratedCacheIdentity === cacheIdentity,
+    canGenerate: canGenerate
+      && clinicalDataReady
+      && !authLoading
+      && hydratedCacheIdentity === cacheIdentity,
+    autoRunAuthorized: canAutoRunAi(autoAiConsent),
     context,
     modelId: model,
     runPanels,
     responses,
     panelStatus,
-    runScope: autoRunScope,
+    runScope: `${autoRunScope}:${autoAiConsent.source}:${autoAiConsent.importId ?? autoAiConsent.decision ?? 'none'}:${bundleRevision}`,
   })
 
   const hasData = clinicalDataReady && context.trim().length > 0 && hydratedCacheIdentity === cacheIdentity

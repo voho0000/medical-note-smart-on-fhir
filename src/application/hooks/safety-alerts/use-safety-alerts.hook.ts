@@ -25,6 +25,10 @@ import {
   type AiSlotDemoContext,
   type AiSlotRunContext,
 } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
+import {
+  isAutoAiEnabledForSource,
+  useAutoAiConsentState,
+} from '@/src/application/hooks/ai-generation/auto-ai-consent'
 
 // Persist a completed scan per-patient so a page reload reuses it instead of
 // re-billing the model. Same lifecycle as the bundle: encrypted with the tab
@@ -61,8 +65,8 @@ export const useSafetyPrefsStore = createModelPrefsStore<SafetyPrefsStore>({
   storageName: 'safety-alerts-prefs',
   defaultModelId: SAFETY_ALERTS_MODEL_ID,
   initializer: (set) => ({
-    // Default OFF to match medical-summary autoGenerate. First-run onboarding
-    // enables both only after the user explicitly consents to cloud AI.
+    // Default OFF to match medical-summary autoGenerate. Real-data auto-runs
+    // also pass through the separate source-aware consent gate.
     autoScan: false,
     setAutoScan: (value) => set({ autoScan: value }),
     modelId: SAFETY_ALERTS_MODEL_ID,
@@ -93,6 +97,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const setAutoScan = useSafetyPrefsStore((s) => s.setAutoScan)
   const modelId = useSafetyPrefsStore((s) => s.modelId)
   const setModelId = useSafetyPrefsStore((s) => s.setModelId)
+  const autoAiConsent = useAutoAiConsentState()
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<SafetyScanResult | null> => {
     const messages = generateSafetyAlertsUseCase.buildMessages({
@@ -144,7 +149,8 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const slot = useAiSlotGeneration<SafetyScanResult>({
     defaultModelId: SAFETY_ALERTS_MODEL_ID,
     selectedModelId: modelId,
-    autoRunEnabled: autoScan,
+    // Do not let a demo preference become authorization for real patient data.
+    autoRunEnabled: isAutoAiEnabledForSource(autoScan, autoAiConsent),
     // A safety result over partial data is itself unsafe and may be cached for
     // 12h, so manual and automatic scans share the same readiness gate.
     requireDataReadyToGenerate: true,

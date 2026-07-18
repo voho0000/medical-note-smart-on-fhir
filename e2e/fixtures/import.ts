@@ -16,13 +16,20 @@ export const LOCAL_BUNDLE = process.env.E2E_LOCAL_BUNDLE
  * patient to render. Exercises the real import → IndexedDB → render path with
  * no SMART auth / Firebase. Returns the bundle path actually used.
  */
-export async function importBundle(page: Page, bundlePath: string = LOCAL_BUNDLE || SYNTHETIC_BUNDLE) {
+export async function importBundle(
+  page: Page,
+  options: {
+    bundlePath?: string
+    aiDecision?: 'manual' | 'auto'
+  } = {},
+) {
+  const bundlePath = options.bundlePath || LOCAL_BUNDLE || SYNTHETIC_BUNDLE
+  const aiDecision = options.aiDecision ?? 'manual'
   // Preset prefs BEFORE the app boots so first-load is deterministic:
   // - zh-TW locale (tests assert Chinese strings)
   // - medical audience, already "selected"
   // - first-run onboarding marked complete → the onboarding stepper (which fires
-  //   on first data load and overlays the whole app) never appears, so clicks
-  //   aren't intercepted by its modal overlay.
+  //   on first data load) reopens only the one-step, import-scoped AI question.
   await page.addInitScript(() => {
     localStorage.setItem('medical-note-locale', 'zh-TW')
     localStorage.setItem('medical-note-audience', 'medical')
@@ -30,9 +37,34 @@ export async function importBundle(page: Page, bundlePath: string = LOCAL_BUNDLE
     localStorage.setItem('medical-note-onboarding-v1', '1')
   })
   await page.goto('/')
+  // Register before choosing the file so a fast import cannot settle between
+  // setInputFiles resolving and the next Playwright command.
+  await page.evaluate(() => {
+    const testWindow = window as Window & { __mediprismaBundleSettled?: boolean }
+    testWindow.__mediprismaBundleSettled = false
+    window.addEventListener('mediprisma:local-bundle-change-settled', () => {
+      testWindow.__mediprismaBundleSettled = true
+    }, { once: true })
+  })
   // The import button renders in both the header and the welcome screen; both
   // are wired to the same importFile, so the first one is fine.
   await page.getByTestId('import-bundle-input').first().setInputFiles(bundlePath)
+  await page.waitForFunction(() => (
+    window as Window & { __mediprismaBundleSettled?: boolean }
+  ).__mediprismaBundleSettled === true)
+  // Every real local import has its own decision. Keep general E2E fixtures
+  // deterministic and free of background AI by choosing the safe default.
+  if (aiDecision === 'auto') {
+    const auto = page.getByRole('button', { name: /^自動產生/ })
+    await expect(auto).toBeVisible({ timeout: 20_000 })
+    await auto.click()
+    await page.getByRole('checkbox').click()
+    await page.getByRole('button', { name: '確認並啟用', exact: true }).click()
+  } else {
+    const importOnly = page.getByRole('button', { name: '只匯入並查看', exact: true })
+    await expect(importOnly).toBeVisible({ timeout: 20_000 })
+    await importOnly.click()
+  }
   // Patient panel renders once the local bundle is active. With the synthetic
   // fixture the name is 王小明; for a real local bundle, just wait for the
   // patient-info heading instead of a specific name.

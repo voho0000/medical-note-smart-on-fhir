@@ -38,6 +38,10 @@ import {
   type AiSlotDemoContext,
   type AiSlotRunContext,
 } from '@/src/application/hooks/ai-generation/use-ai-slot-generation.hook'
+import {
+  isAutoAiEnabledForSource,
+  useAutoAiConsentState,
+} from '@/src/application/hooks/ai-generation/auto-ai-consent'
 
 // Store + cache-key scheme live in medical-summary-store.ts so the IPS export
 // can peek at generated summaries without importing this full hook graph.
@@ -64,8 +68,8 @@ export const useSummaryPrefsStore = createModelPrefsStore<SummaryPrefsStore>({
   storageName: 'medical-summary-prefs',
   defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
   initializer: (set) => ({
-    // Default OFF until first-run onboarding records an explicit choice. This
-    // prevents a new patient's data from reaching cloud AI before consent.
+    // Default OFF. The separate source-aware consent gate also prevents a demo
+    // preference from sending a later real patient's data to cloud AI.
     autoGenerate: false,
     setAutoGenerate: (value) => set({ autoGenerate: value }),
     modelId: MEDICAL_SUMMARY_MODEL_ID,
@@ -95,6 +99,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const modelId = useSummaryPrefsStore((s) => s.modelId)
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
+  const autoAiConsent = useAutoAiConsentState()
 
   // v6 first, v5 fallback for patient summaries (see key comments above).
   const loadCached = useCallback(async (slotKey: string) => {
@@ -178,7 +183,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const slot = useAiSlotGeneration<MedicalSummaryResult>({
     defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
     selectedModelId: modelId,
-    autoRunEnabled: autoGenerate,
+    // A demo-first visit must never authorize a later real patient's data.
+    // Manual generation remains available; only background cloud runs are gated.
+    autoRunEnabled: isAutoAiEnabledForSource(autoGenerate, autoAiConsent),
     // Even a MANUAL generate waits for the full clinical dataset.
     requireDataReadyToGenerate: true,
     store: medicalSummaryStore,

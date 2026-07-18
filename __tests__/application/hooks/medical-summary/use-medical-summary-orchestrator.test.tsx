@@ -4,11 +4,37 @@ import { useMedicalSummary } from '@/src/application/hooks/medical-summary/use-m
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 
+let mockAutoAiConsent = {
+  source: 'other' as 'other' | 'local' | 'demo',
+  decision: null as 'preparing' | 'pending' | 'auto' | 'manual' | null,
+  importId: null as string | null,
+}
+const mockStartLocalImportAiConsent = jest.fn()
+const mockMarkLocalImportAiConsentReady = jest.fn((_importId: string) => true)
+const mockRecordLocalImportAiDecision = jest.fn((
+  _importId: string,
+  _decision: 'auto' | 'manual',
+) => true)
+const mockRecordAutoAiRealDataDecision = jest.fn()
+
 jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', () => ({
   useMedicalSummary: jest.fn(),
 }))
 jest.mock('@/src/application/hooks/safety-alerts/use-safety-alerts.hook', () => ({
   useSafetyAlerts: jest.fn(),
+}))
+jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
+  useAutoAiConsentState: () => mockAutoAiConsent,
+  startLocalImportAiConsent: (importId: string) => mockStartLocalImportAiConsent(importId),
+  markLocalImportAiConsentReady: (importId: string) => (
+    mockMarkLocalImportAiConsentReady(importId)
+  ),
+  recordLocalImportAiDecision: (importId: string, decision: 'auto' | 'manual') => (
+    mockRecordLocalImportAiDecision(importId, decision)
+  ),
+  recordAutoAiRealDataDecision: (decision: 'auto' | 'manual') => (
+    mockRecordAutoAiRealDataDecision(decision)
+  ),
 }))
 
 const mockUseMedicalSummary = useMedicalSummary as jest.MockedFunction<typeof useMedicalSummary>
@@ -82,6 +108,8 @@ function arrange({
 describe('useMedicalSummaryOrchestrator', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockStartLocalImportAiConsent.mockImplementation((importId: string) => ({ importId }))
+    mockAutoAiConsent = { source: 'other', decision: null, importId: null }
     arrange()
   })
 
@@ -141,6 +169,44 @@ describe('useMedicalSummaryOrchestrator', () => {
       expect(setSafetyModel).toHaveBeenCalledWith('gemini-3.1-flash-lite')
       expect(setSafetyAuto).toHaveBeenCalledWith(true)
     })
+  })
+
+  it('reopens import-scoped consent instead of immediately enabling local auto-run', () => {
+    mockAutoAiConsent = { source: 'local', decision: 'manual', importId: 'import-a' }
+    arrange({ summaryAuto: false, safetyAuto: false })
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    act(() => result.current.setAutoGenerate(true))
+
+    expect(mockStartLocalImportAiConsent).toHaveBeenCalledWith('import-a')
+    expect(mockMarkLocalImportAiConsentReady).toHaveBeenCalledWith('import-a')
+    expect(setSummaryAuto).not.toHaveBeenCalled()
+    expect(setSafetyAuto).not.toHaveBeenCalled()
+  })
+
+  it('ignores the previous patient controls while a new Bundle is preparing', () => {
+    mockAutoAiConsent = { source: 'local', decision: 'preparing', importId: 'import-b' }
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    act(() => result.current.setAutoGenerate(true))
+
+    expect(mockStartLocalImportAiConsent).not.toHaveBeenCalled()
+    expect(mockMarkLocalImportAiConsentReady).not.toHaveBeenCalled()
+    expect(mockRecordLocalImportAiDecision).not.toHaveBeenCalled()
+    expect(setSummaryAuto).not.toHaveBeenCalled()
+    expect(setSafetyAuto).not.toHaveBeenCalled()
+  })
+
+  it('records the safe local choice when automatic generation is turned off', () => {
+    mockAutoAiConsent = { source: 'local', decision: 'auto', importId: 'import-a' }
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+    expect(result.current.autoGenerate).toBe(true)
+
+    act(() => result.current.setAutoGenerate(false))
+
+    expect(mockRecordLocalImportAiDecision).toHaveBeenCalledWith('import-a', 'manual')
+    expect(setSummaryAuto).not.toHaveBeenCalled()
+    expect(setSafetyAuto).not.toHaveBeenCalled()
   })
 
   it('publishes refreshed summary and safety results together after a batch settles', async () => {

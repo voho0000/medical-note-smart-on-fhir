@@ -145,6 +145,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     catalog,
   } = useClinicalAiInput()
   const ai = useUnifiedAi()
+  const stopAi = ai.stop
   const { locale } = useLanguage()
   // Auth must be resolved before an auto-run carries a Firebase token —
   // firing before the (possibly anonymous) session resolves would race
@@ -207,7 +208,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // content-bound; only the once-per-access-context trigger
   // guard needs this extra identity.
   const accessScope = hasSelectedProviderKey ? 'own-key' : user ? `user:${user.uid}` : isAnonymous ? 'anonymous' : 'no-session'
-  const autoRunIdentity = slotKey ? `${slotKey}::${accessScope}` : ''
+  const bundleRevision = store((s) => s.bundleRevision)
+  const autoRunIdentity = slotKey
+    ? `${slotKey}::${accessScope}::bundle-${bundleRevision}`
+    : ''
 
   const result = store((s) => (slotKey ? s.byKey[slotKey] : undefined))
   const setResult = store((s) => s.setResult)
@@ -273,7 +277,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // after React Query has published the new patient and clinical collection.
   const [bundleTransitionActive, setBundleTransitionActive] = useState(false)
   useEffect(() => {
-    const begin = () => setBundleTransitionActive(true)
+    const begin = () => {
+      stopAi()
+      setBundleTransitionActive(true)
+    }
     const settle = () => setBundleTransitionActive(false)
     window.addEventListener(BUNDLE_CHANGED_EVENT, begin)
     window.addEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
@@ -281,7 +288,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       window.removeEventListener(BUNDLE_CHANGED_EVENT, begin)
       window.removeEventListener(BUNDLE_CHANGE_SETTLED_EVENT, settle)
     }
-  }, [])
+  }, [stopAi])
   // A zh-TW demo snapshot is the only valid automatic result for the frozen
   // demo bundle. During a bundle switch React Query can briefly expose an
   // empty-but-not-loading clinical collection: the seed correctly waits for a

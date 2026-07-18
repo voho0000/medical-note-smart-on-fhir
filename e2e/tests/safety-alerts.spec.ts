@@ -108,7 +108,7 @@ test.describe('safety alerts (mocked)', () => {
 
   test('auto-generation runs the integrated safety analysis', async ({ page }) => {
     await mockUnifiedSummary(page, true)
-    await importBundle(page)
+    await importBundle(page, { aiDecision: 'auto' })
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
@@ -118,7 +118,7 @@ test.describe('safety alerts (mocked)', () => {
 
   test('a cached unified summary is reused after a page reload — no re-bill', async ({ page }) => {
     await mockUnifiedSummary(page, true)
-    await importBundle(page)
+    await importBundle(page, { aiDecision: 'auto' })
 
     const summaryPanel = page.getByRole('tabpanel', { name: '醫療摘要' })
     await expect(summaryPanel.getByText('藥物過敏衝突')).toBeVisible({ timeout: 20_000 })
