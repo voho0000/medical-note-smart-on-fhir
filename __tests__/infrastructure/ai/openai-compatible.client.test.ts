@@ -31,18 +31,79 @@ describe('OpenAI-compatible browser client', () => {
       _input: Parameters<typeof fetch>[0],
       _init?: Parameters<typeof fetch>[1],
     ) => jsonResponse({
-      data: [{ id: 'hospital-model' }, { id: 'other-model' }],
+      data: [
+        { id: 'other-model', max_model_len: 32768 },
+        { id: 'hospital-model', max_model_len: 131072 },
+      ],
     })) as jest.MockedFunction<typeof fetch>
 
     await expect(testOpenAiCompatibleConnection(profile, { fetchImpl })).resolves.toEqual({
-      models: ['hospital-model', 'other-model'],
+      models: ['other-model', 'hospital-model'],
       modelFound: true,
       usedChatProbe: false,
+      detectedContextWindowTokens: 131072,
     })
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(String(fetchImpl.mock.calls[0][0])).toBe('https://llm.intra.example/v1/models')
     const headers = new Headers(fetchImpl.mock.calls[0][1]?.headers)
     expect(headers.get('Authorization')).toBe('Bearer hospital-secret')
+  })
+
+  it.each([
+    { label: 'context_length', metadata: { context_length: '65536' }, expected: 65536 },
+    { label: 'context_window', metadata: { contextWindow: 32768 }, expected: 32768 },
+    {
+      label: 'smaller top-provider limit',
+      metadata: { context_length: 131072, top_provider: { context_length: 98304 } },
+      expected: 98304,
+    },
+  ])('detects the selected model runtime window from $label metadata', async ({
+    metadata,
+    expected,
+  }) => {
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({
+      data: [{ id: 'hospital-model', ...metadata }],
+    })) as jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleConnection(profile, { fetchImpl }))
+      .resolves.toMatchObject({ detectedContextWindowTokens: expected })
+  })
+
+  it.each([
+    { label: 'completion limit', metadata: { max_tokens: 500000 } },
+    { label: 'training limit', metadata: { n_ctx_train: 500000 } },
+    { label: 'architecture limit', metadata: { max_position_embeddings: 500000 } },
+    { label: 'ambiguous model maximum', metadata: { max_context_length: 500000 } },
+    { label: 'fractional value', metadata: { max_model_len: 32768.5 } },
+    { label: 'too-small value', metadata: { max_model_len: 512 } },
+    { label: 'too-large value', metadata: { max_model_len: 2_000_001 } },
+  ])('does not auto-apply an unsafe $label', async ({ metadata }) => {
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({
+      data: [{ id: 'hospital-model', ...metadata }],
+    })) as jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleConnection(profile, { fetchImpl }))
+      .resolves.toMatchObject({ detectedContextWindowTokens: null })
+  })
+
+  it('treats a successful null models payload as an empty model list', async () => {
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse(null)) as jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleConnection(profile, { fetchImpl })).resolves.toEqual({
+      models: [],
+      modelFound: null,
+      usedChatProbe: false,
+      detectedContextWindowTokens: null,
+    })
   })
 
   it('falls back to a patient-free one-token chat probe when /models is absent', async () => {
@@ -60,7 +121,12 @@ describe('OpenAI-compatible browser client', () => {
       { ...profile, apiKey: null },
       { fetchImpl },
     )
-    expect(result).toEqual({ models: [], modelFound: null, usedChatProbe: true })
+    expect(result).toEqual({
+      models: [],
+      modelFound: null,
+      usedChatProbe: true,
+      detectedContextWindowTokens: null,
+    })
     expect(String(fetchImpl.mock.calls[1][0])).toBe(
       'https://llm.intra.example/v1/chat/completions',
     )
@@ -92,7 +158,12 @@ describe('OpenAI-compatible browser client', () => {
         modelId: 'MODEL_NAME',
       },
       { fetchImpl },
-    )).resolves.toEqual({ models: [], modelFound: null, usedChatProbe: true })
+    )).resolves.toEqual({
+      models: [],
+      modelFound: null,
+      usedChatProbe: true,
+      detectedContextWindowTokens: null,
+    })
 
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(String(fetchImpl.mock.calls[0][0])).toBe(
@@ -164,7 +235,10 @@ describe('OpenAI-compatible browser client', () => {
       _input: Parameters<typeof fetch>[0],
       _init?: Parameters<typeof fetch>[1],
     ) => jsonResponse({
-      data: [{ id: 'nvidia/nemotron-3-ultra-550b-a55b' }],
+      data: [{
+        id: 'nvidia/nemotron-3-ultra-550b-a55b',
+        max_model_len: 262144,
+      }],
     })) as jest.MockedFunction<typeof fetch>
 
     await expect(testOpenAiCompatibleConnection({
@@ -176,7 +250,10 @@ describe('OpenAI-compatible browser client', () => {
     }, {
       fetchImpl,
       gatewayUrl: 'https://gateway.example/proxyOpenAiCompatibleGateway',
-    })).resolves.toMatchObject({ modelFound: true })
+    })).resolves.toMatchObject({
+      modelFound: true,
+      detectedContextWindowTokens: 262144,
+    })
 
     expect(String(fetchImpl.mock.calls[0][0])).toBe(
       'https://gateway.example/proxyOpenAiCompatibleGateway',

@@ -4,6 +4,7 @@
  * actual upstream model name sent to the hospital/local server.
  */
 export type OpenAiCompatibleTransport = 'direct' | 'mediprisma-gateway'
+export type OpenAiCompatibleContextWindowSource = 'suggested' | 'detected' | 'manual'
 
 export interface OpenAiCompatibleConfig {
   enabled: boolean
@@ -18,18 +19,22 @@ export interface OpenAiCompatibleConfig {
   /** Upstream model's total context window. Optional only for migrating
    *  profiles saved before this setting existed. */
   contextWindowTokens?: number
+  /** How the editable window was last chosen. Missing configured profiles are
+   *  migrated as manual so a future probe cannot overwrite a legacy value. */
+  contextWindowSource?: OpenAiCompatibleContextWindowSource
 }
 
 export const DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 15000
 export const MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 1024
 export const MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 2_000_000
 
-/** Best-effort migration defaults for common local model ids. The user can
- *  always override this in Settings; unknown endpoints keep the conservative
- *  historical 15k default. */
+/** Conservative migration fallbacks used only when runtime metadata is not
+ *  available. The user can always override them in Settings. */
 export function suggestedOpenAiCompatibleContextWindow(modelId: string): number {
   const id = modelId.trim().toLowerCase()
-  if (/nemotron-3-ultra-550b-a55b/.test(id)) return 1_000_000
+  // Nemotron Ultra can be configured for ~1M, but NVIDIA NIM's default runtime
+  // window is 262,144. Endpoint-reported max_model_len takes precedence in UI.
+  if (/nemotron-3-ultra-550b-a55b/.test(id)) return 262144
   if (/qwen2[._-]?5/.test(id)) return 32768
   if (/qwen3/.test(id)) return 40960
   return DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW
@@ -50,6 +55,14 @@ export function normalizeOpenAiCompatibleContextWindow(
   return suggestedOpenAiCompatibleContextWindow(modelId)
 }
 
+export function normalizeOpenAiCompatibleContextWindowSource(
+  value: unknown,
+  hasConfiguredProfile = false,
+): OpenAiCompatibleContextWindowSource {
+  if (value === 'suggested' || value === 'detected' || value === 'manual') return value
+  return hasConfiguredProfile ? 'manual' : 'suggested'
+}
+
 export const EMPTY_OPENAI_COMPATIBLE_CONFIG: Readonly<OpenAiCompatibleConfig> = {
   enabled: false,
   baseUrl: '',
@@ -57,6 +70,7 @@ export const EMPTY_OPENAI_COMPATIBLE_CONFIG: Readonly<OpenAiCompatibleConfig> = 
   apiKey: null,
   transport: 'direct',
   contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+  contextWindowSource: 'suggested',
 }
 
 export function normalizeOpenAiCompatibleTransport(

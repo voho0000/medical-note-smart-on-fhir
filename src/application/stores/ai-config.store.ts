@@ -16,6 +16,7 @@ import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatibl
 import {
   createEmptyOpenAiCompatibleConfig,
   normalizeOpenAiCompatibleContextWindow,
+  normalizeOpenAiCompatibleContextWindowSource,
   normalizeOpenAiCompatibleTransport,
 } from '@/src/shared/types/openai-compatible.types'
 import { normalizeOpenAiCompatibleBaseUrl } from '@/src/shared/utils/openai-compatible.utils'
@@ -102,7 +103,12 @@ const saveEncryptedKey = async (storageType: StorageType, key: string, value: st
 
 type StoredOpenAiCompatibleConfig = Pick<
   OpenAiCompatibleConfig,
-  'enabled' | 'baseUrl' | 'modelId' | 'contextWindowTokens' | 'transport'
+  | 'enabled'
+  | 'baseUrl'
+  | 'modelId'
+  | 'contextWindowTokens'
+  | 'contextWindowSource'
+  | 'transport'
 >
 
 const loadOpenAiCompatibleConfig = (
@@ -127,6 +133,10 @@ const loadOpenAiCompatibleConfig = (
       contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
         parsed.contextWindowTokens,
         modelId,
+      ),
+      contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
+        parsed.contextWindowSource,
+        true,
       ),
     }
   } catch {
@@ -153,6 +163,10 @@ const saveOpenAiCompatibleConfig = (
     contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
       config.contextWindowTokens,
       config.modelId,
+    ),
+    contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
+      config.contextWindowSource,
+      Boolean(config.baseUrl && config.modelId),
     ),
   }
   storage.setItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG, JSON.stringify(stored))
@@ -214,6 +228,10 @@ export const useAiConfigStore = create<AiConfigState>()(
           contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
             config.contextWindowTokens,
             config.modelId,
+          ),
+          contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
+            config.contextWindowSource,
+            Boolean(config.baseUrl && config.modelId),
           ),
         }
         set({ openAiCompatible: next })

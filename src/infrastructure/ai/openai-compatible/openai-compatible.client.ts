@@ -1,5 +1,9 @@
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
-import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
+import {
+  MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+  MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+  normalizeOpenAiCompatibleTransport,
+} from '@/src/shared/types/openai-compatible.types'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getAppCheckToken } from '@/src/infrastructure/ai/utils/app-check'
 import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
@@ -15,6 +19,65 @@ export interface OpenAiCompatibleConnectionResult {
   models: string[]
   modelFound: boolean | null
   usedChatProbe: boolean
+  /** Best-effort total context window reported for the configured model.
+   *  OpenAI's model-list schema does not require this metadata. */
+  detectedContextWindowTokens: number | null
+}
+
+const CONTEXT_WINDOW_FIELDS = [
+  // Only high-confidence runtime/serving extensions belong here. Do not add
+  // training limits such as n_ctx_train, max_position_embeddings, or the
+  // ambiguous completion-only max_tokens field.
+  'max_model_len',
+  'context_window',
+  'context_length',
+] as const
+
+function contextWindowNumber(value: unknown): number | null {
+  if (
+    typeof value !== 'number' &&
+    !(typeof value === 'string' && value.trim() !== '')
+  ) return null
+
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return null
+  return parsed >= MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW &&
+    parsed <= MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW
+    ? parsed
+    : null
+}
+
+function normalizedMetadataKey(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase()
+}
+
+/** Parse common extension fields without treating completion-only `max_tokens`
+ * or architecture/training limits as the deployed runtime window. When a
+ * provider supplies both its model-level and top-provider limit, use the
+ * smaller value conservatively. */
+function reportedContextWindow(model: unknown): number | null {
+  if (!model || typeof model !== 'object' || Array.isArray(model)) return null
+  const record = model as Record<string, unknown>
+  const candidates: number[] = []
+  for (const field of CONTEXT_WINDOW_FIELDS) {
+    for (const [key, value] of Object.entries(record)) {
+      if (normalizedMetadataKey(key) !== field) continue
+      const parsed = contextWindowNumber(value)
+      if (parsed !== null) candidates.push(parsed)
+    }
+  }
+  const topProvider = record.top_provider
+  if (topProvider && typeof topProvider === 'object' && !Array.isArray(topProvider)) {
+    const providerLimit = contextWindowNumber(
+      (topProvider as Record<string, unknown>).context_length,
+    )
+    if (providerLimit !== null) candidates.push(providerLimit)
+  }
+  return candidates.length > 0 ? Math.min(...candidates) : null
 }
 
 function requestHeaders(apiKey: string | null | undefined): Headers {
@@ -227,18 +290,26 @@ export async function testOpenAiCompatibleConnection(
     )
 
     if (modelsResponse.ok) {
-      const payload = await modelsResponse.json().catch(() => ({})) as {
-        data?: Array<{ id?: unknown }>
-      }
-      const models = Array.isArray(payload.data)
-        ? payload.data
+      const rawPayload: unknown = await modelsResponse.json().catch(() => null)
+      const payload = rawPayload && typeof rawPayload === 'object' && !Array.isArray(rawPayload)
+        ? rawPayload as { data?: Array<Record<string, unknown>> }
+        : {}
+      const modelEntries = Array.isArray(payload.data)
+        ? payload.data.filter((entry) => entry && typeof entry === 'object')
+        : []
+      const models = modelEntries.length > 0
+        ? modelEntries
           .map((entry) => typeof entry?.id === 'string' ? entry.id : '')
           .filter(Boolean)
         : []
+      const configuredModel = modelEntries.find((entry) => entry.id === config.modelId)
       return {
         models,
         modelFound: models.length > 0 ? models.includes(config.modelId) : null,
         usedChatProbe: false,
+        detectedContextWindowTokens: configuredModel
+          ? reportedContextWindow(configuredModel)
+          : null,
       }
     }
 
@@ -269,7 +340,12 @@ export async function testOpenAiCompatibleConnection(
     if (!chatResponse.ok) {
       throw new Error(await httpErrorMessage(chatResponse))
     }
-    return { models: [], modelFound: null, usedChatProbe: true }
+    return {
+      models: [],
+      modelFound: null,
+      usedChatProbe: true,
+      detectedContextWindowTokens: null,
+    }
   } finally {
     clearTimeout(timeout)
   }

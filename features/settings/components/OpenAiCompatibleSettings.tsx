@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronDown, Cloud, Eye, EyeOff, Loader2, Network, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -16,12 +16,16 @@ import { testOpenAiCompatibleConnection } from '@/src/application/composition.ai
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { InfoHint } from '@/src/shared/components/InfoHint'
-import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import type {
+  OpenAiCompatibleConfig,
+  OpenAiCompatibleContextWindowSource,
+} from '@/src/shared/types/openai-compatible.types'
 import {
   DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   normalizeOpenAiCompatibleContextWindow,
+  normalizeOpenAiCompatibleContextWindowSource,
   normalizeOpenAiCompatibleTransport,
   suggestedOpenAiCompatibleContextWindow,
 } from '@/src/shared/types/openai-compatible.types'
@@ -39,6 +43,15 @@ interface TestState {
   text: string
 }
 
+function initialContextWindowSource(
+  config: OpenAiCompatibleConfig,
+): OpenAiCompatibleContextWindowSource {
+  return normalizeOpenAiCompatibleContextWindowSource(
+    config.contextWindowSource,
+    Boolean(config.baseUrl && config.modelId),
+  )
+}
+
 export function OpenAiCompatibleSettings() {
   const { t } = useLanguage()
   const saved = useAiConfigStore((state) => state.openAiCompatible)
@@ -51,15 +64,24 @@ export function OpenAiCompatibleSettings() {
   const [contextWindowTokens, setContextWindowTokens] = useState(String(
     normalizeOpenAiCompatibleContextWindow(saved.contextWindowTokens, saved.modelId),
   ))
+  const [contextWindowSource, setContextWindowSource] = useState<OpenAiCompatibleContextWindowSource>(
+    initialContextWindowSource(saved),
+  )
+  const [detectedContextWindowTokens, setDetectedContextWindowTokens] = useState<number | null>(
+    null,
+  )
   const [apiKey, setApiKey] = useState(saved.apiKey ?? '')
   const [transport, setTransport] = useState(normalizeOpenAiCompatibleTransport(saved.transport))
   const [showApiKey, setShowApiKey] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testState, setTestState] = useState<TestState | null>(null)
+  const [connectionTestPassed, setConnectionTestPassed] = useState(false)
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
+  const testRequestId = useRef(0)
 
   useEffect(() => {
+    testRequestId.current += 1
     // The encrypted profile rehydrates asynchronously from the selected
     // browser storage, so the editable draft must follow that external store.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -68,8 +90,14 @@ export function OpenAiCompatibleSettings() {
     setContextWindowTokens(String(
       normalizeOpenAiCompatibleContextWindow(saved.contextWindowTokens, saved.modelId),
     ))
+    setContextWindowSource(initialContextWindowSource(saved))
+    setDetectedContextWindowTokens(null)
+    setDiscoveredModels([])
+    setTestState(null)
+    setConnectionTestPassed(false)
     setApiKey(saved.apiKey ?? '')
     setTransport(normalizeOpenAiCompatibleTransport(saved.transport))
+    setTesting(false)
   }, [saved])
 
   const modelOptionsId = 'openai-compatible-model-options'
@@ -80,9 +108,30 @@ export function OpenAiCompatibleSettings() {
       saved.contextWindowTokens,
       saved.modelId,
     ) ||
+    contextWindowSource !== initialContextWindowSource(saved) ||
     apiKey !== (saved.apiKey ?? '') ||
     transport !== normalizeOpenAiCompatibleTransport(saved.transport)
-  ), [apiKey, baseUrl, contextWindowTokens, modelId, saved, savedEndpointUrl, transport])
+  ), [
+    apiKey,
+    baseUrl,
+    contextWindowSource,
+    contextWindowTokens,
+    modelId,
+    saved,
+    savedEndpointUrl,
+    transport,
+  ])
+
+  const connectionDraftChanged = (
+    baseUrl !== savedEndpointUrl ||
+    modelId !== saved.modelId ||
+    apiKey !== (saved.apiKey ?? '') ||
+    transport !== normalizeOpenAiCompatibleTransport(saved.transport)
+  )
+  const connectionReadyToSave = (
+    connectionTestPassed ||
+    (!connectionDraftChanged && Boolean(saved.baseUrl && saved.modelId))
+  )
 
   const normalizeDraft = (): OpenAiCompatibleConfig => {
     const normalizedBaseUrl = normalizeOpenAiCompatibleBaseUrl(baseUrl)
@@ -125,6 +174,7 @@ export function OpenAiCompatibleSettings() {
       apiKey: apiKey.trim() || null,
       transport: normalizedTransport,
       contextWindowTokens: normalizedContextWindow,
+      contextWindowSource,
     }
   }
 
@@ -148,7 +198,12 @@ export function OpenAiCompatibleSettings() {
   }
 
   const handleSave = () => {
+    if (!connectionReadyToSave) {
+      toast.error(t.settings.openAiCompatibleTestBeforeSave)
+      return
+    }
     try {
+      testRequestId.current += 1
       const next = normalizeDraft()
       setConfig(next)
       setBaseUrl(formatOpenAiCompatibleChatCompletionsUrl(next.baseUrl))
@@ -164,42 +219,67 @@ export function OpenAiCompatibleSettings() {
   }
 
   const handleTest = async () => {
+    const requestId = testRequestId.current + 1
+    testRequestId.current = requestId
     setTesting(true)
     setTestState(null)
+    setConnectionTestPassed(false)
     setDiscoveredModels([])
+    setDetectedContextWindowTokens(null)
     try {
       const draft = normalizeDraft()
       const result = await testOpenAiCompatibleConnection(draft)
+      if (requestId !== testRequestId.current) return
       setDiscoveredModels(result.models)
+      setDetectedContextWindowTokens(result.detectedContextWindowTokens)
+      if (result.detectedContextWindowTokens !== null) {
+        setAdvancedOpen(true)
+        if (contextWindowSource !== 'manual') {
+          setContextWindowTokens(String(result.detectedContextWindowTokens))
+          setContextWindowSource('detected')
+        }
+      }
       if (result.modelFound === false) {
+        setConnectionTestPassed(false)
         setTestState({ tone: 'warning', text: t.settings.openAiCompatibleModelNotFound })
       } else {
+        setConnectionTestPassed(true)
+        const connectionText = result.usedChatProbe
+          ? t.settings.openAiCompatibleProbeSuccess
+          : t.settings.openAiCompatibleConnectionSuccess
         setTestState({
           tone: 'success',
-          text: result.usedChatProbe
-            ? t.settings.openAiCompatibleProbeSuccess
-            : t.settings.openAiCompatibleConnectionSuccess,
+          text: result.detectedContextWindowTokens === null
+            ? `${connectionText} ${t.settings.openAiCompatibleContextWindowNotReported}`
+            : connectionText,
         })
       }
     } catch (error) {
+      if (requestId !== testRequestId.current) return
+      setConnectionTestPassed(false)
       setTestState({
         tone: 'error',
         text: `${t.settings.openAiCompatibleConnectionFailed}: ${errorText(error)}`,
       })
     } finally {
-      setTesting(false)
+      if (requestId === testRequestId.current) setTesting(false)
     }
   }
 
   const handleClear = () => {
+    testRequestId.current += 1
+    setTesting(false)
     clearConfig()
     setBaseUrl('')
     setModelId('')
     setContextWindowTokens(String(DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW))
+    setContextWindowSource('suggested')
+    setDetectedContextWindowTokens(null)
     setApiKey('')
     setTransport('direct')
     setDiscoveredModels([])
     setTestState(null)
+    setConnectionTestPassed(false)
     toast.success(t.settings.openAiCompatibleCleared)
   }
 
@@ -222,13 +302,19 @@ export function OpenAiCompatibleSettings() {
           <Input
             id="openai-compatible-base-url"
             value={baseUrl}
-            onChange={(event) => { setBaseUrl(event.target.value); setTestState(null) }}
+            onChange={(event) => {
+              setBaseUrl(event.target.value)
+              setDetectedContextWindowTokens(null)
+              setTestState(null)
+              setConnectionTestPassed(false)
+            }}
             placeholder={transport === 'mediprisma-gateway'
               ? 'https://ai.j3soon.com/v1/chat/completions'
               : 'https://llm.intra.example.org/v1/chat/completions'}
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
+            disabled={testing}
           />
         </div>
 
@@ -242,15 +328,16 @@ export function OpenAiCompatibleSettings() {
             value={modelId}
             onChange={(event) => {
               const nextModelId = event.target.value
-              const followsSuggestion = Number(contextWindowTokens) ===
-                suggestedOpenAiCompatibleContextWindow(modelId)
               setModelId(nextModelId)
-              if (followsSuggestion) {
+              setDetectedContextWindowTokens(null)
+              if (contextWindowSource !== 'manual') {
                 setContextWindowTokens(String(
                   suggestedOpenAiCompatibleContextWindow(nextModelId),
                 ))
+                setContextWindowSource('suggested')
               }
               setTestState(null)
+              setConnectionTestPassed(false)
             }}
             placeholder={transport === 'mediprisma-gateway'
               ? 'MODEL_NAME'
@@ -258,6 +345,7 @@ export function OpenAiCompatibleSettings() {
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
+            disabled={testing}
           />
           <datalist id={modelOptionsId}>
             {discoveredModels.map((id) => <option key={id} value={id} />)}
@@ -270,7 +358,14 @@ export function OpenAiCompatibleSettings() {
             <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted/20 p-1">
               <button
                 type="button"
-                onClick={() => { setTransport('direct'); setTestState(null) }}
+                onClick={() => {
+                  if (transport === 'direct') return
+                  setTransport('direct')
+                  setDetectedContextWindowTokens(null)
+                  setTestState(null)
+                  setConnectionTestPassed(false)
+                }}
+                disabled={testing}
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
                   transport === 'direct'
@@ -284,8 +379,14 @@ export function OpenAiCompatibleSettings() {
               </button>
               <button
                 type="button"
-                onClick={() => { setTransport('mediprisma-gateway'); setTestState(null) }}
-                disabled={!ENV_CONFIG.hasOpenAiCompatibleGateway}
+                onClick={() => {
+                  if (transport === 'mediprisma-gateway') return
+                  setTransport('mediprisma-gateway')
+                  setDetectedContextWindowTokens(null)
+                  setTestState(null)
+                  setConnectionTestPassed(false)
+                }}
+                disabled={testing || !ENV_CONFIG.hasOpenAiCompatibleGateway}
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
                   transport === 'mediprisma-gateway'
@@ -350,10 +451,36 @@ export function OpenAiCompatibleSettings() {
                 value={contextWindowTokens}
                 onChange={(event) => {
                   setContextWindowTokens(event.target.value)
-                  setTestState(null)
+                  setContextWindowSource('manual')
                 }}
                 inputMode="numeric"
+                disabled={testing}
               />
+              {detectedContextWindowTokens !== null && (
+                <div
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] text-muted-foreground"
+                  aria-live="polite"
+                >
+                  <span>
+                    {t.settings.openAiCompatibleContextWindowDetected.replace(
+                      '{tokens}',
+                      detectedContextWindowTokens.toLocaleString('en-US'),
+                    )}
+                  </span>
+                  {Number(contextWindowTokens) !== detectedContextWindowTokens && (
+                    <button
+                      type="button"
+                      className="font-medium text-primary underline-offset-2 hover:underline"
+                      onClick={() => {
+                        setContextWindowTokens(String(detectedContextWindowTokens))
+                        setContextWindowSource('detected')
+                      }}
+                    >
+                      {t.settings.openAiCompatibleUseDetectedContextWindow}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -375,7 +502,12 @@ export function OpenAiCompatibleSettings() {
                   name="openai-compatible-key"
                   type="text"
                   value={apiKey}
-                  onChange={(event) => { setApiKey(event.target.value); setTestState(null) }}
+                  onChange={(event) => {
+                    setApiKey(event.target.value)
+                    setDetectedContextWindowTokens(null)
+                    setTestState(null)
+                    setConnectionTestPassed(false)
+                  }}
                   placeholder={transport === 'mediprisma-gateway'
                     ? t.settings.openAiCompatibleGatewayApiKeyPlaceholder
                     : t.settings.openAiCompatibleApiKeyPlaceholder}
@@ -387,6 +519,7 @@ export function OpenAiCompatibleSettings() {
                   data-1p-ignore
                   data-lpignore="true"
                   data-form-type="other"
+                  disabled={testing}
                 />
                 <button
                   type="button"
@@ -428,7 +561,15 @@ export function OpenAiCompatibleSettings() {
               : t.settings.openAiCompatibleTestPrivacy}
           </p>
         </InfoHint>
-        <Button size="sm" type="button" onClick={handleSave} disabled={!baseUrl.trim() || !modelId.trim()}>
+        <Button
+          size="sm"
+          type="button"
+          onClick={handleSave}
+          disabled={testing || !baseUrl.trim() || !modelId.trim() || !connectionReadyToSave}
+          title={!connectionReadyToSave
+            ? t.settings.openAiCompatibleTestBeforeSave
+            : undefined}
+        >
           {draftChanged || !saved.baseUrl
             ? t.settings.openAiCompatibleSaveEnable
             : t.settings.openAiCompatibleSave}
@@ -442,8 +583,15 @@ export function OpenAiCompatibleSettings() {
               id="openai-compatible-enabled"
               checked={saved.enabled}
               onCheckedChange={setEnabled}
+              disabled={testing}
             />
-            <Button size="sm" variant="ghost" type="button" onClick={handleClear}>
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              onClick={handleClear}
+              disabled={testing}
+            >
               {t.settings.openAiCompatibleClear}
             </Button>
           </div>

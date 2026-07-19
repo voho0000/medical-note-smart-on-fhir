@@ -24,6 +24,7 @@ describe('ai-config.store', () => {
         apiKey: null,
         transport: 'direct',
         contextWindowTokens: 15000,
+        contextWindowSource: 'suggested',
       },
       storageType: 'localStorage',
     })
@@ -128,6 +129,7 @@ describe('ai-config.store', () => {
         apiKey: 'local-key',
         transport: 'direct',
         contextWindowTokens: 15000,
+        contextWindowSource: 'manual',
       })
 
       useAiConfigStore.getState().setOpenAiCompatibleEnabled(false)
@@ -141,6 +143,7 @@ describe('ai-config.store', () => {
         apiKey: null,
         transport: 'direct',
         contextWindowTokens: 15000,
+        contextWindowSource: 'suggested',
       })
     })
 
@@ -159,6 +162,7 @@ describe('ai-config.store', () => {
         apiKey: null,
         transport: 'direct',
         contextWindowTokens: 15000,
+        contextWindowSource: 'manual',
       })
     })
 
@@ -173,6 +177,16 @@ describe('ai-config.store', () => {
       expect(useAiConfigStore.getState().openAiCompatible.transport).toBe(
         'mediprisma-gateway',
       )
+    })
+
+    it('uses a conservative Nemotron fallback when runtime metadata is unavailable', () => {
+      useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://integrate.api.nvidia.com/v1',
+        modelId: 'nvidia/nemotron-3-ultra-550b-a55b',
+        apiKey: 'nvapi-test',
+      })
+      expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(262144)
     })
 
     it('migrates a Qwen endpoint to its known context window unless explicitly overridden', () => {
@@ -192,6 +206,21 @@ describe('ai-config.store', () => {
         contextWindowTokens: 24576,
       })
       expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(24576)
+    })
+
+    it('persists manual provenance even when the value equals the model suggestion', () => {
+      useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        modelId: 'qwen2.5:7b',
+        apiKey: null,
+        contextWindowTokens: 32768,
+        contextWindowSource: 'manual',
+      })
+
+      expect(useAiConfigStore.getState().openAiCompatible.contextWindowSource).toBe('manual')
+      expect(JSON.parse(localStorage.getItem('openai_compatible_config') ?? '{}'))
+        .toMatchObject({ contextWindowTokens: 32768, contextWindowSource: 'manual' })
     })
   })
 
