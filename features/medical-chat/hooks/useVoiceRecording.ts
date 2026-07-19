@@ -6,8 +6,9 @@ import { useAiConfigStore } from "@/src/application/stores/ai-config.store"
 import { PROXY_CLIENT_KEY, WHISPER_PROXY_URL, hasWhisperProxy } from "@/src/shared/config/env.config"
 import { getProxyAuthHeaders } from "@/src/infrastructure/ai/utils/proxy-auth"
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
 import {
-  isOpenAiCompatibleReady,
+  isOpenAiCompatibleRuntimeReady,
   openAiCompatibleEndpointUrl,
 } from '@/src/shared/utils/openai-compatible.utils'
 
@@ -67,7 +68,11 @@ export function useVoiceRecording(
     async (audioBlob: Blob): Promise<string | null> => {
       if (audioBlob.size === 0) return null
 
-      const useCustomEndpoint = isOpenAiCompatibleReady(openAiCompatible)
+      // The Firebase BYO gateway intentionally exposes only models + chat.
+      // Audio stays direct so a gateway profile cannot silently bypass its
+      // declared data path or fail on an unsupported endpoint.
+      const useCustomEndpoint = isOpenAiCompatibleRuntimeReady(openAiCompatible) &&
+        normalizeOpenAiCompatibleTransport(openAiCompatible.transport) === 'direct'
       const useProxy = !useCustomEndpoint && !apiKey && hasWhisperProxy
 
       if (!useCustomEndpoint && !apiKey && !useProxy) {
@@ -150,7 +155,9 @@ export function useVoiceRecording(
   const handleStartRecording = useCallback(() => {
     if (isAsrLoading) return
 
-    if (!isOpenAiCompatibleReady(openAiCompatible) && !apiKey && !hasWhisperProxy) {
+    const hasDirectCustomAudio = isOpenAiCompatibleRuntimeReady(openAiCompatible) &&
+      normalizeOpenAiCompatibleTransport(openAiCompatible.transport) === 'direct'
+    if (!hasDirectCustomAudio && !apiKey && !hasWhisperProxy) {
       toast.error(t.chat.voiceNeedsApiKey)
       return
     }

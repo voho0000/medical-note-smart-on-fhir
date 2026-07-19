@@ -37,7 +37,7 @@
 ## 隱私與安全
 
 - **本地匯入的完整 FHIR Bundle 儲存在本機**：以 AES-GCM 加密寫入 IndexedDB，最長保留 **12 小時**，下次載入時清除過期紀錄、登出時清除，使用者亦可隨時「清除本地資料」。使用 AI 時，產生內容所需的選取資料會傳送至所選的雲端 AI 服務；內建模型可能經由 MediPrisma Firebase Functions 代理。
-- **API 金鑰**：預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。自備金鑰由瀏覽器直接送往對應 provider，不會送給 MediPrisma 的 owner-funded proxy。
+- **API 金鑰**：預設只在本次瀏覽工作階段有效（關閉視窗即清除）；可在設定開啟「在此裝置記住金鑰」改為持久保存。自訂 OpenAI-compatible 端點可明確選擇瀏覽器直連，或對不支援 CORS 的白名單 provider 使用 Firebase Gateway；後者會讓提示、回應與自備 key 暫時經過 Firebase，畫面會先行提示。
 - **對話紀錄**：登入後，一般對話會儲存於 Firestore 並跨裝置同步；「無痕對話」不會儲存，訪客對話不會同步。
 - **回饋**：表單不自動附加 patientId，並提醒不要在自由文字輸入病人識別資訊；FHIR server URL 仍可能透露機構。
 - 詳見 [SECURITY.md](./docs/SECURITY.md)、[PRIVACY_POLICY.md](./PRIVACY_POLICY.md)。
@@ -50,7 +50,7 @@
 
 ## AI 模型
 
-不需自備金鑰時，請求會經由 Firebase Functions 代理（有每日免費額度，登入可提高、訪客較低）。也可在**設定**填自己的金鑰直接呼叫。**模型在各 AI 功能內就地選擇**（對話工具列、自訂模組管理 drawer、醫療摘要標頭，各自記憶）；付費模型未提供金鑰時自動以免費模型執行並如實顯示。
+不需自備金鑰時，請求會經由 Firebase Functions 代理（有每日免費額度，登入可提高、訪客較低）。也可在**設定**填自己的金鑰直接呼叫；自訂 OpenAI-compatible provider 若封鎖瀏覽器 CORS，可明確改選受限的 Firebase Gateway。**模型在各 AI 功能內就地選擇**（對話工具列、自訂模組管理 drawer、醫療摘要標頭，各自記憶）；付費模型未提供金鑰時自動以免費模型執行並如實顯示。
 
 | 類別 | 模型 |
 |------|------|
@@ -119,6 +119,7 @@ npm run test:coverage
 NEXT_PUBLIC_CHAT_URL=...
 NEXT_PUBLIC_GEMINI_URL=...
 NEXT_PUBLIC_CLAUDE_URL=...
+NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL=...
 NEXT_PUBLIC_PERPLEXITY_PROXY_URL=...
 NEXT_PUBLIC_WHISPER_URL=...
 NEXT_PUBLIC_FEEDBACK_URL=...
@@ -224,7 +225,7 @@ Documentation baseline: v0.40.0 (2026-07-14). Runtime registries, composition ro
 ## Privacy & security
 
 - **A locally imported full FHIR Bundle stays on the device**: it is AES-GCM-encrypted in IndexedDB, kept at most **12 hours**, purged on next load when expired and on logout; users can "clear local data" anytime. When AI is used, the selected data needed to generate the content is sent to the chosen cloud AI service; built-in models may route through the MediPrisma Firebase Functions proxy.
-- **API keys**: by default kept only for the current browser session (cleared when you close the window); a "remember on this device" toggle in Settings makes them persist. A user-supplied key is sent directly from the browser to its provider, not to MediPrisma's owner-funded proxy.
+- **API keys**: by default kept only for the current browser session (cleared when you close the window); a "remember on this device" toggle in Settings makes them persist. A custom OpenAI-compatible endpoint explicitly uses either direct browser transport or the allow-listed Firebase Gateway for providers that block browser CORS. Gateway mode temporarily sends prompts, responses, and the user-owned key through Firebase and is disclosed in the UI.
 - **Conversation history**: after sign-in, regular conversations are stored in Firestore and synced across devices; temporary conversations are not saved, and guest conversations are not synced.
 - **Feedback** does not automatically attach a patient ID and warns users not to enter identifiers in free text; the FHIR server URL may still reveal the institution.
 - See [SECURITY.md](./docs/SECURITY.md) and [PRIVACY_POLICY.md](./PRIVACY_POLICY.md).
@@ -237,7 +238,7 @@ Documentation baseline: v0.40.0 (2026-07-14). Runtime registries, composition ro
 
 ## AI models
 
-Without your own key, requests go through a Firebase Functions proxy (daily free quota — higher signed in, lower for guests). Or add your own key in **Settings** to call providers directly. **Models are picked inside each AI feature** (chat toolbar, custom-module manager, medical-summary header — each remembered separately); a premium pick without its key transparently runs — and displays — as the free model.
+Without your own key, requests go through a Firebase Functions proxy (daily free quota — higher signed in, lower for guests). Or add your own key in **Settings** to call providers directly. Custom OpenAI-compatible providers that block browser CORS can explicitly use the restricted Firebase Gateway. **Models are picked inside each AI feature** (chat toolbar, custom-module manager, medical-summary header — each remembered separately); a premium pick without its key transparently runs — and displays — as the free model.
 
 | Tier | Models |
 |------|--------|

@@ -22,6 +22,7 @@ describe('ai-config.store', () => {
         baseUrl: '',
         modelId: '',
         apiKey: null,
+        transport: 'direct',
         contextWindowTokens: 15000,
       },
       storageType: 'localStorage',
@@ -115,7 +116,7 @@ describe('ai-config.store', () => {
       const state = useAiConfigStore.getState()
       state.setOpenAiCompatibleConfig({
         enabled: true,
-        baseUrl: 'https://llm.intra.example/v1/',
+        baseUrl: 'https://llm.intra.example/v1/chat/completions/',
         modelId: ' local-model ',
         apiKey: ' local-key ',
       })
@@ -125,6 +126,7 @@ describe('ai-config.store', () => {
         baseUrl: 'https://llm.intra.example/v1',
         modelId: 'local-model',
         apiKey: 'local-key',
+        transport: 'direct',
         contextWindowTokens: 15000,
       })
 
@@ -137,6 +139,7 @@ describe('ai-config.store', () => {
         baseUrl: '',
         modelId: '',
         apiKey: null,
+        transport: 'direct',
         contextWindowTokens: 15000,
       })
     })
@@ -154,8 +157,22 @@ describe('ai-config.store', () => {
         baseUrl: '/ai/v1',
         modelId: 'hospital-model',
         apiKey: null,
+        transport: 'direct',
         contextWindowTokens: 15000,
       })
+    })
+
+    it('stores Gateway transport only when explicitly selected', () => {
+      useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://integrate.api.nvidia.com/v1',
+        modelId: 'nvidia/nemotron-3-ultra-550b-a55b',
+        apiKey: 'nvapi-test',
+        transport: 'mediprisma-gateway',
+      })
+      expect(useAiConfigStore.getState().openAiCompatible.transport).toBe(
+        'mediprisma-gateway',
+      )
     })
 
     it('migrates a Qwen endpoint to its known context window unless explicitly overridden', () => {

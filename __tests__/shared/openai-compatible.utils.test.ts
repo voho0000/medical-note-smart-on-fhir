@@ -1,5 +1,7 @@
 import {
+  formatOpenAiCompatibleChatCompletionsUrl,
   normalizeOpenAiCompatibleBaseUrl,
+  isOpenAiCompatibleRuntimeReady,
   openAiCompatibleCacheIdentity,
   openAiCompatibleEndpointUrl,
   OpenAiCompatibleUrlError,
@@ -16,6 +18,9 @@ describe('OpenAI-compatible URL validation', () => {
     ['http://localhost:11434/v1/', 'http://localhost:11434/v1'],
     ['http://127.0.0.1:1234/v1', 'http://127.0.0.1:1234/v1'],
     ['http://[::1]:8000/v1', 'http://[::1]:8000/v1'],
+    ['https://llm.intra/v1/chat/completions', 'https://llm.intra/v1'],
+    ['https://llm.intra/v1/chat/completions/', 'https://llm.intra/v1'],
+    ['/ai/v1/chat/completions', '/ai/v1'],
   ])('normalizes %s', (input, expected) => {
     expect(normalizeOpenAiCompatibleBaseUrl(input)).toBe(expected)
   })
@@ -26,8 +31,6 @@ describe('OpenAI-compatible URL validation', () => {
     ['https://user:pass@llm.intra/v1', 'URL_CREDENTIALS'],
     ['https://llm.intra/v1?tenant=a', 'URL_QUERY'],
     ['https://llm.intra/v1#section', 'URL_FRAGMENT'],
-    ['https://llm.intra/v1/chat/completions', 'FULL_COMPLETIONS_URL'],
-    ['/ai/v1/chat/completions', 'FULL_COMPLETIONS_URL'],
     ['//llm.intra/v1', 'INVALID_URL'],
   ])('rejects unsafe or ambiguous URL %s', (input, code) => {
     expect(() => normalizeOpenAiCompatibleBaseUrl(input)).toThrow(OpenAiCompatibleUrlError)
@@ -38,16 +41,34 @@ describe('OpenAI-compatible URL validation', () => {
     }
   })
 
-  it('resolves a same-origin gateway and appends API paths once', () => {
+  it('formats a full Chat URL while storing and routing from its canonical base', () => {
+    expect(formatOpenAiCompatibleChatCompletionsUrl(
+      'https://ai.j3soon.com/v1',
+    )).toBe('https://ai.j3soon.com/v1/chat/completions')
+    expect(formatOpenAiCompatibleChatCompletionsUrl(
+      'https://ai.j3soon.com/v1/chat/completions/',
+    )).toBe('https://ai.j3soon.com/v1/chat/completions')
+    expect(formatOpenAiCompatibleChatCompletionsUrl('/ai/v1')).toBe(
+      '/ai/v1/chat/completions',
+    )
+
     expect(resolveOpenAiCompatibleBaseUrl('/ai/v1', 'https://mediprisma.intra')).toBe(
       'https://mediprisma.intra/ai/v1',
     )
-    expect(openAiCompatibleEndpointUrl('/ai/v1', '/chat/completions', 'https://mediprisma.intra')).toBe(
+    expect(openAiCompatibleEndpointUrl(
+      '/ai/v1/chat/completions',
+      '/chat/completions',
+      'https://mediprisma.intra',
+    )).toBe(
       'https://mediprisma.intra/ai/v1/chat/completions',
     )
+    expect(openAiCompatibleEndpointUrl(
+      'https://ai.j3soon.com/v1/chat/completions',
+      'models',
+    )).toBe('https://ai.j3soon.com/v1/models')
   })
 
-  it('isolates caches by endpoint and upstream model without including the key', () => {
+  it('isolates caches by transport, endpoint, and model without including the key', () => {
     const base = {
       enabled: true,
       baseUrl: 'https://llm.intra/v1',
@@ -63,5 +84,24 @@ describe('OpenAI-compatible URL validation', () => {
     expect(openAiCompatibleCacheIdentity(base)).not.toBe(
       openAiCompatibleCacheIdentity({ ...base, baseUrl: 'https://other.intra/v1' }),
     )
+    expect(openAiCompatibleCacheIdentity(base)).not.toBe(
+      openAiCompatibleCacheIdentity({ ...base, transport: 'mediprisma-gateway' }),
+    )
+  })
+
+  it('fails closed for a Gateway profile when this deployment has no Gateway', () => {
+    const gatewayProfile = {
+      enabled: true,
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      modelId: 'nvidia/model',
+      apiKey: 'secret',
+      transport: 'mediprisma-gateway' as const,
+    }
+    expect(isOpenAiCompatibleRuntimeReady(gatewayProfile, false)).toBe(false)
+    expect(isOpenAiCompatibleRuntimeReady(gatewayProfile, true)).toBe(true)
+    expect(isOpenAiCompatibleRuntimeReady({
+      ...gatewayProfile,
+      transport: 'direct',
+    }, false)).toBe(true)
   })
 })

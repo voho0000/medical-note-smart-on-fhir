@@ -22,7 +22,7 @@ describe('AiProviderFactory custom OpenAI-compatible routing', () => {
       useProxy: true,
       openAiCompatible: {
         enabled: true,
-        baseUrl: 'https://llm.intra.example/v1/',
+        baseUrl: 'https://llm.intra.example/v1/chat/completions',
         modelId: 'hospital-model-v2',
         apiKey: null,
       },

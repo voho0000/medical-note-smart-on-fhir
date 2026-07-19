@@ -28,7 +28,7 @@ import {
   modelContextLimit,
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import {
   aiResultCacheKey,
   contentSignature,
@@ -123,7 +123,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     modelProvider === 'claude' ? hasClaudeProxy :
     modelProvider === 'openai' ? hasChatProxy : false
   const canGenerate = modelProvider === 'custom'
-    ? isOpenAiCompatibleReady(openAiCompatible)
+    ? isOpenAiCompatibleRuntimeReady(openAiCompatible)
     : hasModelProviderKey || hasModelProxy
   const runtimeModelId = modelRuntimeIdentity(model, openAiCompatible)
   const contextLimit = modelContextLimit(model, openAiCompatible)

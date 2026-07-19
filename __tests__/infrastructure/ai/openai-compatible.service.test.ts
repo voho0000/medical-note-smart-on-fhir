@@ -4,7 +4,7 @@ import { getUserErrorMessage } from '@/src/core/errors'
 describe('OpenAiCompatibleService', () => {
   const config = {
     enabled: true,
-    baseUrl: 'https://10.20.30.40:8443/v1',
+    baseUrl: 'https://10.20.30.40:8443/v1/chat/completions',
     modelId: 'local-medical-model',
     apiKey: null,
   }

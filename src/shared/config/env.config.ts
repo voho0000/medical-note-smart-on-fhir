@@ -9,6 +9,8 @@ export const ENV_CONFIG = {
   whisperProxyUrl: process.env.NEXT_PUBLIC_WHISPER_URL || '',
   geminiProxyUrl: process.env.NEXT_PUBLIC_GEMINI_URL || '',
   claudeProxyUrl: process.env.NEXT_PUBLIC_CLAUDE_URL || '',
+  openAiCompatibleGatewayUrl:
+    process.env.NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL || '',
   proxyClientKey: process.env.NEXT_PUBLIC_PROXY_KEY || '',
   
   // Feature flags
@@ -16,6 +18,9 @@ export const ENV_CONFIG = {
   hasWhisperProxy: process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' && Boolean(process.env.NEXT_PUBLIC_WHISPER_URL),
   hasGeminiProxy: process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' && Boolean(process.env.NEXT_PUBLIC_GEMINI_URL),
   hasClaudeProxy: process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' && Boolean(process.env.NEXT_PUBLIC_CLAUDE_URL),
+  hasOpenAiCompatibleGateway:
+    process.env.NEXT_PUBLIC_OFFLINE_MODE !== '1' &&
+    Boolean(process.env.NEXT_PUBLIC_OPENAI_COMPATIBLE_GATEWAY_URL),
   
   // Streaming watchdog: abort a chat stream that produces no new token for this
   // long (ms), so a stalled/never-closing upstream stream surfaces a timeout

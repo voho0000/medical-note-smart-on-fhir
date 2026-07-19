@@ -20,7 +20,7 @@ import {
   evaluateContextBudget,
   type ContextBudgetLevel,
 } from "@/src/shared/utils/context-budget"
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { modelContextLimit, modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 
 const LEVEL_BAR: Record<ContextBudgetLevel, string> = {
@@ -59,7 +59,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId }: ContextTokenMete
           openAiKey: apiKey,
           geminiKey,
           claudeKey,
-          customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+          customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
         },
         fallbackModelId ?? defaultModelId,
       )

@@ -1,4 +1,6 @@
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
 
 const CONTROL_OR_WHITESPACE = /[\u0000-\u0020\u007f]/
 const FULL_COMPLETIONS_PATH = /\/chat\/completions\/?$/i
@@ -13,7 +15,6 @@ export type OpenAiCompatibleUrlErrorCode =
   | 'URL_CREDENTIALS'
   | 'URL_QUERY'
   | 'URL_FRAGMENT'
-  | 'FULL_COMPLETIONS_URL'
 
 export class OpenAiCompatibleUrlError extends Error {
   constructor(
@@ -34,10 +35,15 @@ function stripTrailingSlashes(value: string): string {
   return value === '/' ? value : value.replace(/\/+$/, '')
 }
 
+function stripChatCompletionsPath(value: string): string {
+  return value.replace(FULL_COMPLETIONS_PATH, '')
+}
+
 /**
- * Validate and normalize an API base URL (the value ending at `/v1`, not the
- * complete `/chat/completions` endpoint). Hostnames entered without a scheme
- * default to HTTPS. Relative paths support a same-origin hospital gateway.
+ * Validate a user-entered Chat Completions URL or legacy API base URL and
+ * normalize it to the canonical base stored in the connection profile.
+ * Hostnames entered without a scheme default to HTTPS. Relative paths support
+ * a same-origin hospital gateway.
  *
  * Plain HTTP is intentionally limited to loopback development. A browser
  * cannot safely call an HTTP hospital IP from an HTTPS app, and accepting it in
@@ -47,10 +53,10 @@ function stripTrailingSlashes(value: string): string {
 export function normalizeOpenAiCompatibleBaseUrl(rawValue: string): string {
   const raw = rawValue.trim()
   if (!raw) {
-    throw new OpenAiCompatibleUrlError('EMPTY', 'Base URL is required')
+    throw new OpenAiCompatibleUrlError('EMPTY', 'Chat Completions URL is required')
   }
   if (CONTROL_OR_WHITESPACE.test(raw)) {
-    throw new OpenAiCompatibleUrlError('INVALID_URL', 'Base URL cannot contain spaces or control characters')
+    throw new OpenAiCompatibleUrlError('INVALID_URL', 'Endpoint URL cannot contain spaces or control characters')
   }
 
   // A single-leading-slash path is resolved against the app origin at request
@@ -61,18 +67,12 @@ export function normalizeOpenAiCompatibleBaseUrl(rawValue: string): string {
       throw new OpenAiCompatibleUrlError('INVALID_URL', 'Protocol-relative URLs are not supported')
     }
     if (raw.includes('?')) {
-      throw new OpenAiCompatibleUrlError('URL_QUERY', 'Base URL cannot contain a query string')
+      throw new OpenAiCompatibleUrlError('URL_QUERY', 'Endpoint URL cannot contain a query string')
     }
     if (raw.includes('#')) {
-      throw new OpenAiCompatibleUrlError('URL_FRAGMENT', 'Base URL cannot contain a fragment')
+      throw new OpenAiCompatibleUrlError('URL_FRAGMENT', 'Endpoint URL cannot contain a fragment')
     }
-    if (FULL_COMPLETIONS_PATH.test(raw)) {
-      throw new OpenAiCompatibleUrlError(
-        'FULL_COMPLETIONS_URL',
-        'Enter the API base URL ending at /v1, not /chat/completions',
-      )
-    }
-    return stripTrailingSlashes(raw)
+    return stripTrailingSlashes(stripChatCompletionsPath(raw) || '/')
   }
 
   let candidate = raw
@@ -90,7 +90,7 @@ export function normalizeOpenAiCompatibleBaseUrl(rawValue: string): string {
   try {
     parsed = new URL(candidate)
   } catch {
-    throw new OpenAiCompatibleUrlError('INVALID_URL', 'Base URL is not a valid URL')
+    throw new OpenAiCompatibleUrlError('INVALID_URL', 'Endpoint URL is not a valid URL')
   }
 
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
@@ -103,23 +103,30 @@ export function normalizeOpenAiCompatibleBaseUrl(rawValue: string): string {
     )
   }
   if (parsed.username || parsed.password) {
-    throw new OpenAiCompatibleUrlError('URL_CREDENTIALS', 'Do not embed credentials in the Base URL')
+    throw new OpenAiCompatibleUrlError('URL_CREDENTIALS', 'Do not embed credentials in the endpoint URL')
   }
   if (parsed.search) {
-    throw new OpenAiCompatibleUrlError('URL_QUERY', 'Base URL cannot contain a query string')
+    throw new OpenAiCompatibleUrlError('URL_QUERY', 'Endpoint URL cannot contain a query string')
   }
   if (parsed.hash) {
-    throw new OpenAiCompatibleUrlError('URL_FRAGMENT', 'Base URL cannot contain a fragment')
-  }
-  if (FULL_COMPLETIONS_PATH.test(parsed.pathname)) {
-    throw new OpenAiCompatibleUrlError(
-      'FULL_COMPLETIONS_URL',
-      'Enter the API base URL ending at /v1, not /chat/completions',
-    )
+    throw new OpenAiCompatibleUrlError('URL_FRAGMENT', 'Endpoint URL cannot contain a fragment')
   }
 
-  parsed.pathname = stripTrailingSlashes(parsed.pathname)
+  parsed.pathname = stripTrailingSlashes(
+    stripChatCompletionsPath(parsed.pathname) || '/',
+  )
   return stripTrailingSlashes(parsed.toString())
+}
+
+/** Format the canonical stored base as the full URL shown in Settings. */
+export function formatOpenAiCompatibleChatCompletionsUrl(
+  baseOrEndpointUrl: string,
+): string {
+  if (!baseOrEndpointUrl.trim()) return ''
+  const baseUrl = normalizeOpenAiCompatibleBaseUrl(baseOrEndpointUrl)
+  return baseUrl === '/'
+    ? '/chat/completions'
+    : `${stripTrailingSlashes(baseUrl)}/chat/completions`
 }
 
 export function resolveOpenAiCompatibleBaseUrl(
@@ -131,7 +138,7 @@ export function resolveOpenAiCompatibleBaseUrl(
   if (!origin) {
     throw new OpenAiCompatibleUrlError(
       'INVALID_URL',
-      'A same-origin Base URL can only be resolved in a browser',
+      'A same-origin endpoint URL can only be resolved in a browser',
     )
   }
   return stripTrailingSlashes(new URL(normalized, origin).toString())
@@ -156,6 +163,18 @@ export function isOpenAiCompatibleReady(
   )
 }
 
+/** Runtime availability adds the deployment's explicit Gateway capability to
+ * the persisted profile check. A profile saved elsewhere must fail closed in
+ * offline/intranet builds or deployments that did not configure the Gateway. */
+export function isOpenAiCompatibleRuntimeReady(
+  config: OpenAiCompatibleConfig | null | undefined,
+  gatewayAvailable = ENV_CONFIG.hasOpenAiCompatibleGateway,
+): config is OpenAiCompatibleConfig & { enabled: true } {
+  if (!isOpenAiCompatibleReady(config)) return false
+  return normalizeOpenAiCompatibleTransport(config.transport) !== 'mediprisma-gateway' ||
+    gatewayAvailable
+}
+
 /**
  * Stable, non-secret identity for cache isolation. Changing the endpoint or
  * upstream model must never hydrate clinical output produced by the previous
@@ -165,7 +184,7 @@ export function openAiCompatibleCacheIdentity(
   config: OpenAiCompatibleConfig | null | undefined,
 ): string {
   if (!isOpenAiCompatibleReady(config)) return 'custom-unconfigured'
-  const input = `${config.baseUrl}\u0000${config.modelId}`
+  const input = `${normalizeOpenAiCompatibleTransport(config.transport)}\u0000${config.baseUrl}\u0000${config.modelId}`
   let hash = 0x811c9dc5
   for (let index = 0; index < input.length; index += 1) {
     hash ^= input.charCodeAt(index)

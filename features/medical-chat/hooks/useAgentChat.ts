@@ -28,7 +28,7 @@ import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "@/src/infrastructure/ai/serv
 import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
 import type { ChatReplyReference } from "@/src/core/entities/chat-message.entity"
 import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import {
   apiKeyForModel,
   hasDirectModelAccess,
@@ -100,7 +100,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         openAiKey,
         geminiKey,
         claudeKey,
-        customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+        customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
       })
 
       // Create user message with images

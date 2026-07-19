@@ -44,7 +44,7 @@ import {
   type ClinicalAiDataInput,
 } from './use-clinical-ai-input.hook'
 import { patientAiSlotKey } from './ai-slot-key'
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import {
   hasDirectModelAccess,
   modelContextLimit,
@@ -168,7 +168,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         openAiKey: apiKey,
         geminiKey,
         claudeKey,
-        customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+        customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
       },
       defaultModelId,
     )
@@ -202,7 +202,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     { openAiKey: apiKey, geminiKey, claudeKey },
     openAiCompatible,
   )
-  const selectedModelReady = selectedModelProvider !== 'custom' || isOpenAiCompatibleReady(openAiCompatible)
+  const selectedModelReady = selectedModelProvider !== 'custom' || isOpenAiCompatibleRuntimeReady(openAiCompatible)
   // A failed anonymous auto-run must become eligible again after login (or
   // after the user adds their own provider key). The result cache remains
   // content-bound; only the once-per-access-context trigger

@@ -1,4 +1,8 @@
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import { getAppCheckToken } from '@/src/infrastructure/ai/utils/app-check'
+import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
 import {
   isOpenAiCompatibleReady,
   openAiCompatibleEndpointUrl,
@@ -24,18 +28,132 @@ function requestHeaders(apiKey: string | null | undefined): Headers {
  * harmless placeholder, then remove its Authorization header when this profile
  * is intentionally keyless. Requests stay in the browser and omit cookies.
  */
-export function createOpenAiCompatibleFetch(apiKey: string | null | undefined): typeof fetch {
-  const originalFetch = globalThis.fetch.bind(globalThis)
+export function createOpenAiCompatibleFetch(
+  apiKey: string | null | undefined,
+  fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
+): typeof fetch {
   return async (input, init) => {
     const headers = new Headers(init?.headers)
     if (!apiKey?.trim()) headers.delete('authorization')
-    return originalFetch(input, {
+    return fetchImpl(input, {
       ...init,
       headers,
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     })
   }
+}
+
+function requestUrl(input: Parameters<typeof fetch>[0]): string {
+  return typeof input === 'string' || input instanceof URL
+    ? String(input)
+    : input.url
+}
+
+function validateGatewayUrl(value: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error('MediPrisma Gateway URL is invalid')
+  }
+  if (parsed.protocol !== 'https:' || (parsed.port && parsed.port !== '443')) {
+    throw new Error('MediPrisma Gateway must use HTTPS')
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('MediPrisma Gateway URL cannot contain credentials or parameters')
+  }
+  return parsed.toString()
+}
+
+function gatewayPath(
+  input: Parameters<typeof fetch>[0],
+  config: OpenAiCompatibleConfig,
+  origin?: string,
+): string {
+  const base = new URL(resolveOpenAiCompatibleBaseUrl(config.baseUrl, origin))
+  const request = new URL(requestUrl(input))
+  const basePath = base.pathname.replace(/\/+$/, '')
+  const prefix = `${basePath}/`
+  if (
+    base.origin !== request.origin ||
+    !request.pathname.startsWith(prefix) ||
+    request.search ||
+    request.hash
+  ) {
+    throw new Error('Gateway request does not match the configured endpoint')
+  }
+  const path = request.pathname.slice(prefix.length).replace(/^\/+|\/+$/g, '')
+  if (path !== 'models' && path !== 'chat/completions') {
+    throw new Error('This MediPrisma Gateway does not support that API path')
+  }
+  return path
+}
+
+/** Route an upstream-shaped SDK request through the explicit BYO Firebase
+ * gateway. Authorization is reserved for Firebase Auth; the user's provider
+ * key travels in a separate, non-persisted header. */
+export function createOpenAiCompatibleGatewayFetch(
+  config: OpenAiCompatibleConfig,
+  options: { fetchImpl?: typeof fetch; origin?: string; gatewayUrl?: string } = {},
+): typeof fetch {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const gatewayUrl = options.gatewayUrl ?? (
+    ENV_CONFIG.hasOpenAiCompatibleGateway
+      ? ENV_CONFIG.openAiCompatibleGatewayUrl
+      : ''
+  )
+  const validatedGatewayUrl = gatewayUrl ? validateGatewayUrl(gatewayUrl) : ''
+  return async (input, init) => {
+    if (!validatedGatewayUrl) {
+      throw new Error('MediPrisma Gateway is not configured for this deployment')
+    }
+    const resolvedBaseUrl = resolveOpenAiCompatibleBaseUrl(config.baseUrl, options.origin)
+    if (!resolvedBaseUrl.startsWith('https://')) {
+      throw new Error('MediPrisma Gateway accepts only public HTTPS endpoints')
+    }
+
+    const isRequest = typeof Request !== 'undefined' && input instanceof Request
+    const headers = new Headers(isRequest ? input.headers : undefined)
+    new Headers(init?.headers).forEach((value, key) => headers.set(key, value))
+    headers.delete('authorization')
+    headers.delete('x-api-key')
+    headers.delete('x-goog-api-key')
+    headers.set('X-Upstream-Base-URL', resolvedBaseUrl)
+    headers.set('X-Upstream-Path', gatewayPath(input, config, options.origin))
+    if (config.apiKey?.trim()) {
+      headers.set('X-Upstream-API-Key', config.apiKey.trim())
+    } else {
+      headers.delete('X-Upstream-API-Key')
+    }
+    if (ENV_CONFIG.proxyClientKey) {
+      headers.set('x-proxy-key', ENV_CONFIG.proxyClientKey)
+    }
+
+    const idToken = await getProxyIdToken()
+    if (!idToken) {
+      throw new Error('MediPrisma Gateway session unavailable; please sign in again')
+    }
+    headers.set('Authorization', `Bearer ${idToken}`)
+
+    const appCheckToken = await getAppCheckToken()
+    if (appCheckToken) headers.set('X-Firebase-AppCheck', appCheckToken)
+
+    return fetchImpl(validatedGatewayUrl, {
+      ...init,
+      headers,
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+    })
+  }
+}
+
+export function createConfiguredOpenAiCompatibleFetch(
+  config: OpenAiCompatibleConfig,
+): typeof fetch {
+  return normalizeOpenAiCompatibleTransport(config.transport) === 'mediprisma-gateway'
+    ? createOpenAiCompatibleGatewayFetch(config)
+    : createOpenAiCompatibleFetch(config.apiKey)
 }
 export function openAiCompatibleSdkKey(apiKey: string | null | undefined): string {
   return apiKey?.trim() || NO_AUTH_SDK_KEY
@@ -52,21 +170,43 @@ async function readError(response: Response): Promise<string> {
   return response.statusText || `HTTP ${response.status}`
 }
 
+async function httpErrorMessage(response: Response): Promise<string> {
+  const status = `HTTP ${response.status}`
+  const detail = await readError(response)
+  return detail === status ? status : `${status}: ${detail}`
+}
+
 /**
- * Browser-only connection test. GET /models is non-generative; endpoints that
+ * Connection test. GET /models is non-generative; endpoints that
  * do not implement it fall back to a one-token, patient-free chat probe.
- * Nothing is relayed through a Next.js route.
+ * Direct mode stays browser-only; explicit Gateway mode uses Firebase.
  */
 export async function testOpenAiCompatibleConnection(
   config: OpenAiCompatibleConfig,
-  options: { timeoutMs?: number; fetchImpl?: typeof fetch; origin?: string } = {},
+  options: {
+    timeoutMs?: number
+    fetchImpl?: typeof fetch
+    origin?: string
+    gatewayUrl?: string
+  } = {},
 ): Promise<OpenAiCompatibleConnectionResult> {
   if (!isOpenAiCompatibleReady(config)) {
     throw new Error('Base URL and model ID are required')
   }
 
-  const timeoutMs = options.timeoutMs ?? 10_000
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const usesGateway = normalizeOpenAiCompatibleTransport(config.transport) ===
+    'mediprisma-gateway'
+  // A cold Firebase v2 instance plus provider discovery can exceed the direct
+  // LAN probe budget. This still stays bounded and never contains patient data.
+  const timeoutMs = options.timeoutMs ?? (usesGateway ? 30_000 : 10_000)
+  const rawFetch = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const fetchImpl = usesGateway
+    ? createOpenAiCompatibleGatewayFetch(config, {
+      fetchImpl: rawFetch,
+      origin: options.origin,
+      gatewayUrl: options.gatewayUrl,
+    })
+    : rawFetch
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   const commonInit: RequestInit = {
@@ -102,10 +242,12 @@ export async function testOpenAiCompatibleConnection(
       }
     }
 
-    // Authentication and server failures are authoritative; a missing or
-    // unsupported /models route is the compatibility case that merits a probe.
-    if (modelsResponse.status === 401 || modelsResponse.status === 403 || modelsResponse.status >= 500) {
-      throw new Error(`HTTP ${modelsResponse.status}: ${await readError(modelsResponse)}`)
+    // Some providers accept a scoped key for Chat Completions but deliberately
+    // forbid model discovery. A 403 therefore merits the same patient-free
+    // probe as a missing /models route. A 401 and server failures remain
+    // authoritative so an invalid key or unhealthy server is not retried.
+    if (modelsResponse.status === 401 || modelsResponse.status >= 500) {
+      throw new Error(await httpErrorMessage(modelsResponse))
     }
 
     const probeHeaders = requestHeaders(config.apiKey)
@@ -125,7 +267,7 @@ export async function testOpenAiCompatibleConnection(
       },
     )
     if (!chatResponse.ok) {
-      throw new Error(`HTTP ${chatResponse.status}: ${await readError(chatResponse)}`)
+      throw new Error(await httpErrorMessage(chatResponse))
     }
     return { models: [], modelFound: null, usedChatProbe: true }
   } finally {

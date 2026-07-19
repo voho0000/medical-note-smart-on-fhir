@@ -11,9 +11,10 @@ import {
   isModelId,
   ModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
-import { hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
+import { ENV_CONFIG, hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
 import { useOpenAiCompatibleConfig } from '@/src/application/stores/ai-config.store'
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleReady, isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
+import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
 
 export interface ModelEntry {
   id: string
@@ -78,8 +79,8 @@ export function useModelSelection(
     id: CUSTOM_OPENAI_MODEL_ID,
     label: openAiCompatible.modelId.trim() || t.settings.openAiCompatibleModelLabel,
     description: openAiCompatible.baseUrl || t.settings.openAiCompatibleNotConfigured,
-    isLocked: !isOpenAiCompatibleReady(openAiCompatible),
-    configureInSettings: !isOpenAiCompatibleReady(openAiCompatible),
+    isLocked: !isOpenAiCompatibleRuntimeReady(openAiCompatible),
+    configureInSettings: !isOpenAiCompatibleRuntimeReady(openAiCompatible),
   }], [openAiCompatible, t.settings.openAiCompatibleModelLabel, t.settings.openAiCompatibleNotConfigured])
 
   const handleSelectModel = (candidate: string) => {
@@ -88,8 +89,13 @@ export function useModelSelection(
     if (!definition) return
 
     if (definition.provider === 'custom') {
-      if (!isOpenAiCompatibleReady(openAiCompatible)) {
-        toast.error(t.settings.openAiCompatibleNotConfigured)
+      if (!isOpenAiCompatibleRuntimeReady(openAiCompatible)) {
+        const gatewayUnavailable = isOpenAiCompatibleReady(openAiCompatible) &&
+          normalizeOpenAiCompatibleTransport(openAiCompatible.transport) === 'mediprisma-gateway' &&
+          !ENV_CONFIG.hasOpenAiCompatibleGateway
+        toast.error(gatewayUnavailable
+          ? t.settings.openAiCompatibleGatewayUnavailable
+          : t.settings.openAiCompatibleNotConfigured)
         return
       }
       setModel(candidate)
@@ -133,8 +139,10 @@ export function useModelSelection(
     if (definition.disabled) return t.settings.modelUnavailable
 
     if (definition.provider === 'custom') {
-      return isOpenAiCompatibleReady(openAiCompatible)
-        ? t.settings.openAiCompatibleDirectStatus
+      return isOpenAiCompatibleRuntimeReady(openAiCompatible)
+        ? normalizeOpenAiCompatibleTransport(openAiCompatible.transport) === 'mediprisma-gateway'
+          ? t.settings.openAiCompatibleGatewayStatus
+          : t.settings.openAiCompatibleDirectStatus
         : t.settings.openAiCompatibleNotConfigured
     }
 

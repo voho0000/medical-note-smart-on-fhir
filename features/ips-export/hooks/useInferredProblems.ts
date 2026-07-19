@@ -33,7 +33,7 @@ import { mapSummaryProblemsToIpsCandidates } from '../utils/summary-problems-map
 import { buildEncounterIcdCandidates } from '../utils/encounter-icd-candidates'
 import type { InferredProblem } from '../utils/inferred-problems-types'
 import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 
 export type InferenceStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -94,7 +94,7 @@ export function useInferredProblems(): UseInferredProblemsResult {
   const [confirmedIds, setConfirmedIds] = useState<ReadonlySet<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
-  const customAvailable = isOpenAiCompatibleReady(openAiCompatible)
+  const customAvailable = isOpenAiCompatibleRuntimeReady(openAiCompatible)
   const available = computeAvailable(apiKey, geminiKey, customAvailable)
 
   // Read-only peek at the generated Medical Summary (medical audience, any

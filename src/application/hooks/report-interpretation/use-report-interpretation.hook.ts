@@ -30,7 +30,7 @@ import type {
 } from '@/src/core/entities/report-interpretation.entity'
 import { useOpenAiCompatibleConfig } from '@/src/application/stores/ai-config.store'
 import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
 
 // Persist a completed interpretation so a page reload reuses it instead of
@@ -82,7 +82,7 @@ export function useReportInterpretation(
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const openAiCompatible = useOpenAiCompatibleConfig()
-  const effectiveModelId = isOpenAiCompatibleReady(openAiCompatible)
+  const effectiveModelId = isOpenAiCompatibleRuntimeReady(openAiCompatible)
     ? CUSTOM_OPENAI_MODEL_ID
     : REPORT_INTERPRETATION_MODEL_ID
   const runtimeModelId = modelRuntimeIdentity(effectiveModelId, openAiCompatible)

@@ -22,7 +22,8 @@ import { useSummaryPrefsStore } from "@/src/application/hooks/medical-summary/us
 import { useSafetyPrefsStore } from "@/src/application/hooks/safety-alerts/use-safety-alerts.hook"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
-import { isOpenAiCompatibleReady } from "@/src/shared/utils/openai-compatible.utils"
+import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
+import { normalizeOpenAiCompatibleTransport } from "@/src/shared/types/openai-compatible.types"
 import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
 import {
@@ -190,15 +191,22 @@ export function ModelAndKeySettings({
   }, [claudeKey])
 
   const localConfigured = Boolean(openAiCompatible.baseUrl && openAiCompatible.modelId)
-  const localReady = isOpenAiCompatibleReady(openAiCompatible)
+  const localReady = isOpenAiCompatibleRuntimeReady(openAiCompatible)
   const localStatus = localReady
     ? t.settings.openAiCompatibleEnabled
     : localConfigured
       ? t.settings.openAiCompatibleDisabled
       : t.settings.openAiCompatibleNotConfigured
   const localTone: StatusTone = localReady ? "success" : localConfigured ? "warning" : "muted"
+  const localUsesGateway = normalizeOpenAiCompatibleTransport(
+    openAiCompatible.transport,
+  ) === "mediprisma-gateway"
   const localDetail = localConfigured
-    ? `${openAiCompatible.modelId} · ${endpointLabel(openAiCompatible.baseUrl)}`
+    ? `${openAiCompatible.modelId} · ${endpointLabel(openAiCompatible.baseUrl)} · ${
+      localUsesGateway
+        ? t.settings.openAiCompatibleTransportGateway
+        : t.settings.openAiCompatibleTransportDirect
+    }`
     : t.settings.openAiCompatibleDescription
 
   const cloudKeyCount = [apiKey, geminiKey, claudeKey].filter((key) => Boolean(key?.trim())).length
@@ -330,7 +338,12 @@ export function ModelAndKeySettings({
             hidden={openSection !== "local"}
             className="pb-3 data-[state=closed]:hidden"
           >
-            <div className="rounded-md border border-emerald-200 bg-emerald-50/30 p-3 dark:border-emerald-900 dark:bg-emerald-950/15">
+            <div className={cn(
+              "rounded-md border p-3",
+              localUsesGateway
+                ? "border-amber-200 bg-amber-50/20 dark:border-amber-900 dark:bg-amber-950/10"
+                : "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900 dark:bg-emerald-950/15",
+            )}>
               <OpenAiCompatibleSettings />
             </div>
           </AccordionContent>

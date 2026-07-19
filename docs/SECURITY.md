@@ -43,17 +43,19 @@
 - OpenAI、Gemini、Claude、Perplexity key 在寫入 storage 前加密。
 - 新使用者預設 `sessionStorage`，關閉視窗後消失；只有明確開啟「記住此裝置」才改為 localStorage。
 - key 做 trim 與 header-safe 驗證，避免錯誤內容進入 Authorization header。
-- provider user key 只在 direct-provider path 使用；proxy interceptor 會先移除 provider credential header。
-- 院內 OpenAI-compatible key 與其他 provider key 使用相同的 session-first、加密 browser storage；optional key 只送往使用者設定的 endpoint。
+- 一般 provider user key 只在 direct-provider path 使用；owner-funded proxy interceptor 會先移除 provider credential header。
+- 自訂 OpenAI-compatible key 使用相同的 session-first、加密 browser storage。direct 模式只送往使用者設定的 endpoint；明確選擇 Firebase Gateway 時則以獨立 header 暫時經過 Firebase 後轉送。
 
-### 院內 OpenAI-compatible endpoint
+### 自訂 OpenAI-compatible endpoint
 
 - 接受 HTTPS hostname、IPv4／IPv6、port 與同源 `/ai/v1`；HTTP 僅允許 loopback 開發環境。
-- 拒絕 URL userinfo、query、fragment、非 HTTP(S) scheme 與誤填的完整 `/chat/completions`。
-- 連線測試完全在 browser 執行，不提供 server-side arbitrary-URL fetch，因此不建立 SSRF primitive。
-- 自訂模型使用固定 logical model id，實際 upstream model id 只在 direct request body；endpoint／model fingerprint 納入 AI cache identity。
+- 設定畫面接受完整 `/chat/completions` 或舊版 Base URL，兩者都先正規化成 canonical Base；仍拒絕 URL userinfo、query、fragment 與非 HTTP(S) scheme。
+- direct 連線測試完全在 browser 執行；不會自動 fallback 到 Firebase。
+- Firebase Gateway 是 explicit opt-in，只接受部署白名單中的公開 HTTPS Base URL、固定 `models`／`chat/completions` path 與對應 method；拒絕 IP、非 443 port、redirect、URL credentials、query 與 fragment，避免形成 SSRF／通用轉送器。
+- Gateway 的 `Authorization` 專供 Firebase ID token；使用者 provider key 以 `X-Upstream-API-Key` 在單次 request memory 中轉送，不寫入 Firestore 或 logs。Gateway Function 明確使用 `secrets: []`，無法取得 owner-funded provider keys。
+- 自訂模型使用固定 logical model id；transport／endpoint／model fingerprint 納入 AI cache identity。
 - 自訂 endpoint unavailable 時 fail closed，不 fallback 到 owner proxy。
-- 院內模式停用 Firestore chat auto-save／smart title、移除 Perplexity tool，follow-up 與可支援的語音功能改走相同 endpoint。
+- 自訂模型停用 Firestore chat auto-save／smart title、移除 Perplexity tool；direct 模式可使用相同 endpoint 的語音功能，Firebase Gateway 目前只支援模型清單與文字 Chat Completions。
 - `NEXT_PUBLIC_OFFLINE_MODE=1` 不初始化 Firebase/Auth/App Check；`build:intranet` 另會清空所有 cloud proxy URL。
 
 瀏覽器端加密無法防禦已執行在同一 origin 的惡意 JavaScript／XSS；它主要降低 storage 被直接讀取或共用工作站殘留的風險。
@@ -64,6 +66,7 @@
 - 有設定時加入 Firebase App Check token。
 - `NEXT_PUBLIC_PROXY_KEY`／`x-proxy-key` 位於公開前端，不能當真正身分驗證；後端必須驗 ID token、App Check、quota、allowed model 與 CORS。
 - Upstream provider keys 只存在後端 secrets。
+- 另有使用者自備 key 的 Firebase Gateway；它與 owner-funded proxy 分離、強制 App Check、Firebase Auth、per-uid quota 與 upstream allowlist，且 UI 必須明示資料會經過 Firebase。
 
 ### PII minimization
 

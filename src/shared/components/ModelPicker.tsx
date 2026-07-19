@@ -30,7 +30,7 @@ import {
   getModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 
 interface ModelPickerProps {
@@ -74,7 +74,7 @@ export function ModelPicker({
       openAiKey: apiKey,
       geminiKey,
       claudeKey,
-      customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+      customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
     },
     fallbackModelId,
   )

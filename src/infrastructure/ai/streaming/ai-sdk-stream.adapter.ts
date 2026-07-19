@@ -15,7 +15,7 @@ import {
   gateModel,
 } from "@/src/shared/constants/ai-models.constants"
 import type { OpenAiCompatibleConfig } from "@/src/shared/types/openai-compatible.types"
-import { isOpenAiCompatibleReady } from "@/src/shared/utils/openai-compatible.utils"
+import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
 import { aiProviderFactory } from "../factories/ai-provider.factory"
 import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "../services/openai-compatible.service"
 import { AiError, AiErrorCode } from "@/src/core/errors"
@@ -45,7 +45,7 @@ export class AiSdkStreamAdapter {
     // instead of dead-ending on a missing key (e.g. a model that used to be free
     // and became key-gated). No caller can bypass this.
     const isCustom = config.model === CUSTOM_OPENAI_MODEL_ID
-    if (isCustom && !isOpenAiCompatibleReady(config.openAiCompatible)) {
+    if (isCustom && !isOpenAiCompatibleRuntimeReady(config.openAiCompatible)) {
       throw new Error('OpenAI-compatible endpoint is not configured')
     }
     const modelId = isCustom

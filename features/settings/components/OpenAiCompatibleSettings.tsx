@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, Eye, EyeOff, Loader2, Network } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Cloud, Eye, EyeOff, Loader2, Network, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,10 +22,16 @@ import {
   MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   normalizeOpenAiCompatibleContextWindow,
+  normalizeOpenAiCompatibleTransport,
   suggestedOpenAiCompatibleContextWindow,
 } from '@/src/shared/types/openai-compatible.types'
+import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { isUsableApiKey } from '@/src/shared/utils/api-key.utils'
-import { normalizeOpenAiCompatibleBaseUrl, OpenAiCompatibleUrlError } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  formatOpenAiCompatibleChatCompletionsUrl,
+  normalizeOpenAiCompatibleBaseUrl,
+  OpenAiCompatibleUrlError,
+} from '@/src/shared/utils/openai-compatible.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
 
 interface TestState {
@@ -39,12 +45,14 @@ export function OpenAiCompatibleSettings() {
   const setConfig = useAiConfigStore((state) => state.setOpenAiCompatibleConfig)
   const setEnabled = useAiConfigStore((state) => state.setOpenAiCompatibleEnabled)
   const clearConfig = useAiConfigStore((state) => state.clearOpenAiCompatibleConfig)
-  const [baseUrl, setBaseUrl] = useState(saved.baseUrl)
+  const savedEndpointUrl = formatOpenAiCompatibleChatCompletionsUrl(saved.baseUrl)
+  const [baseUrl, setBaseUrl] = useState(savedEndpointUrl)
   const [modelId, setModelId] = useState(saved.modelId)
   const [contextWindowTokens, setContextWindowTokens] = useState(String(
     normalizeOpenAiCompatibleContextWindow(saved.contextWindowTokens, saved.modelId),
   ))
   const [apiKey, setApiKey] = useState(saved.apiKey ?? '')
+  const [transport, setTransport] = useState(normalizeOpenAiCompatibleTransport(saved.transport))
   const [showApiKey, setShowApiKey] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -55,27 +63,38 @@ export function OpenAiCompatibleSettings() {
     // The encrypted profile rehydrates asynchronously from the selected
     // browser storage, so the editable draft must follow that external store.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBaseUrl(saved.baseUrl)
+    setBaseUrl(formatOpenAiCompatibleChatCompletionsUrl(saved.baseUrl))
     setModelId(saved.modelId)
     setContextWindowTokens(String(
       normalizeOpenAiCompatibleContextWindow(saved.contextWindowTokens, saved.modelId),
     ))
     setApiKey(saved.apiKey ?? '')
+    setTransport(normalizeOpenAiCompatibleTransport(saved.transport))
   }, [saved])
 
   const modelOptionsId = 'openai-compatible-model-options'
   const draftChanged = useMemo(() => (
-    baseUrl !== saved.baseUrl ||
+    baseUrl !== savedEndpointUrl ||
     modelId !== saved.modelId ||
     Number(contextWindowTokens) !== normalizeOpenAiCompatibleContextWindow(
       saved.contextWindowTokens,
       saved.modelId,
     ) ||
-    apiKey !== (saved.apiKey ?? '')
-  ), [apiKey, baseUrl, contextWindowTokens, modelId, saved])
+    apiKey !== (saved.apiKey ?? '') ||
+    transport !== normalizeOpenAiCompatibleTransport(saved.transport)
+  ), [apiKey, baseUrl, contextWindowTokens, modelId, saved, savedEndpointUrl, transport])
 
   const normalizeDraft = (): OpenAiCompatibleConfig => {
     const normalizedBaseUrl = normalizeOpenAiCompatibleBaseUrl(baseUrl)
+    const normalizedTransport = normalizeOpenAiCompatibleTransport(transport)
+    if (normalizedTransport === 'mediprisma-gateway') {
+      if (!ENV_CONFIG.hasOpenAiCompatibleGateway) {
+        throw new Error(t.settings.openAiCompatibleGatewayUnavailable)
+      }
+      if (!normalizedBaseUrl.startsWith('https://')) {
+        throw new Error(t.settings.openAiCompatibleGatewayHttpsOnly)
+      }
+    }
     if (
       typeof window !== 'undefined' &&
       window.location.protocol === 'https:' &&
@@ -104,6 +123,7 @@ export function OpenAiCompatibleSettings() {
       baseUrl: normalizedBaseUrl,
       modelId: normalizedModelId,
       apiKey: apiKey.trim() || null,
+      transport: normalizedTransport,
       contextWindowTokens: normalizedContextWindow,
     }
   }
@@ -118,7 +138,6 @@ export function OpenAiCompatibleSettings() {
         URL_CREDENTIALS: t.settings.openAiCompatibleNoUrlCredentials,
         URL_QUERY: t.settings.openAiCompatibleNoQuery,
         URL_FRAGMENT: t.settings.openAiCompatibleNoFragment,
-        FULL_COMPLETIONS_URL: t.settings.openAiCompatibleBaseOnly,
       }
       return byCode[error.code] ?? error.message
     }
@@ -132,10 +151,11 @@ export function OpenAiCompatibleSettings() {
     try {
       const next = normalizeDraft()
       setConfig(next)
-      setBaseUrl(next.baseUrl)
+      setBaseUrl(formatOpenAiCompatibleChatCompletionsUrl(next.baseUrl))
       setModelId(next.modelId)
       setContextWindowTokens(String(next.contextWindowTokens))
       setApiKey(next.apiKey ?? '')
+      setTransport(normalizeOpenAiCompatibleTransport(next.transport))
       setTestState(null)
       toast.success(t.settings.openAiCompatibleSaved)
     } catch (error) {
@@ -177,6 +197,7 @@ export function OpenAiCompatibleSettings() {
     setModelId('')
     setContextWindowTokens(String(DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW))
     setApiKey('')
+    setTransport('direct')
     setDiscoveredModels([])
     setTestState(null)
     toast.success(t.settings.openAiCompatibleCleared)
@@ -191,14 +212,20 @@ export function OpenAiCompatibleSettings() {
               {t.settings.openAiCompatibleBaseUrl}
             </Label>
             <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
-              <p className="text-xs">{t.settings.openAiCompatibleBaseUrlHint}</p>
+              <p className="text-xs">
+                {transport === 'mediprisma-gateway'
+                  ? t.settings.openAiCompatibleGatewayBaseUrlHint
+                  : t.settings.openAiCompatibleBaseUrlHint}
+              </p>
             </InfoHint>
           </div>
           <Input
             id="openai-compatible-base-url"
             value={baseUrl}
             onChange={(event) => { setBaseUrl(event.target.value); setTestState(null) }}
-            placeholder="https://llm.intra.example.org/v1"
+            placeholder={transport === 'mediprisma-gateway'
+              ? 'https://ai.j3soon.com/v1/chat/completions'
+              : 'https://llm.intra.example.org/v1/chat/completions'}
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
@@ -225,7 +252,9 @@ export function OpenAiCompatibleSettings() {
               }
               setTestState(null)
             }}
-            placeholder="meta-llama/Llama-3.3-70B-Instruct"
+            placeholder={transport === 'mediprisma-gateway'
+              ? 'MODEL_NAME'
+              : 'meta-llama/Llama-3.3-70B-Instruct'}
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
@@ -234,6 +263,57 @@ export function OpenAiCompatibleSettings() {
             {discoveredModels.map((id) => <option key={id} value={id} />)}
           </datalist>
         </div>
+
+        {!ENV_CONFIG.offlineMode && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t.settings.openAiCompatibleTransport}</Label>
+            <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted/20 p-1">
+              <button
+                type="button"
+                onClick={() => { setTransport('direct'); setTestState(null) }}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
+                  transport === 'direct'
+                    ? 'bg-background font-medium shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                aria-pressed={transport === 'direct'}
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                {t.settings.openAiCompatibleTransportDirect}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setTransport('mediprisma-gateway'); setTestState(null) }}
+                disabled={!ENV_CONFIG.hasOpenAiCompatibleGateway}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
+                  transport === 'mediprisma-gateway'
+                    ? 'bg-background font-medium shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                  !ENV_CONFIG.hasOpenAiCompatibleGateway && 'cursor-not-allowed opacity-50',
+                )}
+                aria-pressed={transport === 'mediprisma-gateway'}
+                title={!ENV_CONFIG.hasOpenAiCompatibleGateway
+                  ? t.settings.openAiCompatibleGatewayUnavailable
+                  : undefined}
+              >
+                <Cloud className="h-3.5 w-3.5" />
+                {t.settings.openAiCompatibleTransportGateway}
+              </button>
+            </div>
+            <p className={cn(
+              'text-[0.6875rem] leading-relaxed',
+              transport === 'mediprisma-gateway'
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-muted-foreground',
+            )}>
+              {transport === 'mediprisma-gateway'
+                ? t.settings.openAiCompatibleGatewayDescription
+                : t.settings.openAiCompatibleDirectDescription}
+            </p>
+          </div>
+        )}
 
       </div>
 
@@ -282,7 +362,11 @@ export function OpenAiCompatibleSettings() {
                   {t.settings.openAiCompatibleApiKey}
                 </Label>
                 <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
-                  <p className="text-xs">{t.settings.openAiCompatibleApiKeyHint}</p>
+                  <p className="text-xs">
+                    {transport === 'mediprisma-gateway'
+                      ? t.settings.openAiCompatibleGatewayApiKeyHint
+                      : t.settings.openAiCompatibleApiKeyHint}
+                  </p>
                 </InfoHint>
               </div>
               <div className="relative">
@@ -292,7 +376,9 @@ export function OpenAiCompatibleSettings() {
                   type="text"
                   value={apiKey}
                   onChange={(event) => { setApiKey(event.target.value); setTestState(null) }}
-                  placeholder={t.settings.openAiCompatibleApiKeyPlaceholder}
+                  placeholder={transport === 'mediprisma-gateway'
+                    ? t.settings.openAiCompatibleGatewayApiKeyPlaceholder
+                    : t.settings.openAiCompatibleApiKeyPlaceholder}
                   className={cn('pr-10', !showApiKey && '[-webkit-text-security:disc]')}
                   autoComplete="off"
                   autoCorrect="off"
@@ -336,7 +422,11 @@ export function OpenAiCompatibleSettings() {
           {testing ? t.settings.openAiCompatibleTesting : t.settings.openAiCompatibleTest}
         </Button>
         <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
-          <p className="text-xs">{t.settings.openAiCompatibleTestPrivacy}</p>
+          <p className="text-xs">
+            {transport === 'mediprisma-gateway'
+              ? t.settings.openAiCompatibleGatewayTestPrivacy
+              : t.settings.openAiCompatibleTestPrivacy}
+          </p>
         </InfoHint>
         <Button size="sm" type="button" onClick={handleSave} disabled={!baseUrl.trim() || !modelId.trim()}>
           {draftChanged || !saved.baseUrl

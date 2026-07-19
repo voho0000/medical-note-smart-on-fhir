@@ -22,7 +22,7 @@ import {
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import { useAllApiKeys } from './ai-config.store'
-import { isOpenAiCompatibleReady } from '@/src/shared/utils/openai-compatible.utils'
+import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 
 export type ModelPrefConsumer = 'chat' | 'insights'
 
@@ -100,7 +100,7 @@ export function useEffectiveModel(consumer: ModelPrefConsumer): string {
       openAiKey: apiKey,
       geminiKey,
       claudeKey,
-      customAvailable: isOpenAiCompatibleReady(openAiCompatible),
+      customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
     },
     MODEL_PREF_DEFAULTS[consumer],
   )

@@ -16,6 +16,7 @@ import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatibl
 import {
   createEmptyOpenAiCompatibleConfig,
   normalizeOpenAiCompatibleContextWindow,
+  normalizeOpenAiCompatibleTransport,
 } from '@/src/shared/types/openai-compatible.types'
 import { normalizeOpenAiCompatibleBaseUrl } from '@/src/shared/utils/openai-compatible.utils'
 
@@ -101,7 +102,7 @@ const saveEncryptedKey = async (storageType: StorageType, key: string, value: st
 
 type StoredOpenAiCompatibleConfig = Pick<
   OpenAiCompatibleConfig,
-  'enabled' | 'baseUrl' | 'modelId' | 'contextWindowTokens'
+  'enabled' | 'baseUrl' | 'modelId' | 'contextWindowTokens' | 'transport'
 >
 
 const loadOpenAiCompatibleConfig = (
@@ -122,6 +123,7 @@ const loadOpenAiCompatibleConfig = (
       enabled: parsed.enabled === true,
       baseUrl,
       modelId,
+      transport: normalizeOpenAiCompatibleTransport(parsed.transport),
       contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
         parsed.contextWindowTokens,
         modelId,
@@ -147,6 +149,7 @@ const saveOpenAiCompatibleConfig = (
     enabled: config.enabled,
     baseUrl: config.baseUrl,
     modelId: config.modelId,
+    transport: normalizeOpenAiCompatibleTransport(config.transport),
     contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
       config.contextWindowTokens,
       config.modelId,
@@ -207,6 +210,7 @@ export const useAiConfigStore = create<AiConfigState>()(
           baseUrl: normalizeOpenAiCompatibleBaseUrl(config.baseUrl),
           modelId: config.modelId.trim(),
           apiKey: sanitizeApiKey(config.apiKey),
+          transport: normalizeOpenAiCompatibleTransport(config.transport),
           contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
             config.contextWindowTokens,
             config.modelId,

@@ -94,14 +94,18 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     renderSettings(true)
 
     const localTrigger = screen.getByRole('button', {
-      name: /院內／地端模型/,
+      name: /自訂 AI 端點/,
     })
     expect(localTrigger).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByRole('textbox', { name: 'API Base URL', hidden: true })).not.toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'Chat Completions 網址', hidden: true })).not.toBeVisible()
 
     fireEvent.click(localTrigger)
-    expect(screen.getByRole('textbox', { name: 'API Base URL' })).toHaveValue(
-      'http://127.0.0.1:11434/v1',
+    expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' })).toHaveValue(
+      'http://127.0.0.1:11434/v1/chat/completions',
+    )
+    expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' })).toHaveAttribute(
+      'placeholder',
+      'https://llm.intra.example.org/v1/chat/completions',
     )
     expect(screen.getByRole('combobox', { name: '上游模型 ID' })).toHaveValue('qwen2.5:7b')
     expect(screen.queryByRole('spinbutton', { name: '內容視窗（tokens）' })).not.toBeInTheDocument()
@@ -124,7 +128,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       },
     })
     const { unmount } = renderSettings(true)
-    expect(screen.getByRole('button', { name: /院內／地端模型/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /自訂 AI 端點/ })).toHaveAttribute(
       'aria-expanded',
       'true',
     )
@@ -148,16 +152,18 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     renderSettings(true)
 
     const localTrigger = screen.getByRole('button', {
-      name: /院內／地端模型/,
+      name: /自訂 AI 端點/,
     })
     fireEvent.click(localTrigger)
-    const endpointInput = screen.getByRole('textbox', { name: 'API Base URL' })
-    fireEvent.change(endpointInput, { target: { value: 'https://new.intra.example/v1' } })
+    const endpointInput = screen.getByRole('textbox', { name: 'Chat Completions 網址' })
+    fireEvent.change(endpointInput, {
+      target: { value: 'https://new.intra.example/v1/chat/completions' },
+    })
 
     fireEvent.click(localTrigger)
     fireEvent.click(localTrigger)
-    expect(screen.getByRole('textbox', { name: 'API Base URL' })).toHaveValue(
-      'https://new.intra.example/v1',
+    expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' })).toHaveValue(
+      'https://new.intra.example/v1/chat/completions',
     )
   })
 

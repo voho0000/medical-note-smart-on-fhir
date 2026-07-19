@@ -5,7 +5,7 @@ import {
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import { normalizeOpenAiCompatibleContextWindow } from '@/src/shared/types/openai-compatible.types'
 import {
-  isOpenAiCompatibleReady,
+  isOpenAiCompatibleRuntimeReady,
   openAiCompatibleCacheIdentity,
 } from '@/src/shared/utils/openai-compatible.utils'
 
@@ -34,7 +34,7 @@ export function hasDirectModelAccess(
   customConfig?: OpenAiCompatibleConfig | null,
 ): boolean {
   if (modelId === CUSTOM_OPENAI_MODEL_ID) {
-    return isOpenAiCompatibleReady(customConfig)
+    return isOpenAiCompatibleRuntimeReady(customConfig)
   }
   return Boolean(apiKeyForModel(modelId, keys, customConfig))
 }

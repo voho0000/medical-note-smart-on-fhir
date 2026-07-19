@@ -2,9 +2,11 @@ import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.ent
 import { AiError, AiErrorCode } from '@/src/core/errors'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import {
-  isOpenAiCompatibleReady,
+  isOpenAiCompatibleRuntimeReady,
   openAiCompatibleEndpointUrl,
 } from '@/src/shared/utils/openai-compatible.utils'
+import { createConfiguredOpenAiCompatibleFetch } from
+  '@/src/infrastructure/ai/openai-compatible/openai-compatible.client'
 
 // Local 7B-class models can spend several minutes evaluating a long clinical
 // prompt before returning a non-streaming response. Cloud-provider services
@@ -26,12 +28,12 @@ export class OpenAiCompatibleService {
   }
 
   isAvailable(): boolean {
-    return isOpenAiCompatibleReady(this.config)
+    return isOpenAiCompatibleRuntimeReady(this.config)
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
     const config = this.config
-    if (!isOpenAiCompatibleReady(config)) {
+    if (!isOpenAiCompatibleRuntimeReady(config)) {
       throw new AiError(
         'OpenAI-compatible endpoint is not configured',
         AiErrorCode.API_KEY_MISSING,
@@ -64,7 +66,7 @@ export class OpenAiCompatibleService {
     else request.signal?.addEventListener('abort', forwardAbort, { once: true })
 
     try {
-      const response = await fetch(
+      const response = await createConfiguredOpenAiCompatibleFetch(config)(
         openAiCompatibleEndpointUrl(config.baseUrl, 'chat/completions'),
         {
           method: 'POST',
