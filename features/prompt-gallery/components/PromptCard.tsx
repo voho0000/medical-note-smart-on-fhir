@@ -71,32 +71,30 @@ export function PromptCard({ prompt, onPreview, currentUserId }: PromptCardProps
       onClick={() => onPreview(prompt)}
     >
       <CardHeader className="!pb-0 !pt-2 !px-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <CardTitle className="text-sm line-clamp-1 leading-tight">{prompt.title}</CardTitle>
-            {isMyPrompt && (
-              <Badge className="text-[0.5625rem] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border-0">
-                {t.promptGallery.myBadge}
+        <CardTitle className="text-sm line-clamp-1 leading-tight" title={prompt.title}>
+          {prompt.title}
+        </CardTitle>
+        <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-1">
+          {prompt.types.map((type) => {
+            const TypeIcon = TYPE_COLORS[type as keyof typeof TYPE_COLORS]?.icon || MessageSquare
+            return (
+              <Badge
+                key={type}
+                className={`text-[0.625rem] px-1.5 py-0 h-4 border-0 flex items-center gap-0.5 ${getTypeBadgeStyle(type)}`}
+              >
+                <TypeIcon className="h-2.5 w-2.5" />
+                {getTypeLabel(type)}
               </Badge>
-            )}
-            {isPopular && (
-              <Flame className="h-3.5 w-3.5 text-orange-500 shrink-0" />
-            )}
-          </div>
-          <div className="flex gap-1 shrink-0">
-            {prompt.types.map((type) => {
-              const TypeIcon = TYPE_COLORS[type as keyof typeof TYPE_COLORS]?.icon || MessageSquare
-              return (
-                <Badge 
-                  key={type} 
-                  className={`text-[0.625rem] px-1.5 py-0 h-4 border-0 flex items-center gap-0.5 ${getTypeBadgeStyle(type)}`}
-                >
-                  <TypeIcon className="h-2.5 w-2.5" />
-                  {getTypeLabel(type)}
-                </Badge>
-              )
-            })}
-          </div>
+            )
+          })}
+          {isMyPrompt && (
+            <Badge className="text-[0.5625rem] px-1.5 py-0 h-4 shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border-0">
+              {t.promptGallery.myBadge}
+            </Badge>
+          )}
+          {isPopular && (
+            <Flame className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+          )}
         </div>
       </CardHeader>
 

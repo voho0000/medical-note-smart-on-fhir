@@ -13,6 +13,7 @@ export interface ClinicalInsightPanel {
   autoGenerate: boolean
   order: number
   audience: PanelAudience
+  templateLibraryRevision?: number
   createdAt?: Date
   updatedAt?: Date
 }
@@ -25,6 +26,7 @@ interface FirestoreClinicalInsightPanel {
   autoGenerate: boolean
   order: number
   audience?: PanelAudience
+  templateLibraryRevision?: number
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -43,6 +45,9 @@ const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinic
     autoGenerate: data.autoGenerate || false,
     order: data.order || 0,
     audience: data.audience ?? 'medical',
+    templateLibraryRevision: typeof data.templateLibraryRevision === 'number'
+      ? data.templateLibraryRevision
+      : undefined,
     createdAt: data.createdAt?.toDate(),
     updatedAt: data.updatedAt?.toDate(),
   }),
@@ -54,6 +59,9 @@ const panelSync = createUserCollectionSync<ClinicalInsightPanel, FirestoreClinic
     autoGenerate: panel.autoGenerate,
     order: panel.order,
     audience: panel.audience ?? 'medical',
+    ...(typeof panel.templateLibraryRevision === 'number'
+      ? { templateLibraryRevision: panel.templateLibraryRevision }
+      : {}),
     createdAt: panel.createdAt ? Timestamp.fromDate(panel.createdAt) : now,
     updatedAt: now,
   }),
