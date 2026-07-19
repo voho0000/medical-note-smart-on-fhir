@@ -281,6 +281,26 @@ describe('FhirMapper', () => {
     })
   })
 
+  describe('toComposition', () => {
+    it('preserves the top-level narrative and ordered sections from Bridge', () => {
+      const fhirComposition = {
+        id: 'preventive-1',
+        type: { coding: [{ system: 'http://loinc.org', code: '75484-6' }] },
+        text: { status: 'generated', div: '<div>文件總覽</div>' },
+        section: [
+          { title: '一般檢查', text: { div: '<div>一般檢查內容</div>' } },
+          { title: '血壓', text: { div: '<div>血壓內容</div>' } },
+        ],
+      }
+
+      const result = FhirMapper.toComposition(fhirComposition)
+
+      expect(result.text).toEqual(fhirComposition.text)
+      expect(result.section).toEqual(fhirComposition.section)
+      expect(result.section?.map((section) => section.title)).toEqual(['一般檢查', '血壓'])
+    })
+  })
+
   describe('toDiagnosticReport', () => {
     it('should map FHIR DiagnosticReport without observations', () => {
       const fhirReport = {

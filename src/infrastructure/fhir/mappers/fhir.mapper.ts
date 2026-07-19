@@ -347,6 +347,7 @@ export class FhirMapper implements IDataMapper {
       date: fhirResource.date,
       author: fhirResource.author,
       title: fhirResource.title,
+      text: fhirResource.text,
       section: fhirResource.section,
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id

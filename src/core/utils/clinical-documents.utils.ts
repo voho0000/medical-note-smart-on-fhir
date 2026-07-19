@@ -95,7 +95,8 @@ const decodedTextCache = new WeakMap<object, string>()
 function compositionText(c: CompositionEntity): string {
   const hit = decodedTextCache.get(c as object)
   if (hit !== undefined) return hit
-  const result = (c.section ?? [])
+  const documentNarrative = c.text?.div ? stripHtmlToText(c.text.div) : ''
+  const sectionNarratives = (c.section ?? [])
     .map((s) => {
       const t = s.text?.div ? stripHtmlToText(s.text.div) : ''
       if (!t) return ''
@@ -103,6 +104,7 @@ function compositionText(c: CompositionEntity): string {
     })
     .filter(Boolean)
     .join('\n\n')
+  const result = [documentNarrative, sectionNarratives].filter(Boolean).join('\n\n')
   decodedTextCache.set(c as object, result)
   return result
 }

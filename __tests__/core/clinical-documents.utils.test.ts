@@ -50,6 +50,22 @@ describe('clinical-documents.utils', () => {
     expect(docs.find((d) => d.id === 'ips')!.text).toContain('HTN')
   })
 
+  it('keeps Composition.text before its ordered section narratives', () => {
+    const docs = listClinicalDocuments({
+      compositions: [{
+        id: 'preventive',
+        type: { coding: [{ code: '75484-6' }] },
+        text: { div: '<div><p>文件總覽</p></div>' },
+        section: [
+          { title: '一般檢查', text: { div: '<div>身高與體重</div>' } },
+          { title: '血壓', text: { div: '<div>收縮壓 120</div>' } },
+        ],
+      }],
+    } as any)
+
+    expect(docs[0].text).toBe('文件總覽\n\n一般檢查:\n身高與體重\n\n血壓:\n收縮壓 120')
+  })
+
   it('uses the encounter period start, not the clustered DocumentReference.date', () => {
     // The NHI bridge sets `date` to a shared registration timestamp (so it
     // clusters), while context.period.start is the real, distinct admission.

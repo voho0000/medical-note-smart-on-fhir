@@ -624,6 +624,13 @@ export interface CompositionEntity {
     reference?: string
   }>
   title?: string
+  /** Human-readable narrative for the Composition as a whole. FHIR document
+   *  Compositions may carry an introductory narrative here before the ordered
+   *  section narratives. */
+  text?: {
+    status?: string
+    div?: string
+  }
   section?: Array<{
     title?: string
     code?: {

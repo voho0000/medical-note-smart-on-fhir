@@ -28,7 +28,16 @@ describe('document source navigation expansion', () => {
         }}
         forceExpandKey={2}
         resolveSectionLabel={() => null}
-        labels={{ documentDate: '日期', author: '作者', custodian: '保管單位', noSections: '無內容' }}
+        labels={{
+          documentDate: '日期',
+          author: '作者',
+          custodian: '保管單位',
+          noSections: '無內容',
+          fullDocument: '完整文件',
+          expandFullDocument: '展開全文',
+          collapseFullDocument: '收合全文',
+          sectionCount: '{count} 個章節',
+        }}
       />,
     )
 

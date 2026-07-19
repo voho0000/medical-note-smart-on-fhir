@@ -32,6 +32,10 @@ interface DocumentDetailDialogProps {
     author: string
     custodian: string
     noSections: string
+    fullDocument: string
+    expandFullDocument: string
+    collapseFullDocument: string
+    sectionCount: string
     ipsBadge: string
     ipsBadgeTooltip: string
     dischargeBadge: string
@@ -199,6 +203,10 @@ export function DocumentDetailDialog({
                 author: strings.author,
                 custodian: strings.custodian,
                 noSections: strings.noSections,
+                fullDocument: strings.fullDocument,
+                expandFullDocument: strings.expandFullDocument,
+                collapseFullDocument: strings.collapseFullDocument,
+                sectionCount: strings.sectionCount,
               }}
             />
           ) : entry.sourceKind === 'documentReference' && entry.attachment ? (

@@ -16,6 +16,7 @@ import {
   DOCUMENT_TYPE_LOINC,
   getDocumentTypeCode,
   isIpsComposition,
+  isPreventiveMedicineComposition,
 } from './loinc-document-types'
 
 const DISCHARGE_SUMMARY_LOINC = '18842-5'
@@ -132,7 +133,13 @@ export function compositionToEntry(
   docTypeStrings: Record<string, string>,
 ): DocumentEntry | null {
   const sections = Array.isArray(comp.section) ? comp.section : []
-  const hasAny = sections.some((s) => hasNarrativeContent(s?.text?.div))
+  const hasSectionNarrative = sections.some((s) => hasNarrativeContent(s?.text?.div))
+  // Bridge's adult preventive-care document is one continuous Composition:
+  // its top-level narrative precedes its ordered section narratives. Retain a
+  // document that only has the introductory narrative as well.
+  const hasAny = hasSectionNarrative || (
+    isPreventiveMedicineComposition(comp) && hasNarrativeContent(comp.text?.div)
+  )
   if (!hasAny) return null
 
   const typeCode = getDocumentTypeCode(comp)

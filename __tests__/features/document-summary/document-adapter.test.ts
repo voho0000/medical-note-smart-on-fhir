@@ -11,6 +11,7 @@ const ZH_DOC_TYPES = {
   ipsPatientSummary: '國際病人摘要 (IPS)',
   dischargeSummary: '出院病摘',
   consultNote: '會診紀錄',
+  preventiveMedicineScreening: '成人預防保健',
 }
 
 describe('document-adapter', () => {
@@ -44,6 +45,23 @@ describe('document-adapter', () => {
       expect(entry!.isIps).toBe(true)
       expect(entry!.isDischargeSummary).toBe(false)
       expect(entry!.typeLabel).toBe('國際病人摘要 (IPS)')
+      expect(entry!.composition).toBe(comp)
+    })
+
+    it('keeps a preventive-care Composition with only top-level narrative', () => {
+      const comp: any = {
+        id: 'preventive-1',
+        date: '2026-07-01',
+        type: { coding: [{ system: 'http://loinc.org', code: '75484-6' }] },
+        text: { div: '<div><p>成人預防保健總覽</p></div>' },
+        section: [],
+      }
+
+      const entry = compositionToEntry(comp, ZH_DOC_TYPES)
+
+      expect(entry).not.toBeNull()
+      expect(entry!.typeCode).toBe('75484-6')
+      expect(entry!.typeLabel).toBe('成人預防保健')
       expect(entry!.composition).toBe(comp)
     })
   })

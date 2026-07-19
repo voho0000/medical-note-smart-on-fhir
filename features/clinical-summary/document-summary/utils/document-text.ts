@@ -4,7 +4,10 @@ import type { DocumentEntry } from '../types'
 
 export function getDocumentPlainText(entry: DocumentEntry): string {
   if (entry.sourceKind === 'composition' && entry.composition) {
-    return (entry.composition.section ?? [])
+    const compositionText = entry.composition.text?.div
+      ? stripHtmlToText(entry.composition.text.div)
+      : ''
+    const sectionText = (entry.composition.section ?? [])
       .map((section) => {
         const text = section.text?.div ? stripHtmlToText(section.text.div) : ''
         if (!text) return ''
@@ -12,6 +15,7 @@ export function getDocumentPlainText(entry: DocumentEntry): string {
       })
       .filter(Boolean)
       .join('\n\n')
+    return [compositionText, sectionText].filter(Boolean).join('\n\n')
   }
 
   if (entry.attachment?.data) {

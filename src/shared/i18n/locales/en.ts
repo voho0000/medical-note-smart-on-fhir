@@ -648,6 +648,10 @@ export const en = {
     author: 'Author',
     custodian: 'Custodian',
     noSections: 'This document does not include displayable narrative content.',
+    fullDocument: 'Full document',
+    expandFullDocument: 'Expand document',
+    collapseFullDocument: 'Collapse document',
+    sectionCount: '{count} sections',
     tooltip: 'Shows the original human-readable narrative carried inside imported documents (e.g. an IPS patient summary or discharge summary). The structured data referenced by these narratives is already shown in the cards above — this card preserves the source narrative for cross-reference and summary purposes.',
     ipsBadge: 'IPS',
     ipsBadgeTooltip: 'This document conforms to the IPS (International Patient Summary) implementation guide.',
@@ -671,6 +675,7 @@ export const en = {
       labReport: 'Laboratory report',
       imagingReport: 'Imaging report',
       referralNote: 'Referral note',
+      preventiveMedicineScreening: 'Adult preventive health screening',
     },
     sections: {
       problemList: 'Problem list',

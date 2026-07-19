@@ -34,6 +34,17 @@ export const DOCUMENT_TYPE_LOINC: Record<string, string> = {
   '18748-4': 'imagingReport',
   // Referral note
   '57133-1': 'referralNote',
+  // Preventive medicine risk assessment and screening note (成人預防保健)
+  '75484-6': 'preventiveMedicineScreening',
+}
+
+/** Adult preventive-care document currently supplied by Bridge as one
+ * Composition whose ordered narratives form a single report. */
+export const PREVENTIVE_MEDICINE_SCREENING_LOINC = '75484-6'
+
+export function isPreventiveMedicineComposition(composition: any): boolean {
+  const codings: any[] = composition?.type?.coding ?? []
+  return codings.some((coding) => coding?.code === PREVENTIVE_MEDICINE_SCREENING_LOINC)
 }
 
 /**
