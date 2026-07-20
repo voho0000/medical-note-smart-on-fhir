@@ -85,6 +85,34 @@ describe('buildIpsMarkdown', () => {
     expect(md).toContain('| 2024-03-01 | 99 |')
   })
 
+  it('keeps per-cell units when a cumulative column still has mixed units', () => {
+    const data = emptyCollection()
+    data.observations = [
+      {
+        id: 'hb-g-dl',
+        code: { text: 'Hemoglobin', coding: [{ system: 'http://loinc.org', code: '718-7' }] },
+        valueQuantity: { value: 13.2, unit: 'g/dL' },
+        effectiveDateTime: '2026-01-02',
+      },
+      {
+        id: 'hb-g-l',
+        code: { text: 'Hemoglobin', coding: [{ system: 'http://loinc.org', code: '718-7' }] },
+        valueQuantity: { value: 132, unit: 'g/L' },
+        effectiveDateTime: '2026-01-01',
+      },
+    ]
+
+    const md = buildIpsMarkdown({
+      patient: PATIENT,
+      data,
+      generatedAt: new Date('2026-06-24T00:00:00Z'),
+    })
+
+    expect(md).toContain('| Date | HB |')
+    expect(md).toContain('| 2026-01-02 | 13.2 g/dL |')
+    expect(md).toContain('| 2026-01-01 | 132 g/L |')
+  })
+
   it('renders patient identifier systems as labels instead of clickable namespace URLs', () => {
     const md = buildIpsMarkdown({
       patient: {
@@ -278,8 +306,8 @@ describe('buildIpsMarkdown', () => {
     })
 
     expect(md).toContain('### Urine - Spot Ratios')
-    expect(md).toContain('| Date | MALB (mg/L) | CREA (mg/dL) | ACR |')
-    expect(md).toContain('| 2026-01-28 | 80 H | 100 | 1+ (80) POS |')
+    expect(md).toContain('| Date | MALB (mg/dL) | CREA (mg/dL) | ACR |')
+    expect(md).toContain('| 2026-01-28 | 8 H | 100 | 1+ (80) POS |')
     expect(md).not.toContain('### Urine\n\n| Date | 微白蛋白/肌酐酸比值 |')
   })
 

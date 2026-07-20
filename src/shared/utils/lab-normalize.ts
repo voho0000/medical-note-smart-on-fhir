@@ -225,7 +225,8 @@ export const TEST_ALIASES: Record<string, string> = {
   // they merge with the bare-text 'Creatinine' obs that already alias to CREA
   // via the chem CREATININE entry. Urine-tab CREA column is separate from
   // chem-tab CREA column (each LabCategory has its own testMap).
-  '肌酐、尿': 'CREA', 'Urine Creatinine': 'CREA', 'URINE CREATININE': 'CREA', 'URINECREATININE': 'CREA',
+  '肌酐、尿': 'CREA', '尿液肌酸酐': 'CREA',
+  'Urine Creatinine': 'CREA', 'URINE CREATININE': 'CREA', 'URINECREATININE': 'CREA',
   // Microalbumin / Micro Albumin / MALB(U)
   'Micro Albumin:': 'MALB', 'MICRO ALBUMIN:': 'MALB', 'Micro Albumin': 'MALB', 'MICRO ALBUMIN': 'MALB',
   MICROALBUMIN: 'MALB', MICROALB: 'MALB', '微小白蛋白': 'MALB', '微白蛋白': 'MALB',

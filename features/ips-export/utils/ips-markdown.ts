@@ -477,11 +477,12 @@ function renderCompactRows(group: ResultGroupKey, rows: string[][]): string {
         .join('\n\n')
 }
 
-function labCellText(cell?: LabCell): string {
+function labCellText(cell?: LabCell, includeUnit = false): string {
   if (!cell) return '-'
-  if (!cell.isAbnormal) return cell.value
+  const value = includeUnit && cell.unit ? `${cell.value} ${cell.unit}` : cell.value
+  if (!cell.isAbnormal) return value
   const code = clean(cell.interpretationCode)
-  return code ? `${cell.value} ${code}` : `${cell.value} *`
+  return code ? `${value} ${code}` : `${value} *`
 }
 
 function labTestHeader(row: LabRow): string {
@@ -501,7 +502,7 @@ function pivotDateRows(pivot: LabPivot, tests: LabRow[]): string[][] {
     .filter((date) => tests.some((test) => test.values.has(date)))
     .map((date) => [
       formatDate(date),
-      ...tests.map((test) => labCellText(test.values.get(date))),
+      ...tests.map((test) => labCellText(test.values.get(date), !test.unit)),
     ])
 }
 

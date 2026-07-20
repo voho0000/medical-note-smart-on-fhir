@@ -241,7 +241,6 @@ export function buildLabPivots(
 
     const dateSet = new Set<string>()
     const testMap = new Map<string, LabRow>()
-    const unitCount = new Map<string, Map<string, number>>()
 
     for (const obs of obsList) {
       const date = dateKey(obs.effectiveDateTime)
@@ -255,7 +254,6 @@ export function buildLabPivots(
 
       if (!testMap.has(mapKey)) {
         testMap.set(mapKey, { mapKey, testKey, displayName, values: new Map() })
-        unitCount.set(mapKey, new Map())
       } else {
         // Prefer the shorter display name (cleaner labels)
         const row = testMap.get(mapKey)!
@@ -341,24 +339,21 @@ export function buildLabPivots(
       } else {
         row.values.set(date, cell)
       }
-      if (cellUnit) {
-        const ucMap = unitCount.get(mapKey)!
-        ucMap.set(cellUnit, (ucMap.get(cellUnit) || 0) + 1)
-      }
     }
 
-    // Pick most common unit per row
-    for (const [mk, ucMap] of unitCount.entries()) {
-      let bestUnit: string | undefined
-      let bestCount = 0
-      for (const [u, c] of ucMap.entries()) {
-        if (c > bestCount) {
-          bestCount = c
-          bestUnit = u
-        }
-      }
-      const row = testMap.get(mk)
-      if (row) row.unit = bestUnit
+    // Show a shared column-header unit only when every populated cell now uses
+    // the same unit. Most configured analytes reach that state through UCUM
+    // normalisation above. For an unconfigured/unknown mixed-unit analyte,
+    // leaving row.unit empty makes renderers show each cell's own unit instead
+    // of silently labelling every value with whichever unit happened to be most
+    // common in the source data.
+    for (const row of testMap.values()) {
+      const cellUnits = [...row.values.values()].map((cell) => cell.unit)
+      const distinctUnits = new Set(cellUnits.filter((unit): unit is string => !!unit))
+      const everyCellHasUnit = cellUnits.length > 0 && cellUnits.every((unit) => !!unit)
+      row.unit = everyCellHasUnit && distinctUnits.size === 1
+        ? distinctUnits.values().next().value
+        : undefined
     }
 
     // Inject stub rows for pinned columns not present in patient data.

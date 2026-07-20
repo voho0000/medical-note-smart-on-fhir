@@ -254,7 +254,12 @@ function LabPivotTable({
                     className={`border-l px-1 py-1 text-center ${cls}`}
                     title={cell.interpretationCode ? `Interpretation: ${cell.interpretationCode}` : undefined}
                   >
-                    {cell.value}
+                    <span>{cell.value}</span>
+                    {!test.unit && cell.unit && (
+                      <div className="text-[0.625rem] font-normal leading-tight text-muted-foreground whitespace-nowrap">
+                        {cell.unit}
+                      </div>
+                    )}
                   </td>
                 )
               })}

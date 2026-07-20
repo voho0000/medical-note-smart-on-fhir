@@ -62,6 +62,11 @@ describe('normalizeAnalyteUnit — per-analyte canonical unit', () => {
     expect(normalizeAnalyteUnit('CRP', 85, 'mg/L')).toEqual({ value: 8.5, unit: 'mg/dL' })
   })
 
+  it('rescales urine microalbumin to mg/dL', () => {
+    expect(normalizeAnalyteUnit('MALB', 271.3, 'mg/L')).toEqual({ value: 27.13, unit: 'mg/dL' })
+    expect(normalizeAnalyteUnit('MALB', 27.13, 'mg/dL')).toEqual({ value: 27.13, unit: 'mg/dL' })
+  })
+
   it('is case-insensitive on the analyte key', () => {
     expect(normalizeAnalyteUnit('wbc', 5600, '/uL')).toEqual({ value: 5.6, unit: 'K/µL' })
     expect(normalizeAnalyteUnit('crp', 5, 'mg/L')).toEqual({ value: 0.5, unit: 'mg/dL' })

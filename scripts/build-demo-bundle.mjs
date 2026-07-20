@@ -22,6 +22,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
+import demoLabDedupe from './demo-lab-dedupe.cjs'
+
+const { pruneCrossLinkedLabDuplicates } = demoLabDedupe
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(__dirname, '..')
@@ -256,6 +259,13 @@ const kept = [
   ...keptImm,
   ...keptCare,
 ]
+
+// Some source exports cross-link analyte-level reports (for example an Hb
+// report also points at HCT while the HCT report points back at Hb), producing
+// visually duplicated cumulative values. Prune only the copy whose NHI+LOINC
+// disagree with its parent report when one otherwise-identical copy matches
+// both identifiers. This intentionally does NOT dedupe on date/value alone.
+const demoLabDedup = pruneCrossLinkedLabDuplicates(kept)
 
 // ===========================================================================
 // 2. HARVEST PII tokens from structured fields + discharge HTML
@@ -615,5 +625,6 @@ const hist = {}
 for (const r of out) hist[r.resourceType] = (hist[r.resourceType] || 0) + 1
 console.log('\n✅ demo bundle written:', path.relative(REPO, OUT), `(${sizeMB} MB, ${out.length} resources)`)
 console.log('   histogram:', JSON.stringify(hist))
+console.log(`   lab cross-link dedupe: removed ${demoLabDedup.removedIds.length}`)
 console.log('   leak gate: PASSED — no original PII tokens survive')
 console.log(`   replaced: ${patientNameTokens.size} name · ${nationalIdTokens.size} id · ${mrnTokens.size} mrn · ${physicianTokens.size} physician · ${institutionTokens.size} institution tokens`)

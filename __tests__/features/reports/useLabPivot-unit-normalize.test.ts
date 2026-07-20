@@ -51,4 +51,27 @@ describe('buildLabPivots — cumulative-report blood-count unit normalisation', 
     expect(row).toBeTruthy()
     expect(row!.values.get('2026-01-01')).toMatchObject({ value: '13.2', unit: 'g/dL' })
   })
+
+  it('does not put one misleading header unit over unnormalized mixed-unit cells', () => {
+    const pivots = buildLabPivots([
+      {
+        resourceType: 'Observation',
+        effectiveDateTime: '2026-01-01',
+        code: { text: 'Hemoglobin', coding: [{ system: 'http://loinc.org', code: '718-7' }] },
+        valueQuantity: { value: 13.2, unit: 'g/dL', code: 'g/dL', system: 'http://unitsofmeasure.org' },
+      },
+      {
+        resourceType: 'Observation',
+        effectiveDateTime: '2025-12-01',
+        code: { text: 'Hemoglobin', coding: [{ system: 'http://loinc.org', code: '718-7' }] },
+        valueQuantity: { value: 132, unit: 'g/L', code: 'g/L', system: 'http://unitsofmeasure.org' },
+      },
+    ])
+
+    const row = pivots.cbc.rows.find((candidate) => candidate.testKey === 'HB')
+    expect(row).toBeTruthy()
+    expect(row!.unit).toBeUndefined()
+    expect(row!.values.get('2026-01-01')).toMatchObject({ value: '13.2', unit: 'g/dL' })
+    expect(row!.values.get('2025-12-01')).toMatchObject({ value: '132', unit: 'g/L' })
+  })
 })

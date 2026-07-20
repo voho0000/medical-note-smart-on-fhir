@@ -5,6 +5,7 @@
 //   • blood counts — WBC as "K/µL" (~5) vs raw "/µL" (~5600), RBC "M/µL" (~4) vs
 //     "x10^4/µL" (~400);
 //   • CRP — "mg/dL" (~0.5) at one hospital vs "mg/L" (~5) at another (×10).
+//   • urine microalbumin — "mg/dL" at one hospital vs "mg/L" at another (×10).
 // In one cumulative-report column that reads as "0.5 next to 5", which is
 // meaningless. We convert every value of such an analyte to one canonical unit
 // via its UCUM scale factor — a lossless ×10^n.
@@ -66,6 +67,9 @@ const UNIT_NORMALIZATION: Record<
   // CRP: mg/dL is the Taiwan-common unit; mg/L (international / hs-CRP) values
   // are ÷10 onto it. (mg/L base = 1, mg/dL = 10.)
   CRP: { unit: 'mg/dL', scale: 10, scaleOf: massConcScale },
+  // Urine microalbumin: keep one scale across institutions so a source value of
+  // 271.3 mg/L is displayed as 27.13 mg/dL in the cumulative MALB column.
+  MALB: { unit: 'mg/dL', scale: 10, scaleOf: massConcScale },
 }
 
 // Round off float noise from the ×10^n conversion (5600/1000 = 5.6), ~4 sig figs.
