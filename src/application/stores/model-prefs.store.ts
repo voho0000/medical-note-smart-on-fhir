@@ -22,7 +22,10 @@ import {
   isModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import { useAllApiKeys } from './ai-config.store'
-import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
 
 export type ModelPrefConsumer = 'chat' | 'insights'
 
@@ -93,7 +96,11 @@ export const useSetModelFor = () => useModelPrefsStore((s) => s.setModelFor)
  */
 export function useEffectiveModel(consumer: ModelPrefConsumer): string {
   const pref = useModelPref(consumer)
-  const { apiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
+  const { apiKey, geminiKey, claudeKey, openAiCompatibleProfiles } = useAllApiKeys()
+  const openAiCompatible = resolveOpenAiCompatibleProfile(
+    pref,
+    openAiCompatibleProfiles,
+  )
   const keyGatedModel = gateModelForKeys(
     pref,
     {

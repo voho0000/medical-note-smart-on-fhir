@@ -5,8 +5,32 @@ import {
   openAiCompatibleCacheIdentity,
   openAiCompatibleEndpointUrl,
   OpenAiCompatibleUrlError,
+  resolveDefaultOpenAiCompatibleProfile,
   resolveOpenAiCompatibleBaseUrl,
+  resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
+import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
+import {
+  DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+  suggestedOpenAiCompatibleContextWindow,
+} from '@/src/shared/types/openai-compatible.types'
+
+describe('OpenAI-compatible context-window suggestions', () => {
+  it('uses 32,768 as the safe default for a new unknown model', () => {
+    expect(DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW).toBe(32768)
+    expect(suggestedOpenAiCompatibleContextWindow('hospital-7b')).toBe(32768)
+  })
+
+  it.each([
+    ['qwen2.5:7b', 32768],
+    ['qwen2.5vl:7b', 128000],
+    ['Qwen/Qwen2.5-VL-7B-Instruct', 128000],
+    ['qwen3:8b', 40960],
+    ['meta-llama/Llama-3.1-8B-Instruct', 131072],
+  ])('suggests the known runtime window for %s', (modelId, expected) => {
+    expect(suggestedOpenAiCompatibleContextWindow(modelId)).toBe(expected)
+  })
+})
 
 describe('OpenAI-compatible URL validation', () => {
   it.each([
@@ -103,5 +127,61 @@ describe('OpenAI-compatible URL validation', () => {
       ...gatewayProfile,
       transport: 'direct',
     }, false)).toBe(true)
+  })
+
+  it('resolves only the profile represented by the logical model id', () => {
+    const profiles = [
+      {
+        profileId: 'legacy',
+        enabled: true,
+        baseUrl: 'https://legacy.example/v1',
+        modelId: 'legacy-model',
+        apiKey: null,
+      },
+      {
+        profileId: 'endpoint-b',
+        enabled: true,
+        baseUrl: 'https://endpoint-b.example/v1',
+        modelId: 'model-b',
+        apiKey: null,
+      },
+    ]
+
+    expect(resolveOpenAiCompatibleProfile(
+      customOpenAiModelIdForProfile('endpoint-b'),
+      profiles,
+    )).toBe(profiles[1])
+    expect(resolveOpenAiCompatibleProfile(
+      customOpenAiModelIdForProfile('deleted'),
+      profiles,
+    )).toBeNull()
+  })
+
+  it('uses the first runtime-ready profile for consumers without a picker', () => {
+    const profiles = [
+      {
+        profileId: 'disabled',
+        enabled: false,
+        baseUrl: 'https://disabled.example/v1',
+        modelId: 'disabled-model',
+        apiKey: null,
+      },
+      {
+        profileId: 'ready-b',
+        enabled: true,
+        baseUrl: 'https://ready-b.example/v1',
+        modelId: 'ready-b',
+        apiKey: null,
+      },
+      {
+        profileId: 'ready-c',
+        enabled: true,
+        baseUrl: 'https://ready-c.example/v1',
+        modelId: 'ready-c',
+        apiKey: null,
+      },
+    ]
+
+    expect(resolveDefaultOpenAiCompatibleProfile(profiles)).toBe(profiles[1])
   })
 })

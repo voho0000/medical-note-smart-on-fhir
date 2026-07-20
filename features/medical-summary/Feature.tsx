@@ -39,7 +39,10 @@ import {
   useSetModelFor,
 } from "@/src/application/stores/model-prefs.store"
 import { MEDICAL_SUMMARY_MODEL_ID } from "@/src/core/use-cases/medical-summary/generate-medical-summary.use-case"
-import { CUSTOM_OPENAI_MODEL_ID } from "@/src/shared/constants/ai-models.constants"
+import {
+  isCustomOpenAiModelId,
+  openAiCompatibleProfileIdFromModelId,
+} from "@/src/shared/constants/ai-models.constants"
 import { formatApproxTokenCount, type ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 import { CurrentPrioritiesCard } from "./components/CurrentPrioritiesCard"
 import { DecisionList } from "./components/DecisionList"
@@ -941,12 +944,15 @@ export default function MedicalSummaryFeature() {
                   onClick: () => setDataScopeOpen(true),
                   icon: <Database className="h-3 w-3" />,
                 },
-                ...(model === CUSTOM_OPENAI_MODEL_ID ? [{
+                ...(isCustomOpenAiModelId(model) ? [{
                   label: ms.contextWindowSettings,
                   onClick: () => setActiveTab(
                     "settings",
                     "ai",
-                    "openai-compatible-context-window",
+                    {
+                      kind: "openai-compatible-context-window",
+                      profileId: openAiCompatibleProfileIdFromModelId(model) ?? undefined,
+                    },
                   ),
                   icon: <Settings2 className="h-3 w-3" />,
                   variant: "outline" as const,
@@ -1044,7 +1050,7 @@ export default function MedicalSummaryFeature() {
                 </span>
               ) : null}
               <span className="block">
-                {model === CUSTOM_OPENAI_MODEL_ID
+                {isCustomOpenAiModelId(model)
                   ? ms.contextOverflowResolveDescription
                   : ms.contextOverflowResolveCloudDescription}
               </span>
@@ -1052,12 +1058,15 @@ export default function MedicalSummaryFeature() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            {model === CUSTOM_OPENAI_MODEL_ID ? (
+            {isCustomOpenAiModelId(model) ? (
               <AlertDialogAction
                 className="border border-input bg-background text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground"
                 onClick={() => {
                   setOverflowResolutionOpen(false)
-                  setActiveTab("settings", "ai", "openai-compatible-context-window")
+                  setActiveTab("settings", "ai", {
+                    kind: "openai-compatible-context-window",
+                    profileId: openAiCompatibleProfileIdFromModelId(model) ?? undefined,
+                  })
                 }}
               >
                 {ms.contextWindowSettings}

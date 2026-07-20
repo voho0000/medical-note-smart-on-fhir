@@ -6,8 +6,14 @@ import {
   loadEncryptedCache,
   saveEncryptedCache,
 } from '@/src/infrastructure/cache/encrypted-session-cache'
-import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
-import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import {
+  CUSTOM_OPENAI_MODEL_ID,
+  customOpenAiModelIdForProfile,
+} from '@/src/shared/constants/ai-models.constants'
+import type {
+  OpenAiCompatibleConfig,
+  OpenAiCompatibleProfile,
+} from '@/src/shared/types/openai-compatible.types'
 import {
   BUNDLE_CHANGED_EVENT,
   BUNDLE_CHANGE_SETTLED_EVENT,
@@ -23,6 +29,7 @@ let mockClinicalData: Record<string, unknown> = {
 }
 let mockCachedResult: { headline: string } | null = null
 let mockOpenAiCompatible: OpenAiCompatibleConfig | null = null
+let mockOpenAiCompatibleProfiles: OpenAiCompatibleProfile[] | null = null
 let mockLocale: 'zh-TW' | 'en' = 'zh-TW'
 let mockAudience: 'medical' | 'patient' = 'patient'
 const mockStopAi = jest.fn()
@@ -59,6 +66,9 @@ jest.mock('@/src/application/stores/ai-config.store', () => ({
     geminiKey: '',
     claudeKey: '',
     openAiCompatible: mockOpenAiCompatible,
+    openAiCompatibleProfiles: mockOpenAiCompatibleProfiles ?? (mockOpenAiCompatible
+      ? [{ ...mockOpenAiCompatible, profileId: 'legacy' }]
+      : []),
   }),
 }))
 jest.mock('@/src/application/providers/language.provider', () => ({
@@ -100,6 +110,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     }
     mockCachedResult = null
     mockOpenAiCompatible = null
+    mockOpenAiCompatibleProfiles = null
     mockLocale = 'zh-TW'
     mockAudience = 'patient'
   })
@@ -599,6 +610,76 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.result?.headline).toBe('local-model-b')
     expect(result.current.resultOwnerModelId).toBe(CUSTOM_OPENAI_MODEL_ID)
     expect(result.current.resultOwnerRuntimeId).not.toBe(endpointARuntime)
+  })
+
+  it('routes each dynamic custom model to its own profile and result slot', async () => {
+    mockPatientId = 'smart-patient-1'
+    mockOpenAiCompatibleProfiles = [
+      {
+        profileId: 'endpoint-a',
+        enabled: true,
+        baseUrl: 'https://gateway-a.example/v1',
+        modelId: 'local-model-a',
+        apiKey: null,
+        contextWindowTokens: 32_768,
+      },
+      {
+        profileId: 'endpoint-b',
+        enabled: true,
+        baseUrl: 'https://gateway-b.example/v1',
+        modelId: 'local-model-b',
+        apiKey: null,
+        contextWindowTokens: 65_536,
+      },
+    ]
+    const modelA = customOpenAiModelIdForProfile('endpoint-a')
+    const modelB = customOpenAiModelIdForProfile('endpoint-b')
+    type VersionedResult = {
+      headline: string
+      generation: { modelId: string }
+    }
+    const store = createAiResultStore<VersionedResult>()
+    const run = jest.fn(async (ctx: {
+      modelId: string
+      modelName: string
+      contextLimit: number
+    }) => ({
+      headline: `${ctx.modelName}:${ctx.contextLimit}`,
+      generation: { modelId: ctx.modelId },
+    }))
+    const { result, rerender } = renderHook(
+      ({ selectedModelId }: { selectedModelId: string }) => useAiSlotGeneration({
+        defaultModelId: 'gemini-3.1-flash-lite',
+        selectedModelId,
+        autoRunEnabled: false,
+        requireDataReadyToGenerate: true,
+        store,
+        cacheKeyFor: (slotKey) => `test:${slotKey}`,
+        cacheMaxAgeMs: 60_000,
+        run,
+        resultModelId: (candidate) => candidate.generation.modelId,
+        retainResultOnModelChange: true,
+      }),
+      { initialProps: { selectedModelId: modelA as string } },
+    )
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    await act(async () => result.current.generate())
+    const slotA = result.current.slotKey
+    expect(result.current.result?.headline).toBe('local-model-a:32768')
+    expect(result.current.resultOwnerModelId).toBe(modelA)
+
+    rerender({ selectedModelId: modelB })
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    expect(result.current.slotKey).not.toBe(slotA)
+    expect(result.current.result?.headline).toBe('local-model-a:32768')
+
+    await act(async () => result.current.generate())
+    expect(result.current.result?.headline).toBe('local-model-b:65536')
+    expect(result.current.resultOwnerModelId).toBe(modelB)
+
+    rerender({ selectedModelId: modelA })
+    expect(result.current.result?.headline).toBe('local-model-a:32768')
   })
 
   it('keeps any-model busy state inside the exact Bundle and clinical-input scope', async () => {

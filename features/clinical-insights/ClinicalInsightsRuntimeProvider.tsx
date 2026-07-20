@@ -28,7 +28,10 @@ import {
   modelContextLimit,
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
-import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
 import {
   aiResultCacheKey,
   contentSignature,
@@ -93,7 +96,12 @@ function panelCacheKey(patientId: string, panelId: string): string {
 export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactNode }) {
   const { panels } = useClinicalInsightsConfig()
   const { audience } = useAudience()
-  const { apiKey: openAiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
+  const {
+    apiKey: openAiKey,
+    geminiKey,
+    claudeKey,
+    openAiCompatibleProfiles,
+  } = useAllApiKeys()
   const { user, isAnonymous, loading: authLoading } = useAuth()
   const { getFullClinicalContext } = useClinicalContext("insights")
   const {
@@ -105,6 +113,10 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
   const { patient } = usePatient()
   const patientId = patient?.id ?? ""
   const model = useEffectiveModel("insights")
+  const openAiCompatible = resolveOpenAiCompatibleProfile(
+    model,
+    openAiCompatibleProfiles,
+  )
   const autoAiConsent = useAutoAiConsentState()
   const [hydratedCacheIdentity, setHydratedCacheIdentity] = useState<string | null>(null)
   const [bundleRevision, setBundleRevision] = useState(0)

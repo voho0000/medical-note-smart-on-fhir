@@ -8,8 +8,8 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import {
-  CUSTOM_OPENAI_MODEL_ID,
   getModelDefinition,
+  isCustomOpenAiModelId,
   type ModelProvider,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
@@ -37,7 +37,7 @@ export class AiProviderFactory {
    * Create AI provider with appropriate configuration
    */
   create(config: ProviderConfig): ProviderResult {
-    if (config.modelId === CUSTOM_OPENAI_MODEL_ID) {
+    if (isCustomOpenAiModelId(config.modelId)) {
       return this.createOpenAiCompatibleProvider(config.openAiCompatible)
     }
     const provider = this.providerOf(config.modelId)

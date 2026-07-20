@@ -24,13 +24,12 @@ import { useRightPanel } from "@/src/application/providers/right-panel.provider"
 import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { useModelSelection, type ModelEntry } from "@/src/application/hooks/useModelSelection"
 import {
-  CUSTOM_OPENAI_MODEL_ID,
   gateModelForAgentSupport,
   gateModelForKeys,
   getModelDefinition,
+  isCustomOpenAiModelId,
 } from "@/src/shared/constants/ai-models.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
-import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 
 interface ModelPickerProps {
@@ -59,7 +58,7 @@ export function ModelPicker({
 }: ModelPickerProps) {
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
-  const { apiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
+  const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
   const { gptModels, geminiModels, claudeModels, customModels, handleSelectModel } = useModelSelection(
     apiKey,
     geminiKey,
@@ -67,6 +66,7 @@ export function ModelPicker({
     modelId,
     onSelect,
   )
+  const selectedCustomEntry = customModels.find((entry) => entry.id === modelId)
 
   const keyGatedModelId = gateModelForKeys(
     modelId,
@@ -74,14 +74,15 @@ export function ModelPicker({
       openAiKey: apiKey,
       geminiKey,
       claudeKey,
-      customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
+      customAvailable: Boolean(selectedCustomEntry && !selectedCustomEntry.isLocked),
     },
     fallbackModelId,
   )
   const effectiveModelId = agentModeActive
     ? gateModelForAgentSupport(keyGatedModelId, fallbackModelId)
     : keyGatedModelId
-  const effectiveLabel = modelDisplayLabel(effectiveModelId, openAiCompatible)
+  const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)
+  const effectiveLabel = effectiveCustomEntry?.label ?? modelDisplayLabel(effectiveModelId)
 
   const isAgentLocked = (id: string) =>
     agentModeActive && !!getModelDefinition(id)?.disableAgentMode
@@ -119,6 +120,7 @@ export function ModelPicker({
               survives the signed-in button set on a phone. The slot may still
               shrink (flex) when the host row is genuinely tight. */}
           <span
+            title={effectiveLabel}
             className={cn(
               "truncate text-left font-medium text-foreground",
               compact ? "max-w-[12rem]" : "w-32 sm:w-36",
@@ -126,7 +128,7 @@ export function ModelPicker({
           >
             {effectiveLabel}
           </span>
-          {agentModeActive && effectiveModelId === CUSTOM_OPENAI_MODEL_ID ? (
+          {agentModeActive && isCustomOpenAiModelId(effectiveModelId) ? (
             <span className="hidden shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300 sm:inline">
               {t.modelPicker.standardChatMode}
             </span>
@@ -144,7 +146,7 @@ export function ModelPicker({
             {group.items.map((entry) => {
               const definition = getModelDefinition(entry.id)
               const lockedByAgent = isAgentLocked(entry.id)
-              const usesStandardChat = agentModeActive && entry.id === CUSTOM_OPENAI_MODEL_ID
+              const usesStandardChat = agentModeActive && isCustomOpenAiModelId(entry.id)
               const configureRequired = entry.isLocked
                 && (entry.configureInSettings || !!definition?.requiresUserKey)
                 && !definition?.disabled
@@ -173,7 +175,17 @@ export function ModelPicker({
                     configureRequired && "text-muted-foreground focus:bg-primary/10 focus:text-muted-foreground",
                   )}
                 >
-                  <span className="flex-1 truncate">{entry.label}</span>
+                  <span
+                    title={entry.label}
+                    className={cn(
+                      "min-w-0 flex-1",
+                      definition?.provider === 'custom'
+                        ? "whitespace-normal break-words"
+                        : "truncate",
+                    )}
+                  >
+                    {entry.label}
+                  </span>
                   {usesStandardChat && !configureRequired ? (
                     <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300">
                       {t.modelPicker.standardChatMode}

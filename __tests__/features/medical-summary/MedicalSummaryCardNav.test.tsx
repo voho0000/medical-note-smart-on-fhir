@@ -22,7 +22,20 @@ const items: MedicalSummaryCardNavItem[] = [
   { id: 'medications', label: '用藥', compactLabel: '用藥', description: '我的用藥與照護', count: 4 },
 ]
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 describe('MedicalSummaryCardNav', () => {
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      configurable: true,
+      value: ResizeObserverMock,
+    })
+  })
+
   afterEach(() => {
     jest.useRealTimers()
   })
@@ -93,7 +106,7 @@ describe('MedicalSummaryCardNav', () => {
     const scroller = screen.getByTestId('medical-summary-card-nav-scroller')
     const provenance = screen.getByTestId('medical-summary-generation-meta')
     expect(scroller).not.toContainElement(provenance)
-    expect(provenance).toHaveClass('ml-auto', 'max-w-[48%]')
+    expect(provenance).toHaveClass('ml-auto', 'max-w-[min(48%,24rem)]')
     expect(provenance).not.toHaveClass('max-w-full')
     expect(provenance).toHaveTextContent('MODEL_NAME·2026/07/19 14:32·耗時 01:23')
     expect(provenance).toHaveAttribute(
@@ -138,6 +151,34 @@ describe('MedicalSummaryCardNav', () => {
     unmount()
     expect(jest.getTimerCount()).toBe(0)
     jest.useRealTimers()
+  })
+
+  it('truncates a long model name and reveals the full name on focus', async () => {
+    const longModelName = 'nvidia/nemotron-3-ultra-550b-a55b'
+    render(
+      <MedicalSummaryCardNav
+        items={items}
+        ariaLabel="摘要卡片導覽"
+        onJump={() => {}}
+        generationInfo={{
+          modelName: longModelName,
+          generatedAtIso: '2026-07-20T08:44:00.000Z',
+          generatedAtText: '2026/07/20 16:44',
+          durationLabel: '耗時',
+          durationText: '07:59',
+          ariaLabel: `由 ${longModelName} 於 2026/07/20 16:44 產生，總耗時 07:59`,
+        }}
+      />,
+    )
+
+    const provenance = screen.getByTestId('medical-summary-generation-meta')
+    const modelName = screen.getByText(longModelName)
+    expect(modelName).toHaveClass('max-w-[7rem]', 'truncate')
+    expect(provenance).toHaveAttribute('aria-label', expect.stringContaining(longModelName))
+    expect(provenance).not.toHaveAttribute('title')
+
+    fireEvent.focus(modelName)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(longModelName)
   })
 
   it('shows pre-generated provenance without a fake date', () => {

@@ -10,11 +10,15 @@ import {
   CUSTOM_MODELS,
   INTERNAL_MODELS,
   ALL_MODELS,
+  CUSTOM_OPENAI_MODEL_ID,
   DEFAULT_MODEL_ID,
+  customOpenAiModelIdForProfile,
+  isCustomOpenAiModelId,
   isGptModelId,
   isGeminiModelId,
   isModelId,
   getModelDefinition,
+  openAiCompatibleProfileIdFromModelId,
 } from '@/src/shared/constants/ai-models.constants'
 
 describe('ai-models.constants', () => {
@@ -99,6 +103,23 @@ describe('ai-models.constants', () => {
       expect(isModelId('')).toBe(false)
       expect(isModelId('random-string')).toBe(false)
     })
+
+    it('accepts stable per-profile custom ids while preserving the legacy sentinel', () => {
+      const dynamicId = customOpenAiModelIdForProfile('hospital-a')
+
+      expect(customOpenAiModelIdForProfile('legacy')).toBe(CUSTOM_OPENAI_MODEL_ID)
+      expect(() => customOpenAiModelIdForProfile('  ')).toThrow(
+        'OpenAI-compatible profile id is required',
+      )
+      expect(dynamicId).toBe(`${CUSTOM_OPENAI_MODEL_ID}:hospital-a`)
+      expect(isCustomOpenAiModelId(CUSTOM_OPENAI_MODEL_ID)).toBe(true)
+      expect(isCustomOpenAiModelId(dynamicId)).toBe(true)
+      expect(isCustomOpenAiModelId(`${CUSTOM_OPENAI_MODEL_ID}:`)).toBe(false)
+      expect(isModelId(dynamicId)).toBe(true)
+      expect(openAiCompatibleProfileIdFromModelId(CUSTOM_OPENAI_MODEL_ID)).toBe('legacy')
+      expect(openAiCompatibleProfileIdFromModelId(dynamicId)).toBe('hospital-a')
+      expect(openAiCompatibleProfileIdFromModelId('gemini-unknown')).toBeNull()
+    })
   })
 
   describe('getModelDefinition', () => {
@@ -117,6 +138,15 @@ describe('ai-models.constants', () => {
     it('returns undefined for unknown ids', () => {
       expect(getModelDefinition('unknown-model')).toBeUndefined()
       expect(getModelDefinition('')).toBeUndefined()
+    })
+
+    it('returns custom provider metadata for a dynamic profile id', () => {
+      const dynamicId = customOpenAiModelIdForProfile('hospital-a')
+
+      expect(getModelDefinition(dynamicId)).toMatchObject({
+        id: dynamicId,
+        provider: 'custom',
+      })
     })
   })
 

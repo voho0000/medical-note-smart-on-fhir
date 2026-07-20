@@ -6,24 +6,26 @@ import { OpenAiService } from './openai.service'
 import { GeminiService } from './gemini.service'
 import { ClaudeService } from './claude.service'
 import { OpenAiCompatibleService } from './openai-compatible.service'
-import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
 
 export class AiService implements IAiService {
   private openAiService: OpenAiService
   private geminiService: GeminiService
   private claudeService: ClaudeService
-  private openAiCompatibleService: OpenAiCompatibleService
 
   constructor(
     private openAiApiKey: string | null = null,
     private geminiApiKey: string | null = null,
     private claudeApiKey: string | null = null,
-    private openAiCompatibleConfig: OpenAiCompatibleConfig | null = null,
+    private openAiCompatibleProfiles: readonly OpenAiCompatibleProfile[] = [],
   ) {
     this.openAiService = new OpenAiService(openAiApiKey)
     this.geminiService = new GeminiService(geminiApiKey)
     this.claudeService = new ClaudeService(claudeApiKey)
-    this.openAiCompatibleService = new OpenAiCompatibleService(openAiCompatibleConfig)
   }
 
   setOpenAiApiKey(apiKey: string | null): void {
@@ -41,16 +43,17 @@ export class AiService implements IAiService {
     this.claudeService.setApiKey(apiKey)
   }
 
-  setOpenAiCompatibleConfig(config: OpenAiCompatibleConfig | null): void {
-    this.openAiCompatibleConfig = config
-    this.openAiCompatibleService.setConfig(config)
+  setOpenAiCompatibleProfiles(profiles: readonly OpenAiCompatibleProfile[]): void {
+    this.openAiCompatibleProfiles = profiles
   }
 
   isAvailable(): boolean {
     return this.openAiService.isAvailable() ||
       this.geminiService.isAvailable() ||
       this.claudeService.isAvailable() ||
-      this.openAiCompatibleService.isAvailable()
+      this.openAiCompatibleProfiles.some((profile) => (
+        isOpenAiCompatibleRuntimeReady(profile)
+      ))
   }
 
   getSupportedModels(): AiModelDefinition[] {
@@ -68,7 +71,11 @@ export class AiService implements IAiService {
     } else if (provider === 'claude') {
       return await this.claudeService.query(request)
     } else if (provider === 'custom') {
-      return await this.openAiCompatibleService.query(request)
+      const profile = resolveOpenAiCompatibleProfile(
+        request.modelId,
+        this.openAiCompatibleProfiles,
+      )
+      return await new OpenAiCompatibleService(profile).query(request)
     }
 
     throw new Error(`Unsupported AI provider: ${provider}`)

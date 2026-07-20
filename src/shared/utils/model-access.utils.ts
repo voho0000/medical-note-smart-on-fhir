@@ -1,6 +1,6 @@
 import {
-  CUSTOM_OPENAI_MODEL_ID,
   getModelDefinition,
+  isCustomOpenAiModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import { normalizeOpenAiCompatibleContextWindow } from '@/src/shared/types/openai-compatible.types'
@@ -33,7 +33,7 @@ export function hasDirectModelAccess(
   keys: ProviderKeys,
   customConfig?: OpenAiCompatibleConfig | null,
 ): boolean {
-  if (modelId === CUSTOM_OPENAI_MODEL_ID) {
+  if (isCustomOpenAiModelId(modelId)) {
     return isOpenAiCompatibleRuntimeReady(customConfig)
   }
   return Boolean(apiKeyForModel(modelId, keys, customConfig))
@@ -48,7 +48,7 @@ export function modelRuntimeIdentity(
   modelId: string,
   customConfig?: OpenAiCompatibleConfig | null,
 ): string {
-  return modelId === CUSTOM_OPENAI_MODEL_ID
+  return isCustomOpenAiModelId(modelId)
     ? `${modelId}:${openAiCompatibleCacheIdentity(customConfig)}`
     : modelId
 }
@@ -57,7 +57,7 @@ export function modelDisplayLabel(
   modelId: string,
   customConfig?: OpenAiCompatibleConfig | null,
 ): string {
-  if (modelId === CUSTOM_OPENAI_MODEL_ID && customConfig?.modelId.trim()) {
+  if (isCustomOpenAiModelId(modelId) && customConfig?.modelId.trim()) {
     return customConfig.modelId.trim()
   }
   return getModelDefinition(modelId)?.label ?? modelId
@@ -71,7 +71,7 @@ export function modelContextLimit(
   modelId: string,
   customConfig?: OpenAiCompatibleConfig | null,
 ): number {
-  if (modelId === CUSTOM_OPENAI_MODEL_ID) {
+  if (isCustomOpenAiModelId(modelId)) {
     return normalizeOpenAiCompatibleContextWindow(
       customConfig?.contextWindowTokens,
       customConfig?.modelId,

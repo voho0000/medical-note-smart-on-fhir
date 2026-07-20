@@ -28,9 +28,9 @@ import type {
   ReportInterpretation,
   ReportInterpretationMode,
 } from '@/src/core/entities/report-interpretation.entity'
-import { useOpenAiCompatibleConfig } from '@/src/application/stores/ai-config.store'
-import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
-import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
+import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
+import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
+import { resolveDefaultOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
 import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
 
 // Persist a completed interpretation so a page reload reuses it instead of
@@ -81,9 +81,14 @@ export function useReportInterpretation(
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
   const { audience } = useAudience()
-  const openAiCompatible = useOpenAiCompatibleConfig()
-  const effectiveModelId = isOpenAiCompatibleRuntimeReady(openAiCompatible)
-    ? CUSTOM_OPENAI_MODEL_ID
+  const openAiCompatibleProfiles = useAiConfigStore(
+    (state) => state.openAiCompatibleProfiles,
+  )
+  const openAiCompatible = resolveDefaultOpenAiCompatibleProfile(
+    openAiCompatibleProfiles,
+  )
+  const effectiveModelId = openAiCompatible
+    ? customOpenAiModelIdForProfile(openAiCompatible.profileId)
     : REPORT_INTERPRETATION_MODEL_ID
   const runtimeModelId = modelRuntimeIdentity(effectiveModelId, openAiCompatible)
 

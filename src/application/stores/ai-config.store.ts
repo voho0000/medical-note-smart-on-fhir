@@ -12,12 +12,18 @@ import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
 import { decrypt, encrypt, isEncrypted } from '@/src/shared/utils/crypto.utils'
 import { isUsableApiKey, sanitizeApiKey } from '@/src/shared/utils/api-key.utils'
-import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import type {
+  OpenAiCompatibleConfig,
+  OpenAiCompatibleProfile,
+} from '@/src/shared/types/openai-compatible.types'
 import {
   createEmptyOpenAiCompatibleConfig,
+  LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+  MAX_OPENAI_COMPATIBLE_PROFILES,
   normalizeOpenAiCompatibleContextWindow,
   normalizeOpenAiCompatibleContextWindowSource,
   normalizeOpenAiCompatibleTransport,
+  suggestedOpenAiCompatibleContextWindow,
 } from '@/src/shared/types/openai-compatible.types'
 import { normalizeOpenAiCompatibleBaseUrl } from '@/src/shared/utils/openai-compatible.utils'
 
@@ -29,6 +35,10 @@ interface AiConfigState {
   geminiKey: string | null
   perplexityKey: string | null
   claudeKey: string | null
+  /** All durable custom connections. `openAiCompatible` below is retained as
+   * the compatibility view used by consumers that have not adopted profile
+   * selection yet. */
+  openAiCompatibleProfiles: OpenAiCompatibleProfile[]
   openAiCompatible: OpenAiCompatibleConfig
   storageType: StorageType
   credentialsHydrating: boolean
@@ -39,6 +49,13 @@ interface AiConfigState {
   setGeminiKey: (key: string | null) => void
   setPerplexityKey: (key: string | null) => void
   setClaudeKey: (key: string | null) => void
+  addOpenAiCompatibleConfig: (config: OpenAiCompatibleConfig) => Promise<string>
+  updateOpenAiCompatibleConfig: (
+    profileId: string,
+    config: OpenAiCompatibleConfig,
+  ) => Promise<void>
+  setOpenAiCompatibleProfileEnabled: (profileId: string, enabled: boolean) => Promise<void>
+  deleteOpenAiCompatibleConfig: (profileId: string) => void
   setOpenAiCompatibleConfig: (config: OpenAiCompatibleConfig) => Promise<void>
   setOpenAiCompatibleEnabled: (enabled: boolean) => Promise<void>
   clearOpenAiCompatibleConfig: () => void
@@ -55,6 +72,7 @@ const STORAGE_KEYS = {
   OPENAI_COMPATIBLE_API_KEY: 'openai_compatible_api_key',
   OPENAI_COMPATIBLE_CONFIG: 'openai_compatible_config',
   OPENAI_COMPATIBLE_CONNECTION: 'openai_compatible_connection_v1',
+  OPENAI_COMPATIBLE_CONNECTIONS: 'openai_compatible_connections_v2',
   STORAGE_TYPE: 'api_key_storage_type',
 }
 
@@ -199,11 +217,24 @@ type StoredOpenAiCompatibleConfig = Pick<
   | 'transport'
 >
 
-interface StoredOpenAiCompatibleConnection {
+interface StoredOpenAiCompatibleConnectionV1 {
   version: 1
   profile: StoredOpenAiCompatibleConfig
   encryptedApiKey: string | null
 }
+
+interface StoredOpenAiCompatibleProfileV2 {
+  profileId: string
+  profile: StoredOpenAiCompatibleConfig
+  encryptedApiKey: string | null
+}
+
+interface StoredOpenAiCompatibleConnectionsV2 {
+  version: 2
+  profiles: StoredOpenAiCompatibleProfileV2[]
+}
+
+const LEGACY_SUGGESTED_CONTEXT_WINDOW = 15000
 
 const normalizeStoredOpenAiCompatibleConfig = (
   value: unknown,
@@ -217,19 +248,26 @@ const normalizeStoredOpenAiCompatibleConfig = (
     const baseUrl = normalizeOpenAiCompatibleBaseUrl(parsed.baseUrl)
     const modelId = parsed.modelId.trim()
     if (!modelId) return null
+    const contextWindowSource = normalizeOpenAiCompatibleContextWindowSource(
+      parsed.contextWindowSource,
+      true,
+    )
+    const normalizedContextWindow = normalizeOpenAiCompatibleContextWindow(
+      parsed.contextWindowTokens,
+      modelId,
+    )
     return {
       enabled: parsed.enabled === true,
       baseUrl,
       modelId,
       transport: normalizeOpenAiCompatibleTransport(parsed.transport),
-      contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
-        parsed.contextWindowTokens,
-        modelId,
-      ),
-      contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
-        parsed.contextWindowSource,
-        true,
-      ),
+      // Upgrade only the old automatic fallback. Values that were detected
+      // from an endpoint or entered manually remain untouched.
+      contextWindowTokens: contextWindowSource === 'suggested' &&
+        normalizedContextWindow === LEGACY_SUGGESTED_CONTEXT_WINDOW
+        ? suggestedOpenAiCompatibleContextWindow(modelId)
+        : normalizedContextWindow,
+      contextWindowSource,
     }
   } catch {
     return null
@@ -282,10 +320,10 @@ const loadLegacyOpenAiCompatibleProfile = (
 
 const parseStoredOpenAiCompatibleConnection = (
   raw: string | null,
-): StoredOpenAiCompatibleConnection | null => {
+): StoredOpenAiCompatibleConnectionV1 | null => {
   if (!raw) return null
   try {
-    const parsed = JSON.parse(raw) as Partial<StoredOpenAiCompatibleConnection>
+    const parsed = JSON.parse(raw) as Partial<StoredOpenAiCompatibleConnectionV1>
     const profile = normalizeStoredOpenAiCompatibleConfig(parsed.profile)
     if (
       parsed.version !== 1 ||
@@ -303,7 +341,55 @@ const serializeOpenAiCompatibleConnection = (
   encryptedApiKey: string | null,
 ) => JSON.stringify({ version: 1, profile, encryptedApiKey })
 
+const normalizeOpenAiCompatibleProfileId = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null
+  const profileId = value.trim()
+  return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(profileId) ? profileId : null
+}
+
+const parseStoredOpenAiCompatibleConnections = (
+  raw: string | null,
+): StoredOpenAiCompatibleConnectionsV2 | null => {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredOpenAiCompatibleConnectionsV2>
+    if (parsed.version !== 2 || !Array.isArray(parsed.profiles)) return null
+
+    const seen = new Set<string>()
+    const profiles: StoredOpenAiCompatibleProfileV2[] = []
+    // Bound validation and subsequent PBKDF2 work even if browser storage was
+    // tampered with. Invalid and duplicate rows fail closed individually.
+    for (const value of parsed.profiles) {
+      if (profiles.length >= MAX_OPENAI_COMPATIBLE_PROFILES) break
+      if (!value || typeof value !== 'object') continue
+      const candidate = value as Partial<StoredOpenAiCompatibleProfileV2>
+      const profileId = normalizeOpenAiCompatibleProfileId(candidate.profileId)
+      const profile = normalizeStoredOpenAiCompatibleConfig(candidate.profile)
+      if (
+        !profileId ||
+        seen.has(profileId) ||
+        !profile ||
+        !(candidate.encryptedApiKey === null || typeof candidate.encryptedApiKey === 'string')
+      ) continue
+      seen.add(profileId)
+      profiles.push({
+        profileId,
+        profile,
+        encryptedApiKey: candidate.encryptedApiKey,
+      })
+    }
+    return { version: 2, profiles }
+  } catch {
+    return null
+  }
+}
+
+const serializeOpenAiCompatibleConnections = (
+  profiles: StoredOpenAiCompatibleProfileV2[],
+) => JSON.stringify({ version: 2, profiles })
+
 const clearLegacyOpenAiCompatibleStorage = () => {
+  getStorage('localStorage')?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
   for (const storageType of ['localStorage', 'sessionStorage'] as const) {
     const storage = getStorage(storageType)
     storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
@@ -311,25 +397,31 @@ const clearLegacyOpenAiCompatibleStorage = () => {
   }
 }
 
-/** The endpoint profile and its ciphertext share one versioned localStorage
- * record, avoiding a profile/key mismatch if a write fails. */
-const persistOpenAiCompatibleOnDevice = async (
-  config: OpenAiCompatibleConfig,
+/** Every endpoint profile and its ciphertext share one versioned localStorage
+ * envelope. `setItem` publishes the complete list atomically, avoiding both a
+ * profile/key mismatch and partial multi-profile updates. */
+const persistOpenAiCompatibleProfilesOnDevice = async (
+  profiles: OpenAiCompatibleProfile[],
   expectedRevision: number,
 ) => {
   const storage = getStorage('localStorage')
   if (!storage) return
 
-  const encryptedApiKey = config.apiKey ? await encrypt(config.apiKey) : null
+  const storedProfiles = await Promise.all(profiles.map(async (profile) => ({
+    profileId: profile.profileId,
+    profile: toStoredOpenAiCompatibleConfig(profile),
+    encryptedApiKey: profile.apiKey ? await encrypt(profile.apiKey) : null,
+  })))
   if (expectedRevision !== customConnectionRevision) throw createStaleOperationError()
 
-  storage.setItem(
-    STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
-    serializeOpenAiCompatibleConnection(
-      toStoredOpenAiCompatibleConfig(config),
-      encryptedApiKey,
-    ),
-  )
+  if (storedProfiles.length === 0) {
+    storage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
+  } else {
+    storage.setItem(
+      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+      serializeOpenAiCompatibleConnections(storedProfiles),
+    )
+  }
   // The caller checks the same revision again before publishing state. A
   // clear/logout during either async boundary therefore cannot be undone.
   clearLegacyOpenAiCompatibleStorage()
@@ -353,6 +445,63 @@ const normalizeOpenAiCompatibleConfig = (
   ),
 })
 
+const toOpenAiCompatibleProfile = (
+  profileId: string,
+  config: OpenAiCompatibleConfig,
+): OpenAiCompatibleProfile => ({
+  profileId,
+  ...normalizeOpenAiCompatibleConfig(config),
+})
+
+const compatibilityOpenAiCompatibleConfig = (
+  profiles: OpenAiCompatibleProfile[],
+): OpenAiCompatibleConfig => {
+  const selected = profiles.find(
+    (profile) => profile.profileId === LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+  ) ?? profiles[0]
+  if (!selected) return createEmptyOpenAiCompatibleConfig()
+  const { profileId: _profileId, ...config } = selected
+  return config
+}
+
+const createOpenAiCompatibleProfileId = (existing: OpenAiCompatibleProfile[]): string => {
+  const used = new Set(existing.map((profile) => profile.profileId))
+  let profileId = ''
+  do {
+    profileId = globalThis.crypto?.randomUUID?.() ??
+      `profile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  } while (used.has(profileId))
+  return profileId
+}
+
+/** Deletion does not need to decrypt or re-encrypt surviving credentials. Copy
+ * their already encrypted rows into a new atomic envelope so the action stays
+ * synchronous (matching the legacy clear action) without exposing plaintext. */
+const persistOpenAiCompatibleProfileDeletion = (
+  remainingProfiles: OpenAiCompatibleProfile[],
+  expectedRevision: number,
+) => {
+  const storage = getStorage('localStorage')
+  if (!storage || expectedRevision !== customConnectionRevision) return
+  const stored = parseStoredOpenAiCompatibleConnections(
+    storage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS),
+  )
+  const remainingIds = new Set(remainingProfiles.map((profile) => profile.profileId))
+  const storedProfiles = stored?.profiles.filter((profile) => (
+    remainingIds.has(profile.profileId)
+  )) ?? []
+
+  if (storedProfiles.length === 0) {
+    storage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
+  } else {
+    storage.setItem(
+      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+      serializeOpenAiCompatibleConnections(storedProfiles),
+    )
+  }
+  clearLegacyOpenAiCompatibleStorage()
+}
+
 export const useAiConfigStore = create<AiConfigState>()(
   persist(
     (set, get) => ({
@@ -363,6 +512,7 @@ export const useAiConfigStore = create<AiConfigState>()(
       geminiKey: null,
       perplexityKey: null,
       claudeKey: null,
+      openAiCompatibleProfiles: [],
       openAiCompatible: createEmptyOpenAiCompatibleConfig(),
       storageType: 'sessionStorage',
       credentialsHydrating: false,
@@ -423,27 +573,115 @@ export const useAiConfigStore = create<AiConfigState>()(
         ).catch(console.error)
       },
 
-      setOpenAiCompatibleConfig: async (config) => {
+      addOpenAiCompatibleConfig: async (config) => {
+        const current = get().openAiCompatibleProfiles
+        if (current.length >= MAX_OPENAI_COMPATIBLE_PROFILES) {
+          throw new Error(`At most ${MAX_OPENAI_COMPATIBLE_PROFILES} custom endpoints can be saved`)
+        }
+        const profileId = createOpenAiCompatibleProfileId(current)
+        const next = [...current, toOpenAiCompatibleProfile(profileId, config)]
         const revision = ++customConnectionRevision
-        const next = normalizeOpenAiCompatibleConfig(config)
-        await persistOpenAiCompatibleOnDevice(next, revision)
+        await persistOpenAiCompatibleProfilesOnDevice(next, revision)
         if (revision !== customConnectionRevision) throw createStaleOperationError()
-        set({ openAiCompatible: next })
+        set({
+          openAiCompatibleProfiles: next,
+          openAiCompatible: compatibilityOpenAiCompatibleConfig(next),
+        })
+        return profileId
+      },
+
+      updateOpenAiCompatibleConfig: async (profileId, config) => {
+        const current = get().openAiCompatibleProfiles
+        if (!current.some((profile) => profile.profileId === profileId)) {
+          throw new Error('OpenAI-compatible profile was not found')
+        }
+        const next = current.map((profile) => (
+          profile.profileId === profileId
+            ? toOpenAiCompatibleProfile(profileId, config)
+            : profile
+        ))
+        const revision = ++customConnectionRevision
+        await persistOpenAiCompatibleProfilesOnDevice(next, revision)
+        if (revision !== customConnectionRevision) throw createStaleOperationError()
+        set({
+          openAiCompatibleProfiles: next,
+          openAiCompatible: compatibilityOpenAiCompatibleConfig(next),
+        })
+      },
+
+      setOpenAiCompatibleProfileEnabled: async (profileId, enabled) => {
+        const current = get().openAiCompatibleProfiles
+        if (!current.some((profile) => profile.profileId === profileId)) {
+          throw new Error('OpenAI-compatible profile was not found')
+        }
+        const next = current.map((profile) => (
+          profile.profileId === profileId ? { ...profile, enabled } : profile
+        ))
+        const revision = ++customConnectionRevision
+        await persistOpenAiCompatibleProfilesOnDevice(next, revision)
+        if (revision !== customConnectionRevision) throw createStaleOperationError()
+        set({
+          openAiCompatibleProfiles: next,
+          openAiCompatible: compatibilityOpenAiCompatibleConfig(next),
+        })
+      },
+
+      deleteOpenAiCompatibleConfig: (profileId) => {
+        const current = get().openAiCompatibleProfiles
+        if (!current.some((profile) => profile.profileId === profileId)) return
+        const revision = ++customConnectionRevision
+        const next = current.filter((profile) => profile.profileId !== profileId)
+        persistOpenAiCompatibleProfileDeletion(next, revision)
+        set({
+          openAiCompatibleProfiles: next,
+          openAiCompatible: compatibilityOpenAiCompatibleConfig(next),
+        })
+      },
+
+      setOpenAiCompatibleConfig: async (config) => {
+        const current = get().openAiCompatibleProfiles
+        const target = current.find(
+          (profile) => profile.profileId === LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+        ) ?? current[0]
+        const profileId = target?.profileId ?? LEGACY_OPENAI_COMPATIBLE_PROFILE_ID
+        const nextProfile = toOpenAiCompatibleProfile(profileId, config)
+        const next = target
+          ? current.map((profile) => profile.profileId === profileId ? nextProfile : profile)
+          : [nextProfile]
+        const revision = ++customConnectionRevision
+        await persistOpenAiCompatibleProfilesOnDevice(next, revision)
+        if (revision !== customConnectionRevision) throw createStaleOperationError()
+        set({
+          openAiCompatibleProfiles: next,
+          openAiCompatible: compatibilityOpenAiCompatibleConfig(next),
+        })
       },
 
       setOpenAiCompatibleEnabled: async (enabled) => {
-        const revision = ++customConnectionRevision
-        const next = { ...get().openAiCompatible, enabled }
-        await persistOpenAiCompatibleOnDevice(next, revision)
-        if (revision !== customConnectionRevision) throw createStaleOperationError()
-        set({ openAiCompatible: next })
+        const current = get().openAiCompatibleProfiles
+        const target = current.find(
+          (profile) => profile.profileId === LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+        ) ?? current[0]
+        if (!target) return
+        await get().setOpenAiCompatibleProfileEnabled(target.profileId, enabled)
       },
 
       clearOpenAiCompatibleConfig: () => {
-        customConnectionRevision += 1
-        getStorage('localStorage')?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
-        clearLegacyOpenAiCompatibleStorage()
-        set({ openAiCompatible: createEmptyOpenAiCompatibleConfig() })
+        const current = get().openAiCompatibleProfiles
+        const target = current.find(
+          (profile) => profile.profileId === LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+        ) ?? current[0]
+        if (!target) {
+          customConnectionRevision += 1
+          getStorage('localStorage')?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
+          clearLegacyOpenAiCompatibleStorage()
+          set({
+            openAiCompatibleProfiles: [],
+            openAiCompatible: createEmptyOpenAiCompatibleConfig(),
+          })
+          return
+        }
+        get().deleteOpenAiCompatibleConfig(target.profileId)
       },
       
       setStorageType: async (type) => {
@@ -537,14 +775,21 @@ export const useAiConfigStore = create<AiConfigState>()(
 
         // Memory is cleared first so StorageError cannot leave usable keys in
         // the running app or interrupt an auth/logout cleanup chain.
-        set((state) => ({
-          apiKey: null,
-          geminiKey: null,
-          perplexityKey: null,
-          claudeKey: null,
-          openAiCompatible: { ...state.openAiCompatible, apiKey: null },
-          storageTypeChanging: false,
-        }))
+        set((state) => {
+          const openAiCompatibleProfiles = state.openAiCompatibleProfiles.map((profile) => ({
+            ...profile,
+            apiKey: null,
+          }))
+          return {
+            apiKey: null,
+            geminiKey: null,
+            perplexityKey: null,
+            claudeKey: null,
+            openAiCompatibleProfiles,
+            openAiCompatible: compatibilityOpenAiCompatibleConfig(openAiCompatibleProfiles),
+            storageTypeChanging: false,
+          }
+        })
 
         // Preserve the custom endpoint itself while removing its credential
         // from the same atomic record. If rewriting fails, remove the record so
@@ -552,6 +797,25 @@ export const useAiConfigStore = create<AiConfigState>()(
         let deviceStorage: Storage | null = null
         try {
           deviceStorage = getStorage('localStorage')
+          const storedConnectionsRaw = deviceStorage?.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+          ) ?? null
+          const storedConnections = parseStoredOpenAiCompatibleConnections(
+            storedConnectionsRaw,
+          )
+          if (deviceStorage && storedConnectionsRaw) {
+            if (storedConnections) {
+              deviceStorage.setItem(
+                STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+                serializeOpenAiCompatibleConnections(storedConnections.profiles.map((entry) => ({
+                  ...entry,
+                  encryptedApiKey: null,
+                }))),
+              )
+            } else {
+              deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
+            }
+          }
           const storedConnectionRaw = deviceStorage?.getItem(
             STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
           ) ?? null
@@ -568,6 +832,7 @@ export const useAiConfigStore = create<AiConfigState>()(
           }
         } catch (error) {
           try {
+            deviceStorage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
             deviceStorage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
           } catch {
             // Best effort only; memory has already been cleared above.
@@ -618,6 +883,10 @@ export const useAiConfigStore = create<AiConfigState>()(
           }
 
           const deviceStorage = getStorage('localStorage')
+          const connectionsRaw = deviceStorage?.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+          ) ?? null
+          const storedConnections = parseStoredOpenAiCompatibleConnections(connectionsRaw)
           const connectionRaw = deviceStorage?.getItem(
             STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
           ) ?? null
@@ -634,109 +903,149 @@ export const useAiConfigStore = create<AiConfigState>()(
           const sessionLegacyKeyRaw = window.sessionStorage.getItem(
             STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
           )
-          const legacyProfile = storedConnection
+          const legacyProfile = storedConnections || storedConnection
             ? null
             : loadLegacyOpenAiCompatibleProfile('localStorage') ??
               loadLegacyOpenAiCompatibleProfile('sessionStorage')
-          const storedProfile = storedConnection?.profile ?? legacyProfile?.profile ?? null
-          const customCredentialRaw = storedConnection?.encryptedApiKey ??
-            legacyProfile?.credentialRaw ?? null
+          const sourceProfiles: StoredOpenAiCompatibleProfileV2[] = storedConnections?.profiles ?? (
+            storedConnection
+              ? [{
+                  profileId: LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+                  profile: storedConnection.profile,
+                  encryptedApiKey: storedConnection.encryptedApiKey,
+                }]
+              : legacyProfile
+                ? [{
+                    profileId: LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+                    profile: legacyProfile.profile,
+                    encryptedApiKey: legacyProfile.credentialRaw,
+                  }]
+                : []
+          )
 
-          const [apiKey, geminiKey, perplexityKey, claudeKey, customCredential] =
-            await Promise.all([
+          const [cloudCredentials, customCredentials] = await Promise.all([
+            Promise.all([
               loadEncryptedKey(storageType, STORAGE_KEYS.OPENAI_API_KEY),
               loadEncryptedKey(storageType, STORAGE_KEYS.GEMINI_API_KEY),
               loadEncryptedKey(storageType, STORAGE_KEYS.PERPLEXITY_API_KEY),
               loadEncryptedKey(storageType, STORAGE_KEYS.CLAUDE_API_KEY),
-              decodeStoredCredential(
-                customCredentialRaw,
-                STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
-              ),
-            ])
+            ]),
+            Promise.all(sourceProfiles.map((entry) => decodeStoredCredential(
+              entry.encryptedApiKey,
+              `${STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY}:${entry.profileId}`,
+            ))),
+          ])
+          const [apiKey, geminiKey, perplexityKey, claudeKey] = cloudCredentials
 
           if (hydrationRevision !== aiConfigHydrationRevision) return
 
-          let hydratedOpenAiCompatible: OpenAiCompatibleConfig | undefined
+          let hydratedOpenAiCompatibleProfiles: OpenAiCompatibleProfile[] | undefined
           if (connectionRevision === customConnectionRevision) {
-            let restoredCustomKey = customCredential.invalid ? null : customCredential.value
-            let encryptedCustomKey = customCredential.invalid ? null : customCredentialRaw
+            const restoredProfiles: OpenAiCompatibleProfile[] = []
+            const migratedStoredProfiles: StoredOpenAiCompatibleProfileV2[] = []
+            let unsafeCredentialMigrationFailed = false
 
-            if (customCredential.needsEncryption && restoredCustomKey) {
-              try {
-                encryptedCustomKey = await encrypt(restoredCustomKey)
-              } catch (error) {
-                console.warn('Failed to encrypt legacy custom endpoint key:', error)
-                // Do not retain or expose legacy plaintext if secure migration fails.
-                encryptedCustomKey = null
-                restoredCustomKey = null
+            for (let index = 0; index < sourceProfiles.length; index += 1) {
+              const source = sourceProfiles[index]
+              const credential = customCredentials[index]
+              let restoredKey = credential.invalid ? null : credential.value
+              let encryptedKey = credential.invalid ? null : source.encryptedApiKey
+
+              if (credential.needsEncryption && restoredKey) {
+                try {
+                  encryptedKey = await encrypt(restoredKey)
+                } catch (error) {
+                  console.warn('Failed to encrypt legacy custom endpoint key:', error)
+                  // Never retain or expose a legacy plaintext credential when
+                  // secure destination-first migration cannot finish.
+                  encryptedKey = null
+                  restoredKey = null
+                  unsafeCredentialMigrationFailed = true
+                }
               }
+
+              restoredProfiles.push({
+                profileId: source.profileId,
+                ...source.profile,
+                apiKey: restoredKey,
+              })
+              migratedStoredProfiles.push({
+                ...source,
+                encryptedApiKey: encryptedKey,
+              })
             }
 
             if (
               hydrationRevision === aiConfigHydrationRevision &&
               connectionRevision === customConnectionRevision
             ) {
-              const connectionStillCurrent = storedConnection
-                ? deviceStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION) ===
-                  connectionRaw
-                : legacyProfile
-                  ? deviceStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION) ===
-                    connectionRaw &&
+              const connectionStillCurrent = (
+                deviceStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS) ===
+                  connectionsRaw &&
+                deviceStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION) ===
+                  connectionRaw &&
+                (legacyProfile
+                  ? (
                     getStorage(legacyProfile.storageType)?.getItem(
                       STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG,
                     ) === legacyProfile.raw &&
                     getStorage(legacyProfile.storageType)?.getItem(
                       STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
                     ) === legacyProfile.credentialRaw
-                  : true
+                  )
+                  : true)
+              )
 
-              if (storedProfile && connectionStillCurrent && deviceStorage) {
+              if (sourceProfiles.length > 0 && connectionStillCurrent && deviceStorage) {
                 try {
-                  if (
-                    legacyProfile ||
-                    customCredential.invalid ||
-                    customCredential.needsEncryption
-                  ) {
-                    deviceStorage.setItem(
-                      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
-                      serializeOpenAiCompatibleConnection(
-                        storedProfile,
-                        encryptedCustomKey,
-                      ),
-                    )
-                  }
+                  // Always publish the bounded, normalized v2 envelope. The
+                  // write happens before any source deletion (destination-first).
+                  deviceStorage.setItem(
+                    STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+                    serializeOpenAiCompatibleConnections(migratedStoredProfiles),
+                  )
                   clearLegacyOpenAiCompatibleStorage()
-                  hydratedOpenAiCompatible = {
-                    ...storedProfile,
-                    apiKey: restoredCustomKey,
-                  }
+                  hydratedOpenAiCompatibleProfiles = restoredProfiles
                 } catch (error) {
-                  console.warn('Failed to migrate custom endpoint to device storage:', error)
-                  if (
-                    storedConnection &&
-                    (customCredential.needsEncryption || customCredential.invalid) &&
-                    deviceStorage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION) ===
-                    connectionRaw
-                  ) {
-                    deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
-                    restoredCustomKey = null
-                  } else if (customCredential.needsEncryption || customCredential.invalid) {
-                    const legacyKeyStorage = legacyProfile
-                      ? getStorage(legacyProfile.storageType)
-                      : deviceStorage
-                    if (
-                      legacyKeyStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY) ===
-                      customCredential.raw
-                    ) {
-                      legacyKeyStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+                  console.warn('Failed to migrate custom endpoints to device storage:', error)
+                  if (unsafeCredentialMigrationFailed || customCredentials.some(
+                    (credential) => credential.invalid || credential.needsEncryption,
+                  )) {
+                    // Remove the exact unsafe source snapshot; valid ciphertext
+                    // sources remain available for a later migration retry.
+                    if (storedConnections && deviceStorage.getItem(
+                      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+                    ) === connectionsRaw) {
+                      deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
                     }
-                    restoredCustomKey = null
+                    if (storedConnection && deviceStorage.getItem(
+                      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+                    ) === connectionRaw) {
+                      deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
+                    }
+                    if (legacyProfile) {
+                      const legacyStorage = getStorage(legacyProfile.storageType)
+                      if (legacyStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY) ===
+                        legacyProfile.credentialRaw) {
+                        legacyStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+                      }
+                    }
+                    hydratedOpenAiCompatibleProfiles = restoredProfiles.map((profile) => ({
+                      ...profile,
+                      apiKey: null,
+                    }))
+                  } else {
+                    hydratedOpenAiCompatibleProfiles = restoredProfiles
                   }
-                  hydratedOpenAiCompatible = { ...storedProfile, apiKey: restoredCustomKey }
                 }
-              } else if (!storedProfile) {
+              } else if (sourceProfiles.length === 0) {
                 // Remove corrupted profiles and orphan credentials only when
                 // storage still contains the exact snapshot we inspected.
+                if (connectionsRaw && deviceStorage?.getItem(
+                  STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+                ) === connectionsRaw) {
+                  deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
+                }
                 if (connectionRaw && deviceStorage?.getItem(
                   STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
                 ) === connectionRaw) {
@@ -756,7 +1065,7 @@ export const useAiConfigStore = create<AiConfigState>()(
                     storage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY) === keyRaw
                   ) storage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
                 }
-                hydratedOpenAiCompatible = createEmptyOpenAiCompatibleConfig()
+                hydratedOpenAiCompatibleProfiles = []
               }
             }
           }
@@ -779,8 +1088,11 @@ export const useAiConfigStore = create<AiConfigState>()(
           if (savedStorageTypeRevision === storageTypeRevision) {
             updates.storageType = storageType
           }
-          if (hydratedOpenAiCompatible) {
-            updates.openAiCompatible = hydratedOpenAiCompatible
+          if (hydratedOpenAiCompatibleProfiles) {
+            updates.openAiCompatibleProfiles = hydratedOpenAiCompatibleProfiles
+            updates.openAiCompatible = compatibilityOpenAiCompatibleConfig(
+              hydratedOpenAiCompatibleProfiles,
+            )
           }
           set(updates)
 
@@ -858,12 +1170,14 @@ const selectGeminiKey = (state: AiConfigState) => state.geminiKey
 const selectPerplexityKey = (state: AiConfigState) => state.perplexityKey
 const selectClaudeKey = (state: AiConfigState) => state.claudeKey
 const selectOpenAiCompatible = (state: AiConfigState) => state.openAiCompatible
+const selectOpenAiCompatibleProfiles = (state: AiConfigState) => state.openAiCompatibleProfiles
 
 export const useApiKey = () => useAiConfigStore(selectApiKey)
 export const useGeminiKey = () => useAiConfigStore(selectGeminiKey)
 export const usePerplexityKey = () => useAiConfigStore(selectPerplexityKey)
 export const useClaudeKey = () => useAiConfigStore(selectClaudeKey)
 export const useOpenAiCompatibleConfig = () => useAiConfigStore(selectOpenAiCompatible)
+export const useOpenAiCompatibleProfiles = () => useAiConfigStore(selectOpenAiCompatibleProfiles)
 
 // Use useShallow to prevent infinite loops from object reference changes
 export const useAllApiKeys = () => useAiConfigStore(
@@ -873,5 +1187,6 @@ export const useAllApiKeys = () => useAiConfigStore(
     perplexityKey: state.perplexityKey,
     claudeKey: state.claudeKey,
     openAiCompatible: state.openAiCompatible,
+    openAiCompatibleProfiles: state.openAiCompatibleProfiles,
   }))
 )

@@ -152,7 +152,7 @@ export function MedicalSummaryCardNav({
           activeGeneration={activeGeneration}
           runningLabel={runningLabel}
           runningAriaTemplate={runningAriaTemplate}
-          className="ml-auto max-w-[48%] shrink-0 text-[0.625rem]"
+          className="ml-auto max-w-[min(48%,24rem)] shrink-0 text-[0.625rem]"
         />
       </div>
     </nav>

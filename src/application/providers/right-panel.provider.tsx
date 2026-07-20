@@ -2,7 +2,22 @@
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
-export type SettingsNavigationTarget = 'openai-compatible-context-window'
+export interface OpenAiCompatibleContextWindowTarget {
+  kind: 'openai-compatible-context-window'
+  /** Exact custom connection whose editable token window should be revealed. */
+  profileId?: string
+}
+
+export type SettingsNavigationTarget =
+  | 'openai-compatible-context-window'
+  | OpenAiCompatibleContextWindowTarget
+
+export function isOpenAiCompatibleContextWindowTarget(
+  target: SettingsNavigationTarget | null | undefined,
+): boolean {
+  return target === 'openai-compatible-context-window' ||
+    (typeof target === 'object' && target?.kind === 'openai-compatible-context-window')
+}
 
 interface RightPanelContextType {
   activeTab: string

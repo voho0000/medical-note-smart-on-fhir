@@ -86,7 +86,12 @@ jest.mock('@/src/application/hooks/ai/use-unified-ai.hook', () => ({
 }))
 
 jest.mock('@/src/application/stores/ai-config.store', () => ({
-  useAllApiKeys: () => ({ apiKey: 'test-key', geminiKey: null, perplexityKey: null }),
+  useAllApiKeys: () => ({
+    apiKey: 'test-key',
+    geminiKey: null,
+    perplexityKey: null,
+    openAiCompatibleProfiles: [],
+  }),
 }))
 
 describe('right-panel registry — ips-export tab persistence', () => {

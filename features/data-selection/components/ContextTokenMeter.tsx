@@ -22,7 +22,10 @@ import {
   type ContextOverflowIssue,
   type ContextBudgetLevel,
 } from "@/src/shared/utils/context-budget"
-import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
 import { modelContextLimit, modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 
 const LEVEL_BAR: Record<ContextBudgetLevel, string> = {
@@ -54,7 +57,11 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
   // the meter disagree with the subsequent summary request.
   const { getClinicalContext, formatClinicalContext } = useClinicalContext('insights')
   const defaultModelId = useEffectiveModel("insights")
-  const { apiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
+  const { apiKey, geminiKey, claudeKey, openAiCompatibleProfiles } = useAllApiKeys()
+  const selectedOpenAiCompatible = resolveOpenAiCompatibleProfile(
+    modelId ?? defaultModelId,
+    openAiCompatibleProfiles,
+  )
   const effectiveModelId = modelId
     ? gateModelForKeys(
         modelId,
@@ -62,11 +69,15 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
           openAiKey: apiKey,
           geminiKey,
           claudeKey,
-          customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
+          customAvailable: isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible),
         },
         fallbackModelId ?? defaultModelId,
       )
     : defaultModelId
+  const openAiCompatible = resolveOpenAiCompatibleProfile(
+    effectiveModelId,
+    openAiCompatibleProfiles,
+  )
 
   // Debounced snapshot of the formatted context. We recompute sections on a
   // trailing timer rather than every render.
@@ -96,14 +107,11 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
   }, [getClinicalContext, formatClinicalContext])
 
   const contextLimit = modelContextLimit(effectiveModelId, openAiCompatible)
-  const budget = useMemo(
-    () => evaluateContextBudget(
-      total,
-      effectiveModelId,
-      DEFAULT_RESPONSE_RESERVE,
-      contextLimit,
-    ),
-    [total, effectiveModelId, contextLimit],
+  const budget = evaluateContextBudget(
+    total,
+    effectiveModelId,
+    DEFAULT_RESPONSE_RESERVE,
+    contextLimit,
   )
   const topSections = useMemo(
     () => [...sections].sort((a, b) => b.tokens - a.tokens).slice(0, 3).filter((s) => s.tokens > 0),

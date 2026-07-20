@@ -5,6 +5,8 @@ import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safet
 import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
+import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 
 let mockAutoAiConsent = {
   source: 'other' as 'other' | 'local' | 'demo',
@@ -188,6 +190,7 @@ function arrange({
 describe('useMedicalSummaryOrchestrator', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    useAiConfigStore.setState({ openAiCompatibleProfiles: [] })
     mockStartLocalImportAiConsent.mockImplementation((importId: string) => ({ importId }))
     mockAutoAiConsent = { source: 'other', decision: null, importId: null }
     arrange()
@@ -202,6 +205,88 @@ describe('useMedicalSummaryOrchestrator', () => {
     await act(async () => result.current.generate())
     expect(summaryGenerate).toHaveBeenCalledTimes(1)
     expect(safetyGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts a deleted custom-profile batch before its queued safety request starts', async () => {
+    const profile: OpenAiCompatibleProfile = {
+      profileId: 'legacy',
+      enabled: true,
+      baseUrl: 'https://hospital.example/v1',
+      modelId: 'hospital-7b',
+      apiKey: 'local-key',
+      transport: 'direct',
+      contextWindowTokens: 32768,
+      contextWindowSource: 'manual',
+    }
+    useAiConfigStore.setState({ openAiCompatibleProfiles: [profile] })
+    arrange({
+      summaryModel: CUSTOM_OPENAI_MODEL_ID,
+      safetyModel: CUSTOM_OPENAI_MODEL_ID,
+      summaryResolvedModelName: 'hospital-7b',
+    })
+    let finishSummary!: () => void
+    summaryGenerate.mockImplementationOnce(async () => (
+      await new Promise<void>((resolve) => { finishSummary = resolve })
+    ))
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    let generation!: Promise<void>
+    act(() => {
+      generation = result.current.generate()
+    })
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
+
+    act(() => useAiConfigStore.setState({ openAiCompatibleProfiles: [] }))
+
+    expect(summaryCancel).toHaveBeenCalledWith(expect.stringContaining('summary-model'))
+    expect(safetyCancel).toHaveBeenCalledWith(expect.stringContaining('safety-model'))
+    await act(async () => {
+      finishSummary()
+      await generation
+    })
+
+    expect(safetyGenerate).not.toHaveBeenCalled()
+    await waitFor(() => expect(result.current.isGenerating).toBe(false))
+  })
+
+  it('tombstones queued local work when the summary screen unmounts', async () => {
+    const profile: OpenAiCompatibleProfile = {
+      profileId: 'legacy',
+      enabled: true,
+      baseUrl: 'https://hospital.example/v1',
+      modelId: 'hospital-7b',
+      apiKey: 'local-key',
+      transport: 'direct',
+      contextWindowTokens: 32768,
+      contextWindowSource: 'manual',
+    }
+    useAiConfigStore.setState({ openAiCompatibleProfiles: [profile] })
+    arrange({
+      summaryModel: CUSTOM_OPENAI_MODEL_ID,
+      safetyModel: CUSTOM_OPENAI_MODEL_ID,
+      summaryResolvedModelName: 'hospital-7b',
+    })
+    let finishSummary!: () => void
+    summaryGenerate.mockImplementationOnce(async () => (
+      await new Promise<void>((resolve) => { finishSummary = resolve })
+    ))
+    const { result, unmount } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    let generation!: Promise<void>
+    act(() => {
+      generation = result.current.generate()
+    })
+    await waitFor(() => expect(summaryGenerate).toHaveBeenCalledTimes(1))
+
+    unmount()
+    expect(summaryCancel).toHaveBeenCalledWith(expect.stringContaining('summary-model'))
+    expect(safetyCancel).toHaveBeenCalledWith(expect.stringContaining('safety-model'))
+    await act(async () => {
+      finishSummary()
+      await generation
+    })
+
+    expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
   it('restores a custom endpoint version atomically as its two caches hydrate', async () => {

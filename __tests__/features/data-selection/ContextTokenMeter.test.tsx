@@ -30,6 +30,7 @@ jest.mock('@/src/application/stores/ai-config.store', () => ({
     geminiKey: '',
     claudeKey: '',
     openAiCompatible: null,
+    openAiCompatibleProfiles: [],
   }),
 }))
 jest.mock('@/src/application/stores/model-prefs.store', () => ({

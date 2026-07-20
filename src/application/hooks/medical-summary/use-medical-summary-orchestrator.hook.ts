@@ -13,12 +13,18 @@ import {
   startLocalImportAiConsent,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
-import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { generateId } from '@/src/shared/utils/id.utils'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
+import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
+import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 
 function createBatchId(sequence: number) {
   return `${Date.now().toString(36)}-${sequence.toString(36)}`
@@ -36,6 +42,7 @@ export interface SummaryGenerationBatchInfo {
 
 interface ActiveGenerationBatch extends SummaryGenerationBatchInfo {
   scopeKey: string
+  modelId: string
   startedAtMonotonic: number
   summarySlotKey: string
   safetySlotKey: string
@@ -167,9 +174,14 @@ export function useMedicalSummaryOrchestrator() {
       : autoGenerate
   const sequenceRef = useRef(0)
   const activeBatchRef = useRef<ActiveGenerationBatch | null>(null)
+  const activeCustomProfileRef = useRef<{
+    batchId: string
+    profile: OpenAiCompatibleProfile | null
+  } | null>(null)
   const manualBatchIdsRef = useRef<Set<string>>(new Set())
   const cancelledBatchIdsRef = useRef<Set<string>>(new Set())
   const cancelledScopeKeysRef = useRef<Set<string>>(new Set())
+  const pipelineCancellationRef = useRef({ cancelSummary, cancelSafety })
   const [activeBatch, setActiveBatch] = useState<ActiveGenerationBatch | null>(null)
   const [cancellingScopeKey, setCancellingScopeKey] = useState<string | null>(null)
   const [lastCompletedTiming, setLastCompletedTiming] = useState<CompletedSummaryBatchTiming | null>(null)
@@ -195,6 +207,10 @@ export function useMedicalSummaryOrchestrator() {
     safetyResult: selectedPresentationSafetyResult,
   })
   const [cancelledBaseline, setCancelledBaseline] = useState<CancelledBaseline | null>(null)
+
+  useEffect(() => {
+    pipelineCancellationRef.current = { cancelSummary, cancelSafety }
+  }, [cancelSafety, cancelSummary])
 
   const scopedBatchStatus = lastBatchStatus?.scopeKey === scopeKey
     ? lastBatchStatus
@@ -299,6 +315,7 @@ export function useMedicalSummaryOrchestrator() {
     const next: ActiveGenerationBatch = {
       id,
       scopeKey,
+      modelId: model,
       modelName: resolvedModelName,
       startedAt: Date.now(),
       startedAtMonotonic: monotonicNow(),
@@ -322,6 +339,15 @@ export function useMedicalSummaryOrchestrator() {
       safetyOutcomeIssue: null,
     }
     activeBatchRef.current = next
+    activeCustomProfileRef.current = isCustomOpenAiModelId(model)
+      ? {
+          batchId: id,
+          profile: resolveOpenAiCompatibleProfile(
+            model,
+            useAiConfigStore.getState().openAiCompatibleProfiles,
+          ),
+        }
+      : null
     // Keep the last complete briefing visible throughout a refresh. New
     // summary/safety responses publish together when the batch settles, so the
     // page never mixes one newly generated half with one stale half.
@@ -345,13 +371,13 @@ export function useMedicalSummaryOrchestrator() {
     setLastBatchStatus(null)
     setActiveBatch(next)
     return id
-  }, [cancelledBaseline, readSafetyGenerationSlot, readSummaryGenerationSlot, resolvedModelName, safetyGenerationSlotKey, scopeKey, selectedPresentationResult, selectedPresentationSafetyResult, summaryGenerationSlotKey])
+  }, [cancelledBaseline, model, readSafetyGenerationSlot, readSummaryGenerationSlot, resolvedModelName, safetyGenerationSlotKey, scopeKey, selectedPresentationResult, selectedPresentationSafetyResult, summaryGenerationSlotKey])
 
   const runPipelines = useCallback(async (
     jobs: GenerationPipeline[],
     isCancelled: () => boolean,
   ) => {
-    if (model === CUSTOM_OPENAI_MODEL_ID) {
+    if (isCustomOpenAiModelId(model)) {
       // A small local model commonly runs on one GPU/CPU worker. Starting the
       // two large structured prompts together makes one request queue behind
       // the other (or forces both to compete for memory), which used to trip
@@ -430,13 +456,10 @@ export function useMedicalSummaryOrchestrator() {
     ])
   }, [generateSafety, generateSummary, runManualBatch])
 
-  const cancelGeneration = useCallback(() => {
-    if (!scopeKey) return
-    cancelledScopeKeysRef.current.add(scopeKey)
-    setCancellingScopeKey(scopeKey)
-
-    const current = activeBatchRef.current
-    if (current?.scopeKey === scopeKey && !current.cancelled) {
+  const cancelTrackedBatch = useCallback((current: ActiveGenerationBatch) => {
+    cancelledScopeKeysRef.current.add(current.scopeKey)
+    setCancellingScopeKey(current.scopeKey)
+    if (!current.cancelled) {
       cancelledBatchIdsRef.current.add(current.id)
       const cancelledBatch = { ...current, cancelled: true }
       activeBatchRef.current = cancelledBatch
@@ -446,50 +469,36 @@ export function useMedicalSummaryOrchestrator() {
     // Summary and safety own independent useUnifiedAi instances. Stopping the
     // user-facing batch must abort every expected half, including an auto
     // pipeline that is still waiting for hydration.
-    if (!current || current.scopeKey !== scopeKey || current.expectsSummary) {
-      cancelSummary(
-        current?.scopeKey === scopeKey
-          ? current.summarySlotKey
-          : summaryGenerationSlotKey,
-      )
-    }
-    if (!current || current.scopeKey !== scopeKey || current.expectsSafety) {
-      cancelSafety(
-        current?.scopeKey === scopeKey
-          ? current.safetySlotKey
-          : safetyGenerationSlotKey,
-      )
-    }
+    if (current.expectsSummary) cancelSummary(current.summarySlotKey)
+    if (current.expectsSafety) cancelSafety(current.safetySlotKey)
 
     // A local sequential batch may have committed summary before safety began.
     // Restore that exact slot (and its encrypted cache) immediately; the
     // cancelled-baseline presentation below covers retained-model state until
     // the next complete batch succeeds.
-    if (current?.scopeKey === scopeKey) {
-      if (
-        current.expectsSummary &&
-        !Object.is(
-          readSummaryGenerationSlot(current.summarySlotKey).result,
-          current.summaryPreviousResult,
-        )
-      ) {
-        restoreSummaryGenerationSlot(
-          current.summarySlotKey,
-          current.summaryPreviousResult,
-        )
-      }
-      if (
-        current.expectsSafety &&
-        !Object.is(
-          readSafetyGenerationSlot(current.safetySlotKey).result,
-          current.safetyPreviousResult,
-        )
-      ) {
-        restoreSafetyGenerationSlot(
-          current.safetySlotKey,
-          current.safetyPreviousResult,
-        )
-      }
+    if (
+      current.expectsSummary &&
+      !Object.is(
+        readSummaryGenerationSlot(current.summarySlotKey).result,
+        current.summaryPreviousResult,
+      )
+    ) {
+      restoreSummaryGenerationSlot(
+        current.summarySlotKey,
+        current.summaryPreviousResult,
+      )
+    }
+    if (
+      current.expectsSafety &&
+      !Object.is(
+        readSafetyGenerationSlot(current.safetySlotKey).result,
+        current.safetyPreviousResult,
+      )
+    ) {
+      restoreSafetyGenerationSlot(
+        current.safetySlotKey,
+        current.safetyPreviousResult,
+      )
     }
   }, [
     cancelSafety,
@@ -498,10 +507,83 @@ export function useMedicalSummaryOrchestrator() {
     readSummaryGenerationSlot,
     restoreSafetyGenerationSlot,
     restoreSummaryGenerationSlot,
+  ])
+
+  const cancelGeneration = useCallback(() => {
+    if (!scopeKey) return
+    const current = activeBatchRef.current
+    if (current?.scopeKey === scopeKey) {
+      cancelTrackedBatch(current)
+      return
+    }
+
+    cancelledScopeKeysRef.current.add(scopeKey)
+    setCancellingScopeKey(scopeKey)
+    // A request can begin one render before its presentation batch is
+    // registered. Preserve the historical fallback for that narrow window.
+    cancelSummary(summaryGenerationSlotKey)
+    cancelSafety(safetyGenerationSlotKey)
+  }, [
+    cancelSafety,
+    cancelSummary,
+    cancelTrackedBatch,
     safetyGenerationSlotKey,
     scopeKey,
     summaryGenerationSlotKey,
   ])
+
+  useEffect(() => useAiConfigStore.subscribe((state, previousState) => {
+    if (state.openAiCompatibleProfiles === previousState.openAiCompatibleProfiles) return
+    const current = activeBatchRef.current
+    const tracked = activeCustomProfileRef.current
+    if (
+      !current ||
+      current.cancelled ||
+      !tracked ||
+      tracked.batchId !== current.id
+    ) return
+
+    const liveProfile = resolveOpenAiCompatibleProfile(
+      current.modelId,
+      state.openAiCompatibleProfiles,
+    )
+    if (
+      liveProfile === tracked.profile &&
+      isOpenAiCompatibleRuntimeReady(liveProfile)
+    ) return
+
+    // The endpoint owning this batch was edited, disabled, or deleted. Abort
+    // the active half, tombstone any sequential half that has not started, and
+    // restore the pre-batch pair so no partial result is published.
+    cancelTrackedBatch(current)
+  }), [cancelTrackedBatch])
+
+  useEffect(() => {
+    const manualBatchIds = manualBatchIdsRef
+    const cancelledBatchIds = cancelledBatchIdsRef
+    const cancelledScopeKeys = cancelledScopeKeysRef
+    const currentBatch = activeBatchRef
+    const cancellation = pipelineCancellationRef
+    return () => {
+      // An unmounted local batch still owns async closures. Tombstone every
+      // manual id before the in-flight promise settles, otherwise its
+      // sequential safety job could start after useUnifiedAi has already
+      // removed its live-profile subscription.
+      for (const batchId of manualBatchIds.current) {
+        cancelledBatchIds.current.add(batchId)
+      }
+      const current = currentBatch.current
+      if (!current) return
+      cancelledBatchIds.current.add(current.id)
+      cancelledScopeKeys.current.add(current.scopeKey)
+      if (current.expectsSummary) {
+        cancellation.current.cancelSummary(current.summarySlotKey)
+      }
+      if (current.expectsSafety) {
+        cancellation.current.cancelSafety(current.safetySlotKey)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const cancelQueuedBundleWork = () => {

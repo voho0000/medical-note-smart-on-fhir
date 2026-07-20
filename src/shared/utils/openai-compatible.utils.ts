@@ -1,6 +1,13 @@
-import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import type {
+  OpenAiCompatibleConfig,
+  OpenAiCompatibleProfile,
+} from '@/src/shared/types/openai-compatible.types'
 import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
+import {
+  customOpenAiModelIdForProfile,
+  isCustomOpenAiModelId,
+} from '@/src/shared/constants/ai-models.constants'
 
 const CONTROL_OR_WHITESPACE = /[\u0000-\u0020\u007f]/
 const FULL_COMPLETIONS_PATH = /\/chat\/completions\/?$/i
@@ -173,6 +180,29 @@ export function isOpenAiCompatibleRuntimeReady(
   if (!isOpenAiCompatibleReady(config)) return false
   return normalizeOpenAiCompatibleTransport(config.transport) !== 'mediprisma-gateway' ||
     gatewayAvailable
+}
+
+/** Resolve the exact browser profile represented by a logical custom-model id.
+ * A missing/deleted profile deliberately returns null: callers must fail closed
+ * rather than silently sending hospital data to a cloud fallback or a different
+ * custom endpoint. */
+export function resolveOpenAiCompatibleProfile(
+  modelId: string,
+  profiles: readonly OpenAiCompatibleProfile[] | null | undefined,
+): OpenAiCompatibleProfile | null {
+  if (!isCustomOpenAiModelId(modelId)) return null
+  return profiles?.find(
+    (profile) => customOpenAiModelIdForProfile(profile.profileId) === modelId,
+  ) ?? null
+}
+
+/** Deterministic custom profile for AI features that do not expose a model
+ * picker (currently report interpretation and IPS problem inference). Only a
+ * runtime-ready profile is eligible; array order is the persisted user order. */
+export function resolveDefaultOpenAiCompatibleProfile(
+  profiles: readonly OpenAiCompatibleProfile[] | null | undefined,
+): OpenAiCompatibleProfile | null {
+  return profiles?.find((profile) => isOpenAiCompatibleRuntimeReady(profile)) ?? null
 }
 
 /**

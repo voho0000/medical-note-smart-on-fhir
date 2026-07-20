@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { Cpu, Loader2 } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/src/shared/utils/cn.utils"
 import {
   formatGenerationDuration,
@@ -20,6 +25,28 @@ interface SummaryGenerationMetaProps {
   runningLabel: string
   runningAriaTemplate: string
   className?: string
+}
+
+function TruncatedModelName({ modelName }: { modelName: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="min-w-0 max-w-[7rem] cursor-help truncate focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          tabIndex={0}
+        >
+          {modelName}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={4}
+        className="max-w-[min(90vw,32rem)] whitespace-normal break-all text-left text-xs"
+      >
+        {modelName}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 function RunningGenerationMeta({
@@ -57,14 +84,13 @@ function RunningGenerationMeta({
       role="timer"
       aria-live="off"
       aria-label={ariaLabel}
-      title={ariaLabel}
     >
       <Loader2 aria-hidden="true" className="h-3 w-3 shrink-0 animate-spin text-teal-600" />
       <span className="shrink-0 font-medium text-teal-700 dark:text-teal-300">
         {runningLabel}
       </span>
       <span aria-hidden="true" className="shrink-0">·</span>
-      <span className="min-w-0 truncate">{activeGeneration.modelName}</span>
+      <TruncatedModelName modelName={activeGeneration.modelName} />
       <span aria-hidden="true" className="shrink-0">·</span>
       <span className="shrink-0 tabular-nums">{elapsedText}</span>
     </div>
@@ -99,7 +125,6 @@ export function SummaryGenerationMeta({
         className,
       )}
       aria-label={generationInfo.ariaLabel}
-      title={generationInfo.ariaLabel}
     >
       <Cpu aria-hidden="true" className="h-3 w-3 shrink-0" />
       {generationInfo.prefix ? (
@@ -108,7 +133,7 @@ export function SummaryGenerationMeta({
           <span aria-hidden="true" className="shrink-0">·</span>
         </>
       ) : null}
-      <span className="min-w-0 truncate">{generationInfo.modelName}</span>
+      <TruncatedModelName modelName={generationInfo.modelName} />
       {generationInfo.generatedAtIso && generationInfo.generatedAtText ? (
         <>
           <span aria-hidden="true" className="shrink-0">·</span>

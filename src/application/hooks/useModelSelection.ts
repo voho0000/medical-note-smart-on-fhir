@@ -7,12 +7,14 @@ import {
   GEMINI_MODELS,
   CLAUDE_MODELS,
   CUSTOM_OPENAI_MODEL_ID,
+  customOpenAiModelIdForProfile,
   getModelDefinition,
   isModelId,
+  openAiCompatibleProfileIdFromModelId,
   ModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
 import { ENV_CONFIG, hasChatProxy, hasGeminiProxy, hasClaudeProxy } from "@/src/shared/config/env.config"
-import { useOpenAiCompatibleConfig } from '@/src/application/stores/ai-config.store'
+import { useOpenAiCompatibleProfiles } from '@/src/application/stores/ai-config.store'
 import { isOpenAiCompatibleReady, isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
 import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
 
@@ -24,6 +26,20 @@ export interface ModelEntry {
   configureInSettings?: boolean
 }
 
+function endpointParts(baseUrl: string): { host: string; full: string } {
+  if (baseUrl.startsWith('/')) return { host: baseUrl, full: baseUrl }
+  try {
+    const url = new URL(baseUrl)
+    const pathname = url.pathname.replace(/\/+$/, '')
+    return {
+      host: url.host,
+      full: `${url.host}${pathname && pathname !== '/' ? pathname : ''}`,
+    }
+  } catch {
+    return { host: baseUrl, full: baseUrl }
+  }
+}
+
 export function useModelSelection(
   apiKey: string | null,
   geminiKey: string | null,
@@ -32,7 +48,7 @@ export function useModelSelection(
   setModel: (model: string) => void
 ) {
   const { t } = useLanguage()
-  const openAiCompatible = useOpenAiCompatibleConfig()
+  const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
   const gptModels = useMemo(() => {
     return GPT_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
@@ -45,7 +61,7 @@ export function useModelSelection(
         isLocked: isLocked || false
       }
     })
-  }, [apiKey, t.settings.modelDescriptions])
+  }, [apiKey, t])
 
   const geminiModels = useMemo(() => {
     return GEMINI_MODELS.map((entry): ModelEntry => {
@@ -59,7 +75,7 @@ export function useModelSelection(
         isLocked: isLocked || false
       }
     })
-  }, [geminiKey, t.settings.modelDescriptions])
+  }, [geminiKey, t])
 
   const claudeModels = useMemo(() => {
     return CLAUDE_MODELS.map((entry): ModelEntry => {
@@ -73,15 +89,71 @@ export function useModelSelection(
         isLocked: isLocked || false
       }
     })
-  }, [claudeKey, t.settings.modelDescriptions])
+  }, [claudeKey, t])
 
-  const customModels = useMemo((): ModelEntry[] => [{
-    id: CUSTOM_OPENAI_MODEL_ID,
-    label: openAiCompatible.modelId.trim() || t.settings.openAiCompatibleModelLabel,
-    description: openAiCompatible.baseUrl || t.settings.openAiCompatibleNotConfigured,
-    isLocked: !isOpenAiCompatibleRuntimeReady(openAiCompatible),
-    configureInSettings: !isOpenAiCompatibleRuntimeReady(openAiCompatible),
-  }], [openAiCompatible, t.settings.openAiCompatibleModelLabel, t.settings.openAiCompatibleNotConfigured])
+  const customModels = useMemo((): ModelEntry[] => {
+    const enabledProfiles = openAiCompatibleProfiles.filter((profile) => profile.enabled)
+    if (enabledProfiles.length === 0) {
+      return [{
+        id: CUSTOM_OPENAI_MODEL_ID,
+        label: t.settings.openAiCompatibleModelLabel,
+        description: t.settings.openAiCompatibleNotConfigured,
+        isLocked: true,
+        configureInSettings: true,
+      }]
+    }
+
+    const modelNameCounts = new Map<string, number>()
+    const modelHostCounts = new Map<string, number>()
+    for (const profile of enabledProfiles) {
+      const upstreamModelId = profile.modelId.trim()
+      modelNameCounts.set(upstreamModelId, (modelNameCounts.get(upstreamModelId) ?? 0) + 1)
+      const hostIdentity = `${upstreamModelId}\u0000${endpointParts(profile.baseUrl).host}`
+      modelHostCounts.set(hostIdentity, (modelHostCounts.get(hostIdentity) ?? 0) + 1)
+    }
+
+    const displayEndpoints = enabledProfiles.map((profile) => {
+      const upstreamModelId = profile.modelId.trim()
+      const endpoint = endpointParts(profile.baseUrl)
+      const hostIdentity = `${upstreamModelId}\u0000${endpoint.host}`
+      return (modelHostCounts.get(hostIdentity) ?? 0) > 1 ? endpoint.full : endpoint.host
+    })
+    const modelEndpointCounts = new Map<string, number>()
+    enabledProfiles.forEach((profile, index) => {
+      const identity = `${profile.modelId.trim()}\u0000${displayEndpoints[index]}`
+      modelEndpointCounts.set(identity, (modelEndpointCounts.get(identity) ?? 0) + 1)
+    })
+    const seenModelEndpoints = new Map<string, number>()
+    return enabledProfiles.map((profile, index) => {
+      const upstreamModelId = profile.modelId.trim()
+      const duplicateModelName = (modelNameCounts.get(upstreamModelId) ?? 0) > 1
+      const endpoint = displayEndpoints[index]
+      const identity = `${upstreamModelId}\u0000${endpoint}`
+      const ordinal = (seenModelEndpoints.get(identity) ?? 0) + 1
+      seenModelEndpoints.set(identity, ordinal)
+      const duplicateEndpoint = (modelEndpointCounts.get(identity) ?? 0) > 1
+      const ready = isOpenAiCompatibleRuntimeReady(profile)
+      return {
+        id: customOpenAiModelIdForProfile(profile.profileId),
+        label: duplicateModelName && endpoint
+          ? `${upstreamModelId} · ${endpoint}${duplicateEndpoint ? ` #${ordinal}` : ''}`
+          : upstreamModelId || t.settings.openAiCompatibleModelLabel,
+        description: profile.baseUrl || t.settings.openAiCompatibleNotConfigured,
+        isLocked: !ready,
+        configureInSettings: !ready,
+      }
+    })
+  }, [
+    openAiCompatibleProfiles,
+    t.settings.openAiCompatibleModelLabel,
+    t.settings.openAiCompatibleNotConfigured,
+  ])
+
+  const customProfileForModel = (candidate: string) => {
+    const profileId = openAiCompatibleProfileIdFromModelId(candidate)
+    if (profileId === null) return undefined
+    return openAiCompatibleProfiles.find((profile) => profile.profileId === profileId)
+  }
 
   const handleSelectModel = (candidate: string) => {
     if (!isModelId(candidate)) return
@@ -89,9 +161,10 @@ export function useModelSelection(
     if (!definition) return
 
     if (definition.provider === 'custom') {
-      if (!isOpenAiCompatibleRuntimeReady(openAiCompatible)) {
-        const gatewayUnavailable = isOpenAiCompatibleReady(openAiCompatible) &&
-          normalizeOpenAiCompatibleTransport(openAiCompatible.transport) === 'mediprisma-gateway' &&
+      const customProfile = customProfileForModel(candidate)
+      if (!isOpenAiCompatibleRuntimeReady(customProfile)) {
+        const gatewayUnavailable = isOpenAiCompatibleReady(customProfile) &&
+          normalizeOpenAiCompatibleTransport(customProfile.transport) === 'mediprisma-gateway' &&
           !ENV_CONFIG.hasOpenAiCompatibleGateway
         toast.error(gatewayUnavailable
           ? t.settings.openAiCompatibleGatewayUnavailable
@@ -139,8 +212,9 @@ export function useModelSelection(
     if (definition.disabled) return t.settings.modelUnavailable
 
     if (definition.provider === 'custom') {
-      return isOpenAiCompatibleRuntimeReady(openAiCompatible)
-        ? normalizeOpenAiCompatibleTransport(openAiCompatible.transport) === 'mediprisma-gateway'
+      const customProfile = customProfileForModel(definition.id)
+      return isOpenAiCompatibleRuntimeReady(customProfile)
+        ? normalizeOpenAiCompatibleTransport(customProfile.transport) === 'mediprisma-gateway'
           ? t.settings.openAiCompatibleGatewayStatus
           : t.settings.openAiCompatibleDirectStatus
         : t.settings.openAiCompatibleNotConfigured

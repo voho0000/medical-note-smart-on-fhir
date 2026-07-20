@@ -17,7 +17,11 @@ function NavigationHarness() {
     <div>
       <output data-testid="active-tab">{activeTab}</output>
       <output data-testid="settings-tab">{settingsTab}</output>
-      <output data-testid="settings-target">{settingsTarget ?? 'none'}</output>
+      <output data-testid="settings-target">
+        {settingsTarget && typeof settingsTarget === 'object'
+          ? `${settingsTarget.kind}:${settingsTarget.profileId ?? ''}`
+          : settingsTarget ?? 'none'}
+      </output>
       <button type="button" onClick={() => setActiveTab('settings', 'display')}>
         Open display
       </button>
@@ -30,6 +34,15 @@ function NavigationHarness() {
         )}
       >
         Open context window
+      </button>
+      <button
+        type="button"
+        onClick={() => setActiveTab('settings', 'ai', {
+          kind: 'openai-compatible-context-window',
+          profileId: 'profile-2',
+        })}
+      >
+        Open profile context window
       </button>
       <button type="button" onClick={clearSettingsTarget}>Clear target</button>
     </div>
@@ -53,6 +66,11 @@ describe('RightPanelProvider settings navigation target', () => {
     expect(screen.getByTestId('settings-tab')).toHaveTextContent('ai')
     expect(screen.getByTestId('settings-target')).toHaveTextContent(
       'openai-compatible-context-window',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open profile context window' }))
+    expect(screen.getByTestId('settings-target')).toHaveTextContent(
+      'openai-compatible-context-window:profile-2',
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear target' }))

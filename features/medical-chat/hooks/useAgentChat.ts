@@ -1,9 +1,9 @@
 // Agent Chat Hook - Refactored
 "use client"
 
-import { useState, useCallback, useRef, useMemo } from "react"
+import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
-import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
+import { useAiConfigStore, useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
@@ -15,9 +15,9 @@ import { createUserMessage, createAgentState, formatChatMessageContentForAi } fr
 import { useAuth } from "@/src/application/providers/auth.provider"
 import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
 import {
-  CUSTOM_OPENAI_MODEL_ID,
   getModelDefinition,
   gateModelForKeys,
+  isCustomOpenAiModelId,
 } from "@/src/shared/constants/ai-models.constants"
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
 import { buildStandardChatSystemPrompt } from "@/src/core/use-cases/chat/build-standard-chat-system-prompt.use-case"
@@ -28,26 +28,30 @@ import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "@/src/infrastructure/ai/serv
 import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
 import type { ChatReplyReference } from "@/src/core/entities/chat-message.entity"
 import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
-import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
 import {
   apiKeyForModel,
   hasDirectModelAccess,
   modelContextLimit,
 } from '@/src/shared/utils/model-access.utils'
 import { truncateToContextWindow } from '@/src/shared/utils/context-window-manager'
+import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 
 const standardChatStream = new AiSdkStreamAdapter()
+
+interface ActiveChatRequest {
+  controller: AbortController
+  modelId: string
+  openAiCompatible: OpenAiCompatibleProfile | null
+}
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
-  const {
-    apiKey: openAiKey,
-    geminiKey,
-    perplexityKey,
-    claudeKey,
-    openAiCompatible,
-  } = useAllApiKeys()
+  const { perplexityKey } = useAllApiKeys()
   const { patient } = usePatient()
   // A tool-less local model cannot fetch FHIR records on demand. Give standard
   // chat the exact same user-selected, PII-scrubbed snapshot used by summaries.
@@ -64,7 +68,36 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const activeRequestRef = useRef<ActiveChatRequest | null>(null)
+  const mountedRef = useRef(true)
   const hasReceivedChunkRef = useRef(false)
+
+  useEffect(() => {
+    mountedRef.current = true
+    const unsubscribe = useAiConfigStore.subscribe((state, previousState) => {
+      if (state.openAiCompatibleProfiles === previousState.openAiCompatibleProfiles) return
+      const active = activeRequestRef.current
+      if (!active || !isCustomOpenAiModelId(active.modelId)) return
+      const liveProfile = resolveOpenAiCompatibleProfile(
+        active.modelId,
+        state.openAiCompatibleProfiles,
+      )
+      if (
+        liveProfile !== active.openAiCompatible ||
+        !isOpenAiCompatibleRuntimeReady(liveProfile)
+      ) {
+        active.controller.abort()
+      }
+    })
+
+    return () => {
+      mountedRef.current = false
+      unsubscribe()
+      activeRequestRef.current?.controller.abort()
+      activeRequestRef.current = null
+      abortControllerRef.current = null
+    }
+  }, [])
 
   // Unified tool factory reads from the same ClinicalDataCollection cache
   // that the left-panel UI consumes — single implementation works for both
@@ -78,7 +111,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
     // Hospital/local models run in explicit standard-chat mode: no tool schema
     // is sent at all. This both avoids unsupported function calling and keeps
     // literature search from becoming an auxiliary cloud recipient.
-    if (modelId === CUSTOM_OPENAI_MODEL_ID) return undefined
+    if (isCustomOpenAiModelId(modelId)) return undefined
     if (!fhirTools && !literatureTools) return undefined
     return {
       ...(fhirTools || {}),
@@ -88,20 +121,35 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
 
   const handleSend = useCallback(
     async (input: string, images?: ChatImage[], replyTo?: ChatReplyReference | null) => {
+      if (!mountedRef.current) return
       hasReceivedChunkRef.current = false
       const trimmed = input.trim()
       if (!trimmed && (!images || images.length === 0)) return
+
+      // A callback captured by the chat input can outlive the render that
+      // created it. Resolve credentials and the exact custom profile from the
+      // live store at the request boundary so deleted/disabled endpoints never
+      // fall through to an older snapshot.
+      const liveConfig = useAiConfigStore.getState()
+      const requestedOpenAiCompatible = resolveOpenAiCompatibleProfile(
+        modelId,
+        liveConfig.openAiCompatibleProfiles,
+      )
 
       // Graceful degradation: if the picked model needs a user key we don't have,
       // run on the free default instead of dead-ending with an error. Normal mode
       // gates the same way inside the ai-sdk-stream adapter; agent chat runs its
       // own streamText loop (runDeepModeAgent), so it must gate here too.
       const effectiveModelId = gateModelForKeys(modelId, {
-        openAiKey,
-        geminiKey,
-        claudeKey,
-        customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
+        openAiKey: liveConfig.apiKey,
+        geminiKey: liveConfig.geminiKey,
+        claudeKey: liveConfig.claudeKey,
+        customAvailable: isOpenAiCompatibleRuntimeReady(requestedOpenAiCompatible),
       })
+      const openAiCompatible = resolveOpenAiCompatibleProfile(
+        effectiveModelId,
+        liveConfig.openAiCompatibleProfiles,
+      )
 
       // Create user message with images
       const userMessage = createUserMessage(trimmed, images, replyTo)
@@ -112,7 +160,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const assistantMessageId = crypto.randomUUID()
       const thinkingMessage = `🤔 ${t.agent.thinking}`
       const initialState = createAgentState(thinkingMessage)
-      const isStandardChat = effectiveModelId === CUSTOM_OPENAI_MODEL_ID
+      const isStandardChat = isCustomOpenAiModelId(effectiveModelId)
       
       setChatMessages([...newMessages, {
         id: assistantMessageId,
@@ -129,6 +177,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       // pending timers still need to check THIS run's abort state.
       const abortController = new AbortController()
       abortControllerRef.current = abortController
+      activeRequestRef.current = {
+        controller: abortController,
+        modelId: effectiveModelId,
+        openAiCompatible,
+      }
       // Idle watchdog for every agent stream below: abort + surface a timeout
       // error if a stream stalls. Idle-
       // based, so legitimate long tool runs that keep emitting events are fine.
@@ -157,12 +210,20 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const provider = getModelDefinition(effectiveModelId)?.provider ?? "openai"
         const apiKey = apiKeyForModel(
           effectiveModelId,
-          { openAiKey, geminiKey, claudeKey },
+          {
+            openAiKey: liveConfig.apiKey,
+            geminiKey: liveConfig.geminiKey,
+            claudeKey: liveConfig.claudeKey,
+          },
           openAiCompatible,
         )
         const hasDirectAccess = hasDirectModelAccess(
           effectiveModelId,
-          { openAiKey, geminiKey, claudeKey },
+          {
+            openAiKey: liveConfig.apiKey,
+            geminiKey: liveConfig.geminiKey,
+            claudeKey: liveConfig.claudeKey,
+          },
           openAiCompatible,
         )
         const isCustomEndpoint = provider === 'custom'
@@ -376,11 +437,16 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         )
       } finally {
         clearPending()
-        setIsLoading(false)
-        abortControllerRef.current = null
+        if (mountedRef.current) setIsLoading(false)
+        if (abortControllerRef.current === abortController) {
+          abortControllerRef.current = null
+        }
+        if (activeRequestRef.current?.controller === abortController) {
+          activeRequestRef.current = null
+        }
 
         // Trigger save after agent completes
-        if (onStreamComplete) {
+        if (mountedRef.current && onStreamComplete) {
           try {
             await onStreamComplete()
           } catch (error) {
@@ -389,7 +455,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
       }
     },
-    [chatMessages, modelId, openAiKey, geminiKey, claudeKey, openAiCompatible, patient, patientTextLiterals, selectedClinicalContext, setChatMessages, systemPrompt, onInputClear, onStreamComplete, tools, hasProxyAccess, perplexityKey, t, isLocalMode]
+    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, setChatMessages, systemPrompt, onInputClear, onStreamComplete, tools, hasProxyAccess, perplexityKey, t, isLocalMode]
   )
 
   const handleReset = useCallback(() => {

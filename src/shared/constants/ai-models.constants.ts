@@ -49,11 +49,45 @@ export const CLAUDE_MODELS = [
 ] as const satisfies readonly ModelDefinition[]
 
 /**
- * Stable logical id for a browser-configured OpenAI-compatible endpoint. The
- * actual upstream model id lives in ai-config.store; keeping this id static lets
- * persisted per-feature preferences survive arbitrary local model names.
+ * Legacy logical id for the originally released browser-configured endpoint.
+ * New profiles derive a stable id from this sentinel plus their profile id;
+ * the actual upstream model name continues to live only in ai-config.store.
  */
 export const CUSTOM_OPENAI_MODEL_ID = "openai-compatible-custom" as const
+const CUSTOM_OPENAI_MODEL_ID_PREFIX = `${CUSTOM_OPENAI_MODEL_ID}:` as const
+
+/**
+ * Logical model id for one browser-owned OpenAI-compatible profile.
+ *
+ * The originally released single profile keeps the bare id so existing model
+ * preferences continue to work. New profiles carry their stable, non-secret
+ * profile id in the logical model id; the upstream model name remains in the
+ * encrypted browser profile and is never used as preference identity.
+ */
+export type CustomOpenAiModelId =
+  | typeof CUSTOM_OPENAI_MODEL_ID
+  | `${typeof CUSTOM_OPENAI_MODEL_ID}:${string}`
+
+export function customOpenAiModelIdForProfile(profileId: string): CustomOpenAiModelId {
+  const normalizedProfileId = profileId.trim()
+  if (!normalizedProfileId) throw new Error('OpenAI-compatible profile id is required')
+  return normalizedProfileId === 'legacy'
+    ? CUSTOM_OPENAI_MODEL_ID
+    : `${CUSTOM_OPENAI_MODEL_ID_PREFIX}${normalizedProfileId}`
+}
+
+export function isCustomOpenAiModelId(value: string): value is CustomOpenAiModelId {
+  return value === CUSTOM_OPENAI_MODEL_ID || (
+    value.startsWith(CUSTOM_OPENAI_MODEL_ID_PREFIX) &&
+    value.length > CUSTOM_OPENAI_MODEL_ID_PREFIX.length
+  )
+}
+
+export function openAiCompatibleProfileIdFromModelId(modelId: string): string | null {
+  if (modelId === CUSTOM_OPENAI_MODEL_ID) return 'legacy'
+  if (!isCustomOpenAiModelId(modelId)) return null
+  return modelId.slice(CUSTOM_OPENAI_MODEL_ID_PREFIX.length)
+}
 
 export const CUSTOM_MODELS = [
   {
@@ -68,7 +102,7 @@ export const CUSTOM_MODELS = [
 export type GptModelId = (typeof GPT_MODELS)[number]["id"]
 export type GeminiModelId = (typeof GEMINI_MODELS)[number]["id"]
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]["id"]
-export type CustomModelId = (typeof CUSTOM_MODELS)[number]["id"]
+export type CustomModelId = CustomOpenAiModelId
 export type ModelId = GptModelId | GeminiModelId | ClaudeModelId | CustomModelId
 
 export const DEFAULT_MODEL_ID: GeminiModelId = "gemini-3-flash-preview"
@@ -101,10 +135,15 @@ export function isClaudeModelId(value: string): value is ClaudeModelId {
 }
 
 export function isModelId(value: string): value is ModelId {
-  return ALL_MODEL_IDS.has(value as ModelId)
+  return isCustomOpenAiModelId(value) || ALL_MODEL_IDS.has(value as ModelId)
 }
 
 export function getModelDefinition(modelId: string): ModelDefinition | undefined {
+  if (isCustomOpenAiModelId(modelId)) {
+    return modelId === CUSTOM_OPENAI_MODEL_ID
+      ? CUSTOM_MODELS[0]
+      : { ...CUSTOM_MODELS[0], id: modelId }
+  }
   return ALL_MODELS.find((model) => model.id === modelId)
 }
 

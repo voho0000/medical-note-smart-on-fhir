@@ -10,9 +10,9 @@
 import { streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
-  CUSTOM_OPENAI_MODEL_ID,
   getModelDefinition,
   gateModel,
+  isCustomOpenAiModelId,
 } from "@/src/shared/constants/ai-models.constants"
 import type { OpenAiCompatibleConfig } from "@/src/shared/types/openai-compatible.types"
 import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
@@ -44,7 +44,7 @@ export class AiSdkStreamAdapter {
     // provider's free, proxy-eligible base model so the call rides the proxy
     // instead of dead-ending on a missing key (e.g. a model that used to be free
     // and became key-gated). No caller can bypass this.
-    const isCustom = config.model === CUSTOM_OPENAI_MODEL_ID
+    const isCustom = isCustomOpenAiModelId(config.model)
     if (isCustom && !isOpenAiCompatibleRuntimeReady(config.openAiCompatible)) {
       throw new Error('OpenAI-compatible endpoint is not configured')
     }
@@ -127,7 +127,7 @@ export class AiSdkStreamAdapter {
   }
 
   private shouldUseProxy(apiKey: string | null, model: string): boolean {
-    if (model === CUSTOM_OPENAI_MODEL_ID) return false
+    if (isCustomOpenAiModelId(model)) return false
     if (apiKey) return false
     const provider = getModelDefinition(model)?.provider ?? "openai"
     const hasProxy =

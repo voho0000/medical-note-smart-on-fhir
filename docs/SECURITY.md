@@ -41,10 +41,10 @@
 ### API keys
 
 - OpenAI、Gemini、Claude、Perplexity key 在寫入 storage 前加密。
-- 新使用者預設 `sessionStorage`，關閉視窗後消失；只有明確開啟「記住此裝置」才改為 localStorage。
+- 一般雲端 provider key 預設使用 `sessionStorage`，關閉視窗後消失；只有明確開啟「記住此裝置」才改為 localStorage。
 - key 做 trim 與 header-safe 驗證，避免錯誤內容進入 Authorization header。
 - 一般 provider user key 只在 direct-provider path 使用；owner-funded proxy interceptor 會先移除 provider credential header。
-- 自訂 OpenAI-compatible key 使用相同的 session-first、加密 browser storage。direct 模式只送往使用者設定的 endpoint；明確選擇 Firebase Gateway 時則以獨立 header 暫時經過 Firebase 後轉送。
+- 自訂 OpenAI-compatible connections 使用獨立的 localStorage v2 envelope；最多 10 個 profile，每把 key 分別以 browser-side encryption 加密，endpoint／model metadata 與密文原子保存。direct 模式只送往該 profile 的 endpoint；明確選擇 Firebase Gateway 時則以獨立 header 暫時經過 Firebase 後轉送。
 
 ### 自訂 OpenAI-compatible endpoint
 
@@ -53,8 +53,9 @@
 - direct 連線測試完全在 browser 執行；不會自動 fallback 到 Firebase。
 - Firebase Gateway 是 explicit opt-in，只接受部署白名單中的公開 HTTPS Base URL、固定 `models`／`chat/completions` path 與對應 method；拒絕 IP、非 443 port、redirect、URL credentials、query 與 fragment，避免形成 SSRF／通用轉送器。
 - Gateway 的 `Authorization` 專供 Firebase ID token；使用者 provider key 以 `X-Upstream-API-Key` 在單次 request memory 中轉送，不寫入 Firestore 或 logs。Gateway Function 明確使用 `secrets: []`，無法取得 owner-funded provider keys。
-- 自訂模型使用固定 logical model id；transport／endpoint／model fingerprint 納入 AI cache identity。
+- 每個自訂 profile 有穩定 logical model id（舊 profile 保留 `openai-compatible-custom`，新增 profile 使用帶 profile id 的 dynamic id）；transport／endpoint／model fingerprint 納入 AI cache identity。
 - 自訂 endpoint unavailable 時 fail closed，不 fallback 到 owner proxy。
+- 自訂 profile 被修改、停用、刪除或畫面卸載時，進行中的文字／語音請求會中止；後續與排隊請求在送出前重新解析 live profile，不沿用舊 endpoint 或 key。
 - 自訂模型停用 Firestore chat auto-save／smart title、移除 Perplexity tool；direct 模式可使用相同 endpoint 的語音功能，Firebase Gateway 目前只支援模型清單與文字 Chat Completions。
 - `NEXT_PUBLIC_OFFLINE_MODE=1` 不初始化 Firebase/Auth/App Check；`build:intranet` 另會清空所有 cloud proxy URL。
 

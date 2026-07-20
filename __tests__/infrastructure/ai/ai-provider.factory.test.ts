@@ -6,7 +6,10 @@ jest.mock('@ai-sdk/openai', () => ({
 }))
 
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
-import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import {
+  CUSTOM_OPENAI_MODEL_ID,
+  customOpenAiModelIdForProfile,
+} from '@/src/shared/constants/ai-models.constants'
 
 describe('AiProviderFactory custom OpenAI-compatible routing', () => {
   beforeEach(() => {
@@ -51,5 +54,21 @@ describe('AiProviderFactory custom OpenAI-compatible routing', () => {
       },
     })).toThrow('not configured')
     expect(mockCreateOpenAI).not.toHaveBeenCalled()
+  })
+
+  it('recognizes a profile-scoped logical model as custom', () => {
+    const factory = new AiProviderFactory()
+    factory.create({
+      modelId: customOpenAiModelIdForProfile('endpoint-b'),
+      useProxy: true,
+      openAiCompatible: {
+        enabled: true,
+        baseUrl: 'https://endpoint-b.example/v1',
+        modelId: 'upstream-b',
+        apiKey: null,
+      },
+    })
+
+    expect(mockChat).toHaveBeenCalledWith('upstream-b')
   })
 })

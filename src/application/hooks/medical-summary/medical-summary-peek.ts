@@ -14,11 +14,18 @@
 //   2. the encrypted session cache, probing every known model id (covers a
 //      page reload where the 醫療摘要 tab hasn't been opened yet).
 import { useEffect, useMemo, useState } from 'react'
-import { ALL_MODELS } from '@/src/shared/constants/ai-models.constants'
+import {
+  ALL_MODELS,
+  customOpenAiModelIdForProfile,
+  isCustomOpenAiModelId,
+} from '@/src/shared/constants/ai-models.constants'
 import { loadEncryptedCache } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useOpenAiCompatibleProfiles } from '@/src/application/stores/ai-config.store'
 import { patientAiSlotKey } from '@/src/application/hooks/ai-generation/ai-slot-key'
 import { useClinicalAiInput } from '@/src/application/hooks/ai-generation/use-clinical-ai-input.hook'
+import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
+import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
 import {
   medicalSummaryStore,
@@ -30,12 +37,22 @@ function medicalSlotKeys(
   patientId: string,
   locale: ReturnType<typeof useLanguage>['locale'],
   inputSignature: string,
+  customProfiles: readonly OpenAiCompatibleProfile[],
 ): string[] {
-  return ALL_MODELS.map((model) => patientAiSlotKey({
+  const runtimeModelIds = [
+    ...ALL_MODELS
+      .filter((model) => !isCustomOpenAiModelId(model.id))
+      .map((model) => model.id),
+    ...customProfiles.map((profile) => modelRuntimeIdentity(
+      customOpenAiModelIdForProfile(profile.profileId),
+      profile,
+    )),
+  ]
+  return [...new Set(runtimeModelIds)].map((modelId) => patientAiSlotKey({
     patientId,
     audience: 'medical',
     locale,
-    modelId: model.id,
+    modelId,
     inputSignature,
   }))
 }
@@ -57,6 +74,7 @@ function scanStore(
  */
 export function useMedicalSummaryPeek(patientId: string | null): MedicalSummaryResult | null {
   const { locale } = useLanguage()
+  const customProfiles = useOpenAiCompatibleProfiles()
   const clinicalInput = useClinicalAiInput()
   const inputMatchesPatient = Boolean(
     patientId
@@ -66,9 +84,14 @@ export function useMedicalSummaryPeek(patientId: string | null): MedicalSummaryR
   )
   const slotKeys = useMemo(
     () => (inputMatchesPatient && patientId
-      ? medicalSlotKeys(patientId, locale, clinicalInput.inputSignature)
+      ? medicalSlotKeys(
+          patientId,
+          locale,
+          clinicalInput.inputSignature,
+          customProfiles,
+        )
       : []),
-    [clinicalInput.inputSignature, inputMatchesPatient, locale, patientId],
+    [clinicalInput.inputSignature, customProfiles, inputMatchesPatient, locale, patientId],
   )
   const byKey = medicalSummaryStore((s) => s.byKey)
   const storeHit = useMemo(() => scanStore(byKey, slotKeys), [byKey, slotKeys])

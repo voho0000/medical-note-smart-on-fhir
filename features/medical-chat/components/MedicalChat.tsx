@@ -59,7 +59,8 @@ import type { PromptType, SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { AuthDialog } from "@/features/auth"
 import { isQuotaExceededError } from "@/src/core/errors"
-import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { resolveOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -72,8 +73,14 @@ export default function MedicalChat() {
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const claudeKey = useAiConfigStore((state) => state.claudeKey)
-  const openAiCompatible = useAiConfigStore((state) => state.openAiCompatible)
-  const isCustomEndpoint = model === CUSTOM_OPENAI_MODEL_ID
+  const openAiCompatibleProfiles = useAiConfigStore(
+    (state) => state.openAiCompatibleProfiles,
+  )
+  const openAiCompatible = resolveOpenAiCompatibleProfile(
+    model,
+    openAiCompatibleProfiles,
+  )
+  const isCustomEndpoint = isCustomOpenAiModelId(model)
   // Selecting the hospital endpoint is also a privacy boundary: chat messages
   // must not be copied to Firestore or title/suggestion helper proxies.
   const cloudChatHistoryEnabled = !!user && !isCustomEndpoint
@@ -240,7 +247,7 @@ export default function MedicalChat() {
   
   const voice = useVoiceRecording(
     handleTranscriptReady,
-    isCustomEndpoint ? openAiCompatible : null,
+    isCustomEndpoint ? model : null,
   )
   const recordingStatus = useRecordingStatus(voice)
 

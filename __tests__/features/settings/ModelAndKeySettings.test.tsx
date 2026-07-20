@@ -2,7 +2,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ModelAndKeySettings } from '@/features/settings/components/ApiKeyField'
 import { testOpenAiCompatibleConnection } from '@/src/application/composition.ai'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
+import type { SettingsNavigationTarget } from '@/src/application/providers/right-panel.provider'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
+import { DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW } from '@/src/shared/types/openai-compatible.types'
 
 jest.mock('@/src/application/composition.ai', () => ({
   testOpenAiCompatibleConnection: jest.fn(),
@@ -48,7 +50,7 @@ jest.mock('@/src/application/hooks/safety-alerts/use-safety-alerts.hook', () => 
 function renderSettings(
   offlineMode: boolean,
   navigation?: {
-    settingsTarget: 'openai-compatible-context-window'
+    settingsTarget: SettingsNavigationTarget
     onSettingsTargetHandled: () => void
   },
 ) {
@@ -60,6 +62,14 @@ function renderSettings(
 }
 
 function setConfiguredLocalEndpoint() {
+  const config = {
+    enabled: true,
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    modelId: 'qwen2.5:7b',
+    apiKey: null,
+    contextWindowTokens: 32768,
+    contextWindowSource: 'suggested' as const,
+  }
   useAiConfigStore.setState({
     apiKey: null,
     geminiKey: null,
@@ -68,14 +78,8 @@ function setConfiguredLocalEndpoint() {
     storageType: 'sessionStorage',
     credentialsHydrating: false,
     storageTypeChanging: false,
-    openAiCompatible: {
-      enabled: true,
-      baseUrl: 'http://127.0.0.1:11434/v1',
-      modelId: 'qwen2.5:7b',
-      apiKey: null,
-      contextWindowTokens: 32768,
-      contextWindowSource: 'suggested',
-    },
+    openAiCompatibleProfiles: [{ profileId: 'legacy', ...config }],
+    openAiCompatible: config,
   })
 }
 
@@ -173,6 +177,37 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     }
   })
 
+  it('opens the exact custom profile named by a context-window target', async () => {
+    const legacy = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const second = {
+      ...legacy,
+      profileId: 'profile-2',
+      baseUrl: 'https://llama.intra.example/v1',
+      modelId: 'hospital-llama',
+      contextWindowTokens: 65536,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [legacy, second],
+      openAiCompatible: legacy,
+    })
+
+    renderSettings(true, {
+      settingsTarget: {
+        kind: 'openai-compatible-context-window',
+        profileId: 'profile-2',
+      },
+      onSettingsTargetHandled: jest.fn(),
+    })
+
+    const contextInput = await screen.findByRole('spinbutton', {
+      name: '內容視窗（tokens）',
+    })
+    await waitFor(() => expect(contextInput).toHaveValue(65536))
+    expect(screen.getByRole('combobox', {
+      name: '選擇要編輯的模型',
+    })).toHaveValue('profile-2')
+  })
+
   it('locks endpoint and cloud credential controls until browser settings finish loading', () => {
     useAiConfigStore.setState({ credentialsHydrating: true })
     renderSettings(false)
@@ -198,14 +233,56 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(cloudKeyInput).toBeEnabled()
   })
 
-  it('opens an unconfigured local profile and distinguishes a disabled saved profile', () => {
+  it('selects a saved profile when encrypted settings finish hydrating', async () => {
     useAiConfigStore.setState({
+      credentialsHydrating: true,
+      openAiCompatibleProfiles: [],
       openAiCompatible: {
         enabled: false,
         baseUrl: '',
         modelId: '',
         apiKey: null,
-        contextWindowTokens: 15000,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+        contextWindowSource: 'suggested',
+      },
+    })
+    renderSettings(true)
+
+    const hydrated = {
+      profileId: 'legacy',
+      enabled: true,
+      baseUrl: 'https://hydrated.intra.example/v1',
+      modelId: 'hydrated-model',
+      apiKey: 'secret-after-hydration',
+      contextWindowTokens: 65536,
+      contextWindowSource: 'manual' as const,
+      transport: 'direct' as const,
+    }
+    act(() => useAiConfigStore.setState({
+      credentialsHydrating: false,
+      openAiCompatibleProfiles: [hydrated],
+      openAiCompatible: hydrated,
+    }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', {
+        name: '選擇要編輯的模型',
+      })).toHaveValue('legacy')
+    })
+    expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' })).toHaveValue(
+      'https://hydrated.intra.example/v1/chat/completions',
+    )
+  })
+
+  it('opens an unconfigured local profile and distinguishes a disabled saved profile', () => {
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [],
+      openAiCompatible: {
+        enabled: false,
+        baseUrl: '',
+        modelId: '',
+        apiKey: null,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'suggested',
       },
     })
@@ -216,19 +293,53 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     )
     unmount()
 
+    const disabledConfig = {
+      enabled: false,
+      baseUrl: 'https://llm.intra.example/v1',
+      modelId: 'qwen3:8b',
+      apiKey: null,
+      contextWindowTokens: 40960,
+      contextWindowSource: 'manual' as const,
+    }
     useAiConfigStore.setState({
-      openAiCompatible: {
-        enabled: false,
-        baseUrl: 'https://llm.intra.example/v1',
-        modelId: 'qwen3:8b',
-        apiKey: null,
-        contextWindowTokens: 40960,
-        contextWindowSource: 'manual',
-      },
+      openAiCompatibleProfiles: [{ profileId: 'legacy', ...disabledConfig }],
+      openAiCompatible: disabledConfig,
     })
     renderSettings(true)
     expect(screen.getAllByText('已停用').length).toBeGreaterThan(0)
     expect(screen.queryByText('尚未設定端點')).not.toBeInTheDocument()
+  })
+
+  it('starts a new endpoint at 32,768 and applies known model suggestions until edited', () => {
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [],
+      openAiCompatible: {
+        enabled: false,
+        baseUrl: '',
+        modelId: '',
+        apiKey: null,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+        contextWindowSource: 'suggested',
+      },
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: '進階設定' }))
+    const contextInput = screen.getByRole('spinbutton', {
+      name: '內容視窗（tokens）',
+    })
+    expect(contextInput).toHaveValue(32768)
+
+    fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+      target: { value: 'qwen2.5vl:7b' },
+    })
+    expect(contextInput).toHaveValue(128000)
+
+    fireEvent.change(contextInput, { target: { value: '64000' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+      target: { value: 'qwen3:8b' },
+    })
+    expect(contextInput).toHaveValue(64000)
   })
 
   it('preserves an unsaved endpoint draft when the outer section is collapsed', () => {
@@ -287,12 +398,13 @@ describe('ModelAndKeySettings progressive disclosure', () => {
 
   it('keeps a new connection profile unsaveable until its test succeeds', async () => {
     useAiConfigStore.setState({
+      openAiCompatibleProfiles: [],
       openAiCompatible: {
         enabled: false,
         baseUrl: '',
         modelId: '',
         apiKey: null,
-        contextWindowTokens: 15000,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'suggested',
       },
     })
@@ -315,6 +427,182 @@ describe('ModelAndKeySettings progressive disclosure', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
     await waitFor(() => expect(saveButton).toBeEnabled())
+  })
+
+  it('adds another custom model without replacing the first and can delete it', async () => {
+    mockTestOpenAiCompatibleConnection.mockResolvedValue({
+      models: ['hospital-llama'],
+      modelFound: true,
+      usedChatProbe: false,
+      detectedContextWindowTokens: 65536,
+    })
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false)
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.click(screen.getByRole('button', { name: '新增模型' }))
+    expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' })).toHaveValue('')
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Chat Completions 網址' }), {
+      target: { value: 'https://llama.intra.example/v1/chat/completions' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+      target: { value: 'hospital-llama' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
+    const saveButton = screen.getByRole('button', { name: '儲存並啟用' })
+    await waitFor(() => expect(saveButton).toBeEnabled())
+    fireEvent.click(saveButton)
+
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(2)
+    })
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles.map((profile) => (
+      profile.modelId
+    ))).toEqual(['qwen2.5:7b', 'hospital-llama'])
+    expect(screen.getByText('已儲存 2 / 10')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '移除' }))
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(2)
+    confirm.mockReturnValue(true)
+    fireEvent.click(screen.getByRole('button', { name: '移除' }))
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(1)
+    })
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles[0].modelId).toBe('qwen2.5:7b')
+    expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining(
+      'hospital-llama · llama.intra.example/v1',
+    ))
+    confirm.mockRestore()
+  })
+
+  it('guards unsaved profile switches and re-masks each profile API key', () => {
+    const first = {
+      ...useAiConfigStore.getState().openAiCompatibleProfiles[0]!,
+      apiKey: 'first-secret',
+    }
+    const second = {
+      ...first,
+      profileId: 'profile-2',
+      baseUrl: 'https://second.intra.example/v1',
+      modelId: 'second-model',
+      apiKey: 'second-secret',
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [first, second],
+      openAiCompatible: first,
+    })
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false)
+    renderSettings(true)
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.click(screen.getByRole('button', { name: '進階設定' }))
+
+    const profileSelect = screen.getByRole('combobox', {
+      name: '選擇要編輯的模型',
+    })
+    const endpointInput = screen.getByRole('textbox', { name: 'Chat Completions 網址' })
+    fireEvent.change(endpointInput, {
+      target: { value: 'https://unsaved.intra.example/v1/chat/completions' },
+    })
+    fireEvent.change(profileSelect, { target: { value: 'profile-2' } })
+    expect(profileSelect).toHaveValue('legacy')
+    expect(endpointInput).toHaveValue('https://unsaved.intra.example/v1/chat/completions')
+
+    confirm.mockReturnValue(true)
+    fireEvent.change(profileSelect, { target: { value: 'profile-2' } })
+    expect(profileSelect).toHaveValue('profile-2')
+    const apiKeyInput = screen.getByRole('textbox', { name: 'API 金鑰（選填）' })
+    expect(apiKeyInput).toHaveValue('second-secret')
+    expect(apiKeyInput.className).toContain('[-webkit-text-security:disc]')
+    fireEvent.click(screen.getByRole('button', { name: '顯示 API 金鑰' }))
+    expect(screen.getByRole('button', { name: '隱藏 API 金鑰' })).toBeInTheDocument()
+
+    fireEvent.change(profileSelect, { target: { value: 'legacy' } })
+    expect(screen.getByRole('button', { name: '顯示 API 金鑰' })).toBeInTheDocument()
+    expect(apiKeyInput.className).toContain('[-webkit-text-security:disc]')
+    confirm.mockRestore()
+  })
+
+  it('isolates connection-test state and enabled state by profile', async () => {
+    const first = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const second = {
+      ...first,
+      profileId: 'profile-2',
+      baseUrl: 'https://second.intra.example/v1',
+      modelId: 'second-model',
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [first, second],
+      openAiCompatible: first,
+    })
+    mockTestOpenAiCompatibleConnection.mockResolvedValue({
+      models: [first.modelId],
+      modelFound: true,
+      usedChatProbe: false,
+      detectedContextWindowTokens: null,
+    })
+    renderSettings(true)
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
+    await screen.findByText(/連線成功，模型清單端點回應正常/)
+
+    const profileSelect = screen.getByRole('combobox', {
+      name: '選擇要編輯的模型',
+    })
+    fireEvent.change(profileSelect, { target: { value: 'profile-2' } })
+    expect(screen.queryByText(/連線成功，模型清單端點回應正常/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('switch', { name: '啟用' }))
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({ profileId: 'legacy', enabled: true }),
+        expect.objectContaining({ profileId: 'profile-2', enabled: false }),
+      ])
+    })
+    expect(profileSelect).toHaveValue('profile-2')
+    expect(screen.getByRole('switch', { name: '啟用' })).not.toBeChecked()
+  })
+
+  it('does not discard an unsaved profile draft when enable is toggled without confirmation', () => {
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false)
+    renderSettings(true)
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    const endpointInput = screen.getByRole('textbox', { name: 'Chat Completions 網址' })
+    fireEvent.change(endpointInput, {
+      target: { value: 'https://unsaved.intra.example/v1/chat/completions' },
+    })
+
+    fireEvent.click(screen.getByRole('switch', { name: '啟用' }))
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('尚未儲存'))
+    expect(endpointInput).toHaveValue('https://unsaved.intra.example/v1/chat/completions')
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles[0]).toEqual(
+      expect.objectContaining({ enabled: true }),
+    )
+    expect(screen.getByRole('switch', { name: '啟用' })).toBeChecked()
+    confirm.mockRestore()
+  })
+
+  it('caps custom models at ten', () => {
+    const profiles = Array.from({ length: 10 }, (_, index) => ({
+      profileId: index === 0 ? 'legacy' : `profile-${index}`,
+      enabled: true,
+      baseUrl: `https://model-${index}.intra.example/v1`,
+      modelId: `model-${index}`,
+      apiKey: null,
+      contextWindowTokens: 32768,
+      contextWindowSource: 'manual' as const,
+      transport: 'direct' as const,
+    }))
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: profiles,
+      openAiCompatible: profiles[0],
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    expect(screen.getByText('已儲存 10 / 10')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '新增模型' })).toBeDisabled()
   })
 
   it('does not treat a missing model warning as a successful connection test', async () => {
@@ -378,9 +666,11 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(65536)
     })
     expect(useAiConfigStore.getState().openAiCompatible.contextWindowSource).toBe('manual')
-    expect(JSON.parse(localStorage.getItem('openai_compatible_connection_v1') ?? '{}'))
+    expect(JSON.parse(localStorage.getItem('openai_compatible_connections_v2') ?? '{}'))
       .toMatchObject({
-        profile: { contextWindowTokens: 65536, contextWindowSource: 'manual' },
+        profiles: [{
+          profile: { contextWindowTokens: 65536, contextWindowSource: 'manual' },
+        }],
       })
     expect(sessionStorage.getItem('openai_compatible_config')).toBeNull()
   })
@@ -411,12 +701,14 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   })
 
   it('does not overwrite a saved manual context window during connection testing', async () => {
+    const manualConfig = {
+      ...useAiConfigStore.getState().openAiCompatible,
+      contextWindowTokens: 32768,
+      contextWindowSource: 'manual' as const,
+    }
     useAiConfigStore.setState({
-      openAiCompatible: {
-        ...useAiConfigStore.getState().openAiCompatible,
-        contextWindowTokens: 32768,
-        contextWindowSource: 'manual',
-      },
+      openAiCompatibleProfiles: [{ profileId: 'legacy', ...manualConfig }],
+      openAiCompatible: manualConfig,
     })
     mockTestOpenAiCompatibleConnection.mockResolvedValue({
       models: ['qwen2.5:7b'],

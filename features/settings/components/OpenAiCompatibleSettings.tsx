@@ -1,7 +1,18 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, ChevronDown, Cloud, Eye, EyeOff, Loader2, Network, ShieldCheck } from 'lucide-react'
+import {
+  CheckCircle2,
+  ChevronDown,
+  Cloud,
+  Eye,
+  EyeOff,
+  Loader2,
+  Network,
+  Plus,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,9 +30,11 @@ import { InfoHint } from '@/src/shared/components/InfoHint'
 import type {
   OpenAiCompatibleConfig,
   OpenAiCompatibleContextWindowSource,
+  OpenAiCompatibleProfile,
 } from '@/src/shared/types/openai-compatible.types'
 import {
-  DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+  createEmptyOpenAiCompatibleConfig,
+  MAX_OPENAI_COMPATIBLE_PROFILES,
   MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   normalizeOpenAiCompatibleContextWindow,
@@ -37,7 +50,10 @@ import {
   OpenAiCompatibleUrlError,
 } from '@/src/shared/utils/openai-compatible.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
-import type { SettingsNavigationTarget } from '@/src/application/providers/right-panel.provider'
+import {
+  isOpenAiCompatibleContextWindowTarget,
+  type SettingsNavigationTarget,
+} from '@/src/application/providers/right-panel.provider'
 
 interface TestState {
   tone: 'success' | 'warning' | 'error'
@@ -53,6 +69,29 @@ function initialContextWindowSource(
   )
 }
 
+function profileEndpointLabel(profile: OpenAiCompatibleProfile): string {
+  if (profile.baseUrl.startsWith('/')) return profile.baseUrl
+  try {
+    const url = new URL(profile.baseUrl)
+    const pathname = url.pathname.replace(/\/+$/, '')
+    return `${url.host}${pathname && pathname !== '/' ? pathname : ''}`
+  } catch {
+    return profile.baseUrl
+  }
+}
+
+function profileOptionLabel(
+  profile: OpenAiCompatibleProfile,
+  profiles: readonly OpenAiCompatibleProfile[],
+): string {
+  const endpoint = profileEndpointLabel(profile)
+  const matching = profiles.filter((candidate) => (
+    candidate.modelId === profile.modelId && profileEndpointLabel(candidate) === endpoint
+  ))
+  const ordinal = matching.findIndex((candidate) => candidate.profileId === profile.profileId) + 1
+  return `${matching.length > 1 ? `#${ordinal} ` : ''}${profile.modelId} · ${endpoint}`
+}
+
 interface OpenAiCompatibleSettingsProps {
   /** The outer local-model accordion must be visible before focusing a target. */
   navigationReady?: boolean
@@ -66,11 +105,27 @@ export function OpenAiCompatibleSettings({
   onSettingsTargetHandled,
 }: OpenAiCompatibleSettingsProps = {}) {
   const { t } = useLanguage()
-  const saved = useAiConfigStore((state) => state.openAiCompatible)
+  const profiles = useAiConfigStore((state) => state.openAiCompatibleProfiles)
   const credentialsHydrating = useAiConfigStore((state) => state.credentialsHydrating)
-  const setConfig = useAiConfigStore((state) => state.setOpenAiCompatibleConfig)
-  const setEnabled = useAiConfigStore((state) => state.setOpenAiCompatibleEnabled)
-  const clearConfig = useAiConfigStore((state) => state.clearOpenAiCompatibleConfig)
+  const addConfig = useAiConfigStore((state) => state.addOpenAiCompatibleConfig)
+  const updateConfig = useAiConfigStore((state) => state.updateOpenAiCompatibleConfig)
+  const setProfileEnabled = useAiConfigStore(
+    (state) => state.setOpenAiCompatibleProfileEnabled,
+  )
+  const deleteConfig = useAiConfigStore((state) => state.deleteOpenAiCompatibleConfig)
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
+    () => profiles[0]?.profileId ?? null,
+  )
+  const [creatingNew, setCreatingNew] = useState(() => profiles.length === 0)
+  const newProfileRequestedRef = useRef(false)
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.profileId === selectedProfileId) ?? null,
+    [profiles, selectedProfileId],
+  )
+  const saved = useMemo<OpenAiCompatibleConfig>(
+    () => selectedProfile ?? createEmptyOpenAiCompatibleConfig(),
+    [selectedProfile],
+  )
   const savedEndpointUrl = formatOpenAiCompatibleChatCompletionsUrl(saved.baseUrl)
   const [baseUrl, setBaseUrl] = useState(savedEndpointUrl)
   const [modelId, setModelId] = useState(saved.modelId)
@@ -94,22 +149,47 @@ export function OpenAiCompatibleSettings({
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
   const testRequestId = useRef(0)
   const busy = testing || saving || credentialsHydrating
+  const targetProfileId = settingsTarget && typeof settingsTarget === 'object'
+    ? settingsTarget.profileId
+    : undefined
+
+  useEffect(() => {
+    if (credentialsHydrating || (creatingNew && newProfileRequestedRef.current)) return
+    if (selectedProfileId && profiles.some((profile) => (
+      profile.profileId === selectedProfileId
+    ))) return
+    // Hydration and deletion can replace the available profile list.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedProfileId(profiles[0]?.profileId ?? null)
+    setCreatingNew(profiles.length === 0)
+  }, [creatingNew, credentialsHydrating, profiles, selectedProfileId])
 
   useEffect(() => {
     if (
       !navigationReady ||
-      settingsTarget !== 'openai-compatible-context-window'
+      !isOpenAiCompatibleContextWindowTarget(settingsTarget)
     ) return
+    if (
+      targetProfileId &&
+      targetProfileId !== selectedProfileId &&
+      profiles.some((profile) => profile.profileId === targetProfileId)
+    ) {
+      // External navigation identifies the model whose overflow warning the
+      // user acted on; reveal that profile rather than whichever was last edited.
+      newProfileRequestedRef.current = false
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCreatingNew(false)
+      setSelectedProfileId(targetProfileId)
+    }
     // A navigation intent is external state; reveal its owning disclosure.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAdvancedOpen(true)
-  }, [navigationReady, settingsTarget])
+  }, [navigationReady, profiles, selectedProfileId, settingsTarget, targetProfileId])
 
   useEffect(() => {
     if (
       !navigationReady ||
       !advancedOpen ||
-      settingsTarget !== 'openai-compatible-context-window'
+      !isOpenAiCompatibleContextWindowTarget(settingsTarget)
     ) return
 
     const input = document.getElementById('openai-compatible-context-window')
@@ -136,6 +216,7 @@ export function OpenAiCompatibleSettings({
     setConnectionTestPassed(false)
     setApiKey(saved.apiKey ?? '')
     setTransport(normalizeOpenAiCompatibleTransport(saved.transport))
+    setShowApiKey(false)
     setTesting(false)
   }, [saved])
 
@@ -240,6 +321,31 @@ export function OpenAiCompatibleSettings({
     error instanceof Error && error.name === 'AbortError'
   )
 
+  const confirmDiscardDraft = () => (
+    !draftChanged || typeof window === 'undefined' ||
+    window.confirm(t.settings.openAiCompatibleUnsavedConfirm)
+  )
+
+  const handleProfileSelection = (profileId: string) => {
+    if (profileId === selectedProfileId || !confirmDiscardDraft()) return
+    testRequestId.current += 1
+    newProfileRequestedRef.current = false
+    setCreatingNew(false)
+    setSelectedProfileId(profileId)
+  }
+
+  const handleAddProfile = () => {
+    if (profiles.length >= MAX_OPENAI_COMPATIBLE_PROFILES) {
+      toast.error(t.settings.openAiCompatibleProfileLimit)
+      return
+    }
+    if (creatingNew || !confirmDiscardDraft()) return
+    testRequestId.current += 1
+    newProfileRequestedRef.current = true
+    setCreatingNew(true)
+    setSelectedProfileId(null)
+  }
+
   const handleSave = async () => {
     if (!connectionReadyToSave) {
       toast.error(t.settings.openAiCompatibleTestBeforeSave)
@@ -260,7 +366,12 @@ export function OpenAiCompatibleSettings({
       // Resolve only after the encrypted credential and profile are durably
       // written, so closing the page after the success toast cannot race the
       // API-key save.
-      await setConfig(next)
+      const profileId = selectedProfileId
+        ? (await updateConfig(selectedProfileId, next), selectedProfileId)
+        : await addConfig(next)
+      newProfileRequestedRef.current = false
+      setCreatingNew(false)
+      setSelectedProfileId(profileId)
       setBaseUrl(formatOpenAiCompatibleChatCompletionsUrl(next.baseUrl))
       setModelId(next.modelId)
       setContextWindowTokens(String(next.contextWindowTokens))
@@ -277,9 +388,10 @@ export function OpenAiCompatibleSettings({
   }
 
   const handleEnabledChange = async (enabled: boolean) => {
+    if (!selectedProfileId || !confirmDiscardDraft()) return
     setSaving(true)
     try {
-      await setEnabled(enabled)
+      await setProfileEnabled(selectedProfileId, enabled)
     } catch (error) {
       if (!isStaleOperation(error)) {
         toast.error(t.settings.openAiCompatibleSecureSaveFailed)
@@ -337,25 +449,92 @@ export function OpenAiCompatibleSettings({
     }
   }
 
-  const handleClear = () => {
+  const handleDelete = async () => {
+    if (!selectedProfile) return
+    const message = t.settings.openAiCompatibleDeleteConfirm.replace(
+      '{model}',
+      profileOptionLabel(selectedProfile, profiles),
+    )
+    if (typeof window !== 'undefined' && !window.confirm(message)) return
+
     testRequestId.current += 1
     setTesting(false)
-    clearConfig()
-    setBaseUrl('')
-    setModelId('')
-    setContextWindowTokens(String(DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW))
-    setContextWindowSource('suggested')
-    setDetectedContextWindowTokens(null)
-    setApiKey('')
-    setTransport('direct')
-    setDiscoveredModels([])
-    setTestState(null)
-    setConnectionTestPassed(false)
-    toast.success(t.settings.openAiCompatibleCleared)
+    setSaving(true)
+    try {
+      await deleteConfig(selectedProfile.profileId)
+      const remaining = profiles.filter((profile) => (
+        profile.profileId !== selectedProfile.profileId
+      ))
+      newProfileRequestedRef.current = remaining.length === 0
+      setSelectedProfileId(remaining[0]?.profileId ?? null)
+      setCreatingNew(remaining.length === 0)
+      toast.success(t.settings.openAiCompatibleCleared)
+    } catch (error) {
+      if (!isStaleOperation(error)) {
+        toast.error(t.settings.openAiCompatibleSecureSaveFailed)
+      }
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <section className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-background/70 p-2">
+        <Label htmlFor="openai-compatible-profile" className="sr-only">
+          {t.settings.openAiCompatibleSelectProfile}
+        </Label>
+        <select
+          id="openai-compatible-profile"
+          value={selectedProfileId ?? ''}
+          onChange={(event) => handleProfileSelection(event.target.value)}
+          disabled={busy || profiles.length === 0}
+          className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={t.settings.openAiCompatibleSelectProfile}
+        >
+          {creatingNew && (
+            <option value="">{t.settings.openAiCompatibleAddProfile}</option>
+          )}
+          {profiles.map((profile) => (
+            <option key={profile.profileId} value={profile.profileId}>
+              {profileOptionLabel(profile, profiles)}
+            </option>
+          ))}
+        </select>
+        <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
+          {t.settings.openAiCompatibleProfileCount
+            .replace('{count}', String(profiles.length))
+            .replace('{max}', String(MAX_OPENAI_COMPATIBLE_PROFILES))}
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          onClick={handleAddProfile}
+          disabled={busy || creatingNew || profiles.length >= MAX_OPENAI_COMPATIBLE_PROFILES}
+          title={profiles.length >= MAX_OPENAI_COMPATIBLE_PROFILES
+            ? t.settings.openAiCompatibleProfileLimit
+            : t.settings.openAiCompatibleAddProfile}
+          aria-label={t.settings.openAiCompatibleAddProfile}
+          className="h-8 px-2"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{t.settings.openAiCompatibleAddProfile}</span>
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          type="button"
+          onClick={handleDelete}
+          disabled={busy || !selectedProfile}
+          aria-label={t.settings.openAiCompatibleClear}
+          title={t.settings.openAiCompatibleClear}
+          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
       <div className="grid gap-3">
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5">
@@ -614,7 +793,7 @@ export function OpenAiCompatibleSettings({
           testState.tone === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
           testState.tone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
           testState.tone === 'error' && 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
-        )}>
+        )} role={testState.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
           {testState.tone === 'success'
             ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             : <Network className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
@@ -646,11 +825,11 @@ export function OpenAiCompatibleSettings({
           {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
           {saving
             ? t.settings.openAiCompatibleSaving
-            : draftChanged || !saved.baseUrl
+            : draftChanged || !selectedProfile
               ? t.settings.openAiCompatibleSaveEnable
               : t.settings.openAiCompatibleSave}
         </Button>
-        {saved.baseUrl && saved.modelId && (
+        {selectedProfile && (
           <div className="ml-auto flex items-center gap-2">
             <Label htmlFor="openai-compatible-enabled" className="text-xs text-muted-foreground">
               {t.settings.openAiCompatibleUseConnection}
@@ -661,15 +840,6 @@ export function OpenAiCompatibleSettings({
               onCheckedChange={handleEnabledChange}
               disabled={busy}
             />
-            <Button
-              size="sm"
-              variant="ghost"
-              type="button"
-              onClick={handleClear}
-              disabled={busy}
-            >
-              {t.settings.openAiCompatibleClear}
-            </Button>
           </div>
         )}
       </div>

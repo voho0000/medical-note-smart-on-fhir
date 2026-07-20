@@ -43,7 +43,10 @@ import { Switch } from "@/components/ui/switch"
 import { ApiKeyInput } from "./ApiKeyInput"
 import { AuthStatus } from "@/features/auth"
 import { OpenAiCompatibleSettings } from "./OpenAiCompatibleSettings"
-import type { SettingsNavigationTarget } from "@/src/application/providers/right-panel.provider"
+import {
+  isOpenAiCompatibleContextWindowTarget,
+  type SettingsNavigationTarget,
+} from "@/src/application/providers/right-panel.provider"
 
 type StatusTone = "success" | "muted" | "warning"
 
@@ -55,16 +58,6 @@ function statusClass(tone: StatusTone): string {
     return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
   }
   return "border-border bg-muted/40 text-muted-foreground"
-}
-
-function endpointLabel(baseUrl: string): string {
-  if (!baseUrl) return ""
-  if (baseUrl.startsWith("/")) return baseUrl
-  try {
-    return new URL(baseUrl).host
-  } catch {
-    return baseUrl
-  }
 }
 
 function StatusBadge({ label, tone }: { label: string; tone: StatusTone }) {
@@ -166,7 +159,9 @@ export function ModelAndKeySettings({
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const perplexityKey = useAiConfigStore((state) => state.perplexityKey)
   const claudeKey = useAiConfigStore((state) => state.claudeKey)
-  const openAiCompatible = useAiConfigStore((state) => state.openAiCompatible)
+  const openAiCompatibleProfiles = useAiConfigStore(
+    (state) => state.openAiCompatibleProfiles,
+  )
   const setApiKey = useAiConfigStore((state) => state.setApiKey)
   const setGeminiKey = useAiConfigStore((state) => state.setGeminiKey)
   const setPerplexityKey = useAiConfigStore((state) => state.setPerplexityKey)
@@ -200,24 +195,23 @@ export function ModelAndKeySettings({
     setClaudeValue(claudeKey)
   }, [claudeKey])
 
-  const localConfigured = Boolean(openAiCompatible.baseUrl && openAiCompatible.modelId)
-  const localReady = isOpenAiCompatibleRuntimeReady(openAiCompatible)
+  const localConfigured = openAiCompatibleProfiles.length > 0
+  const readyProfiles = openAiCompatibleProfiles.filter((profile) => (
+    isOpenAiCompatibleRuntimeReady(profile)
+  ))
+  const localReady = readyProfiles.length > 0
   const localStatus = localReady
-    ? t.settings.openAiCompatibleEnabled
+    ? t.settings.openAiCompatibleProfilesSummary
+      .replace("{enabled}", String(readyProfiles.length))
+      .replace("{count}", String(openAiCompatibleProfiles.length))
     : localConfigured
       ? t.settings.openAiCompatibleDisabled
       : t.settings.openAiCompatibleNotConfigured
   const localTone: StatusTone = localReady ? "success" : localConfigured ? "warning" : "muted"
-  const localUsesGateway = normalizeOpenAiCompatibleTransport(
-    openAiCompatible.transport,
-  ) === "mediprisma-gateway"
-  const localDetail = localConfigured
-    ? `${openAiCompatible.modelId} · ${endpointLabel(openAiCompatible.baseUrl)} · ${
-      localUsesGateway
-        ? t.settings.openAiCompatibleTransportGateway
-        : t.settings.openAiCompatibleTransportDirect
-    }`
-    : t.settings.openAiCompatibleDescription
+  const localUsesGateway = localConfigured && openAiCompatibleProfiles.every((profile) => (
+    normalizeOpenAiCompatibleTransport(profile.transport) === "mediprisma-gateway"
+  ))
+  const localDetail = t.settings.openAiCompatibleDescription
 
   const cloudKeyCount = [apiKey, geminiKey, claudeKey].filter((key) => Boolean(key?.trim())).length
   const cloudDetail = t.settings.cloudKeyCount.replace("{count}", String(cloudKeyCount))
@@ -230,8 +224,8 @@ export function ModelAndKeySettings({
   useEffect(() => {
     const syncInitialSection = () => {
       if (sectionTouchedRef.current) return
-      const config = useAiConfigStore.getState().openAiCompatible
-      setOpenSection(config.baseUrl && config.modelId ? "" : "local")
+      const configuredProfiles = useAiConfigStore.getState().openAiCompatibleProfiles
+      setOpenSection(configuredProfiles.length > 0 ? "" : "local")
     }
 
     // Hydration may finish between the first render and this subscription.
@@ -241,7 +235,7 @@ export function ModelAndKeySettings({
   }, [])
 
   useEffect(() => {
-    if (settingsTarget !== 'openai-compatible-context-window') return
+    if (!isOpenAiCompatibleContextWindowTarget(settingsTarget)) return
     sectionTouchedRef.current = true
     // A navigation intent is external state; reveal its owning disclosure.
     // eslint-disable-next-line react-hooks/set-state-in-effect

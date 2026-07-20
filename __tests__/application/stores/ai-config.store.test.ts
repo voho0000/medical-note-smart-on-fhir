@@ -1,5 +1,6 @@
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { decrypt, encrypt, isEncrypted } from '@/src/shared/utils/crypto.utils'
+import { DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW } from '@/src/shared/types/openai-compatible.types'
 
 // Model selection moved to model-prefs.store (per-feature prefs, key-gated at
 // read time) — see model-prefs.store.test.ts. This store is keys-only now.
@@ -18,7 +19,8 @@ jest.mock('@/src/shared/utils/crypto.utils', () => ({
 const mockEncrypt = jest.mocked(encrypt)
 const mockDecrypt = jest.mocked(decrypt)
 const mockIsEncrypted = jest.mocked(isEncrypted)
-const CONNECTION_STORAGE_KEY = 'openai_compatible_connection_v1'
+const CONNECTION_STORAGE_KEY = 'openai_compatible_connections_v2'
+const LEGACY_CONNECTION_STORAGE_KEY = 'openai_compatible_connection_v1'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -31,6 +33,15 @@ function deferred<T>() {
 }
 
 function readStoredConnection() {
+  const raw = localStorage.getItem(CONNECTION_STORAGE_KEY)
+  if (!raw) return null
+  const envelope = JSON.parse(raw)
+  return envelope?.profiles?.[0]
+    ? { version: envelope.version, ...envelope.profiles[0] }
+    : null
+}
+
+function readStoredConnections() {
   const raw = localStorage.getItem(CONNECTION_STORAGE_KEY)
   return raw ? JSON.parse(raw) : null
 }
@@ -53,13 +64,14 @@ describe('ai-config.store', () => {
       geminiKey: null,
       perplexityKey: null,
       claudeKey: null,
+      openAiCompatibleProfiles: [],
       openAiCompatible: {
         enabled: false,
         baseUrl: '',
         modelId: '',
         apiKey: null,
         transport: 'direct',
-        contextWindowTokens: 15000,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'suggested',
       },
       storageType: 'localStorage',
@@ -202,7 +214,7 @@ describe('ai-config.store', () => {
         modelId: 'local-model',
         apiKey: 'local-key',
         transport: 'direct',
-        contextWindowTokens: 15000,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'manual',
       })
 
@@ -216,7 +228,7 @@ describe('ai-config.store', () => {
         modelId: '',
         apiKey: null,
         transport: 'direct',
-        contextWindowTokens: 15000,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'suggested',
       })
     })
@@ -235,7 +247,7 @@ describe('ai-config.store', () => {
         modelId: 'hospital-model',
         apiKey: null,
         transport: 'direct',
-        contextWindowTokens: 15000,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'manual',
       })
       expect(readStoredConnection()).toMatchObject({
@@ -286,6 +298,59 @@ describe('ai-config.store', () => {
       expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(24576)
     })
 
+    it('upgrades only the old suggested window while preserving a manual value', async () => {
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+        version: 2,
+        profiles: [
+          {
+            profileId: 'legacy',
+            profile: {
+              enabled: true,
+              baseUrl: 'http://127.0.0.1:11434/v1',
+              modelId: 'qwen2.5vl:7b',
+              transport: 'direct',
+              contextWindowTokens: 15000,
+              contextWindowSource: 'suggested',
+            },
+            encryptedApiKey: null,
+          },
+          {
+            profileId: 'manual-small',
+            profile: {
+              enabled: true,
+              baseUrl: 'https://small.intra.example/v1',
+              modelId: 'small-context-model',
+              transport: 'direct',
+              contextWindowTokens: 15000,
+              contextWindowSource: 'manual',
+            },
+            encryptedApiKey: null,
+          },
+        ],
+      }))
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({
+          profileId: 'legacy',
+          contextWindowTokens: 128000,
+          contextWindowSource: 'suggested',
+        }),
+        expect.objectContaining({
+          profileId: 'manual-small',
+          contextWindowTokens: 15000,
+          contextWindowSource: 'manual',
+        }),
+      ])
+      expect(readStoredConnections()).toMatchObject({
+        profiles: [
+          { profile: { contextWindowTokens: 128000, contextWindowSource: 'suggested' } },
+          { profile: { contextWindowTokens: 15000, contextWindowSource: 'manual' } },
+        ],
+      })
+    })
+
     it('persists manual provenance even when the value equals the model suggestion', async () => {
       await useAiConfigStore.getState().setOpenAiCompatibleConfig({
         enabled: true,
@@ -319,7 +384,8 @@ describe('ai-config.store', () => {
       const storedRaw = localStorage.getItem(CONNECTION_STORAGE_KEY)
       const storedConnection = readStoredConnection()
       expect(storedConnection).toMatchObject({
-        version: 1,
+        version: 2,
+        profileId: 'legacy',
         profile: { modelId: 'hospital-model', contextWindowTokens: 65536 },
       })
       expect(storedConnection.profile).not.toHaveProperty('apiKey')
@@ -349,7 +415,7 @@ describe('ai-config.store', () => {
           modelId: '',
           apiKey: null,
           transport: 'direct',
-          contextWindowTokens: 15000,
+          contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
           contextWindowSource: 'suggested',
         },
       })
@@ -373,7 +439,7 @@ describe('ai-config.store', () => {
     })
 
     it('restores the saved endpoint through Zustand automatic rehydration', async () => {
-      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+      localStorage.setItem(LEGACY_CONNECTION_STORAGE_KEY, JSON.stringify({
         version: 1,
         profile: {
           enabled: true,
@@ -392,7 +458,7 @@ describe('ai-config.store', () => {
           modelId: '',
           apiKey: null,
           transport: 'direct',
-          contextWindowTokens: 15000,
+          contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
           contextWindowSource: 'suggested',
         },
       })
@@ -412,6 +478,19 @@ describe('ai-config.store', () => {
         modelId: 'hospital-model',
         apiKey: 'hospital-secret-key',
       })
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({
+          profileId: 'legacy',
+          modelId: 'hospital-model',
+          apiKey: 'hospital-secret-key',
+        }),
+      ])
+      expect(readStoredConnection()).toMatchObject({
+        version: 2,
+        profileId: 'legacy',
+        encryptedApiKey: encryptValue('hospital-secret-key'),
+      })
+      expect(localStorage.getItem(LEGACY_CONNECTION_STORAGE_KEY)).toBeNull()
     })
 
     it('rewrites a legacy plaintext custom key as ciphertext during rehydration', async () => {
@@ -440,11 +519,12 @@ describe('ai-config.store', () => {
         storage.setItem('openai_compatible_config', '{"modelId":"stale"}')
         storage.setItem('openai_compatible_api_key', 'stale-ciphertext')
       }
-      localStorage.setItem(CONNECTION_STORAGE_KEY, '{"version":1,"stale":true}')
+      localStorage.setItem(LEGACY_CONNECTION_STORAGE_KEY, '{"version":1,"stale":true}')
 
       useAiConfigStore.getState().clearOpenAiCompatibleConfig()
 
       expect(localStorage.getItem(CONNECTION_STORAGE_KEY)).toBeNull()
+      expect(localStorage.getItem(LEGACY_CONNECTION_STORAGE_KEY)).toBeNull()
       for (const storage of [localStorage, sessionStorage]) {
         expect(storage.getItem('openai_compatible_config')).toBeNull()
         expect(storage.getItem('openai_compatible_api_key')).toBeNull()
@@ -488,7 +568,7 @@ describe('ai-config.store', () => {
     })
 
     it('does not let delayed hydration overwrite a newly saved connection', async () => {
-      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+      localStorage.setItem(LEGACY_CONNECTION_STORAGE_KEY, JSON.stringify({
         version: 1,
         profile: {
           enabled: true,
@@ -616,6 +696,155 @@ describe('ai-config.store', () => {
       expect(sessionStorage.getItem('openai_compatible_api_key')).toBeNull()
       expect(useAiConfigStore.getState().openAiCompatible.apiKey).toBeNull()
     })
+
+    it('adds, independently updates, disables, and deletes multiple encrypted profiles', async () => {
+      await useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://legacy.intra.example/v1',
+        modelId: 'legacy-model',
+        apiKey: 'legacy-secret',
+      })
+      const secondId = await useAiConfigStore.getState().addOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://second.intra.example/v1',
+        modelId: 'second-model',
+        apiKey: 'second-secret',
+        contextWindowTokens: 65536,
+        contextWindowSource: 'manual',
+      })
+
+      expect(secondId).not.toBe('legacy')
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({ profileId: 'legacy', modelId: 'legacy-model' }),
+        expect.objectContaining({ profileId: secondId, modelId: 'second-model' }),
+      ])
+      expect(useAiConfigStore.getState().openAiCompatible.modelId).toBe('legacy-model')
+      expect(readStoredConnections()).toMatchObject({
+        version: 2,
+        profiles: [
+          {
+            profileId: 'legacy',
+            profile: { modelId: 'legacy-model' },
+            encryptedApiKey: encryptValue('legacy-secret'),
+          },
+          {
+            profileId: secondId,
+            profile: { modelId: 'second-model' },
+            encryptedApiKey: encryptValue('second-secret'),
+          },
+        ],
+      })
+      expect(localStorage.getItem(CONNECTION_STORAGE_KEY)).not.toContain('second-secret')
+
+      await useAiConfigStore.getState().updateOpenAiCompatibleConfig(secondId, {
+        enabled: true,
+        baseUrl: 'https://second.intra.example/v1/chat/completions',
+        modelId: 'second-model-v2',
+        apiKey: 'second-secret-v2',
+      })
+      await useAiConfigStore.getState().setOpenAiCompatibleProfileEnabled(secondId, false)
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles[1]).toMatchObject({
+        profileId: secondId,
+        enabled: false,
+        modelId: 'second-model-v2',
+        apiKey: 'second-secret-v2',
+      })
+
+      useAiConfigStore.getState().deleteOpenAiCompatibleConfig('legacy')
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(1)
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        modelId: 'second-model-v2',
+        apiKey: 'second-secret-v2',
+      })
+      expect(readStoredConnections().profiles).toEqual([
+        expect.objectContaining({ profileId: secondId }),
+      ])
+    })
+
+    it('enforces the ten-profile limit before writing browser storage', async () => {
+      for (let index = 0; index < 10; index += 1) {
+        await useAiConfigStore.getState().addOpenAiCompatibleConfig({
+          enabled: true,
+          baseUrl: `https://model-${index}.intra.example/v1`,
+          modelId: `model-${index}`,
+          apiKey: null,
+        })
+      }
+      const before = localStorage.getItem(CONNECTION_STORAGE_KEY)
+
+      await expect(useAiConfigStore.getState().addOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://model-10.intra.example/v1',
+        modelId: 'model-10',
+        apiKey: null,
+      })).rejects.toThrow('At most 10')
+
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(10)
+      expect(localStorage.getItem(CONNECTION_STORAGE_KEY)).toBe(before)
+    })
+
+    it('rehydrates a bounded v2 profile list and decrypts each credential', async () => {
+      const profiles = Array.from({ length: 12 }, (_, index) => ({
+        profileId: `profile-${index}`,
+        profile: {
+          enabled: true,
+          baseUrl: `https://model-${index}.intra.example/v1`,
+          modelId: `model-${index}`,
+          transport: 'direct',
+          contextWindowTokens: 32768,
+          contextWindowSource: 'manual',
+        },
+        encryptedApiKey: encryptValue(`secret-${index}`),
+      }))
+      // A duplicate is ignored rather than replacing the first profile/key.
+      profiles.splice(1, 0, { ...profiles[0], encryptedApiKey: encryptValue('wrong-secret') })
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({ version: 2, profiles }))
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(10)
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles[0]).toMatchObject({
+        profileId: 'profile-0',
+        apiKey: 'secret-0',
+      })
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles[1].profileId).toBe('profile-1')
+      expect(readStoredConnections().profiles).toHaveLength(10)
+    })
+
+    it('does not let a delayed profile update revive a synchronously deleted profile', async () => {
+      await useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://first.intra.example/v1',
+        modelId: 'first-model',
+        apiKey: 'first-secret',
+      })
+      const secondId = await useAiConfigStore.getState().addOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://second.intra.example/v1',
+        modelId: 'second-model',
+        apiKey: 'second-secret',
+      })
+      const pendingEncryption = deferred<string>()
+      mockEncrypt.mockReturnValueOnce(pendingEncryption.promise)
+
+      const update = useAiConfigStore.getState().updateOpenAiCompatibleConfig('legacy', {
+        enabled: true,
+        baseUrl: 'https://updated.intra.example/v1',
+        modelId: 'updated-model',
+        apiKey: 'updated-secret',
+      })
+      useAiConfigStore.getState().deleteOpenAiCompatibleConfig('legacy')
+      pendingEncryption.resolve(encryptValue('updated-secret'))
+
+      await expect(update).rejects.toMatchObject({ name: 'AbortError' })
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({ profileId: secondId, modelId: 'second-model' }),
+      ])
+      expect(readStoredConnections().profiles).toEqual([
+        expect.objectContaining({ profileId: secondId }),
+      ])
+      expect(localStorage.getItem(CONNECTION_STORAGE_KEY)).not.toContain('updated-secret')
+    })
   })
 
   describe('clearAllKeys', () => {
@@ -635,6 +864,33 @@ describe('ai-config.store', () => {
       expect(state.geminiKey).toBeNull()
       expect(state.perplexityKey).toBeNull()
       expect(state.claudeKey).toBeNull()
+    })
+
+    it('clears every custom credential while preserving all endpoint profiles', async () => {
+      await useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://first.intra.example/v1',
+        modelId: 'first-model',
+        apiKey: 'first-secret',
+      })
+      const secondId = await useAiConfigStore.getState().addOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://second.intra.example/v1',
+        modelId: 'second-model',
+        apiKey: 'second-secret',
+      })
+
+      useAiConfigStore.getState().clearAllKeys()
+
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({ profileId: 'legacy', apiKey: null }),
+        expect.objectContaining({ profileId: secondId, apiKey: null }),
+      ])
+      expect(useAiConfigStore.getState().openAiCompatible.apiKey).toBeNull()
+      expect(readStoredConnections().profiles).toEqual([
+        expect.objectContaining({ profileId: 'legacy', encryptedApiKey: null }),
+        expect.objectContaining({ profileId: secondId, encryptedApiKey: null }),
+      ])
     })
 
     it('clears memory even when browser storage throws during logout cleanup', () => {

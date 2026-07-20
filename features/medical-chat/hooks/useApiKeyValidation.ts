@@ -8,7 +8,7 @@ export function useApiKeyValidation(
   openAiKey: string | null,
   geminiKey: string | null,
   claudeKey: string | null,
-  openAiCompatible: OpenAiCompatibleConfig,
+  openAiCompatible: OpenAiCompatibleConfig | null,
 ) {
   const hasApiKey = useCallback(() => {
     return hasDirectModelAccess(

@@ -53,7 +53,10 @@ import {
   type ClinicalAiDataInput,
 } from './use-clinical-ai-input.hook'
 import { patientAiSlotKey } from './ai-slot-key'
-import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
 import {
   modelContextLimit,
   modelDisplayLabel,
@@ -203,7 +206,12 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // firing before the (possibly anonymous) session resolves would race
   // getProxyIdToken / the auth listener and get rejected.
   const { loading: authLoading, user, isAnonymous } = useAuth()
-  const { apiKey, geminiKey, claudeKey, openAiCompatible } = useAllApiKeys()
+  const {
+    apiKey,
+    geminiKey,
+    claudeKey,
+    openAiCompatibleProfiles,
+  } = useAllApiKeys()
   const { audience } = useAudience()
 
   // The model actually used — test seam → user pick (key-gated → free base) →
@@ -212,6 +220,10 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // and an in-flight generation keeps running and lands in its own model's
   // slot. Features may retain the last result as a presentation fallback while
   // the newly selected model waits for an explicit run.
+  const selectedOpenAiCompatible = useMemo(
+    () => resolveOpenAiCompatibleProfile(selectedModelId, openAiCompatibleProfiles),
+    [selectedModelId, openAiCompatibleProfiles],
+  )
   const resolvedModelId = useMemo(() => {
     const override = resolveModelOverride?.()
     if (typeof override === 'string' && override) return override
@@ -221,11 +233,16 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         openAiKey: apiKey,
         geminiKey,
         claudeKey,
-        customAvailable: isOpenAiCompatibleRuntimeReady(openAiCompatible),
+        customAvailable: isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible),
       },
       defaultModelId,
     )
-  }, [resolveModelOverride, selectedModelId, apiKey, geminiKey, claudeKey, openAiCompatible, defaultModelId])
+  }, [resolveModelOverride, selectedModelId, apiKey, geminiKey, claudeKey, selectedOpenAiCompatible, defaultModelId])
+
+  const openAiCompatible = useMemo(
+    () => resolveOpenAiCompatibleProfile(resolvedModelId, openAiCompatibleProfiles),
+    [resolvedModelId, openAiCompatibleProfiles],
+  )
 
   const runtimeModelId = useMemo(
     () => modelRuntimeIdentity(resolvedModelId, openAiCompatible),
@@ -254,7 +271,8 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   })
 
   const selectedModelProvider = getModelDefinition(selectedModelId)?.provider
-  const selectedModelReady = selectedModelProvider !== 'custom' || isOpenAiCompatibleRuntimeReady(openAiCompatible)
+  const selectedModelReady = selectedModelProvider !== 'custom' ||
+    isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible)
   // A failed anonymous auto-run must become eligible again after login (or
   // after the user adds a provider connection). This identity deliberately
   // describes all available access, not the selected model: moving the picker
@@ -264,7 +282,9 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     apiKey ? 'openai' : '',
     geminiKey ? 'gemini' : '',
     claudeKey ? 'claude' : '',
-    isOpenAiCompatibleRuntimeReady(openAiCompatible) ? 'custom' : '',
+    openAiCompatibleProfiles.some((profile) => (
+      isOpenAiCompatibleRuntimeReady(profile)
+    )) ? 'custom' : '',
   ].join('|')
   const bundleRevision = store((s) => s.bundleRevision)
 

@@ -39,12 +39,12 @@ Medical Chat 是右側面板的臨床 Agent 對話。它沒有「普通模式／
 模型清單以 `src/shared/constants/ai-models.constants.ts` 為準。Chat 在 feature header／expanded toolbar 內選 model，不在 Settings 選。
 
 - 有該 provider 的 user key：瀏覽器直接呼叫 provider。
-- 選擇院內 OpenAI-compatible model：瀏覽器直接呼叫使用者設定的 HTTPS endpoint；key 可選，且不會使用 Firebase proxy。
+- 選擇院內 OpenAI-compatible model：依該 profile 的 transport 執行；`direct` 由瀏覽器直接呼叫設定的 HTTPS endpoint，明確選擇 `mediprisma-gateway` 時文字對話會經受限 Firebase BYO Gateway。兩者不會互相 fallback。
 - 無 key：有可用 Firebase 匿名／登入 session 時走 owner-funded proxy。
 - premium pick 沒有對應 key：執行時降級到免費 default，訊息保存實際 model id。
 - 沒有 user key、Firebase session 或 proxy URL：顯示設定提示，不啟動串流。
 
-Settings 只管理 OpenAI、Gemini、Claude、Perplexity keys 與保存方式。新使用者預設存於加密的 `sessionStorage`；明確開啟「記住此裝置」才改用 `localStorage`。
+Settings 管理 OpenAI、Gemini、Claude、Perplexity keys，以及最多 10 個自訂 OpenAI-compatible profiles。一般雲端 key 預設存於加密的 `sessionStorage`，明確開啟「記住此裝置」才改用 `localStorage`；自訂 profiles 則以每把 key 分別加密的 localStorage v2 envelope 跨重開保存。自訂 direct profile 可呼叫同 endpoint 的語音轉錄；Gateway profile 不支援語音，且不會改送雲端 Whisper。
 
 ## Agent tools
 
