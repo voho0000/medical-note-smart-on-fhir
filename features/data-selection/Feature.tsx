@@ -8,6 +8,7 @@ import { DataSelectionPanel } from "./components/DataSelectionPanel"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { useClinicalDataMapper } from "@/src/application/hooks/data/use-clinical-data-mapper.hook"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
+import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 
 /**
  * Raw clinical data type from provider (includes loading state)
@@ -32,12 +33,14 @@ export interface DataSelectionFeatureProps {
   fallbackModelId?: string
   /** Standalone surfaces may keep the explanatory line; drawers own it in their header. */
   showScopeDescription?: boolean
+  overflowIssue?: ContextOverflowIssue | null
 }
 
 export function DataSelectionFeature({
   modelId,
   fallbackModelId,
   showScopeDescription = true,
+  overflowIssue,
 }: DataSelectionFeatureProps = {}) {
   const { t } = useLanguage()
   const rawClinicalData = useClinicalData() as RawClinicalData
@@ -109,6 +112,7 @@ export function DataSelectionFeature({
         onFiltersChange={handleFiltersChange}
         modelId={modelId}
         fallbackModelId={fallbackModelId}
+        overflowIssue={overflowIssue}
         showScopeDescription={showScopeDescription}
       />
     </div>

@@ -28,10 +28,28 @@
 // Scope guards (enforced by the hooks): demo patient + zh-TW locale + no cached
 // result. A retained model preference never causes an automatic live call;
 // pressing 重新產生 explicitly still runs the selected model.
-import type { MedicalSummaryAiResult } from '@/src/core/entities/medical-summary.entity'
-import type { SafetyScanResultInput } from '@/src/core/entities/safety-alert.entity'
+import type {
+  MedicalSummaryAiResult,
+  MedicalSummaryGeneration,
+} from '@/src/core/entities/medical-summary.entity'
+import type {
+  SafetyScanGeneration,
+  SafetyScanResultInput,
+} from '@/src/core/entities/safety-alert.entity'
 
 export const DEMO_PATIENT_ID = 'demo-patient-1'
+
+export const DEMO_MEDICAL_SUMMARY_GENERATION = {
+  source: 'pre-generated',
+  modelId: 'gemini-3.1-flash-lite',
+  modelName: 'Gemini 3.1 Flash-Lite',
+} as const satisfies MedicalSummaryGeneration
+
+export const DEMO_SAFETY_SCAN_GENERATION = {
+  source: 'pre-generated',
+  modelId: 'gemini-3.1-flash-lite',
+  modelName: 'Gemini 3.1 Flash-Lite',
+} as const satisfies SafetyScanGeneration
 
 type Audience = 'medical' | 'patient'
 

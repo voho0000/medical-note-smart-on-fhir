@@ -56,8 +56,23 @@ export interface SafetyAlert extends SafetyAlertInput {
 }
 
 export interface SafetyScanResult {
+  /** App-authored provenance used to restore model-specific scan versions.
+   * Legacy caches may omit it; bundled demo results identify Flash-Lite
+   * explicitly so they cannot masquerade as another selected model. */
+  generation?: SafetyScanGeneration
   scannedCount: number
   alerts: SafetyAlert[]
+}
+
+export type SafetyScanGeneration = {
+  source: 'live'
+  modelId: string
+  modelName: string
+  generatedAt: number
+} | {
+  source: 'pre-generated'
+  modelId: string
+  modelName: string
 }
 
 export function normaliseCategory(raw?: string): SafetyCategory {

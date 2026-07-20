@@ -4,16 +4,22 @@
 // bundle, and caches per patient/audience/locale/model/exact clinical input so
 // tab switches / reloads don't re-bill or restore a result for stale data.
 //
-// Auto-generate policy: when enabled, every available selected model runs once
-// for an empty content-bound slot after cache/auth hydration.
+// Auto-generate policy: when enabled, an initially empty clinical-input scope
+// runs once after cache/auth hydration. Changing the picker restores that
+// model's completed version when available; otherwise the current version
+// remains visible until an explicit regeneration succeeds.
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { toast } from 'sonner'
 import { useAudience } from '@/src/application/providers/audience.provider'
-import { preflightContextWarning } from '@/src/shared/utils/context-budget'
+import {
+  ContextOverflowError,
+  createContextOverflowIssue,
+  type ContextOverflowIssue,
+} from '@/src/shared/utils/context-budget'
 import {
   loadEncryptedCache,
+  saveEncryptedCache,
   aiResultCacheKey,
 } from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
@@ -26,7 +32,10 @@ import type {
   MedicalSummaryResult,
   SummaryCoverageStats,
 } from '@/src/core/entities/medical-summary.entity'
-import { demoMedicalSummarySnapshots } from '@/src/infrastructure/demo/demo-ai-snapshots'
+import {
+  DEMO_MEDICAL_SUMMARY_GENERATION,
+  demoMedicalSummarySnapshots,
+} from '@/src/infrastructure/demo/demo-ai-snapshots'
 import {
   medicalSummaryStore,
   summaryCacheKey,
@@ -57,6 +66,9 @@ const legacyPatientSummaryCacheKeys = (scanKey: string) => [
   aiResultCacheKey('medsummary5', scanKey),
 ]
 
+const medicalSummaryResultModelId = (result: MedicalSummaryResult) =>
+  result.generation?.modelId
+
 interface SummaryPrefsStore {
   autoGenerate: boolean
   setAutoGenerate: (value: boolean) => void
@@ -79,18 +91,50 @@ export const useSummaryPrefsStore = createModelPrefsStore<SummaryPrefsStore>({
 
 export interface UseMedicalSummaryReturn {
   result: MedicalSummaryResult | undefined
+  /** Actual model that owns result; differs from model while an empty selected
+   * slot is temporarily showing another model's last complete version. */
+  resultOwnerModelId: string | null
+  /** Exact endpoint/model cache identity that owns result. */
+  resultOwnerRuntimeId: string | null
   coverage: SummaryCoverageStats | null
   isGenerating: boolean
   error: string | null
+  issue: ContextOverflowIssue | null
   hasPatient: boolean
   dataReady: boolean
-  /** True once this exact content-bound cache slot was restored. */
+  /** Model-independent Bundle/patient/audience/locale/input identity used by
+   *  the summary+safety orchestrator to isolate visible generation batches. */
+  scopeKey: string
+  /** Exact model/content slot selected for the next generation. */
+  generationSlotKey: string
+  /** Unlike isGenerating, this identifies whether the currently selected
+   * slot itself is running (used to capture auto-run batch ownership). */
+  isCurrentSlotGenerating: boolean
+  readGenerationSlot: (slotKey: string) => {
+    result: MedicalSummaryResult | undefined
+    isRunning: boolean
+    error: string | null
+    issue: ContextOverflowIssue | null
+  }
+  /** True when this clinical-input scope has a presentable restored result. */
   isHydrated: boolean
   autoGenerate: boolean
   setAutoGenerate: (value: boolean) => void
   model: string
+  /** Effective user-facing model name for the next run, captured by the
+   * orchestrator when a generation batch begins. */
+  resolvedModelName: string
   setModel: (id: string) => void
+  recordGenerationCompletion: (input: {
+    slotKey: string
+    generatedAt: number
+    modelId: string
+    completedAt: number
+    durationMs: number
+  }) => void
   generate: () => Promise<void>
+  cancel: (slotKey?: string) => void
+  restoreGenerationSlot: (slotKey: string, result: MedicalSummaryResult | undefined) => void
 }
 
 export function useMedicalSummary(): UseMedicalSummaryReturn {
@@ -129,24 +173,24 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
     })
-    const overflow = preflightContextWarning(
+    const overflow = createContextOverflowIssue(
       messages.map((message) => message.content).join('\n\n'),
       ctx.modelId,
-      ctx.locale,
       {
         selectedContext: ctx.clinicalContext,
         contextLimit: ctx.contextLimit,
       },
     )
     if (overflow) {
-      toast.error(overflow)
-      throw new Error(overflow)
+      throw new ContextOverflowError(overflow, ctx.locale)
     }
 
     const streamOnce = async () => {
       let full = ''
       await ctx.ai.stream(messages, {
         modelId: ctx.modelId,
+        operationKey: ctx.operationKey,
+        throwOnAbort: true,
         onChunk: (chunk: string) => {
           full = chunk
         },
@@ -160,11 +204,23 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     let parsed = await streamOnce()
     if (!parsed) parsed = await streamOnce()
     if (!parsed) return null
-    return generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
+    const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
       clinicalData: ctx.clinicalData ?? undefined,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
     })
+    const generatedAt = Date.now()
+    return {
+      ...finalized,
+      generation: {
+        source: 'live',
+        // This is the resolved model that actually ran, not the raw picker
+        // preference (which may have fallen back because a key was missing).
+        modelId: ctx.modelId,
+        modelName: ctx.modelName,
+        generatedAt,
+      },
+    }
   }, [])
 
   // Demo bundle: runs through the SAME parse → finalize pipeline as a live
@@ -173,11 +229,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const snapshot = demoMedicalSummarySnapshots[ctx.audience === 'patient' ? 'patient' : 'medical']
     const parsed = generateMedicalSummaryUseCase.parseResult(JSON.stringify(snapshot))
     if (!parsed) return null
-    return generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
+    const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
       clinicalData: ctx.clinicalData,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       locale: 'zh-TW',
     })
+    return {
+      ...finalized,
+      generation: DEMO_MEDICAL_SUMMARY_GENERATION,
+    }
   }, [])
 
   const slot = useAiSlotGeneration<MedicalSummaryResult>({
@@ -194,6 +254,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     loadCached,
     run,
     demoSeed,
+    resultModelId: medicalSummaryResultModelId,
+    retainResultOnModelChange: true,
   })
 
   // Deterministic coverage stats for the coverage card — recomputes only when
@@ -203,27 +265,88 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     [slot.dataReady, slot.clinicalData],
   )
 
-  // Switching model just changes which per-model slot the view reads — it does
-  // NOT cancel or clear anything. The old model's in-flight run keeps going and
-  // lands in its own slot; the new model shows its cached result, its spinner
-  // if still generating, or auto-generates if it has neither (user directive
-  // 2026-07-07).
+  // The picker restores that model's latest completed summary when available.
+  // If its slot is empty, the shared hook keeps the last visible summary until
+  // this model succeeds; in-flight work still lands in the slot that owns it.
   const setModel = useCallback((id: string) => {
     setModelId(id)
   }, [setModelId])
 
+  const readGenerationSlot = useCallback((slotKey: string) => {
+    const state = medicalSummaryStore.getState()
+    return {
+      result: state.byKey[slotKey],
+      isRunning: Boolean(state.running[slotKey]),
+      error: state.errors[slotKey] ?? null,
+      issue: state.issues[slotKey] ?? null,
+    }
+  }, [])
+
+  // The orchestrator owns the user-visible batch (summary + safety scan), so
+  // completion metadata is attached only after every pipeline that belongs to
+  // that batch succeeds. The exact captured slot remains correct even if the
+  // user changes the model picker while the request is running.
+  const recordGenerationCompletion = useCallback(({
+    slotKey,
+    generatedAt,
+    modelId,
+    completedAt,
+    durationMs,
+  }: {
+    slotKey: string
+    generatedAt: number
+    modelId: string
+    completedAt: number
+    durationMs: number
+  }) => {
+    if (!Number.isFinite(generatedAt) || !Number.isFinite(durationMs) || durationMs < 0) return
+    if (!Number.isFinite(completedAt) || completedAt < generatedAt) return
+    const state = medicalSummaryStore.getState()
+    const bundleRevision = state.bundleRevision
+    const current = state.byKey[slotKey]
+    if (
+      current?.generation?.source !== 'live' ||
+      current.generation.generatedAt !== generatedAt ||
+      current.generation.modelId !== modelId
+    ) return
+    const next: MedicalSummaryResult = {
+      ...current,
+      generation: {
+        ...current.generation,
+        completedAt,
+        durationMs: Math.round(durationMs),
+      },
+    }
+    state.setResult(slotKey, next)
+    void saveEncryptedCache(summaryCacheKey(slotKey), next, () => {
+      const latest = medicalSummaryStore.getState()
+      return latest.bundleRevision === bundleRevision && latest.byKey[slotKey] === next
+    })
+  }, [])
+
   return {
     result: slot.result,
+    resultOwnerModelId: slot.resultOwnerModelId,
+    resultOwnerRuntimeId: slot.resultOwnerRuntimeId,
     coverage,
-    isGenerating: slot.isRunning,
+    isGenerating: slot.isAnyRunning,
     error: slot.error,
+    issue: slot.issue,
     hasPatient: slot.hasPatient,
     dataReady: slot.dataReady,
+    scopeKey: slot.scopeKey,
+    generationSlotKey: slot.slotKey,
+    isCurrentSlotGenerating: slot.isRunning,
+    readGenerationSlot,
     isHydrated: slot.isHydrated,
     autoGenerate,
     setAutoGenerate,
     model: modelId,
+    resolvedModelName: slot.resolvedModelName,
     setModel,
+    recordGenerationCompletion,
     generate: slot.generate,
+    cancel: slot.cancel,
+    restoreGenerationSlot: slot.restoreSlot,
   }
 }

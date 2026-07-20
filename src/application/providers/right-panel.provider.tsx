@@ -1,11 +1,19 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+
+export type SettingsNavigationTarget = 'openai-compatible-context-window'
 
 interface RightPanelContextType {
   activeTab: string
-  setActiveTab: (tab: string, settingsSubTab?: string) => void
+  setActiveTab: (
+    tab: string,
+    settingsSubTab?: string,
+    settingsTarget?: SettingsNavigationTarget,
+  ) => void
   settingsTab: string
+  settingsTarget: SettingsNavigationTarget | null
+  clearSettingsTarget: () => void
 }
 
 const RightPanelContext = createContext<RightPanelContextType | undefined>(undefined)
@@ -18,16 +26,33 @@ const RightPanelContext = createContext<RightPanelContextType | undefined>(undef
 export function RightPanelProvider({ children, defaultTab = 'medical-summary' }: { children: ReactNode; defaultTab?: string }) {
   const [activeTab, setActiveTabState] = useState(defaultTab)
   const [settingsTab, setSettingsTab] = useState('ai')
+  const [settingsTarget, setSettingsTarget] = useState<SettingsNavigationTarget | null>(null)
 
-  const setActiveTab = (tab: string, settingsSubTab?: string) => {
+  const setActiveTab = useCallback((
+    tab: string,
+    settingsSubTab?: string,
+    target?: SettingsNavigationTarget,
+  ) => {
     setActiveTabState(tab)
-    if (tab === 'settings' && settingsSubTab) {
-      setSettingsTab(settingsSubTab)
+    if (tab === 'settings') {
+      if (settingsSubTab) setSettingsTab(settingsSubTab)
+      else if (target) setSettingsTab('ai')
+      setSettingsTarget(target ?? null)
+    } else {
+      setSettingsTarget(null)
     }
-  }
+  }, [])
+
+  const clearSettingsTarget = useCallback(() => setSettingsTarget(null), [])
 
   return (
-    <RightPanelContext.Provider value={{ activeTab, setActiveTab, settingsTab }}>
+    <RightPanelContext.Provider value={{
+      activeTab,
+      setActiveTab,
+      settingsTab,
+      settingsTarget,
+      clearSettingsTarget,
+    }}>
       {children}
     </RightPanelContext.Provider>
   )

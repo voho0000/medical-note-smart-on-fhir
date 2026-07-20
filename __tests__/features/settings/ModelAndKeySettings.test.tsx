@@ -45,10 +45,16 @@ jest.mock('@/src/application/hooks/safety-alerts/use-safety-alerts.hook', () => 
   },
 }))
 
-function renderSettings(offlineMode: boolean) {
+function renderSettings(
+  offlineMode: boolean,
+  navigation?: {
+    settingsTarget: 'openai-compatible-context-window'
+    onSettingsTargetHandled: () => void
+  },
+) {
   return render(
     <LanguageProvider>
-      <ModelAndKeySettings offlineMode={offlineMode} />
+      <ModelAndKeySettings offlineMode={offlineMode} {...navigation} />
     </LanguageProvider>,
   )
 }
@@ -60,6 +66,8 @@ function setConfiguredLocalEndpoint() {
     perplexityKey: null,
     claudeKey: null,
     storageType: 'sessionStorage',
+    credentialsHydrating: false,
+    storageTypeChanging: false,
     openAiCompatible: {
       enabled: true,
       baseUrl: 'http://127.0.0.1:11434/v1',
@@ -73,6 +81,8 @@ function setConfiguredLocalEndpoint() {
 
 describe('ModelAndKeySettings progressive disclosure', () => {
   beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
     mockTestOpenAiCompatibleConnection.mockReset()
     setConfiguredLocalEndpoint()
   })
@@ -124,6 +134,68 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     fireEvent.click(advancedTrigger)
     expect(screen.getByRole('spinbutton', { name: '內容視窗（tokens）' })).toHaveValue(32768)
     expect(screen.getByRole('textbox', { name: 'API 金鑰（選填）' })).toBeInTheDocument()
+  })
+
+  it('reveals, scrolls to, and focuses a context-window navigation target', async () => {
+    const onSettingsTargetHandled = jest.fn()
+    const scrollIntoView = jest.fn()
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    try {
+      renderSettings(true, {
+        settingsTarget: 'openai-compatible-context-window',
+        onSettingsTargetHandled,
+      })
+
+      const contextInput = await screen.findByRole('spinbutton', {
+        name: '內容視窗（tokens）',
+      })
+      await waitFor(() => expect(contextInput).toHaveFocus())
+      expect(screen.getByRole('button', { name: /自訂 AI 端點/ })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      expect(screen.getByRole('button', { name: '進階設定' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+      expect(onSettingsTargetHandled).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        value: originalScrollIntoView,
+      })
+    }
+  })
+
+  it('locks endpoint and cloud credential controls until browser settings finish loading', () => {
+    useAiConfigStore.setState({ credentialsHydrating: true })
+    renderSettings(false)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    const endpointInput = screen.getByRole('textbox', { name: 'Chat Completions 網址' })
+    expect(endpointInput).toBeDisabled()
+    expect(screen.getByRole('button', { name: '測試連線' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /儲存/ })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /隱私與裝置保存/ }))
+    expect(screen.getByRole('switch', {
+      name: '在此裝置記住雲端 AI 與工具金鑰',
+    })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^雲端 AI 0 \/ 3/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI 未設定' }))
+    const cloudKeyInput = screen.getByLabelText(/個人 OpenAI API 金鑰/)
+    expect(cloudKeyInput).toBeDisabled()
+
+    act(() => useAiConfigStore.setState({ credentialsHydrating: false }))
+    expect(endpointInput).toBeEnabled()
+    expect(cloudKeyInput).toBeEnabled()
   })
 
   it('opens an unconfigured local profile and distinguishes a disabled saved profile', () => {
@@ -302,8 +374,15 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(contextInput).toHaveValue(65536)
 
     fireEvent.click(screen.getByRole('button', { name: '儲存並啟用' }))
-    expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(65536)
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(65536)
+    })
     expect(useAiConfigStore.getState().openAiCompatible.contextWindowSource).toBe('manual')
+    expect(JSON.parse(localStorage.getItem('openai_compatible_connection_v1') ?? '{}'))
+      .toMatchObject({
+        profile: { contextWindowTokens: 65536, contextWindowSource: 'manual' },
+      })
+    expect(sessionStorage.getItem('openai_compatible_config')).toBeNull()
   })
 
   it('saves an accepted auto-detected value with detected provenance', async () => {
@@ -323,9 +402,11 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     await waitFor(() => expect(contextInput).toHaveValue(262144))
     fireEvent.click(screen.getByRole('button', { name: '儲存並啟用' }))
 
-    expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
-      contextWindowTokens: 262144,
-      contextWindowSource: 'detected',
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        contextWindowTokens: 262144,
+        contextWindowSource: 'detected',
+      })
     })
   })
 
@@ -416,7 +497,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
   it('separates cloud model credentials from the Perplexity Agent tool', () => {
     renderSettings(false)
 
-    fireEvent.click(screen.getByRole('button', { name: /雲端 AI/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^雲端 AI 0 \/ 3/ }))
     expect(screen.getByTestId('auth-status')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'OpenAI 未設定' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Gemini 未設定' })).toBeInTheDocument()
@@ -428,15 +509,17 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(screen.queryByTestId('auth-status')).not.toBeInTheDocument()
   })
 
-  it('labels and updates persistence for the full AI connection profile', () => {
+  it('labels and updates persistence for cloud and tool keys', async () => {
     renderSettings(true)
 
     fireEvent.click(screen.getByRole('button', { name: /隱私與裝置保存/ }))
     const persistenceSwitch = screen.getByRole('switch', {
-      name: '在此裝置記住 AI 連線設定與金鑰',
+      name: '在此裝置記住雲端 AI 與工具金鑰',
     })
     expect(persistenceSwitch).not.toBeChecked()
     fireEvent.click(persistenceSwitch)
-    expect(useAiConfigStore.getState().storageType).toBe('localStorage')
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().storageType).toBe('localStorage')
+    })
   })
 })

@@ -12,6 +12,7 @@ import { DataSelectionTab } from "./DataSelectionTab"
 import { PreviewTab } from "./PreviewTab"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
+import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 
 interface DataSelectionPanelProps {
   clinicalData: ClinicalDataCollection
@@ -22,6 +23,7 @@ interface DataSelectionPanelProps {
   modelId?: string
   fallbackModelId?: string
   showScopeDescription?: boolean
+  overflowIssue?: ContextOverflowIssue | null
 }
 
 export function DataSelectionPanel({ 
@@ -33,6 +35,7 @@ export function DataSelectionPanel({
   modelId,
   fallbackModelId,
   showScopeDescription = true,
+  overflowIssue,
 }: DataSelectionPanelProps) {
   const { t } = useLanguage()
   // Preview the same summary/insights scope that this panel edits.
@@ -77,6 +80,7 @@ export function DataSelectionPanel({
             someSelected={someSelected}
             modelId={modelId}
             fallbackModelId={fallbackModelId}
+            overflowIssue={overflowIssue}
           />
         </TabsContent>
         <TabsContent value="preview">

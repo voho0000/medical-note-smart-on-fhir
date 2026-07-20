@@ -24,6 +24,7 @@ interface ApiKeyInputProps {
   onClear: () => void
   helpText: string
   clearWarning?: string
+  disabled?: boolean
 }
 
 export function ApiKeyInput({
@@ -36,6 +37,7 @@ export function ApiKeyInput({
   onClear,
   helpText,
   clearWarning,
+  disabled = false,
 }: ApiKeyInputProps) {
   const { t } = useLanguage()
   const [showPassword, setShowPassword] = useState(false)
@@ -71,11 +73,13 @@ export function ApiKeyInput({
             data-1p-ignore
             data-lpignore="true"
             data-form-type="other"
+            disabled={disabled}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            disabled={disabled}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={showPassword ? t.settings.hideKey : t.settings.showKey}
           >
             {showPassword ? (
@@ -86,13 +90,13 @@ export function ApiKeyInput({
           </button>
         </div>
         <div className="flex gap-2 sm:w-auto">
-          <Button size="sm" onClick={onSave} disabled={!value?.trim()}>
+          <Button size="sm" onClick={onSave} disabled={disabled || !value?.trim()}>
             {t.settings.saveKey}
           </Button>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="sm" variant="outline" onClick={onClear}>
+                <Button size="sm" variant="outline" onClick={onClear} disabled={disabled}>
                   {t.settings.clear}
                 </Button>
               </TooltipTrigger>

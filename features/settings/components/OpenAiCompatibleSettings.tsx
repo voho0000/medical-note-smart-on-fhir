@@ -37,6 +37,7 @@ import {
   OpenAiCompatibleUrlError,
 } from '@/src/shared/utils/openai-compatible.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
+import type { SettingsNavigationTarget } from '@/src/application/providers/right-panel.provider'
 
 interface TestState {
   tone: 'success' | 'warning' | 'error'
@@ -52,9 +53,21 @@ function initialContextWindowSource(
   )
 }
 
-export function OpenAiCompatibleSettings() {
+interface OpenAiCompatibleSettingsProps {
+  /** The outer local-model accordion must be visible before focusing a target. */
+  navigationReady?: boolean
+  settingsTarget?: SettingsNavigationTarget | null
+  onSettingsTargetHandled?: () => void
+}
+
+export function OpenAiCompatibleSettings({
+  navigationReady = true,
+  settingsTarget = null,
+  onSettingsTargetHandled,
+}: OpenAiCompatibleSettingsProps = {}) {
   const { t } = useLanguage()
   const saved = useAiConfigStore((state) => state.openAiCompatible)
+  const credentialsHydrating = useAiConfigStore((state) => state.credentialsHydrating)
   const setConfig = useAiConfigStore((state) => state.setOpenAiCompatibleConfig)
   const setEnabled = useAiConfigStore((state) => state.setOpenAiCompatibleEnabled)
   const clearConfig = useAiConfigStore((state) => state.clearOpenAiCompatibleConfig)
@@ -75,10 +88,36 @@ export function OpenAiCompatibleSettings() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [testState, setTestState] = useState<TestState | null>(null)
   const [connectionTestPassed, setConnectionTestPassed] = useState(false)
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
   const testRequestId = useRef(0)
+  const busy = testing || saving || credentialsHydrating
+
+  useEffect(() => {
+    if (
+      !navigationReady ||
+      settingsTarget !== 'openai-compatible-context-window'
+    ) return
+    // A navigation intent is external state; reveal its owning disclosure.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAdvancedOpen(true)
+  }, [navigationReady, settingsTarget])
+
+  useEffect(() => {
+    if (
+      !navigationReady ||
+      !advancedOpen ||
+      settingsTarget !== 'openai-compatible-context-window'
+    ) return
+
+    const input = document.getElementById('openai-compatible-context-window')
+    if (!(input instanceof HTMLInputElement)) return
+    input.scrollIntoView?.({ block: 'center' })
+    input.focus({ preventScroll: true })
+    onSettingsTargetHandled?.()
+  }, [advancedOpen, navigationReady, onSettingsTargetHandled, settingsTarget])
 
   useEffect(() => {
     testRequestId.current += 1
@@ -197,15 +236,31 @@ export function OpenAiCompatibleSettings() {
     return error instanceof Error ? error.message : t.settings.openAiCompatibleConnectionFailed
   }
 
-  const handleSave = () => {
+  const isStaleOperation = (error: unknown) => (
+    error instanceof Error && error.name === 'AbortError'
+  )
+
+  const handleSave = async () => {
     if (!connectionReadyToSave) {
       toast.error(t.settings.openAiCompatibleTestBeforeSave)
       return
     }
+
+    let next: OpenAiCompatibleConfig
     try {
-      testRequestId.current += 1
-      const next = normalizeDraft()
-      setConfig(next)
+      next = normalizeDraft()
+    } catch (error) {
+      toast.error(errorText(error))
+      return
+    }
+
+    testRequestId.current += 1
+    setSaving(true)
+    try {
+      // Resolve only after the encrypted credential and profile are durably
+      // written, so closing the page after the success toast cannot race the
+      // API-key save.
+      await setConfig(next)
       setBaseUrl(formatOpenAiCompatibleChatCompletionsUrl(next.baseUrl))
       setModelId(next.modelId)
       setContextWindowTokens(String(next.contextWindowTokens))
@@ -214,7 +269,23 @@ export function OpenAiCompatibleSettings() {
       setTestState(null)
       toast.success(t.settings.openAiCompatibleSaved)
     } catch (error) {
-      toast.error(errorText(error))
+      if (isStaleOperation(error)) return
+      toast.error(t.settings.openAiCompatibleSecureSaveFailed)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEnabledChange = async (enabled: boolean) => {
+    setSaving(true)
+    try {
+      await setEnabled(enabled)
+    } catch (error) {
+      if (!isStaleOperation(error)) {
+        toast.error(t.settings.openAiCompatibleSecureSaveFailed)
+      }
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -314,7 +385,7 @@ export function OpenAiCompatibleSettings() {
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
-            disabled={testing}
+            disabled={busy}
           />
         </div>
 
@@ -345,7 +416,7 @@ export function OpenAiCompatibleSettings() {
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
-            disabled={testing}
+            disabled={busy}
           />
           <datalist id={modelOptionsId}>
             {discoveredModels.map((id) => <option key={id} value={id} />)}
@@ -365,7 +436,7 @@ export function OpenAiCompatibleSettings() {
                   setTestState(null)
                   setConnectionTestPassed(false)
                 }}
-                disabled={testing}
+                disabled={busy}
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
                   transport === 'direct'
@@ -386,7 +457,7 @@ export function OpenAiCompatibleSettings() {
                   setTestState(null)
                   setConnectionTestPassed(false)
                 }}
-                disabled={testing || !ENV_CONFIG.hasOpenAiCompatibleGateway}
+                disabled={busy || !ENV_CONFIG.hasOpenAiCompatibleGateway}
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
                   transport === 'mediprisma-gateway'
@@ -454,7 +525,7 @@ export function OpenAiCompatibleSettings() {
                   setContextWindowSource('manual')
                 }}
                 inputMode="numeric"
-                disabled={testing}
+                disabled={busy}
               />
               {detectedContextWindowTokens !== null && (
                 <div
@@ -470,7 +541,8 @@ export function OpenAiCompatibleSettings() {
                   {Number(contextWindowTokens) !== detectedContextWindowTokens && (
                     <button
                       type="button"
-                      className="font-medium text-primary underline-offset-2 hover:underline"
+                      className="font-medium text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={busy}
                       onClick={() => {
                         setContextWindowTokens(String(detectedContextWindowTokens))
                         setContextWindowSource('detected')
@@ -519,11 +591,12 @@ export function OpenAiCompatibleSettings() {
                   data-1p-ignore
                   data-lpignore="true"
                   data-form-type="other"
-                  disabled={testing}
+                  disabled={busy}
                 />
                 <button
                   type="button"
                   onClick={() => setShowApiKey((current) => !current)}
+                  disabled={busy}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label={showApiKey ? t.settings.hideKey : t.settings.showKey}
                 >
@@ -550,7 +623,7 @@ export function OpenAiCompatibleSettings() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" type="button" onClick={handleTest} disabled={testing || !baseUrl.trim() || !modelId.trim()}>
+        <Button size="sm" type="button" onClick={handleTest} disabled={busy || !baseUrl.trim() || !modelId.trim()}>
           {testing && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
           {testing ? t.settings.openAiCompatibleTesting : t.settings.openAiCompatibleTest}
         </Button>
@@ -565,14 +638,17 @@ export function OpenAiCompatibleSettings() {
           size="sm"
           type="button"
           onClick={handleSave}
-          disabled={testing || !baseUrl.trim() || !modelId.trim() || !connectionReadyToSave}
+          disabled={busy || !baseUrl.trim() || !modelId.trim() || !connectionReadyToSave}
           title={!connectionReadyToSave
             ? t.settings.openAiCompatibleTestBeforeSave
             : undefined}
         >
-          {draftChanged || !saved.baseUrl
-            ? t.settings.openAiCompatibleSaveEnable
-            : t.settings.openAiCompatibleSave}
+          {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+          {saving
+            ? t.settings.openAiCompatibleSaving
+            : draftChanged || !saved.baseUrl
+              ? t.settings.openAiCompatibleSaveEnable
+              : t.settings.openAiCompatibleSave}
         </Button>
         {saved.baseUrl && saved.modelId && (
           <div className="ml-auto flex items-center gap-2">
@@ -582,15 +658,15 @@ export function OpenAiCompatibleSettings() {
             <Switch
               id="openai-compatible-enabled"
               checked={saved.enabled}
-              onCheckedChange={setEnabled}
-              disabled={testing}
+              onCheckedChange={handleEnabledChange}
+              disabled={busy}
             />
             <Button
               size="sm"
               variant="ghost"
               type="button"
               onClick={handleClear}
-              disabled={testing}
+              disabled={busy}
             >
               {t.settings.openAiCompatibleClear}
             </Button>

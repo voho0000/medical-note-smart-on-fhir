@@ -34,8 +34,16 @@ function base64ToBytes(b64: string): Uint8Array {
 }
 
 /** Encrypt + persist a value under `key`. Best-effort: silently no-ops when the
- *  session key / storage is unavailable (caller keeps its in-memory copy). */
-export async function saveEncryptedCache(key: string, value: unknown): Promise<void> {
+ *  session key / storage is unavailable (caller keeps its in-memory copy).
+ *
+ *  `shouldCommit` is checked after the asynchronous encryption step. Callers
+ *  use it to prevent an older result (or a result from a purged Bundle epoch)
+ *  from winning a late localStorage write. */
+export async function saveEncryptedCache(
+  key: string,
+  value: unknown,
+  shouldCommit: () => boolean = () => true,
+): Promise<void> {
   if (typeof window === 'undefined') return
   try {
     const cryptoKey = await getSessionBundleKey({ create: true })
@@ -47,6 +55,7 @@ export async function saveEncryptedCache(key: string, value: unknown): Promise<v
       data: bytesToBase64(new Uint8Array(record.data)),
       savedAt: record.savedAt,
     }
+    if (!shouldCommit()) return
     window.localStorage.setItem(key, JSON.stringify(stored))
   } catch {
     // Best-effort cache — never throw into the caller.

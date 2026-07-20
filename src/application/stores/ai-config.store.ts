@@ -10,7 +10,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useShallow } from 'zustand/react/shallow'
-import { encrypt, decrypt } from '@/src/shared/utils/crypto.utils'
+import { decrypt, encrypt, isEncrypted } from '@/src/shared/utils/crypto.utils'
 import { isUsableApiKey, sanitizeApiKey } from '@/src/shared/utils/api-key.utils'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import {
@@ -31,17 +31,20 @@ interface AiConfigState {
   claudeKey: string | null
   openAiCompatible: OpenAiCompatibleConfig
   storageType: StorageType
+  credentialsHydrating: boolean
+  storageTypeChanging: boolean
 
   // Actions
   setApiKey: (key: string | null) => void
   setGeminiKey: (key: string | null) => void
   setPerplexityKey: (key: string | null) => void
   setClaudeKey: (key: string | null) => void
-  setOpenAiCompatibleConfig: (config: OpenAiCompatibleConfig) => void
-  setOpenAiCompatibleEnabled: (enabled: boolean) => void
+  setOpenAiCompatibleConfig: (config: OpenAiCompatibleConfig) => Promise<void>
+  setOpenAiCompatibleEnabled: (enabled: boolean) => Promise<void>
   clearOpenAiCompatibleConfig: () => void
-  setStorageType: (type: StorageType) => void
+  setStorageType: (type: StorageType) => Promise<void>
   clearAllKeys: () => void
+  rehydrateFromBrowserStorage: () => Promise<void>
 }
 
 const STORAGE_KEYS = {
@@ -51,7 +54,37 @@ const STORAGE_KEYS = {
   CLAUDE_API_KEY: 'claude_api_key',
   OPENAI_COMPATIBLE_API_KEY: 'openai_compatible_api_key',
   OPENAI_COMPATIBLE_CONFIG: 'openai_compatible_config',
+  OPENAI_COMPATIBLE_CONNECTION: 'openai_compatible_connection_v1',
   STORAGE_TYPE: 'api_key_storage_type',
+}
+
+type CredentialField = 'apiKey' | 'geminiKey' | 'perplexityKey' | 'claudeKey'
+
+const credentialRevisions: Record<CredentialField, number> = {
+  apiKey: 0,
+  geminiKey: 0,
+  perplexityKey: 0,
+  claudeKey: 0,
+}
+let customConnectionRevision = 0
+let storageTypeRevision = 0
+let aiConfigHydrationRevision = 0
+
+const bumpCredentialRevision = (field: CredentialField) => {
+  credentialRevisions[field] += 1
+  return credentialRevisions[field]
+}
+
+const bumpAllCredentialRevisions = () => {
+  for (const field of Object.keys(credentialRevisions) as CredentialField[]) {
+    credentialRevisions[field] += 1
+  }
+}
+
+const createStaleOperationError = () => {
+  const error = new Error('A newer credential operation replaced this save')
+  error.name = 'AbortError'
+  return error
 }
 
 // Helper to get storage
@@ -60,43 +93,98 @@ const getStorage = (type: StorageType) => {
   return type === 'localStorage' ? window.localStorage : window.sessionStorage
 }
 
-// Helper to load encrypted key (async)
-const loadEncryptedKey = async (storageType: StorageType, key: string): Promise<string | null> => {
-  const storage = getStorage(storageType)
-  if (!storage) return null
-  
-  const encrypted = storage.getItem(key)
-  if (!encrypted) return null
+interface LoadedCredential {
+  raw: string | null
+  value: string | null
+  needsEncryption: boolean
+  invalid: boolean
+}
+
+/** Read/decrypt only. Cleanup and plaintext migration happen later behind a
+ * revision + compare-and-set guard, so an old async result cannot overwrite a
+ * key the user just saved. */
+const decodeStoredCredential = async (
+  raw: string | null,
+  label: string,
+): Promise<LoadedCredential> => {
+  if (!raw) return { raw: null, value: null, needsEncryption: false, invalid: false }
 
   try {
-    const decrypted = await decrypt(encrypted)
+    const decrypted = await decrypt(raw)
     // A stored key with non-Latin1 chars (e.g. a chat message pasted into the
     // key field) would crash the provider's Headers construction. Ignore + clear
     // it so the app falls back to the proxy instead of an opaque error.
     if (!isUsableApiKey(decrypted)) {
-      storage.removeItem(key)
-      return null
+      return { raw, value: null, needsEncryption: false, invalid: true }
     }
-    return decrypted
+    return {
+      raw,
+      value: decrypted,
+      needsEncryption: !isEncrypted(raw),
+      invalid: false,
+    }
   } catch (error) {
-    console.warn(`Failed to decrypt ${key}:`, error)
-    return null
+    console.warn(`Failed to decrypt ${label}:`, error)
+    return { raw, value: null, needsEncryption: false, invalid: true }
   }
 }
 
-// Helper to save encrypted key (async)
-const saveEncryptedKey = async (storageType: StorageType, key: string, value: string | null) => {
+const loadEncryptedKey = async (
+  storageType: StorageType,
+  key: string,
+): Promise<LoadedCredential> => {
+  const storage = getStorage(storageType)
+  return decodeStoredCredential(storage?.getItem(key) ?? null, key)
+}
+
+const finishLoadedCredential = async (
+  storageType: StorageType,
+  key: string,
+  loaded: LoadedCredential,
+  isCurrent: () => boolean,
+) => {
+  if (!loaded.raw) return
   const storage = getStorage(storageType)
   if (!storage) return
-  
+
+  if (loaded.invalid) {
+    if (isCurrent() && storage.getItem(key) === loaded.raw) storage.removeItem(key)
+    return
+  }
+  if (!loaded.needsEncryption || !loaded.value) return
+
+  try {
+    const encrypted = await encrypt(loaded.value)
+    if (isCurrent() && storage.getItem(key) === loaded.raw) {
+      storage.setItem(key, encrypted)
+    }
+  } catch (error) {
+    console.warn(`Failed to encrypt legacy ${key}:`, error)
+    // Never keep a legacy plaintext credential when it cannot be encrypted.
+    if (isCurrent() && storage.getItem(key) === loaded.raw) storage.removeItem(key)
+  }
+}
+
+// Helper to save encrypted cloud-provider keys. `isCurrent` prevents an old
+// PBKDF2 operation from reviving a key after clear/logout or a newer edit.
+const saveEncryptedKey = async (
+  storageType: StorageType,
+  key: string,
+  value: string | null,
+  isCurrent: () => boolean = () => true,
+) => {
+  const storage = getStorage(storageType)
+  if (!storage || !isCurrent()) return
+
   if (value === null) {
     storage.removeItem(key)
   } else {
     try {
       const encrypted = await encrypt(value)
-      storage.setItem(key, encrypted)
+      if (isCurrent()) storage.setItem(key, encrypted)
     } catch (error) {
       console.warn(`Failed to encrypt ${key}:`, error)
+      throw error
     }
   }
 }
@@ -111,20 +199,24 @@ type StoredOpenAiCompatibleConfig = Pick<
   | 'transport'
 >
 
-const loadOpenAiCompatibleConfig = (
-  storageType: StorageType,
+interface StoredOpenAiCompatibleConnection {
+  version: 1
+  profile: StoredOpenAiCompatibleConfig
+  encryptedApiKey: string | null
+}
+
+const normalizeStoredOpenAiCompatibleConfig = (
+  value: unknown,
 ): StoredOpenAiCompatibleConfig | null => {
-  const storage = getStorage(storageType)
-  const raw = storage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
-  if (!raw) return null
+  if (!value || typeof value !== 'object') return null
+  const parsed = value as Partial<StoredOpenAiCompatibleConfig>
+  if (typeof parsed.baseUrl !== 'string' || typeof parsed.modelId !== 'string') {
+    return null
+  }
   try {
-    const parsed = JSON.parse(raw) as Partial<StoredOpenAiCompatibleConfig>
-    if (typeof parsed.baseUrl !== 'string' || typeof parsed.modelId !== 'string') {
-      throw new Error('Invalid profile shape')
-    }
     const baseUrl = normalizeOpenAiCompatibleBaseUrl(parsed.baseUrl)
     const modelId = parsed.modelId.trim()
-    if (!modelId) throw new Error('Missing model id')
+    if (!modelId) return null
     return {
       enabled: parsed.enabled === true,
       baseUrl,
@@ -140,220 +232,621 @@ const loadOpenAiCompatibleConfig = (
       ),
     }
   } catch {
-    storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
     return null
   }
 }
 
-const saveOpenAiCompatibleConfig = (
-  storageType: StorageType,
+const toStoredOpenAiCompatibleConfig = (
   config: OpenAiCompatibleConfig,
-) => {
-  const storage = getStorage(storageType)
-  if (!storage) return
-  if (!config.baseUrl || !config.modelId) {
-    storage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
-    return
-  }
-  const stored: StoredOpenAiCompatibleConfig = {
-    enabled: config.enabled,
-    baseUrl: config.baseUrl,
-    modelId: config.modelId,
-    transport: normalizeOpenAiCompatibleTransport(config.transport),
-    contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
-      config.contextWindowTokens,
-      config.modelId,
-    ),
-    contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
-      config.contextWindowSource,
-      Boolean(config.baseUrl && config.modelId),
-    ),
-  }
-  storage.setItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG, JSON.stringify(stored))
+): StoredOpenAiCompatibleConfig => ({
+  enabled: config.enabled,
+  baseUrl: config.baseUrl,
+  modelId: config.modelId,
+  transport: normalizeOpenAiCompatibleTransport(config.transport),
+  contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
+    config.contextWindowTokens,
+    config.modelId,
+  ),
+  contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
+    config.contextWindowSource,
+    Boolean(config.baseUrl && config.modelId),
+  ),
+})
+
+interface LegacyOpenAiCompatibleProfile {
+  storageType: StorageType
+  raw: string
+  profile: StoredOpenAiCompatibleConfig
+  credentialRaw: string | null
 }
+
+const loadLegacyOpenAiCompatibleProfile = (
+  storageType: StorageType,
+): LegacyOpenAiCompatibleProfile | null => {
+  const storage = getStorage(storageType)
+  const raw = storage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
+  if (!storage || !raw) return null
+  try {
+    const profile = normalizeStoredOpenAiCompatibleConfig(JSON.parse(raw))
+    if (!profile) return null
+    return {
+      storageType,
+      raw,
+      profile,
+      credentialRaw: storage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY),
+    }
+  } catch {
+    return null
+  }
+}
+
+const parseStoredOpenAiCompatibleConnection = (
+  raw: string | null,
+): StoredOpenAiCompatibleConnection | null => {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredOpenAiCompatibleConnection>
+    const profile = normalizeStoredOpenAiCompatibleConfig(parsed.profile)
+    if (
+      parsed.version !== 1 ||
+      !profile ||
+      !(parsed.encryptedApiKey === null || typeof parsed.encryptedApiKey === 'string')
+    ) return null
+    return { version: 1, profile, encryptedApiKey: parsed.encryptedApiKey }
+  } catch {
+    return null
+  }
+}
+
+const serializeOpenAiCompatibleConnection = (
+  profile: StoredOpenAiCompatibleConfig,
+  encryptedApiKey: string | null,
+) => JSON.stringify({ version: 1, profile, encryptedApiKey })
+
+const clearLegacyOpenAiCompatibleStorage = () => {
+  for (const storageType of ['localStorage', 'sessionStorage'] as const) {
+    const storage = getStorage(storageType)
+    storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
+    storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+  }
+}
+
+/** The endpoint profile and its ciphertext share one versioned localStorage
+ * record, avoiding a profile/key mismatch if a write fails. */
+const persistOpenAiCompatibleOnDevice = async (
+  config: OpenAiCompatibleConfig,
+  expectedRevision: number,
+) => {
+  const storage = getStorage('localStorage')
+  if (!storage) return
+
+  const encryptedApiKey = config.apiKey ? await encrypt(config.apiKey) : null
+  if (expectedRevision !== customConnectionRevision) throw createStaleOperationError()
+
+  storage.setItem(
+    STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+    serializeOpenAiCompatibleConnection(
+      toStoredOpenAiCompatibleConfig(config),
+      encryptedApiKey,
+    ),
+  )
+  // The caller checks the same revision again before publishing state. A
+  // clear/logout during either async boundary therefore cannot be undone.
+  clearLegacyOpenAiCompatibleStorage()
+}
+
+const normalizeOpenAiCompatibleConfig = (
+  config: OpenAiCompatibleConfig,
+): OpenAiCompatibleConfig => ({
+  enabled: config.enabled,
+  baseUrl: normalizeOpenAiCompatibleBaseUrl(config.baseUrl),
+  modelId: config.modelId.trim(),
+  apiKey: sanitizeApiKey(config.apiKey),
+  transport: normalizeOpenAiCompatibleTransport(config.transport),
+  contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
+    config.contextWindowTokens,
+    config.modelId,
+  ),
+  contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
+    config.contextWindowSource,
+    Boolean(config.baseUrl && config.modelId),
+  ),
+})
 
 export const useAiConfigStore = create<AiConfigState>()(
   persist(
     (set, get) => ({
-      // Initial state — sessionStorage by default (shared-workstation safety):
-      // keys clear when the window closes. Users who want persistence flip the
-      // "remember on this device" toggle in Settings, which switches storage to
-      // localStorage and migrates any saved keys. onRehydrateStorage keeps
-      // legacy users who already hold keys in localStorage on localStorage.
+      // Cloud-provider keys use sessionStorage by default for shared-workstation
+      // safety. The explicitly saved custom endpoint is handled independently
+      // and persists as a local profile plus an encrypted credential.
       apiKey: null,
       geminiKey: null,
       perplexityKey: null,
       claudeKey: null,
       openAiCompatible: createEmptyOpenAiCompatibleConfig(),
       storageType: 'sessionStorage',
+      credentialsHydrating: false,
+      storageTypeChanging: false,
 
       // Actions. Removing a key needs no model bookkeeping here — every model
       // pref is key-gated at read time (useEffectiveModel / resolvedModelId),
       // so stranded premium picks land on the feature's free default.
       setApiKey: (key) => {
+        const revision = bumpCredentialRevision('apiKey')
         const clean = sanitizeApiKey(key)
-        set({ apiKey: clean })
-        // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.OPENAI_API_KEY, clean).catch(console.error)
-      },
-
-      setGeminiKey: (key) => {
-        const clean = sanitizeApiKey(key)
-        set({ geminiKey: clean })
-        // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.GEMINI_API_KEY, clean).catch(console.error)
-      },
-
-      setPerplexityKey: (key) => {
-        const clean = sanitizeApiKey(key)
-        set({ perplexityKey: clean })
-        // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.PERPLEXITY_API_KEY, clean).catch(console.error)
-      },
-
-      setClaudeKey: (key) => {
-        const clean = sanitizeApiKey(key)
-        set({ claudeKey: clean })
-        // Fire and forget - async save
-        saveEncryptedKey(get().storageType, STORAGE_KEYS.CLAUDE_API_KEY, clean).catch(console.error)
-      },
-
-      setOpenAiCompatibleConfig: (config) => {
-        const next: OpenAiCompatibleConfig = {
-          enabled: config.enabled,
-          baseUrl: normalizeOpenAiCompatibleBaseUrl(config.baseUrl),
-          modelId: config.modelId.trim(),
-          apiKey: sanitizeApiKey(config.apiKey),
-          transport: normalizeOpenAiCompatibleTransport(config.transport),
-          contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
-            config.contextWindowTokens,
-            config.modelId,
-          ),
-          contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
-            config.contextWindowSource,
-            Boolean(config.baseUrl && config.modelId),
-          ),
-        }
-        set({ openAiCompatible: next })
         const storageType = get().storageType
-        saveOpenAiCompatibleConfig(storageType, next)
+        set({ apiKey: clean })
         saveEncryptedKey(
           storageType,
-          STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
-          next.apiKey,
+          STORAGE_KEYS.OPENAI_API_KEY,
+          clean,
+          () => revision === credentialRevisions.apiKey && get().storageType === storageType,
         ).catch(console.error)
       },
 
-      setOpenAiCompatibleEnabled: (enabled) => {
-        const next = { ...get().openAiCompatible, enabled }
+      setGeminiKey: (key) => {
+        const revision = bumpCredentialRevision('geminiKey')
+        const clean = sanitizeApiKey(key)
+        const storageType = get().storageType
+        set({ geminiKey: clean })
+        saveEncryptedKey(
+          storageType,
+          STORAGE_KEYS.GEMINI_API_KEY,
+          clean,
+          () => revision === credentialRevisions.geminiKey && get().storageType === storageType,
+        ).catch(console.error)
+      },
+
+      setPerplexityKey: (key) => {
+        const revision = bumpCredentialRevision('perplexityKey')
+        const clean = sanitizeApiKey(key)
+        const storageType = get().storageType
+        set({ perplexityKey: clean })
+        saveEncryptedKey(
+          storageType,
+          STORAGE_KEYS.PERPLEXITY_API_KEY,
+          clean,
+          () => revision === credentialRevisions.perplexityKey && get().storageType === storageType,
+        ).catch(console.error)
+      },
+
+      setClaudeKey: (key) => {
+        const revision = bumpCredentialRevision('claudeKey')
+        const clean = sanitizeApiKey(key)
+        const storageType = get().storageType
+        set({ claudeKey: clean })
+        saveEncryptedKey(
+          storageType,
+          STORAGE_KEYS.CLAUDE_API_KEY,
+          clean,
+          () => revision === credentialRevisions.claudeKey && get().storageType === storageType,
+        ).catch(console.error)
+      },
+
+      setOpenAiCompatibleConfig: async (config) => {
+        const revision = ++customConnectionRevision
+        const next = normalizeOpenAiCompatibleConfig(config)
+        await persistOpenAiCompatibleOnDevice(next, revision)
+        if (revision !== customConnectionRevision) throw createStaleOperationError()
         set({ openAiCompatible: next })
-        saveOpenAiCompatibleConfig(get().storageType, next)
+      },
+
+      setOpenAiCompatibleEnabled: async (enabled) => {
+        const revision = ++customConnectionRevision
+        const next = { ...get().openAiCompatible, enabled }
+        await persistOpenAiCompatibleOnDevice(next, revision)
+        if (revision !== customConnectionRevision) throw createStaleOperationError()
+        set({ openAiCompatible: next })
       },
 
       clearOpenAiCompatibleConfig: () => {
+        customConnectionRevision += 1
+        getStorage('localStorage')?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
+        clearLegacyOpenAiCompatibleStorage()
         set({ openAiCompatible: createEmptyOpenAiCompatibleConfig() })
-        const storage = getStorage(get().storageType)
-        storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
-        storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
       },
       
-      setStorageType: (type) => {
-        const oldType = get().storageType
-        set({ storageType: type })
-        
-        // Migrate keys to new storage (async)
-        if (typeof window !== 'undefined') {
-          const { apiKey, geminiKey, perplexityKey, claudeKey, openAiCompatible } = get()
-          
-          // Clear old storage
+      setStorageType: async (type) => {
+        // Stored cloud keys have not reached memory yet; migrating from null
+        // values here would erase them. The Settings UI is disabled as well,
+        // but keep the action safe for programmatic callers.
+        const currentState = get()
+        if (
+          currentState.credentialsHydrating ||
+          currentState.storageTypeChanging ||
+          type === currentState.storageType
+        ) return
+
+        const migrationStorageRevision = ++storageTypeRevision
+        bumpAllCredentialRevisions()
+        const migrationFieldRevisions = { ...credentialRevisions }
+        const oldType = currentState.storageType
+        const keyValues = [
+          [STORAGE_KEYS.OPENAI_API_KEY, currentState.apiKey],
+          [STORAGE_KEYS.GEMINI_API_KEY, currentState.geminiKey],
+          [STORAGE_KEYS.PERPLEXITY_API_KEY, currentState.perplexityKey],
+          [STORAGE_KEYS.CLAUDE_API_KEY, currentState.claudeKey],
+        ] as const
+        set({ storageTypeChanging: true })
+
+        try {
+          const encryptedValues = await Promise.all(keyValues.map(async ([key, value]) => (
+            [key, value ? await encrypt(value) : null] as const
+          )))
+          const revisionsStillCurrent = (
+            migrationStorageRevision === storageTypeRevision &&
+            migrationFieldRevisions.apiKey === credentialRevisions.apiKey &&
+            migrationFieldRevisions.geminiKey === credentialRevisions.geminiKey &&
+            migrationFieldRevisions.perplexityKey === credentialRevisions.perplexityKey &&
+            migrationFieldRevisions.claudeKey === credentialRevisions.claudeKey
+          )
+          if (!revisionsStillCurrent) return
+
           const oldStorage = getStorage(oldType)
-          oldStorage?.removeItem(STORAGE_KEYS.OPENAI_API_KEY)
-          oldStorage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
-          oldStorage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
-          oldStorage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
-          oldStorage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
-          oldStorage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
-          
-          // Save to new storage (fire and forget)
-          Promise.all([
-            saveEncryptedKey(type, STORAGE_KEYS.OPENAI_API_KEY, apiKey),
-            saveEncryptedKey(type, STORAGE_KEYS.GEMINI_API_KEY, geminiKey),
-            saveEncryptedKey(type, STORAGE_KEYS.PERPLEXITY_API_KEY, perplexityKey),
-            saveEncryptedKey(type, STORAGE_KEYS.CLAUDE_API_KEY, claudeKey),
-            saveEncryptedKey(type, STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY, openAiCompatible.apiKey),
-          ]).catch(console.error)
-          saveOpenAiCompatibleConfig(type, openAiCompatible)
-          
-          // Save storage type preference
-          window.localStorage.setItem(STORAGE_KEYS.STORAGE_TYPE, type)
+          const newStorage = getStorage(type)
+          if (!oldStorage || !newStorage || typeof window === 'undefined') return
+          const previousDestination = encryptedValues.map(([key]) => (
+            [key, newStorage.getItem(key)] as const
+          ))
+          const previousPreference = window.localStorage.getItem(STORAGE_KEYS.STORAGE_TYPE)
+
+          try {
+            // Stage the entire destination first. Source values and the saved
+            // preference remain intact if encryption or any write fails.
+            for (const [key, encrypted] of encryptedValues) {
+              if (encrypted === null) newStorage.removeItem(key)
+              else newStorage.setItem(key, encrypted)
+            }
+            window.localStorage.setItem(STORAGE_KEYS.STORAGE_TYPE, type)
+          } catch (error) {
+            try {
+              for (const [key, previous] of previousDestination) {
+                if (previous === null) newStorage.removeItem(key)
+                else newStorage.setItem(key, previous)
+              }
+              if (previousPreference === null) {
+                window.localStorage.removeItem(STORAGE_KEYS.STORAGE_TYPE)
+              } else {
+                window.localStorage.setItem(STORAGE_KEYS.STORAGE_TYPE, previousPreference)
+              }
+            } catch {
+              // Best-effort rollback; the untouched source remains authoritative.
+            }
+            throw error
+          }
+
+          set({ storageType: type })
+          // Cleanup happens only after the durable destination and preference
+          // are committed. A failure here leaves harmless duplicate ciphertext.
+          try {
+            for (const [key] of keyValues) oldStorage.removeItem(key)
+          } catch (error) {
+            console.warn('Failed to clean previous credential storage:', error)
+          }
+        } finally {
+          if (migrationStorageRevision === storageTypeRevision) {
+            set({ storageTypeChanging: false })
+          }
         }
       },
       
       clearAllKeys: () => {
-        const storageType = get().storageType
+        storageTypeRevision += 1
+        customConnectionRevision += 1
+        bumpAllCredentialRevisions()
+
+        // Memory is cleared first so StorageError cannot leave usable keys in
+        // the running app or interrupt an auth/logout cleanup chain.
         set((state) => ({
           apiKey: null,
           geminiKey: null,
           perplexityKey: null,
           claudeKey: null,
           openAiCompatible: { ...state.openAiCompatible, apiKey: null },
+          storageTypeChanging: false,
         }))
 
-        const storage = getStorage(storageType)
-        storage?.removeItem(STORAGE_KEYS.OPENAI_API_KEY)
-        storage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
-        storage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
-        storage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
-        storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+        // Preserve the custom endpoint itself while removing its credential
+        // from the same atomic record. If rewriting fails, remove the record so
+        // a logout can never leave a recoverable key behind.
+        let deviceStorage: Storage | null = null
+        try {
+          deviceStorage = getStorage('localStorage')
+          const storedConnectionRaw = deviceStorage?.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+          ) ?? null
+          const storedConnection = parseStoredOpenAiCompatibleConnection(storedConnectionRaw)
+          if (deviceStorage && storedConnectionRaw) {
+            if (storedConnection) {
+              deviceStorage.setItem(
+                STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+                serializeOpenAiCompatibleConnection(storedConnection.profile, null),
+              )
+            } else {
+              deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
+            }
+          }
+        } catch (error) {
+          try {
+            deviceStorage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
+          } catch {
+            // Best effort only; memory has already been cleared above.
+          }
+          console.warn('Failed to clear stored custom endpoint credential:', error)
+        }
+
+        for (const type of ['localStorage', 'sessionStorage'] as const) {
+          try {
+            const storage = getStorage(type)
+            storage?.removeItem(STORAGE_KEYS.OPENAI_API_KEY)
+            storage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
+            storage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
+            storage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
+            storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+          } catch (error) {
+            console.warn(`Failed to clear credentials from ${type}:`, error)
+          }
+        }
+      },
+
+      rehydrateFromBrowserStorage: async () => {
+        if (typeof window === 'undefined') return
+
+        const hydrationRevision = ++aiConfigHydrationRevision
+        const fieldRevisions = { ...credentialRevisions }
+        const connectionRevision = customConnectionRevision
+        const savedStorageTypeRevision = storageTypeRevision
+        set({ credentialsHydrating: true })
+
+        try {
+          // Cloud-provider keys retain the explicit shared-workstation choice.
+          // The durable custom endpoint is intentionally independent.
+          const savedStorageType = window.localStorage.getItem(
+            STORAGE_KEYS.STORAGE_TYPE,
+          ) as StorageType | null
+          let storageType: StorageType
+          if (savedStorageType === 'localStorage' || savedStorageType === 'sessionStorage') {
+            storageType = savedStorageType
+          } else {
+            const hasLegacyLocalKeys =
+              window.localStorage.getItem(STORAGE_KEYS.OPENAI_API_KEY) !== null ||
+              window.localStorage.getItem(STORAGE_KEYS.GEMINI_API_KEY) !== null ||
+              window.localStorage.getItem(STORAGE_KEYS.PERPLEXITY_API_KEY) !== null ||
+              window.localStorage.getItem(STORAGE_KEYS.CLAUDE_API_KEY) !== null
+            storageType = hasLegacyLocalKeys ? 'localStorage' : 'sessionStorage'
+            window.localStorage.setItem(STORAGE_KEYS.STORAGE_TYPE, storageType)
+          }
+
+          const deviceStorage = getStorage('localStorage')
+          const connectionRaw = deviceStorage?.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+          ) ?? null
+          const storedConnection = parseStoredOpenAiCompatibleConnection(connectionRaw)
+          const localLegacyConfigRaw = window.localStorage.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG,
+          )
+          const localLegacyKeyRaw = window.localStorage.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
+          )
+          const sessionLegacyConfigRaw = window.sessionStorage.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG,
+          )
+          const sessionLegacyKeyRaw = window.sessionStorage.getItem(
+            STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
+          )
+          const legacyProfile = storedConnection
+            ? null
+            : loadLegacyOpenAiCompatibleProfile('localStorage') ??
+              loadLegacyOpenAiCompatibleProfile('sessionStorage')
+          const storedProfile = storedConnection?.profile ?? legacyProfile?.profile ?? null
+          const customCredentialRaw = storedConnection?.encryptedApiKey ??
+            legacyProfile?.credentialRaw ?? null
+
+          const [apiKey, geminiKey, perplexityKey, claudeKey, customCredential] =
+            await Promise.all([
+              loadEncryptedKey(storageType, STORAGE_KEYS.OPENAI_API_KEY),
+              loadEncryptedKey(storageType, STORAGE_KEYS.GEMINI_API_KEY),
+              loadEncryptedKey(storageType, STORAGE_KEYS.PERPLEXITY_API_KEY),
+              loadEncryptedKey(storageType, STORAGE_KEYS.CLAUDE_API_KEY),
+              decodeStoredCredential(
+                customCredentialRaw,
+                STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
+              ),
+            ])
+
+          if (hydrationRevision !== aiConfigHydrationRevision) return
+
+          let hydratedOpenAiCompatible: OpenAiCompatibleConfig | undefined
+          if (connectionRevision === customConnectionRevision) {
+            let restoredCustomKey = customCredential.invalid ? null : customCredential.value
+            let encryptedCustomKey = customCredential.invalid ? null : customCredentialRaw
+
+            if (customCredential.needsEncryption && restoredCustomKey) {
+              try {
+                encryptedCustomKey = await encrypt(restoredCustomKey)
+              } catch (error) {
+                console.warn('Failed to encrypt legacy custom endpoint key:', error)
+                // Do not retain or expose legacy plaintext if secure migration fails.
+                encryptedCustomKey = null
+                restoredCustomKey = null
+              }
+            }
+
+            if (
+              hydrationRevision === aiConfigHydrationRevision &&
+              connectionRevision === customConnectionRevision
+            ) {
+              const connectionStillCurrent = storedConnection
+                ? deviceStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION) ===
+                  connectionRaw
+                : legacyProfile
+                  ? deviceStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION) ===
+                    connectionRaw &&
+                    getStorage(legacyProfile.storageType)?.getItem(
+                      STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG,
+                    ) === legacyProfile.raw &&
+                    getStorage(legacyProfile.storageType)?.getItem(
+                      STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
+                    ) === legacyProfile.credentialRaw
+                  : true
+
+              if (storedProfile && connectionStillCurrent && deviceStorage) {
+                try {
+                  if (
+                    legacyProfile ||
+                    customCredential.invalid ||
+                    customCredential.needsEncryption
+                  ) {
+                    deviceStorage.setItem(
+                      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+                      serializeOpenAiCompatibleConnection(
+                        storedProfile,
+                        encryptedCustomKey,
+                      ),
+                    )
+                  }
+                  clearLegacyOpenAiCompatibleStorage()
+                  hydratedOpenAiCompatible = {
+                    ...storedProfile,
+                    apiKey: restoredCustomKey,
+                  }
+                } catch (error) {
+                  console.warn('Failed to migrate custom endpoint to device storage:', error)
+                  if (
+                    storedConnection &&
+                    (customCredential.needsEncryption || customCredential.invalid) &&
+                    deviceStorage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION) ===
+                    connectionRaw
+                  ) {
+                    deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
+                    restoredCustomKey = null
+                  } else if (customCredential.needsEncryption || customCredential.invalid) {
+                    const legacyKeyStorage = legacyProfile
+                      ? getStorage(legacyProfile.storageType)
+                      : deviceStorage
+                    if (
+                      legacyKeyStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY) ===
+                      customCredential.raw
+                    ) {
+                      legacyKeyStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+                    }
+                    restoredCustomKey = null
+                  }
+                  hydratedOpenAiCompatible = { ...storedProfile, apiKey: restoredCustomKey }
+                }
+              } else if (!storedProfile) {
+                // Remove corrupted profiles and orphan credentials only when
+                // storage still contains the exact snapshot we inspected.
+                if (connectionRaw && deviceStorage?.getItem(
+                  STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+                ) === connectionRaw) {
+                  deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
+                }
+                const legacySnapshots = [
+                  [window.localStorage, localLegacyConfigRaw, localLegacyKeyRaw],
+                  [window.sessionStorage, sessionLegacyConfigRaw, sessionLegacyKeyRaw],
+                ] as const
+                for (const [storage, configRaw, keyRaw] of legacySnapshots) {
+                  if (
+                    configRaw &&
+                    storage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG) === configRaw
+                  ) storage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
+                  if (
+                    keyRaw &&
+                    storage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY) === keyRaw
+                  ) storage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+                }
+                hydratedOpenAiCompatible = createEmptyOpenAiCompatibleConfig()
+              }
+            }
+          }
+
+          if (hydrationRevision !== aiConfigHydrationRevision) return
+
+          const updates: Partial<AiConfigState> = {}
+          if (fieldRevisions.apiKey === credentialRevisions.apiKey) {
+            updates.apiKey = apiKey.value
+          }
+          if (fieldRevisions.geminiKey === credentialRevisions.geminiKey) {
+            updates.geminiKey = geminiKey.value
+          }
+          if (fieldRevisions.perplexityKey === credentialRevisions.perplexityKey) {
+            updates.perplexityKey = perplexityKey.value
+          }
+          if (fieldRevisions.claudeKey === credentialRevisions.claudeKey) {
+            updates.claudeKey = claudeKey.value
+          }
+          if (savedStorageTypeRevision === storageTypeRevision) {
+            updates.storageType = storageType
+          }
+          if (hydratedOpenAiCompatible) {
+            updates.openAiCompatible = hydratedOpenAiCompatible
+          }
+          set(updates)
+
+          await Promise.all([
+            finishLoadedCredential(
+              storageType,
+              STORAGE_KEYS.OPENAI_API_KEY,
+              apiKey,
+              () => hydrationRevision === aiConfigHydrationRevision &&
+                fieldRevisions.apiKey === credentialRevisions.apiKey,
+            ),
+            finishLoadedCredential(
+              storageType,
+              STORAGE_KEYS.GEMINI_API_KEY,
+              geminiKey,
+              () => hydrationRevision === aiConfigHydrationRevision &&
+                fieldRevisions.geminiKey === credentialRevisions.geminiKey,
+            ),
+            finishLoadedCredential(
+              storageType,
+              STORAGE_KEYS.PERPLEXITY_API_KEY,
+              perplexityKey,
+              () => hydrationRevision === aiConfigHydrationRevision &&
+                fieldRevisions.perplexityKey === credentialRevisions.perplexityKey,
+            ),
+            finishLoadedCredential(
+              storageType,
+              STORAGE_KEYS.CLAUDE_API_KEY,
+              claudeKey,
+              () => hydrationRevision === aiConfigHydrationRevision &&
+                fieldRevisions.claudeKey === credentialRevisions.claudeKey,
+            ),
+          ])
+        } finally {
+          if (hydrationRevision === aiConfigHydrationRevision) {
+            set({ credentialsHydrating: false })
+          }
+        }
       },
     }),
     {
-      name: 'ai-config-storage',
+      // Keep this lifecycle-only middleware separate from the legacy
+      // `ai-config-storage` record. model-prefs still reads that old record once
+      // to migrate the user's former global model selection.
+      name: 'ai-config-hydration',
+      // This middleware is used only for its hydration lifecycle hooks. All
+      // actual credentials use the explicit encrypted storage paths above, so
+      // a no-op backend avoids an empty localStorage write on every state
+      // update (which could otherwise throw and interrupt logout cleanup).
+      storage: {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
       // Keys are NOT persisted through Zustand (they're encrypted into their
       // own storage entries by the actions above); nothing else needs to
       // persist since the model moved to model-prefs. The middleware stays for
       // onRehydrateStorage, which loads the encrypted keys + storage type.
       partialize: () => ({}),
-      onRehydrateStorage: () => async (state) => {
-        if (!state || typeof window === 'undefined') return
-
-        // Load storage type preference. No saved preference: legacy users who
-        // already have keys in localStorage keep that behavior (and we persist
-        // the choice so it stays stable); fresh users default to sessionStorage
-        // so keys don't outlive the browser session on shared workstations.
-        const savedStorageType = window.localStorage.getItem(STORAGE_KEYS.STORAGE_TYPE) as StorageType | null
-        let storageType: StorageType
-        if (savedStorageType) {
-          storageType = savedStorageType
-        } else {
-          const hasLegacyLocalKeys =
-            window.localStorage.getItem(STORAGE_KEYS.OPENAI_API_KEY) !== null ||
-            window.localStorage.getItem(STORAGE_KEYS.GEMINI_API_KEY) !== null ||
-            window.localStorage.getItem(STORAGE_KEYS.PERPLEXITY_API_KEY) !== null ||
-            window.localStorage.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG) !== null
-          storageType = hasLegacyLocalKeys ? 'localStorage' : 'sessionStorage'
-          window.localStorage.setItem(STORAGE_KEYS.STORAGE_TYPE, storageType)
-        }
-        
-        // Load encrypted keys from appropriate storage (async)
-        const [apiKey, geminiKey, perplexityKey, claudeKey, openAiCompatibleApiKey] = await Promise.all([
-          loadEncryptedKey(storageType, STORAGE_KEYS.OPENAI_API_KEY),
-          loadEncryptedKey(storageType, STORAGE_KEYS.GEMINI_API_KEY),
-          loadEncryptedKey(storageType, STORAGE_KEYS.PERPLEXITY_API_KEY),
-          loadEncryptedKey(storageType, STORAGE_KEYS.CLAUDE_API_KEY),
-          loadEncryptedKey(storageType, STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY),
-        ])
-        const storedOpenAiCompatible = loadOpenAiCompatibleConfig(storageType)
-        
-        // Update state - this will trigger re-renders in components
-        state.apiKey = apiKey
-        state.geminiKey = geminiKey
-        state.perplexityKey = perplexityKey
-        state.claudeKey = claudeKey
-        state.openAiCompatible = storedOpenAiCompatible
-          ? { ...storedOpenAiCompatible, apiKey: openAiCompatibleApiKey }
-          : createEmptyOpenAiCompatibleConfig()
-        state.storageType = storageType
+      onRehydrateStorage: () => (state) => {
+        // Zustand does not await an async completion callback. Delegate to a
+        // store action that uses set(), so both the profile and later decrypted
+        // credentials notify mounted subscribers correctly.
+        void state?.rehydrateFromBrowserStorage().catch((error) => {
+          console.warn('Failed to restore AI credentials from browser storage:', error)
+        })
       },
     }
   )

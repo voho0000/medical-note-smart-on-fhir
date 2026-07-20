@@ -8,16 +8,22 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { toast } from 'sonner'
 import { aiResultCacheKey } from '@/src/infrastructure/cache/encrypted-session-cache'
-import { preflightContextWarning } from '@/src/shared/utils/context-budget'
+import {
+  ContextOverflowError,
+  createContextOverflowIssue,
+  type ContextOverflowIssue,
+} from '@/src/shared/utils/context-budget'
 import {
   generateSafetyAlertsUseCase,
   SAFETY_ALERTS_MODEL_ID,
 } from '@/src/core/use-cases/safety-alerts/generate-safety-alerts.use-case'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import type { SafetyScanResult, SafetySeverity } from '@/src/core/entities/safety-alert.entity'
-import { demoSafetyScanSnapshots } from '@/src/infrastructure/demo/demo-ai-snapshots'
+import {
+  DEMO_SAFETY_SCAN_GENERATION,
+  demoSafetyScanSnapshots,
+} from '@/src/infrastructure/demo/demo-ai-snapshots'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
 import { createModelPrefsStore } from '@/src/application/hooks/ai-generation/create-model-prefs-store'
 import {
@@ -39,6 +45,9 @@ const safetyCacheKey = (scanKey: string) => aiResultCacheKey('safety', scanKey)
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).
 const safetyAlertsStore = createAiResultStore<SafetyScanResult>()
+
+const safetyResultModelId = (result: SafetyScanResult) =>
+  result.generation?.modelId
 
 // Playwright seam (e2e/tests/safety-alerts.spec.ts) — dev/test builds only;
 // Next.js dead-code-eliminates this branch from the production bundle so
@@ -76,10 +85,25 @@ export const useSafetyPrefsStore = createModelPrefsStore<SafetyPrefsStore>({
 
 export interface UseSafetyAlertsReturn {
   result: SafetyScanResult | undefined
+  /** Actual model that owns result; may differ from model while an empty slot
+   * uses the previously visible safety scan as fallback. */
+  resultOwnerModelId: string | null
+  /** Exact endpoint/model cache identity that owns result. */
+  resultOwnerRuntimeId: string | null
   isScanning: boolean
   error: string | null
+  issue: ContextOverflowIssue | null
   hasPatient: boolean
-  /** True once this exact content-bound cache slot was restored. */
+  /** Exact model/content slot selected for the next scan. */
+  generationSlotKey: string
+  isCurrentSlotGenerating: boolean
+  readGenerationSlot: (slotKey: string) => {
+    result: SafetyScanResult | undefined
+    isRunning: boolean
+    error: string | null
+    issue: ContextOverflowIssue | null
+  }
+  /** True when this clinical-input scope has a presentable restored result. */
   isHydrated: boolean
   autoScan: boolean
   setAutoScan: (value: boolean) => void
@@ -87,6 +111,8 @@ export interface UseSafetyAlertsReturn {
   model: string
   setModel: (id: string) => void
   scan: () => Promise<void>
+  cancel: (slotKey?: string) => void
+  restoreGenerationSlot: (slotKey: string, result: SafetyScanResult | undefined) => void
   /** Resolve a source-list key an alert cited (e.g. "L3") to its bundle
    *  record, for click-to-navigate citations. undefined = unknown/hallucinated. */
   resolveSource: (key: string) => SummarySourceCatalogEntry | undefined
@@ -106,23 +132,23 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       catalog: ctx.catalog,
     })
-    const overflow = preflightContextWarning(
+    const overflow = createContextOverflowIssue(
       messages.map((message) => message.content).join('\n\n'),
       ctx.modelId,
-      ctx.locale,
       {
         selectedContext: ctx.clinicalContext,
         contextLimit: ctx.contextLimit,
       },
     )
     if (overflow) {
-      toast.error(overflow)
-      throw new Error(overflow)
+      throw new ContextOverflowError(overflow, ctx.locale)
     }
 
     let full = ''
     await ctx.ai.stream(messages, {
       modelId: ctx.modelId,
+      operationKey: ctx.operationKey,
+      throwOnAbort: true,
       onChunk: (chunk: string) => {
         full = chunk
       },
@@ -133,7 +159,16 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     // "掃描 N 筆" must be a deterministic app-side count, not the model's
     // self-reported number (which varied 30/54/68 across runs on the same
     // patient) — use the record count we actually put in the SOURCE LIST.
-    return { ...parsed, scannedCount: ctx.catalog.length }
+    return {
+      ...parsed,
+      scannedCount: ctx.catalog.length,
+      generation: {
+        source: 'live',
+        modelId: ctx.modelId,
+        modelName: ctx.modelName,
+        generatedAt: Date.now(),
+      },
+    }
   }, [])
 
   // Demo bundle: the snapshot goes through the same parseScanResult validation
@@ -143,7 +178,11 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     const parsed = generateSafetyAlertsUseCase.parseScanResult(JSON.stringify(snapshot), ctx.catalog)
     if (!parsed) return null
     // Same deterministic count rule as a live scan (see run() above).
-    return { ...parsed, scannedCount: ctx.catalog.length }
+    return {
+      ...parsed,
+      scannedCount: ctx.catalog.length,
+      generation: DEMO_SAFETY_SCAN_GENERATION,
+    }
   }, [])
 
   const slot = useAiSlotGeneration<SafetyScanResult>({
@@ -160,6 +199,8 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     cacheMaxAgeMs: SAFETY_CACHE_MAX_AGE_MS,
     run,
     demoSeed,
+    resultModelId: safetyResultModelId,
+    retainResultOnModelChange: true,
   })
 
   // Catalog lookup so the UI can resolve cited keys into click-to-navigate
@@ -173,25 +214,42 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     [catalogByKey],
   )
 
-  // Switching model just changes which per-model slot the view reads — it does
-  // NOT cancel or clear anything. The old model's in-flight scan keeps going and
-  // lands in its own slot; the new model shows its cached result, its spinner if
-  // still scanning, or auto-scans if it has neither (user directive 2026-07-07).
+  // The picker restores that model's latest completed scan when available.
+  // With an empty target slot, keep the last visible scan until this model
+  // succeeds; in-flight work still lands in the slot that actually ran.
   const setModel = useCallback((id: string) => {
     setModelId(id)
   }, [setModelId])
 
+  const readGenerationSlot = useCallback((slotKey: string) => {
+    const state = safetyAlertsStore.getState()
+    return {
+      result: state.byKey[slotKey],
+      isRunning: Boolean(state.running[slotKey]),
+      error: state.errors[slotKey] ?? null,
+      issue: state.issues[slotKey] ?? null,
+    }
+  }, [])
+
   return {
     result: slot.result,
-    isScanning: slot.isRunning,
+    resultOwnerModelId: slot.resultOwnerModelId,
+    resultOwnerRuntimeId: slot.resultOwnerRuntimeId,
+    isScanning: slot.isAnyRunning,
     error: slot.error,
+    issue: slot.issue,
     hasPatient: slot.hasPatient,
+    generationSlotKey: slot.slotKey,
+    isCurrentSlotGenerating: slot.isRunning,
+    readGenerationSlot,
     isHydrated: slot.isHydrated,
     autoScan,
     setAutoScan,
     model: modelId,
     setModel,
     scan: slot.generate,
+    cancel: slot.cancel,
+    restoreGenerationSlot: slot.restoreSlot,
     resolveSource,
   }
 }

@@ -11,7 +11,13 @@ import { DisplaySettings } from "./components/DisplaySettings"
 
 export function SettingsFeature() {
   const { t } = useLanguage()
-  const { settingsTab, setActiveTab, activeTab } = useRightPanel()
+  const {
+    settingsTab,
+    setActiveTab,
+    activeTab,
+    settingsTarget,
+    clearSettingsTarget,
+  } = useRightPanel()
 
   // Reset to 'ai' tab when manually navigating to settings, unless the
   // navigation specified a known sub-tab. `display` was added in v0.4.0
@@ -38,7 +44,10 @@ export function SettingsFeature() {
         <TabsContent value="ai" className="space-y-6">
           <Card className={`gap-2 py-4 ${CARD_BORDER_CLASSES.settings}`}>
             <CardContent>
-              <ModelAndKeySettings />
+              <ModelAndKeySettings
+                settingsTarget={settingsTarget}
+                onSettingsTargetHandled={clearSettingsTarget}
+              />
             </CardContent>
           </Card>
         </TabsContent>

@@ -31,6 +31,7 @@ describe('crypto.utils', () => {
       const encrypted = await encrypt(plaintext)
       expect(encrypted).toBeDefined()
       expect(encrypted).not.toBe(plaintext)
+      expect(encrypted).not.toContain(plaintext)
       expect(isEncrypted(encrypted)).toBe(true)
     })
 

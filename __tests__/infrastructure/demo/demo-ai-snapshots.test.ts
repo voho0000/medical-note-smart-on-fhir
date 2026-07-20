@@ -1,4 +1,6 @@
 import {
+  DEMO_MEDICAL_SUMMARY_GENERATION,
+  DEMO_SAFETY_SCAN_GENERATION,
   demoMedicalSummarySnapshots,
   getDemoClinicalInsightSnapshot,
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
@@ -23,6 +25,16 @@ describe('demo clinical-insight snapshots', () => {
 })
 
 describe('demo medical-summary snapshots', () => {
+  it('declares honest pre-generated model provenance without a fabricated time', () => {
+    expect(DEMO_MEDICAL_SUMMARY_GENERATION).toEqual({
+      source: 'pre-generated',
+      modelId: 'gemini-3.1-flash-lite',
+      modelName: 'Gemini 3.1 Flash-Lite',
+    })
+    expect(DEMO_MEDICAL_SUMMARY_GENERATION).not.toHaveProperty('generatedAt')
+    expect(DEMO_SAFETY_SCAN_GENERATION).toEqual(DEMO_MEDICAL_SUMMARY_GENERATION)
+  })
+
   it.each(['medical', 'patient'] as const)('passes the current %s summary schema', (audience) => {
     expect(generateMedicalSummaryUseCase.parseResult(
       JSON.stringify(demoMedicalSummarySnapshots[audience]),

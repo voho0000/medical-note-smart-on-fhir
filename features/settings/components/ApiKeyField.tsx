@@ -43,6 +43,7 @@ import { Switch } from "@/components/ui/switch"
 import { ApiKeyInput } from "./ApiKeyInput"
 import { AuthStatus } from "@/features/auth"
 import { OpenAiCompatibleSettings } from "./OpenAiCompatibleSettings"
+import type { SettingsNavigationTarget } from "@/src/application/providers/right-panel.provider"
 
 type StatusTone = "success" | "muted" | "warning"
 
@@ -148,10 +149,16 @@ function CredentialDisclosure({
 interface ModelAndKeySettingsProps {
   /** Test/deployment seam; production follows the build-time offline mode. */
   offlineMode?: boolean
+  /** Optional deep-link destination supplied by the right-panel navigator. */
+  settingsTarget?: SettingsNavigationTarget | null
+  /** Clears a deep-link only after its final field has been revealed and focused. */
+  onSettingsTargetHandled?: () => void
 }
 
 export function ModelAndKeySettings({
   offlineMode = ENV_CONFIG.offlineMode,
+  settingsTarget = null,
+  onSettingsTargetHandled,
 }: ModelAndKeySettingsProps = {}) {
   const { t } = useLanguage()
   const { user, isAnonymous } = useAuth()
@@ -165,7 +172,10 @@ export function ModelAndKeySettings({
   const setPerplexityKey = useAiConfigStore((state) => state.setPerplexityKey)
   const setClaudeKey = useAiConfigStore((state) => state.setClaudeKey)
   const storageType = useAiConfigStore((state) => state.storageType)
+  const credentialsHydrating = useAiConfigStore((state) => state.credentialsHydrating)
+  const storageTypeChanging = useAiConfigStore((state) => state.storageTypeChanging)
   const setStorageType = useAiConfigStore((state) => state.setStorageType)
+  const credentialControlsDisabled = credentialsHydrating || storageTypeChanging
   const [openAiValue, setOpenAiValue] = useState(apiKey)
   const [geminiValue, setGeminiValue] = useState(geminiKey)
   const [perplexityValue, setPerplexityValue] = useState(perplexityKey)
@@ -229,6 +239,14 @@ export function ModelAndKeySettings({
     if (useAiConfigStore.persist.hasHydrated()) syncInitialSection()
     return useAiConfigStore.persist.onFinishHydration(syncInitialSection)
   }, [])
+
+  useEffect(() => {
+    if (settingsTarget !== 'openai-compatible-context-window') return
+    sectionTouchedRef.current = true
+    // A navigation intent is external state; reveal its owning disclosure.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpenSection('local')
+  }, [settingsTarget])
 
   const rejectIfInvalidKey = (value: string | null | undefined): boolean => {
     if (value && value.trim() && !isUsableApiKey(value)) {
@@ -296,6 +314,15 @@ export function ModelAndKeySettings({
     setPerplexityKey(null)
   }
 
+  const handleStorageTypeChange = async (checked: boolean) => {
+    try {
+      await setStorageType(checked ? "localStorage" : "sessionStorage")
+    } catch (error) {
+      console.warn("Failed to change credential storage mode:", error)
+      toast.error(t.settings.keyStorageChangeFailed)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">{t.settings.modelsMovedNoteShort}</p>
@@ -344,7 +371,11 @@ export function ModelAndKeySettings({
                 ? "border-amber-200 bg-amber-50/20 dark:border-amber-900 dark:bg-amber-950/10"
                 : "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900 dark:bg-emerald-950/15",
             )}>
-              <OpenAiCompatibleSettings />
+              <OpenAiCompatibleSettings
+                navigationReady={openSection === "local"}
+                settingsTarget={settingsTarget}
+                onSettingsTargetHandled={onSettingsTargetHandled}
+              />
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -379,6 +410,7 @@ export function ModelAndKeySettings({
                     onClear={handleClearOpenAiKey}
                     helpText={t.settings.openAiKeyHelp}
                     clearWarning={t.settings.clearOpenAiKeyWarning}
+                    disabled={credentialControlsDisabled}
                   />
                 </CredentialDisclosure>
                 <CredentialDisclosure
@@ -397,6 +429,7 @@ export function ModelAndKeySettings({
                     onClear={handleClearGeminiKey}
                     helpText={t.settings.geminiKeyHelp}
                     clearWarning={t.settings.clearGeminiKeyWarning}
+                    disabled={credentialControlsDisabled}
                   />
                 </CredentialDisclosure>
                 <CredentialDisclosure
@@ -415,6 +448,7 @@ export function ModelAndKeySettings({
                     onClear={handleClearClaudeKey}
                     helpText={t.settings.claudeKeyHelp}
                     clearWarning={t.settings.clearClaudeKeyWarning}
+                    disabled={credentialControlsDisabled}
                   />
                 </CredentialDisclosure>
               </div>
@@ -445,6 +479,7 @@ export function ModelAndKeySettings({
                   onClear={handleClearPerplexityKey}
                   helpText={t.settings.perplexityKeyHelp}
                   clearWarning={t.settings.clearPerplexityKeyWarning}
+                  disabled={credentialControlsDisabled}
                 />
               </div>
             </AccordionContent>
@@ -475,9 +510,8 @@ export function ModelAndKeySettings({
                 id="remember-ai-connections"
                 className="shrink-0"
                 checked={storageType === "localStorage"}
-                onCheckedChange={(checked) =>
-                  setStorageType(checked ? "localStorage" : "sessionStorage")
-                }
+                onCheckedChange={handleStorageTypeChange}
+                disabled={credentialControlsDisabled}
               />
             </div>
           </AccordionContent>

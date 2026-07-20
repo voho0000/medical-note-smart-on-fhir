@@ -18,6 +18,8 @@ import { estimateTokens } from "@/src/shared/utils/token-estimator"
 import {
   DEFAULT_RESPONSE_RESERVE,
   evaluateContextBudget,
+  formatApproxTokenCount,
+  type ContextOverflowIssue,
   type ContextBudgetLevel,
 } from "@/src/shared/utils/context-budget"
 import { isOpenAiCompatibleRuntimeReady } from '@/src/shared/utils/openai-compatible.utils'
@@ -41,9 +43,10 @@ interface ContextTokenMeterProps {
   modelId?: string
   /** Free model used when the raw preference is currently key-gated. */
   fallbackModelId?: string
+  overflowIssue?: ContextOverflowIssue | null
 }
 
-export function ContextTokenMeter({ modelId, fallbackModelId }: ContextTokenMeterProps) {
+export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: ContextTokenMeterProps) {
   const { t } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
   // The main Data Selection drawer edits the summary/insights profile. Read
@@ -139,6 +142,30 @@ export function ContextTokenMeter({ modelId, fallbackModelId }: ContextTokenMete
       <p className="mt-1 text-[0.625rem] leading-snug text-muted-foreground">
         {ds.tokenMeterRequestHint ?? "產生摘要時還會加入 AI 指令、輸出格式與來源索引；送出前會顯示完整輸入量。"}
       </p>
+      {overflowIssue ? (
+        <div
+          role="status"
+          className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[0.6875rem] leading-relaxed text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          <p className="font-medium">
+            {(ds.tokenMeterOverflowGuidance ?? "上次完整摘要輸入約 {request} tokens，超過可用的 {usable} tokens。")
+              .replace("{request}", formatApproxTokenCount(overflowIssue.requestTokens))
+              .replace("{usable}", formatApproxTokenCount(overflowIssue.usable))}
+          </p>
+          {overflowIssue.selectedTokens !== null && overflowIssue.suggestedSelectedMax !== null ? (
+            <p>
+              {(ds.tokenMeterReductionTarget ?? "至少需減少約 {reduction} tokens；建議將已選病歷降至 {target} tokens 以下。")
+                .replace("{reduction}", formatApproxTokenCount(overflowIssue.overBy))
+                .replace("{target}", formatApproxTokenCount(overflowIssue.suggestedSelectedMax))}
+            </p>
+          ) : null}
+          {overflowIssue.suggestedSelectedMax !== null && total <= overflowIssue.suggestedSelectedMax ? (
+            <p className="mt-0.5 font-medium text-emerald-700 dark:text-emerald-300">
+              {ds.tokenMeterTargetReached ?? "目前已低於建議值；關閉後可重新產生，系統會再次檢查完整輸入。"}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {budget.level === "over" && (
         <p className="mt-1 text-[0.625rem] text-red-600 dark:text-red-400">
           {ds.tokenMeterOver ?? "已選病歷本身已超過此模型的可用輸入空間；建議縮小文件或檢驗範圍，或改用內容視窗更大的模型。"}

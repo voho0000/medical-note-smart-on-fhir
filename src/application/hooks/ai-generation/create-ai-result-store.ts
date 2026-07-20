@@ -5,6 +5,9 @@
 // imported so nothing stale renders against fresh clinical data.
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { resetOnBundleChange } from '@/src/shared/utils/reset-on-bundle-change'
+import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
+
+export type AiGenerationIssue = ContextOverflowIssue
 
 export interface AiResultStoreState<T> {
   /** Monotonic Bundle epoch. A run captures this before streaming and may
@@ -21,6 +24,7 @@ export interface AiResultStoreState<T> {
   byKey: Record<string, T>
   running: Record<string, boolean>
   errors: Record<string, string | null>
+  issues: Record<string, AiGenerationIssue | null>
   // Per-key persisted-cache-checked flags. Only used by stores whose hooks
   // hydrate per key (report interpretation); the patient-scoped hooks track
   // hydration as React state keyed to the CURRENT slot instead.
@@ -29,6 +33,7 @@ export interface AiResultStoreState<T> {
   clear: (key: string) => void
   setRunning: (key: string, value: boolean) => void
   setError: (key: string, error: string | null) => void
+  setIssue: (key: string, issue: AiGenerationIssue | null) => void
   setHydrated: (key: string, value: boolean) => void
 }
 
@@ -41,6 +46,7 @@ export function createAiResultStore<T>(): AiResultStore<T> {
     byKey: {},
     running: {},
     errors: {},
+    issues: {},
     hydrated: {},
     setResult: (key, result) => set((s) => ({ byKey: { ...s.byKey, [key]: result } })),
     clear: (key) =>
@@ -51,6 +57,7 @@ export function createAiResultStore<T>(): AiResultStore<T> {
       }),
     setRunning: (key, value) => set((s) => ({ running: { ...s.running, [key]: value } })),
     setError: (key, error) => set((s) => ({ errors: { ...s.errors, [key]: error } })),
+    setIssue: (key, issue) => set((s) => ({ issues: { ...s.issues, [key]: issue } })),
     setHydrated: (key, value) => set((s) => ({ hydrated: { ...s.hydrated, [key]: value } })),
   }))
   // Importing a new bundle must wipe the previous bundle's results so nothing
@@ -60,6 +67,7 @@ export function createAiResultStore<T>(): AiResultStore<T> {
     byKey: {},
     running: {},
     errors: {},
+    issues: {},
     hydrated: {},
   })))
   return store

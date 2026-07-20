@@ -25,11 +25,11 @@ export function shouldAutoRunSummarySlot(input: {
 }
 
 /**
- * Demo snapshots are frozen, audited outputs for the frozen demo bundle. Seed
- * them into whichever model slot the user already has selected so opening the
- * demo never spends quota merely because a model preference survived from a
- * previously loaded patient. A deliberate manual regenerate still uses the
- * selected model and replaces the seeded result in that slot.
+ * Demo snapshots are frozen, audited outputs for the frozen demo bundle. This
+ * gate decides when the caller may install the audited output after the
+ * selected slot has finished hydration. Ownership is deliberately handled by
+ * the caller: only the canonical model receives it in a result slot; another
+ * selected model may use it solely as a presentation fallback.
  */
 export function shouldSeedDemoSlot(input: {
   hasDemoSeed: boolean

@@ -1,5 +1,9 @@
 import {
+  ContextOverflowError,
+  createContextOverflowIssue,
   evaluateContextBudget,
+  formatContextOverflowIssue,
+  isContextOverflowError,
   preflightContextWarning,
   DEFAULT_RESPONSE_RESERVE,
   WARN_FRACTION,
@@ -67,6 +71,7 @@ describe('preflightContextWarning', () => {
     expect(warning).toContain('約 11k tokens 的可用輸入空間')
     expect(warning).toContain('總內容視窗約 15k')
     expect(warning).toContain('保留 4k 供模型回覆')
+    expect(warning).toContain('建議將選取病歷控制在約 2.6k tokens 以內')
     expect(warning).not.toContain('選取的病歷資料約 13k')
   })
 
@@ -80,5 +85,51 @@ describe('preflightContextWarning', () => {
       'zh-TW',
       { selectedContext, contextLimit: 32768 },
     )).toBeNull()
+  })
+})
+
+describe('structured context overflow issue', () => {
+  it('retains the full budget arithmetic and a concrete Data Selection target', () => {
+    const issue = createContextOverflowIssue(
+      '病'.repeat(19500),
+      'openai-compatible-custom',
+      { selectedContext: '病'.repeat(6900) },
+    )
+
+    expect(issue).toEqual({
+      kind: 'context-overflow',
+      requestTokens: 13000,
+      selectedTokens: 4600,
+      usable: 11000,
+      limit: 15000,
+      reserve: 4000,
+      overBy: 2000,
+      suggestedSelectedMax: 2599,
+    })
+  })
+
+  it('uses null for selection-specific fields when no selected context is supplied', () => {
+    const issue = createContextOverflowIssue(
+      '病'.repeat(19500),
+      'openai-compatible-custom',
+    )
+
+    expect(issue?.selectedTokens).toBeNull()
+    expect(issue?.suggestedSelectedMax).toBeNull()
+  })
+
+  it('formats and preserves the issue on a recognizable error', () => {
+    const issue = createContextOverflowIssue(
+      '病'.repeat(19500),
+      'openai-compatible-custom',
+      { selectedContext: '病'.repeat(6900) },
+    )!
+    const error = new ContextOverflowError(issue, 'en')
+
+    expect(formatContextOverflowIssue(issue, 'en')).toContain('aim for about 2.6k tokens or fewer')
+    expect(error.message).toBe(formatContextOverflowIssue(issue, 'en'))
+    expect(error.issue).toBe(issue)
+    expect(isContextOverflowError(error)).toBe(true)
+    expect(isContextOverflowError(new Error(error.message))).toBe(false)
   })
 })

@@ -25,11 +25,18 @@ interface QueryOptions {
   temperature?: number
   maxTokens?: number
   responseFormat?: 'json'
+  /** Optional owner identity for cancelling one structured generation slot
+   * without aborting background work from another patient/input scope. */
+  operationKey?: string
 }
 
 interface StreamOptions extends QueryOptions {
   onChunk?: (chunk: string) => void
   onComplete?: (fullText: string) => void
+  /** Structured generators must not parse or persist a partial response after
+   * an explicit user stop. Other callers keep the historical partial-text
+   * behaviour by leaving this false. */
+  throwOnAbort?: boolean
 }
 
 /**
@@ -44,10 +51,10 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
   const defaultModel = DEFAULT_MODEL_ID
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // A Set, not a single ref: one hook instance can have several requests in
-  // flight. stop() must abort every non-streaming query and stream owned by
-  // this hook instance.
-  const abortControllersRef = useRef<Set<AbortController>>(new Set())
+  // A keyed Map, not a single ref: one hook instance can have requests from
+  // several model/input slots in flight. stop(key) aborts only that owner;
+  // stop() without a key remains the global teardown used on Bundle changes.
+  const abortControllersRef = useRef<Map<AbortController, string | undefined>>(new Map())
 
   // Cache AI service instance to avoid recreating on every call
   const aiService = useMemo(
@@ -75,7 +82,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       setIsLoading(true)
       setError(null)
       const abortController = new AbortController()
-      abortControllersRef.current.add(abortController)
+      abortControllersRef.current.set(abortController, queryOptions?.operationKey)
 
       try {
         const result = await queryUseCase.execute({
@@ -96,8 +103,8 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         options.onError?.(errorMessage)
         throw err
       } finally {
-        setIsLoading(false)
         abortControllersRef.current.delete(abortController)
+        setIsLoading(abortControllersRef.current.size > 0)
       }
     },
     [queryUseCase, defaultModel, options]
@@ -111,7 +118,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       setIsLoading(true)
       setError(null)
       const abortController = new AbortController()
-      abortControllersRef.current.add(abortController)
+      abortControllersRef.current.set(abortController, streamOptions?.operationKey)
 
       const modelId = streamOptions?.modelId || options.defaultModel || defaultModel
       const apiKey = apiKeyForModel(
@@ -135,11 +142,30 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           },
         })
 
+        // Some streaming adapters resolve normally after forwarding an abort
+        // instead of rejecting. Structured callers still need a hard stop so
+        // they neither parse buffered text nor launch their parse-retry pass.
+        if (abortController.signal.aborted && streamOptions?.throwOnAbort) {
+          const abortError = new Error('The operation was aborted')
+          abortError.name = 'AbortError'
+          throw abortError
+        }
+
         streamOptions?.onComplete?.(fullText)
         options.onSuccess?.(fullText)
         return fullText
       } catch (err) {
+        if (abortController.signal.aborted) {
+          if (streamOptions?.throwOnAbort) {
+            if (err instanceof Error && err.name === 'AbortError') throw err
+            const abortError = new Error('The operation was aborted')
+            abortError.name = 'AbortError'
+            throw abortError
+          }
+          return fullText
+        }
         if (err instanceof Error && err.name === 'AbortError') {
+          if (streamOptions?.throwOnAbort) throw err
           return fullText
         }
 
@@ -148,20 +174,23 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         options.onError?.(errorMessage)
         throw err
       } finally {
-        setIsLoading(false)
         abortControllersRef.current.delete(abortController)
+        setIsLoading(abortControllersRef.current.size > 0)
       }
     },
     [streamOrchestrator, openAiKey, geminiKey, claudeKey, openAiCompatible, defaultModel, options]
   )
 
-  /**
-   * Stop AI work — aborts every in-flight query or stream started by this hook instance.
-   */
-  const stop = useCallback(() => {
-    for (const controller of abortControllersRef.current) controller.abort()
-    abortControllersRef.current.clear()
-    setIsLoading(false)
+  /** Stop one owned operation, or every in-flight request when no key is given. */
+  const stop = useCallback((operationKey?: string) => {
+    let stoppedAny = false
+    for (const [controller, ownerKey] of abortControllersRef.current) {
+      if (operationKey !== undefined && ownerKey !== operationKey) continue
+      controller.abort()
+      abortControllersRef.current.delete(controller)
+      stoppedAny = true
+    }
+    if (stoppedAny) setIsLoading(abortControllersRef.current.size > 0)
   }, [])
 
   /**

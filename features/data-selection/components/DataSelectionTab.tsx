@@ -16,6 +16,7 @@ import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 import type { FilterValue } from "@/src/core/interfaces/data-category.interface"
+import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 
 interface DataSelectionTabProps {
   clinicalData: ClinicalDataCollection
@@ -29,6 +30,7 @@ interface DataSelectionTabProps {
   someSelected: boolean
   modelId?: string
   fallbackModelId?: string
+  overflowIssue?: ContextOverflowIssue | null
 }
 
 // Sections mirror the LEFT-panel tabs so what you toggle here maps 1:1 to what
@@ -58,6 +60,7 @@ export function DataSelectionTab({
   allSelected,
   modelId,
   fallbackModelId,
+  overflowIssue,
 }: DataSelectionTabProps) {
   const { t } = useLanguage()
   const {
@@ -88,7 +91,11 @@ export function DataSelectionTab({
     <div className="space-y-3">
       {/* Live token meter — surfaces under/over-selection against the active summary model's
           context window (the two previously-invisible failure modes). */}
-      <ContextTokenMeter modelId={modelId} fallbackModelId={fallbackModelId} />
+      <ContextTokenMeter
+        modelId={modelId}
+        fallbackModelId={fallbackModelId}
+        overflowIssue={overflowIssue}
+      />
 
       {/* Templates — one-tap fill, then tweak the single selection freely. */}
       <div>

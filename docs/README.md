@@ -1,6 +1,6 @@
 # MediPrisma 文件索引
 
-> 基準版本：v0.40.0｜最後核對：2026-07-14
+> 基準版本：v0.40.0｜最後核對：2026-07-15
 
 本目錄把文件分成「現行規格」與「歷史紀錄」。現行規格應隨程式一起更新；帶日期的文件保留當時的問題、假設與實驗結果，不應被當成目前功能承諾。
 
@@ -31,6 +31,7 @@
 | [Briefing panel design](BRIEFING-PANEL-DESIGN-2026-07-04.md) | 醫療摘要的設計演進與實作後記 |
 | [Medical Summary audit](MEDICAL-SUMMARY-AUDIT-2026-07-12.md) | v0.34.0 時點稽核；表格內容是當時狀態 |
 | [Lab format experiment](LAB-FORMAT-EXPERIMENT-2026-07-12.md) | 格式與資料忠實度實驗紀錄 |
+| [Medication history scope experiment](MEDICATION-HISTORY-SCOPE-EXPERIMENT-2026-07-15.md) | 三模型、兩資料臂的 token 與醫療摘要品質 A/B 實驗 |
 | [Loop Engineering process review](LOOP-ENGINEERING-PROCESS-REVIEW-2026-07-12.md) | 2026-07-12 的研究與流程診斷 |
 | [Deep-mode eval loop](DEEP-MODE-EVAL-LOOP.md) | Agent 品質評估規格與現況 |
 | [Deep-mode handoff](DEEP-MODE-HANDOFF.md) | 工作線交接狀態 |

@@ -10,6 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { DataSelectionFeature } from "../Feature"
+import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 
 export interface DataSelectionDrawerProps {
   open: boolean
@@ -19,6 +20,9 @@ export interface DataSelectionDrawerProps {
   applyHint?: string
   modelId?: string
   fallbackModelId?: string
+  /** Last exact full-request overflow, used to turn the selected-only meter
+   * into a concrete reduction target instead of a dead-end green bar. */
+  overflowIssue?: ContextOverflowIssue | null
 }
 
 /**
@@ -36,6 +40,7 @@ export function DataSelectionDrawer({
   applyHint,
   modelId,
   fallbackModelId,
+  overflowIssue,
 }: DataSelectionDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -53,6 +58,7 @@ export function DataSelectionDrawer({
             <DataSelectionFeature
               modelId={modelId}
               fallbackModelId={fallbackModelId}
+              overflowIssue={overflowIssue}
               showScopeDescription={false}
             />
           </div>

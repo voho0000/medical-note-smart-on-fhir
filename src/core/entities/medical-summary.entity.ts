@@ -317,6 +317,11 @@ export interface SummaryMedicationReview {
 }
 
 export interface MedicalSummaryResult {
+  /** App-authored generation provenance. This is added only after the
+   * structured AI reply has been parsed/finalized, so the model cannot claim a
+   * different model or timestamp. Legacy caches may omit it; bundled demo
+   * snapshots use explicit pre-generated provenance without a timestamp. */
+  generation?: MedicalSummaryGeneration
   headline: string
   summary: Array<{ text: string; emphasis: boolean; sourceKeys: string[] }>
   investigations: SummaryInvestigation[]
@@ -336,6 +341,27 @@ export interface MedicalSummaryResult {
   sourceIndex: ResolvedSourceRef[]
   /** Timeline picks whose ref didn't resolve to the bundle (dropped, counted). */
   droppedTimelineCount: number
+}
+
+export type MedicalSummaryGeneration = {
+  source: 'live'
+  modelId: string
+  /** Immutable display name captured at generation time (especially
+   * important for user-configured upstream model ids). */
+  modelName: string
+  /** When the structured summary itself finished. Also serves as the stable
+   * identity used to attach app-authored batch metadata. */
+  generatedAt: number
+  /** When the complete user-visible summary + safety batch settled. Optional
+   * for legacy caches and unsuccessful/incomplete batches. */
+  completedAt?: number
+  /** End-to-end user-visible generation batch duration. Optional for legacy
+   * caches and unsuccessful/incomplete batches. */
+  durationMs?: number
+} | {
+  source: 'pre-generated'
+  modelId: string
+  modelName: string
 }
 
 /** Deterministic coverage stats — zero AI, computed straight from the bundle. */

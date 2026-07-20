@@ -41,7 +41,7 @@ describe('Medical Summary auto-run policy', () => {
 })
 
 describe('demo snapshot policy', () => {
-  it('seeds a hydrated demo slot even when its key contains a retained non-default model', () => {
+  it('allows a bundled fallback after a retained non-default slot is hydrated', () => {
     expect(shouldSeedDemoSlot({
       hasDemoSeed: true,
       slotKey: 'demo-patient-1::patient::gpt-5.4-mini',
