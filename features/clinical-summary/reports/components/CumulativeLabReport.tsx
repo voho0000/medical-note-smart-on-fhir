@@ -288,26 +288,70 @@ export function CumulativeLabReport({
       .filter((p) => !!p)
   }, [pivots])
 
-  // Split into always-visible categories and hiddenByDefault ones (blood gas,
-  // and future extra groups), which surface only after the user picks them from
-  // the 「查看更多」 dropdown. A Set of revealed ids (rather than a single boolean)
-  // so multiple hidden groups can each be added independently — the dropdown is
-  // a picker, not an all-or-nothing toggle.
+  // Split into primary categories and hiddenByDefault ones (blood gas, and
+  // future extra groups). Extra groups surface automatically when the row is
+  // wide enough; in a narrow row the user can add them from 「查看更多」. A Set
+  // of revealed ids (rather than a single boolean) keeps each manual choice.
   const visibleCats = useMemo(() => nonEmpty.filter((p) => !p.category.hiddenByDefault), [nonEmpty])
   const hiddenCats = useMemo(() => nonEmpty.filter((p) => p.category.hiddenByDefault), [nonEmpty])
 
   const [internalActiveId, setInternalActiveId] = useState<string>(() => visibleCats[0]?.category.id || nonEmpty[0]?.category.id || 'cbc')
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set())
+  const tabsViewportRef = useRef<HTMLDivElement>(null)
+  const allTabsMeasureRef = useRef<HTMLDivElement>(null)
+  const [hasRoomForAll, setHasRoomForAll] = useState(false)
   // Prefer the parent-controlled id (survives the fullscreen remount) when it
   // points at a category that still has data; otherwise use internal state.
   const activeId = (activeCategoryId && nonEmpty.some((p) => p.category.id === activeCategoryId))
     ? activeCategoryId
     : internalActiveId
 
-  // A hidden category is "shown" once the user picked it (revealedIds) or it's
-  // the active tab (e.g. a fullscreen remount restored a blood-gas selection —
-  // Radix renders nothing for a value with no matching trigger/content).
-  const isHiddenShown = (id: string) => revealedIds.has(id) || id === activeId
+  // Measure the real tab bar rather than relying on a screen-size breakpoint:
+  // the left report pane can be resized independently from the window. The
+  // invisible probe contains every category with the same typography and
+  // spacing as the real tabs. If it fits, minority panels can be surfaced
+  // directly and the 「查看更多」 picker is unnecessary.
+  const measurementKey = nonEmpty
+    .map((p) => `${p.category.id}:${categoryLabels[p.category.id] || p.category.id}:${p.dates.length}`)
+    .join('|')
+
+  useEffect(() => {
+    const viewport = tabsViewportRef.current
+    const allTabs = allTabsMeasureRef.current
+    if (!viewport || !allTabs) return
+
+    let disposed = false
+    const measure = () => {
+      if (disposed) return
+      setHasRoomForAll(allTabs.scrollWidth <= viewport.clientWidth + 1)
+    }
+
+    measure()
+
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(measure)
+    observer?.observe(viewport)
+    observer?.observe(allTabs)
+    window.addEventListener('resize', measure)
+
+    // A late-loading webfont can change label widths without resizing the
+    // viewport. ResizeObserver normally catches it; fonts.ready is a fallback
+    // for browsers that do not report that intrinsic-size change.
+    void document.fonts?.ready.then(measure)
+
+    return () => {
+      disposed = true
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [measurementKey, activeId])
+
+  // A hidden category is "shown" once all tabs fit, the user picked it
+  // (revealedIds), or it's the active tab (e.g. a fullscreen remount restored a
+  // blood-gas selection — Radix renders nothing for a value with no matching
+  // trigger/content).
+  const isHiddenShown = (id: string) => hasRoomForAll || revealedIds.has(id) || id === activeId
   const shownHidden = hiddenCats.filter((p) => isHiddenShown(p.category.id))
   const shownCats = [...visibleCats, ...shownHidden]
   // Hidden groups not yet surfaced → the dropdown's menu items. When empty, the
@@ -338,8 +382,8 @@ export function CumulativeLabReport({
   return (
     <div className={fullHeight ? 'flex h-full flex-col min-w-0 w-full max-w-full overflow-hidden' : 'space-y-3 min-w-0 w-full max-w-full overflow-hidden'}>
       <Tabs value={activeId} onValueChange={setActiveId} className={fullHeight ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0 overflow-hidden'}>
-        <div className="flex min-w-0 items-center gap-2">
-          <TabsList className="!flex !flex-nowrap !justify-start flex-1 min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
+        <div className="relative flex min-w-0 items-center gap-2">
+          <TabsList ref={tabsViewportRef} className="!flex !flex-nowrap !justify-start flex-1 min-w-0 overflow-x-auto h-auto bg-muted/40 p-1 gap-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
             {shownCats.map((p) => {
               const label = categoryLabels[p.category.id] || p.category.id
               return (
@@ -385,6 +429,28 @@ export function CumulativeLabReport({
               </DropdownMenu>
             )}
           </TabsList>
+          {/* Intrinsic-width probe used only to decide whether every category
+              fits in one row. Fixed positioning keeps it out of both layout
+              and the horizontal scroll area; aria-hidden keeps the duplicate
+              labels out of the accessibility tree. */}
+          <div
+            ref={allTabsMeasureRef}
+            data-cumulative-tabs-measure=""
+            aria-hidden="true"
+            className="fixed left-0 top-0 invisible pointer-events-none flex w-max items-center gap-1 p-1"
+          >
+            {nonEmpty.map((p) => {
+              const label = categoryLabels[p.category.id] || p.category.id
+              return (
+                <span
+                  key={p.category.id}
+                  className={`inline-flex h-7 items-center justify-center whitespace-nowrap rounded-lg border border-transparent px-2 text-xs ${p.category.id === activeId ? 'font-semibold' : 'font-medium'}`}
+                >
+                  {label} ({p.dates.length})
+                </span>
+              )
+            })}
+          </div>
         </div>
         {shownCats.map((p) => (
           <TabsContent

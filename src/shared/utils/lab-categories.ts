@@ -34,11 +34,11 @@ export interface LabCategory {
   subgroups?: LabSubgroup[]
   /** Test keys that always appear as columns even when the patient has no data for them */
   pinnedColumns?: string[]
-  /** When true this category is NOT shown as a sub-tab by default — it is
-   *  revealed only after the user clicks the 「查看更多」 chip in the cumulative
-   *  report. For panels ordered on a minority of (usually critically-ill)
-   *  patients (e.g. arterial blood gas) that would otherwise add a persistently
-   *  empty tab to routine outpatient labs. */
+  /** When true this category is treated as a secondary sub-tab. It appears
+   *  automatically when every category fits in the cumulative-report row, or
+   *  through the 「查看更多」 picker when space is limited. For panels ordered on
+   *  a minority of patients (e.g. arterial blood gas), this avoids crowding a
+   *  narrow routine-outpatient view. */
   hiddenByDefault?: boolean
 }
 
@@ -331,10 +331,9 @@ export const LAB_CATEGORIES: LabCategory[] = [
   },
   {
     id: 'bloodgas',
-    // Blood gas (ABG / VBG / CBG). hiddenByDefault → surfaced only via the
-    // 「查看更多」 chip in the cumulative report; blood gas is ordered for a
-    // minority of (usually critically-ill) patients so it would otherwise add a
-    // near-always-empty tab to routine outpatient labs.
+    // Blood gas (ABG / VBG / CBG). hiddenByDefault → shown directly when the
+    // category row has room, otherwise surfaced via 「查看更多」; blood gas is
+    // ordered for a minority of (usually critically-ill) patients.
     //
     // MULTI-SPECIMEN, ONE COLUMN by design: arterial, venous AND capillary
     // LOINCs for each analyte map to the same canonical key (see
@@ -383,8 +382,8 @@ export const LAB_CATEGORIES: LabCategory[] = [
     // categorise by NHI 醫令 code (14065C/14066C/14084C/12020C) — the reliable
     // identifier (code.text is inconsistent). Analyte canonicalisation +
     // display labels live in lab-normalize (TEST_ALIASES / CANONICAL_DISPLAY).
-    // hiddenByDefault: a minority panel — surfaced via 「查看更多」only when the
-    // patient actually has it, no persistently-empty tab for routine labs.
+    // hiddenByDefault: a minority panel — shown directly when space permits,
+    // otherwise surfaced via 「查看更多」 without crowding routine labs.
     // When revealed manually, pinnedColumns still show the expected column
     // headers even when there are no rows in the selected time range — same
     // behaviour as blood gas, and less confusing than a blank empty-state.
