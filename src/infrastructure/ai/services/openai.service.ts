@@ -2,7 +2,12 @@
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getProxyAuthHeaders } from '../utils/proxy-auth'
-import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import {
+  getModelDefinitionOrThrow,
+  isProxyEligibleModel,
+  modelRequiresUserKey,
+  resolveModelTemperature,
+} from '@/src/shared/constants/ai-models.constants'
 import { AiError, AiErrorCode } from '@/src/core/errors'
 
 export class OpenAiService {
@@ -19,13 +24,20 @@ export class OpenAiService {
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
-    const modelDef = getModelDefinition(request.modelId)
-    // Check if model is OpenAI (including internal models) and can use proxy
-    const isOpenAIModel = modelDef?.provider === 'openai'
-    const shouldUseProxy = !this.apiKey && isOpenAIModel && !modelDef?.requiresUserKey && ENV_CONFIG.hasChatProxy
+    const modelDef = getModelDefinitionOrThrow(request.modelId)
+    if (modelDef.provider !== 'openai') {
+      throw new Error(`Model ${request.modelId} is not an OpenAI model`)
+    }
+    if (
+      modelDef.apiSurface !== 'openai-chat-completions' &&
+      modelDef.apiSurface !== 'openai-responses'
+    ) {
+      throw new Error(`OpenAI model ${request.modelId} has incompatible API surface ${modelDef.apiSurface}`)
+    }
+    const shouldUseProxy = !this.apiKey && isProxyEligibleModel(modelDef) && ENV_CONFIG.hasChatProxy
 
     if (!shouldUseProxy && !this.apiKey) {
-      if (modelDef?.requiresUserKey) {
+      if (modelRequiresUserKey(modelDef)) {
         throw new AiError(
           'This model requires a personal OpenAI API key',
           AiErrorCode.API_KEY_MISSING,
@@ -39,36 +51,44 @@ export class OpenAiService {
       )
     }
 
-    // Use Firebase proxy or direct OpenAI API (not /api/llm for GitHub Pages compatibility)
-    const targetUrl = shouldUseProxy 
-      ? ENV_CONFIG.chatProxyUrl 
-      : 'https://api.openai.com/v1/chat/completions'
+    if (shouldUseProxy && modelDef.apiSurface !== 'openai-chat-completions') {
+      throw new Error(`The MediPrisma proxy does not support ${modelDef.apiSurface}`)
+    }
+
+    // The API surface comes from the manifest. This keeps non-streaming calls
+    // aligned with the SDK factory used by streaming and Agent chat.
+    const targetUrl = shouldUseProxy
+      ? ENV_CONFIG.chatProxyUrl
+      : modelDef.apiSurface === 'openai-responses'
+        ? 'https://api.openai.com/v1/responses'
+        : 'https://api.openai.com/v1/chat/completions'
     
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
 
-    const body: Record<string, unknown> = {
-      model: request.modelId,
-      messages: request.messages,
-      stream: false,
-    }
-
-    // GPT-5-family (reasoning) models only accept temperature = 1. The old
-    // check listed retired ids (gpt-5-mini / gpt-5-nano) verbatim and silently
-    // stopped matching when the lineup moved to gpt-5.4-* — match the family
-    // by prefix so lineup bumps can't reintroduce the drift.
-    if (/^gpt-5/.test(request.modelId)) {
-      body.temperature = 1
-    } else if (request.temperature !== undefined) {
-      body.temperature = request.temperature
-    }
-
-    // Best-effort JSON mode (Phase 2.2). Proxies may ignore it; callers still
-    // defensively parse the returned text.
-    if (request.responseFormat === 'json') {
-      body.response_format = { type: 'json_object' }
-    }
+    const temperature = resolveModelTemperature(modelDef, request.temperature)
+    const isResponsesApi = modelDef.apiSurface === 'openai-responses'
+    const body: Record<string, unknown> = isResponsesApi
+      ? {
+          model: request.modelId,
+          input: request.messages,
+          ...(temperature !== undefined ? { temperature } : {}),
+          ...(request.maxTokens !== undefined ? { max_output_tokens: request.maxTokens } : {}),
+          ...(request.responseFormat === 'json'
+            ? { text: { format: { type: 'json_object' } } }
+            : {}),
+        }
+      : {
+          model: request.modelId,
+          messages: request.messages,
+          stream: false,
+          ...(temperature !== undefined ? { temperature } : {}),
+          ...(request.maxTokens !== undefined ? { max_tokens: request.maxTokens } : {}),
+          ...(request.responseFormat === 'json'
+            ? { response_format: { type: 'json_object' } }
+            : {}),
+        }
 
     if (shouldUseProxy) {
       if (ENV_CONFIG.proxyClientKey) {
@@ -117,7 +137,7 @@ export class OpenAiService {
       }
 
       const data = await response.json()
-      const text = this.extractOpenAiContent(data, shouldUseProxy)
+      const text = this.extractOpenAiContent(data, shouldUseProxy, isResponsesApi)
 
       return {
         text,
@@ -133,10 +153,19 @@ export class OpenAiService {
     }
   }
 
-  private extractOpenAiContent(data: any, shouldUseProxy: boolean): string {
+  private extractOpenAiContent(data: any, shouldUseProxy: boolean, isResponsesApi: boolean): string {
     if (shouldUseProxy) {
       // Proxy response format: { message: "...", openAiResponse: {...} }
       return data.message || data.text || data.choices?.[0]?.message?.content || ''
+    }
+    if (isResponsesApi) {
+      if (typeof data.output_text === 'string') return data.output_text
+      return (data.output ?? [])
+        .filter((item: any) => item?.type === 'message')
+        .flatMap((item: any) => item.content ?? [])
+        .filter((part: any) => part?.type === 'output_text')
+        .map((part: any) => part.text ?? '')
+        .join('')
     }
     // Direct OpenAI API response format
     return data.choices?.[0]?.message?.content || ''

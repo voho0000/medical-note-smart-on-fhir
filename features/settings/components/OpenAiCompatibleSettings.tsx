@@ -51,6 +51,7 @@ import {
 } from '@/src/shared/utils/openai-compatible.utils'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
+  isOpenAiCompatibleAddProfileTarget,
   isOpenAiCompatibleContextWindowTarget,
   type SettingsNavigationTarget,
 } from '@/src/application/providers/right-panel.provider'
@@ -118,6 +119,7 @@ export function OpenAiCompatibleSettings({
   )
   const [creatingNew, setCreatingNew] = useState(() => profiles.length === 0)
   const newProfileRequestedRef = useRef(false)
+  const addProfileTargetHandledRef = useRef(false)
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.profileId === selectedProfileId) ?? null,
     [profiles, selectedProfileId],
@@ -346,6 +348,48 @@ export function OpenAiCompatibleSettings({
     setSelectedProfileId(null)
   }
 
+  useEffect(() => {
+    if (!isOpenAiCompatibleAddProfileTarget(settingsTarget)) {
+      addProfileTargetHandledRef.current = false
+      return
+    }
+    if (!navigationReady || addProfileTargetHandledRef.current) return
+    addProfileTargetHandledRef.current = true
+
+    if (profiles.length >= MAX_OPENAI_COMPATIBLE_PROFILES) {
+      toast.error(t.settings.openAiCompatibleProfileLimit)
+      onSettingsTargetHandled?.()
+      return
+    }
+    if (
+      !creatingNew &&
+      draftChanged &&
+      typeof window !== 'undefined' &&
+      !window.confirm(t.settings.openAiCompatibleUnsavedConfirm)
+    ) {
+      onSettingsTargetHandled?.()
+      return
+    }
+    if (!creatingNew) {
+      testRequestId.current += 1
+      newProfileRequestedRef.current = true
+      // The target is a one-shot external navigation intent.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCreatingNew(true)
+      setSelectedProfileId(null)
+    }
+    onSettingsTargetHandled?.()
+  }, [
+    creatingNew,
+    draftChanged,
+    navigationReady,
+    onSettingsTargetHandled,
+    profiles.length,
+    settingsTarget,
+    t.settings.openAiCompatibleProfileLimit,
+    t.settings.openAiCompatibleUnsavedConfirm,
+  ])
+
   const handleSave = async () => {
     if (!connectionReadyToSave) {
       toast.error(t.settings.openAiCompatibleTestBeforeSave)
@@ -559,7 +603,7 @@ export function OpenAiCompatibleSettings({
               setConnectionTestPassed(false)
             }}
             placeholder={transport === 'mediprisma-gateway'
-              ? 'https://ai.j3soon.com/v1/chat/completions'
+              ? 'https://openrouter.ai/api/v1/chat/completions'
               : 'https://llm.intra.example.org/v1/chat/completions'}
             autoComplete="off"
             autoCapitalize="off"

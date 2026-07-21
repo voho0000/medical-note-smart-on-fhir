@@ -14,11 +14,12 @@ import {
 } from '@/src/core/entities/report-interpretation.entity'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
+import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 
 // Same fast, cheap, clean-JSON model the safety scan pinned after the head-to-
 // head eval — pin it so this on-demand task doesn't ride the user's possibly-slow
 // chat model (e.g. nano). Free-tier eligible so 民眾 can use it without a key.
-export const REPORT_INTERPRETATION_MODEL_ID = 'gemini-3.1-flash-lite'
+export const REPORT_INTERPRETATION_MODEL_ID = MODEL_ROLE_IDS['report-interpretation']
 
 // Hard cap on the report text we send. A 健保存摺 discharge summary can be many
 // KB; past this we send the leading portion and flag `truncated` so the card can

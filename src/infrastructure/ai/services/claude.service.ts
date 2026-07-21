@@ -7,11 +7,18 @@
 import { generateText } from 'ai'
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
-import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
-import { aiProviderFactory } from '../factories/ai-provider.factory'
+import {
+  getModelDefinitionOrThrow,
+  isProxyEligibleModel,
+  resolveModelTemperature,
+} from '@/src/shared/constants/ai-models.constants'
+import type { AiProviderFactory } from '../factories/ai-provider.factory'
 
 export class ClaudeService {
-  constructor(private apiKey: string | null = null) {}
+  constructor(
+    private apiKey: string | null,
+    private readonly providerFactory: Pick<AiProviderFactory, 'create'>,
+  ) {}
 
   setApiKey(apiKey: string | null): void {
     this.apiKey = apiKey
@@ -22,14 +29,17 @@ export class ClaudeService {
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
-    const modelDef = getModelDefinition(request.modelId)
-    const useProxy = !this.apiKey && ENV_CONFIG.hasClaudeProxy && !modelDef?.requiresUserKey
+    const modelDef = getModelDefinitionOrThrow(request.modelId)
+    if (modelDef.provider !== 'claude') {
+      throw new Error(`Model ${request.modelId} is not a Claude model`)
+    }
+    const useProxy = !this.apiKey && ENV_CONFIG.hasClaudeProxy && isProxyEligibleModel(modelDef)
 
     if (!this.apiKey && !useProxy) {
       throw new Error('Claude API key is required for this model. Please add it in Settings.')
     }
 
-    const { model } = aiProviderFactory.create({
+    const { model } = this.providerFactory.create({
       modelId: request.modelId,
       apiKey: this.apiKey ?? undefined,
       useProxy,
@@ -41,7 +51,9 @@ export class ClaudeService {
         role: m.role as 'system' | 'user' | 'assistant',
         content: m.content,
       })),
-      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      ...(resolveModelTemperature(modelDef, request.temperature) !== undefined
+        ? { temperature: resolveModelTemperature(modelDef, request.temperature) }
+        : {}),
       ...(request.maxTokens !== undefined ? { maxOutputTokens: request.maxTokens } : {}),
       ...(request.signal ? { abortSignal: request.signal } : {}),
     })

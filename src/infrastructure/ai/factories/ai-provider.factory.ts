@@ -8,8 +8,10 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import {
-  getModelDefinition,
+  getModelDefinitionOrThrow,
+  isProxyEligibleModel,
   isCustomOpenAiModelId,
+  type ModelDefinition,
   type ModelProvider,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
@@ -40,31 +42,24 @@ export class AiProviderFactory {
     if (isCustomOpenAiModelId(config.modelId)) {
       return this.createOpenAiCompatibleProvider(config.openAiCompatible)
     }
-    const provider = this.providerOf(config.modelId)
+    const definition = getModelDefinitionOrThrow(config.modelId)
 
     if (config.useProxy) {
-      return this.createProxyProvider(config.modelId, provider)
+      if (!isProxyEligibleModel(definition)) {
+        throw new Error(`Model ${config.modelId} is not eligible for the MediPrisma proxy`)
+      }
+      return this.createProxyProvider(definition)
     } else {
-      return this.createDirectProvider(config.modelId, config.apiKey!, provider)
+      if (!config.apiKey) throw new Error(`API key is required for model ${config.modelId}`)
+      return this.createDirectProvider(definition, config.apiKey)
     }
-  }
-
-  /**
-   * Resolve the provider from the model definition (id-prefix fallback for
-   * unknown/internal ids)
-   */
-  private providerOf(modelId: string): ModelProvider {
-    const def = getModelDefinition(modelId)
-    if (def) return def.provider
-    if (modelId.startsWith('gemini') || modelId.startsWith('models/gemini')) return 'gemini'
-    if (modelId.startsWith('claude')) return 'claude'
-    return 'openai'
   }
 
   /**
    * Create provider with proxy configuration
    */
-  private createProxyProvider(modelId: string, provider: ModelProvider): ProviderResult {
+  private createProxyProvider(definition: ModelDefinition): ProviderResult {
+    const { id: modelId, provider } = definition
     if (provider === 'custom') {
       throw new Error('OpenAI-compatible endpoints must be called directly from the browser')
     }
@@ -102,14 +97,20 @@ export class AiProviderFactory {
       apiKey: 'proxy', // Dummy key required by SDK
       fetch: customFetch,
     })
-    // Use .chat() to force Chat Completions API instead of Responses API
-    return { model: sdk.chat(modelId), isGemini: false }
+    if (definition.apiSurface === 'openai-chat-completions') {
+      return { model: sdk.chat(modelId), isGemini: false }
+    }
+    if (definition.apiSurface === 'openai-responses') {
+      return { model: sdk.responses(modelId), isGemini: false }
+    }
+    throw new Error(`OpenAI model ${modelId} has incompatible API surface ${definition.apiSurface}`)
   }
 
   /**
    * Create provider with direct API access
    */
-  private createDirectProvider(modelId: string, apiKey: string, provider: ModelProvider): ProviderResult {
+  private createDirectProvider(definition: ModelDefinition, apiKey: string): ProviderResult {
+    const { id: modelId, provider } = definition
     if (provider === 'custom') {
       throw new Error('OpenAI-compatible connection profile is missing')
     }
@@ -127,7 +128,13 @@ export class AiProviderFactory {
       return { model: sdk(modelId), isGemini: false }
     }
     const sdk = createOpenAI({ apiKey })
-    return { model: sdk.chat(modelId), isGemini: false }
+    if (definition.apiSurface === 'openai-responses') {
+      return { model: sdk.responses(modelId), isGemini: false }
+    }
+    if (definition.apiSurface === 'openai-chat-completions') {
+      return { model: sdk.chat(modelId), isGemini: false }
+    }
+    throw new Error(`OpenAI model ${modelId} has incompatible API surface ${definition.apiSurface}`)
   }
 
   private createOpenAiCompatibleProvider(
@@ -151,12 +158,25 @@ export class AiProviderFactory {
    * Validate proxy availability
    */
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
-    const provider = this.providerOf(modelId)
+    let definition: ModelDefinition
+    try {
+      definition = getModelDefinitionOrThrow(modelId)
+    } catch (error) {
+      return { available: false, error: error instanceof Error ? error.message : 'Unsupported AI model' }
+    }
+    const provider: ModelProvider = definition.provider
 
     if (provider === 'custom') {
       return {
         available: false,
         error: 'OpenAI-compatible endpoints do not use the MediPrisma proxy.',
+      }
+    }
+
+    if (!isProxyEligibleModel(definition)) {
+      return {
+        available: false,
+        error: 'This model requires a personal provider API key.',
       }
     }
 
@@ -184,5 +204,3 @@ export class AiProviderFactory {
     return { available: true }
   }
 }
-
-export const aiProviderFactory = new AiProviderFactory()

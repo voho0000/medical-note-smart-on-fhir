@@ -1,164 +1,152 @@
-// Tests for ai-models.constants. Avoid hard-coding model IDs in assertions
-// where possible — model IDs evolve (gpt-5 → gpt-5.4 → …) and the test
-// must keep validating *the contract* not a snapshot of the IDs at one
-// point in time. Where an actual ID is needed, pull it from the
-// constants themselves.
 import {
-  GPT_MODELS,
-  GEMINI_MODELS,
+  ALL_MODELS,
   CLAUDE_MODELS,
   CUSTOM_MODELS,
-  INTERNAL_MODELS,
-  ALL_MODELS,
   CUSTOM_OPENAI_MODEL_ID,
   DEFAULT_MODEL_ID,
+  GEMINI_MODELS,
+  GPT_MODELS,
+  INTERNAL_MODELS,
+  MODEL_CATALOG,
+  MODEL_ROLE_IDS,
   customOpenAiModelIdForProfile,
-  isCustomOpenAiModelId,
-  isGptModelId,
-  isGeminiModelId,
-  isModelId,
+  getBaseModelIdForProvider,
   getModelDefinition,
+  getModelDefinitionOrThrow,
+  isCustomOpenAiModelId,
+  isGeminiModelId,
+  isGptModelId,
+  isModelId,
+  isProxyEligibleModel,
+  modelRequiresUserKey,
   openAiCompatibleProfileIdFromModelId,
+  resolveModelTemperature,
+  type ModelProvider,
+  type ModelRole,
 } from '@/src/shared/constants/ai-models.constants'
 
-describe('ai-models.constants', () => {
-  describe('Model lists', () => {
-    it('has at least one GPT model, all tagged provider="openai"', () => {
-      expect(GPT_MODELS.length).toBeGreaterThan(0)
-      GPT_MODELS.forEach((model) => {
-        expect(model.provider).toBe('openai')
-        expect(model.id).toBeDefined()
-        expect(model.label).toBeDefined()
-      })
-    })
+describe('MODEL_CATALOG contract', () => {
+  it('contains each model id exactly once', () => {
+    const ids = MODEL_CATALOG.map((model) => model.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ALL_MODELS).toBe(MODEL_CATALOG)
+  })
 
-    it('has at least one Gemini model, all tagged provider="gemini"', () => {
-      expect(GEMINI_MODELS.length).toBeGreaterThan(0)
-      GEMINI_MODELS.forEach((model) => {
-        expect(model.provider).toBe('gemini')
-        expect(model.id).toBeDefined()
-        expect(model.label).toBeDefined()
-      })
-    })
+  it.each(MODEL_CATALOG)('$id has a complete, valid runtime definition', (model) => {
+    expect(model.label.trim()).not.toBe('')
+    expect(model.descriptions.en.trim()).not.toBe('')
+    expect(model.descriptions['zh-TW'].trim()).not.toBe('')
+    expect(Number.isInteger(model.contextLimit)).toBe(true)
+    expect(model.contextLimit).toBeGreaterThan(0)
+    expect(['proxy-or-key', 'key-only', 'custom-profile']).toContain(model.access)
+    expect(['passthrough', 'fixed-one', 'omit']).toContain(model.temperaturePolicy)
+    expect(['deep-agent', 'standard']).toContain(model.conversationMode)
+    expect(['available', 'disabled']).toContain(model.status)
+  })
 
-    it('has internal models with all required fields', () => {
-      expect(INTERNAL_MODELS.length).toBeGreaterThan(0)
-      INTERNAL_MODELS.forEach((model) => {
-        expect(model.id).toBeDefined()
-        expect(model.label).toBeDefined()
-        expect(model.provider).toBeDefined()
-      })
-    })
+  it('derives provider lists and internal uses from the unique catalog', () => {
+    expect(GPT_MODELS).toEqual(MODEL_CATALOG.filter((model) => model.selectable && model.provider === 'openai'))
+    expect(GEMINI_MODELS).toEqual(MODEL_CATALOG.filter((model) => model.selectable && model.provider === 'gemini'))
+    expect(CLAUDE_MODELS).toEqual(MODEL_CATALOG.filter((model) => model.selectable && model.provider === 'claude'))
+    expect(CUSTOM_MODELS).toEqual(MODEL_CATALOG.filter((model) => model.selectable && model.provider === 'custom'))
+    expect(INTERNAL_MODELS).toEqual(MODEL_CATALOG.filter((model) =>
+      model.roles.some((role) => role !== 'default')))
+  })
 
-    it('ALL_MODELS = internal + every user-selectable provider list', () => {
-      expect(ALL_MODELS.length).toBe(
-        INTERNAL_MODELS.length + GPT_MODELS.length + GEMINI_MODELS.length + CLAUDE_MODELS.length + CUSTOM_MODELS.length,
-      )
+  it.each(['openai', 'gemini', 'claude'] as const)(
+    '%s has exactly one explicit, proxy-eligible provider base',
+    (provider) => {
+      const bases = MODEL_CATALOG.filter((model) => model.provider === provider && model.providerBase)
+      expect(bases).toHaveLength(1)
+      expect(isProxyEligibleModel(bases[0])).toBe(true)
+      expect(getBaseModelIdForProvider(provider)).toBe(bases[0].id)
+    },
+  )
+
+  it('assigns every feature role exactly once', () => {
+    const roles: ModelRole[] = [
+      'default',
+      'smart-title',
+      'medical-summary',
+      'safety-alerts',
+      'report-interpretation',
+      'followup-suggestions',
+    ]
+    for (const role of roles) {
+      const assigned = MODEL_CATALOG.filter((model) =>
+        (model.roles as readonly ModelRole[]).includes(role))
+      expect(assigned).toHaveLength(1)
+      expect(MODEL_ROLE_IDS[role]).toBe(assigned[0].id)
+    }
+    expect(DEFAULT_MODEL_ID).toBe(MODEL_ROLE_IDS.default)
+  })
+
+  it('uses API surfaces compatible with each provider', () => {
+    const allowed: Record<ModelProvider, readonly string[]> = {
+      openai: ['openai-chat-completions', 'openai-responses'],
+      gemini: ['gemini-generate-content'],
+      claude: ['anthropic-messages'],
+      custom: ['openai-compatible-chat-completions'],
+    }
+    for (const model of MODEL_CATALOG) {
+      expect(allowed[model.provider]).toContain(model.apiSurface)
+      expect(model.access === 'key-only').toBe(modelRequiresUserKey(model))
+      expect(model.access === 'proxy-or-key').toBe(isProxyEligibleModel(model))
+    }
+  })
+
+  it('keeps the requested GPT rollout and Fable availability', () => {
+    expect(GPT_MODELS.map((model) => model.id)).toEqual([
+      'gpt-5.4-nano',
+      'gpt-5.6-luna',
+      'gpt-5.6-terra',
+      'gpt-5.6-sol',
+    ])
+    expect(GPT_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
+      'gpt-5.6-luna',
+      'gpt-5.6-terra',
+      'gpt-5.6-sol',
+    ])
+    expect(getModelDefinition('claude-fable-5')).toMatchObject({
+      provider: 'claude',
+      access: 'key-only',
+      status: 'available',
+      contextLimit: 1_000_000,
+    })
+  })
+})
+
+describe('model catalog selectors', () => {
+  it('recognizes every registered provider id and rejects retired/unknown ids', () => {
+    GPT_MODELS.forEach((model) => expect(isGptModelId(model.id)).toBe(true))
+    GEMINI_MODELS.forEach((model) => expect(isGeminiModelId(model.id)).toBe(true))
+    MODEL_CATALOG.forEach((model) => expect(isModelId(model.id)).toBe(true))
+    expect(isModelId('gpt-5.4-mini')).toBe(false)
+    expect(isModelId('gpt-5.4')).toBe(false)
+    expect(isModelId('gpt-5.5')).toBe(false)
+    expect(() => getModelDefinitionOrThrow('unknown-model')).toThrow('Unsupported AI model')
+  })
+
+  it('resolves profile-scoped custom ids from the custom template', () => {
+    const dynamicId = customOpenAiModelIdForProfile('hospital-a')
+    expect(customOpenAiModelIdForProfile('legacy')).toBe(CUSTOM_OPENAI_MODEL_ID)
+    expect(() => customOpenAiModelIdForProfile('  ')).toThrow('OpenAI-compatible profile id is required')
+    expect(isCustomOpenAiModelId(dynamicId)).toBe(true)
+    expect(isModelId(dynamicId)).toBe(true)
+    expect(openAiCompatibleProfileIdFromModelId(dynamicId)).toBe('hospital-a')
+    expect(getModelDefinition(dynamicId)).toMatchObject({
+      id: dynamicId,
+      provider: 'custom',
+      conversationMode: 'standard',
     })
   })
 
-  describe('DEFAULT_MODEL_ID', () => {
-    it('is a valid Gemini model that passes the isGeminiModelId check', () => {
-      expect(isGeminiModelId(DEFAULT_MODEL_ID)).toBe(true)
-    })
-  })
-
-  describe('isGptModelId', () => {
-    it('returns true for every id in GPT_MODELS', () => {
-      GPT_MODELS.forEach((m) => expect(isGptModelId(m.id)).toBe(true))
-    })
-
-    it('returns false for Gemini ids', () => {
-      GEMINI_MODELS.forEach((m) => expect(isGptModelId(m.id)).toBe(false))
-    })
-
-    it('returns false for unknown / empty strings', () => {
-      expect(isGptModelId('unknown-model')).toBe(false)
-      expect(isGptModelId('')).toBe(false)
-    })
-  })
-
-  describe('isGeminiModelId', () => {
-    it('returns true for every id in GEMINI_MODELS', () => {
-      GEMINI_MODELS.forEach((m) => expect(isGeminiModelId(m.id)).toBe(true))
-    })
-
-    it('returns false for GPT ids', () => {
-      GPT_MODELS.forEach((m) => expect(isGeminiModelId(m.id)).toBe(false))
-    })
-
-    it('returns false for unknown / empty strings', () => {
-      expect(isGeminiModelId('unknown-model')).toBe(false)
-      expect(isGeminiModelId('')).toBe(false)
-    })
-  })
-
-  describe('isModelId', () => {
-    it('returns true for every id in ALL_MODELS (user + internal)', () => {
-      ALL_MODELS.forEach((m) => expect(isModelId(m.id)).toBe(true))
-    })
-
-    it('returns false for unknown / empty strings', () => {
-      expect(isModelId('unknown-model')).toBe(false)
-      expect(isModelId('')).toBe(false)
-      expect(isModelId('random-string')).toBe(false)
-    })
-
-    it('accepts stable per-profile custom ids while preserving the legacy sentinel', () => {
-      const dynamicId = customOpenAiModelIdForProfile('hospital-a')
-
-      expect(customOpenAiModelIdForProfile('legacy')).toBe(CUSTOM_OPENAI_MODEL_ID)
-      expect(() => customOpenAiModelIdForProfile('  ')).toThrow(
-        'OpenAI-compatible profile id is required',
-      )
-      expect(dynamicId).toBe(`${CUSTOM_OPENAI_MODEL_ID}:hospital-a`)
-      expect(isCustomOpenAiModelId(CUSTOM_OPENAI_MODEL_ID)).toBe(true)
-      expect(isCustomOpenAiModelId(dynamicId)).toBe(true)
-      expect(isCustomOpenAiModelId(`${CUSTOM_OPENAI_MODEL_ID}:`)).toBe(false)
-      expect(isModelId(dynamicId)).toBe(true)
-      expect(openAiCompatibleProfileIdFromModelId(CUSTOM_OPENAI_MODEL_ID)).toBe('legacy')
-      expect(openAiCompatibleProfileIdFromModelId(dynamicId)).toBe('hospital-a')
-      expect(openAiCompatibleProfileIdFromModelId('gemini-unknown')).toBeNull()
-    })
-  })
-
-  describe('getModelDefinition', () => {
-    it('returns the matching definition for every known model id', () => {
-      ALL_MODELS.forEach((m) => {
-        const def = getModelDefinition(m.id)
-        expect(def).toBeDefined()
-        // Internal + user list overlap on some ids; getModelDefinition uses
-        // `find` so the FIRST match wins — assert provider matches at least
-        // one entry rather than insisting on exact equality.
-        const candidates = ALL_MODELS.filter((x) => x.id === m.id)
-        expect(candidates.some((c) => c.provider === def!.provider)).toBe(true)
-      })
-    })
-
-    it('returns undefined for unknown ids', () => {
-      expect(getModelDefinition('unknown-model')).toBeUndefined()
-      expect(getModelDefinition('')).toBeUndefined()
-    })
-
-    it('returns custom provider metadata for a dynamic profile id', () => {
-      const dynamicId = customOpenAiModelIdForProfile('hospital-a')
-
-      expect(getModelDefinition(dynamicId)).toMatchObject({
-        id: dynamicId,
-        provider: 'custom',
-      })
-    })
-  })
-
-  describe('Per-model flags', () => {
-    it('at least one GPT model is marked requiresUserKey (BYO-key tier exists)', () => {
-      const byok = GPT_MODELS.find((m) => 'requiresUserKey' in m && m.requiresUserKey)
-      expect(byok).toBeDefined()
-    })
-
-    it('at least one GPT model is NOT marked requiresUserKey (free tier exists)', () => {
-      const free = GPT_MODELS.find((m) => !('requiresUserKey' in m) || !m.requiresUserKey)
-      expect(free).toBeDefined()
-    })
+  it('applies sampling policy without model-name checks', () => {
+    const fixed = MODEL_CATALOG.find((model) => model.temperaturePolicy === 'fixed-one')!
+    const omitted = MODEL_CATALOG.find((model) => model.temperaturePolicy === 'omit')!
+    const passthrough = MODEL_CATALOG.find((model) => model.temperaturePolicy === 'passthrough')!
+    expect(resolveModelTemperature(fixed, 0.2)).toBe(1)
+    expect(resolveModelTemperature(omitted, 0.2)).toBeUndefined()
+    expect(resolveModelTemperature(passthrough, 0.2)).toBe(0.2)
   })
 })

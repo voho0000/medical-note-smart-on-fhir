@@ -44,6 +44,16 @@ function NavigationHarness() {
       >
         Open profile context window
       </button>
+      <button
+        type="button"
+        onClick={() => setActiveTab(
+          'settings',
+          'ai',
+          'openai-compatible-add-profile',
+        )}
+      >
+        Add custom model
+      </button>
       <button type="button" onClick={clearSettingsTarget}>Clear target</button>
     </div>
   )
@@ -71,6 +81,12 @@ describe('RightPanelProvider settings navigation target', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open profile context window' }))
     expect(screen.getByTestId('settings-target')).toHaveTextContent(
       'openai-compatible-context-window:profile-2',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add custom model' }))
+    expect(screen.getByTestId('settings-tab')).toHaveTextContent('ai')
+    expect(screen.getByTestId('settings-target')).toHaveTextContent(
+      'openai-compatible-add-profile',
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear target' }))

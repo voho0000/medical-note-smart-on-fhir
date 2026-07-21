@@ -1,14 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
-import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { useChatStore } from '@/src/application/stores/chat.store'
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
 import { useUpdateSessionMutation } from './use-chat-sessions-query.hook'
 import { useFhirContext } from './use-fhir-context.hook'
 import { getChatSessionRepository } from '@/src/application/composition.chat'
-import { GenerateSmartTitleUseCase } from '@/src/core/use-cases/chat/generate-smart-title.use-case'
-import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
+import {
+  captureAiRuntimeConfig,
+  createSmartTitleUseCase,
+} from '@/src/application/composition.ai'
 
 const repository = getChatSessionRepository()
 
@@ -17,7 +18,6 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
   const { user } = useAuth()
   const { locale } = useLanguage()
   const { patientId, fhirServerUrl } = useFhirContext()
-  const apiKey = useAiConfigStore(state => state.apiKey)
   const messages = useChatStore(state => state.messages)
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const setIsTitleGenerating = useChatHistoryStore(state => state.setIsTitleGenerating)
@@ -34,7 +34,53 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
       prevMessageCountRef.current = messages.length
       prevSessionIdRef.current = currentSessionId
     }
-  }, [currentSessionId, messages.length])
+  }, [currentSessionId, enabled, messages.length])
+
+  const generateSmartTitle = useCallback(async (
+    sessionId: string,
+    userId: string,
+    userMessage: string,
+    assistantMessage: string,
+    locale: string,
+  ) => {
+    try {
+      setIsTitleGenerating(true)
+
+      const useCase = createSmartTitleUseCase(captureAiRuntimeConfig())
+      const smartTitle = await useCase.execute({
+        userMessage,
+        assistantMessage,
+        locale,
+      })
+
+      // Give the existing auto-save a chance to create the Firestore document.
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      const currentId = useChatHistoryStore.getState().currentSessionId
+      if (currentId !== sessionId) {
+        console.warn('[Smart Title] Session changed during generation, skipping update')
+        return
+      }
+
+      try {
+        await repository.updateTitle(sessionId, userId, smartTitle)
+      } catch (firestoreError: any) {
+        if (firestoreError?.code === 'not-found' || firestoreError?.message?.includes('No document to update')) {
+          console.warn('[Smart Title] Document not yet saved, will update on next auto-save')
+        } else {
+          throw firestoreError
+        }
+      }
+
+      if (patientId && fhirServerUrl) {
+        updateSession(userId, patientId, fhirServerUrl, sessionId, { title: smartTitle })
+      }
+    } catch (error) {
+      console.error('[Smart Title] Failed to generate or update title:', error)
+    } finally {
+      setIsTitleGenerating(false)
+    }
+  }, [fhirServerUrl, patientId, setIsTitleGenerating, updateSession])
 
   useEffect(() => {
     // Only generate title once per session
@@ -79,67 +125,8 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
       userMessage.content,
       assistantMessage.content,
       locale,
-      apiKey
     )
-  }, [enabled, messages, currentSessionId, user?.uid, locale, apiKey])
-
-  const generateSmartTitle = async (
-    sessionId: string,
-    userId: string,
-    userMessage: string,
-    assistantMessage: string,
-    locale: string,
-    apiKey: string | null
-  ) => {
-    try {
-      // Set generating state to true
-      setIsTitleGenerating(true)
-      
-      // Composition happens here (application layer): OpenAiService falls
-      // back to the Firebase proxy when no key is set
-      const useCase = new GenerateSmartTitleUseCase(new OpenAiService(apiKey))
-      const smartTitle = await useCase.execute({
-        userMessage,
-        assistantMessage,
-        locale,
-      })
-      
-      // Wait a bit to ensure auto-save has completed
-      // This prevents "No document to update" error
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Verify we're still on the same session before updating
-      // This prevents updating the wrong session if user switched during generation
-      const currentId = useChatHistoryStore.getState().currentSessionId
-      if (currentId !== sessionId) {
-        console.warn('[Smart Title] Session changed during generation, skipping update')
-        return
-      }
-      
-      // Update Firestore - check if document exists first
-      try {
-        await repository.updateTitle(sessionId, userId, smartTitle)
-      } catch (firestoreError: any) {
-        // If document doesn't exist yet, just update React Query cache
-        // The title will be saved when auto-save runs next time
-        if (firestoreError?.code === 'not-found' || firestoreError?.message?.includes('No document to update')) {
-          console.warn('[Smart Title] Document not yet saved, will update on next auto-save')
-        } else {
-          throw firestoreError
-        }
-      }
-      
-      // Update React Query cache for immediate UI update
-      if (patientId && fhirServerUrl) {
-        updateSession(userId, patientId, fhirServerUrl, sessionId, { title: smartTitle })
-      }
-    } catch (error) {
-      console.error('[Smart Title] Failed to generate or update title:', error)
-    } finally {
-      // Always reset generating state
-      setIsTitleGenerating(false)
-    }
-  }
+  }, [enabled, generateSmartTitle, messages, currentSessionId, user?.uid, locale])
 
   return {
     // Expose nothing for now, this hook works automatically

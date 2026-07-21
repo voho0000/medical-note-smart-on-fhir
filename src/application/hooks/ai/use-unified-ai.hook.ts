@@ -6,9 +6,11 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
-import { AiService } from '@/src/infrastructure/ai/services/ai.service'
-import { QueryAiUseCase } from '@/src/core/use-cases/ai/query-ai.use-case'
-import { StreamOrchestrator } from '@/src/infrastructure/ai/streaming/stream-orchestrator'
+import {
+  captureAiRuntimeConfig,
+  createAiStreamOrchestrator,
+  createQueryAiUseCase,
+} from '@/src/application/composition.ai'
 import { getUserErrorMessage } from '@/src/core/errors'
 import {
   DEFAULT_MODEL_ID,
@@ -74,7 +76,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
 
   // Cache stream orchestrator instance
   const streamOrchestrator = useMemo(
-    () => new StreamOrchestrator(),
+    () => createAiStreamOrchestrator(),
     []
   )
 
@@ -117,7 +119,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       setIsLoading(true)
       setError(null)
       const modelId = queryOptions?.modelId || options.defaultModel || defaultModel
-      const liveConfig = useAiConfigStore.getState()
+      const liveConfig = captureAiRuntimeConfig()
       const openAiCompatible = resolveOpenAiCompatibleProfile(
         modelId,
         liveConfig.openAiCompatibleProfiles,
@@ -130,12 +132,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       })
 
       try {
-        const queryUseCase = new QueryAiUseCase(new AiService(
-          liveConfig.apiKey,
-          liveConfig.geminiKey,
-          liveConfig.claudeKey,
-          liveConfig.openAiCompatibleProfiles,
-        ))
+        const queryUseCase = createQueryAiUseCase(liveConfig)
         const result = await queryUseCase.execute({
           messages,
           modelId,
@@ -169,7 +166,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       setIsLoading(true)
       setError(null)
       const modelId = streamOptions?.modelId || options.defaultModel || defaultModel
-      const liveConfig = useAiConfigStore.getState()
+      const liveConfig = captureAiRuntimeConfig()
       const openAiCompatible = resolveOpenAiCompatibleProfile(
         modelId,
         liveConfig.openAiCompatibleProfiles,
@@ -183,9 +180,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       const apiKey = apiKeyForModel(
         modelId,
         {
-          openAiKey: liveConfig.apiKey,
-          geminiKey: liveConfig.geminiKey,
-          claudeKey: liveConfig.claudeKey,
+          openAiKey: liveConfig.openAiApiKey,
+          geminiKey: liveConfig.geminiApiKey,
+          claudeKey: liveConfig.claudeApiKey,
         },
         openAiCompatible,
       )
@@ -208,6 +205,9 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           apiKey,
           openAiCompatible,
           signal: abortController.signal,
+          temperature: streamOptions?.temperature,
+          maxTokens: streamOptions?.maxTokens,
+          responseFormat: streamOptions?.responseFormat,
           onChunk: (chunk: string) => {
             fullText = chunk
             streamOptions?.onChunk?.(chunk)

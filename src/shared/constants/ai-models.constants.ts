@@ -1,69 +1,329 @@
-export type ModelProvider = "openai" | "gemini" | "claude" | "custom"
+export type ModelProvider = 'openai' | 'gemini' | 'claude' | 'custom'
 
+/** How a model is allowed to obtain credentials at runtime. */
+export type ModelAccess = 'proxy-or-key' | 'key-only' | 'custom-profile'
+
+/** Concrete upstream API contract. Provider and API surface are intentionally
+ * separate: OpenAI models can use either Chat Completions or Responses. */
+export type ModelApiSurface =
+  | 'openai-chat-completions'
+  | 'openai-responses'
+  | 'gemini-generate-content'
+  | 'anthropic-messages'
+  | 'openai-compatible-chat-completions'
+
+/** Sampling rules that must remain identical in query and streaming paths. */
+export type ModelTemperaturePolicy = 'passthrough' | 'fixed-one' | 'omit'
+
+/** Deep models receive Agent tools; standard models receive no tool schema. */
+export type ModelConversationMode = 'deep-agent' | 'standard'
+
+export type ModelRole =
+  | 'default'
+  | 'smart-title'
+  | 'medical-summary'
+  | 'safety-alerts'
+  | 'report-interpretation'
+  | 'followup-suggestions'
+
+export type ModelStatus = 'available' | 'disabled'
+export type ModelLocale = 'en' | 'zh-TW'
+
+/**
+ * The single source of truth for one model.
+ *
+ * Every behavior that used to be inferred from an id prefix or duplicated in
+ * a provider list is explicit here. Adding or replacing a model therefore does
+ * not require a new switch/regex in UI or infrastructure code.
+ */
 export interface ModelDefinition {
   id: string
   label: string
+  descriptions: Readonly<Record<ModelLocale, string>>
   provider: ModelProvider
-  // Conservative input-context budget (tokens) used by context-window
-  // truncation (token-estimator/context-window-manager). REQUIRED so a new
-  // model can never silently fall back to a tiny default — keeping this here
-  // (instead of a separate CONTEXT_LIMITS table) is what prevents the two
-  // lists from drifting apart.
   contextLimit: number
-  requiresUserKey?: boolean
-  disableAgentMode?: boolean // Models with known function calling issues
-  disabled?: boolean // Temporarily not selectable (shown locked) — e.g. not yet available
+  access: ModelAccess
+  apiSurface: ModelApiSurface
+  temperaturePolicy: ModelTemperaturePolicy
+  conversationMode: ModelConversationMode
+  status: ModelStatus
+  selectable: boolean
+  providerBase: boolean
+  autoRunEligible: boolean
+  roles: readonly ModelRole[]
 }
 
-// Internal models for AI title generation (not shown to users)
-export const INTERNAL_MODELS = [
-  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai" as const, contextLimit: 120000 },
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini" as const, contextLimit: 900000 },
-] as const satisfies readonly ModelDefinition[]
-
-// User-selectable models. Within each provider, an entry WITHOUT
-// `requiresUserKey` is free — routable through the owner-funded proxy; entries
-// flagged `requiresUserKey` need the user's own key. The first entry is always
-// proxy-eligible and acts as the provider's free base (getBaseModelIdForProvider).
-// Gemini intentionally exposes two free tiers (Flash-Lite + Flash Preview); the
-// proxy's own allowlist (functions: ALLOWED_GEMINI_MODEL_IDS) must match.
-export const GPT_MODELS = [
-  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano", provider: "openai", contextLimit: 120000 },
-  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", provider: "openai", requiresUserKey: true, contextLimit: 120000 },
-  { id: "gpt-5.4", label: "GPT-5.4", provider: "openai", requiresUserKey: true, contextLimit: 120000 },
-  { id: "gpt-5.5", label: "GPT-5.5", provider: "openai", requiresUserKey: true, contextLimit: 120000 },
-] as const satisfies readonly ModelDefinition[]
-
-export const GEMINI_MODELS = [
-  { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", provider: "gemini", contextLimit: 900000 },
-  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", provider: "gemini", contextLimit: 900000 },
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", provider: "gemini", requiresUserKey: true, contextLimit: 900000 },
-  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", provider: "gemini", requiresUserKey: true, contextLimit: 1800000 },
-] as const satisfies readonly ModelDefinition[]
-
-export const CLAUDE_MODELS = [
-  { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", provider: "claude", contextLimit: 180000 },
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "claude", requiresUserKey: true, contextLimit: 180000 },
-  { id: "claude-opus-4-8", label: "Claude Opus 4.8", provider: "claude", requiresUserKey: true, contextLimit: 180000 },
-  { id: "claude-fable-5", label: "Claude Fable 5", provider: "claude", requiresUserKey: true, disabled: true, contextLimit: 180000 },
-] as const satisfies readonly ModelDefinition[]
+/** Stable logical id for browser-configured OpenAI-compatible endpoints. */
+export const CUSTOM_OPENAI_MODEL_ID = 'openai-compatible-custom' as const
 
 /**
- * Legacy logical id for the originally released browser-configured endpoint.
- * New profiles derive a stable id from this sentinel plus their profile id;
- * the actual upstream model name continues to live only in ai-config.store.
+ * Canonical model manifest. Each id appears exactly once, even when the same
+ * model is both user-selectable and used by an internal background task.
+ *
+ * Firebase proxy allowlists remain an independent backend security boundary;
+ * any `proxy-or-key` change here must also be intentionally approved there.
  */
-export const CUSTOM_OPENAI_MODEL_ID = "openai-compatible-custom" as const
+export const MODEL_CATALOG = [
+  {
+    id: 'gpt-5.4-nano',
+    label: 'GPT-5.4 Nano',
+    descriptions: {
+      en: 'Fastest responses, budget friendly',
+      'zh-TW': '極速回應，經濟實惠',
+    },
+    provider: 'openai',
+    contextLimit: 120_000,
+    access: 'proxy-or-key',
+    apiSurface: 'openai-chat-completions',
+    temperaturePolicy: 'fixed-one',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: true,
+    autoRunEligible: true,
+    roles: ['smart-title'],
+  },
+  {
+    id: 'gpt-5.6-luna',
+    label: 'GPT-5.6 Luna',
+    descriptions: {
+      en: 'Efficient for high-volume workloads',
+      'zh-TW': '適合高用量、重視成本效率的任務',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'gpt-5.6-terra',
+    label: 'GPT-5.6 Terra',
+    descriptions: {
+      en: 'Balanced intelligence and cost',
+      'zh-TW': '平衡智慧能力與成本',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'gpt-5.6-sol',
+    label: 'GPT-5.6 Sol',
+    descriptions: {
+      en: 'Flagship model for complex professional work',
+      'zh-TW': '適合複雜專業工作的旗艦模型',
+    },
+    provider: 'openai',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'openai-responses',
+    temperaturePolicy: 'omit',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash-Lite',
+    descriptions: {
+      en: 'Fastest responses, budget friendly',
+      'zh-TW': '極速回應，經濟實惠',
+    },
+    provider: 'gemini',
+    contextLimit: 900_000,
+    access: 'proxy-or-key',
+    apiSurface: 'gemini-generate-content',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: true,
+    autoRunEligible: true,
+    roles: [
+      'medical-summary',
+      'safety-alerts',
+      'report-interpretation',
+      'followup-suggestions',
+    ],
+  },
+  {
+    id: 'gemini-3-flash-preview',
+    label: 'Gemini 3 Flash Preview',
+    descriptions: {
+      en: 'Fast and accurate',
+      'zh-TW': '快速準確',
+    },
+    provider: 'gemini',
+    contextLimit: 900_000,
+    access: 'proxy-or-key',
+    apiSurface: 'gemini-generate-content',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: false,
+    roles: ['default'],
+  },
+  {
+    id: 'gemini-3.5-flash',
+    label: 'Gemini 3.5 Flash',
+    descriptions: {
+      en: 'Next-gen fast model',
+      'zh-TW': '新一代快速模型',
+    },
+    provider: 'gemini',
+    contextLimit: 900_000,
+    access: 'key-only',
+    apiSurface: 'gemini-generate-content',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'gemini-3.1-pro-preview',
+    label: 'Gemini 3.1 Pro Preview',
+    descriptions: {
+      en: 'Newest top-tier model',
+      'zh-TW': '最新頂級模型',
+    },
+    provider: 'gemini',
+    contextLimit: 1_800_000,
+    access: 'key-only',
+    apiSurface: 'gemini-generate-content',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'claude-haiku-4-5-20251001',
+    label: 'Claude Haiku 4.5',
+    descriptions: {
+      en: 'Fastest responses, budget friendly',
+      'zh-TW': '極速回應，經濟實惠',
+    },
+    provider: 'claude',
+    contextLimit: 180_000,
+    access: 'proxy-or-key',
+    apiSurface: 'anthropic-messages',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: true,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    label: 'Claude Sonnet 4.6',
+    descriptions: {
+      en: 'Balanced performance and quality',
+      'zh-TW': '平衡效能與品質',
+    },
+    provider: 'claude',
+    contextLimit: 180_000,
+    access: 'key-only',
+    apiSurface: 'anthropic-messages',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'claude-opus-4-8',
+    label: 'Claude Opus 4.8',
+    descriptions: {
+      en: 'Deep reasoning for complex tasks',
+      'zh-TW': '深度推理，複雜任務',
+    },
+    provider: 'claude',
+    contextLimit: 180_000,
+    access: 'key-only',
+    apiSurface: 'anthropic-messages',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: 'claude-fable-5',
+    label: 'Claude Fable 5',
+    descriptions: {
+      en: 'Newest top-tier model',
+      'zh-TW': '最新頂級模型',
+    },
+    provider: 'claude',
+    contextLimit: 1_000_000,
+    access: 'key-only',
+    apiSurface: 'anthropic-messages',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'deep-agent',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+  {
+    id: CUSTOM_OPENAI_MODEL_ID,
+    label: 'OpenAI-compatible',
+    descriptions: {
+      en: 'Connect a hospital, local, or user-owned model',
+      'zh-TW': '連接院內、地端或使用者自己的模型',
+    },
+    provider: 'custom',
+    // Conservative floor for local models whose context size is unknown.
+    contextLimit: 15_000,
+    access: 'custom-profile',
+    apiSurface: 'openai-compatible-chat-completions',
+    temperaturePolicy: 'passthrough',
+    conversationMode: 'standard',
+    status: 'available',
+    selectable: true,
+    providerBase: false,
+    autoRunEligible: true,
+    roles: [],
+  },
+] as const satisfies readonly ModelDefinition[]
+
+type CatalogModel = (typeof MODEL_CATALOG)[number]
+type CatalogModelForProvider<P extends ModelProvider> = Extract<CatalogModel, { provider: P }>
+
 const CUSTOM_OPENAI_MODEL_ID_PREFIX = `${CUSTOM_OPENAI_MODEL_ID}:` as const
 
-/**
- * Logical model id for one browser-owned OpenAI-compatible profile.
- *
- * The originally released single profile keeps the bare id so existing model
- * preferences continue to work. New profiles carry their stable, non-secret
- * profile id in the logical model id; the upstream model name remains in the
- * encrypted browser profile and is never used as preference identity.
- */
 export type CustomOpenAiModelId =
   | typeof CUSTOM_OPENAI_MODEL_ID
   | `${typeof CUSTOM_OPENAI_MODEL_ID}:${string}`
@@ -89,38 +349,40 @@ export function openAiCompatibleProfileIdFromModelId(modelId: string): string | 
   return modelId.slice(CUSTOM_OPENAI_MODEL_ID_PREFIX.length)
 }
 
-export const CUSTOM_MODELS = [
-  {
-    id: CUSTOM_OPENAI_MODEL_ID,
-    label: "OpenAI-compatible",
-    provider: "custom",
-    // Conservative floor for local models whose context size is unknown.
-    contextLimit: 15000,
-  },
-] as const satisfies readonly ModelDefinition[]
+function selectableModelsFor<P extends ModelProvider>(provider: P) {
+  return MODEL_CATALOG.filter(
+    (model) => model.selectable && model.provider === provider,
+  ) as unknown as readonly CatalogModelForProvider<P>[]
+}
 
-export type GptModelId = (typeof GPT_MODELS)[number]["id"]
-export type GeminiModelId = (typeof GEMINI_MODELS)[number]["id"]
-export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]["id"]
+export const GPT_MODELS = selectableModelsFor('openai')
+export const GEMINI_MODELS = selectableModelsFor('gemini')
+export const CLAUDE_MODELS = selectableModelsFor('claude')
+export const CUSTOM_MODELS = selectableModelsFor('custom')
+export const INTERNAL_MODELS = MODEL_CATALOG.filter((model) =>
+  model.roles.some((role) => role !== 'default'),
+)
+
+export type GptModelId = (typeof GPT_MODELS)[number]['id']
+export type GeminiModelId = (typeof GEMINI_MODELS)[number]['id']
+export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]['id']
 export type CustomModelId = CustomOpenAiModelId
 export type ModelId = GptModelId | GeminiModelId | ClaudeModelId | CustomModelId
 
-export const DEFAULT_MODEL_ID: GeminiModelId = "gemini-3-flash-preview"
+/** Unique catalog, including user-selectable and internally assigned models. */
+export const ALL_MODELS: readonly ModelDefinition[] = MODEL_CATALOG
+
+const MODEL_BY_ID = new Map<string, ModelDefinition>(
+  MODEL_CATALOG.map((model) => [model.id, model]),
+)
+if (MODEL_BY_ID.size !== MODEL_CATALOG.length) {
+  throw new Error('MODEL_CATALOG contains duplicate model ids')
+}
 
 export const GPT_MODEL_IDS = new Set<GptModelId>(GPT_MODELS.map((model) => model.id))
 export const GEMINI_MODEL_IDS = new Set<GeminiModelId>(GEMINI_MODELS.map((model) => model.id))
 export const CLAUDE_MODEL_IDS = new Set<ClaudeModelId>(CLAUDE_MODELS.map((model) => model.id))
-
-// All models including internal ones (for validation and lookups)
-export const ALL_MODELS: readonly ModelDefinition[] = [
-  ...INTERNAL_MODELS,
-  ...GPT_MODELS,
-  ...GEMINI_MODELS,
-  ...CLAUDE_MODELS,
-  ...CUSTOM_MODELS,
-]
-const ALL_MODEL_ID_LIST = ALL_MODELS.map((model) => model.id) as ModelId[]
-export const ALL_MODEL_IDS = new Set<ModelId>(ALL_MODEL_ID_LIST)
+export const ALL_MODEL_IDS = new Set<ModelId>(MODEL_CATALOG.map((model) => model.id) as ModelId[])
 
 export function isGptModelId(value: string): value is GptModelId {
   return GPT_MODEL_IDS.has(value as GptModelId)
@@ -140,80 +402,102 @@ export function isModelId(value: string): value is ModelId {
 
 export function getModelDefinition(modelId: string): ModelDefinition | undefined {
   if (isCustomOpenAiModelId(modelId)) {
-    return modelId === CUSTOM_OPENAI_MODEL_ID
-      ? CUSTOM_MODELS[0]
-      : { ...CUSTOM_MODELS[0], id: modelId }
+    const template = MODEL_BY_ID.get(CUSTOM_OPENAI_MODEL_ID)
+    return template && modelId !== CUSTOM_OPENAI_MODEL_ID
+      ? { ...template, id: modelId }
+      : template
   }
-  return ALL_MODELS.find((model) => model.id === modelId)
+  return MODEL_BY_ID.get(modelId)
 }
 
-// The base (proxy-eligible, no-user-key) model for a provider — its first
-// non-key, non-disabled entry. Used to downgrade off a premium model when its
-// user key is removed, keeping the user on the same provider's free tier.
-const PROVIDER_MODELS: Record<ModelProvider, readonly ModelDefinition[]> = {
-  openai: GPT_MODELS,
-  gemini: GEMINI_MODELS,
-  claude: CLAUDE_MODELS,
-  custom: CUSTOM_MODELS,
+/** Runtime boundary: unknown/retired ids must fail before any network call. */
+export function getModelDefinitionOrThrow(modelId: string): ModelDefinition {
+  const definition = getModelDefinition(modelId)
+  if (!definition) throw new Error(`Unsupported AI model: ${modelId || '(empty)'}`)
+  if (definition.status === 'disabled') throw new Error(`AI model is unavailable: ${modelId}`)
+  return definition
+}
+
+function modelIdForRole(role: ModelRole): string {
+  const matches = MODEL_CATALOG.filter((model) =>
+    (model.roles as readonly ModelRole[]).includes(role),
+  )
+  if (matches.length !== 1) {
+    throw new Error(`AI model role "${role}" must be assigned exactly once`)
+  }
+  return matches[0].id
+}
+
+/** Feature defaults are derived from roles on the manifest entries. */
+export const MODEL_ROLE_IDS: Readonly<Record<ModelRole, string>> = Object.freeze({
+  default: modelIdForRole('default'),
+  'smart-title': modelIdForRole('smart-title'),
+  'medical-summary': modelIdForRole('medical-summary'),
+  'safety-alerts': modelIdForRole('safety-alerts'),
+  'report-interpretation': modelIdForRole('report-interpretation'),
+  'followup-suggestions': modelIdForRole('followup-suggestions'),
+})
+
+export const DEFAULT_MODEL_ID = MODEL_ROLE_IDS.default as GeminiModelId
+export const SMART_TITLE_MODEL_ID = MODEL_ROLE_IDS['smart-title']
+
+export function modelRequiresUserKey(model: string | ModelDefinition): boolean {
+  const definition = typeof model === 'string' ? getModelDefinition(model) : model
+  return definition?.access === 'key-only'
+}
+
+export function isProxyEligibleModel(model: string | ModelDefinition): boolean {
+  const definition = typeof model === 'string' ? getModelDefinition(model) : model
+  return definition?.access === 'proxy-or-key' && definition.status === 'available'
+}
+
+export function modelUsesStandardChat(model: string | ModelDefinition): boolean {
+  const definition = typeof model === 'string' ? getModelDefinition(model) : model
+  return definition?.conversationMode === 'standard'
+}
+
+export function modelSupportsAgentTools(model: string | ModelDefinition): boolean {
+  const definition = typeof model === 'string' ? getModelDefinition(model) : model
+  return definition?.conversationMode === 'deep-agent'
+}
+
+/** Apply the model's sampling contract without inspecting its id. */
+export function resolveModelTemperature(
+  model: string | ModelDefinition,
+  requested?: number,
+): number | undefined {
+  const definition = typeof model === 'string'
+    ? getModelDefinitionOrThrow(model)
+    : model
+  if (definition.temperaturePolicy === 'fixed-one') return 1
+  if (definition.temperaturePolicy === 'omit') return undefined
+  return requested
 }
 
 export function getBaseModelIdForProvider(provider: ModelProvider): string | undefined {
-  return PROVIDER_MODELS[provider].find((m) => !m.requiresUserKey && !m.disabled)?.id
+  return MODEL_CATALOG.find((model) =>
+    model.provider === provider &&
+    model.providerBase &&
+    model.status === 'available' &&
+    model.access === 'proxy-or-key',
+  )?.id
 }
 
-/**
- * Whether a model may AUTO-run (auto-generate summary / auto-scan safety) rather
- * than requiring an explicit 產生/掃描 press. Eligible = the free BASE of its
- * provider (the cheap default the user lands on: nano / flash-lite / haiku) OR a
- * model paid for with the user's OWN key. Free NON-base proxy models (e.g.
- * gemini-3-flash-preview) are NOT eligible, so merely browsing the model picker
- * doesn't silently spend the visitor's free daily quota (user directive
- * 2026-07-07). Falls back to false for unknown ids.
- */
 export function isAutoRunEligibleModel(modelId: string): boolean {
-  const def = getModelDefinition(modelId)
-  if (!def) return false
-  // A configured custom endpoint is the user's/institution's own resource; it
-  // does not consume the owner-funded proxy quota. Runtime readiness is gated
-  // separately before an auto-run can start.
-  if (def.provider === 'custom') return true
-  if (def.requiresUserKey) return true
-  return modelId === getBaseModelIdForProvider(def.provider)
+  return getModelDefinition(modelId)?.autoRunEligible === true
 }
 
-/**
- * Resolve the model an AI call should ACTUALLY run on. If the picked model needs
- * the user's own key (`requiresUserKey`) but no key for its provider is present,
- * downgrade to the free, proxy-eligible default model (`fallback`, defaulting to
- * DEFAULT_MODEL_ID) — so a stranded premium pick never dead-ends with "API key is
- * missing". This covers a model that USED to be free but became key-gated (a
- * lineup change), and a default the user simply has no key for. Unknown ids fall
- * back to `fallback` too. Callers that want a different landing model (e.g. a
- * background helper pinned to a cheaper tier) pass their own `fallback`.
- *
- * `hasProviderKey` is whether the user has a key for THIS model's provider.
- */
 export function gateModel(
   modelId: string,
   hasProviderKey: boolean,
   fallback: string = DEFAULT_MODEL_ID,
 ): string {
-  const def = getModelDefinition(modelId)
-  if (!def) return fallback
-  if (def.requiresUserKey && !hasProviderKey) {
-    return fallback
-  }
+  const definition = getModelDefinition(modelId)
+  if (!definition || definition.status === 'disabled') return fallback
+  if (modelRequiresUserKey(definition) && !hasProviderKey) return fallback
   return modelId
 }
 
-/**
- * Convenience wrapper over {@link gateModel} for callers that hold the user's
- * three provider keys rather than a single "has a key for this provider" bool —
- * e.g. the deep-mode agent path (useAgentChat), which runs its own streamText
- * loop and so can't lean on the ai-sdk-stream adapter's gate. Picks the key for
- * THIS model's provider, then gates. A key for a different provider never keeps a
- * stranded pick alive (an Opus pick needs a Claude key, not a Gemini one).
- */
 export function gateModelForKeys(
   modelId: string,
   keys: {
@@ -224,27 +508,26 @@ export function gateModelForKeys(
   },
   fallback: string = DEFAULT_MODEL_ID,
 ): string {
-  const provider = getModelDefinition(modelId)?.provider ?? 'openai'
-  // Custom endpoints fail closed when their browser profile is unavailable.
-  // Never silently turn a persisted hospital-model choice into an owner-proxy
-  // request; runtime/UI readiness checks surface the missing configuration.
-  if (provider === 'custom') return modelId
+  const definition = getModelDefinition(modelId)
+  if (!definition || definition.status === 'disabled') return fallback
+  // Custom endpoints fail closed at their runtime/profile boundary and never
+  // silently turn into an owner-funded cloud request.
+  if (definition.provider === 'custom') return modelId
   const key =
-    provider === 'gemini' ? keys.geminiKey :
-    provider === 'claude' ? keys.claudeKey :
+    definition.provider === 'gemini' ? keys.geminiKey :
+    definition.provider === 'claude' ? keys.claudeKey :
     keys.openAiKey
-  return gateModel(modelId, !!key, fallback)
+  return gateModel(modelId, Boolean(key), fallback)
 }
 
 /**
- * Agent-only consumers must never run a model with known tool-calling issues.
- * The picker prevents new selections; this runtime gate also covers a model
- * preference persisted before the model was marked incompatible.
+ * Retained for callers that require a deep-agent model. Standard-chat models
+ * remain valid because the chat runtime deliberately switches execution mode.
  */
 export function gateModelForAgentSupport(
   modelId: string,
   fallback: string = DEFAULT_MODEL_ID,
 ): string {
   const definition = getModelDefinition(modelId)
-  return !definition || definition.disableAgentMode ? fallback : modelId
+  return !definition || definition.status === 'disabled' ? fallback : modelId
 }

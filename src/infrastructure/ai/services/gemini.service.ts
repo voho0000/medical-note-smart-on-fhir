@@ -2,7 +2,12 @@
 import type { AiQueryRequest, AiQueryResponse } from '@/src/core/entities/ai.entity'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getProxyAuthHeaders } from '../utils/proxy-auth'
-import { getModelDefinition } from '@/src/shared/constants/ai-models.constants'
+import {
+  getModelDefinitionOrThrow,
+  isProxyEligibleModel,
+  modelRequiresUserKey,
+  resolveModelTemperature,
+} from '@/src/shared/constants/ai-models.constants'
 
 export class GeminiService {
   constructor(private apiKey: string | null = null) {}
@@ -16,11 +21,16 @@ export class GeminiService {
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
-    const modelDef = getModelDefinition(request.modelId)
-    const shouldUseProxy = !this.apiKey && ENV_CONFIG.hasGeminiProxy
+    const modelDef = getModelDefinitionOrThrow(request.modelId)
+    if (modelDef.provider !== 'gemini') {
+      throw new Error(`Model ${request.modelId} is not a Gemini model`)
+    }
+    const shouldUseProxy = !this.apiKey && ENV_CONFIG.hasGeminiProxy && isProxyEligibleModel(modelDef)
 
     if (!shouldUseProxy && !this.apiKey) {
-      throw new Error('Gemini API key is required for this model')
+      throw new Error(modelRequiresUserKey(modelDef)
+        ? 'This model requires a personal Gemini API key'
+        : 'Gemini API key or proxy is required for this model')
     }
 
     // Use the absolute Firebase proxy URL (NEXT_PUBLIC_GEMINI_URL), consistent
@@ -38,8 +48,9 @@ export class GeminiService {
       messages: request.messages,
     }
 
-    if (request.temperature !== undefined) {
-      body.temperature = request.temperature
+    const temperature = resolveModelTemperature(modelDef, request.temperature)
+    if (temperature !== undefined) {
+      body.temperature = temperature
     }
 
     // Best-effort JSON mode (Phase 2.2). Proxies may ignore it; callers still
@@ -48,6 +59,12 @@ export class GeminiService {
       body.generationConfig = {
         ...(body.generationConfig as Record<string, unknown> | undefined),
         responseMimeType: 'application/json',
+      }
+    }
+    if (request.maxTokens !== undefined) {
+      body.generationConfig = {
+        ...(body.generationConfig as Record<string, unknown> | undefined),
+        maxOutputTokens: request.maxTokens,
       }
     }
 

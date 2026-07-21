@@ -13,11 +13,12 @@ import {
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
+import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 
 // Gemini Flash-Lite won the head-to-head eval (clean JSON, caught all risk
 // categories, fast, cheap, 900K context for big bundles) — pin it so this
 // background scan doesn't ride the user's possibly-slow chat model (e.g. nano).
-export const SAFETY_ALERTS_MODEL_ID = 'gemini-3.1-flash-lite'
+export const SAFETY_ALERTS_MODEL_ID = MODEL_ROLE_IDS['safety-alerts']
 
 const SCHEMA_HINT =
   '{"scannedCount": <number of records scanned>, "alerts": [{' +

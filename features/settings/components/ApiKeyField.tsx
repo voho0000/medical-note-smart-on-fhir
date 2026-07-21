@@ -24,7 +24,11 @@ import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
 import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
 import { normalizeOpenAiCompatibleTransport } from "@/src/shared/types/openai-compatible.types"
-import { getModelDefinition, type ModelProvider } from "@/src/shared/constants/ai-models.constants"
+import {
+  getModelDefinition,
+  modelRequiresUserKey,
+  type ModelProvider,
+} from "@/src/shared/constants/ai-models.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
 import {
   Accordion,
@@ -44,6 +48,7 @@ import { ApiKeyInput } from "./ApiKeyInput"
 import { AuthStatus } from "@/features/auth"
 import { OpenAiCompatibleSettings } from "./OpenAiCompatibleSettings"
 import {
+  isOpenAiCompatibleAddProfileTarget,
   isOpenAiCompatibleContextWindowTarget,
   type SettingsNavigationTarget,
 } from "@/src/application/providers/right-panel.provider"
@@ -235,7 +240,10 @@ export function ModelAndKeySettings({
   }, [])
 
   useEffect(() => {
-    if (!isOpenAiCompatibleContextWindowTarget(settingsTarget)) return
+    if (
+      !isOpenAiCompatibleContextWindowTarget(settingsTarget) &&
+      !isOpenAiCompatibleAddProfileTarget(settingsTarget)
+    ) return
     sectionTouchedRef.current = true
     // A navigation intent is external state; reveal its owning disclosure.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -265,7 +273,7 @@ export function ModelAndKeySettings({
     ]
     const strandsAPick = prefsInUse.some((id) => {
       const def = getModelDefinition(id)
-      return def?.provider === provider && def.requiresUserKey
+      return def?.provider === provider && modelRequiresUserKey(def)
     })
     if (strandsAPick) toast.info(t.settings.modelDowngradedToFree)
   }

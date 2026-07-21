@@ -1,5 +1,6 @@
 import type { IAiService } from '@/src/core/interfaces/services/ai.service.interface'
 import { logger } from '@/src/shared/services/logger.service'
+import { SMART_TITLE_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
 
 const titleLogger = logger.scope('AI Title')
 
@@ -27,13 +28,13 @@ export class GenerateSmartTitleUseCase {
     
     try {
       const response = await this.aiService.query({
-        modelId: 'gpt-5-nano',
+        modelId: SMART_TITLE_MODEL_ID,
         messages: [{
           role: 'user',
           content: prompt
         }],
         // Note: temperature is omitted to use default value (1)
-        // Firebase proxy only supports temperature = 1 for gpt-5-nano
+        // The manifest owns this model's sampling policy.
       })
 
       const generatedTitle = response.text?.trim()

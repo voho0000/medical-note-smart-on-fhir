@@ -32,6 +32,10 @@ const config = [
   // already guards (or that needs a dedicated cleanup pass) is downgraded to
   // warn — errors must stay actionable so the CI gate means something.
   {
+    // eslint-config-next does not register the React Hooks plugin for CommonJS
+    // utility scripts. Keep React-oriented overrides on the source extensions
+    // where that plugin is present, so `eslint .` can still lint legacy .cjs.
+    files: ["**/*.{js,jsx,mjs,ts,tsx}"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off", // ~500 FHIR-shaped anys — separate burn-down (audit C7)
       "@typescript-eslint/no-unused-vars": [
@@ -50,6 +54,12 @@ const config = [
       "react-hooks/preserve-manual-memoization": "warn",
       "react-hooks/refs": "warn",
       "react-hooks/immutability": "warn",
+    },
+  },
+  {
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "warn",
     },
   },
 

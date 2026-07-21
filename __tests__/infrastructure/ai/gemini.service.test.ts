@@ -52,7 +52,7 @@ describe('GeminiService', () => {
 
   describe('query', () => {
     const mockRequest: AiQueryRequest = {
-      modelId: 'gemini-2.5-flash',
+      modelId: 'gemini-3.1-flash-lite',
       messages: [
         { role: 'user', content: 'Hello' }
       ],
@@ -86,7 +86,7 @@ describe('GeminiService', () => {
 
       // Assert
       expect(result.text).toBe('Hello! How can I assist you?')
-      expect(result.metadata.modelId).toBe('gemini-2.5-flash')
+      expect(result.metadata.modelId).toBe('gemini-3.1-flash-lite')
       expect(result.metadata.provider).toBe('gemini')
       expect(result.metadata.tokensUsed).toBe(25)
     })
@@ -113,7 +113,7 @@ describe('GeminiService', () => {
       const service = new GeminiService(null)
       
       // Act & Assert
-      await expect(service.query(mockRequest)).rejects.toThrow('Gemini API key is required')
+      await expect(service.query(mockRequest)).rejects.toThrow('Gemini API key or proxy is required')
     })
 
     it('should handle API errors', async () => {
@@ -149,7 +149,7 @@ describe('GeminiService', () => {
     it('should set generationConfig.responseMimeType when responseFormat is json', async () => {
       // Arrange
       const jsonRequest: AiQueryRequest = {
-        modelId: 'gemini-2.5-flash',
+        modelId: 'gemini-3.1-flash-lite',
         messages: [{ role: 'user', content: 'Test' }],
         responseFormat: 'json',
       }
@@ -238,7 +238,7 @@ describe('GeminiService', () => {
   // `/api/gemini-proxy`, which has no backend on the static deployment.
   describe('query via proxy (no API key — static deployment)', () => {
     const proxyRequest: AiQueryRequest = {
-      modelId: 'gemini-2.5-flash',
+      modelId: 'gemini-3.1-flash-lite',
       messages: [{ role: 'user', content: 'Hello' }],
     }
 
@@ -271,6 +271,16 @@ describe('GeminiService', () => {
       const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>
       expect(headers['x-proxy-key']).toBe('client-key')
       expect(result.text).toBe('hi')
+    })
+
+    it('does not route a key-only Gemini model through the owner proxy', async () => {
+      const proxyService = new GeminiService(null)
+
+      await expect(proxyService.query({
+        ...proxyRequest,
+        modelId: 'gemini-3.5-flash',
+      })).rejects.toThrow('personal Gemini API key')
+      expect(mockFetch).not.toHaveBeenCalled()
     })
   })
 })

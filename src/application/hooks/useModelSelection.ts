@@ -10,6 +10,8 @@ import {
   customOpenAiModelIdForProfile,
   getModelDefinition,
   isModelId,
+  isProxyEligibleModel,
+  modelRequiresUserKey,
   openAiCompatibleProfileIdFromModelId,
   ModelDefinition,
 } from "@/src/shared/constants/ai-models.constants"
@@ -47,49 +49,46 @@ export function useModelSelection(
   model: string,
   setModel: (model: string) => void
 ) {
-  const { t } = useLanguage()
+  const { locale, t } = useLanguage()
   const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
   const gptModels = useMemo(() => {
     return GPT_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      const isLocked = definition?.disabled || (definition?.requiresUserKey && !apiKey)
-      const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
+      const isLocked = definition?.status === 'disabled' || (modelRequiresUserKey(entry.id) && !apiKey)
       return {
         id: entry.id,
         label: entry.label,
-        description,
+        description: entry.descriptions[locale],
         isLocked: isLocked || false
       }
     })
-  }, [apiKey, t])
+  }, [apiKey, locale])
 
   const geminiModels = useMemo(() => {
     return GEMINI_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      const isLocked = definition?.disabled || (definition?.requiresUserKey && !geminiKey)
-      const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
+      const isLocked = definition?.status === 'disabled' || (modelRequiresUserKey(entry.id) && !geminiKey)
       return {
         id: entry.id,
         label: entry.label,
-        description,
+        description: entry.descriptions[locale],
         isLocked: isLocked || false
       }
     })
-  }, [geminiKey, t])
+  }, [geminiKey, locale])
 
   const claudeModels = useMemo(() => {
     return CLAUDE_MODELS.map((entry): ModelEntry => {
       const definition = getModelDefinition(entry.id)
-      const isLocked = definition?.disabled || (definition?.requiresUserKey && !claudeKey)
-      const description = t.settings.modelDescriptions[entry.id as keyof typeof t.settings.modelDescriptions] || ''
+      const isLocked = definition?.status === 'disabled' || (modelRequiresUserKey(entry.id) && !claudeKey)
       return {
         id: entry.id,
         label: entry.label,
-        description,
+        description: entry.descriptions[locale],
         isLocked: isLocked || false
       }
     })
-  }, [claudeKey, t])
+  }, [claudeKey, locale])
 
   const customModels = useMemo((): ModelEntry[] => {
     const enabledProfiles = openAiCompatibleProfiles.filter((profile) => profile.enabled)
@@ -175,32 +174,37 @@ export function useModelSelection(
       return
     }
 
-    if (definition.disabled) {
+    if (definition.status === 'disabled') {
       toast.error(t.settings.modelUnavailable)
       return
     }
 
-    if (definition.provider === "openai" && definition.requiresUserKey && !apiKey) {
+    if (definition.provider === "openai" && modelRequiresUserKey(definition) && !apiKey) {
       toast.error(t.settings.requiresOpenAiKey)
       return
     }
 
-    if (definition.provider === "openai" && !definition.requiresUserKey && !apiKey && !hasChatProxy) {
+    if (definition.provider === "openai" && isProxyEligibleModel(definition) && !apiKey && !hasChatProxy) {
       toast.error(t.settings.requiresProxyOrOpenAiKey)
       return
     }
 
-    if (definition.provider === "gemini" && !geminiKey && !hasGeminiProxy) {
+    if (definition.provider === "gemini" && modelRequiresUserKey(definition) && !geminiKey) {
+      toast.error(t.settings.requiresGeminiKey)
+      return
+    }
+
+    if (definition.provider === "gemini" && isProxyEligibleModel(definition) && !geminiKey && !hasGeminiProxy) {
       toast.error(t.settings.requiresGeminiKeyOrProxy)
       return
     }
 
-    if (definition.provider === "claude" && definition.requiresUserKey && !claudeKey) {
+    if (definition.provider === "claude" && modelRequiresUserKey(definition) && !claudeKey) {
       toast.error(t.settings.requiresClaudeKey)
       return
     }
 
-    if (definition.provider === "claude" && !definition.requiresUserKey && !claudeKey && !hasClaudeProxy) {
+    if (definition.provider === "claude" && isProxyEligibleModel(definition) && !claudeKey && !hasClaudeProxy) {
       toast.error(t.settings.requiresClaudeKeyOrProxy)
       return
     }
@@ -209,7 +213,7 @@ export function useModelSelection(
   }
 
   const getModelStatus = (definition: ModelDefinition) => {
-    if (definition.disabled) return t.settings.modelUnavailable
+    if (definition.status === 'disabled') return t.settings.modelUnavailable
 
     if (definition.provider === 'custom') {
       const customProfile = customProfileForModel(definition.id)
@@ -221,7 +225,7 @@ export function useModelSelection(
     }
 
     if (definition.provider === "openai") {
-      if (definition.requiresUserKey) {
+      if (modelRequiresUserKey(definition)) {
         return apiKey ? t.settings.usingPersonalOpenAiKey : t.settings.requiresOpenAiKey
       }
       if (apiKey) return t.settings.willUsePersonalOpenAiKey
@@ -230,7 +234,7 @@ export function useModelSelection(
     }
 
     if (definition.provider === "gemini") {
-      if (definition.requiresUserKey) {
+      if (modelRequiresUserKey(definition)) {
         return geminiKey ? t.settings.usingPersonalGeminiKey : t.settings.requiresGeminiKey
       }
       if (geminiKey) return t.settings.usingPersonalGeminiKey
@@ -239,7 +243,7 @@ export function useModelSelection(
     }
 
     if (definition.provider === "claude") {
-      if (definition.requiresUserKey) {
+      if (modelRequiresUserKey(definition)) {
         return claudeKey ? t.settings.usingPersonalClaudeKey : t.settings.requiresClaudeKey
       }
       if (claudeKey) return t.settings.usingPersonalClaudeKey

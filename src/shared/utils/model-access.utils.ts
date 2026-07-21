@@ -1,5 +1,6 @@
 import {
   getModelDefinition,
+  getModelDefinitionOrThrow,
   isCustomOpenAiModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
@@ -20,7 +21,7 @@ export function apiKeyForModel(
   keys: ProviderKeys,
   customConfig?: OpenAiCompatibleConfig | null,
 ): string | null {
-  const provider = getModelDefinition(modelId)?.provider ?? 'openai'
+  const provider = getModelDefinitionOrThrow(modelId).provider
   if (provider === 'custom') return customConfig?.apiKey?.trim() || null
   if (provider === 'gemini') return keys.geminiKey?.trim() || null
   if (provider === 'claude') return keys.claudeKey?.trim() || null

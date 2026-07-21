@@ -84,11 +84,11 @@ describe('model-prefs.store', () => {
     })
   })
 
-  it('rehydrate replaces an unknown persisted id with the consumer default', () => {
+  it('rehydrate replaces a retired GPT pick with the consumer default', () => {
     localStorage.setItem(
       'model-prefs',
       JSON.stringify({
-        state: { prefs: { chat: 'model-that-was-retired', insights: 'gpt-5.4-nano' } },
+        state: { prefs: { chat: 'gpt-5.5', insights: 'gpt-5.4-nano' } },
         version: 0,
       }),
     )

@@ -1,5 +1,9 @@
 const mockChat = jest.fn((modelId: string) => ({ kind: 'chat-model', modelId }))
-const mockCreateOpenAI = jest.fn((_config: unknown) => ({ chat: mockChat }))
+const mockResponses = jest.fn((modelId: string) => ({ kind: 'responses-model', modelId }))
+const mockCreateOpenAI = jest.fn((_config: unknown) => ({
+  chat: mockChat,
+  responses: mockResponses,
+}))
 
 jest.mock('@ai-sdk/openai', () => ({
   createOpenAI: (config: unknown) => mockCreateOpenAI(config),
@@ -8,13 +12,65 @@ jest.mock('@ai-sdk/openai', () => ({
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
 import {
   CUSTOM_OPENAI_MODEL_ID,
+  MODEL_CATALOG,
   customOpenAiModelIdForProfile,
 } from '@/src/shared/constants/ai-models.constants'
 
-describe('AiProviderFactory custom OpenAI-compatible routing', () => {
+describe('AiProviderFactory routing', () => {
   beforeEach(() => {
     mockChat.mockClear()
+    mockResponses.mockClear()
     mockCreateOpenAI.mockClear()
+  })
+
+  it.each(MODEL_CATALOG.filter((model) => model.apiSurface === 'openai-responses'))(
+    'routes $id through the manifest-declared Responses API',
+    ({ id: modelId }) => {
+      const factory = new AiProviderFactory()
+      const result = factory.create({
+        modelId,
+        apiKey: 'test-openai-key',
+        useProxy: false,
+      })
+
+      expect(mockResponses).toHaveBeenCalledWith(modelId)
+      expect(mockChat).not.toHaveBeenCalled()
+      expect(result.model).toEqual({ kind: 'responses-model', modelId })
+    },
+  )
+
+  it('keeps the free Nano proxy on Chat Completions', () => {
+    const factory = new AiProviderFactory()
+    const result = factory.create({
+      modelId: 'gpt-5.4-nano',
+      useProxy: true,
+    })
+
+    expect(mockChat).toHaveBeenCalledWith('gpt-5.4-nano')
+    expect(mockResponses).not.toHaveBeenCalled()
+    expect(result.model).toEqual({ kind: 'chat-model', modelId: 'gpt-5.4-nano' })
+  })
+
+  it('fails closed for an unknown model before creating an SDK provider', () => {
+    const factory = new AiProviderFactory()
+
+    expect(() => factory.create({
+      modelId: 'future-model-not-in-manifest',
+      apiKey: 'test-key',
+      useProxy: false,
+    })).toThrow('Unsupported AI model')
+    expect(mockCreateOpenAI).not.toHaveBeenCalled()
+  })
+
+  it('never lets a key-only model use the owner-funded proxy', () => {
+    const keyOnly = MODEL_CATALOG.find((model) => model.access === 'key-only')!
+    const factory = new AiProviderFactory()
+
+    expect(() => factory.create({
+      modelId: keyOnly.id,
+      useProxy: true,
+    })).toThrow('not eligible')
+    expect(mockCreateOpenAI).not.toHaveBeenCalled()
   })
 
   it('always creates a direct provider with the configured base URL and actual upstream model', () => {

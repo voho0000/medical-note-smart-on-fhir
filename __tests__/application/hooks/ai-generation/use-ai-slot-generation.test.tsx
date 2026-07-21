@@ -346,7 +346,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     const { result } = renderHook(() => useAiSlotGeneration({
       defaultModelId: 'gemini-3.1-flash-lite',
-      selectedModelId: 'gpt-5.4-mini',
+      selectedModelId: 'gpt-5.6-terra',
       autoRunEnabled: true,
       requireDataReadyToGenerate: true,
       store,
@@ -357,7 +357,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     }))
 
     await waitFor(() => {
-      expect(result.current.resolvedModelId).toBe('gpt-5.4-mini')
+      expect(result.current.resolvedModelId).toBe('gpt-5.6-terra')
       expect(result.current.result).toEqual({ headline: 'pre-generated demo result' })
     })
     expect(store.getState().byKey[result.current.slotKey]).toBeUndefined()
@@ -499,7 +499,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const store = createAiResultStore<VersionedResult>()
     let resolveModelBCache!: (value: VersionedResult) => void
     const loadCached = jest.fn((slotKey: string) => {
-      if (slotKey.includes('::gpt-5.4-mini::')) {
+      if (slotKey.includes('::gpt-5.6-terra::')) {
         return new Promise<VersionedResult>((resolve) => {
           resolveModelBCache = resolve
         })
@@ -532,23 +532,23 @@ describe('useAiSlotGeneration demo snapshot', () => {
     await act(async () => result.current.generate())
     expect(result.current.result?.headline).toBe('live gpt-5.4-nano')
 
-    rerender({ selectedModelId: 'gpt-5.4-mini' })
+    rerender({ selectedModelId: 'gpt-5.6-terra' })
     await waitFor(() => expect(loadCached.mock.calls.some(
-      ([slotKey]) => slotKey.includes('::gpt-5.4-mini::'),
+      ([slotKey]) => slotKey.includes('::gpt-5.6-terra::'),
     )).toBe(true))
     expect(result.current.result?.headline).toBe('live gpt-5.4-nano')
 
     await act(async () => {
       resolveModelBCache({
         headline: 'cached model B',
-        generation: { modelId: 'gpt-5.4-mini', modelName: 'GPT-5.4 mini' },
+        generation: { modelId: 'gpt-5.6-terra', modelName: 'GPT-5.6 Terra' },
       })
       await Promise.resolve()
     })
 
     await waitFor(() => {
       expect(result.current.result?.headline).toBe('cached model B')
-      expect(result.current.result?.generation.modelId).toBe('gpt-5.4-mini')
+      expect(result.current.result?.generation.modelId).toBe('gpt-5.6-terra')
     })
     expect(run).toHaveBeenCalledTimes(1)
   })
@@ -716,30 +716,30 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.isAnyRunning).toBe(true)
 
     mockAudience = 'medical'
-    rerender({ selectedModelId: 'gpt-5.4-mini' })
+    rerender({ selectedModelId: 'gpt-5.6-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
     mockAudience = 'patient'
     mockLocale = 'en'
-    rerender({ selectedModelId: 'gpt-5.4-mini' })
+    rerender({ selectedModelId: 'gpt-5.6-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
     mockLocale = 'zh-TW'
     mockClinicalContext = 'different selected clinical input'
-    rerender({ selectedModelId: 'gpt-5.4-mini' })
+    rerender({ selectedModelId: 'gpt-5.6-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
     mockClinicalContext = 'demo context'
     mockPatientId = 'smart-patient-2'
-    rerender({ selectedModelId: 'gpt-5.4-mini' })
+    rerender({ selectedModelId: 'gpt-5.6-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
     mockPatientId = 'smart-patient-1'
-    rerender({ selectedModelId: 'gpt-5.4-mini' })
+    rerender({ selectedModelId: 'gpt-5.6-terra' })
     expect(result.current.scopeKey).toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(true)
 

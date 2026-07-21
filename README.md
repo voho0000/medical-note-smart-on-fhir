@@ -55,7 +55,7 @@
 | 類別 | 模型 |
 |------|------|
 | 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、Claude Haiku 4.5 |
-| 進階（需自備金鑰） | GPT-5.4 Mini／GPT-5.4／GPT-5.5；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
+| 進階（需自備金鑰） | GPT-5.6 Luna／GPT-5.6 Terra／GPT-5.6 Sol；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
 
 醫學文獻搜尋使用 Perplexity（AI Agent 對話）。
 
@@ -167,6 +167,7 @@ Clean Architecture 分層：
 
 - **左側面板** `src/shared/config/feature-registry.ts` — 5 個分頁：病人資訊／就診紀錄／報告／用藥／文件。
 - **右側面板** `src/shared/config/right-panel-registry.ts` — 5 個主功能：醫療摘要／臨床對話／匯出（IPS）／醫療計算機／設定；資料範圍與自訂摘要管理以可插拔 drawer 嵌入醫療摘要。
+- **AI 模型** `src/shared/constants/ai-models.constants.ts` — 唯一 model manifest；ID、provider、API surface、金鑰／proxy、內容視窗、Agent 模式與背景任務角色皆由同一筆定義驅動。具體 provider wiring 只放在 `src/application/composition.ai.ts`。若開放免費 proxy 模型，仍須另外審核 Firebase 後端 allowlist（安全邊界）。
 
 ## 文件
 
@@ -243,7 +244,7 @@ Without your own key, requests go through a Firebase Functions proxy (daily free
 | Tier | Models |
 |------|--------|
 | Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, Claude Haiku 4.5 |
-| Advanced (your own key) | GPT-5.4 Mini / GPT-5.4 / GPT-5.5; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
+| Advanced (your own key) | GPT-5.6 Luna / GPT-5.6 Terra / GPT-5.6 Sol; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
 
 Literature search uses Perplexity (AI Agent chat).
 
@@ -315,6 +316,7 @@ Pluggable via registries:
 
 - **Left panel** `src/shared/config/feature-registry.ts` — 5 tabs: Patient / Visits / Reports / Medications / Documents.
 - **Right panel** `src/shared/config/right-panel-registry.ts` — 5 primary features: Medical Summary / Clinical Chat / Export (IPS) / Medical Calculator / Settings. Data scope and custom-summary management are pluggable drawers owned by Medical Summary.
+- **AI models** `src/shared/constants/ai-models.constants.ts` — the single model manifest for ids, providers, API surfaces, key/proxy policy, context windows, conversation mode, and internal task roles. Concrete provider wiring lives only in `src/application/composition.ai.ts`. Enabling an owner-funded proxy model still requires a separate review of the Firebase backend allowlist (the security boundary).
 
 ## Docs
 

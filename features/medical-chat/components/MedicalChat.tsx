@@ -59,7 +59,10 @@ import type { PromptType, SharedPrompt } from "@/features/prompt-gallery"
 import { useChatTemplates } from "@/src/application/providers/chat-templates.provider"
 import { AuthDialog } from "@/features/auth"
 import { isQuotaExceededError } from "@/src/core/errors"
-import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import {
+  isCustomOpenAiModelId,
+  modelUsesStandardChat,
+} from '@/src/shared/constants/ai-models.constants'
 import { resolveOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
 
 export default function MedicalChat() {
@@ -81,6 +84,7 @@ export default function MedicalChat() {
     openAiCompatibleProfiles,
   )
   const isCustomEndpoint = isCustomOpenAiModelId(model)
+  const isStandardChat = modelUsesStandardChat(model)
   // Selecting the hospital endpoint is also a privacy boundary: chat messages
   // must not be copied to Firestore or title/suggestion helper proxies.
   const cloudChatHistoryEnabled = !!user && !isCustomEndpoint
@@ -359,9 +363,9 @@ export default function MedicalChat() {
     lastSuggestedIdRef.current = last.id
     generateFollowups(lastUser, content, {
       recentUserMessages: userMessages,
-      isDeepMode: !isCustomEndpoint,
+      isDeepMode: !isStandardChat,
     })
-  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups, isCustomEndpoint])
+  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups, isStandardChat])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
@@ -463,7 +467,7 @@ export default function MedicalChat() {
               modelId={chatModelPref}
               fallbackModelId={MODEL_PREF_DEFAULTS.chat}
               onSelect={(id) => setModelFor('chat', id)}
-              tooltip={isCustomEndpoint
+              tooltip={isStandardChat
                 ? t.medicalChat.localStandardModeTitle
                 : t.modelPicker.chatTooltip}
               agentModeActive
@@ -514,7 +518,7 @@ export default function MedicalChat() {
         <ChatMessageList
           messages={chatMessages}
           isLoading={chat.isLoading}
-          isStandardChatMode={isCustomEndpoint}
+          isStandardChatMode={isStandardChat}
           scrollSignal={followupSuggestions.length}
           onReplyToSelection={handleReplyToSelection}
           afterMessages={

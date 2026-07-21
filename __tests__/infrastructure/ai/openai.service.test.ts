@@ -30,8 +30,7 @@ describe('OpenAiService', () => {
   describe('setApiKey', () => {
     it('should update API key', () => {
       const service = new OpenAiService(null)
-      const wasAvailable = service.isAvailable()
-      
+
       service.setApiKey('new-key')
       expect(service.isAvailable()).toBe(true)
     })
@@ -48,7 +47,7 @@ describe('OpenAiService', () => {
 
   describe('query', () => {
     const mockRequest: AiQueryRequest = {
-      modelId: 'gpt-5.1',
+      modelId: 'gpt-5.4-nano',
       messages: [
         { role: 'user', content: 'Hello' }
       ],
@@ -80,7 +79,7 @@ describe('OpenAiService', () => {
 
       // Assert
       expect(result.text).toBe('Hello! How can I help you?')
-      expect(result.metadata.modelId).toBe('gpt-5.1')
+      expect(result.metadata.modelId).toBe('gpt-5.4-nano')
       expect(result.metadata.provider).toBe('openai')
       expect(result.metadata.tokensUsed).toBe(20)
     })
@@ -140,12 +139,12 @@ describe('OpenAiService', () => {
       await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     })
 
-    it('should set temperature to 1 for gpt-5-mini', async () => {
+    it('applies the manifest fixed-one temperature policy', async () => {
       // Reset mock to clear any leftover mock implementations
       mockFetch.mockReset()
       // Arrange
       const gpt5Request: AiQueryRequest = {
-        modelId: 'gpt-5-mini',
+        modelId: 'gpt-5.4-nano',
         messages: [{ role: 'user', content: 'Test' }],
       }
 
@@ -166,32 +165,16 @@ describe('OpenAiService', () => {
       expect(body.temperature).toBe(1)
     })
 
-    it('should include custom temperature when provided (non-reasoning model)', async () => {
-      // Arrange — gpt-4o: not in the gpt-5 reasoning family, so the caller's
-      // temperature passes through.
-      const customTempRequest: AiQueryRequest = {
-        modelId: 'gpt-4o',
+    it('rejects unknown OpenAI ids before calling fetch', async () => {
+      await expect(service.query({
+        modelId: 'gpt-future-unregistered',
         messages: [{ role: 'user', content: 'Test' }],
         temperature: 0.5,
-      }
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'Response' } }],
-        }),
-      } as Response)
-
-      // Act
-      await service.query(customTempRequest)
-
-      // Assert
-      const fetchCall = mockFetch.mock.calls[0]
-      const body = JSON.parse(fetchCall[1]?.body as string)
-      expect(body.temperature).toBe(0.5)
+      })).rejects.toThrow('Unsupported AI model')
+      expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    it('forces temperature=1 for every gpt-5-family model (reasoning models reject other values)', async () => {
+    it('forces temperature=1 for GPT-5.4-family models', async () => {
       const request: AiQueryRequest = {
         modelId: 'gpt-5.4-nano',
         messages: [{ role: 'user', content: 'Test' }],
@@ -210,6 +193,33 @@ describe('OpenAiService', () => {
       const fetchCall = mockFetch.mock.calls[0]
       const body = JSON.parse(fetchCall[1]?.body as string)
       expect(body.temperature).toBe(1)
+    })
+
+    it('omits legacy sampling parameters for GPT-5.6 reasoning requests', async () => {
+      const request: AiQueryRequest = {
+        modelId: 'gpt-5.6-terra',
+        messages: [{ role: 'user', content: 'Test' }],
+        temperature: 0.5,
+        maxTokens: 4096,
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: [{ type: 'message', content: [{ type: 'output_text', text: 'Response' }] }],
+          usage: { total_tokens: 99 },
+        }),
+      } as Response)
+
+      const result = await service.query(request)
+
+      const fetchCall = mockFetch.mock.calls[0]
+      const body = JSON.parse(fetchCall[1]?.body as string)
+      expect(body.temperature).toBeUndefined()
+      expect(String(fetchCall[0])).toBe('https://api.openai.com/v1/responses')
+      expect(body.input).toEqual(request.messages)
+      expect(body.max_output_tokens).toBe(4096)
+      expect(result).toMatchObject({ text: 'Response', metadata: { tokensUsed: 99 } })
     })
 
     it('should attach an auth header derived from the API key', async () => {
@@ -240,7 +250,7 @@ describe('OpenAiService', () => {
     it('should set response_format json_object when responseFormat is json', async () => {
       // Arrange
       const jsonRequest: AiQueryRequest = {
-        modelId: 'gpt-5.1',
+        modelId: 'gpt-5.4-nano',
         messages: [{ role: 'user', content: 'Test' }],
         responseFormat: 'json',
       }
@@ -282,7 +292,7 @@ describe('OpenAiService', () => {
       
       // Arrange
       const emptyRequest: AiQueryRequest = {
-        modelId: 'gpt-5.1',
+        modelId: 'gpt-5.4-nano',
         messages: [{ role: 'user', content: 'Test' }],
       }
       

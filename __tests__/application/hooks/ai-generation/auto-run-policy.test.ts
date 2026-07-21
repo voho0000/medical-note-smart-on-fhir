@@ -20,9 +20,9 @@ describe('Medical Summary auto-run policy', () => {
     expect(shouldAutoRunSummarySlot(ready)).toBe(true)
     expect(shouldAutoRunSummarySlot({
       ...ready,
-      slotKey: 'patient-1::medical::gpt-5.4-mini',
-      hydratedSlotKey: 'patient-1::medical::gpt-5.4-mini',
-      autoRunIdentity: 'patient-1::medical::gpt-5.4-mini::user:1',
+      slotKey: 'patient-1::medical::gpt-5.6-terra',
+      hydratedSlotKey: 'patient-1::medical::gpt-5.6-terra',
+      autoRunIdentity: 'patient-1::medical::gpt-5.6-terra::user:1',
     })).toBe(true)
   })
 
@@ -44,9 +44,9 @@ describe('demo snapshot policy', () => {
   it('allows a bundled fallback after a retained non-default slot is hydrated', () => {
     expect(shouldSeedDemoSlot({
       hasDemoSeed: true,
-      slotKey: 'demo-patient-1::patient::gpt-5.4-mini',
+      slotKey: 'demo-patient-1::patient::gpt-5.6-terra',
       hasResult: false,
-      hydratedSlotKey: 'demo-patient-1::patient::gpt-5.4-mini',
+      hydratedSlotKey: 'demo-patient-1::patient::gpt-5.6-terra',
       patientId: 'demo-patient-1',
       demoPatientId: 'demo-patient-1',
       locale: 'zh-TW',
@@ -57,9 +57,9 @@ describe('demo snapshot policy', () => {
   it('does not seed a real patient or overwrite an existing result', () => {
     const ready = {
       hasDemoSeed: true,
-      slotKey: 'demo-patient-1::patient::gpt-5.4-mini',
+      slotKey: 'demo-patient-1::patient::gpt-5.6-terra',
       hasResult: false,
-      hydratedSlotKey: 'demo-patient-1::patient::gpt-5.4-mini',
+      hydratedSlotKey: 'demo-patient-1::patient::gpt-5.6-terra',
       patientId: 'demo-patient-1',
       demoPatientId: 'demo-patient-1',
       locale: 'zh-TW',

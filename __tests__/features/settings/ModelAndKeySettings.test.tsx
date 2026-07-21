@@ -140,6 +140,31 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(screen.getByRole('textbox', { name: 'API 金鑰（選填）' })).toBeInTheDocument()
   })
 
+  it('shows only the public Firebase Gateway providers', () => {
+    const current = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const gatewayProfile = {
+      ...current,
+      transport: 'mediprisma-gateway' as const,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [gatewayProfile],
+      openAiCompatible: gatewayProfile,
+    })
+
+    renderSettings(false)
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+
+    expect(screen.getByText(
+      /目前支援 NVIDIA、OpenRouter 與 Cerebras/,
+    )).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' }))
+      .toHaveAttribute(
+        'placeholder',
+        'https://openrouter.ai/api/v1/chat/completions',
+      )
+    expect(screen.queryByText(/j3soon/i)).not.toBeInTheDocument()
+  })
+
   it('reveals, scrolls to, and focuses a context-window navigation target', async () => {
     const onSettingsTargetHandled = jest.fn()
     const scrollIntoView = jest.fn()
@@ -206,6 +231,30 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(screen.getByRole('combobox', {
       name: '選擇要編輯的模型',
     })).toHaveValue('profile-2')
+  })
+
+  it('opens a blank custom-model form from the model-picker add target', async () => {
+    const onSettingsTargetHandled = jest.fn()
+
+    renderSettings(true, {
+      settingsTarget: 'openai-compatible-add-profile',
+      onSettingsTargetHandled,
+    })
+
+    expect(await screen.findByRole('button', { name: /自訂 AI 端點/ }))
+      .toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', {
+        name: 'Chat Completions 網址',
+      })).toHaveValue('')
+      expect(screen.getByRole('combobox', {
+        name: '上游模型 ID',
+      })).toHaveValue('')
+    })
+    expect(screen.getByRole('combobox', {
+      name: '選擇要編輯的模型',
+    })).toHaveValue('')
+    expect(onSettingsTargetHandled).toHaveBeenCalledTimes(1)
   })
 
   it('locks endpoint and cloud credential controls until browser settings finish loading', () => {

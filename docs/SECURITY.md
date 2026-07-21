@@ -51,7 +51,7 @@
 - 接受 HTTPS hostname、IPv4／IPv6、port 與同源 `/ai/v1`；HTTP 僅允許 loopback 開發環境。
 - 設定畫面接受完整 `/chat/completions` 或舊版 Base URL，兩者都先正規化成 canonical Base；仍拒絕 URL userinfo、query、fragment 與非 HTTP(S) scheme。
 - direct 連線測試完全在 browser 執行；不會自動 fallback 到 Firebase。
-- Firebase Gateway 是 explicit opt-in，只接受部署白名單中的公開 HTTPS Base URL、固定 `models`／`chat/completions` path 與對應 method；拒絕 IP、非 443 port、redirect、URL credentials、query 與 fragment，避免形成 SSRF／通用轉送器。
+- Firebase Gateway 是 explicit opt-in；目前對使用者公開支援 NVIDIA、OpenRouter、Cerebras，只接受部署白名單中的公開 HTTPS Base URL、固定 `models`／`chat/completions` path 與對應 method；拒絕 IP、非 443 port、redirect、URL credentials、query 與 fragment，避免形成 SSRF／通用轉送器。
 - Gateway 的 `Authorization` 專供 Firebase ID token；使用者 provider key 以 `X-Upstream-API-Key` 在單次 request memory 中轉送，不寫入 Firestore 或 logs。Gateway Function 明確使用 `secrets: []`，無法取得 owner-funded provider keys。
 - 每個自訂 profile 有穩定 logical model id（舊 profile 保留 `openai-compatible-custom`，新增 profile 使用帶 profile id 的 dynamic id）；transport／endpoint／model fingerprint 納入 AI cache identity。
 - 自訂 endpoint unavailable 時 fail closed，不 fallback 到 owner proxy。

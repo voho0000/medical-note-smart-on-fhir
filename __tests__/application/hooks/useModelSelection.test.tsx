@@ -28,7 +28,7 @@ const profile = (
   contextWindowSource: 'manual' as const,
 })
 
-describe('useModelSelection custom profiles', () => {
+describe('useModelSelection', () => {
   beforeEach(() => {
     localStorage.clear()
     useAiConfigStore.setState({
@@ -110,5 +110,63 @@ describe('useModelSelection custom profiles', () => {
       'MODEL_NAME · gateway.example/tenant-b/v1 #1',
       'MODEL_NAME · gateway.example/tenant-b/v1 #2',
     ])
+  })
+
+  it('allows Claude Fable 5 to be selected when a personal Claude key is present', () => {
+    const setModel = jest.fn()
+    const { result } = renderHook(
+      () => useModelSelection(
+        null,
+        null,
+        'test-claude-key',
+        'claude-fable-5',
+        setModel,
+      ),
+      { wrapper },
+    )
+
+    expect(result.current.claudeModels.find(
+      (entry) => entry.id === 'claude-fable-5',
+    )).toMatchObject({
+      label: 'Claude Fable 5',
+      isLocked: false,
+    })
+
+    act(() => result.current.handleSelectModel('claude-fable-5'))
+    expect(setModel).toHaveBeenCalledWith('claude-fable-5')
+  })
+
+  it('keeps only Nano unlocked without an OpenAI key and unlocks every GPT-5.6 model with one', () => {
+    const { result, rerender } = renderHook(
+      ({ apiKey }: { apiKey: string | null }) => useModelSelection(
+        apiKey,
+        null,
+        null,
+        'gpt-5.4-nano',
+        jest.fn(),
+      ),
+      { wrapper, initialProps: { apiKey: null as string | null } },
+    )
+
+    expect(result.current.gptModels.map(({ id, isLocked }) => ({ id, isLocked }))).toEqual([
+      { id: 'gpt-5.4-nano', isLocked: false },
+      { id: 'gpt-5.6-luna', isLocked: true },
+      { id: 'gpt-5.6-terra', isLocked: true },
+      { id: 'gpt-5.6-sol', isLocked: true },
+    ])
+
+    rerender({ apiKey: 'test-openai-key' })
+    expect(result.current.gptModels.every((entry) => !entry.isLocked)).toBe(true)
+  })
+
+  it('reads localized model descriptions from the canonical manifest', () => {
+    const { result } = renderHook(
+      () => useModelSelection(null, null, null, 'gpt-5.4-nano', jest.fn()),
+      { wrapper },
+    )
+
+    expect(result.current.gptModels.find(
+      (entry) => entry.id === 'gpt-5.4-nano',
+    )?.description).toBe('極速回應，經濟實惠')
   })
 })

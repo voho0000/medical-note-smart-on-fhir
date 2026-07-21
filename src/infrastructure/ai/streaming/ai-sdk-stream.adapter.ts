@@ -7,16 +7,18 @@
 // forwards the SDK's native body verbatim (passthrough), so chat and agent
 // mode share one path.
 
-import { streamText, type ModelMessage } from "ai"
+import { Output, streamText, type ModelMessage } from "ai"
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import {
-  getModelDefinition,
+  getModelDefinitionOrThrow,
   gateModel,
+  isProxyEligibleModel,
   isCustomOpenAiModelId,
+  resolveModelTemperature,
 } from "@/src/shared/constants/ai-models.constants"
 import type { OpenAiCompatibleConfig } from "@/src/shared/types/openai-compatible.types"
 import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
-import { aiProviderFactory } from "../factories/ai-provider.factory"
+import type { AiProviderFactory } from "../factories/ai-provider.factory"
 import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "../services/openai-compatible.service"
 import { AiError, AiErrorCode } from "@/src/core/errors"
 import {
@@ -32,12 +34,19 @@ export interface StreamConfig {
   openAiCompatible?: OpenAiCompatibleConfig | null
   signal: AbortSignal
   onChunk: (content: string) => void
+  temperature?: number
+  maxTokens?: number
+  responseFormat?: 'json'
   /** Optional per-request idle window. Slow local models need longer for the
    *  first token after evaluating a large selected clinical context. */
   idleTimeoutMs?: number
 }
 
 export class AiSdkStreamAdapter {
+  constructor(
+    private readonly providerFactory: Pick<AiProviderFactory, 'create'>,
+  ) {}
+
   async stream(config: StreamConfig): Promise<void> {
     // Central safety net: every AI feature streams through here. If the picked
     // model needs the user's own key but none was supplied, downgrade to the
@@ -45,14 +54,16 @@ export class AiSdkStreamAdapter {
     // instead of dead-ending on a missing key (e.g. a model that used to be free
     // and became key-gated). No caller can bypass this.
     const isCustom = isCustomOpenAiModelId(config.model)
+    getModelDefinitionOrThrow(config.model)
     if (isCustom && !isOpenAiCompatibleRuntimeReady(config.openAiCompatible)) {
       throw new Error('OpenAI-compatible endpoint is not configured')
     }
     const modelId = isCustom
       ? config.model
       : gateModel(config.model, !!config.apiKey)
+    const definition = getModelDefinitionOrThrow(modelId)
     const useProxy = this.shouldUseProxy(config.apiKey, modelId)
-    const { model } = aiProviderFactory.create({
+    const { model } = this.providerFactory.create({
       modelId,
       apiKey: config.apiKey ?? undefined,
       useProxy,
@@ -73,10 +84,14 @@ export class AiSdkStreamAdapter {
     // surfaced ("spinner for a second, then nothing"). Capture it and rethrow
     // after the loop so callers can show a real error.
     let streamError: unknown = null
+    const temperature = resolveModelTemperature(definition, config.temperature)
     const result = streamText({
       model,
       messages: this.toSdkMessages(config.messages),
       abortSignal: controller.signal,
+      ...(temperature !== undefined ? { temperature } : {}),
+      ...(config.maxTokens !== undefined ? { maxOutputTokens: config.maxTokens } : {}),
+      ...(config.responseFormat === 'json' ? { output: Output.json() } : {}),
       onError: ({ error }) => { streamError = error },
     })
 
@@ -129,13 +144,14 @@ export class AiSdkStreamAdapter {
   private shouldUseProxy(apiKey: string | null, model: string): boolean {
     if (isCustomOpenAiModelId(model)) return false
     if (apiKey) return false
-    const provider = getModelDefinition(model)?.provider ?? "openai"
+    const definition = getModelDefinitionOrThrow(model)
+    const provider = definition.provider
     const hasProxy =
       provider === "gemini" ? ENV_CONFIG.hasGeminiProxy :
       provider === "claude" ? ENV_CONFIG.hasClaudeProxy :
       ENV_CONFIG.hasChatProxy
     if (!hasProxy) return false
-    return !getModelDefinition(model)?.requiresUserKey
+    return isProxyEligibleModel(definition)
   }
 
   private toSdkMessages(messages: StreamConfig["messages"]): ModelMessage[] {
@@ -163,5 +179,3 @@ export class AiSdkStreamAdapter {
     })
   }
 }
-
-export const aiSdkStreamAdapter = new AiSdkStreamAdapter()

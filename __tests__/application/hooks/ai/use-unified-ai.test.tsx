@@ -105,6 +105,33 @@ describe('useUnifiedAi cancellation', () => {
     expect(result.current.isLoading).toBe(false)
   })
 
+  it('captures fresh credentials and forwards request policy options for every stream', async () => {
+    mockStream.mockResolvedValueOnce(undefined)
+    const { result } = renderHook(() => useUnifiedAi())
+    const capturedStream = result.current.stream
+
+    act(() => setMockAiConfigState({ apiKey: 'replacement-openai-key' }))
+    await act(async () => {
+      await capturedStream(
+        [{ role: 'user', content: 'structured summary' }],
+        {
+          modelId: 'gpt-5.6-terra',
+          temperature: 0.2,
+          maxTokens: 2048,
+          responseFormat: 'json',
+        },
+      )
+    })
+
+    expect(mockStream).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gpt-5.6-terra',
+      apiKey: 'replacement-openai-key',
+      temperature: 0.2,
+      maxTokens: 2048,
+      responseFormat: 'json',
+    }))
+  })
+
   it('stops only the requested generation slot and leaves background work running', async () => {
     let finishFirst!: () => void
     let finishSecond!: () => void

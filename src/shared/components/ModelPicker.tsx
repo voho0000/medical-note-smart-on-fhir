@@ -10,7 +10,7 @@
 // exactly like the stream adapter does; re-adding the key revives the pick.
 "use client"
 
-import { Check, ChevronDown, ChevronRight, Lock } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Lock, Plus } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,16 +21,18 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
-import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
+import { useAiConfigStore, useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { useModelSelection, type ModelEntry } from "@/src/application/hooks/useModelSelection"
 import {
   gateModelForAgentSupport,
   gateModelForKeys,
   getModelDefinition,
-  isCustomOpenAiModelId,
+  modelRequiresUserKey,
+  modelUsesStandardChat,
 } from "@/src/shared/constants/ai-models.constants"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
+import { MAX_OPENAI_COMPATIBLE_PROFILES } from '@/src/shared/types/openai-compatible.types'
 
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
@@ -40,7 +42,7 @@ interface ModelPickerProps {
   onSelect: (id: string) => void
   /** Hover title on the trigger (e.g. "與聊天模型獨立"). */
   tooltip?: string
-  /** Deep mode: additionally lock models flagged disableAgentMode. */
+  /** Chat mode: standard-capability models are labelled and run without tools. */
   agentModeActive?: boolean
   align?: "start" | "end"
   /** Dense header variant: hide the prefix and size to the actual model name. */
@@ -59,6 +61,9 @@ export function ModelPicker({
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
+  const customProfileCount = useAiConfigStore(
+    (state) => state.openAiCompatibleProfiles.length,
+  )
   const { gptModels, geminiModels, claudeModels, customModels, handleSelectModel } = useModelSelection(
     apiKey,
     geminiKey,
@@ -84,11 +89,8 @@ export function ModelPicker({
   const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)
   const effectiveLabel = effectiveCustomEntry?.label ?? modelDisplayLabel(effectiveModelId)
 
-  const isAgentLocked = (id: string) =>
-    agentModeActive && !!getModelDefinition(id)?.disableAgentMode
-
-  const groups: Array<{ label: string; items: ModelEntry[] }> = [
-    { label: t.settings.openAiCompatibleGroupLabel, items: customModels },
+  const groups: Array<{ label: string; items: ModelEntry[]; custom?: boolean }> = [
+    { label: t.settings.openAiCompatibleGroupLabel, items: customModels, custom: true },
     { label: "Gemini", items: geminiModels },
     { label: "GPT", items: gptModels },
     { label: "Claude", items: claudeModels },
@@ -128,7 +130,7 @@ export function ModelPicker({
           >
             {effectiveLabel}
           </span>
-          {agentModeActive && isCustomOpenAiModelId(effectiveModelId) ? (
+          {agentModeActive && modelUsesStandardChat(effectiveModelId) ? (
             <span className="hidden shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300 sm:inline">
               {t.modelPicker.standardChatMode}
             </span>
@@ -145,11 +147,11 @@ export function ModelPicker({
             </DropdownMenuLabel>
             {group.items.map((entry) => {
               const definition = getModelDefinition(entry.id)
-              const lockedByAgent = isAgentLocked(entry.id)
-              const usesStandardChat = agentModeActive && isCustomOpenAiModelId(entry.id)
+              const lockedByAgent = false
+              const usesStandardChat = agentModeActive && modelUsesStandardChat(entry.id)
               const configureRequired = entry.isLocked
-                && (entry.configureInSettings || !!definition?.requiresUserKey)
-                && !definition?.disabled
+                && (entry.configureInSettings || modelRequiresUserKey(entry.id))
+                && definition?.status !== 'disabled'
                 && !lockedByAgent
               const locked = entry.isLocked || lockedByAgent
               return (
@@ -208,6 +210,30 @@ export function ModelPicker({
                 </DropdownMenuItem>
               )
             })}
+            {group.custom ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={customProfileCount >= MAX_OPENAI_COMPATIBLE_PROFILES}
+                  onClick={() => setActiveTab(
+                    'settings',
+                    'ai',
+                    'openai-compatible-add-profile',
+                  )}
+                  data-testid="model-picker-add-custom-model"
+                  title={customProfileCount >= MAX_OPENAI_COMPATIBLE_PROFILES
+                    ? t.settings.openAiCompatibleProfileLimit
+                    : t.modelPicker.addCustomModel}
+                  className="cursor-pointer gap-2 text-xs font-medium text-primary focus:bg-primary/10 focus:text-primary"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    {t.modelPicker.addCustomModel}
+                  </span>
+                  <ChevronRight className="h-3 w-3 shrink-0" />
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </div>
         ))}
       </DropdownMenuContent>

@@ -6,6 +6,7 @@
 
 import type { AiMessage, AiProvider } from '@/src/core/entities/ai.entity'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
+import { getModelDefinitionOrThrow } from '@/src/shared/constants/ai-models.constants'
 
 const SYSTEM_INSTRUCTION =
   "You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate.\n\n" +
@@ -75,9 +76,7 @@ export class GenerateInsightUseCase {
    * Determine AI provider from model ID
    */
   getProvider(modelId: string): AiProvider {
-    return modelId.startsWith('gemini') || modelId.startsWith('models/gemini')
-      ? 'gemini'
-      : 'openai'
+    return getModelDefinitionOrThrow(modelId).provider
   }
 
   /**

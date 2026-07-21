@@ -4,6 +4,7 @@
 // a cheap model and fails closed (empty list) so it can never break the chat.
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
+import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 
 export interface FollowupSuggestion {
   /** Short button text, in the UI language (≤ ~12 words). */
@@ -15,7 +16,7 @@ export interface FollowupSuggestion {
 // Cheap, fast, free-via-proxy model — never the user's (possibly slow/expensive)
 // chat model. Matches SAFETY_ALERTS_MODEL_ID's reasoning: a background helper
 // shouldn't ride the main model.
-export const FOLLOWUP_MODEL_ID = 'gemini-3.1-flash-lite'
+export const FOLLOWUP_MODEL_ID = MODEL_ROLE_IDS['followup-suggestions']
 
 export interface GenerateFollowupInput {
   lastUser: string

@@ -5,11 +5,14 @@
 // handles OpenAI/Gemini/Claude — the provider is resolved from the model id
 // inside the factory + fetch interceptor, and every proxy forwards the SDK's
 // native body verbatim.
-import { AiSdkStreamAdapter } from "./ai-sdk-stream.adapter"
 import type { StreamConfig } from "./ai-sdk-stream.adapter"
 
+export interface AiStreamAdapter {
+  stream(config: StreamConfig): Promise<void>
+}
+
 export class StreamOrchestrator {
-  private adapter = new AiSdkStreamAdapter()
+  constructor(private readonly adapter: AiStreamAdapter) {}
 
   async stream(config: StreamConfig): Promise<void> {
     await this.adapter.stream(config)

@@ -53,11 +53,12 @@ import {
   limitInvestigationTrendPoints,
   MAX_INVESTIGATION_TREND_POINTS,
 } from '@/src/shared/utils/investigation-trend.utils'
+import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
 // possibly-slow chat model (GPT-Nano on a large context ≈ 77s).
-export const MEDICAL_SUMMARY_MODEL_ID = 'gemini-3.1-flash-lite'
+export const MEDICAL_SUMMARY_MODEL_ID = MODEL_ROLE_IDS['medical-summary']
 
 const LONGITUDINAL_MAX_LAB_SERIES = 16
 const LONGITUDINAL_MAX_LAB_POINTS = MAX_INVESTIGATION_TREND_POINTS

@@ -10,6 +10,7 @@ export interface OpenAiCompatibleContextWindowTarget {
 
 export type SettingsNavigationTarget =
   | 'openai-compatible-context-window'
+  | 'openai-compatible-add-profile'
   | OpenAiCompatibleContextWindowTarget
 
 export function isOpenAiCompatibleContextWindowTarget(
@@ -17,6 +18,12 @@ export function isOpenAiCompatibleContextWindowTarget(
 ): boolean {
   return target === 'openai-compatible-context-window' ||
     (typeof target === 'object' && target?.kind === 'openai-compatible-context-window')
+}
+
+export function isOpenAiCompatibleAddProfileTarget(
+  target: SettingsNavigationTarget | null | undefined,
+): target is 'openai-compatible-add-profile' {
+  return target === 'openai-compatible-add-profile'
 }
 
 interface RightPanelContextType {

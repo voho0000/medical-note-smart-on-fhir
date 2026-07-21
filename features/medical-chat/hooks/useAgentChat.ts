@@ -13,18 +13,22 @@ import { useLiteratureTools } from "@/src/application/hooks/ai/use-literature-to
 import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-client.service"
 import { createUserMessage, createAgentState, formatChatMessageContentForAi } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
-import { aiProviderFactory } from "@/src/infrastructure/ai/factories/ai-provider.factory"
 import {
-  getModelDefinition,
+  getModelDefinitionOrThrow,
   gateModelForKeys,
   isCustomOpenAiModelId,
+  modelUsesStandardChat,
 } from "@/src/shared/constants/ai-models.constants"
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
 import { buildStandardChatSystemPrompt } from "@/src/core/use-cases/chat/build-standard-chat-system-prompt.use-case"
 import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
-import { AiSdkStreamAdapter } from "@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter"
 import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "@/src/infrastructure/ai/services/openai-compatible.service"
+import {
+  createAiProvider,
+  createAiStreamOrchestrator,
+  validateAiProxyAvailability,
+} from '@/src/application/composition.ai'
 import { useChatHistoryStore } from "@/src/application/stores/chat-history.store"
 import type { ChatReplyReference } from "@/src/core/entities/chat-message.entity"
 import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
@@ -40,7 +44,7 @@ import {
 import { truncateToContextWindow } from '@/src/shared/utils/context-window-manager'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 
-const standardChatStream = new AiSdkStreamAdapter()
+const standardChatStream = createAiStreamOrchestrator()
 
 interface ActiveChatRequest {
   controller: AbortController
@@ -111,7 +115,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
     // Hospital/local models run in explicit standard-chat mode: no tool schema
     // is sent at all. This both avoids unsupported function calling and keeps
     // literature search from becoming an auxiliary cloud recipient.
-    if (isCustomOpenAiModelId(modelId)) return undefined
+    if (modelUsesStandardChat(modelId)) return undefined
     if (!fhirTools && !literatureTools) return undefined
     return {
       ...(fhirTools || {}),
@@ -160,7 +164,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const assistantMessageId = crypto.randomUUID()
       const thinkingMessage = `🤔 ${t.agent.thinking}`
       const initialState = createAgentState(thinkingMessage)
-      const isStandardChat = isCustomOpenAiModelId(effectiveModelId)
+      const isStandardChat = modelUsesStandardChat(effectiveModelId)
       
       setChatMessages([...newMessages, {
         id: assistantMessageId,
@@ -207,7 +211,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       }
 
       try {
-        const provider = getModelDefinition(effectiveModelId)?.provider ?? "openai"
+        const provider = getModelDefinitionOrThrow(effectiveModelId).provider
         const apiKey = apiKeyForModel(
           effectiveModelId,
           {
@@ -244,7 +248,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           return
         }
 
-        if (isCustomEndpoint) {
+        if (isStandardChat) {
           // Standard chat deliberately sends no `tools` field. It answers from
           // the user-selected clinical snapshot instead of pretending it can
           // query the complete FHIR record or current literature on demand.
@@ -282,7 +286,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
             signal: abortController.signal,
             // A local 7B model may spend minutes evaluating the selected chart
             // before its first token. Continuous output resets this idle timer.
-            idleTimeoutMs: OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS,
+            ...(isCustomEndpoint
+              ? { idleTimeoutMs: OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS }
+              : {}),
             onChunk: (content) => {
               if (!hasReceivedChunkRef.current && onInputClear) {
                 hasReceivedChunkRef.current = true
@@ -298,7 +304,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         // a Firebase token (real or anonymous)
         const useProxy = !isCustomEndpoint && !apiKey && hasProxyAccess
         if (useProxy) {
-          const validation = aiProviderFactory.validateProxyAvailability(effectiveModelId)
+          const validation = validateAiProxyAvailability(effectiveModelId)
           if (!validation.available) {
             setChatMessages((prev) =>
               prev.map((m) => m.id === assistantMessageId ? { ...m, content: validation.error || t.agent.apiKeyRequired } : m)
@@ -309,7 +315,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
 
         // Create AI provider using factory
-        const { model } = aiProviderFactory.create({
+        const { model } = createAiProvider({
           modelId: effectiveModelId,
           apiKey: apiKey || undefined,
           useProxy,

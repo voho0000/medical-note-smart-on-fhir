@@ -18,7 +18,6 @@ export interface AiModelDefinition {
   id: string
   label: string
   provider: AiProvider
-  requiresUserKey?: boolean
 }
 
 export interface AiQueryRequest {
