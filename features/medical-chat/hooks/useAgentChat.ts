@@ -34,6 +34,7 @@ import type { ChatReplyReference } from "@/src/core/entities/chat-message.entity
 import { buildPatientTextLiterals, scrubFreeText } from "@/src/shared/utils/pii-text-scrub"
 import {
   isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleConversationMode,
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
 import {
@@ -50,6 +51,15 @@ interface ActiveChatRequest {
   controller: AbortController
   modelId: string
   openAiCompatible: OpenAiCompatibleProfile | null
+}
+
+function usesStandardChat(
+  modelId: string,
+  openAiCompatible: OpenAiCompatibleProfile | null,
+): boolean {
+  return isCustomOpenAiModelId(modelId)
+    ? resolveOpenAiCompatibleConversationMode(openAiCompatible) === 'standard'
+    : modelUsesStandardChat(modelId)
 }
 
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
@@ -111,17 +121,13 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
   const literatureTools = useLiteratureTools(perplexityKey)
   const patientTextLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
 
-  const tools = useMemo(() => {
-    // Hospital/local models run in explicit standard-chat mode: no tool schema
-    // is sent at all. This both avoids unsupported function calling and keeps
-    // literature search from becoming an auxiliary cloud recipient.
-    if (modelUsesStandardChat(modelId)) return undefined
+  const cloudAgentTools = useMemo(() => {
     if (!fhirTools && !literatureTools) return undefined
     return {
       ...(fhirTools || {}),
       ...(literatureTools || {}),
     }
-  }, [fhirTools, literatureTools, modelId])
+  }, [fhirTools, literatureTools])
 
   const handleSend = useCallback(
     async (input: string, images?: ChatImage[], replyTo?: ChatReplyReference | null) => {
@@ -154,6 +160,16 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         effectiveModelId,
         liveConfig.openAiCompatibleProfiles,
       )
+      const isCustomEndpoint = isCustomOpenAiModelId(effectiveModelId)
+      // Custom profiles opt into Agent execution per endpoint. Automatic mode
+      // stays tool-less until the patient-free tool-call probe is verified;
+      // automatic verification and an explicit standard-chat selection are
+      // resolved by the same helper.
+      const isStandardChat = usesStandardChat(effectiveModelId, openAiCompatible)
+      // A custom/hospital Agent may query the browser-bound FHIR tools, but it
+      // does not receive the external literature tool. This preserves the
+      // custom endpoint's existing no-auxiliary-cloud privacy boundary.
+      const agentTools = isCustomEndpoint ? fhirTools : cloudAgentTools
 
       // Create user message with images
       const userMessage = createUserMessage(trimmed, images, replyTo)
@@ -164,8 +180,6 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       const assistantMessageId = crypto.randomUUID()
       const thinkingMessage = `🤔 ${t.agent.thinking}`
       const initialState = createAgentState(thinkingMessage)
-      const isStandardChat = modelUsesStandardChat(effectiveModelId)
-      
       setChatMessages([...newMessages, {
         id: assistantMessageId,
         role: "assistant",
@@ -189,7 +203,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       // Idle watchdog for every agent stream below: abort + surface a timeout
       // error if a stream stalls. Idle-
       // based, so legitimate long tool runs that keep emitting events are fine.
-      const idleMs = resolveStreamIdleTimeoutMs()
+      const idleMs = isCustomEndpoint
+        ? OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS
+        : resolveStreamIdleTimeoutMs()
 
       // Throttle state, declared OUTSIDE the try so catch/finally can clear a
       // still-pending timer — a leftover timer otherwise fired after abort or
@@ -230,7 +246,9 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           },
           openAiCompatible,
         )
-        const isCustomEndpoint = provider === 'custom'
+        if (isCustomEndpoint !== (provider === 'custom')) {
+          throw new Error('Custom model profile does not match its provider definition')
+        }
 
         // Check if the user can access agent chat.
         if (!hasDirectAccess && (!hasProxyAccess || isCustomEndpoint)) {
@@ -414,7 +432,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         await runDeepModeAgent({
           model,
           messages: apiMessages,
-          tools,
+          tools: agentTools,
           idleMs,
           abortController,
           onEvent,
@@ -461,7 +479,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
       }
     },
-    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, setChatMessages, systemPrompt, onInputClear, onStreamComplete, tools, hasProxyAccess, perplexityKey, t, isLocalMode]
+    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, perplexityKey, t, isLocalMode]
   )
 
   const handleReset = useCallback(() => {

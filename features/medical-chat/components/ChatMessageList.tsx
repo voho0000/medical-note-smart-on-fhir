@@ -5,11 +5,12 @@ import { toast } from "sonner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { getModelDefinition } from "@/src/shared/constants/ai-models.constants"
+import { isCustomOpenAiModelId } from "@/src/shared/constants/ai-models.constants"
 import { MarkdownRenderer } from "@/src/shared/components/MarkdownRenderer"
 import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
+import { modelDisplayLabel } from "@/src/shared/utils/model-access.utils"
 import type { ChatMessage, ChatReplyReference } from "@/src/application/stores/chat.store"
 import { createReplyReference } from "@/src/shared/utils/chat-message.utils"
 import { AgentStateHistory } from "./AgentStateHistory"
@@ -29,12 +30,18 @@ interface ChatMessageListProps {
    *  (the [messages] effect alone won't fire, since messages didn't change). */
   scrollSignal?: number
   onReplyToSelection?: (reply: ChatReplyReference) => void
+  /** Sanitized logical-id → upstream-name mapping. Endpoint URLs and API keys
+   * never need to enter this presentation component. */
+  customModelDisplayNames?: Readonly<Record<string, string>>
 }
 
-function getModelDisplayName(modelId?: string): string {
+function getModelDisplayName(
+  modelId?: string,
+  customModelDisplayNames?: Readonly<Record<string, string>>,
+): string {
   if (!modelId) return "AI"
-  const modelDef = getModelDefinition(modelId)
-  return modelDef?.label || modelId
+  const customName = customModelDisplayNames?.[modelId]?.trim()
+  return customName || modelDisplayLabel(modelId)
 }
 
 function formatTimestamp(timestamp: number): string {
@@ -68,11 +75,13 @@ interface SelectionAction {
 const MessageItem = memo(function MessageItem({
   message,
   t,
+  modelDisplayName,
   onReplyToSelection,
   replyDisabled,
 }: {
   message: ChatMessage
   t: any
+  modelDisplayName: string
   onReplyToSelection?: (reply: ChatReplyReference) => void
   replyDisabled?: boolean
 }) {
@@ -105,7 +114,7 @@ const MessageItem = memo(function MessageItem({
     }
 
     const selectedText = selection.toString()
-    const reply = createReplyReference(message, selectedText, getModelDisplayName(message.modelId))
+    const reply = createReplyReference(message, selectedText, modelDisplayName)
     if (!reply) {
       setSelectionAction(null)
       return
@@ -119,7 +128,7 @@ const MessageItem = memo(function MessageItem({
     const y = Math.max(8, rect.top - 38)
 
     setSelectionAction({ reply, x, y })
-  }, [message, onReplyToSelection, replyDisabled])
+  }, [message, modelDisplayName, onReplyToSelection, replyDisabled])
 
   const handleSelectionEnd = useCallback(() => {
     window.setTimeout(updateSelectionAction, 0)
@@ -152,9 +161,12 @@ const MessageItem = memo(function MessageItem({
       )}
     >
       <div className="flex items-center gap-2 text-[0.65rem] text-muted-foreground px-1">
-        <span className="font-medium uppercase tracking-wide">
+        <span className={cn(
+          "min-w-0 max-w-[60vw] truncate font-medium tracking-wide sm:max-w-96",
+          !isCustomOpenAiModelId(message.modelId ?? '') && "uppercase",
+        )} title={message.role === 'assistant' ? modelDisplayName : undefined}>
           {message.role === "assistant" 
-            ? getModelDisplayName(message.modelId)
+            ? modelDisplayName
             : message.role === "user" 
             ? t.chat.you
             : t.chat.system}
@@ -306,6 +318,7 @@ export function ChatMessageList({
   afterMessages,
   scrollSignal,
   onReplyToSelection,
+  customModelDisplayNames,
 }: ChatMessageListProps) {
   const { t } = useLanguage()
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -356,15 +369,22 @@ export function ChatMessageList({
             </div>
           </div>
         ) : (
-          messages.map((message) => (
-            <MessageItem
-              key={message.id}
-              message={message}
-              t={t}
-              onReplyToSelection={onReplyToSelection}
-              replyDisabled={isLoading}
-            />
-          ))
+          messages.map((message) => {
+            const modelDisplayName = getModelDisplayName(
+              message.modelId,
+              customModelDisplayNames,
+            )
+            return (
+              <MessageItem
+                key={message.id}
+                message={message}
+                t={t}
+                modelDisplayName={modelDisplayName}
+                onReplyToSelection={onReplyToSelection}
+                replyDisabled={isLoading}
+              />
+            )
+          })
         )}
         {isLoading ? (
           <StreamingIndicator label={t.common.loading} />

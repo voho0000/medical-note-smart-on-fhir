@@ -1,8 +1,14 @@
 import type {
   OpenAiCompatibleConfig,
+  OpenAiCompatibleConversationMode,
   OpenAiCompatibleProfile,
 } from '@/src/shared/types/openai-compatible.types'
-import { normalizeOpenAiCompatibleTransport } from '@/src/shared/types/openai-compatible.types'
+import {
+  normalizeOpenAiCompatibleAgentCapability,
+  normalizeOpenAiCompatibleAgentCapabilityTestedAt,
+  normalizeOpenAiCompatibleAgentMode,
+  normalizeOpenAiCompatibleTransport,
+} from '@/src/shared/types/openai-compatible.types'
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import {
   customOpenAiModelIdForProfile,
@@ -180,6 +186,25 @@ export function isOpenAiCompatibleRuntimeReady(
   if (!isOpenAiCompatibleReady(config)) return false
   return normalizeOpenAiCompatibleTransport(config.transport) !== 'mediprisma-gateway' ||
     gatewayAvailable
+}
+
+/** Resolve the chat execution path for a custom profile. Automatic mode is
+ * deliberately fail-closed: only a verified tool-call probe enables the Agent.
+ * Standard mode always disables Agent tools. Legacy manual-deep values are
+ * normalized to automatic mode and therefore cannot bypass verification. */
+export function resolveOpenAiCompatibleConversationMode(
+  profile: OpenAiCompatibleConfig | null | undefined,
+): OpenAiCompatibleConversationMode {
+  const agentMode = normalizeOpenAiCompatibleAgentMode(profile?.agentMode)
+  if (agentMode === 'standard') return 'standard'
+  const hasVerifiedProbe = normalizeOpenAiCompatibleAgentCapability(
+    profile?.agentCapability,
+  ) === 'verified' && normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+    profile?.agentCapabilityTestedAt,
+  ) !== null
+  return hasVerifiedProbe
+    ? 'deep-agent'
+    : 'standard'
 }
 
 /** Resolve the exact browser profile represented by a logical custom-model id.

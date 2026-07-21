@@ -26,6 +26,30 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
   const sessionIdForTitleRef = useRef<string | null>(null)
   const prevMessageCountRef = useRef<number>(0)
   const prevSessionIdRef = useRef<string | null>(null)
+  const activeGenerationRef = useRef<{
+    sessionId: string
+    revision: number
+  } | null>(null)
+  const generationGateRef = useRef({ enabled, revision: 0 })
+
+  /* eslint-disable react-hooks/refs -- This is a synchronous privacy gate.
+   * A render that switches to a custom endpoint must invalidate an in-flight
+   * cloud-title task before any passive effect or awaited continuation can
+   * write the transcript-derived title to Firestore. */
+  if (generationGateRef.current.enabled !== enabled) {
+    generationGateRef.current = {
+      enabled,
+      revision: generationGateRef.current.revision + 1,
+    }
+  }
+  /* eslint-enable react-hooks/refs */
+
+  useEffect(() => {
+    if (enabled) return
+    if (!activeGenerationRef.current) return
+    activeGenerationRef.current = null
+    setIsTitleGenerating(false)
+  }, [enabled, setIsTitleGenerating])
 
   // Reset message count when session changes
   useEffect(() => {
@@ -42,7 +66,19 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
     userMessage: string,
     assistantMessage: string,
     locale: string,
+    generationRevision: number,
   ) => {
+    const generation = { sessionId, revision: generationRevision }
+    const isGenerationActive = () => {
+      const gate = generationGateRef.current
+      return gate.enabled &&
+        gate.revision === generationRevision &&
+        useChatHistoryStore.getState().currentSessionId === sessionId
+    }
+
+    if (!isGenerationActive()) return
+    activeGenerationRef.current = generation
+
     try {
       setIsTitleGenerating(true)
 
@@ -52,9 +88,11 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
         assistantMessage,
         locale,
       })
+      if (!isGenerationActive()) return
 
       // Give the existing auto-save a chance to create the Firestore document.
       await new Promise(resolve => setTimeout(resolve, 1000))
+      if (!isGenerationActive()) return
 
       const currentId = useChatHistoryStore.getState().currentSessionId
       if (currentId !== sessionId) {
@@ -72,17 +110,26 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
         }
       }
 
+      if (!isGenerationActive()) return
       if (patientId && fhirServerUrl) {
         updateSession(userId, patientId, fhirServerUrl, sessionId, { title: smartTitle })
       }
     } catch (error) {
       console.error('[Smart Title] Failed to generate or update title:', error)
     } finally {
-      setIsTitleGenerating(false)
+      const active = activeGenerationRef.current
+      if (active?.sessionId === sessionId && active.revision === generationRevision) {
+        activeGenerationRef.current = null
+        setIsTitleGenerating(false)
+      }
     }
   }, [fhirServerUrl, patientId, setIsTitleGenerating, updateSession])
 
   useEffect(() => {
+    // `enabled` is a privacy boundary, not merely a scheduling hint. Custom
+    // endpoint transcripts must never enter the cloud smart-title pipeline.
+    if (!enabled) return
+
     // Only generate title once per session
     if (!currentSessionId) return
     if (!user?.uid) return
@@ -125,6 +172,7 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
       userMessage.content,
       assistantMessage.content,
       locale,
+      generationGateRef.current.revision,
     )
   }, [enabled, generateSmartTitle, messages, currentSessionId, user?.uid, locale])
 

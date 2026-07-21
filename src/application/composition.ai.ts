@@ -10,7 +10,9 @@ import {
   type ProviderResult,
 } from '@/src/infrastructure/ai/factories/ai-provider.factory'
 import {
+  testOpenAiCompatibleAgentCapability as testDirectOpenAiCompatibleAgentCapability,
   testOpenAiCompatibleConnection as testDirectOpenAiCompatibleConnection,
+  type OpenAiCompatibleAgentCapabilityResult,
   type OpenAiCompatibleConnectionResult,
 } from '@/src/infrastructure/ai/openai-compatible/openai-compatible.client'
 import { AiService } from '@/src/infrastructure/ai/services/ai.service'
@@ -87,4 +89,11 @@ export function testOpenAiCompatibleConnection(
   config: OpenAiCompatibleConfig,
 ): Promise<OpenAiCompatibleConnectionResult> {
   return testDirectOpenAiCompatibleConnection(config)
+}
+
+/** Patient-free two-step tool-call probe through the profile's configured path. */
+export function testOpenAiCompatibleAgentCapability(
+  config: OpenAiCompatibleConfig,
+): Promise<OpenAiCompatibleAgentCapabilityResult> {
+  return testDirectOpenAiCompatibleAgentCapability(config)
 }

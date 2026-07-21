@@ -73,6 +73,9 @@ describe('ai-config.store', () => {
         transport: 'direct',
         contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'suggested',
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
       },
       storageType: 'localStorage',
       credentialsHydrating: false,
@@ -216,6 +219,9 @@ describe('ai-config.store', () => {
         transport: 'direct',
         contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'manual',
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
       })
 
       await useAiConfigStore.getState().setOpenAiCompatibleEnabled(false)
@@ -230,6 +236,9 @@ describe('ai-config.store', () => {
         transport: 'direct',
         contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'suggested',
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
       })
     })
 
@@ -239,6 +248,9 @@ describe('ai-config.store', () => {
         baseUrl: '/ai/v1',
         modelId: 'hospital-model',
         apiKey: 'secret',
+        agentMode: 'auto',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 1_721_234_567_890,
       })
       useAiConfigStore.getState().clearAllKeys()
       expect(useAiConfigStore.getState().openAiCompatible).toEqual({
@@ -249,10 +261,177 @@ describe('ai-config.store', () => {
         transport: 'direct',
         contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
         contextWindowSource: 'manual',
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
       })
       expect(readStoredConnection()).toMatchObject({
-        profile: { baseUrl: '/ai/v1', modelId: 'hospital-model' },
+        profile: {
+          baseUrl: '/ai/v1',
+          modelId: 'hospital-model',
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        },
         encryptedApiKey: null,
+      })
+    })
+
+    it('revokes Agent trust when an encrypted custom key is cleared before hydration finishes', () => {
+      const profile = {
+        profileId: 'legacy',
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'hospital-model',
+        apiKey: null,
+        transport: 'direct' as const,
+        contextWindowTokens: 32768,
+        contextWindowSource: 'manual' as const,
+        agentMode: 'auto' as const,
+        agentCapability: 'verified' as const,
+        agentCapabilityTestedAt: 100,
+      }
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+        version: 2,
+        profiles: [{
+          profileId: profile.profileId,
+          profile: {
+            enabled: profile.enabled,
+            baseUrl: profile.baseUrl,
+            modelId: profile.modelId,
+            transport: profile.transport,
+            contextWindowTokens: profile.contextWindowTokens,
+            contextWindowSource: profile.contextWindowSource,
+            agentMode: profile.agentMode,
+            agentCapability: profile.agentCapability,
+            agentCapabilityTestedAt: profile.agentCapabilityTestedAt,
+          },
+          encryptedApiKey: 'ciphertext:not-hydrated-yet',
+        }],
+      }))
+      useAiConfigStore.setState({
+        openAiCompatibleProfiles: [profile],
+        openAiCompatible: profile,
+      })
+
+      useAiConfigStore.getState().clearAllKeys()
+
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        apiKey: null,
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+      expect(readStoredConnection()).toMatchObject({
+        profile: {
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        },
+        encryptedApiKey: null,
+      })
+    })
+
+    it('preserves or invalidates Agent capability according to the connection identity', async () => {
+      await useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'model-a',
+        apiKey: 'secret-a',
+        contextWindowTokens: 32768,
+        contextWindowSource: 'manual',
+        agentMode: 'auto',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 100,
+      })
+
+      // A context-budget edit is not a new upstream runtime and must not erase a
+      // successful capability probe when the current UI omits these new fields.
+      await useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'model-a',
+        apiKey: 'secret-a',
+        contextWindowTokens: 65536,
+        contextWindowSource: 'manual',
+      })
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        agentMode: 'auto',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 100,
+      })
+
+      // A copied old timestamp does not certify a changed model. Changing the
+      // runtime identity also revokes a previously manual mode by default.
+      await useAiConfigStore.getState().setOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'model-b',
+        apiKey: 'secret-a',
+        agentMode: 'auto',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 100,
+      })
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        modelId: 'model-b',
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+
+      // A new probe timestamp belongs to the edited connection and is accepted.
+      await useAiConfigStore.getState().updateOpenAiCompatibleConfig('legacy', {
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'model-c',
+        apiKey: 'secret-b',
+        agentMode: 'auto',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 200,
+      }, { confirmAgentModeForIdentityChange: true })
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        modelId: 'model-c',
+        apiKey: 'secret-b',
+        agentMode: 'auto',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 200,
+      })
+      expect(readStoredConnection()).toMatchObject({
+        profile: {
+          agentMode: 'auto',
+          agentCapability: 'verified',
+          agentCapabilityTestedAt: 200,
+        },
+      })
+    })
+
+    it.each([
+      ['base URL', { baseUrl: 'https://other.intra.example/v1' }],
+      ['transport', { transport: 'mediprisma-gateway' as const }],
+      ['API key', { apiKey: 'secret-b' }],
+    ])('revokes Agent trust when the %s identity field changes', async (_label, changed) => {
+      const initial = {
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'model-a',
+        apiKey: 'secret-a',
+        transport: 'direct' as const,
+        agentMode: 'auto' as const,
+        agentCapability: 'verified' as const,
+        agentCapabilityTestedAt: 100,
+      }
+      await useAiConfigStore.getState().setOpenAiCompatibleConfig(initial)
+
+      await useAiConfigStore.getState().updateOpenAiCompatibleConfig('legacy', {
+        ...initial,
+        ...changed,
+      })
+
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        ...changed,
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
       })
     })
 
@@ -336,17 +515,39 @@ describe('ai-config.store', () => {
           profileId: 'legacy',
           contextWindowTokens: 128000,
           contextWindowSource: 'suggested',
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
         }),
         expect.objectContaining({
           profileId: 'manual-small',
           contextWindowTokens: 15000,
           contextWindowSource: 'manual',
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
         }),
       ])
       expect(readStoredConnections()).toMatchObject({
         profiles: [
-          { profile: { contextWindowTokens: 128000, contextWindowSource: 'suggested' } },
-          { profile: { contextWindowTokens: 15000, contextWindowSource: 'manual' } },
+          {
+            profile: {
+              contextWindowTokens: 128000,
+              contextWindowSource: 'suggested',
+              agentMode: 'auto',
+              agentCapability: 'unknown',
+              agentCapabilityTestedAt: null,
+            },
+          },
+          {
+            profile: {
+              contextWindowTokens: 15000,
+              contextWindowSource: 'manual',
+              agentMode: 'auto',
+              agentCapability: 'unknown',
+              agentCapabilityTestedAt: null,
+            },
+          },
         ],
       })
     })
@@ -512,6 +713,164 @@ describe('ai-config.store', () => {
       expect(JSON.stringify(migrated)).not.toContain('legacy-secret!')
       expect(localStorage.getItem('openai_compatible_config')).toBeNull()
       expect(localStorage.getItem('openai_compatible_api_key')).toBeNull()
+    })
+
+    it('migrates a legacy manual-deep policy to verification-gated automatic mode', async () => {
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+        version: 2,
+        profiles: [{
+          profileId: 'legacy',
+          profile: {
+            enabled: true,
+            baseUrl: 'https://llm.intra.example/v1',
+            modelId: 'hospital-model',
+            transport: 'direct',
+            contextWindowTokens: 32768,
+            contextWindowSource: 'manual',
+            agentMode: 'deep-agent',
+            agentCapability: 'unknown',
+            agentCapabilityTestedAt: null,
+          },
+          encryptedApiKey: null,
+        }],
+      }))
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+      expect(readStoredConnection()).toMatchObject({
+        profile: {
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        },
+      })
+    })
+
+    it('revokes Agent trust when a stored custom credential cannot be decrypted', async () => {
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+        version: 2,
+        profiles: [{
+          profileId: 'legacy',
+          profile: {
+            enabled: true,
+            baseUrl: 'https://llm.intra.example/v1',
+            modelId: 'hospital-model',
+            transport: 'direct',
+            contextWindowTokens: 32768,
+            contextWindowSource: 'manual',
+            agentMode: 'deep-agent',
+            agentCapability: 'verified',
+            agentCapabilityTestedAt: 100,
+          },
+          encryptedApiKey: 'ciphertext:broken',
+        }],
+      }))
+      mockDecrypt.mockRejectedValueOnce(new Error('ciphertext cannot be decrypted'))
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        apiKey: null,
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+      expect(readStoredConnection()).toMatchObject({
+        profile: {
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        },
+        encryptedApiKey: null,
+      })
+      warn.mockRestore()
+    })
+
+    it('revokes Agent trust when plaintext credential migration cannot encrypt the key', async () => {
+      localStorage.setItem('openai_compatible_config', JSON.stringify({
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'hospital-model',
+        transport: 'direct',
+        contextWindowTokens: 32768,
+        contextWindowSource: 'manual',
+        agentMode: 'deep-agent',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 100,
+      }))
+      localStorage.setItem('openai_compatible_api_key', 'legacy-secret!')
+      mockEncrypt.mockRejectedValueOnce(new Error('WebCrypto unavailable'))
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        apiKey: null,
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+      expect(readStoredConnection()).toMatchObject({
+        profile: {
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        },
+        encryptedApiKey: null,
+      })
+      expect(localStorage.getItem('openai_compatible_api_key')).toBeNull()
+      warn.mockRestore()
+    })
+
+    it('persists a trust-revoked keyless fallback when the first migration write fails', async () => {
+      localStorage.setItem('openai_compatible_config', JSON.stringify({
+        enabled: true,
+        baseUrl: 'https://llm.intra.example/v1',
+        modelId: 'hospital-model',
+        transport: 'direct',
+        contextWindowTokens: 32768,
+        contextWindowSource: 'manual',
+        agentMode: 'deep-agent',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 100,
+      }))
+      localStorage.setItem('openai_compatible_api_key', 'legacy-secret!')
+      const originalSetItem = Storage.prototype.setItem
+      let connectionWrites = 0
+      const setItem = jest.spyOn(Storage.prototype, 'setItem')
+        .mockImplementation(function (this: Storage, key, value) {
+          if (key === CONNECTION_STORAGE_KEY && connectionWrites++ === 0) {
+            throw new Error('transient quota error')
+          }
+          originalSetItem.call(this, key, value)
+        })
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(connectionWrites).toBe(2)
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        apiKey: null,
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+      expect(readStoredConnection()).toMatchObject({
+        profile: {
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        },
+        encryptedApiKey: null,
+      })
+      setItem.mockRestore()
+      warn.mockRestore()
     })
 
     it('removes custom profile and credential remnants from both storage scopes', () => {
@@ -891,6 +1250,68 @@ describe('ai-config.store', () => {
         expect.objectContaining({ profileId: 'legacy', encryptedApiKey: null }),
         expect.objectContaining({ profileId: secondId, encryptedApiKey: null }),
       ])
+    })
+
+    it('revokes legacy split-record Agent trust when keys are cleared before hydration', async () => {
+      localStorage.setItem('openai_compatible_config', JSON.stringify({
+        enabled: true,
+        baseUrl: 'https://legacy.intra.example/v1',
+        modelId: 'legacy-agent-model',
+        transport: 'direct',
+        contextWindowTokens: 32768,
+        contextWindowSource: 'manual',
+        agentMode: 'deep-agent',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 100,
+      }))
+      localStorage.setItem('openai_compatible_api_key', 'legacy-secret')
+
+      useAiConfigStore.getState().clearAllKeys()
+
+      expect(localStorage.getItem('openai_compatible_api_key')).toBeNull()
+      expect(JSON.parse(
+        localStorage.getItem('openai_compatible_config') ?? '{}',
+      )).toMatchObject({
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        baseUrl: 'https://legacy.intra.example/v1',
+        apiKey: null,
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      })
+    })
+
+    it('removes a legacy split-record profile when trust revocation cannot be saved', () => {
+      localStorage.setItem('openai_compatible_config', JSON.stringify({
+        enabled: true,
+        baseUrl: 'https://legacy.intra.example/v1',
+        modelId: 'legacy-agent-model',
+        agentMode: 'deep-agent',
+        agentCapability: 'verified',
+        agentCapabilityTestedAt: 100,
+      }))
+      localStorage.setItem('openai_compatible_api_key', 'legacy-secret')
+      const originalSetItem = Storage.prototype.setItem
+      const setItem = jest.spyOn(Storage.prototype, 'setItem')
+        .mockImplementation(function (this: Storage, key, value) {
+          if (key === 'openai_compatible_config') throw new Error('Quota exceeded')
+          originalSetItem.call(this, key, value)
+        })
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+
+      useAiConfigStore.getState().clearAllKeys()
+
+      expect(localStorage.getItem('openai_compatible_api_key')).toBeNull()
+      expect(localStorage.getItem('openai_compatible_config')).toBeNull()
+      setItem.mockRestore()
+      warn.mockRestore()
     })
 
     it('clears memory even when browser storage throws during logout cleanup', () => {

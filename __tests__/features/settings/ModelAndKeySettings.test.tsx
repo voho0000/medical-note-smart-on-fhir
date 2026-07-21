@@ -1,6 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ModelAndKeySettings } from '@/features/settings/components/ApiKeyField'
-import { testOpenAiCompatibleConnection } from '@/src/application/composition.ai'
+import {
+  testOpenAiCompatibleAgentCapability,
+  testOpenAiCompatibleConnection,
+} from '@/src/application/composition.ai'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import type { SettingsNavigationTarget } from '@/src/application/providers/right-panel.provider'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
@@ -8,9 +11,13 @@ import { DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW } from '@/src/shared/types/ope
 
 jest.mock('@/src/application/composition.ai', () => ({
   testOpenAiCompatibleConnection: jest.fn(),
+  testOpenAiCompatibleAgentCapability: jest.fn(),
 }))
 
 const mockTestOpenAiCompatibleConnection = jest.mocked(testOpenAiCompatibleConnection)
+const mockTestOpenAiCompatibleAgentCapability = jest.mocked(
+  testOpenAiCompatibleAgentCapability,
+)
 
 jest.mock('@/features/auth', () => ({
   AuthStatus: () => <div data-testid="auth-status">Cloud account status</div>,
@@ -88,6 +95,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     localStorage.clear()
     sessionStorage.clear()
     mockTestOpenAiCompatibleConnection.mockReset()
+    mockTestOpenAiCompatibleAgentCapability.mockReset()
     setConfiguredLocalEndpoint()
   })
 
@@ -113,7 +121,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(screen.getAllByText(/qwen2\.5:7b · 127\.0\.0\.1:11434/)).toHaveLength(1)
   })
 
-  it('shows only essential local fields until Advanced settings is opened', () => {
+  it('shows all custom endpoint settings without a nested Advanced toggle', () => {
     renderSettings(true)
 
     const localTrigger = screen.getByRole('button', {
@@ -131,13 +139,9 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       'https://llm.intra.example.org/v1/chat/completions',
     )
     expect(screen.getByRole('combobox', { name: '上游模型 ID' })).toHaveValue('qwen2.5:7b')
-    expect(screen.queryByRole('spinbutton', { name: '內容視窗（tokens）' })).not.toBeInTheDocument()
-
-    const advancedTrigger = screen.getByRole('button', { name: '進階設定' })
-    expect(advancedTrigger).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(advancedTrigger)
     expect(screen.getByRole('spinbutton', { name: '內容視窗（tokens）' })).toHaveValue(32768)
     expect(screen.getByRole('textbox', { name: 'API 金鑰（選填）' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '進階設定' })).not.toBeInTheDocument()
   })
 
   it('shows only the public Firebase Gateway providers', () => {
@@ -155,7 +159,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
 
     expect(screen.getByText(
-      /目前支援 NVIDIA、OpenRouter 與 Cerebras/,
+      '支援 NVIDIA、OpenRouter、Cerebras',
     )).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' }))
       .toHaveAttribute(
@@ -188,10 +192,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         'aria-expanded',
         'true',
       )
-      expect(screen.getByRole('button', { name: '進階設定' })).toHaveAttribute(
-        'aria-expanded',
-        'true',
-      )
+      expect(screen.queryByRole('button', { name: '進階設定' })).not.toBeInTheDocument()
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
       expect(onSettingsTargetHandled).toHaveBeenCalledTimes(1)
     } finally {
@@ -373,7 +374,6 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     })
     renderSettings(true)
 
-    fireEvent.click(screen.getByRole('button', { name: '進階設定' }))
     const contextInput = screen.getByRole('spinbutton', {
       name: '內容視窗（tokens）',
     })
@@ -445,6 +445,269 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(saveButton).toBeDisabled()
   })
 
+  it('checks Agent support and automatically saves a verified result', async () => {
+    mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({ status: 'verified' })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    expect(screen.getByRole('radio', { name: '自動偵測' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '標準對話' })).not.toBeChecked()
+    expect(screen.queryByRole('radio', { name: '深入對話' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Agent 能力: 未驗證')).toBeInTheDocument()
+
+    const agentTestButton = screen.getByRole('button', { name: '檢查 Agent 支援' })
+    expect(agentTestButton).toBeEnabled()
+    fireEvent.click(agentTestButton)
+
+    await screen.findByText('支援 Agent 深入模式，已自動儲存。')
+    expect(screen.getByLabelText('Agent 能力: 已驗證')).toBeInTheDocument()
+    expect(mockTestOpenAiCompatibleAgentCapability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'qwen2.5:7b',
+        agentMode: 'auto',
+        agentCapability: 'unknown',
+        agentCapabilityTestedAt: null,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual(
+        expect.objectContaining({
+          agentMode: 'auto',
+          agentCapability: 'verified',
+          agentCapabilityTestedAt: expect.any(Number),
+        }),
+      )
+    })
+  })
+
+  it('does not re-enable a disabled profile while saving its Agent result', async () => {
+    const current = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const disabled = { ...current, enabled: false }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [disabled],
+      openAiCompatible: disabled,
+    })
+    mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({ status: 'verified' })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
+
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles[0]).toEqual(
+        expect.objectContaining({
+          enabled: false,
+          agentCapability: 'verified',
+          agentCapabilityTestedAt: expect.any(Number),
+        }),
+      )
+    })
+  })
+
+  it('records an unsupported Agent result and allows an explicit standard-chat policy', async () => {
+    mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({
+      status: 'unsupported',
+      reason: 'tools are not accepted',
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
+
+    await screen.findByText('未通過深入模式驗證，結果已自動儲存。')
+    expect(screen.getByText('檢測詳細資訊: tools are not accepted')).toBeInTheDocument()
+    expect(screen.getByLabelText('Agent 能力: 未通過深入模式驗證')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual(
+        expect.objectContaining({
+          agentMode: 'auto',
+          agentCapability: 'unsupported',
+          agentCapabilityTestedAt: expect.any(Number),
+        }),
+      )
+    })
+    fireEvent.click(screen.getByRole('radio', { name: '標準對話' }))
+    fireEvent.click(screen.getByRole('button', { name: /儲存/ }))
+
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual(
+        expect.objectContaining({
+          agentMode: 'standard',
+          agentCapability: 'unsupported',
+          agentCapabilityTestedAt: expect.any(Number),
+        }),
+      )
+    })
+  })
+
+  it('keeps the saved Agent result when a new check is inconclusive', async () => {
+    const current = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const verified = {
+      ...current,
+      agentMode: 'auto' as const,
+      agentCapability: 'verified' as const,
+      agentCapabilityTestedAt: 1_721_500_000_000,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [verified],
+      openAiCompatible: verified,
+    })
+    mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({
+      status: 'inconclusive',
+      reason: 'request timed out',
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
+
+    await screen.findByText('暫時無法完成深入模式驗證；已保留原本設定。')
+    expect(screen.getByText('檢測詳細資訊: request timed out')).toBeInTheDocument()
+    expect(screen.getByLabelText('Agent 能力: 已驗證')).toBeInTheDocument()
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles[0]).toEqual(verified)
+  })
+
+  it('invalidates Agent verification when a connection identity field changes', async () => {
+    const current = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const verified = {
+      ...current,
+      agentMode: 'auto' as const,
+      agentCapability: 'verified' as const,
+      agentCapabilityTestedAt: 1_721_500_000_000,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [verified],
+      openAiCompatible: verified,
+    })
+    mockTestOpenAiCompatibleConnection.mockResolvedValue({
+      models: ['qwen3:8b'],
+      modelFound: true,
+      usedChatProbe: false,
+      detectedContextWindowTokens: null,
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    expect(screen.getByLabelText('Agent 能力: 已驗證')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+      target: { value: 'qwen3:8b' },
+    })
+    expect(screen.getByRole('radio', { name: '自動偵測' })).toBeChecked()
+    expect(screen.queryByRole('radio', { name: '深入對話' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Agent 能力: 未驗證')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '檢查 Agent 支援' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '檢查 Agent 支援' })).toBeEnabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /儲存/ }))
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual(
+        expect.objectContaining({
+          modelId: 'qwen3:8b',
+          agentMode: 'auto',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        }),
+      )
+    })
+  })
+
+  it('saves a fresh Agent result when the clock matches the previous timestamp', async () => {
+    const testedAt = 1_721_500_000_000
+    const current = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const verified = {
+      ...current,
+      agentMode: 'auto' as const,
+      agentCapability: 'verified' as const,
+      agentCapabilityTestedAt: testedAt,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [verified],
+      openAiCompatible: verified,
+    })
+    mockTestOpenAiCompatibleConnection.mockResolvedValue({
+      models: ['qwen3:8b'],
+      modelFound: true,
+      usedChatProbe: false,
+      detectedContextWindowTokens: null,
+    })
+    mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({ status: 'verified' })
+    const now = jest.spyOn(Date, 'now').mockReturnValue(testedAt)
+
+    try {
+      renderSettings(true)
+      fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+      fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+        target: { value: 'qwen3:8b' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
+      const agentTestButton = screen.getByRole('button', { name: '檢查 Agent 支援' })
+      await waitFor(() => expect(agentTestButton).toBeEnabled())
+      fireEvent.click(agentTestButton)
+
+      await waitFor(() => {
+        expect(useAiConfigStore.getState().openAiCompatibleProfiles[0]).toEqual(
+          expect.objectContaining({
+            modelId: 'qwen3:8b',
+            agentCapability: 'verified',
+            agentCapabilityTestedAt: testedAt + 1,
+          }),
+        )
+      })
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('preserves an explicit standard-chat policy selected for an edited connection', async () => {
+    const current = useAiConfigStore.getState().openAiCompatibleProfiles[0]!
+    const verified = {
+      ...current,
+      agentMode: 'auto' as const,
+      agentCapability: 'verified' as const,
+      agentCapabilityTestedAt: 1_721_500_000_000,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [verified],
+      openAiCompatible: verified,
+    })
+    mockTestOpenAiCompatibleConnection.mockResolvedValue({
+      models: ['qwen3:8b'],
+      modelFound: true,
+      usedChatProbe: false,
+      detectedContextWindowTokens: null,
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+      target: { value: 'qwen3:8b' },
+    })
+    expect(screen.getByRole('radio', { name: '自動偵測' })).toBeChecked()
+
+    fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '檢查 Agent 支援' })).toBeEnabled()
+    })
+    fireEvent.click(screen.getByRole('radio', { name: '標準對話' }))
+    fireEvent.click(screen.getByRole('button', { name: /儲存/ }))
+
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatible).toEqual(
+        expect.objectContaining({
+          modelId: 'qwen3:8b',
+          agentMode: 'standard',
+          agentCapability: 'unknown',
+          agentCapabilityTestedAt: null,
+        }),
+      )
+    })
+  })
+
   it('keeps a new connection profile unsaveable until its test succeeds', async () => {
     useAiConfigStore.setState({
       openAiCompatibleProfiles: [],
@@ -472,10 +735,101 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       target: { value: 'hospital-model' },
     })
     const saveButton = screen.getByRole('button', { name: '儲存並啟用' })
+    const agentTestButton = screen.getByRole('button', { name: '檢查 Agent 支援' })
     expect(saveButton).toBeDisabled()
+    expect(agentTestButton).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
-    await waitFor(() => expect(saveButton).toBeEnabled())
+    await waitFor(() => {
+      expect(saveButton).toBeEnabled()
+      expect(agentTestButton).toBeEnabled()
+    })
+  })
+
+  it('creates a new profile as soon as Agent support is confirmed', async () => {
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [],
+      openAiCompatible: {
+        enabled: false,
+        baseUrl: '',
+        modelId: '',
+        apiKey: null,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+        contextWindowSource: 'suggested',
+      },
+    })
+    mockTestOpenAiCompatibleConnection.mockResolvedValue({
+      models: [],
+      modelFound: null,
+      usedChatProbe: true,
+      detectedContextWindowTokens: null,
+    })
+    mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({ status: 'verified' })
+    renderSettings(true)
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Chat Completions 網址' }), {
+      target: { value: 'https://new.intra.example/v1/chat/completions' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+      target: { value: 'hospital-agent' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
+    const agentTestButton = screen.getByRole('button', { name: '檢查 Agent 支援' })
+    await waitFor(() => expect(agentTestButton).toBeEnabled())
+    fireEvent.click(agentTestButton)
+
+    await screen.findByText('支援 Agent 深入模式，已自動儲存。')
+    await waitFor(() => {
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({
+          enabled: true,
+          modelId: 'hospital-agent',
+          agentMode: 'auto',
+          agentCapability: 'verified',
+          agentCapabilityTestedAt: expect.any(Number),
+        }),
+      ])
+    })
+  })
+
+  it('does not create a new profile when Agent support cannot be confirmed', async () => {
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [],
+      openAiCompatible: {
+        enabled: false,
+        baseUrl: '',
+        modelId: '',
+        apiKey: null,
+        contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+        contextWindowSource: 'suggested',
+      },
+    })
+    mockTestOpenAiCompatibleConnection.mockResolvedValue({
+      models: [],
+      modelFound: null,
+      usedChatProbe: true,
+      detectedContextWindowTokens: null,
+    })
+    mockTestOpenAiCompatibleAgentCapability.mockResolvedValue({
+      status: 'inconclusive',
+      reason: 'request timed out',
+    })
+    renderSettings(true)
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Chat Completions 網址' }), {
+      target: { value: 'https://new.intra.example/v1/chat/completions' },
+    })
+    fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
+      target: { value: 'hospital-agent' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
+    const agentTestButton = screen.getByRole('button', { name: '檢查 Agent 支援' })
+    await waitFor(() => expect(agentTestButton).toBeEnabled())
+    fireEvent.click(agentTestButton)
+
+    await screen.findByText('暫時無法完成深入模式驗證；已保留原本設定。')
+    expect(screen.getByText('檢測詳細資訊: request timed out')).toBeInTheDocument()
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
   })
 
   it('adds another custom model without replacing the first and can delete it', async () => {
@@ -544,8 +898,6 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false)
     renderSettings(true)
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
-    fireEvent.click(screen.getByRole('button', { name: '進階設定' }))
-
     const profileSelect = screen.getByRole('combobox', {
       name: '選擇要編輯的模型',
     })
@@ -795,7 +1147,6 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     renderSettings(true)
 
     fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
-    fireEvent.click(screen.getByRole('button', { name: '進階設定' }))
     const contextInput = screen.getByRole('spinbutton', { name: '內容視窗（tokens）' })
     fireEvent.change(contextInput, { target: { value: '65536' } })
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
@@ -833,6 +1184,28 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(screen.getByRole('textbox', { name: 'Chat Completions 網址' })).toHaveValue('')
     expect(screen.queryByText(/端點回報 262,144 tokens/)).not.toBeInTheDocument()
     expect(screen.queryByText('連線成功，模型清單端點回應正常。')).not.toBeInTheDocument()
+  })
+
+  it('does not restore Agent trust from a stale check after profiles are cleared', async () => {
+    let resolveAgentCheck!: (
+      value: Awaited<ReturnType<typeof testOpenAiCompatibleAgentCapability>>,
+    ) => void
+    mockTestOpenAiCompatibleAgentCapability.mockImplementation(() => new Promise((resolve) => {
+      resolveAgentCheck = resolve
+    }))
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    fireEvent.click(screen.getByRole('button', { name: '檢查 Agent 支援' }))
+
+    act(() => useAiConfigStore.getState().clearOpenAiCompatibleConfig())
+    await act(async () => {
+      resolveAgentCheck({ status: 'verified' })
+    })
+
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+    expect(screen.queryByText('支援 Agent 深入模式，已自動儲存。'))
+      .not.toBeInTheDocument()
   })
 
   it('separates cloud model credentials from the Perplexity Agent tool', () => {

@@ -1,3 +1,5 @@
+import { createOpenAI } from '@ai-sdk/openai'
+import { stepCountIs, streamText } from 'ai'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import {
   MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
@@ -7,6 +9,7 @@ import {
 import { ENV_CONFIG } from '@/src/shared/config/env.config'
 import { getAppCheckToken } from '@/src/infrastructure/ai/utils/app-check'
 import { getProxyIdToken } from '@/src/infrastructure/ai/utils/proxy-auth'
+import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import {
   isOpenAiCompatibleReady,
   openAiCompatibleEndpointUrl,
@@ -23,6 +26,27 @@ export interface OpenAiCompatibleConnectionResult {
    *  OpenAI's model-list schema does not require this metadata. */
   detectedContextWindowTokens: number | null
 }
+
+export interface OpenAiCompatibleAgentCapabilityResult {
+  status: 'verified' | 'unsupported' | 'inconclusive'
+  reason?: string
+}
+
+export interface OpenAiCompatibleAgentCapabilityOptions {
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+  origin?: string
+  gatewayUrl?: string
+}
+
+const AGENT_CAPABILITY_PROBE_TOOL = 'getDataOverview' as const
+const AGENT_CAPABILITY_PROBE_TIMEOUT_MS = 3 * 60_000
+// Keep this below the Firebase Gateway's eight-minute upstream timeout while
+// allowing the two-step 550B reasoning-model probe substantially more time.
+const NVIDIA_NEMOTRON_AGENT_CAPABILITY_PROBE_TIMEOUT_MS = 7 * 60_000
+const AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS = 1_024
+const NVIDIA_NEMOTRON_3_ULTRA_MODEL_ID = 'nvidia/nemotron-3-ultra-550b-a55b'
+const NVIDIA_NEMOTRON_PROBE_REASONING_BUDGET = 1_024
 
 const CONTEXT_WINDOW_FIELDS = [
   // Only high-confidence runtime/serving extensions belong here. Do not add
@@ -214,9 +238,11 @@ export function createOpenAiCompatibleGatewayFetch(
 export function createConfiguredOpenAiCompatibleFetch(
   config: OpenAiCompatibleConfig,
 ): typeof fetch {
-  return normalizeOpenAiCompatibleTransport(config.transport) === 'mediprisma-gateway'
+  const transportFetch = normalizeOpenAiCompatibleTransport(config.transport) ===
+    'mediprisma-gateway'
     ? createOpenAiCompatibleGatewayFetch(config)
     : createOpenAiCompatibleFetch(config.apiKey)
+  return createNvidiaNemotronRequestFetch(config, transportFetch)
 }
 export function openAiCompatibleSdkKey(apiKey: string | null | undefined): string {
   return apiKey?.trim() || NO_AUTH_SDK_KEY
@@ -345,6 +371,293 @@ export async function testOpenAiCompatibleConnection(
       modelFound: null,
       usedChatProbe: true,
       detectedContextWindowTokens: null,
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function agentCapabilityProbeReason(
+  error: unknown,
+  apiKey: string | null | undefined,
+): string {
+  const record = error && typeof error === 'object'
+    ? error as Record<string, unknown>
+    : null
+  const raw = error instanceof Error
+    ? error.message
+    : typeof record?.message === 'string'
+      ? record.message
+      : String(error || 'Agent capability probe failed')
+  // Redact before truncating so a credential that crosses the display limit
+  // cannot leave a visible prefix behind.
+  let reason = raw
+  if (apiKey?.trim()) reason = reason.split(apiKey.trim()).join('[API_KEY_REDACTED]')
+  return reason
+    .replace(/sk-[a-zA-Z0-9_-]{12,}/g, '[API_KEY_REDACTED]')
+    .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [TOKEN_REDACTED]')
+    .slice(0, 300)
+}
+
+function agentCapabilityProbeStatus(error: unknown): 'unsupported' | 'inconclusive' {
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException && (
+    error.name === 'AbortError' || error.name === 'TimeoutError'
+  )) return 'inconclusive'
+  if (error instanceof TypeError) return 'inconclusive'
+
+  const message = error instanceof Error ? error.message : String(error || '')
+  const capabilityTerm = String.raw`(?:tools|tool[_ -]?(?:calling|use)|function[_ -]?(?:calling|calls))`
+  const explicitCapabilityRejection = [
+    new RegExp(`\\b${capabilityTerm}\\b.{0,80}\\b(?:not supported|unsupported)\\b`, 'i'),
+    new RegExp(`\\b(?:not supported|unsupported)\\b.{0,80}\\b${capabilityTerm}\\b`, 'i'),
+    new RegExp(`\\b(?:does not|doesn't)\\s+support\\b.{0,40}\\b${capabilityTerm}\\b`, 'i'),
+  ]
+  if (explicitCapabilityRejection.some((pattern) => pattern.test(message))) {
+    return 'unsupported'
+  }
+
+  // A provider can reject a schema, omit an OpenAI-compatible stream field, or
+  // return a vendor-specific parsing error even when the underlying model has
+  // function-calling support. Authentication, rate limits, network failures,
+  // and unknown 4xx responses are equally unable to prove lack of support.
+  return 'inconclusive'
+}
+
+function isHostedNvidiaNemotron3Ultra(
+  config: OpenAiCompatibleConfig,
+  origin?: string,
+): boolean {
+  if (config.modelId.trim().toLowerCase() !== NVIDIA_NEMOTRON_3_ULTRA_MODEL_ID) {
+    return false
+  }
+  try {
+    return new URL(resolveOpenAiCompatibleBaseUrl(config.baseUrl, origin))
+      .hostname.toLowerCase() === 'integrate.api.nvidia.com'
+  } catch {
+    return false
+  }
+}
+
+function hasAgentToolContext(body: Record<string, unknown>): boolean {
+  if (
+    Object.prototype.hasOwnProperty.call(body, 'tools') ||
+    Object.prototype.hasOwnProperty.call(body, 'tool_choice')
+  ) return true
+
+  if (!Array.isArray(body.messages)) return false
+  return body.messages.some((message) => {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) return false
+    const record = message as Record<string, unknown>
+    return record.role === 'tool' || (
+      record.role === 'assistant' &&
+      Object.prototype.hasOwnProperty.call(record, 'tool_calls')
+    )
+  })
+}
+
+/** NVIDIA's hosted Nemotron endpoint requires chat-template options that the
+ * OpenAI AI SDK schema does not expose for tool-bearing requests. Inject them
+ * only for the exact official host/model pair when tools or tool history are
+ * present, leaving standard chat/summary requests and other endpoints untouched.
+ * The optional reduced reasoning budget is reserved for the patient-free
+ * capability probe; normal queries keep NVIDIA's configured/default budget. */
+function createNvidiaNemotronRequestFetch(
+  config: OpenAiCompatibleConfig,
+  fetchImpl: typeof fetch,
+  options: { origin?: string; reasoningBudget?: number } = {},
+): typeof fetch {
+  if (!isHostedNvidiaNemotron3Ultra(config, options.origin)) return fetchImpl
+
+  return async (input, init) => {
+    if (typeof init?.body !== 'string') return fetchImpl(input, init)
+    try {
+      const body = JSON.parse(init.body) as Record<string, unknown>
+      if (!hasAgentToolContext(body)) return fetchImpl(input, init)
+      const existingTemplateOptions = body.chat_template_kwargs
+      body.chat_template_kwargs = {
+        ...(existingTemplateOptions && typeof existingTemplateOptions === 'object' &&
+          !Array.isArray(existingTemplateOptions)
+          ? existingTemplateOptions as Record<string, unknown>
+          : {}),
+        enable_thinking: true,
+        force_nonempty_content: true,
+      }
+      if (options.reasoningBudget !== undefined) {
+        body.reasoning_budget = options.reasoningBudget
+      }
+      return fetchImpl(input, { ...init, body: JSON.stringify(body) })
+    } catch {
+      // Keep the SDK request intact if a future transport uses a non-JSON body.
+      return fetchImpl(input, init)
+    }
+  }
+}
+
+function agentCapabilityProbeNonce(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
+  }
+  const bytes = new Uint8Array(16)
+  globalThis.crypto?.getRandomValues?.(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('') ||
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+/**
+ * Patient-free, end-to-end Agent capability probe for an OpenAI-compatible
+ * profile. This deliberately uses the same AI SDK Chat Completions provider and
+ * configured direct/Gateway fetch path as Deep Chat.
+ *
+ * Step 1 sends the complete production FHIR tool set and forces getDataOverview.
+ * Every tool receives a null patient/data source, and that one execute function
+ * is replaced with a no-side-effect nonce response. Step 2 disables every tool
+ * and asks the model to return that nonce. A verified result therefore proves
+ * that the endpoint accepts the real schemas as well as streamed tool-call
+ * parsing, local execution, assistant/tool message round-tripping, and post-tool
+ * streamed text. No patient record is read or included in either request.
+ */
+export async function testOpenAiCompatibleAgentCapability(
+  config: OpenAiCompatibleConfig,
+  options: OpenAiCompatibleAgentCapabilityOptions = {},
+): Promise<OpenAiCompatibleAgentCapabilityResult> {
+  if (!isOpenAiCompatibleReady(config)) {
+    return { status: 'inconclusive', reason: 'Base URL and model ID are required' }
+  }
+
+  const timeoutMs = options.timeoutMs ?? (
+    isHostedNvidiaNemotron3Ultra(config, options.origin)
+      ? NVIDIA_NEMOTRON_AGENT_CAPABILITY_PROBE_TIMEOUT_MS
+      : AGENT_CAPABILITY_PROBE_TIMEOUT_MS
+  )
+  const rawFetch = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const usesGateway = normalizeOpenAiCompatibleTransport(config.transport) ===
+    'mediprisma-gateway'
+  const configuredFetch = usesGateway
+    ? createOpenAiCompatibleGatewayFetch(config, {
+      fetchImpl: rawFetch,
+      origin: options.origin,
+      gatewayUrl: options.gatewayUrl,
+    })
+    : createOpenAiCompatibleFetch(config.apiKey, rawFetch)
+  const probeFetch = createNvidiaNemotronRequestFetch(
+    config,
+    configuredFetch,
+    {
+      origin: options.origin,
+      reasoningBudget: NVIDIA_NEMOTRON_PROBE_REASONING_BUDGET,
+    },
+  )
+  const controller = new AbortController()
+  let didTimeout = false
+  const timeout = setTimeout(() => {
+    didTimeout = true
+    controller.abort()
+  }, timeoutMs)
+  const nonce = agentCapabilityProbeNonce()
+  let toolExecuted = false
+  let sawToolCall = false
+  let sawToolResult = false
+  let finalText = ''
+
+  try {
+    const sdk = createOpenAI({
+      baseURL: resolveOpenAiCompatibleBaseUrl(config.baseUrl, options.origin),
+      apiKey: openAiCompatibleSdkKey(config.apiKey),
+      fetch: probeFetch,
+    })
+    const productionFhirTools = createFhirTools(() => ({
+      patient: null,
+      collection: null,
+    }))
+    const tools = {
+      ...productionFhirTools,
+      [AGENT_CAPABILITY_PROBE_TOOL]: {
+        ...productionFhirTools[AGENT_CAPABILITY_PROBE_TOOL],
+        execute: async () => {
+          toolExecuted = true
+          return {
+            success: true,
+            summary: 'Synthetic Agent capability probe completed',
+            data: { nonce },
+          }
+        },
+      },
+    }
+    const result = streamText({
+      model: sdk.chat(config.modelId),
+      system: 'This is a capability test with synthetic data only. Follow the requested tool flow exactly.',
+      messages: [
+        {
+          role: 'user',
+          content: `Call ${AGENT_CAPABILITY_PROBE_TOOL}. After its result arrives, reply with only the nonce inside result.data.`,
+        },
+      ],
+      tools,
+      stopWhen: stepCountIs(2),
+      maxOutputTokens: AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS,
+      maxRetries: 0,
+      abortSignal: controller.signal,
+      onError: () => undefined,
+      prepareStep: ({ stepNumber }) => stepNumber === 0
+        ? {
+          toolChoice: { type: 'tool', toolName: AGENT_CAPABILITY_PROBE_TOOL },
+        }
+        : {
+          activeTools: [],
+          toolChoice: 'none',
+        },
+    })
+
+    for await (const chunk of result.fullStream) {
+      if (chunk.type === 'tool-call') {
+        if (chunk.toolName !== AGENT_CAPABILITY_PROBE_TOOL) {
+          return {
+            status: 'inconclusive',
+            reason: `Endpoint called an unexpected tool: ${chunk.toolName}`,
+          }
+        }
+        sawToolCall = true
+      } else if (chunk.type === 'tool-result') {
+        if (chunk.toolName === AGENT_CAPABILITY_PROBE_TOOL) sawToolResult = true
+      } else if (chunk.type === 'text-delta') {
+        finalText += chunk.text
+      } else if (chunk.type === 'error') {
+        throw chunk.error
+      }
+    }
+
+    if (didTimeout) {
+      return {
+        status: 'inconclusive',
+        reason: `Agent capability probe timed out after ${timeoutMs} ms`,
+      }
+    }
+
+    if (!sawToolCall || !toolExecuted || !sawToolResult) {
+      return {
+        status: 'inconclusive',
+        reason: 'Endpoint did not complete a valid streamed tool-call and tool-result flow',
+      }
+    }
+    if (!finalText.trim()) {
+      return {
+        status: 'inconclusive',
+        reason: 'Endpoint produced no streamed final text after the tool result',
+      }
+    }
+    if (finalText.trim() !== nonce) {
+      return {
+        status: 'inconclusive',
+        reason: 'Tool round-trip completed, but the model did not return the requested probe nonce exactly',
+      }
+    }
+    return { status: 'verified' }
+  } catch (error) {
+    return {
+      status: didTimeout ? 'inconclusive' : agentCapabilityProbeStatus(error),
+      reason: didTimeout
+        ? `Agent capability probe timed out after ${timeoutMs} ms`
+        : agentCapabilityProbeReason(error, config.apiKey),
     }
   } finally {
     clearTimeout(timeout)

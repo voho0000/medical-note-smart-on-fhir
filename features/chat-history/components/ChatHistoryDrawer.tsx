@@ -26,7 +26,14 @@ import { LoginPrompt } from './LoginPrompt'
 import { EmptyState } from './EmptyState'
 import { formatRelativeDate } from '../utils/date-formatter'
 
-export function ChatHistoryDrawer() {
+interface ChatHistoryDrawerProps {
+  /** Whether this conversation is allowed to persist to cloud history. */
+  persistenceEnabled?: boolean
+}
+
+export function ChatHistoryDrawer({
+  persistenceEnabled = true,
+}: ChatHistoryDrawerProps) {
   const { t, locale } = useLanguage()
   const { patientId, patientName, fhirServerUrl } = useFhirContext()
   const { user } = useAuth()
@@ -48,7 +55,11 @@ export function ChatHistoryDrawer() {
     handleOpenAuthDialog,
     handleConfirmSwitch,
     handleCancelSwitch,
-  } = useChatHistoryDrawer(patientId || undefined, fhirServerUrl || undefined)
+  } = useChatHistoryDrawer(
+    patientId || undefined,
+    fhirServerUrl || undefined,
+    { persistenceEnabled },
+  )
 
   const [query, setQuery] = useState('')
   const filteredSessions = useMemo(() => {

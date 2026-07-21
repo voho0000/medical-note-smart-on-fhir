@@ -7,11 +7,15 @@ import {
   OpenAiCompatibleUrlError,
   resolveDefaultOpenAiCompatibleProfile,
   resolveOpenAiCompatibleBaseUrl,
+  resolveOpenAiCompatibleConversationMode,
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
 import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
 import {
   DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+  normalizeOpenAiCompatibleAgentCapability,
+  normalizeOpenAiCompatibleAgentCapabilityTestedAt,
+  normalizeOpenAiCompatibleAgentMode,
   suggestedOpenAiCompatibleContextWindow,
 } from '@/src/shared/types/openai-compatible.types'
 
@@ -29,6 +33,59 @@ describe('OpenAI-compatible context-window suggestions', () => {
     ['meta-llama/Llama-3.1-8B-Instruct', 131072],
   ])('suggests the known runtime window for %s', (modelId, expected) => {
     expect(suggestedOpenAiCompatibleContextWindow(modelId)).toBe(expected)
+  })
+})
+
+describe('OpenAI-compatible Agent capability', () => {
+  it('normalizes legacy and tampered capability fields to safe defaults', () => {
+    expect(normalizeOpenAiCompatibleAgentMode(undefined)).toBe('auto')
+    expect(normalizeOpenAiCompatibleAgentMode('invalid')).toBe('auto')
+    expect(normalizeOpenAiCompatibleAgentMode('deep-agent')).toBe('auto')
+    expect(normalizeOpenAiCompatibleAgentCapability(undefined)).toBe('unknown')
+    expect(normalizeOpenAiCompatibleAgentCapability('verified')).toBe('verified')
+    expect(normalizeOpenAiCompatibleAgentCapability('invalid')).toBe('unknown')
+    expect(normalizeOpenAiCompatibleAgentCapabilityTestedAt(1_721_234_567_890)).toBe(
+      1_721_234_567_890,
+    )
+    expect(normalizeOpenAiCompatibleAgentCapabilityTestedAt(-1)).toBeNull()
+    expect(normalizeOpenAiCompatibleAgentCapabilityTestedAt('1721234567890')).toBeNull()
+  })
+
+  it.each([
+    [{}, 'standard'],
+    [{ agentMode: 'auto', agentCapability: 'unknown' }, 'standard'],
+    [{ agentMode: 'auto', agentCapability: 'unsupported' }, 'standard'],
+    [{ agentMode: 'auto', agentCapability: 'verified' }, 'standard'],
+    [{
+      agentMode: 'auto',
+      agentCapability: 'verified',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    }, 'deep-agent'],
+    [{
+      agentMode: 'standard',
+      agentCapability: 'verified',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    }, 'standard'],
+  ] as const)('resolves %# to %s', (agentState, expected) => {
+    expect(resolveOpenAiCompatibleConversationMode({
+      enabled: true,
+      baseUrl: 'https://llm.intra.example/v1',
+      modelId: 'hospital-model',
+      apiKey: null,
+      ...agentState,
+    })).toBe(expected)
+  })
+
+  it('does not let a legacy manual-deep value bypass Agent verification', () => {
+    expect(resolveOpenAiCompatibleConversationMode({
+      enabled: true,
+      baseUrl: 'https://llm.intra.example/v1',
+      modelId: 'hospital-model',
+      apiKey: null,
+      agentMode: 'deep-agent' as never,
+      agentCapability: 'unsupported',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    })).toBe('standard')
   })
 })
 

@@ -60,10 +60,62 @@ import { useChatTemplates } from "@/src/application/providers/chat-templates.pro
 import { AuthDialog } from "@/features/auth"
 import { isQuotaExceededError } from "@/src/core/errors"
 import {
+  customOpenAiModelIdForProfile,
+  gateModelForAgentSupport,
+  gateModelForKeys,
   isCustomOpenAiModelId,
   modelUsesStandardChat,
+  openAiCompatibleProfileIdFromModelId,
 } from '@/src/shared/constants/ai-models.constants'
-import { resolveOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
+import {
+  isOpenAiCompatibleRuntimeReady,
+  resolveOpenAiCompatibleConversationMode,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
+import {
+  normalizeOpenAiCompatibleTransport,
+  type OpenAiCompatibleProfile,
+} from '@/src/shared/types/openai-compatible.types'
+
+/**
+ * Destination + execution identity for one chat transcript. A custom endpoint
+ * is more than its logical picker id: editing the URL/upstream model/transport
+ * or changing whether it receives Agent tools creates a new privacy boundary.
+ */
+export function medicalChatRuntimeIdentity(
+  modelId: string,
+  profile: OpenAiCompatibleProfile | null,
+): string {
+  if (!isCustomOpenAiModelId(modelId)) {
+    return JSON.stringify(['cloud', modelId])
+  }
+  return JSON.stringify([
+    'custom',
+    profile?.profileId ?? openAiCompatibleProfileIdFromModelId(modelId) ?? modelId,
+    profile?.baseUrl ?? '',
+    profile?.modelId ?? '',
+    normalizeOpenAiCompatibleTransport(profile?.transport),
+    resolveOpenAiCompatibleConversationMode(profile),
+  ])
+}
+
+function useRuntimeBoundaryGuard(identity: string, credential: string | null) {
+  /* eslint-disable react-hooks/refs -- This is an intentional synchronous
+   * privacy gate. An external custom-to-cloud render must remain unable to
+   * persist the previous transcript until its effect has cleared the chat. */
+  const identityRef = useRef(identity)
+  const credentialRef = useRef(credential)
+  const transitionPending =
+    identityRef.current !== identity || credentialRef.current !== credential
+
+  const adopt = useCallback((nextIdentity: string, nextCredential: string | null) => {
+    identityRef.current = nextIdentity
+    credentialRef.current = nextCredential
+  }, [])
+
+  return { transitionPending, adopt }
+  /* eslint-enable react-hooks/refs */
+}
 
 export default function MedicalChat() {
   const { t } = useLanguage()
@@ -83,11 +135,37 @@ export default function MedicalChat() {
     model,
     openAiCompatibleProfiles,
   )
+  const customModelDisplayNames = useMemo<Readonly<Record<string, string>>>(() => (
+    Object.fromEntries(openAiCompatibleProfiles.map((profile) => [
+      customOpenAiModelIdForProfile(profile.profileId),
+      profile.modelId.trim(),
+    ]))
+  ), [openAiCompatibleProfiles])
   const isCustomEndpoint = isCustomOpenAiModelId(model)
-  const isStandardChat = modelUsesStandardChat(model)
+  const isStandardChat = isCustomEndpoint
+    ? resolveOpenAiCompatibleConversationMode(openAiCompatible) === 'standard'
+    : modelUsesStandardChat(model)
+  const runtimeIdentity = useMemo(
+    () => medicalChatRuntimeIdentity(model, openAiCompatible),
+    [model, openAiCompatible],
+  )
+  // Credentials are deliberately tracked outside runtimeIdentity: a replaced
+  // secret is still a privacy boundary, but secrets must never enter a string
+  // that might later be logged or surfaced for diagnostics.
+  const runtimeCredential = openAiCompatible?.apiKey ?? null
+  // This guard is also a synchronous history gate. On an externally-triggered
+  // custom -> cloud transition the render sees a new identity before the
+  // boundary effect can clear messages; retaining the old boundary prevents
+  // Firestore auto-save / smart-title effects from observing that old text.
+  const {
+    transitionPending: runtimeTransitionPending,
+    adopt: adoptRuntimeBoundary,
+  } = useRuntimeBoundaryGuard(runtimeIdentity, runtimeCredential)
+  const [, rerenderAfterRuntimeBoundary] = useState(0)
   // Selecting the hospital endpoint is also a privacy boundary: chat messages
   // must not be copied to Firestore or title/suggestion helper proxies.
-  const cloudChatHistoryEnabled = !!user && !isCustomEndpoint
+  const cloudChatHistoryEnabled = !!user && !isCustomEndpoint &&
+    !runtimeTransitionPending
   const { systemPrompt, updateSystemPrompt, resetSystemPrompt, isCustomPrompt } = useSystemPrompt()
   const { addTemplate, updateTemplate, saveTemplates, maxTemplates, templates } = useChatTemplates()
   const input = useChatInput()
@@ -179,6 +257,64 @@ export default function MedicalChat() {
     generate: generateFollowups,
     clear: clearFollowups,
   } = useFollowupSuggestions(isCustomEndpoint ? model : undefined)
+
+  // Initial mount adopts the current destination. Subsequent changes are
+  // privacy boundaries, including external profile edits/hydration that did
+  // not originate from either visible ModelPicker.
+  const resetActiveChat = chat.handleReset
+  const resetChatForRuntimeBoundary = useCallback(() => {
+    // handleReset aborts first, then synchronously clears the Zustand messages
+    // and saved-session pointer. Do this while the OLD model is still active so
+    // enabling cloud history on the next render can never observe local text.
+    resetActiveChat()
+    setReplyDraft(null)
+    clearFollowups()
+    setLocalModeNoticeDismissed(false)
+  }, [resetActiveChat, clearFollowups])
+
+  const resolveSelectedModel = useCallback((requestedModelId: string) => {
+    const requestedProfile = resolveOpenAiCompatibleProfile(
+      requestedModelId,
+      openAiCompatibleProfiles,
+    )
+    const keyGatedModel = gateModelForKeys(
+      requestedModelId,
+      {
+        openAiKey,
+        geminiKey,
+        claudeKey,
+        customAvailable: isOpenAiCompatibleRuntimeReady(requestedProfile),
+      },
+      MODEL_PREF_DEFAULTS.chat,
+    )
+    return gateModelForAgentSupport(keyGatedModel, MODEL_PREF_DEFAULTS.chat)
+  }, [claudeKey, geminiKey, openAiCompatibleProfiles, openAiKey])
+
+  const handleModelSelect = useCallback((requestedModelId: string) => {
+    const nextModel = resolveSelectedModel(requestedModelId)
+    if (nextModel !== model) {
+      const nextProfile = resolveOpenAiCompatibleProfile(
+        nextModel,
+        openAiCompatibleProfiles,
+      )
+      const nextIdentity = medicalChatRuntimeIdentity(nextModel, nextProfile)
+      resetChatForRuntimeBoundary()
+      // Suppress the defensive effect's duplicate reset after this controlled
+      // switch; the privacy cleanup above has already completed synchronously.
+      adoptRuntimeBoundary(nextIdentity, nextProfile?.apiKey ?? null)
+    }
+    setModelFor('chat', requestedModelId)
+  }, [adoptRuntimeBoundary, model, openAiCompatibleProfiles, resetChatForRuntimeBoundary, resolveSelectedModel, setModelFor])
+
+  useEffect(() => {
+    if (!runtimeTransitionPending) return
+    adoptRuntimeBoundary(runtimeIdentity, runtimeCredential)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- cleanup must precede persistence re-enable
+    resetChatForRuntimeBoundary()
+    // Clearing an already-empty store may not schedule a component render. The
+    // explicit tick lets cloud persistence turn on only after the cleanup above.
+    rerenderAfterRuntimeBoundary((revision) => revision + 1)
+  }, [adoptRuntimeBoundary, resetChatForRuntimeBoundary, runtimeCredential, runtimeIdentity, runtimeTransitionPending])
   
   // Ensure chat.messages is always an array
   const chatMessages = useMemo(() => (
@@ -425,7 +561,7 @@ export default function MedicalChat() {
                 mode toggle, on the other hand, is a "don't save" switch
                 that makes no sense when we weren't saving in the first
                 place, so hide it for signed-out users. */}
-            <ChatHistoryDrawer />
+            <ChatHistoryDrawer persistenceEnabled={cloudChatHistoryEnabled} />
             {user && (
               <button
                 onClick={handleToggleTemporaryMode}
@@ -466,7 +602,7 @@ export default function MedicalChat() {
             <ModelPicker
               modelId={chatModelPref}
               fallbackModelId={MODEL_PREF_DEFAULTS.chat}
-              onSelect={(id) => setModelFor('chat', id)}
+              onSelect={handleModelSelect}
               tooltip={isStandardChat
                 ? t.medicalChat.localStandardModeTitle
                 : t.modelPicker.chatTooltip}
@@ -519,6 +655,7 @@ export default function MedicalChat() {
           messages={chatMessages}
           isLoading={chat.isLoading}
           isStandardChatMode={isStandardChat}
+          customModelDisplayNames={customModelDisplayNames}
           scrollSignal={followupSuggestions.length}
           onReplyToSelection={handleReplyToSelection}
           afterMessages={
@@ -541,6 +678,7 @@ export default function MedicalChat() {
             hasTemplateContent={!!template.selectedTemplate?.content?.trim()}
             onOpenGallery={() => setShowPromptGallery(true)}
             onManageTemplates={() => setShowTemplateManager(true)}
+            onModelSelect={handleModelSelect}
             showModelPicker={isExpanded}
           />
           {showApiKeyWarning && (
@@ -572,7 +710,7 @@ export default function MedicalChat() {
               </div>
             </div>
           )}
-          {isCustomEndpoint && canUseChat && !localModeNoticeDismissed && (
+          {isCustomEndpoint && isStandardChat && canUseChat && !localModeNoticeDismissed && (
             <div
               role="status"
               className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/35 dark:text-sky-100"

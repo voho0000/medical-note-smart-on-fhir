@@ -1,8 +1,20 @@
 import {
+  createConfiguredOpenAiCompatibleFetch,
   createOpenAiCompatibleFetch,
   createOpenAiCompatibleGatewayFetch,
+  testOpenAiCompatibleAgentCapability,
   testOpenAiCompatibleConnection,
 } from '@/src/infrastructure/ai/openai-compatible/openai-compatible.client'
+import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
+import { asSchema, type FlexibleSchema } from '@ai-sdk/provider-utils'
+import { TextDecoderStream as NodeTextDecoderStream } from 'node:stream/web'
+
+if (typeof globalThis.TextDecoderStream === 'undefined') {
+  Object.defineProperty(globalThis, 'TextDecoderStream', {
+    configurable: true,
+    value: NodeTextDecoderStream,
+  })
+}
 
 jest.mock('@/src/infrastructure/ai/utils/proxy-auth', () => ({
   getProxyIdToken: jest.fn(async () => 'firebase-id-token'),
@@ -24,6 +36,102 @@ const jsonResponse = (body: unknown, status = 200): Response => ({
   statusText: status === 404 ? 'Not Found' : 'OK',
   json: async () => body,
 } as Response)
+
+const streamBody = (value: string): ReadableStream<Uint8Array> => {
+  const encoded = new TextEncoder().encode(value)
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoded)
+      controller.close()
+    },
+  })
+}
+
+const sseResponse = (events: unknown[]): Response => {
+  const payload = [
+    ...events.map((event) => `data: ${JSON.stringify(event)}\n\n`),
+    'data: [DONE]\n\n',
+  ].join('')
+  return {
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: new Headers({ 'Content-Type': 'text/event-stream' }),
+    body: streamBody(payload),
+  } as Response
+}
+
+const errorResponse = (status: number, message: string): Response => {
+  const payload = JSON.stringify({ error: { message } })
+  return {
+    ok: false,
+    status,
+    statusText: message,
+    headers: new Headers({ 'Content-Type': 'application/json' }),
+    body: streamBody(payload),
+    text: async () => payload,
+  } as Response
+}
+
+const firstToolCallStream = () => sseResponse([
+  {
+    id: 'chatcmpl-probe-1',
+    model: 'hospital-model',
+    choices: [{
+      index: 0,
+      delta: {
+        role: 'assistant',
+        tool_calls: [{
+          index: 0,
+          id: 'call-probe-1',
+          type: 'function',
+          function: {
+            name: 'getDataOverview',
+            arguments: '{}',
+          },
+        }],
+      },
+      finish_reason: null,
+    }],
+  },
+  {
+    id: 'chatcmpl-probe-1',
+    model: 'hospital-model',
+    choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+  },
+])
+
+const finalTextStream = (content: string) => sseResponse([
+  {
+    id: 'chatcmpl-probe-2',
+    model: 'hospital-model',
+    choices: [{
+      index: 0,
+      delta: { role: 'assistant', content },
+      finish_reason: null,
+    }],
+  },
+  {
+    id: 'chatcmpl-probe-2',
+    model: 'hospital-model',
+    choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+  },
+])
+
+function agentRoundTripFetch(finalText?: string) {
+  return jest.fn(async (
+    _input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ) => {
+    const body = JSON.parse(String(init?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>
+    }
+    const toolMessage = body.messages?.find((message) => message.role === 'tool')
+    if (!toolMessage) return firstToolCallStream()
+    const nonce = JSON.parse(String(toolMessage.content)).data.nonce as string
+    return finalTextStream(finalText ?? nonce)
+  }) as jest.MockedFunction<typeof fetch>
+}
 
 describe('OpenAI-compatible browser client', () => {
   it('tests /models directly and reports whether the model exists', async () => {
@@ -268,6 +376,92 @@ describe('OpenAI-compatible browser client', () => {
     expect(headers.get('X-Upstream-Path')).toBe('models')
   })
 
+  it('keeps standard Nemotron request bodies unchanged', async () => {
+    const originalFetch = global.fetch
+    const fetchMock = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({})) as jest.MockedFunction<typeof fetch>
+    global.fetch = fetchMock
+    try {
+      const originalBody = JSON.stringify({
+        model: 'nvidia/nemotron-3-ultra-550b-a55b',
+        messages: [{ role: 'user', content: 'Summarize this text.' }],
+      })
+      await createConfiguredOpenAiCompatibleFetch({
+        ...profile,
+        baseUrl: 'https://integrate.api.nvidia.com/v1',
+        modelId: 'nvidia/nemotron-3-ultra-550b-a55b',
+      })('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        body: originalBody,
+      })
+
+      expect(fetchMock.mock.calls[0][1]?.body).toBe(originalBody)
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
+
+  it('adds required Nemotron chat-template fields to Agent requests', async () => {
+    const originalFetch = global.fetch
+    const fetchMock = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({})) as jest.MockedFunction<typeof fetch>
+    global.fetch = fetchMock
+    try {
+      await createConfiguredOpenAiCompatibleFetch({
+        ...profile,
+        baseUrl: 'https://integrate.api.nvidia.com/v1',
+        modelId: 'nvidia/nemotron-3-ultra-550b-a55b',
+      })('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'nvidia/nemotron-3-ultra-550b-a55b',
+          messages: [],
+          tools: [{ type: 'function', function: { name: 'probe' } }],
+          tool_choice: 'auto',
+        }),
+      })
+
+      const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+      expect(requestBody).toEqual({
+        model: 'nvidia/nemotron-3-ultra-550b-a55b',
+        messages: [],
+        tools: [{ type: 'function', function: { name: 'probe' } }],
+        tool_choice: 'auto',
+        chat_template_kwargs: {
+          enable_thinking: true,
+          force_nonempty_content: true,
+        },
+      })
+      expect(requestBody.reasoning_budget).toBeUndefined()
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
+
+  it('does not modify normal configured request bodies for other endpoints', async () => {
+    const originalFetch = global.fetch
+    const fetchMock = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => jsonResponse({})) as jest.MockedFunction<typeof fetch>
+    global.fetch = fetchMock
+    try {
+      const originalBody = JSON.stringify({ model: 'hospital-model', messages: [] })
+      await createConfiguredOpenAiCompatibleFetch(profile)(
+        'https://llm.intra.example/v1/chat/completions',
+        { method: 'POST', body: originalBody },
+      )
+
+      expect(fetchMock.mock.calls[0][1]?.body).toBe(originalBody)
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
+
   it('refuses to send credentials through a non-HTTPS Gateway URL', () => {
     expect(() => createOpenAiCompatibleGatewayFetch({
       ...profile,
@@ -275,5 +469,270 @@ describe('OpenAI-compatible browser client', () => {
     }, {
       gatewayUrl: 'http://gateway.example/proxyOpenAiCompatibleGateway',
     })).toThrow('MediPrisma Gateway must use HTTPS')
+  })
+
+  it('verifies a patient-free streamed tool call, result round-trip, and final nonce', async () => {
+    const fetchImpl = agentRoundTripFetch()
+
+    await expect(testOpenAiCompatibleAgentCapability(profile, { fetchImpl }))
+      .resolves.toEqual({ status: 'verified' })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const firstRequest = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))
+    const secondRequest = JSON.parse(String(fetchImpl.mock.calls[1][1]?.body))
+    const productionFhirTools = createFhirTools(() => ({
+      patient: null,
+      collection: null,
+    }))
+    const productionToolNames = Object.keys(productionFhirTools).sort()
+    expect(String(fetchImpl.mock.calls[0][0])).toBe(
+      'https://llm.intra.example/v1/chat/completions',
+    )
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get('Authorization'))
+      .toBe('Bearer hospital-secret')
+    expect(firstRequest).toMatchObject({
+      model: 'hospital-model',
+      stream: true,
+      max_tokens: 1024,
+      stream_options: { include_usage: true },
+      tool_choice: {
+        type: 'function',
+        function: { name: 'getDataOverview' },
+      },
+      messages: [{
+        role: 'system',
+        content: 'This is a capability test with synthetic data only. Follow the requested tool flow exactly.',
+      }, {
+        role: 'user',
+        content: 'Call getDataOverview. After its result arrives, reply with only the nonce inside result.data.',
+      }],
+    })
+    expect(firstRequest.chat_template_kwargs).toBeUndefined()
+    expect(firstRequest.reasoning_budget).toBeUndefined()
+    expect(productionToolNames.length).toBeGreaterThan(10)
+    expect(firstRequest.tools).toHaveLength(productionToolNames.length)
+    expect(firstRequest.tools.map((entry: { function: { name: string } }) => (
+      entry.function.name
+    )).sort()).toEqual(productionToolNames)
+    for (const requestTool of firstRequest.tools as Array<{
+      type: string
+      function: {
+        name: keyof typeof productionFhirTools
+        description?: string
+        parameters: unknown
+      }
+    }>) {
+      const productionTool = productionFhirTools[requestTool.function.name]
+      expect(requestTool.type).toBe('function')
+      expect(requestTool.function.description).toBe(productionTool.description)
+      expect(requestTool.function.parameters).toEqual(
+        asSchema(productionTool.inputSchema as FlexibleSchema<unknown>).jsonSchema,
+      )
+    }
+    // The probe's request contains only fixed prompts and static tool schemas;
+    // no clinical resource payload is present because the production tool
+    // factory is bound to a null patient/collection above.
+    expect(firstRequest.messages).toHaveLength(2)
+    expect(secondRequest.tools).toBeUndefined()
+    expect(secondRequest.tool_choice).toBeUndefined()
+    expect(secondRequest.messages.slice(-2)).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        tool_calls: [expect.objectContaining({
+          id: 'call-probe-1',
+          function: expect.objectContaining({
+            name: 'getDataOverview',
+          }),
+        })],
+      }),
+      expect.objectContaining({
+        role: 'tool',
+        tool_call_id: 'call-probe-1',
+      }),
+    ])
+  })
+
+  it('allows a three-minute cold-start window by default', async () => {
+    const timeoutSpy = jest.spyOn(globalThis, 'setTimeout')
+    try {
+      await expect(testOpenAiCompatibleAgentCapability(profile, {
+        fetchImpl: agentRoundTripFetch(),
+      })).resolves.toEqual({ status: 'verified' })
+      expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 180_000)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
+
+  it('allows the hosted Nemotron probe seven minutes for both reasoning steps', async () => {
+    const timeoutSpy = jest.spyOn(globalThis, 'setTimeout')
+    try {
+      await expect(testOpenAiCompatibleAgentCapability({
+        ...profile,
+        baseUrl: 'https://integrate.api.nvidia.com/v1',
+        modelId: 'nvidia/nemotron-3-ultra-550b-a55b',
+      }, {
+        fetchImpl: agentRoundTripFetch(),
+      })).resolves.toEqual({ status: 'verified' })
+      expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 420_000)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
+
+  it('runs both Agent probe steps through the explicit Firebase Gateway transport', async () => {
+    const fetchImpl = agentRoundTripFetch()
+    const gatewayConfig = {
+      ...profile,
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      modelId: 'nvidia/nemotron-3-ultra-550b-a55b',
+      transport: 'mediprisma-gateway' as const,
+    }
+
+    await expect(testOpenAiCompatibleAgentCapability(gatewayConfig, {
+      fetchImpl,
+      gatewayUrl: 'https://gateway.example/proxyOpenAiCompatibleGateway',
+    })).resolves.toEqual({ status: 'verified' })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    for (const [input, init] of fetchImpl.mock.calls) {
+      expect(String(input)).toBe('https://gateway.example/proxyOpenAiCompatibleGateway')
+      const headers = new Headers(init?.headers)
+      expect(headers.get('Authorization')).toBe('Bearer firebase-id-token')
+      expect(headers.get('X-Upstream-API-Key')).toBe('hospital-secret')
+      expect(headers.get('X-Upstream-Base-URL')).toBe(
+        'https://integrate.api.nvidia.com/v1',
+      )
+      expect(headers.get('X-Upstream-Path')).toBe('chat/completions')
+      const body = JSON.parse(String(init?.body))
+      expect(body).toMatchObject({
+        max_tokens: 1024,
+        reasoning_budget: 1024,
+        chat_template_kwargs: {
+          enable_thinking: true,
+          force_nonempty_content: true,
+        },
+      })
+    }
+  })
+
+  it('reports inconclusive when the endpoint ignores the forced tool call', async () => {
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => finalTextStream('I cannot call tools')) as
+      jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleAgentCapability(profile, { fetchImpl }))
+      .resolves.toMatchObject({
+        status: 'inconclusive',
+        reason: expect.stringContaining('tool-call'),
+      })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['unknown client error', 'invalid request body', 'inconclusive'],
+    ['temporary capability outage', 'Tool calling is temporarily unavailable', 'inconclusive'],
+    ['forced-choice incompatibility', 'tool_choice is not supported', 'inconclusive'],
+    ['schema incompatibility', 'Function schema is unsupported', 'inconclusive'],
+    ['explicit capability error', 'Tool calling is not supported by this model', 'unsupported'],
+    ['explicit model capability error', 'This model does not support tools', 'unsupported'],
+  ])('classifies an %s without overclaiming support', async (
+    _label,
+    message,
+    expectedStatus,
+  ) => {
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => errorResponse(400, message)) as jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleAgentCapability(profile, { fetchImpl }))
+      .resolves.toMatchObject({ status: expectedStatus })
+  })
+
+  it('redacts provider credentials from Agent check details', async () => {
+    const leakedSkKey = 'sk-examplecredential123456'
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => errorResponse(
+      400,
+      `Rejected Bearer hospital-secret and ${leakedSkKey}`,
+    )) as jest.MockedFunction<typeof fetch>
+
+    const result = await testOpenAiCompatibleAgentCapability(profile, { fetchImpl })
+
+    expect(result.status).toBe('inconclusive')
+    expect(result.reason).toContain('Bearer [TOKEN_REDACTED]')
+    expect(result.reason).toContain('[API_KEY_REDACTED]')
+    expect(result.reason).not.toContain('hospital-secret')
+    expect(result.reason).not.toContain(leakedSkKey)
+  })
+
+  it('redacts a configured credential before truncating check details', async () => {
+    const apiKey = 'nvapi-secret-that-crosses-the-display-limit'
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => errorResponse(
+      400,
+      `${'x'.repeat(290)} ${apiKey}`,
+    )) as jest.MockedFunction<typeof fetch>
+
+    const result = await testOpenAiCompatibleAgentCapability({
+      ...profile,
+      apiKey,
+    }, { fetchImpl })
+
+    expect(result.reason).not.toContain('nvapi-secret')
+    expect(result.reason).not.toContain(apiKey)
+  })
+
+  it('reports inconclusive when the tool flow works but final nonce adherence does not', async () => {
+    const fetchImpl = agentRoundTripFetch('not-the-tool-nonce')
+
+    await expect(testOpenAiCompatibleAgentCapability(profile, { fetchImpl }))
+      .resolves.toMatchObject({
+        status: 'inconclusive',
+        reason: expect.stringContaining('nonce'),
+      })
+  })
+
+  it.each([
+    ['authentication', async () => errorResponse(401, 'invalid key')],
+    ['network', async () => { throw new TypeError('Failed to fetch') }],
+  ])('reports an inconclusive %s failure', async (_label, implementation) => {
+    const fetchImpl = jest.fn(async (
+      _input: Parameters<typeof fetch>[0],
+      _init?: Parameters<typeof fetch>[1],
+    ) => implementation()) as jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleAgentCapability(profile, { fetchImpl }))
+      .resolves.toMatchObject({ status: 'inconclusive' })
+  })
+
+  it('reports an inconclusive timeout and aborts the injected fetch', async () => {
+    let wasAborted = false
+    const fetchImpl = jest.fn((
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal
+      signal?.addEventListener('abort', () => {
+        wasAborted = true
+        reject(new DOMException('Aborted', 'AbortError'))
+      }, { once: true })
+    })) as jest.MockedFunction<typeof fetch>
+
+    await expect(testOpenAiCompatibleAgentCapability(profile, {
+      fetchImpl,
+      timeoutMs: 5,
+    })).resolves.toMatchObject({
+      status: 'inconclusive',
+      reason: expect.stringContaining('timed out'),
+    })
+    expect(wasAborted).toBe(true)
   })
 })

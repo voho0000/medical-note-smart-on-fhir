@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useModelPref, useSetModelFor, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
+import { useModelPref, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
 import { ChevronDown, FileText, Library, SlidersHorizontal } from "lucide-react"
 
@@ -29,6 +29,10 @@ interface ChatToolbarProps {
   hasTemplateContent: boolean
   onOpenGallery?: () => void
   onManageTemplates: () => void
+  /** MedicalChat owns the privacy boundary around model changes. Keeping the
+   * picker callback outside this toolbar prevents fullscreen mode from
+   * bypassing the abort/reset performed by the header picker. */
+  onModelSelect: (id: string) => void
   /** The picker normally lives in the chat header strip (this toolbar is
    *  cramped); the fullscreen overlay has no header strip, so only there
    *  does the toolbar host it. */
@@ -43,11 +47,11 @@ export function ChatToolbar({
   hasTemplateContent,
   onOpenGallery,
   onManageTemplates,
+  onModelSelect,
   showModelPicker = false,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
   const chatModelPref = useModelPref('chat')
-  const setModelFor = useSetModelFor()
 
   const handleOpenGallery = () => {
     if (onOpenGallery) {
@@ -141,7 +145,7 @@ export function ChatToolbar({
           <ModelPicker
             modelId={chatModelPref}
             fallbackModelId={MODEL_PREF_DEFAULTS.chat}
-            onSelect={(id) => setModelFor('chat', id)}
+            onSelect={onModelSelect}
             tooltip={t.modelPicker.chatTooltip}
             compact
             align="end"

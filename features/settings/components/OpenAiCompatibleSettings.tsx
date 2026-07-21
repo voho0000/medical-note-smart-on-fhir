@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
-  ChevronDown,
   Cloud,
   Eye,
   EyeOff,
   Loader2,
   Network,
   Plus,
+  Save,
   ShieldCheck,
+  Sparkles,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -19,15 +20,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import { testOpenAiCompatibleConnection } from '@/src/application/composition.ai'
+  testOpenAiCompatibleAgentCapability,
+  testOpenAiCompatibleConnection,
+} from '@/src/application/composition.ai'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { InfoHint } from '@/src/shared/components/InfoHint'
 import type {
+  OpenAiCompatibleAgentCapability,
+  OpenAiCompatibleAgentMode,
   OpenAiCompatibleConfig,
   OpenAiCompatibleContextWindowSource,
   OpenAiCompatibleProfile,
@@ -37,6 +38,9 @@ import {
   MAX_OPENAI_COMPATIBLE_PROFILES,
   MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
+  normalizeOpenAiCompatibleAgentCapability,
+  normalizeOpenAiCompatibleAgentCapabilityTestedAt,
+  normalizeOpenAiCompatibleAgentMode,
   normalizeOpenAiCompatibleContextWindow,
   normalizeOpenAiCompatibleContextWindowSource,
   normalizeOpenAiCompatibleTransport,
@@ -59,7 +63,49 @@ import {
 interface TestState {
   tone: 'success' | 'warning' | 'error'
   text: string
+  detail?: string
 }
+
+interface PersistedAgentTestState {
+  profileId: string
+  capability: 'verified' | 'unsupported'
+  testedAt: number
+  state: TestState
+}
+
+const MAX_AGENT_TEST_REASON_LENGTH = 240
+
+function conciseAgentTestReason(reason: string | undefined): string | undefined {
+  const normalized = reason?.replace(/\s+/g, ' ').trim()
+  if (!normalized) return undefined
+  if (normalized.length <= MAX_AGENT_TEST_REASON_LENGTH) return normalized
+  return `${normalized.slice(0, MAX_AGENT_TEST_REASON_LENGTH - 1).trimEnd()}…`
+}
+
+const SECONDARY_ACTION_BUTTON_CLASS = cn(
+  'h-8 flex-1 border-teal-200 bg-teal-50/60 text-teal-800 shadow-none',
+  'hover:border-teal-300 hover:bg-teal-100/70 hover:text-teal-900',
+  'focus-visible:border-teal-500 focus-visible:ring-teal-500/25',
+  'dark:border-teal-800/80 dark:bg-teal-950/25 dark:text-teal-200',
+  'dark:hover:border-teal-700 dark:hover:bg-teal-950/50 dark:hover:text-teal-100',
+  'sm:min-w-32 sm:flex-none',
+)
+
+const PRIMARY_ACTION_BUTTON_CLASS = cn(
+  'h-8 flex-1 bg-teal-600 text-white shadow-sm shadow-teal-600/15',
+  'hover:bg-teal-700 hover:shadow-md hover:shadow-teal-600/20',
+  'focus-visible:border-teal-500 focus-visible:ring-teal-500/30',
+  'dark:bg-teal-500 dark:text-teal-950 dark:shadow-teal-950/30',
+  'dark:hover:bg-teal-400 dark:hover:text-teal-950',
+  'sm:min-w-32 sm:flex-none',
+)
+
+const ACTION_INFO_CLASS = cn(
+  'h-8 w-8 shrink-0 hover:bg-teal-50 hover:text-teal-700',
+  'dark:hover:bg-teal-950/40 dark:hover:text-teal-300',
+)
+
+const COMPACT_INPUT_CLASS = 'h-9 py-1.5 text-base sm:h-8 sm:py-1 sm:text-sm'
 
 function initialContextWindowSource(
   config: OpenAiCompatibleConfig,
@@ -68,6 +114,16 @@ function initialContextWindowSource(
     config.contextWindowSource,
     Boolean(config.baseUrl && config.modelId),
   )
+}
+
+function initialAgentCapability(
+  config: OpenAiCompatibleConfig,
+): OpenAiCompatibleAgentCapability {
+  return normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+    config.agentCapabilityTestedAt,
+  ) === null
+    ? 'unknown'
+    : normalizeOpenAiCompatibleAgentCapability(config.agentCapability)
 }
 
 function profileEndpointLabel(profile: OpenAiCompatibleProfile): string {
@@ -143,14 +199,31 @@ export function OpenAiCompatibleSettings({
   const [apiKey, setApiKey] = useState(saved.apiKey ?? '')
   const [transport, setTransport] = useState(normalizeOpenAiCompatibleTransport(saved.transport))
   const [showApiKey, setShowApiKey] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [agentTesting, setAgentTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testState, setTestState] = useState<TestState | null>(null)
+  const [agentTestState, setAgentTestState] = useState<TestState | null>(null)
   const [connectionTestPassed, setConnectionTestPassed] = useState(false)
+  const [agentMode, setAgentMode] = useState<OpenAiCompatibleAgentMode>(
+    normalizeOpenAiCompatibleAgentMode(saved.agentMode),
+  )
+  // An explicit standard-chat policy belongs to the exact connection identity.
+  // When endpoint/model/transport/key changes we reset to auto; this flag lets
+  // the store distinguish a policy the user deliberately selected again for the
+  // edited draft from a stale mode carried over by an older caller.
+  const [agentModeConfirmedForDraft, setAgentModeConfirmedForDraft] = useState(false)
+  const [agentCapability, setAgentCapability] = useState<OpenAiCompatibleAgentCapability>(
+    initialAgentCapability(saved),
+  )
+  const [agentCapabilityTestedAt, setAgentCapabilityTestedAt] = useState<number | null>(
+    normalizeOpenAiCompatibleAgentCapabilityTestedAt(saved.agentCapabilityTestedAt),
+  )
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([])
   const testRequestId = useRef(0)
-  const busy = testing || saving || credentialsHydrating
+  const agentTestRequestId = useRef(0)
+  const persistedAgentTestStateRef = useRef<PersistedAgentTestState | null>(null)
+  const busy = testing || agentTesting || saving || credentialsHydrating
   const targetProfileId = settingsTarget && typeof settingsTarget === 'object'
     ? settingsTarget.profileId
     : undefined
@@ -183,26 +256,41 @@ export function OpenAiCompatibleSettings({
       setCreatingNew(false)
       setSelectedProfileId(targetProfileId)
     }
-    // A navigation intent is external state; reveal its owning disclosure.
-    setAdvancedOpen(true)
   }, [navigationReady, profiles, selectedProfileId, settingsTarget, targetProfileId])
 
   useEffect(() => {
     if (
       !navigationReady ||
-      !advancedOpen ||
       !isOpenAiCompatibleContextWindowTarget(settingsTarget)
     ) return
+    if (targetProfileId && targetProfileId !== selectedProfileId) return
 
     const input = document.getElementById('openai-compatible-context-window')
     if (!(input instanceof HTMLInputElement)) return
     input.scrollIntoView?.({ block: 'center' })
     input.focus({ preventScroll: true })
     onSettingsTargetHandled?.()
-  }, [advancedOpen, navigationReady, onSettingsTargetHandled, settingsTarget])
+  }, [
+    navigationReady,
+    onSettingsTargetHandled,
+    selectedProfileId,
+    settingsTarget,
+    targetProfileId,
+  ])
 
   useEffect(() => {
     testRequestId.current += 1
+    agentTestRequestId.current += 1
+    const persistedAgentTestState = persistedAgentTestStateRef.current
+    persistedAgentTestStateRef.current = null
+    const shouldKeepPersistedAgentTestState = Boolean(
+      persistedAgentTestState &&
+      selectedProfile?.profileId === persistedAgentTestState.profileId &&
+      initialAgentCapability(saved) === persistedAgentTestState.capability &&
+      normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+        saved.agentCapabilityTestedAt,
+      ) === persistedAgentTestState.testedAt,
+    )
     // The encrypted profile rehydrates asynchronously from the selected
     // browser storage, so the editable draft must follow that external store.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -215,12 +303,22 @@ export function OpenAiCompatibleSettings({
     setDetectedContextWindowTokens(null)
     setDiscoveredModels([])
     setTestState(null)
+    setAgentTestState(
+      shouldKeepPersistedAgentTestState ? persistedAgentTestState!.state : null,
+    )
     setConnectionTestPassed(false)
+    setAgentMode(normalizeOpenAiCompatibleAgentMode(saved.agentMode))
+    setAgentModeConfirmedForDraft(false)
+    setAgentCapability(initialAgentCapability(saved))
+    setAgentCapabilityTestedAt(normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+      saved.agentCapabilityTestedAt,
+    ))
     setApiKey(saved.apiKey ?? '')
     setTransport(normalizeOpenAiCompatibleTransport(saved.transport))
     setShowApiKey(false)
     setTesting(false)
-  }, [saved])
+    setAgentTesting(false)
+  }, [saved, selectedProfile?.profileId])
 
   const modelOptionsId = 'openai-compatible-model-options'
   const draftChanged = useMemo(() => (
@@ -232,8 +330,16 @@ export function OpenAiCompatibleSettings({
     ) ||
     contextWindowSource !== initialContextWindowSource(saved) ||
     apiKey !== (saved.apiKey ?? '') ||
-    transport !== normalizeOpenAiCompatibleTransport(saved.transport)
+    transport !== normalizeOpenAiCompatibleTransport(saved.transport) ||
+    agentMode !== normalizeOpenAiCompatibleAgentMode(saved.agentMode) ||
+    agentCapability !== initialAgentCapability(saved) ||
+    agentCapabilityTestedAt !== normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+      saved.agentCapabilityTestedAt,
+    )
   ), [
+    agentCapability,
+    agentCapabilityTestedAt,
+    agentMode,
     apiKey,
     baseUrl,
     contextWindowSource,
@@ -254,6 +360,15 @@ export function OpenAiCompatibleSettings({
     connectionTestPassed ||
     (!connectionDraftChanged && Boolean(saved.baseUrl && saved.modelId))
   )
+
+  const invalidateAgentCapability = () => {
+    agentTestRequestId.current += 1
+    setAgentMode('auto')
+    setAgentModeConfirmedForDraft(false)
+    setAgentCapability('unknown')
+    setAgentCapabilityTestedAt(null)
+    setAgentTestState(null)
+  }
 
   const normalizeDraft = (): OpenAiCompatibleConfig => {
     const normalizedBaseUrl = normalizeOpenAiCompatibleBaseUrl(baseUrl)
@@ -297,6 +412,9 @@ export function OpenAiCompatibleSettings({
       transport: normalizedTransport,
       contextWindowTokens: normalizedContextWindow,
       contextWindowSource,
+      agentMode,
+      agentCapability,
+      agentCapabilityTestedAt,
     }
   }
 
@@ -331,6 +449,7 @@ export function OpenAiCompatibleSettings({
   const handleProfileSelection = (profileId: string) => {
     if (profileId === selectedProfileId || !confirmDiscardDraft()) return
     testRequestId.current += 1
+    agentTestRequestId.current += 1
     newProfileRequestedRef.current = false
     setCreatingNew(false)
     setSelectedProfileId(profileId)
@@ -343,6 +462,7 @@ export function OpenAiCompatibleSettings({
     }
     if (creatingNew || !confirmDiscardDraft()) return
     testRequestId.current += 1
+    agentTestRequestId.current += 1
     newProfileRequestedRef.current = true
     setCreatingNew(true)
     setSelectedProfileId(null)
@@ -390,6 +510,60 @@ export function OpenAiCompatibleSettings({
     t.settings.openAiCompatibleUnsavedConfirm,
   ])
 
+  const persistNormalizedDraft = async (
+    next: OpenAiCompatibleConfig,
+    agentTestStateToKeep: Omit<PersistedAgentTestState, 'profileId'> | null = null,
+  ) => {
+    const existingProfileId = selectedProfileId
+    if (!existingProfileId) newProfileRequestedRef.current = true
+    if (existingProfileId && agentTestStateToKeep) {
+      persistedAgentTestStateRef.current = {
+        profileId: existingProfileId,
+        ...agentTestStateToKeep,
+      }
+    } else {
+      persistedAgentTestStateRef.current = null
+    }
+
+    try {
+      // Resolve only after the encrypted credential and profile are durably
+      // written, so closing the page cannot race the API-key save.
+      const profileId = existingProfileId
+        ? (
+            await updateConfig(existingProfileId, next, {
+              confirmAgentModeForIdentityChange: agentModeConfirmedForDraft,
+            }),
+            existingProfileId
+          )
+        : await addConfig(next)
+      if (!existingProfileId && agentTestStateToKeep) {
+        persistedAgentTestStateRef.current = {
+          profileId,
+          ...agentTestStateToKeep,
+        }
+      }
+      newProfileRequestedRef.current = false
+      setCreatingNew(false)
+      setSelectedProfileId(profileId)
+      setBaseUrl(formatOpenAiCompatibleChatCompletionsUrl(next.baseUrl))
+      setModelId(next.modelId)
+      setContextWindowTokens(String(next.contextWindowTokens))
+      setContextWindowSource(initialContextWindowSource(next))
+      setApiKey(next.apiKey ?? '')
+      setTransport(normalizeOpenAiCompatibleTransport(next.transport))
+      setAgentMode(normalizeOpenAiCompatibleAgentMode(next.agentMode))
+      setAgentModeConfirmedForDraft(false)
+      setAgentCapability(initialAgentCapability(next))
+      setAgentCapabilityTestedAt(normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+        next.agentCapabilityTestedAt,
+      ))
+      return profileId
+    } catch (error) {
+      persistedAgentTestStateRef.current = null
+      throw error
+    }
+  }
+
   const handleSave = async () => {
     if (!connectionReadyToSave) {
       toast.error(t.settings.openAiCompatibleTestBeforeSave)
@@ -407,21 +581,9 @@ export function OpenAiCompatibleSettings({
     testRequestId.current += 1
     setSaving(true)
     try {
-      // Resolve only after the encrypted credential and profile are durably
-      // written, so closing the page after the success toast cannot race the
-      // API-key save.
-      const profileId = selectedProfileId
-        ? (await updateConfig(selectedProfileId, next), selectedProfileId)
-        : await addConfig(next)
-      newProfileRequestedRef.current = false
-      setCreatingNew(false)
-      setSelectedProfileId(profileId)
-      setBaseUrl(formatOpenAiCompatibleChatCompletionsUrl(next.baseUrl))
-      setModelId(next.modelId)
-      setContextWindowTokens(String(next.contextWindowTokens))
-      setApiKey(next.apiKey ?? '')
-      setTransport(normalizeOpenAiCompatibleTransport(next.transport))
+      await persistNormalizedDraft(next)
       setTestState(null)
+      setAgentTestState(null)
       toast.success(t.settings.openAiCompatibleSaved)
     } catch (error) {
       if (isStaleOperation(error)) return
@@ -460,7 +622,6 @@ export function OpenAiCompatibleSettings({
       setDiscoveredModels(result.models)
       setDetectedContextWindowTokens(result.detectedContextWindowTokens)
       if (result.detectedContextWindowTokens !== null) {
-        setAdvancedOpen(true)
         if (contextWindowSource !== 'manual') {
           setContextWindowTokens(String(result.detectedContextWindowTokens))
           setContextWindowSource('detected')
@@ -493,6 +654,80 @@ export function OpenAiCompatibleSettings({
     }
   }
 
+  const handleAgentCapabilityTest = async () => {
+    if (!connectionReadyToSave) {
+      toast.error(t.settings.openAiCompatibleAgentTestNeedsConnection)
+      return
+    }
+
+    const requestId = agentTestRequestId.current + 1
+    agentTestRequestId.current = requestId
+    setAgentTesting(true)
+    setAgentTestState(null)
+    try {
+      const testedDraft = normalizeDraft()
+      const result = await testOpenAiCompatibleAgentCapability(testedDraft)
+      if (requestId !== agentTestRequestId.current) return
+
+      if (result.status === 'inconclusive') {
+        setAgentTestState({
+          tone: 'warning',
+          text: t.settings.openAiCompatibleAgentTestInconclusive,
+          detail: conciseAgentTestReason(result.reason),
+        })
+        return
+      }
+
+      const previousTestedAt = normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+        selectedProfile?.agentCapabilityTestedAt,
+      )
+      const now = Date.now()
+      const testedAt = now === previousTestedAt ? now + 1 : now
+      const resultState: TestState = result.status === 'verified'
+        ? {
+          tone: 'success',
+          text: t.settings.openAiCompatibleAgentTestSuccess,
+        }
+        : {
+          tone: 'warning',
+          text: t.settings.openAiCompatibleAgentTestUnsupported,
+          detail: conciseAgentTestReason(result.reason),
+        }
+      const next: OpenAiCompatibleConfig = {
+        ...testedDraft,
+        // Checking Agent support must not silently re-enable a profile that
+        // the user deliberately disabled.
+        enabled: selectedProfile?.enabled ?? true,
+        agentCapability: result.status,
+        agentCapabilityTestedAt: testedAt,
+      }
+
+      try {
+        await persistNormalizedDraft(next, {
+          capability: result.status,
+          testedAt,
+          state: resultState,
+        })
+        setTestState(null)
+      } catch (error) {
+        if (isStaleOperation(error)) return
+        setAgentTestState({
+          tone: 'error',
+          text: t.settings.openAiCompatibleAgentTestSaveFailed,
+        })
+        toast.error(t.settings.openAiCompatibleSecureSaveFailed)
+      }
+    } catch {
+      if (requestId !== agentTestRequestId.current) return
+      setAgentTestState({
+        tone: 'warning',
+        text: t.settings.openAiCompatibleAgentTestInconclusive,
+      })
+    } finally {
+      if (requestId === agentTestRequestId.current) setAgentTesting(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!selectedProfile) return
     const message = t.settings.openAiCompatibleDeleteConfirm.replace(
@@ -502,7 +737,9 @@ export function OpenAiCompatibleSettings({
     if (typeof window !== 'undefined' && !window.confirm(message)) return
 
     testRequestId.current += 1
+    agentTestRequestId.current += 1
     setTesting(false)
+    setAgentTesting(false)
     setSaving(true)
     try {
       await deleteConfig(selectedProfile.profileId)
@@ -523,8 +760,8 @@ export function OpenAiCompatibleSettings({
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-background/70 p-2">
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/25 p-1.5">
         <Label htmlFor="openai-compatible-profile" className="sr-only">
           {t.settings.openAiCompatibleSelectProfile}
         </Label>
@@ -533,7 +770,7 @@ export function OpenAiCompatibleSettings({
           value={selectedProfileId ?? ''}
           onChange={(event) => handleProfileSelection(event.target.value)}
           disabled={busy || profiles.length === 0}
-          className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:text-xs"
           aria-label={t.settings.openAiCompatibleSelectProfile}
         >
           {creatingNew && (
@@ -545,7 +782,7 @@ export function OpenAiCompatibleSettings({
             </option>
           ))}
         </select>
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
+        <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[0.6875rem] text-muted-foreground">
           {t.settings.openAiCompatibleProfileCount
             .replace('{count}', String(profiles.length))
             .replace('{max}', String(MAX_OPENAI_COMPATIBLE_PROFILES))}
@@ -563,7 +800,7 @@ export function OpenAiCompatibleSettings({
           className="h-8 px-2"
         >
           <Plus className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t.settings.openAiCompatibleAddProfile}</span>
+          <span className="hidden md:inline">{t.settings.openAiCompatibleAddProfile}</span>
         </Button>
         <Button
           size="icon"
@@ -579,8 +816,8 @@ export function OpenAiCompatibleSettings({
         </Button>
       </div>
 
-      <div className="grid gap-3">
-        <div className="space-y-1.5">
+      <div className="grid gap-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-1.5">
             <Label htmlFor="openai-compatible-base-url" className="text-xs">
               {t.settings.openAiCompatibleBaseUrl}
@@ -601,6 +838,7 @@ export function OpenAiCompatibleSettings({
               setDetectedContextWindowTokens(null)
               setTestState(null)
               setConnectionTestPassed(false)
+              invalidateAgentCapability()
             }}
             placeholder={transport === 'mediprisma-gateway'
               ? 'https://openrouter.ai/api/v1/chat/completions'
@@ -609,10 +847,11 @@ export function OpenAiCompatibleSettings({
             autoCapitalize="off"
             spellCheck={false}
             disabled={busy}
+            className={COMPACT_INPUT_CLASS}
           />
         </div>
 
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <Label htmlFor="openai-compatible-model" className="text-xs">
             {t.settings.openAiCompatibleModelId}
           </Label>
@@ -632,6 +871,7 @@ export function OpenAiCompatibleSettings({
               }
               setTestState(null)
               setConnectionTestPassed(false)
+              invalidateAgentCapability()
             }}
             placeholder={transport === 'mediprisma-gateway'
               ? 'MODEL_NAME'
@@ -640,6 +880,7 @@ export function OpenAiCompatibleSettings({
             autoCapitalize="off"
             spellCheck={false}
             disabled={busy}
+            className={COMPACT_INPUT_CLASS}
           />
           <datalist id={modelOptionsId}>
             {discoveredModels.map((id) => <option key={id} value={id} />)}
@@ -647,189 +888,290 @@ export function OpenAiCompatibleSettings({
         </div>
 
         {!ENV_CONFIG.offlineMode && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">{t.settings.openAiCompatibleTransport}</Label>
-            <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted/20 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (transport === 'direct') return
-                  setTransport('direct')
-                  setDetectedContextWindowTokens(null)
-                  setTestState(null)
-                  setConnectionTestPassed(false)
-                }}
-                disabled={busy}
-                className={cn(
-                  'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
-                  transport === 'direct'
-                    ? 'bg-background font-medium shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                aria-pressed={transport === 'direct'}
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                {t.settings.openAiCompatibleTransportDirect}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (transport === 'mediprisma-gateway') return
-                  setTransport('mediprisma-gateway')
-                  setDetectedContextWindowTokens(null)
-                  setTestState(null)
-                  setConnectionTestPassed(false)
-                }}
-                disabled={busy || !ENV_CONFIG.hasOpenAiCompatibleGateway}
-                className={cn(
-                  'flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors',
-                  transport === 'mediprisma-gateway'
-                    ? 'bg-background font-medium shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                  !ENV_CONFIG.hasOpenAiCompatibleGateway && 'cursor-not-allowed opacity-50',
-                )}
-                aria-pressed={transport === 'mediprisma-gateway'}
-                title={!ENV_CONFIG.hasOpenAiCompatibleGateway
-                  ? t.settings.openAiCompatibleGatewayUnavailable
-                  : undefined}
-              >
-                <Cloud className="h-3.5 w-3.5" />
-                {t.settings.openAiCompatibleTransportGateway}
-              </button>
+          <div className="space-y-1">
+            <div className="grid gap-1 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Label className="text-xs">{t.settings.openAiCompatibleTransport}</Label>
+                <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
+                  <p className="text-xs">
+                    {transport === 'mediprisma-gateway'
+                      ? t.settings.openAiCompatibleGatewayDescription
+                      : t.settings.openAiCompatibleDirectDescription}
+                  </p>
+                </InfoHint>
+              </div>
+              <div className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-md border bg-muted/20 p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (transport === 'direct') return
+                    setTransport('direct')
+                    setDetectedContextWindowTokens(null)
+                    setTestState(null)
+                    setConnectionTestPassed(false)
+                    invalidateAgentCapability()
+                  }}
+                  disabled={busy}
+                  className={cn(
+                    'flex min-w-0 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs transition-colors',
+                    transport === 'direct'
+                      ? 'bg-background font-medium shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  aria-pressed={transport === 'direct'}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{t.settings.openAiCompatibleTransportDirect}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (transport === 'mediprisma-gateway') return
+                    setTransport('mediprisma-gateway')
+                    setDetectedContextWindowTokens(null)
+                    setTestState(null)
+                    setConnectionTestPassed(false)
+                    invalidateAgentCapability()
+                  }}
+                  disabled={busy || !ENV_CONFIG.hasOpenAiCompatibleGateway}
+                  className={cn(
+                    'flex min-w-0 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs transition-colors',
+                    transport === 'mediprisma-gateway'
+                      ? 'bg-background font-medium shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                    !ENV_CONFIG.hasOpenAiCompatibleGateway && 'cursor-not-allowed opacity-50',
+                  )}
+                  aria-pressed={transport === 'mediprisma-gateway'}
+                  title={!ENV_CONFIG.hasOpenAiCompatibleGateway
+                    ? t.settings.openAiCompatibleGatewayUnavailable
+                    : undefined}
+                >
+                  <Cloud className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{t.settings.openAiCompatibleTransportGateway}</span>
+                </button>
+              </div>
+              <p className={cn(
+                'truncate text-[0.6875rem] leading-relaxed sm:col-start-2',
+                transport === 'mediprisma-gateway'
+                  ? 'text-amber-700 dark:text-amber-300'
+                  : 'text-muted-foreground',
+              )} title={transport === 'mediprisma-gateway'
+                ? t.settings.openAiCompatibleGatewayProvidersShort
+                : t.settings.openAiCompatibleDirectStatus}>
+                {transport === 'mediprisma-gateway'
+                  ? t.settings.openAiCompatibleGatewayProvidersShort
+                  : t.settings.openAiCompatibleDirectStatus}
+              </p>
             </div>
-            <p className={cn(
-              'text-[0.6875rem] leading-relaxed',
-              transport === 'mediprisma-gateway'
-                ? 'text-amber-700 dark:text-amber-300'
-                : 'text-muted-foreground',
-            )}>
-              {transport === 'mediprisma-gateway'
-                ? t.settings.openAiCompatibleGatewayDescription
-                : t.settings.openAiCompatibleDirectDescription}
-            </p>
           </div>
         )}
 
       </div>
 
-      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <span>{t.settings.advancedSettings}</span>
-            <ChevronDown className={cn(
-              'h-4 w-4 text-muted-foreground transition-transform',
-              advancedOpen && 'rotate-180',
-            )} />
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="mt-3 grid gap-3 rounded-md border bg-muted/10 p-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Label htmlFor="openai-compatible-context-window" className="text-xs">
-                  {t.settings.openAiCompatibleContextWindow}
-                </Label>
-                <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
-                  <p className="text-xs">{t.settings.openAiCompatibleContextWindowHint}</p>
-                </InfoHint>
-              </div>
-              <Input
-                id="openai-compatible-context-window"
-                type="number"
-                min={MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW}
-                max={MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW}
-                step={1024}
-                value={contextWindowTokens}
-                onChange={(event) => {
-                  setContextWindowTokens(event.target.value)
-                  setContextWindowSource('manual')
-                }}
-                inputMode="numeric"
-                disabled={busy}
-              />
-              {detectedContextWindowTokens !== null && (
-                <div
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] text-muted-foreground"
-                  aria-live="polite"
-                >
-                  <span>
-                    {t.settings.openAiCompatibleContextWindowDetected.replace(
-                      '{tokens}',
-                      detectedContextWindowTokens.toLocaleString('en-US'),
-                    )}
-                  </span>
-                  {Number(contextWindowTokens) !== detectedContextWindowTokens && (
-                    <button
-                      type="button"
-                      className="font-medium text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={busy}
-                      onClick={() => {
-                        setContextWindowTokens(String(detectedContextWindowTokens))
-                        setContextWindowSource('detected')
-                      }}
-                    >
-                      {t.settings.openAiCompatibleUseDetectedContextWindow}
-                    </button>
-                  )}
+      <div className="grid gap-2">
+            <div className="grid gap-2">
+              <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <Label htmlFor="openai-compatible-context-window" className="text-xs">
+                    {t.settings.openAiCompatibleContextWindow}
+                  </Label>
+                  <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
+                    <p className="text-xs">{t.settings.openAiCompatibleContextWindowHint}</p>
+                  </InfoHint>
                 </div>
-              )}
+                <Input
+                  id="openai-compatible-context-window"
+                  type="number"
+                  min={MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW}
+                  max={MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW}
+                  step={1024}
+                  value={contextWindowTokens}
+                  onChange={(event) => {
+                    setContextWindowTokens(event.target.value)
+                    setContextWindowSource('manual')
+                  }}
+                  inputMode="numeric"
+                  disabled={busy}
+                  className={COMPACT_INPUT_CLASS}
+                />
+                {detectedContextWindowTokens !== null && (
+                  <div
+                    className="col-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] text-muted-foreground"
+                    aria-live="polite"
+                  >
+                    <span>
+                      {t.settings.openAiCompatibleContextWindowDetected.replace(
+                        '{tokens}',
+                        detectedContextWindowTokens.toLocaleString('en-US'),
+                      )}
+                    </span>
+                    {Number(contextWindowTokens) !== detectedContextWindowTokens && (
+                      <button
+                        type="button"
+                        className="font-medium text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() => {
+                          setContextWindowTokens(String(detectedContextWindowTokens))
+                          setContextWindowSource('detected')
+                        }}
+                      >
+                        {t.settings.openAiCompatibleUseDetectedContextWindow}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <Label htmlFor="openai-compatible-key" className="text-xs">
+                    {t.settings.openAiCompatibleApiKey}
+                  </Label>
+                  <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
+                    <p className="text-xs">
+                      {transport === 'mediprisma-gateway'
+                        ? t.settings.openAiCompatibleGatewayApiKeyHint
+                        : t.settings.openAiCompatibleApiKeyHint}
+                    </p>
+                  </InfoHint>
+                </div>
+                <div className="relative">
+                  <Input
+                    id="openai-compatible-key"
+                    name="openai-compatible-key"
+                    type="text"
+                    value={apiKey}
+                    onChange={(event) => {
+                      setApiKey(event.target.value)
+                      setDetectedContextWindowTokens(null)
+                      setTestState(null)
+                      setConnectionTestPassed(false)
+                      invalidateAgentCapability()
+                    }}
+                    placeholder={transport === 'mediprisma-gateway'
+                      ? t.settings.openAiCompatibleGatewayApiKeyPlaceholder
+                      : t.settings.openAiCompatibleApiKeyPlaceholder}
+                    className={cn(
+                      COMPACT_INPUT_CLASS,
+                      'pr-9',
+                      !showApiKey && '[-webkit-text-security:disc]',
+                    )}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-form-type="other"
+                    disabled={busy}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey((current) => !current)}
+                    disabled={busy}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showApiKey ? t.settings.hideKey : t.settings.showKey}
+                  >
+                    {showApiKey
+                      ? <EyeOff className="h-4 w-4" />
+                      : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Label htmlFor="openai-compatible-key" className="text-xs">
-                  {t.settings.openAiCompatibleApiKey}
-                </Label>
-                <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
-                  <p className="text-xs">
-                    {transport === 'mediprisma-gateway'
-                      ? t.settings.openAiCompatibleGatewayApiKeyHint
-                      : t.settings.openAiCompatibleApiKeyHint}
-                  </p>
-                </InfoHint>
+            <fieldset
+              className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5 border-t pt-2"
+              aria-labelledby="openai-compatible-agent-mode-label"
+            >
+              <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    id="openai-compatible-agent-mode-label"
+                    className="text-xs font-medium"
+                  >
+                    {t.settings.openAiCompatibleAgentMode}
+                  </span>
+                  <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
+                    <p className="text-xs">
+                      {t.settings.openAiCompatibleAgentModeHint}
+                    </p>
+                  </InfoHint>
+                </div>
               </div>
-              <div className="relative">
-                <Input
-                  id="openai-compatible-key"
-                  name="openai-compatible-key"
-                  type="text"
-                  value={apiKey}
-                  onChange={(event) => {
-                    setApiKey(event.target.value)
-                    setDetectedContextWindowTokens(null)
-                    setTestState(null)
-                    setConnectionTestPassed(false)
-                  }}
-                  placeholder={transport === 'mediprisma-gateway'
-                    ? t.settings.openAiCompatibleGatewayApiKeyPlaceholder
-                    : t.settings.openAiCompatibleApiKeyPlaceholder}
-                  className={cn('pr-10', !showApiKey && '[-webkit-text-security:disc]')}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  data-1p-ignore
-                  data-lpignore="true"
-                  data-form-type="other"
-                  disabled={busy}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey((current) => !current)}
-                  disabled={busy}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showApiKey ? t.settings.hideKey : t.settings.showKey}
+
+              <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted/20 p-1">
+                {([
+                  {
+                    value: 'auto',
+                    label: t.settings.openAiCompatibleAgentModeAuto,
+                  },
+                  {
+                    value: 'standard',
+                    label: t.settings.openAiCompatibleAgentModeStandard,
+                  },
+                ] as const).map((option) => (
+                  <label
+                    key={option.value}
+                    className={cn(
+                      'flex min-w-0 cursor-pointer items-center justify-center gap-1 rounded px-1 py-1.5 text-center transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50 sm:gap-1.5 sm:px-2',
+                      agentMode === option.value
+                        ? 'bg-background text-teal-800 shadow-sm dark:text-teal-200'
+                        : 'hover:bg-muted/40',
+                      busy && 'cursor-not-allowed opacity-50',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="openai-compatible-agent-mode"
+                      value={option.value}
+                      checked={agentMode === option.value}
+                      onChange={() => {
+                        setAgentMode(option.value)
+                        setAgentModeConfirmedForDraft(true)
+                      }}
+                      disabled={busy}
+                      className="sr-only"
+                    />
+                    <span className="min-w-0 truncate text-xs font-medium" title={option.label}>
+                      {option.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="col-span-2 flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                <p className="min-w-0 flex-1 text-[0.6875rem] leading-relaxed text-muted-foreground">
+                  {agentMode === 'auto'
+                    ? t.settings.openAiCompatibleAgentModeAutoDescription
+                    : t.settings.openAiCompatibleAgentModeStandardDescription}
+                </p>
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full border px-2 py-0.5 text-[0.6875rem] font-medium',
+                    agentCapability === 'verified' &&
+                      'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+                    agentCapability === 'unsupported' &&
+                      'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+                    agentCapability === 'unknown' &&
+                      'border-border bg-background text-muted-foreground',
+                  )}
+                  aria-label={`${t.settings.openAiCompatibleAgentCapability}: ${
+                    agentCapability === 'verified'
+                      ? t.settings.openAiCompatibleAgentCapabilityVerified
+                      : agentCapability === 'unsupported'
+                        ? t.settings.openAiCompatibleAgentCapabilityUnsupported
+                        : t.settings.openAiCompatibleAgentCapabilityUnknown
+                  }`}
                 >
-                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                  {agentCapability === 'verified'
+                    ? t.settings.openAiCompatibleAgentCapabilityVerified
+                    : agentCapability === 'unsupported'
+                      ? t.settings.openAiCompatibleAgentCapabilityUnsupported
+                      : t.settings.openAiCompatibleAgentCapabilityUnknown}
+                </span>
               </div>
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+            </fieldset>
+      </div>
 
       {testState && (
         <div className={cn(
@@ -845,47 +1187,121 @@ export function OpenAiCompatibleSettings({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" type="button" onClick={handleTest} disabled={busy || !baseUrl.trim() || !modelId.trim()}>
-          {testing && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-          {testing ? t.settings.openAiCompatibleTesting : t.settings.openAiCompatibleTest}
-        </Button>
-        <InfoHint aria-label={t.common.help} contentClassName="max-w-sm">
-          <p className="text-xs">
-            {transport === 'mediprisma-gateway'
-              ? t.settings.openAiCompatibleGatewayTestPrivacy
-              : t.settings.openAiCompatibleTestPrivacy}
-          </p>
-        </InfoHint>
-        <Button
-          size="sm"
-          type="button"
-          onClick={handleSave}
-          disabled={busy || !baseUrl.trim() || !modelId.trim() || !connectionReadyToSave}
-          title={!connectionReadyToSave
-            ? t.settings.openAiCompatibleTestBeforeSave
-            : undefined}
-        >
-          {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-          {saving
-            ? t.settings.openAiCompatibleSaving
-            : draftChanged || !selectedProfile
-              ? t.settings.openAiCompatibleSaveEnable
-              : t.settings.openAiCompatibleSave}
-        </Button>
-        {selectedProfile && (
-          <div className="ml-auto flex items-center gap-2">
-            <Label htmlFor="openai-compatible-enabled" className="text-xs text-muted-foreground">
-              {t.settings.openAiCompatibleUseConnection}
-            </Label>
-            <Switch
-              id="openai-compatible-enabled"
-              checked={saved.enabled}
-              onCheckedChange={handleEnabledChange}
-              disabled={busy}
-            />
-          </div>
-        )}
+      {agentTestState && (
+        <div className={cn(
+          'flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs',
+          agentTestState.tone === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+          agentTestState.tone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+          agentTestState.tone === 'error' && 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+        )} role={agentTestState.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
+          {agentTestState.tone === 'success'
+            ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            : <Network className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          <span className="min-w-0">
+            <span>{agentTestState.text}</span>
+            {agentTestState.detail && (
+              <span className="mt-0.5 block break-words text-[0.6875rem] opacity-80">
+                {t.settings.openAiCompatibleAgentTestReason}: {agentTestState.detail}
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div
+        data-testid="openai-compatible-actions"
+        className="flex flex-col gap-1.5 border-t border-border/60 pt-2 sm:flex-row sm:flex-wrap sm:items-center"
+      >
+        <div className="flex w-full items-center gap-1 sm:w-auto">
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={handleTest}
+            disabled={busy || !baseUrl.trim() || !modelId.trim()}
+            className={SECONDARY_ACTION_BUTTON_CLASS}
+          >
+            {testing
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Network className="h-3.5 w-3.5" />}
+            {testing ? t.settings.openAiCompatibleTesting : t.settings.openAiCompatibleTest}
+          </Button>
+          <InfoHint
+            aria-label={t.common.help}
+            className={ACTION_INFO_CLASS}
+            contentClassName="max-w-sm"
+          >
+            <p className="text-xs">
+              {transport === 'mediprisma-gateway'
+                ? t.settings.openAiCompatibleGatewayTestPrivacy
+                : t.settings.openAiCompatibleTestPrivacy}
+            </p>
+          </InfoHint>
+        </div>
+
+        <div className="flex w-full items-center gap-1 sm:w-auto">
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={handleAgentCapabilityTest}
+            disabled={busy || !baseUrl.trim() || !modelId.trim() || !connectionReadyToSave}
+            title={!connectionReadyToSave
+              ? t.settings.openAiCompatibleAgentTestNeedsConnection
+              : undefined}
+            className={SECONDARY_ACTION_BUTTON_CLASS}
+          >
+            {agentTesting
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Sparkles className="h-3.5 w-3.5" />}
+            {agentTesting
+              ? t.settings.openAiCompatibleAgentTesting
+              : t.settings.openAiCompatibleAgentTest}
+          </Button>
+          <InfoHint
+            aria-label={t.common.help}
+            className={ACTION_INFO_CLASS}
+            contentClassName="max-w-sm"
+          >
+            <p className="text-xs">{t.settings.openAiCompatibleAgentTestPrivacy}</p>
+          </InfoHint>
+        </div>
+
+        <div className="flex w-full items-center gap-3 sm:ml-auto sm:w-auto">
+          <Button
+            size="sm"
+            type="button"
+            onClick={handleSave}
+            disabled={busy || !baseUrl.trim() || !modelId.trim() || !connectionReadyToSave}
+            title={!connectionReadyToSave
+              ? t.settings.openAiCompatibleTestBeforeSave
+              : undefined}
+            className={PRIMARY_ACTION_BUTTON_CLASS}
+          >
+            {saving
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Save className="h-3.5 w-3.5" />}
+            {saving
+              ? t.settings.openAiCompatibleSaving
+              : draftChanged || !selectedProfile
+                ? t.settings.openAiCompatibleSaveEnable
+                : t.settings.openAiCompatibleSave}
+          </Button>
+          {selectedProfile && (
+            <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
+              <Label htmlFor="openai-compatible-enabled" className="text-xs text-muted-foreground">
+                {t.settings.openAiCompatibleUseConnection}
+              </Label>
+              <Switch
+                id="openai-compatible-enabled"
+                checked={saved.enabled}
+                onCheckedChange={handleEnabledChange}
+                disabled={busy}
+                className="data-[state=checked]:bg-teal-600 focus-visible:ring-teal-500/30 dark:data-[state=checked]:bg-teal-500"
+              />
+            </div>
+          )}
+        </div>
       </div>
     </section>
   )

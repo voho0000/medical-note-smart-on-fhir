@@ -5,6 +5,9 @@
  */
 export type OpenAiCompatibleTransport = 'direct' | 'mediprisma-gateway'
 export type OpenAiCompatibleContextWindowSource = 'suggested' | 'detected' | 'manual'
+export type OpenAiCompatibleAgentMode = 'auto' | 'standard'
+export type OpenAiCompatibleAgentCapability = 'unknown' | 'verified' | 'unsupported'
+export type OpenAiCompatibleConversationMode = 'standard' | 'deep-agent'
 
 export interface OpenAiCompatibleConfig {
   enabled: boolean
@@ -22,6 +25,18 @@ export interface OpenAiCompatibleConfig {
   /** How the editable window was last chosen. Missing configured profiles are
    *  migrated as manual so a future probe cannot overwrite a legacy value. */
   contextWindowSource?: OpenAiCompatibleContextWindowSource
+  /** User-selected conversation policy for this exact connection identity.
+   * `auto` trusts only a successful, patient-free tool-call capability probe;
+   * `standard` never sends Agent tools. Missing, legacy manual-deep, and
+   * identity-changed values normalize/reset to `auto`, which fails closed to
+   * standard chat until verified. */
+  agentMode?: OpenAiCompatibleAgentMode
+  /** Result of the latest tool-call capability probe for this exact endpoint,
+   * upstream model, transport, and credential. */
+  agentCapability?: OpenAiCompatibleAgentCapability
+  /** Epoch milliseconds for the latest capability probe, or null when this
+   * profile has not been tested (including invalidated legacy results). */
+  agentCapabilityTestedAt?: number | null
 }
 
 /** A browser-owned connection that can be selected independently from other
@@ -90,6 +105,29 @@ export const EMPTY_OPENAI_COMPATIBLE_CONFIG: Readonly<OpenAiCompatibleConfig> = 
   transport: 'direct',
   contextWindowTokens: DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW,
   contextWindowSource: 'suggested',
+  agentMode: 'auto',
+  agentCapability: 'unknown',
+  agentCapabilityTestedAt: null,
+}
+
+export function normalizeOpenAiCompatibleAgentMode(
+  value: unknown,
+): OpenAiCompatibleAgentMode {
+  return value === 'standard' ? value : 'auto'
+}
+
+export function normalizeOpenAiCompatibleAgentCapability(
+  value: unknown,
+): OpenAiCompatibleAgentCapability {
+  return value === 'verified' || value === 'unsupported' ? value : 'unknown'
+}
+
+export function normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+  value: unknown,
+): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null
 }
 
 export function normalizeOpenAiCompatibleTransport(

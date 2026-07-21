@@ -51,12 +51,14 @@
 - 接受 HTTPS hostname、IPv4／IPv6、port 與同源 `/ai/v1`；HTTP 僅允許 loopback 開發環境。
 - 設定畫面接受完整 `/chat/completions` 或舊版 Base URL，兩者都先正規化成 canonical Base；仍拒絕 URL userinfo、query、fragment 與非 HTTP(S) scheme。
 - direct 連線測試完全在 browser 執行；不會自動 fallback 到 Firebase。
+- Agent 能力測試送出與正式自訂 Agent 相同的完整 FHIR tool schemas，但資料來源綁定為空，並將強制呼叫的 `getDataOverview` 執行函式替換成只回傳隨機 nonce 的記憶體內版本；它不讀取病歷、不呼叫 FHIR server。測試會驗證串流 tool call、local execute、tool result 與第二輪文字；`auto` 僅在完整往返成功後啟用深入對話，無法判定時 fail closed 為標準對話。端點、模型、transport 或 key 改變會清除既有驗證。
 - Firebase Gateway 是 explicit opt-in；目前對使用者公開支援 NVIDIA、OpenRouter、Cerebras，只接受部署白名單中的公開 HTTPS Base URL、固定 `models`／`chat/completions` path 與對應 method；拒絕 IP、非 443 port、redirect、URL credentials、query 與 fragment，避免形成 SSRF／通用轉送器。
 - Gateway 的 `Authorization` 專供 Firebase ID token；使用者 provider key 以 `X-Upstream-API-Key` 在單次 request memory 中轉送，不寫入 Firestore 或 logs。Gateway Function 明確使用 `secrets: []`，無法取得 owner-funded provider keys。
 - 每個自訂 profile 有穩定 logical model id（舊 profile 保留 `openai-compatible-custom`，新增 profile 使用帶 profile id 的 dynamic id）；transport／endpoint／model fingerprint 納入 AI cache identity。
 - 自訂 endpoint unavailable 時 fail closed，不 fallback 到 owner proxy。
 - 自訂 profile 被修改、停用、刪除或畫面卸載時，進行中的文字／語音請求會中止；後續與排隊請求在送出前重新解析 live profile，不沿用舊 endpoint 或 key。
-- 自訂模型停用 Firestore chat auto-save／smart title、移除 Perplexity tool；direct 模式可使用相同 endpoint 的語音功能，Firebase Gateway 目前只支援模型清單與文字 Chat Completions。
+- 對話切換模型、provider 或自訂 profile 身分時會先中止並清空目前對話與 session pointer，避免舊端點的訊息或 FHIR tool result 被送往另一個端點，亦避免切回雲端後將混合來源對話寫入 Firestore。
+- 自訂模型停用 Firestore chat auto-save／smart title、移除 Perplexity tool；通過驗證的深入對話只暴露 browser-bound FHIR tools。direct 模式可使用相同 endpoint 的語音功能，Firebase Gateway 目前只支援模型清單與文字 Chat Completions。
 - `NEXT_PUBLIC_OFFLINE_MODE=1` 不初始化 Firebase/Auth/App Check；`build:intranet` 另會清空所有 cloud proxy URL。
 
 瀏覽器端加密無法防禦已執行在同一 origin 的惡意 JavaScript／XSS；它主要降低 storage 被直接讀取或共用工作站殘留的風險。

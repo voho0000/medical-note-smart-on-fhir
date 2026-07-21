@@ -9,6 +9,7 @@
 import { render, screen } from '@testing-library/react'
 import { ChatMessageList } from '@/features/medical-chat/components/ChatMessageList'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
+import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
 
 // jsdom has no ResizeObserver (radix ScrollArea needs it) and react-markdown is
 // heavy/irrelevant here — we only assert child ORDER, so stub both to passthroughs.
@@ -73,5 +74,29 @@ describe('ChatMessageList — afterMessages slot (follow-up chips placement)', (
     expect(screen.getByText('回覆 GPT')).toBeInTheDocument()
     expect(screen.getByText('SELECTED_ANSWER_EXCERPT')).toBeInTheDocument()
     expect(screen.getByText('QUESTION_TEXT')).toBeInTheDocument()
+  })
+
+  it('shows the configured upstream model name for a custom endpoint answer', () => {
+    const customModelId = customOpenAiModelIdForProfile('hospital-qwen')
+    const messages = [{
+      id: 'a1',
+      role: 'assistant',
+      content: 'LOCAL_ANSWER',
+      timestamp: 0,
+      modelId: customModelId,
+    }] as any[]
+
+    render(
+      <LanguageProvider>
+        <ChatMessageList
+          messages={messages}
+          isLoading={false}
+          customModelDisplayNames={{ [customModelId]: 'qwen2.5vl:7b' }}
+        />
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByText('qwen2.5vl:7b')).toHaveAttribute('title', 'qwen2.5vl:7b')
+    expect(screen.queryByText('OpenAI-compatible')).not.toBeInTheDocument()
   })
 })

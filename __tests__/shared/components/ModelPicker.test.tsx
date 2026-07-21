@@ -1,5 +1,5 @@
 import type { MouseEventHandler, ReactNode } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { ModelPicker } from '@/src/shared/components/ModelPicker'
 import { LanguageProvider } from '@/src/application/providers/language.provider'
 import {
@@ -103,5 +103,36 @@ describe('ModelPicker custom model management entry', () => {
     expect(screen.getByTestId('settings-navigation')).toHaveTextContent(
       'settings|ai|openai-compatible-add-profile',
     )
+  })
+
+  it('updates the standard-chat badge from the selected custom profile capability', () => {
+    const modelId = customOpenAiModelIdForProfile('hospital-7b')
+    render(
+      <LanguageProvider>
+        <RightPanelProvider>
+          <ModelPicker
+            modelId={modelId}
+            fallbackModelId="gemini-3.1-flash-lite"
+            onSelect={jest.fn()}
+            agentModeActive
+          />
+        </RightPanelProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getAllByText('標準對話').length).toBeGreaterThan(0)
+
+    act(() => {
+      useAiConfigStore.setState((state) => ({
+        openAiCompatibleProfiles: state.openAiCompatibleProfiles.map((profile) => ({
+          ...profile,
+          agentMode: 'auto',
+          agentCapability: 'verified',
+          agentCapabilityTestedAt: 1_721_234_567_890,
+        })),
+      }))
+    })
+
+    expect(screen.queryByText('標準對話')).not.toBeInTheDocument()
   })
 })

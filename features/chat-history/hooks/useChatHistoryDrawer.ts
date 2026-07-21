@@ -8,7 +8,21 @@ import { useAutoSaveChat } from '@/src/application/hooks/chat/use-auto-save-chat
 import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
 import { useChatStore } from '@/src/application/stores/chat.store'
 
-export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string) {
+interface UseChatHistoryDrawerOptions {
+  /**
+   * Firestore persistence is a destination-level privacy decision. Custom
+   * endpoint conversations keep the drawer available for starting a fresh
+   * local chat, but must never use its independent force-save path.
+   */
+  persistenceEnabled?: boolean
+}
+
+export function useChatHistoryDrawer(
+  patientId?: string,
+  fhirServerUrl?: string,
+  options: UseChatHistoryDrawerOptions = {},
+) {
+  const persistenceEnabled = options.persistenceEnabled ?? true
   const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [showAuthDialog, setShowAuthDialog] = useState(false)
@@ -17,7 +31,11 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const { sessions, isLoading, deleteSession } = useChatHistory(patientId, fhirServerUrl)
   const { loadSession, startNewSession } = useChatSession()
-  const { forceSave } = useAutoSaveChat({ patientId, fhirServerUrl })
+  const { forceSave } = useAutoSaveChat({
+    patientId,
+    fhirServerUrl,
+    enabled: persistenceEnabled,
+  })
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const messages = useChatStore(state => state.messages)
 
@@ -44,8 +62,11 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
 
   const performLoadSession = async (sessionId: string) => {
     try {
-      // Force save current session before switching
-      await forceSave()
+      // A custom-endpoint conversation is browser-local. Do not even invoke an
+      // old drawer save callback while its persistence boundary is closed.
+      if (persistenceEnabled) {
+        await forceSave()
+      }
       
       await loadSession(sessionId)
       setOpen(false)
@@ -107,8 +128,11 @@ export function useChatHistoryDrawer(patientId?: string, fhirServerUrl?: string)
 
   const performNewChat = async () => {
     try {
-      // Force save current session before starting new chat
-      await forceSave()
+      // Force save only for cloud conversations. The hook-level `enabled`
+      // option is a second fail-closed guard inside forceSave itself.
+      if (persistenceEnabled) {
+        await forceSave()
+      }
       
       startNewSession()
       setOpen(false)

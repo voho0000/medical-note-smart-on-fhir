@@ -20,6 +20,9 @@ import {
   createEmptyOpenAiCompatibleConfig,
   LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
   MAX_OPENAI_COMPATIBLE_PROFILES,
+  normalizeOpenAiCompatibleAgentCapability,
+  normalizeOpenAiCompatibleAgentCapabilityTestedAt,
+  normalizeOpenAiCompatibleAgentMode,
   normalizeOpenAiCompatibleContextWindow,
   normalizeOpenAiCompatibleContextWindowSource,
   normalizeOpenAiCompatibleTransport,
@@ -28,6 +31,13 @@ import {
 import { normalizeOpenAiCompatibleBaseUrl } from '@/src/shared/utils/openai-compatible.utils'
 
 type StorageType = 'localStorage' | 'sessionStorage'
+
+export interface UpdateOpenAiCompatibleConfigOptions {
+  /** Identity changes revoke previous Agent trust. Settings may preserve the
+   * explicit standard-chat policy submitted in this update only after user
+   * confirmation. There is no manual bypass for Agent capability verification. */
+  confirmAgentModeForIdentityChange?: boolean
+}
 
 interface AiConfigState {
   // API Keys
@@ -53,6 +63,7 @@ interface AiConfigState {
   updateOpenAiCompatibleConfig: (
     profileId: string,
     config: OpenAiCompatibleConfig,
+    options?: UpdateOpenAiCompatibleConfigOptions,
   ) => Promise<void>
   setOpenAiCompatibleProfileEnabled: (profileId: string, enabled: boolean) => Promise<void>
   deleteOpenAiCompatibleConfig: (profileId: string) => void
@@ -215,6 +226,9 @@ type StoredOpenAiCompatibleConfig = Pick<
   | 'contextWindowTokens'
   | 'contextWindowSource'
   | 'transport'
+  | 'agentMode'
+  | 'agentCapability'
+  | 'agentCapabilityTestedAt'
 >
 
 interface StoredOpenAiCompatibleConnectionV1 {
@@ -233,6 +247,13 @@ interface StoredOpenAiCompatibleConnectionsV2 {
   version: 2
   profiles: StoredOpenAiCompatibleProfileV2[]
 }
+
+const resetOpenAiCompatibleAgentTrust = <T extends object>(value: T) => ({
+  ...value,
+  agentMode: 'auto' as const,
+  agentCapability: 'unknown' as const,
+  agentCapabilityTestedAt: null,
+})
 
 const LEGACY_SUGGESTED_CONTEXT_WINDOW = 15000
 
@@ -256,6 +277,9 @@ const normalizeStoredOpenAiCompatibleConfig = (
       parsed.contextWindowTokens,
       modelId,
     )
+    const agentCapabilityTestedAt = normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+      parsed.agentCapabilityTestedAt,
+    )
     return {
       enabled: parsed.enabled === true,
       baseUrl,
@@ -268,6 +292,11 @@ const normalizeStoredOpenAiCompatibleConfig = (
         ? suggestedOpenAiCompatibleContextWindow(modelId)
         : normalizedContextWindow,
       contextWindowSource,
+      agentMode: normalizeOpenAiCompatibleAgentMode(parsed.agentMode),
+      agentCapability: agentCapabilityTestedAt === null
+        ? 'unknown'
+        : normalizeOpenAiCompatibleAgentCapability(parsed.agentCapability),
+      agentCapabilityTestedAt,
     }
   } catch {
     return null
@@ -276,20 +305,30 @@ const normalizeStoredOpenAiCompatibleConfig = (
 
 const toStoredOpenAiCompatibleConfig = (
   config: OpenAiCompatibleConfig,
-): StoredOpenAiCompatibleConfig => ({
-  enabled: config.enabled,
-  baseUrl: config.baseUrl,
-  modelId: config.modelId,
-  transport: normalizeOpenAiCompatibleTransport(config.transport),
-  contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
-    config.contextWindowTokens,
-    config.modelId,
-  ),
-  contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
-    config.contextWindowSource,
-    Boolean(config.baseUrl && config.modelId),
-  ),
-})
+): StoredOpenAiCompatibleConfig => {
+  const agentCapabilityTestedAt = normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+    config.agentCapabilityTestedAt,
+  )
+  return {
+    enabled: config.enabled,
+    baseUrl: config.baseUrl,
+    modelId: config.modelId,
+    transport: normalizeOpenAiCompatibleTransport(config.transport),
+    contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
+      config.contextWindowTokens,
+      config.modelId,
+    ),
+    contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
+      config.contextWindowSource,
+      Boolean(config.baseUrl && config.modelId),
+    ),
+    agentMode: normalizeOpenAiCompatibleAgentMode(config.agentMode),
+    agentCapability: agentCapabilityTestedAt === null
+      ? 'unknown'
+      : normalizeOpenAiCompatibleAgentCapability(config.agentCapability),
+    agentCapabilityTestedAt,
+  }
+}
 
 interface LegacyOpenAiCompatibleProfile {
   storageType: StorageType
@@ -429,29 +468,82 @@ const persistOpenAiCompatibleProfilesOnDevice = async (
 
 const normalizeOpenAiCompatibleConfig = (
   config: OpenAiCompatibleConfig,
-): OpenAiCompatibleConfig => ({
-  enabled: config.enabled,
-  baseUrl: normalizeOpenAiCompatibleBaseUrl(config.baseUrl),
-  modelId: config.modelId.trim(),
-  apiKey: sanitizeApiKey(config.apiKey),
-  transport: normalizeOpenAiCompatibleTransport(config.transport),
-  contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
-    config.contextWindowTokens,
-    config.modelId,
-  ),
-  contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
-    config.contextWindowSource,
-    Boolean(config.baseUrl && config.modelId),
-  ),
-})
+  previous?: OpenAiCompatibleConfig,
+): OpenAiCompatibleConfig => {
+  const agentMode = normalizeOpenAiCompatibleAgentMode(
+    config.agentMode !== undefined ? config.agentMode : previous?.agentMode,
+  )
+  const agentCapabilityTestedAt = normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+    config.agentCapabilityTestedAt !== undefined
+      ? config.agentCapabilityTestedAt
+      : previous?.agentCapabilityTestedAt,
+  )
+  const agentCapability = agentCapabilityTestedAt === null
+    ? 'unknown'
+    : normalizeOpenAiCompatibleAgentCapability(
+      config.agentCapability !== undefined
+        ? config.agentCapability
+        : previous?.agentCapability,
+    )
+
+  return {
+    enabled: config.enabled,
+    baseUrl: normalizeOpenAiCompatibleBaseUrl(config.baseUrl),
+    modelId: config.modelId.trim(),
+    apiKey: sanitizeApiKey(config.apiKey),
+    transport: normalizeOpenAiCompatibleTransport(config.transport),
+    contextWindowTokens: normalizeOpenAiCompatibleContextWindow(
+      config.contextWindowTokens,
+      config.modelId,
+    ),
+    contextWindowSource: normalizeOpenAiCompatibleContextWindowSource(
+      config.contextWindowSource,
+      Boolean(config.baseUrl && config.modelId),
+    ),
+    agentMode,
+    agentCapability,
+    agentCapabilityTestedAt,
+  }
+}
+
+const connectionIdentityChanged = (
+  previous: OpenAiCompatibleConfig,
+  next: OpenAiCompatibleConfig,
+) => (
+  previous.baseUrl !== next.baseUrl ||
+  previous.modelId !== next.modelId ||
+  normalizeOpenAiCompatibleTransport(previous.transport) !== next.transport ||
+  sanitizeApiKey(previous.apiKey) !== next.apiKey
+)
 
 const toOpenAiCompatibleProfile = (
   profileId: string,
   config: OpenAiCompatibleConfig,
-): OpenAiCompatibleProfile => ({
-  profileId,
-  ...normalizeOpenAiCompatibleConfig(config),
-})
+  previous?: OpenAiCompatibleProfile,
+  options?: UpdateOpenAiCompatibleConfigOptions,
+): OpenAiCompatibleProfile => {
+  const normalized = normalizeOpenAiCompatibleConfig(config, previous)
+  if (previous && connectionIdentityChanged(previous, normalized)) {
+    const submittedMode = normalizeOpenAiCompatibleAgentMode(config.agentMode)
+    normalized.agentMode = options?.confirmAgentModeForIdentityChange === true &&
+      submittedMode !== 'auto'
+      ? submittedMode
+      : 'auto'
+    const previousTestedAt = normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+      previous.agentCapabilityTestedAt,
+    )
+    const incomingTestedAt = normalizeOpenAiCompatibleAgentCapabilityTestedAt(
+      config.agentCapabilityTestedAt,
+    )
+    const hasNewCapabilityResult = incomingTestedAt !== null &&
+      incomingTestedAt !== previousTestedAt
+    if (!hasNewCapabilityResult) {
+      normalized.agentCapability = 'unknown'
+      normalized.agentCapabilityTestedAt = null
+    }
+  }
+  return { profileId, ...normalized }
+}
 
 const compatibilityOpenAiCompatibleConfig = (
   profiles: OpenAiCompatibleProfile[],
@@ -590,14 +682,14 @@ export const useAiConfigStore = create<AiConfigState>()(
         return profileId
       },
 
-      updateOpenAiCompatibleConfig: async (profileId, config) => {
+      updateOpenAiCompatibleConfig: async (profileId, config, options) => {
         const current = get().openAiCompatibleProfiles
         if (!current.some((profile) => profile.profileId === profileId)) {
           throw new Error('OpenAI-compatible profile was not found')
         }
         const next = current.map((profile) => (
           profile.profileId === profileId
-            ? toOpenAiCompatibleProfile(profileId, config)
+            ? toOpenAiCompatibleProfile(profileId, config, profile, options)
             : profile
         ))
         const revision = ++customConnectionRevision
@@ -644,7 +736,7 @@ export const useAiConfigStore = create<AiConfigState>()(
           (profile) => profile.profileId === LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
         ) ?? current[0]
         const profileId = target?.profileId ?? LEGACY_OPENAI_COMPATIBLE_PROFILE_ID
-        const nextProfile = toOpenAiCompatibleProfile(profileId, config)
+        const nextProfile = toOpenAiCompatibleProfile(profileId, config, target)
         const next = target
           ? current.map((profile) => profile.profileId === profileId ? nextProfile : profile)
           : [nextProfile]
@@ -772,6 +864,38 @@ export const useAiConfigStore = create<AiConfigState>()(
         storageTypeRevision += 1
         customConnectionRevision += 1
         bumpAllCredentialRevisions()
+        const capabilityInvalidatedProfileIds = new Set(
+          get().openAiCompatibleProfiles
+            .filter((profile) => Boolean(profile.apiKey))
+            .map((profile) => profile.profileId),
+        )
+        // Logout/key clearing can race credential hydration. Include profiles
+        // whose encrypted key is still only on disk so their Agent trust cannot
+        // survive merely because the in-memory key has not decrypted yet.
+        try {
+          const storedConnections = parseStoredOpenAiCompatibleConnections(
+            getStorage('localStorage')?.getItem(
+              STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+            ) ?? null,
+          )
+          for (const entry of storedConnections?.profiles ?? []) {
+            if (entry.encryptedApiKey) {
+              capabilityInvalidatedProfileIds.add(entry.profileId)
+            }
+          }
+          for (const type of ['localStorage', 'sessionStorage'] as const) {
+            if (getStorage(type)?.getItem(
+              STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
+            ) !== null) {
+              capabilityInvalidatedProfileIds.add(
+                LEGACY_OPENAI_COMPATIBLE_PROFILE_ID,
+              )
+            }
+          }
+        } catch {
+          // Storage cleanup below remains best-effort; memory keys are still
+          // cleared synchronously even when browser storage cannot be read.
+        }
 
         // Memory is cleared first so StorageError cannot leave usable keys in
         // the running app or interrupt an auth/logout cleanup chain.
@@ -779,6 +903,13 @@ export const useAiConfigStore = create<AiConfigState>()(
           const openAiCompatibleProfiles = state.openAiCompatibleProfiles.map((profile) => ({
             ...profile,
             apiKey: null,
+            ...(capabilityInvalidatedProfileIds.has(profile.profileId)
+              ? {
+                  agentMode: 'auto' as const,
+                  agentCapability: 'unknown' as const,
+                  agentCapabilityTestedAt: null,
+                }
+              : {}),
           }))
           return {
             apiKey: null,
@@ -809,6 +940,15 @@ export const useAiConfigStore = create<AiConfigState>()(
                 STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
                 serializeOpenAiCompatibleConnections(storedConnections.profiles.map((entry) => ({
                   ...entry,
+                  profile: capabilityInvalidatedProfileIds.has(entry.profileId) ||
+                    Boolean(entry.encryptedApiKey)
+                    ? {
+                        ...entry.profile,
+                        agentMode: 'auto',
+                        agentCapability: 'unknown',
+                        agentCapabilityTestedAt: null,
+                      }
+                    : entry.profile,
                   encryptedApiKey: null,
                 }))),
               )
@@ -822,9 +962,12 @@ export const useAiConfigStore = create<AiConfigState>()(
           const storedConnection = parseStoredOpenAiCompatibleConnection(storedConnectionRaw)
           if (deviceStorage && storedConnectionRaw) {
             if (storedConnection) {
+              const profile = storedConnection.encryptedApiKey
+                ? resetOpenAiCompatibleAgentTrust(storedConnection.profile)
+                : storedConnection.profile
               deviceStorage.setItem(
                 STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
-                serializeOpenAiCompatibleConnection(storedConnection.profile, null),
+                serializeOpenAiCompatibleConnection(profile, null),
               )
             } else {
               deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
@@ -847,6 +990,39 @@ export const useAiConfigStore = create<AiConfigState>()(
             storage?.removeItem(STORAGE_KEYS.GEMINI_API_KEY)
             storage?.removeItem(STORAGE_KEYS.PERPLEXITY_API_KEY)
             storage?.removeItem(STORAGE_KEYS.CLAUDE_API_KEY)
+
+            // Before v1, the endpoint profile and its key lived in separate
+            // records. Clearing only that key would leave a trusted
+            // `deep-agent / verified` profile behind, allowing the trust result
+            // to reappear on the next page load. Revoke the trust in-place
+            // before removing the key; if the safe rewrite fails, remove the
+            // stale profile rather than retain an unverifiable capability.
+            const legacyKeyRaw = storage?.getItem(
+              STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY,
+            ) ?? null
+            if (storage && legacyKeyRaw !== null) {
+              const legacyConfigRaw = storage.getItem(
+                STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG,
+              )
+              if (legacyConfigRaw !== null) {
+                try {
+                  const legacyConfig = normalizeStoredOpenAiCompatibleConfig(
+                    JSON.parse(legacyConfigRaw),
+                  )
+                  if (!legacyConfig) throw new Error('Invalid legacy endpoint profile')
+                  storage.setItem(
+                    STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG,
+                    JSON.stringify(resetOpenAiCompatibleAgentTrust(legacyConfig)),
+                  )
+                } catch (error) {
+                  storage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
+                  console.warn(
+                    `Failed to revoke legacy custom endpoint trust in ${type}:`,
+                    error,
+                  )
+                }
+              }
+            }
             storage?.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
           } catch (error) {
             console.warn(`Failed to clear credentials from ${type}:`, error)
@@ -950,6 +1126,7 @@ export const useAiConfigStore = create<AiConfigState>()(
               const credential = customCredentials[index]
               let restoredKey = credential.invalid ? null : credential.value
               let encryptedKey = credential.invalid ? null : source.encryptedApiKey
+              let credentialWasCleared = Boolean(source.encryptedApiKey) && credential.invalid
 
               if (credential.needsEncryption && restoredKey) {
                 try {
@@ -960,17 +1137,23 @@ export const useAiConfigStore = create<AiConfigState>()(
                   // secure destination-first migration cannot finish.
                   encryptedKey = null
                   restoredKey = null
+                  credentialWasCleared = true
                   unsafeCredentialMigrationFailed = true
                 }
               }
 
+              const restoredProfile = credentialWasCleared
+                ? resetOpenAiCompatibleAgentTrust(source.profile)
+                : source.profile
+
               restoredProfiles.push({
                 profileId: source.profileId,
-                ...source.profile,
+                ...restoredProfile,
                 apiKey: restoredKey,
               })
               migratedStoredProfiles.push({
                 ...source,
+                profile: restoredProfile,
                 encryptedApiKey: encryptedKey,
               })
             }
@@ -1011,29 +1194,61 @@ export const useAiConfigStore = create<AiConfigState>()(
                   if (unsafeCredentialMigrationFailed || customCredentials.some(
                     (credential) => credential.invalid || credential.needsEncryption,
                   )) {
-                    // Remove the exact unsafe source snapshot; valid ciphertext
-                    // sources remain available for a later migration retry.
-                    if (storedConnections && deviceStorage.getItem(
-                      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
-                    ) === connectionsRaw) {
-                      deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
+                    // The migration write failed after unsafe/legacy credentials
+                    // were encountered. Fall back to a keyless v2 envelope and
+                    // revoke Agent trust for every profile whose restored key is
+                    // now being discarded. If even this safe write is impossible,
+                    // remove the exact source snapshot rather than retain a key.
+                    const safeProfiles = restoredProfiles.map((profile) => (
+                      profile.apiKey
+                        ? { ...resetOpenAiCompatibleAgentTrust(profile), apiKey: null }
+                        : { ...profile, apiKey: null }
+                    ))
+                    const safeStoredProfiles = migratedStoredProfiles.map((entry, index) => ({
+                      ...entry,
+                      profile: restoredProfiles[index]?.apiKey
+                        ? resetOpenAiCompatibleAgentTrust(entry.profile)
+                        : entry.profile,
+                      encryptedApiKey: null,
+                    }))
+                    let safeStatePersisted = false
+                    try {
+                      deviceStorage.setItem(
+                        STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+                        serializeOpenAiCompatibleConnections(safeStoredProfiles),
+                      )
+                      clearLegacyOpenAiCompatibleStorage()
+                      safeStatePersisted = true
+                    } catch (safeWriteError) {
+                      console.warn(
+                        'Failed to persist keyless custom endpoint fallback:',
+                        safeWriteError,
+                      )
                     }
-                    if (storedConnection && deviceStorage.getItem(
-                      STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
-                    ) === connectionRaw) {
-                      deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
-                    }
-                    if (legacyProfile) {
-                      const legacyStorage = getStorage(legacyProfile.storageType)
-                      if (legacyStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY) ===
-                        legacyProfile.credentialRaw) {
-                        legacyStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+                    if (!safeStatePersisted) {
+                      if (storedConnections && deviceStorage.getItem(
+                        STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS,
+                      ) === connectionsRaw) {
+                        deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTIONS)
+                      }
+                      if (storedConnection && deviceStorage.getItem(
+                        STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION,
+                      ) === connectionRaw) {
+                        deviceStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONNECTION)
+                      }
+                      if (legacyProfile) {
+                        const legacyStorage = getStorage(legacyProfile.storageType)
+                        if (legacyStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY) ===
+                          legacyProfile.credentialRaw) {
+                          legacyStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_API_KEY)
+                        }
+                        if (legacyStorage?.getItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG) ===
+                          legacyProfile.raw) {
+                          legacyStorage.removeItem(STORAGE_KEYS.OPENAI_COMPATIBLE_CONFIG)
+                        }
                       }
                     }
-                    hydratedOpenAiCompatibleProfiles = restoredProfiles.map((profile) => ({
-                      ...profile,
-                      apiKey: null,
-                    }))
+                    hydratedOpenAiCompatibleProfiles = safeProfiles
                   } else {
                     hydratedOpenAiCompatibleProfiles = restoredProfiles
                   }

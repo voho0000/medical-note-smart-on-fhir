@@ -23,7 +23,6 @@ import { useSafetyPrefsStore } from "@/src/application/hooks/safety-alerts/use-s
 import { ENV_CONFIG } from "@/src/shared/config/env.config"
 import { isUsableApiKey } from "@/src/shared/utils/api-key.utils"
 import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
-import { normalizeOpenAiCompatibleTransport } from "@/src/shared/types/openai-compatible.types"
 import {
   getModelDefinition,
   modelRequiresUserKey,
@@ -94,7 +93,7 @@ function SectionTriggerContent({
           <span>{title}</span>
           <StatusBadge label={status} tone={tone} />
         </div>
-        <p className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground">
+        <p className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground group-data-[state=open]:hidden">
           {description}
         </p>
       </div>
@@ -213,9 +212,6 @@ export function ModelAndKeySettings({
       ? t.settings.openAiCompatibleDisabled
       : t.settings.openAiCompatibleNotConfigured
   const localTone: StatusTone = localReady ? "success" : localConfigured ? "warning" : "muted"
-  const localUsesGateway = localConfigured && openAiCompatibleProfiles.every((profile) => (
-    normalizeOpenAiCompatibleTransport(profile.transport) === "mediprisma-gateway"
-  ))
   const localDetail = t.settings.openAiCompatibleDescription
 
   const cloudKeyCount = [apiKey, geminiKey, claudeKey].filter((key) => Boolean(key?.trim())).length
@@ -352,8 +348,8 @@ export function ModelAndKeySettings({
         }}
         className="overflow-hidden rounded-lg border bg-background"
       >
-        <AccordionItem value="local" className="px-3">
-          <AccordionTrigger className="py-3 hover:no-underline">
+        <AccordionItem value="local" className="px-2">
+          <AccordionTrigger className="group py-2.5 hover:no-underline">
             <SectionTriggerContent
               icon={<Server className="h-4 w-4" />}
               title={t.settings.localModelSection}
@@ -365,14 +361,9 @@ export function ModelAndKeySettings({
           <AccordionContent
             forceMount
             hidden={openSection !== "local"}
-            className="pb-3 data-[state=closed]:hidden"
+            className="pb-2 data-[state=closed]:hidden"
           >
-            <div className={cn(
-              "rounded-md border p-3",
-              localUsesGateway
-                ? "border-amber-200 bg-amber-50/20 dark:border-amber-900 dark:bg-amber-950/10"
-                : "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900 dark:bg-emerald-950/15",
-            )}>
+            <div className="rounded-md border border-border/70 bg-muted/10 p-2">
               <OpenAiCompatibleSettings
                 navigationReady={openSection === "local"}
                 settingsTarget={settingsTarget}

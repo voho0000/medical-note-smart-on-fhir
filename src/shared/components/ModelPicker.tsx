@@ -33,6 +33,10 @@ import {
 import { cn } from "@/src/shared/utils/cn.utils"
 import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
 import { MAX_OPENAI_COMPATIBLE_PROFILES } from '@/src/shared/types/openai-compatible.types'
+import {
+  resolveOpenAiCompatibleConversationMode,
+  resolveOpenAiCompatibleProfile,
+} from '@/src/shared/utils/openai-compatible.utils'
 
 interface ModelPickerProps {
   /** Raw persisted model preference (may be key-gated right now). */
@@ -61,9 +65,10 @@ export function ModelPicker({
   const { t } = useLanguage()
   const { setActiveTab } = useRightPanel()
   const { apiKey, geminiKey, claudeKey } = useAllApiKeys()
-  const customProfileCount = useAiConfigStore(
-    (state) => state.openAiCompatibleProfiles.length,
+  const openAiCompatibleProfiles = useAiConfigStore(
+    (state) => state.openAiCompatibleProfiles,
   )
+  const customProfileCount = openAiCompatibleProfiles.length
   const { gptModels, geminiModels, claudeModels, customModels, handleSelectModel } = useModelSelection(
     apiKey,
     geminiKey,
@@ -88,6 +93,13 @@ export function ModelPicker({
     : keyGatedModelId
   const effectiveCustomEntry = customModels.find((entry) => entry.id === effectiveModelId)
   const effectiveLabel = effectiveCustomEntry?.label ?? modelDisplayLabel(effectiveModelId)
+  const usesStandardChat = (candidateModelId: string) => {
+    const definition = getModelDefinition(candidateModelId)
+    if (definition?.provider !== 'custom') return modelUsesStandardChat(candidateModelId)
+    return resolveOpenAiCompatibleConversationMode(
+      resolveOpenAiCompatibleProfile(candidateModelId, openAiCompatibleProfiles),
+    ) === 'standard'
+  }
 
   const groups: Array<{ label: string; items: ModelEntry[]; custom?: boolean }> = [
     { label: t.settings.openAiCompatibleGroupLabel, items: customModels, custom: true },
@@ -130,7 +142,7 @@ export function ModelPicker({
           >
             {effectiveLabel}
           </span>
-          {agentModeActive && modelUsesStandardChat(effectiveModelId) ? (
+          {agentModeActive && usesStandardChat(effectiveModelId) ? (
             <span className="hidden shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300 sm:inline">
               {t.modelPicker.standardChatMode}
             </span>
@@ -148,7 +160,7 @@ export function ModelPicker({
             {group.items.map((entry) => {
               const definition = getModelDefinition(entry.id)
               const lockedByAgent = false
-              const usesStandardChat = agentModeActive && modelUsesStandardChat(entry.id)
+              const entryUsesStandardChat = agentModeActive && usesStandardChat(entry.id)
               const configureRequired = entry.isLocked
                 && (entry.configureInSettings || modelRequiresUserKey(entry.id))
                 && definition?.status !== 'disabled'
@@ -169,7 +181,7 @@ export function ModelPicker({
                   aria-label={configureRequired ? `${entry.label}，${entry.configureInSettings ? t.modelPicker.configureEndpoint : t.modelPicker.configureApiKey}` : undefined}
                   title={configureRequired
                     ? (entry.configureInSettings ? t.modelPicker.configureEndpoint : t.modelPicker.configureApiKey)
-                    : usesStandardChat
+                    : entryUsesStandardChat
                       ? t.modelPicker.standardChatDescription
                       : undefined}
                   className={cn(
@@ -188,7 +200,7 @@ export function ModelPicker({
                   >
                     {entry.label}
                   </span>
-                  {usesStandardChat && !configureRequired ? (
+                  {entryUsesStandardChat && !configureRequired ? (
                     <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.5625rem] font-medium text-sky-700 dark:bg-sky-950 dark:text-sky-300">
                       {t.modelPicker.standardChatMode}
                     </span>
