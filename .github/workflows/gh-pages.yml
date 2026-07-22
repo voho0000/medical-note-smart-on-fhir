@@ -54,7 +54,7 @@ jobs:
           NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY: ${{ secrets.NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY }}
           NEXT_PUBLIC_PERPLEXITY_PROXY_URL: ${{ secrets.NEXT_PUBLIC_PERPLEXITY_PROXY_URL }}
           NEXT_PUBLIC_FEEDBACK_URL: ${{ secrets.NEXT_PUBLIC_FEEDBACK_URL }}
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ./out
 
