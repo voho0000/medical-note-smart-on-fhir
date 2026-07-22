@@ -63,9 +63,27 @@ export function useImportBundle(): UseImportBundleReturn {
       setBundleIsActive(shouldUseLocalBundle())
       setIsDemo(LocalBundleService.isDemoData())
     }
-    sync() // initial
+
+    // A localStorage presence marker is shared by every tab on this origin,
+    // while the bundle's decryption key is deliberately tab-scoped. Validate
+    // the persisted bundle before publishing the initial badge state: a newly
+    // opened tab may see the marker but be unable to decrypt the chart. load()
+    // clears that inaccessible record; the follow-up sync then keeps both the
+    // "Local data" badge and its trash action hidden on the welcome screen.
+    let active = true
+    const reconcileInitialState = async () => {
+      if (LocalBundleService.hasData()) {
+        await LocalBundleService.load()
+      }
+      if (active) sync()
+    }
+    void reconcileInitialState()
+
     window.addEventListener(BUNDLE_CHANGED_EVENT, sync)
-    return () => window.removeEventListener(BUNDLE_CHANGED_EVENT, sync)
+    return () => {
+      active = false
+      window.removeEventListener(BUNDLE_CHANGED_EVENT, sync)
+    }
   }, [])
 
   // Shared persist core for both real imports and the demo loader: validate,
