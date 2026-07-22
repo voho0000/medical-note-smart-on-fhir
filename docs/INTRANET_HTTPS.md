@@ -1,5 +1,18 @@
 # 院內 HTTPS／純內網部署
 
+> 現行規格｜基準版本：v0.43.0｜最後核對：2026-07-22
+
+| 項目 | Cloud profile | On-prem profile |
+|---|---|---|
+| 官方用途 | `mediprisma.tw/app`、GitHub Pages | 院內 HTTPS／無外網部署 |
+| Firebase | Auth、Firestore、Functions、App Check | 不初始化且不進入 static artifact |
+| AI | 內建 cloud、自備 key、自訂 endpoint | 僅院內 OpenAI-compatible profiles |
+| 對話／範本同步 | 登入後可跨裝置 | 目前瀏覽器裝置，不跨裝置 |
+| Prompt Gallery／回饋 | 可用 | 停用雲端服務 |
+| 指令 | `dev:cloud`／`build:cloud` | `dev:onprem`／`build:onprem`／`package:onprem` |
+
+目前的 on-prem milestone 是 **Firebase-free 靜態瀏覽器應用**，適合單一工作站或由 EHR/SMART 提供 patient context 的院內部署。它尚未內建醫院 OIDC/SSO、集中式 PostgreSQL、跨裝置 chat history、伺服器 audit trail 或備份管理；需要這些能力的機構應另行提供受管後端與治理流程，不能把 browser localStorage 當成中央病歷系統。
+
 MediPrisma 支援由使用者瀏覽器直接呼叫 OpenAI Chat Completions compatible API，包括：
 
 - `https://llm.intra.example.org/v1/chat/completions`
@@ -45,6 +58,7 @@ MediPrisma 支援由使用者瀏覽器直接呼叫 OpenAI Chat Completions compa
 - 載入 `.env.intranet` 的院內 SMART／AI allowlist 設定；
 - 清除 build shell 中可能殘留的 Firebase、MediPrisma AI、Whisper、Perplexity、feedback、proxy key 與 App Check 設定；
 - 不把 Next `/api` route 放進靜態 artifact。
+- 在輸出後執行 sanitizer 與 forbidden-domain audit；也可用 `npm run audit:onprem` 對目前的 `out/` 重跑掃描。
 
 模型權重、container image、Caddy binary 與更新套件也必須事先匯入院內；runtime 不需要外網。
 

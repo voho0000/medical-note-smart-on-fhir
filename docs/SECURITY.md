@@ -1,6 +1,6 @@
 # 安全性指南 / Security Guide
 
-> 現行規格｜基準版本：v0.40.0｜最後核對：2026-07-14
+> 現行規格｜基準版本：v0.43.0｜最後核對：2026-07-22
 
 本文件描述 app repo 已實作的控制與仍需由部署端承擔的責任。MediPrisma 是研究／教學用途軟體；本 repo 沒有宣稱已取得 HIPAA、GDPR、臺灣醫療器材或資安認證。
 
@@ -12,6 +12,7 @@
 - 使用者、病人與 FHIR server 的雲端資料互相隔離。
 - 生成內容可追溯來源，無來源或無法驗證時明確標示。
 - Static host、Node host 與外部 Firebase Functions 的責任不混淆。
+- Cloud 與 on-prem 能力由 build-time profile 分隔；on-prem artifact 不包含 Firebase 或公共 AI endpoint。
 
 ## 已實作控制
 
@@ -22,6 +23,15 @@
 - EHR launch 與 standalone launch 使用不同 launch scope。
 - 有有效 SMART token 時優先於舊 local bundle。
 - 分頁搜尋超過 50 頁會明確失敗，不回傳靜默截斷的成功資料。
+
+### Deployment profile boundary
+
+- `NEXT_PUBLIC_DEPLOYMENT_PROFILE` 只接受 `cloud` 或 `onprem`；未設定時為向後相容的 `cloud`。Legacy `NEXT_PUBLIC_OFFLINE_MODE=1` 優先且強制 fail closed 到 `onprem`，衝突設定不會意外開啟 cloud capability。
+- `build:mediprisma`、`build:gh` 與相關 workflow 明確設定 `cloud`；`build:onprem` 明確設定 `onprem`，載入 `.env.intranet`，並清除呼叫 shell 中可能殘留的 Firebase、MediPrisma proxy、public AI、feedback 與 App Check variables。
+- On-prem build 透過 `next.config.ts` aliases 在 module graph 建立前替換 Auth、Firestore sync、Prompt Gallery、chat persistence、cloud AI、proxy auth 與 public SMART defaults。這避免只靠 runtime branch、卻仍把 Firebase code 打包進 browser chunk。
+- On-prem static artifact 會掃描 Firebase SDK／服務設定、公共 OpenAI／Gemini／Anthropic／Perplexity domain 與 public SMART sandbox；vendor SDK 未使用的公共預設先被改成 disabled same-origin path，掃描仍有命中即建置失敗。
+- `NEXT_PUBLIC_ONPREM_AI_ALLOWED_ORIGINS` 只接受以 comma 分隔的 exact origins；same-origin 與 loopback 另行允許。未列入的跨 origin AI endpoint 會在 request 前被拒絕。
+- On-prem SMART issuer 必須出現在 `NEXT_PUBLIC_SMART_ALLOWED_ISS`；無 `iss` 時不導向公共 sandbox，未受信任 issuer 沒有使用者繞過選項。
 
 ### 本地 Bundle
 
@@ -59,7 +69,7 @@
 - 自訂 profile 被修改、停用、刪除或畫面卸載時，進行中的文字／語音請求會中止；後續與排隊請求在送出前重新解析 live profile，不沿用舊 endpoint 或 key。
 - 對話切換模型、provider 或自訂 profile 身分時會先中止並清空目前對話與 session pointer，避免舊端點的訊息或 FHIR tool result 被送往另一個端點，亦避免切回雲端後將混合來源對話寫入 Firestore。
 - 自訂模型停用 Firestore chat auto-save／smart title、移除 Perplexity tool；通過驗證的深入對話只暴露 browser-bound FHIR tools。direct 模式可使用相同 endpoint 的語音功能，Firebase Gateway 目前只支援模型清單與文字 Chat Completions。
-- `NEXT_PUBLIC_OFFLINE_MODE=1` 不初始化 Firebase/Auth/App Check；`build:intranet` 另會清空所有 cloud proxy URL。
+- On-prem profile 不初始化 Firebase/Auth/App Check、不接受公共 provider key，也不提供 Firebase Gateway transport；自訂 endpoint unavailable 時維持 fail closed。`build:intranet` 是 `build:onprem` 的相容別名。
 
 瀏覽器端加密無法防禦已執行在同一 origin 的惡意 JavaScript／XSS；它主要降低 storage 被直接讀取或共用工作站殘留的風險。
 
@@ -117,7 +127,7 @@ GitHub Pages 不會執行 Next `headers()`，因此上述 header 不會由 stati
 ### Quality controls
 
 - ESLint boundary rules 阻止主要跨層依賴回歸。
-- GitHub Actions 執行 typecheck、lint、Jest 與 static build。
+- GitHub Actions 執行 typecheck、lint、Jest、cloud static build 與 on-prem forbidden-domain audit。
 - CodeQL 在 push、PR 與每週排程分析 JavaScript／TypeScript。
 - Dependabot 監控 npm／Actions dependency。
 - Playwright 以合成資料測 client flows，另有 Firebase emulator chain。
@@ -126,11 +136,21 @@ GitHub Pages 不會執行 Next `headers()`，因此上述 header 不會由 stati
 
 ### Firebase
 
+本節只適用於 cloud profile。
+
 - 部署並版本控制 Auth policy、Firestore Rules、indexes、Functions CORS、quota 與 App Check enforcement。
 - 確認 Firebase Authorized Domains，repo 的 daily auth-domain guard 只做 drift detection。
 - 對 `users/{uid}` collection 強制 uid ownership。
 - 對 `sharedPrompts` 強制 author ownership、schema、長度與安全欄位。
 - 設定 data retention、刪除流程、audit log 與 incident response。
+
+### On-prem gateway 與網路
+
+- 以院內 TLS／PKI 提供靜態 App；若使用同源 `/ai/v1`，reverse proxy 只允許必要 path、method 與 upstream。
+- 將 `connect-src`、`frame-ancestors`、FHIR／OAuth origins 與 AI origins 收斂為實際院內 allowlist，不使用 `*` 或廣泛 `https:`。
+- 防火牆只允許使用者到 Gateway、Gateway 到模型主機，以及使用者／Gateway 到院內 EHR/FHIR/OAuth endpoints；其他 Internet egress 預設拒絕。
+- Gateway／模型服務不記錄 prompt、response、FHIR token、Authorization 或完整 request body；更新套件與模型權重使用已驗證的離線 artifact。
+- Browser-side no-egress 是應用層控制，不取代 DNS、防火牆、proxy log、憑證與封包稽核。
 
 ### Secrets 與環境變數
 
@@ -138,6 +158,7 @@ GitHub Pages 不會執行 Next `headers()`，因此上述 header 不會由 stati
 - `RESEND_API_KEY`、AI provider proxy keys、service credentials 只能放 server／Functions secret store。
 - 輪替曾暴露或疑似外洩的 key，不以刪除 Git history 當成輪替替代品。
 - Production 與 dev proxy URL／CORS 應分離。
+- `.env.intranet` 不進 Git；`NEXT_PUBLIC_*` 即使只在院內使用仍是公開 browser configuration，不可放真正 secret。
 
 ### 組織政策
 
@@ -155,17 +176,20 @@ GitHub Pages 不會執行 Next `headers()`，因此上述 header 不會由 stati
 - Static GitHub Pages 無自訂 response headers 與 server API route。
 - Source key 存在只證明引用可定位，不自動證明每一個自然語言 claim 完全由該來源支持。
 - 第三方 AI、Firebase、Resend、GitHub Pages 各有自己的處理條款與 availability。
+- On-prem artifact audit 只能證明已建置檔未含已知 forbidden strings；無法證明院內 DNS、Gateway、模型 container、瀏覽器 extension 或主機本身沒有外連。
 
 ## 發布前檢查
 
 - [ ] `npm audit` 與 CodeQL findings 已檢視；風險有 owner／期限。
 - [ ] `npx tsc --noEmit`、`npm run lint`、Jest、E2E、build 通過。
+- [ ] `npm run build:cloud` 與 `npm run build:onprem` 都通過；on-prem forbidden-domain audit 無命中。
 - [ ] Firebase Rules／indexes／Functions 與 app 版本相容。
 - [ ] Authorized domains、CORS、App Check、quota、allowed models 已驗證。
 - [ ] Production `NEXT_PUBLIC_FEEDBACK_URL` 指向真正可用的外部 endpoint。
 - [ ] CDN／host 的 CSP、HSTS、referrer、permissions headers 實際回應已檢查。
 - [ ] Demo Bundle 保持去識別化，未將 `.env.local`、真實 Bundle、trace、screenshots 加入 Git。
 - [ ] 隱私政策與 UI consent 反映實際啟用的 providers 與資料流。
+- [ ] On-prem 的 SMART issuer、AI origin、Caddy CSP、TLS、DNS、防火牆與 logging 以實際封包／response headers 驗證。
 
 ## 發現問題
 
@@ -177,3 +201,4 @@ GitHub Pages 不會執行 Next `headers()`，因此上述 header 不會由 stati
 - [Architecture](ARCHITECTURE.md)
 - [AI Agent](AI_AGENT_IMPLEMENTATION.md)
 - [Feedback setup](FEEDBACK_SETUP.md)
+- [院內 HTTPS／純內網部署](INTRANET_HTTPS.md)
