@@ -71,6 +71,14 @@ const onPremWebpackAliases = Object.fromEntries(
   ]),
 );
 
+const configureOnPremWebpack: NonNullable<NextConfig['webpack']> = (config) => {
+  config.resolve.alias = {
+    ...config.resolve.alias,
+    ...onPremWebpackAliases,
+  };
+  return config;
+};
+
 const nextConfig: NextConfig = {
   // Static export is only required for the GitHub Pages deploy. In dev mode
   // (and on Vercel) we want the full Next.js server so dynamic API routes
@@ -89,15 +97,10 @@ const nextConfig: NextConfig = {
         },
       }
     : {}),
-  webpack(config) {
-    if (isOnPremDeployment) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        ...onPremWebpackAliases,
-      };
-    }
-    return config;
-  },
+  // Keep the webpack fallback available for explicit on-prem webpack builds,
+  // but do not register it for cloud profiles. Next.js 16 treats a webpack
+  // hook without a Turbopack config as an ambiguous production build.
+  ...(isOnPremDeployment ? { webpack: configureOnPremWebpack } : {}),
   // Static-export targets (GH Pages, mediprisma /app) need basePath / assetPrefix
   ...(isStaticExport
     ? {
