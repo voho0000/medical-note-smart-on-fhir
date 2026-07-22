@@ -9,6 +9,7 @@ import { useDataSelection } from "@/src/application/providers/data-selection.pro
 import { useClinicalDataMapper } from "@/src/application/hooks/data/use-clinical-data-mapper.hook"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
+import type { DataConsumer } from "@/src/application/providers/data-selection.provider"
 
 /**
  * Raw clinical data type from provider (includes loading state)
@@ -34,6 +35,8 @@ export interface DataSelectionFeatureProps {
   /** Standalone surfaces may keep the explanatory line; drawers own it in their header. */
   showScopeDescription?: boolean
   overflowIssue?: ContextOverflowIssue | null
+  consumer?: DataConsumer
+  showTemplates?: boolean
 }
 
 export function DataSelectionFeature({
@@ -41,16 +44,22 @@ export function DataSelectionFeature({
   fallbackModelId,
   showScopeDescription = true,
   overflowIssue,
+  consumer = 'insights',
+  showTemplates = true,
 }: DataSelectionFeatureProps = {}) {
   const { t } = useLanguage()
   const rawClinicalData = useClinicalData() as RawClinicalData
   const clinicalDataMapper = useClinicalDataMapper()
-  const { 
-    selectedData, 
-    setSelectedData, 
-    filters, 
-    setFilters 
-  } = useDataSelection()
+  const dataSelection = useDataSelection()
+  const profile = dataSelection.getProfile(consumer)
+  const selectedData = consumer === 'insights' ? dataSelection.selectedData : profile.selection
+  const filters = consumer === 'insights' ? dataSelection.filters : profile.filters
+  const setSelectedData = consumer === 'insights'
+    ? dataSelection.setSelectedData
+    : (next: typeof selectedData) => dataSelection.setSelectionFor(consumer, next)
+  const setFilters = consumer === 'insights'
+    ? dataSelection.setFilters
+    : (next: DataFilters) => dataSelection.setFiltersFor(consumer, next)
 
   // Use ClinicalDataMapper service to transform data (Dependency Inversion Principle)
   const mappedData = useMemo(() => {
@@ -114,6 +123,8 @@ export function DataSelectionFeature({
         fallbackModelId={fallbackModelId}
         overflowIssue={overflowIssue}
         showScopeDescription={showScopeDescription}
+        consumer={consumer}
+        showTemplates={showTemplates}
       />
     </div>
   )

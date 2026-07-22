@@ -15,6 +15,7 @@ import { buildIpsMarkdown } from './utils/ips-markdown'
 import { IpsDataScopePanel } from './components/IpsDataScopePanel'
 import { IpsExportPreview } from './components/IpsExportPreview'
 import { InferredProblemsReview } from './components/InferredProblemsReview'
+import { AiHandoffPanel } from './components/AiHandoffPanel'
 
 export default function IpsExportFeature() {
   const { t } = useLanguage()
@@ -85,9 +86,25 @@ export default function IpsExportFeature() {
 
   return (
     <div className="space-y-3">
-      {/* Preview first & default: the copyable markdown/JSON preview is the
-          high-frequency use; scope tuning is the occasional one. */}
-      <Tabs defaultValue="preview" className="space-y-3">
+      <div className="px-1">
+        <h1 className="text-base font-semibold">{x.hubTitle}</h1>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{x.hubDescription}</p>
+      </div>
+
+      <Tabs defaultValue="ai" className="space-y-3">
+        <TabsList className="grid h-9 w-full grid-cols-2">
+          <TabsTrigger value="ai">{x.aiUseTab}</TabsTrigger>
+          <TabsTrigger value="institution">{x.institutionTab}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ai">
+          <AiHandoffPanel />
+        </TabsContent>
+
+        <TabsContent value="institution">
+          {/* Preview first & default: the copyable IPS markdown/JSON preview is
+              the high-frequency exchange use; scope tuning is occasional. */}
+          <Tabs defaultValue="preview" className="space-y-3">
         <TabsList className="grid h-9 w-full grid-cols-2">
           <TabsTrigger value="preview">{x.previewTab}</TabsTrigger>
           <TabsTrigger value="scope">{x.scopeTab}</TabsTrigger>
@@ -144,6 +161,8 @@ export default function IpsExportFeature() {
           />
 
           <IpsDataScopePanel bundle={bundle} curatedData={curatedData} />
+        </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
     </div>

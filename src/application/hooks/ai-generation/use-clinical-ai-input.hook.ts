@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
-import { useDataSelection } from '@/src/application/providers/data-selection.provider'
+import {
+  useDataSelection,
+  type DataConsumer,
+} from '@/src/application/providers/data-selection.provider'
 import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
 import {
   buildClinicalContextFitCandidate,
@@ -95,13 +98,16 @@ interface FitState {
  * supplied, the outbound view is progressively reduced without mutating the
  * user's saved Data Selection profile.
  */
-export function useClinicalAiInput(contextLimit?: number) {
+export function useClinicalAiInput(
+  contextLimit?: number,
+  consumer: DataConsumer = 'insights',
+) {
   const { patient } = usePatient()
   const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   const { locale } = useLanguage()
   const clinicalData = useClinicalData() as unknown as ClinicalAiDataInput | null
   const dataSelection = useDataSelection()
-  const insightsProfile = dataSelection.getProfile('insights')
+  const activeProfile = dataSelection.getProfile(consumer)
 
   const rawDataReady = !!clinicalData
     && !clinicalData.isLoading
@@ -113,31 +119,31 @@ export function useClinicalAiInput(contextLimit?: number) {
   // context. This keeps the cache/scope identity model-independent while the
   // actual outbound request below may use a smaller transient profile.
   const baseDocumentIds = useMemo(() => {
-    if (!rawDataReady || !clinicalData || !insightsProfile.selection.documents) return []
+    if (!rawDataReady || !clinicalData || !activeProfile.selection.documents) return []
     const documents = listClinicalDocuments(
       clinicalData as unknown as Parameters<typeof listClinicalDocuments>[0],
     )
     return resolveSelectedDocuments(
       documents,
-      insightsProfile.documentMode ?? 'latestAdmission',
-      insightsProfile.documentIds ?? [],
+      activeProfile.documentMode ?? 'latestAdmission',
+      activeProfile.documentIds ?? [],
     ).map((document) => document.id)
-  }, [rawDataReady, clinicalData, insightsProfile])
+  }, [rawDataReady, clinicalData, activeProfile])
 
   const baseScopedClinicalData = useMemo(
     () => (rawDataReady && clinicalData
       ? scopeClinicalDataForAi(
           clinicalData as unknown as Partial<ClinicalDataCollection>,
-          insightsProfile.selection,
-          insightsProfile.filters,
+          activeProfile.selection,
+          activeProfile.filters,
           baseDocumentIds,
         ) as ClinicalAiDataInput
       : null),
     [
       rawDataReady,
       clinicalData,
-      insightsProfile.selection,
-      insightsProfile.filters,
+      activeProfile.selection,
+      activeProfile.filters,
       baseDocumentIds,
     ],
   )
@@ -152,10 +158,10 @@ export function useClinicalAiInput(contextLimit?: number) {
       ? clinicalAiSourceSignature(
           patient,
           {
-            selection: insightsProfile.selection,
-            filters: insightsProfile.filters,
-            documentMode: insightsProfile.documentMode ?? 'latestAdmission',
-            documentIds: insightsProfile.documentIds ?? [],
+            selection: activeProfile.selection,
+            filters: activeProfile.filters,
+            documentMode: activeProfile.documentMode ?? 'latestAdmission',
+            documentIds: activeProfile.documentIds ?? [],
           },
           baseScopedClinicalData,
           baseCatalog,
@@ -165,7 +171,7 @@ export function useClinicalAiInput(contextLimit?: number) {
       rawDataReady,
       baseScopedClinicalData,
       patient,
-      insightsProfile,
+      activeProfile,
       baseCatalog,
     ],
   )
@@ -187,14 +193,14 @@ export function useClinicalAiInput(contextLimit?: number) {
   const activeTier: ClinicalContextFitTier =
     fitKey && fitState.key === fitKey ? fitState.tier : 'full'
   const fitCandidate = useMemo(
-    () => buildClinicalContextFitCandidate(insightsProfile, activeTier, targetTokens),
-    [insightsProfile, activeTier, targetTokens],
+    () => buildClinicalContextFitCandidate(activeProfile, activeTier, targetTokens),
+    [activeProfile, activeTier, targetTokens],
   )
   const {
     getFormattedClinicalContext,
     getFullClinicalContext,
     includedDocumentIds,
-  } = useClinicalContext('insights', {
+  } = useClinicalContext(consumer, {
     profile: fitCandidate.profile,
     documentTokenBudget: fitCandidate.documentTokenBudget,
   })

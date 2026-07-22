@@ -22,6 +22,7 @@ import {
 } from "@/src/shared/utils/context-budget"
 import { formatClinicalContextAdaptationNotice } from '@/src/core/utils/adaptive-clinical-context.utils'
 import { useResolvedDataSelectionModel } from '../hooks/useResolvedDataSelectionModel'
+import type { DataConsumer } from '@/src/application/providers/data-selection.provider'
 
 const LEVEL_BAR: Record<ContextBudgetLevel, string> = {
   ok: "bg-emerald-500",
@@ -42,15 +43,16 @@ interface ContextTokenMeterProps {
   /** Free model used when the raw preference is currently key-gated. */
   fallbackModelId?: string
   overflowIssue?: ContextOverflowIssue | null
+  consumer?: DataConsumer
 }
 
-export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: ContextTokenMeterProps) {
+export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, consumer = 'insights' }: ContextTokenMeterProps) {
   const { t, locale } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
   // The main Data Selection drawer edits the summary/insights profile. Read
   // that exact consumer here too so a stale legacy chat profile cannot make
   // the meter disagree with the subsequent summary request.
-  const { getClinicalContext, formatClinicalContext } = useClinicalContext('insights')
+  const { getClinicalContext, formatClinicalContext } = useClinicalContext(consumer)
   const {
     modelId: effectiveModelId,
     contextLimit,
@@ -59,7 +61,10 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
     modelId,
     fallbackModelId,
   )
-  const fittedClinicalInput = useClinicalAiInput(contextLimit)
+  const fittedClinicalInput = useClinicalAiInput(
+    consumer === 'insights' ? contextLimit : undefined,
+    consumer,
+  )
 
   // Debounced snapshot of the formatted context. We recompute sections on a
   // trailing timer rather than every render.
