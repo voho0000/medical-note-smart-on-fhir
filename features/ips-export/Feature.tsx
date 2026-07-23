@@ -85,16 +85,11 @@ export default function IpsExportFeature() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="px-1">
-        <h1 className="text-base font-semibold">{x.hubTitle}</h1>
-        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{x.hubDescription}</p>
-      </div>
-
-      <Tabs defaultValue="ai" className="space-y-3">
-        <TabsList className="grid h-9 w-full grid-cols-2">
-          <TabsTrigger value="ai">{x.aiUseTab}</TabsTrigger>
-          <TabsTrigger value="institution">{x.institutionTab}</TabsTrigger>
+    <div>
+      <Tabs defaultValue="ai" className="space-y-2">
+        <TabsList className="grid h-8 w-full grid-cols-2">
+          <TabsTrigger value="ai" className="text-xs">{x.aiUseTab}</TabsTrigger>
+          <TabsTrigger value="institution" className="text-xs">{x.institutionTab}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="ai">

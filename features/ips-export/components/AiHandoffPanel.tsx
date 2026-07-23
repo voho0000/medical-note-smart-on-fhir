@@ -118,26 +118,28 @@ export function AiHandoffPanel() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-lg border bg-card p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">{x.title}</h2>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{x.description}</p>
-          </div>
-          <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 text-xs" onClick={() => setScopeOpen(true)}>
-            <Database className="h-3.5 w-3.5" />
-            {x.chooseData}
-          </Button>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+    <div className="space-y-2">
+      <div className="rounded-lg border bg-card p-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Tabs value={profile} onValueChange={(value) => setProfile(value as AiArtifactProfile)}>
-            <TabsList className="grid h-8 w-64 grid-cols-2">
+            <TabsList className="grid h-8 w-56 grid-cols-2">
               <TabsTrigger value="quick" className="text-xs">{x.quickProfile}</TabsTrigger>
               <TabsTrigger value="traceable" className="text-xs">{x.traceableProfile}</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="flex items-center gap-2">
+          {!questionExpanded && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2 text-xs text-muted-foreground"
+              onClick={() => setQuestionExpanded(true)}
+            >
+              <MessageSquarePlus className="h-3.5 w-3.5" />
+              {x.optionalQuestionAction}
+            </Button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
             <label htmlFor="ai-export-mask-identifiers" className="text-xs text-muted-foreground">{x.maskIdentifiers}</label>
             <Switch
               id="ai-export-mask-identifiers"
@@ -145,23 +147,13 @@ export function AiHandoffPanel() {
               onCheckedChange={setMaskIdentifiers}
               aria-label={x.maskIdentifiers}
             />
+            <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 text-xs" onClick={() => setScopeOpen(true)}>
+              <Database className="h-3.5 w-3.5" />
+              {x.chooseData}
+            </Button>
           </div>
         </div>
-        <p className="mt-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
-          {profile === 'quick' ? x.quickDescription : x.traceableDescription}
-        </p>
-        {!questionExpanded ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-1 h-7 gap-1.5 px-2 text-xs text-muted-foreground"
-            onClick={() => setQuestionExpanded(true)}
-          >
-            <MessageSquarePlus className="h-3.5 w-3.5" />
-            {x.optionalQuestionAction}
-          </Button>
-        ) : (
+        {questionExpanded && (
           <div className="mt-2 rounded-md border bg-muted/10 p-2.5">
             <div className="flex items-center justify-between gap-2">
               <label htmlFor="ai-export-optional-question" className="text-xs font-medium">{x.optionalQuestionLabel}</label>
@@ -207,12 +199,11 @@ export function AiHandoffPanel() {
           </Button>
           <pre
             data-testid="ai-export-exact-preview"
-            className="max-h-[420px] min-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 pr-24 font-mono text-xs leading-relaxed"
+            className="h-[58vh] min-h-80 max-h-[680px] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 pr-24 font-mono text-xs leading-relaxed"
           >
             {artifact}
           </pre>
         </div>
-        <p className="mt-1 text-[0.6875rem] text-muted-foreground">{x.exactPreviewHint}</p>
       </div>
 
       <div className="rounded-lg border bg-card p-3">
