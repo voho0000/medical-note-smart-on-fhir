@@ -34,9 +34,11 @@ const aiHandoff = {
   title: 'Ask AI',
   description: 'Free text',
   chooseData: 'Choose data',
-  questionLabel: 'My question',
   questionPlaceholder: 'Question',
-  freeTextHint: 'No template',
+  optionalQuestionAction: 'Attach a question (optional)',
+  optionalQuestionLabel: 'Question to copy with the data (optional)',
+  optionalQuestionHint: 'Leave this blank to copy only the health data.',
+  optionalQuestionRemove: 'Remove question',
   quickProfile: 'Quick copy',
   traceableProfile: 'Traceable package',
   quickDescription: 'Quick',
@@ -52,6 +54,8 @@ const aiHandoff = {
   openEvidenceQuestionOnly: 'Question only',
   openEvidencePreflight: 'Check sign-in first',
   openEvidenceClinicianOnly: 'Clinicians only',
+  openEvidenceQuestionLabel: 'Question for OpenEvidence',
+  openEvidenceQuestionPlaceholder: 'Enter a clinical question',
   openEvidenceAttestation: 'I am registered and signed in',
   openEvidenceAction: 'Copy question and open OpenEvidence',
   scopeTitle: 'Scope',
@@ -89,20 +93,34 @@ describe('AiHandoffPanel', () => {
 
   afterEach(() => jest.restoreAllMocks())
 
-  it('copies the full selected artifact for general AI destinations', async () => {
+  it('copies the selected data without requiring a question for general AI destinations', async () => {
     render(<AiHandoffPanel />)
-    fireEvent.change(screen.getByLabelText('My question'), { target: { value: 'Review my data' } })
+    fireEvent.click(screen.getByRole('button', { name: /ChatGPT/ }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    expect(writeText.mock.calls[0][0]).toContain('MASKED CLINICAL CONTEXT')
+    expect(writeText.mock.calls[0][0]).not.toContain('# 我的問題')
+    expect(replace).toHaveBeenCalledWith('https://chatgpt.com/')
+  })
+
+  it('can optionally attach a free-text question to the general AI artifact', async () => {
+    render(<AiHandoffPanel />)
+    fireEvent.click(screen.getByRole('button', { name: 'Attach a question (optional)' }))
+    fireEvent.change(screen.getByLabelText('Question to copy with the data (optional)'), {
+      target: { value: 'Review my data' },
+    })
     fireEvent.click(screen.getByRole('button', { name: /ChatGPT/ }))
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     expect(writeText.mock.calls[0][0]).toContain('MASKED CLINICAL CONTEXT')
     expect(writeText.mock.calls[0][0]).toContain('Review my data')
-    expect(replace).toHaveBeenCalledWith('https://chatgpt.com/')
   })
 
   it('gates OpenEvidence and copies a question-only artifact', async () => {
     render(<AiHandoffPanel />)
-    fireEvent.change(screen.getByLabelText('My question'), { target: { value: 'Could aspirin explain bruising?' } })
+    fireEvent.change(screen.getByLabelText('Question for OpenEvidence'), {
+      target: { value: 'Could aspirin explain bruising?' },
+    })
 
     const action = screen.getByRole('button', { name: /Copy question and open OpenEvidence/ })
     expect(action).toBeDisabled()

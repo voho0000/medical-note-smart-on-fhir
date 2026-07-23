@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Copy, Database, ExternalLink, ShieldCheck } from 'lucide-react'
+import { Check, Copy, Database, ExternalLink, MessageSquarePlus, ShieldCheck, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -48,7 +48,9 @@ export function AiHandoffPanel() {
   const { patient } = usePatient()
   const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext('aiExport')
   const { copied, copy } = useCopyToClipboard()
-  const [question, setQuestion] = useState('')
+  const [attachedQuestion, setAttachedQuestion] = useState('')
+  const [questionExpanded, setQuestionExpanded] = useState(false)
+  const [openEvidenceQuestion, setOpenEvidenceQuestion] = useState('')
   const [profile, setProfile] = useState<AiArtifactProfile>('quick')
   const [maskIdentifiers, setMaskIdentifiers] = useState(true)
   const [scopeOpen, setScopeOpen] = useState(false)
@@ -64,26 +66,31 @@ export function AiHandoffPanel() {
   useEffect(() => {
     setExportId(newExportId())
     setGeneratedAt(new Date().toISOString())
-  }, [question, clinicalContext, maskIdentifiers, profile, patient?.id])
+  }, [attachedQuestion, clinicalContext, maskIdentifiers, profile, patient?.id])
 
   useEffect(() => {
     setOpenEvidenceAttested(false)
-  }, [question, patient?.id, audience])
+  }, [openEvidenceQuestion, patient?.id, audience])
 
   const artifact = useMemo(
     () => buildAiArtifact({
       profile,
-      question,
+      question: attachedQuestion,
       clinicalContext,
       exportId,
       generatedAt,
       identifiersMasked: maskIdentifiers,
     }),
-    [clinicalContext, exportId, generatedAt, maskIdentifiers, profile, question],
+    [attachedQuestion, clinicalContext, exportId, generatedAt, maskIdentifiers, profile],
   )
-  const questionOnlyArtifact = useMemo(() => buildQuestionOnlyArtifact(question), [question])
-  const canHandoff = question.trim().length > 0 && clinicalContext.trim().length > 0
-  const openEvidenceEligible = audience === 'medical' && openEvidenceAttested && question.trim().length > 0
+  const questionOnlyArtifact = useMemo(
+    () => buildQuestionOnlyArtifact(openEvidenceQuestion),
+    [openEvidenceQuestion],
+  )
+  const canHandoff = clinicalContext.trim().length > 0
+  const openEvidenceEligible = audience === 'medical'
+    && openEvidenceAttested
+    && openEvidenceQuestion.trim().length > 0
 
   const copyArtifact = async () => {
     const ok = await copy(artifact)
@@ -113,7 +120,7 @@ export function AiHandoffPanel() {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border bg-card p-3">
-        <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold">{x.title}</h2>
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{x.description}</p>
@@ -123,19 +130,7 @@ export function AiHandoffPanel() {
             {x.chooseData}
           </Button>
         </div>
-        <label htmlFor="ai-export-question" className="text-xs font-medium">{x.questionLabel}</label>
-        <Textarea
-          id="ai-export-question"
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          placeholder={x.questionPlaceholder}
-          className="mt-1 min-h-24 resize-y text-sm"
-        />
-        <p className="mt-1 text-[0.6875rem] text-muted-foreground">{x.freeTextHint}</p>
-      </div>
-
-      <div className="rounded-lg border bg-card p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
           <Tabs value={profile} onValueChange={(value) => setProfile(value as AiArtifactProfile)}>
             <TabsList className="grid h-8 w-64 grid-cols-2">
               <TabsTrigger value="quick" className="text-xs">{x.quickProfile}</TabsTrigger>
@@ -155,6 +150,45 @@ export function AiHandoffPanel() {
         <p className="mt-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
           {profile === 'quick' ? x.quickDescription : x.traceableDescription}
         </p>
+        {!questionExpanded ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-1 h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+            onClick={() => setQuestionExpanded(true)}
+          >
+            <MessageSquarePlus className="h-3.5 w-3.5" />
+            {x.optionalQuestionAction}
+          </Button>
+        ) : (
+          <div className="mt-2 rounded-md border bg-muted/10 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="ai-export-optional-question" className="text-xs font-medium">{x.optionalQuestionLabel}</label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="h-6 w-6"
+                aria-label={x.optionalQuestionRemove}
+                onClick={() => {
+                  setAttachedQuestion('')
+                  setQuestionExpanded(false)
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <Textarea
+              id="ai-export-optional-question"
+              value={attachedQuestion}
+              onChange={(event) => setAttachedQuestion(event.target.value)}
+              placeholder={x.questionPlaceholder}
+              className="mt-1 min-h-20 resize-y text-sm"
+            />
+            <p className="mt-1 text-[0.6875rem] text-muted-foreground">{x.optionalQuestionHint}</p>
+          </div>
+        )}
         {!maskIdentifiers && (
           <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
             {x.unmaskedWarning}
@@ -218,6 +252,15 @@ export function AiHandoffPanel() {
           </Button>
         </div>
 
+        <label htmlFor="open-evidence-question" className="mt-3 block text-xs font-medium">{x.openEvidenceQuestionLabel}</label>
+        <Textarea
+          id="open-evidence-question"
+          value={openEvidenceQuestion}
+          onChange={(event) => setOpenEvidenceQuestion(event.target.value)}
+          placeholder={x.openEvidenceQuestionPlaceholder}
+          className="mt-1 min-h-20 resize-y bg-background text-sm"
+        />
+
         {audience !== 'medical' ? (
           <p className="mt-2 rounded-md border bg-background px-2.5 py-2 text-xs text-muted-foreground">{x.openEvidenceClinicianOnly}</p>
         ) : (
@@ -254,4 +297,3 @@ export function AiHandoffPanel() {
     </div>
   )
 }
-

@@ -30,6 +30,21 @@ describe('AI export artifacts', () => {
     expect(artifact).not.toContain('export_id:')
   })
 
+  it('does not add a placeholder question when the user only wants to copy data', () => {
+    const artifact = buildAiArtifact({
+      profile: 'quick',
+      question: '',
+      clinicalContext: context,
+      exportId: 'unused',
+      generatedAt: '2026-07-23T10:00:00+08:00',
+      identifiersMasked: true,
+    })
+
+    expect(artifact).not.toContain('# 我的問題')
+    expect(artifact).not.toContain('尚未填寫')
+    expect(artifact).toContain('# 所選健康資料')
+  })
+
   it('builds a deterministic traceable envelope and escapes matching boundaries', () => {
     const artifact = buildAiArtifact({
       profile: 'traceable',
