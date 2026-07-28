@@ -60,6 +60,11 @@ function isNumericCellValue(v: string | undefined): boolean {
   return Number.isFinite(Number(t))
 }
 
+function cellContainsNumericValue(cell: LabCell): boolean {
+  if (isNumericCellValue(cell.value)) return true
+  return cell.allValues?.some(isNumericCellValue) ?? false
+}
+
 // NOTE (2026-07-10): the app-side HARDCODED_REF_RANGES table (TSH / lipids /
 // HbA1c / glucose-AC …) was REMOVED per user directive. Abnormal flagging now
 // derives from the source's Observation.interpretation when present, falling
@@ -279,7 +284,10 @@ export function buildLabPivots(
         const conversionUnit = obs.valueQuantity?.system === FHIR_SYSTEMS.UCUM
           ? obs.valueQuantity.code || unit
           : unit
-        const norm = normalizeAnalyteUnit(testKey, numericValue, conversionUnit)
+        const loincCode = obs.code?.coding?.find(
+          (coding: any) => coding?.system === FHIR_SYSTEMS.LOINC,
+        )?.code
+        const norm = normalizeAnalyteUnit(testKey, numericValue, conversionUnit, { loincCode })
         if (norm) {
           cellValue = String(norm.value)
           cellUnit = norm.unit
@@ -341,14 +349,16 @@ export function buildLabPivots(
       }
     }
 
-    // Show a shared column-header unit only when every populated cell now uses
-    // the same unit. Most configured analytes reach that state through UCUM
-    // normalisation above. For an unconfigured/unknown mixed-unit analyte,
-    // leaving row.unit empty makes renderers show each cell's own unit instead
-    // of silently labelling every value with whichever unit happened to be most
-    // common in the source data.
+    // Show a shared column-header unit only when every numeric/unit-bearing cell
+    // now uses the same unit. A qualitative result without a unit must not force
+    // an otherwise uniform numeric column to repeat the unit below every value.
+    // Numeric cells that still lack a unit remain blockers, as do genuinely
+    // mixed units; those rows continue to show source units per cell.
     for (const row of testMap.values()) {
-      const cellUnits = [...row.values.values()].map((cell) => cell.unit)
+      const unitBearingCells = [...row.values.values()].filter(
+        (cell) => !!cell.unit || cellContainsNumericValue(cell),
+      )
+      const cellUnits = unitBearingCells.map((cell) => cell.unit)
       const distinctUnits = new Set(cellUnits.filter((unit): unit is string => !!unit))
       const everyCellHasUnit = cellUnits.length > 0 && cellUnits.every((unit) => !!unit)
       row.unit = everyCellHasUnit && distinctUnits.size === 1

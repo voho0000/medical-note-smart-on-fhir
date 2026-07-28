@@ -74,12 +74,73 @@ describe('normalizeAnalyteUnit — per-analyte canonical unit', () => {
 
   it('returns null for analytes not configured for scaling', () => {
     expect(normalizeAnalyteUnit('HB', 13, 'g/dL')).toBeNull()
-    expect(normalizeAnalyteUnit('NA', 140, 'mmol/L')).toBeNull()
+    expect(normalizeAnalyteUnit('CA', 9.2, 'mg/dL')).toBeNull()
   })
 
   it('returns null (leaves value untouched) when the unit is not in the analyte family', () => {
     expect(normalizeAnalyteUnit('WBC', 5, 'mg/dL')).toBeNull()   // wrong family
     expect(normalizeAnalyteUnit('CRP', 5, '/uL')).toBeNull()     // wrong family
     expect(normalizeAnalyteUnit('WBC', 5, undefined)).toBeNull()
+  })
+
+  it('standardises equivalent CBC display-unit spellings without changing values', () => {
+    expect(normalizeAnalyteUnit('MCV', 92.2, 'fl')).toEqual({ value: 92.2, unit: 'fL' })
+    expect(normalizeAnalyteUnit('MCV', 92.2, 'fL')).toEqual({ value: 92.2, unit: 'fL' })
+    expect(normalizeAnalyteUnit('MCH', 29.7, 'pg/Cell')).toEqual({ value: 29.7, unit: 'pg' })
+    expect(normalizeAnalyteUnit('MCH', 29.7, 'pg')).toEqual({ value: 29.7, unit: 'pg' })
+    expect(normalizeAnalyteUnit('MCHC', 32.3, 'gHb/dL')).toEqual({ value: 32.3, unit: 'g/dL' })
+    expect(normalizeAnalyteUnit('MCHC', 32.3, 'g/dL')).toEqual({ value: 32.3, unit: 'g/dL' })
+  })
+
+  it('rescales MCHC g/L to the canonical g/dL column', () => {
+    expect(normalizeAnalyteUnit('MCHC', 323, 'g/L')).toEqual({ value: 32.3, unit: 'g/dL' })
+  })
+
+  it('standardises Na and K mmol/L and mEq/L to mmol/L without rescaling', () => {
+    expect(normalizeAnalyteUnit('NA', 140, 'mEq/L')).toEqual({ value: 140, unit: 'mmol/L' })
+    expect(normalizeAnalyteUnit('NA', 140, 'mmol/L')).toEqual({ value: 140, unit: 'mmol/L' })
+    expect(normalizeAnalyteUnit('K', 4.2, 'meq/L')).toEqual({ value: 4.2, unit: 'mmol/L' })
+    expect(normalizeAnalyteUnit('K', 4.2, 'mmol/L')).toEqual({ value: 4.2, unit: 'mmol/L' })
+  })
+
+  it('standardises AST/ALT U/L and IU/L spellings to U/L', () => {
+    expect(normalizeAnalyteUnit('AST', 21, 'U/L')).toEqual({ value: 21, unit: 'U/L' })
+    expect(normalizeAnalyteUnit('AST', 21, '[iU]/L')).toEqual({ value: 21, unit: 'U/L' })
+    expect(normalizeAnalyteUnit('ALT', 31, 'U/L')).toEqual({ value: 31, unit: 'U/L' })
+    expect(normalizeAnalyteUnit('ALT', 31, 'IU/L')).toEqual({ value: 31, unit: 'U/L' })
+    expect(normalizeAnalyteUnit('ALT', 31, '[IU]/L')).toEqual({ value: 31, unit: 'U/L' })
+  })
+
+  it('standardises ASCII/full-width percent and defaults verified RDW-CV only', () => {
+    expect(normalizeAnalyteUnit('HCT', 37.2, '%')).toEqual({ value: 37.2, unit: '%' })
+    expect(normalizeAnalyteUnit('NEU', 48.9, '％')).toEqual({ value: 48.9, unit: '%' })
+    expect(normalizeAnalyteUnit('RDW', 13.4, undefined, { loincCode: '788-0' })).toEqual({
+      value: 13.4,
+      unit: '%',
+    })
+    expect(normalizeAnalyteUnit('RDW', 42, undefined, { loincCode: '21000-5' })).toBeNull()
+  })
+
+  it('standardises eGFR unit spellings and supplies the approved missing-unit default', () => {
+    expect(normalizeAnalyteUnit('EGFR(M)', 52, 'mL/min/1.73m2')).toEqual({
+      value: 52,
+      unit: 'mL/min/1.73m²',
+    })
+    expect(normalizeAnalyteUnit('EGFR(EPI)', 52, 'mL/min/{1.73_m2}')).toEqual({
+      value: 52,
+      unit: 'mL/min/1.73m²',
+    })
+    expect(normalizeAnalyteUnit('EGFR(M)', 52, 'mL/min/1.73.m2')).toEqual({
+      value: 52,
+      unit: 'mL/min/1.73m²',
+    })
+    expect(normalizeAnalyteUnit('EGFR(M)', 52, undefined)).toEqual({
+      value: 52,
+      unit: 'mL/min/1.73m²',
+    })
+  })
+
+  it('does not assume the body-surface-area eGFR unit from a conflicting supplied unit', () => {
+    expect(normalizeAnalyteUnit('EGFR(M)', 52, 'mL/min')).toBeNull()
   })
 })
