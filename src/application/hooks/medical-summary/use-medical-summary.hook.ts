@@ -191,12 +191,20 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       locale: outputLocale,
       audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,
     }
-    const requests = targetModuleIds.map((moduleId) => ({
-      moduleId,
-      messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
-    }))
-    const overflow = requests
-      .map(({ messages }) => createContextOverflowIssue(
+    const retryRequests = retryRequest
+      ? targetModuleIds.map((moduleId) => ({
+          moduleId,
+          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
+        }))
+      : []
+    const initialBatchMessages = retryRequest
+      ? null
+      : generateMedicalSummaryUseCase.buildBatchModuleMessages(promptInput)
+    const messageSets = initialBatchMessages
+      ? [initialBatchMessages]
+      : retryRequests.map(({ messages }) => messages)
+    const overflow = messageSets
+      .map((messages) => createContextOverflowIssue(
         messages.map((message) => message.content).join('\n\n'),
         ctx.modelId,
         {
@@ -213,7 +221,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const runModule = async ({
       moduleId,
       messages,
-    }: typeof requests[number]) => {
+    }: typeof retryRequests[number]) => {
       const full = await ctx.ai.stream(messages, {
         modelId: ctx.modelId,
         operationKey: ctx.operationKey,
@@ -226,12 +234,36 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       return { moduleId, result: parsed }
     }
 
-    // Cloud providers can process the independent cards concurrently. A
-    // user-configured local endpoint remains sequential so a small on-prem
-    // model is not unexpectedly hit with five large prompts at once.
+    // Initial generation sends the large clinical context once, then validates
+    // each delimited card independently. Retry requests remain one call per
+    // failed card so successful content is neither re-billed nor replaced.
     const settled: Array<PromiseSettledResult<Awaited<ReturnType<typeof runModule>>>> = []
-    if (isCustomOpenAiModelId(ctx.modelId)) {
-      for (const request of requests) {
+    if (initialBatchMessages) {
+      try {
+        const full = await ctx.ai.stream(initialBatchMessages, {
+          modelId: ctx.modelId,
+          operationKey: ctx.operationKey,
+          throwOnAbort: true,
+        })
+        targetModuleIds.forEach((moduleId) => {
+          const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, full)
+          settled.push({
+            status: 'fulfilled',
+            value: parsed
+              ? { moduleId, result: parsed }
+              : { moduleId, error: 'PARSE_FAILED' as const },
+          })
+        })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error
+        targetModuleIds.forEach(() => {
+          settled.push({ status: 'rejected', reason: error })
+        })
+      }
+    } else if (isCustomOpenAiModelId(ctx.modelId)) {
+      // A user-configured local endpoint remains sequential so a small
+      // on-prem model is not unexpectedly hit with several retries at once.
+      for (const request of retryRequests) {
         try {
           settled.push({ status: 'fulfilled', value: await runModule(request) })
         } catch (error) {
@@ -240,7 +272,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         }
       }
     } else {
-      settled.push(...await Promise.allSettled(requests.map(runModule)))
+      settled.push(...await Promise.allSettled(retryRequests.map(runModule)))
     }
 
     const aborted = settled.find((outcome) =>
@@ -255,7 +287,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       ...(retryRequest?.baseResult.moduleErrors ?? {}),
     }
     settled.forEach((outcome, index) => {
-      const moduleId = requests[index].moduleId
+      const moduleId = targetModuleIds[index]
       if (outcome.status === 'rejected') {
         moduleErrors[moduleId] = getUserErrorMessage(outcome.reason)
         return

@@ -528,6 +528,18 @@ describe('modular summary generation contract', () => {
     expect(messages[0].content).toContain('Do not return fields belonging to another module')
   })
 
+  it('builds one batch prompt with five independently delimited JSON blocks', () => {
+    const messages = useCase.buildBatchModuleMessages(input)
+    const prompt = messages[0].content
+
+    expect(prompt).toContain('BATCH MODULAR OUTPUT CONTRACT')
+    for (const moduleId of ['priorities', 'problems', 'timeline', 'investigations', 'medications']) {
+      expect(prompt).toContain(`<<<MEDIPRISMA_MODULE:${moduleId}>>>`)
+      expect(prompt).toContain(`<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`)
+    }
+    expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
+  })
+
   it('validates each module independently so one malformed card does not discard another', () => {
     const priorities = useCase.parseModuleResult('priorities', '{"headline":"broken"}')
     const problems = useCase.parseModuleResult('problems', JSON.stringify({
@@ -541,6 +553,53 @@ describe('modular summary generation contract', () => {
 
     expect(priorities).toBeNull()
     expect(problems?.problems).toHaveLength(1)
+  })
+
+  it('salvages valid batch blocks around a malformed neighbouring block', () => {
+    const batchReply = [
+      '<<<MEDIPRISMA_MODULE:priorities>>>',
+      JSON.stringify({
+        headline: 'Complex cross-facility care',
+        summary: [{ text: 'Kidney function needs follow-up.', sources: ['E1'] }],
+      }),
+      '<<<END_MEDIPRISMA_MODULE:priorities>>>',
+      '<<<MEDIPRISMA_MODULE:problems>>>',
+      '{"problems": [}',
+      '<<<END_MEDIPRISMA_MODULE:problems>>>',
+      '<<<MEDIPRISMA_MODULE:timeline>>>',
+      JSON.stringify({ timeline: [] }),
+      '<<<END_MEDIPRISMA_MODULE:timeline>>>',
+      '<<<MEDIPRISMA_MODULE:investigations>>>',
+      JSON.stringify({ investigations: [] }),
+      '<<<END_MEDIPRISMA_MODULE:investigations>>>',
+      '<<<MEDIPRISMA_MODULE:medications>>>',
+      JSON.stringify({
+        medicationEducation: [],
+        medicationReview: { regimen: [], changes: [], reconciliation: [] },
+      }),
+      '<<<END_MEDIPRISMA_MODULE:medications>>>',
+    ].join('\n')
+
+    expect(useCase.parseBatchModuleResult('priorities', batchReply)?.headline)
+      .toBe('Complex cross-facility care')
+    expect(useCase.parseBatchModuleResult('problems', batchReply)).toBeNull()
+    expect(useCase.parseBatchModuleResult('timeline', batchReply)?.timeline).toEqual([])
+    expect(useCase.parseBatchModuleResult('investigations', batchReply)?.investigations).toEqual([])
+    expect(useCase.parseBatchModuleResult('medications', batchReply)?.medicationReview.regimen)
+      .toEqual([])
+  })
+
+  it('salvages a complete final JSON block when only its closing marker is truncated', () => {
+    const reply = [
+      '<<<MEDIPRISMA_MODULE:medications>>>',
+      JSON.stringify({
+        medicationEducation: [],
+        medicationReview: { regimen: [], changes: [], reconciliation: [] },
+      }),
+    ].join('\n')
+
+    expect(useCase.parseBatchModuleResult('medications', reply)?.medicationReview.changes)
+      .toEqual([])
   })
 
   it('merges a retried module into an existing draft without replacing successful cards', () => {

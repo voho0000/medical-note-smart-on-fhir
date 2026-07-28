@@ -11,8 +11,9 @@ import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.e
 
 export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
-// v13: each fixed summary card is generated and validated independently.
-// Older all-or-nothing live results regenerate into the modular cache shape.
+// v13: fixed summary cards are stored with module-level validation/errors.
+// The initial request may batch their independently delimited payloads, while
+// retries replace only failed modules without changing the cached result shape.
 export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary13', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle

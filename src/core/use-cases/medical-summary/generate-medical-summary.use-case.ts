@@ -986,6 +986,22 @@ const MODULE_OUTPUT_INSTRUCTION = (moduleId: MedicalSummaryModuleId) =>
   'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
   MODULE_SCHEMA_HINTS[moduleId]
 
+const moduleBlockStart = (moduleId: MedicalSummaryModuleId) =>
+  `<<<MEDIPRISMA_MODULE:${moduleId}>>>`
+
+const moduleBlockEnd = (moduleId: MedicalSummaryModuleId) =>
+  `<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`
+
+const BATCH_OUTPUT_INSTRUCTION =
+  '\n\nBATCH MODULAR OUTPUT CONTRACT: Generate all five modules in the exact order shown below. ' +
+  'Each module is an independent JSON object enclosed by its exact start and end markers. ' +
+  'The markers are the only permitted non-JSON text. Do NOT wrap the five modules in one outer JSON object or array, ' +
+  'do NOT use markdown fences, and do NOT omit later modules if an earlier module is uncertain. ' +
+  'Use empty arrays or optional omissions allowed by that module schema instead of explanatory prose.\n\n' +
+  MEDICAL_SUMMARY_MODULE_IDS.map((moduleId) =>
+    `${moduleBlockStart(moduleId)}\n${MODULE_SCHEMA_HINTS[moduleId]}\n${moduleBlockEnd(moduleId)}`,
+  ).join('\n\n')
+
 const SYSTEM_MEDICAL =
   'You are preparing a structured cross-hospital patient summary for a physician who is seeing this patient ' +
   'without knowing their history at other facilities. Precise clinical language; cite actual values and trends. ' +
@@ -1221,6 +1237,13 @@ export class GenerateMedicalSummaryUseCase {
     return this.buildMessagesForOutput(input, MODULE_OUTPUT_INSTRUCTION(moduleId))
   }
 
+  /** Initial live generation sends the clinical context once and asks for
+   * independently delimited card payloads. Failed cards can then reuse the
+   * single-module contract above without regenerating successful cards. */
+  buildBatchModuleMessages(input: GenerateMedicalSummaryInput): AiMessage[] {
+    return this.buildMessagesForOutput(input, BATCH_OUTPUT_INSTRUCTION)
+  }
+
   /**
    * Parse the model's reply, or null if it isn't valid JSON for the schema.
    * Failures log a truncated head of the raw reply — Flash-Lite occasionally
@@ -1279,6 +1302,46 @@ export class GenerateMedicalSummaryUseCase {
       .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
       .join('; ')
     return fail(`schema mismatch — ${issues}`)
+  }
+
+  /** Extract and validate one independently delimited card from the shared
+   * initial response. A malformed neighbouring block cannot affect this card.
+   * If a provider ignores the delimiters and returns one ordinary JSON object,
+   * fall back to validating that object against each module schema. */
+  parseBatchModuleResult<T extends MedicalSummaryModuleId>(
+    moduleId: T,
+    text: string,
+  ): MedicalSummaryModuleResultMap[T] | null {
+    const startMarker = moduleBlockStart(moduleId)
+    const startIndex = text.indexOf(startMarker)
+    if (startIndex < 0) {
+      const hasAnyModuleMarker = MEDICAL_SUMMARY_MODULE_IDS.some((id) =>
+        text.includes(moduleBlockStart(id)),
+      )
+      if (hasAnyModuleMarker) {
+        console.warn(
+          `[medical-summary:${moduleId}] parseResult failed (missing batch module marker)`,
+        )
+        return null
+      }
+      return this.parseModuleResult(moduleId, text)
+    }
+
+    const contentStart = startIndex + startMarker.length
+    const endIndex = text.indexOf(moduleBlockEnd(moduleId), contentStart)
+    if (endIndex >= 0) {
+      return this.parseModuleResult(moduleId, text.slice(contentStart, endIndex))
+    }
+
+    // A missing end marker should break only this block. Stop at the next
+    // module marker when present so later valid cards remain independently
+    // recoverable; for the final block, allow EOF so complete JSON can still
+    // be salvaged from a response whose closing marker alone was truncated.
+    const nextStart = MEDICAL_SUMMARY_MODULE_IDS
+      .map((id) => text.indexOf(moduleBlockStart(id), contentStart))
+      .filter((index) => index >= 0)
+      .sort((left, right) => left - right)[0] ?? text.length
+    return this.parseModuleResult(moduleId, text.slice(contentStart, nextStart))
   }
 
   createEmptyAiResult(): MedicalSummaryAiResult {
