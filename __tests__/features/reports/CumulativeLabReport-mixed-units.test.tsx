@@ -13,6 +13,47 @@ function TestProviders({ children }: { children: ReactNode }) {
 }
 
 describe('CumulativeLabReport mixed-unit fallback', () => {
+  it('shows a normalised unit once in the column header, not below each value', () => {
+    const { container } = render(
+      <CumulativeLabReport
+        activeCategoryId="chem"
+        observations={[
+          {
+            id: 'ast-iu-l',
+            code: { text: 'AST', coding: [{ system: 'http://loinc.org', code: '1920-8' }] },
+            valueQuantity: {
+              value: 21,
+              unit: 'IU/L',
+              code: '[iU]/L',
+              system: 'http://unitsofmeasure.org',
+            },
+            effectiveDateTime: '2026-01-02',
+          },
+          {
+            id: 'ast-u-l',
+            code: { text: 'AST', coding: [{ system: 'http://loinc.org', code: '1920-8' }] },
+            valueQuantity: {
+              value: 19,
+              unit: 'U/L',
+              code: 'U/L',
+              system: 'http://unitsofmeasure.org',
+            },
+            effectiveDateTime: '2026-01-01',
+          },
+        ]}
+      />,
+      { wrapper: TestProviders },
+    )
+
+    const astHeader = container.querySelector<HTMLElement>('[data-lab-test-key="AST"]')
+    expect(astHeader).not.toBeNull()
+    expect(astHeader).toHaveTextContent('U/L')
+    expect(
+      [...container.querySelectorAll('tbody td div')]
+        .filter((element) => element.textContent === 'U/L'),
+    ).toHaveLength(0)
+  })
+
   it('shows each cell unit instead of placing one incorrect unit in the column header', () => {
     const { container } = render(
       <CumulativeLabReport
