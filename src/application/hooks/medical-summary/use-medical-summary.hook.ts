@@ -26,6 +26,7 @@ import {
   generateMedicalSummaryUseCase,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
+  isMedicalSummaryLanguageConsistent,
   MEDICAL_SUMMARY_MODEL_ID,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type {
@@ -51,6 +52,7 @@ import {
   isAutoAiEnabledForSource,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 // Store + cache-key scheme live in medical-summary-store.ts so the IPS export
 // can peek at generated summaries without importing this full hook graph.
@@ -143,6 +145,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const modelId = useSummaryPrefsStore((s) => s.modelId)
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
+  const { locale } = useLanguage()
   const autoAiConsent = useAutoAiConsentState()
 
   // v6 first, v5 fallback for patient summaries (see key comments above).
@@ -157,10 +160,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         if (cached) break
       }
     }
+    // Do not resurrect a previously cached mixed-language result after the
+    // English-output contract is tightened. The next generation overwrites
+    // this exact locale-bound cache slot.
+    if (cached && !isMedicalSummaryLanguageConsistent(cached, locale)) return null
     return cached
-  }, [audience])
+  }, [audience, locale])
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
+    const outputLocale = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
     const longitudinalInvestigationContext = ctx.clinicalData
       ? buildLongitudinalInvestigationContext(ctx.clinicalData, ctx.catalog)
       : ''
@@ -170,7 +178,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const messages = generateMedicalSummaryUseCase.buildMessages({
       clinicalContext,
       catalog: ctx.catalog,
-      locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
+      locale: outputLocale,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
     })
     const overflow = createContextOverflowIssue(
@@ -199,15 +207,17 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     }
 
     // Flash-Lite occasionally returns malformed/truncated JSON on large
-    // contexts; one silent retry mirrors the user pressing 重新產生 (which
-    // reliably recovers). Exactly one — never a loop.
+    // contexts or copies Chinese prose into an English result. Retry either
+    // contract failure once, never in a loop.
     let parsed = await streamOnce()
-    if (!parsed) parsed = await streamOnce()
-    if (!parsed) return null
+    if (!parsed || !isMedicalSummaryLanguageConsistent(parsed, outputLocale)) {
+      parsed = await streamOnce()
+    }
+    if (!parsed || !isMedicalSummaryLanguageConsistent(parsed, outputLocale)) return null
     const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
       clinicalData: ctx.clinicalData ?? undefined,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
-      locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
+      locale: outputLocale,
     })
     const generatedAt = Date.now()
     return {
