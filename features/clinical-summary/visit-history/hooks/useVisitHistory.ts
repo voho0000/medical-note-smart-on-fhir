@@ -23,6 +23,13 @@ export interface VisitRecord {
   physician?: string
 }
 
+function localizeEncounterChannel(channel: string, locale: string): string {
+  if (locale === 'zh-TW') return channel
+  if (channel === 'IC卡資料') return 'NHI card data'
+  if (channel === '申報資料') return 'Claims data'
+  return channel
+}
+
 export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>) {
   const { locale } = useLanguage()
   return useMemo<VisitRecord[]>(() => {
@@ -135,6 +142,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           // words, so stripping would be a no-op there.
           department = department.replace(/門診|住院|急診|藥局/g, '').trim()
         }
+        department = localizeEncounterChannel(department, locale)
 
         const participant = encounter.participant?.find((p: any) =>
           p?.individual?.display || p?.actor?.display

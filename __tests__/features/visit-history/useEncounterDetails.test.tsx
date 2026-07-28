@@ -56,6 +56,62 @@ describe('useEncounterDetails — clinical category grouping', () => {
   })
 })
 
+describe('useEncounterDetails — medication quantity localization', () => {
+  const medication = (overrides: Record<string, unknown> = {}) => ({
+    id: 'm1',
+    encounter: { reference: 'Encounter/e1' },
+    medicationCodeableConcept: {
+      text: '葉酸',
+      coding: [{ display: 'Folic acid' }],
+    },
+    status: 'active',
+    ...overrides,
+  })
+
+  const runMedications = (medications: any[], locale: string) => {
+    const { result } = renderHook(() =>
+      useEncounterDetails(medications, [], [], [], [], [], locale, 'medical'),
+    )
+    return result.current.get('e1')!
+  }
+
+  it('translates the common NHI dispensing sentence in the English UI', () => {
+    const details = runMedications([
+      medication({
+        dosageInstruction: [{
+          text: '給藥總量 28，給藥日數 28 天（平均每日 1）',
+        }],
+      }),
+    ], 'en')
+
+    expect(details.medications[0].detail)
+      .toBe('Total quantity 28 · Days supplied 28 (avg. 1/day)')
+  })
+
+  it('keeps the original FHIR sentence in the Traditional Chinese UI', () => {
+    const sourceText = '給藥總量 70，給藥日數 28 天（平均每日 2.5）'
+    const details = runMedications([
+      medication({ dosageInstruction: [{ text: sourceText }] }),
+    ], 'zh-TW')
+
+    expect(details.medications[0].detail).toBe(sourceText)
+  })
+
+  it('localizes the structured quantity fallback without inventing an average', () => {
+    const details = runMedications([
+      medication({
+        dispenseRequest: {
+          quantity: { value: 7 },
+          expectedSupplyDuration: { value: 28 },
+        },
+      }),
+    ], 'en')
+
+    expect(details.medications[0].detail)
+      .toBe('Total quantity 7 · Days supplied 28')
+  })
+})
+
 // A narrative DiagnosticReport (EKG / imaging / endoscopy / pathology) carries
 // its finding in `conclusion` with NO member observations — before the fix it
 // produced zero rows and vanished from the visit despite the encounter link.

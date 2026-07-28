@@ -32,14 +32,39 @@ const CATEGORY_BY_ID: Map<string, (typeof LAB_CATEGORIES)[number]> = new Map(
 // the bridge ships those meds with a structured dispenseRequest.quantity but NO
 // pre-formatted dosageInstruction.text — and the row then showed no dose at all.
 // When the text is missing, fall back to the quantity NHI did report (健保存摺
-// shows it). Kept in 給藥總量 wording to match the bridge's zh-only dosage
-// strings on sibling rows. 給藥日數 is only appended when the bridge actually
-// provided a supply duration — never fabricated.
+// shows it). 給藥日數 is only appended when the bridge actually provided a
+// supply duration — never fabricated.
 function medicationQuantityDetail(med: any): string | undefined {
   const qty = med?.dispenseRequest?.quantity?.value
   if (qty == null) return undefined
   const days = med?.dispenseRequest?.expectedSupplyDuration?.value
   return days != null ? `給藥總量 ${qty}，給藥日數 ${days} 天` : `給藥總量 ${qty}`
+}
+
+// The NHI bridge commonly places this fixed dispensing-arithmetic sentence in
+// dosageInstruction.text. It is source data rather than a UI translation key,
+// so localize the known labels at the view-model boundary and leave the FHIR
+// resource untouched. This is display-only arithmetic, not a verified SIG.
+function localizeMedicationQuantityDetail(
+  detail: string | undefined,
+  locale: string,
+): string | undefined {
+  if (!detail || locale === 'zh-TW') return detail
+  const number = '([+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+))'
+  return detail
+    .replace(
+      new RegExp(`[（(]\\s*平均每日\\s*${number}\\s*[）)]`, 'g'),
+      ' (avg. $1/day)',
+    )
+    .replace(
+      new RegExp(`[，,；;]\\s*給藥日數\\s*${number}\\s*天`, 'g'),
+      ' · Days supplied $1',
+    )
+    .replace(
+      new RegExp(`給藥日數\\s*${number}\\s*天`, 'g'),
+      'Days supplied $1',
+    )
+    .replace(/給藥總量/g, 'Total quantity')
 }
 
 export type EncounterDiagnosis = {
@@ -493,12 +518,14 @@ export function useEncounterDetails(
           med?.code?.text ||
           ''
         const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
+        const rawDetail =
+          med?.dosageInstruction?.[0]?.text || medicationQuantityDetail(med)
 
         entry.medications.push({
           id: medId,
           name: getMedicationNameLocalized(med, audience, locale),
           status: med?.status,
-          detail: med?.dosageInstruction?.[0]?.text || medicationQuantityDetail(med),
+          detail: localizeMedicationQuantityDetail(rawDetail, locale),
           when: formatDateTime(med?.authoredOn, locale),
           isChronic,
         })
