@@ -8,6 +8,7 @@ import {
   buildLongitudinalInvestigationContext,
   scopeDocumentSources,
   classifyEncounterClass,
+  isMedicalSummaryLanguageConsistent,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
@@ -82,6 +83,55 @@ describe('buildSourceCatalog', () => {
     })
     expect(byKey.get('L1')).toMatchObject({ resourceId: 'rep-1', display: 'HbA1c' })
     expect(byKey.get('C1')).toMatchObject({ resourceId: 'cond-1' })
+  })
+
+  it('uses English encounter type and ICD display while preserving the organization', () => {
+    const [source] = buildSourceCatalog({
+      encounters: [{
+        id: 'enc-bph',
+        class: { code: 'AMB', display: 'ambulatory' },
+        type: [{
+          text: '門診',
+          coding: [{ code: 'outpatient', display: '門診' }],
+        }],
+        reasonCode: [{
+          text: 'N400 良性攝護腺增生未伴有下泌尿道症狀',
+          coding: [{
+            system: 'http://hl7.org/fhir/sid/icd-10-cm',
+            code: 'N40.0',
+            display: 'Benign prostatic hyperplasia without lower urinary tract symptoms',
+          }],
+        }],
+        serviceProvider: { display: '示範長青醫院' },
+      }],
+    }, 'en')
+
+    expect(source).toMatchObject({
+      display: 'Outpatient (N40.0 Benign prostatic hyperplasia without lower urinary tract symptoms)',
+      organization: '示範長青醫院',
+    })
+  })
+
+  it('reuses the Reports-area English order name for imaging citations', () => {
+    const [source] = buildSourceCatalog({
+      diagnosticReports: [{
+        id: 'chest-xray',
+        code: {
+          text: '胸腔檢查（包括各種角度部位之胸腔檢查）',
+          coding: [{
+            code: '32001C',
+            display: '胸腔檢查（包括各種角度部位之胸腔檢查）',
+          }],
+        },
+        effectiveDateTime: '2026-06-02',
+        performer: [{ display: '示範長青醫院' }],
+      }],
+    }, 'en')
+
+    expect(source).toMatchObject({
+      display: 'Chest X-ray',
+      organization: '示範長青醫院',
+    })
   })
 
   it('keeps every selected medication citable without a hidden catalog cap', () => {
@@ -538,6 +588,57 @@ describe('medication education prompt contract', () => {
   it('keeps the patient summary free of the clinician medication review', () => {
     const messages = useCase.buildMessages({ ...input, audience: 'patient' })
     expect(messages[0].content).toContain('Return "medicationReview" with empty regimen, changes, and reconciliation arrays')
+  })
+})
+
+describe('medical summary output-language contract', () => {
+  const baseResult = {
+    headline: 'Chronic kidney disease with recent pneumonia',
+    summary: [{ text: 'Kidney function has gradually declined.', sources: [] }],
+    investigations: [],
+    medicationEducation: [],
+    medicationReview: {
+      regimen: [],
+      changes: [],
+      reconciliation: [],
+    },
+    problems: [],
+    decisions: [],
+    timeline: [],
+  }
+
+  it('places the English-only instruction around Chinese clinical source text', () => {
+    const messages = useCase.buildMessages({
+      clinicalContext: '近期診斷為肺炎，腎功能逐漸衰退。',
+      catalog: [{
+        key: 'E1',
+        resourceType: 'Encounter',
+        resourceId: 'enc-1',
+        display: '肺炎住院',
+      }],
+      locale: 'en',
+      audience: 'medical',
+    })
+
+    expect(messages[0].content.match(/OUTPUT LANGUAGE: ENGLISH ONLY/g)).toHaveLength(2)
+    expect(messages[1].content.match(/OUTPUT LANGUAGE: ENGLISH ONLY/g)).toHaveLength(2)
+    expect(messages[1].content).toContain('translate their meaning into natural English')
+    expect(messages[1].content).toContain('must contain no Chinese Han characters')
+  })
+
+  it('rejects mixed Chinese prose in an English result', () => {
+    expect(isMedicalSummaryLanguageConsistent({
+      ...baseResult,
+      summary: [{ text: '近期診斷為肺炎。', sources: [] }],
+    } as never, 'en')).toBe(false)
+  })
+
+  it('accepts an English result and does not constrain zh-TW medical terms', () => {
+    expect(isMedicalSummaryLanguageConsistent(baseResult as never, 'en')).toBe(true)
+    expect(isMedicalSummaryLanguageConsistent({
+      ...baseResult,
+      summary: [{ text: 'eGFR 呈下降趨勢。', sources: [] }],
+    } as never, 'zh-TW')).toBe(true)
   })
 })
 

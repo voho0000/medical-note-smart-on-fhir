@@ -54,6 +54,7 @@ import {
   MAX_INVESTIGATION_TREND_POINTS,
 } from '@/src/shared/utils/investigation-trend.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
+import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -157,8 +158,83 @@ export interface SummaryCatalogInput {
 const day = (iso?: string): string | undefined =>
   iso && iso.length >= 10 ? iso.slice(0, 10) : iso || undefined
 
-const codeText = (c?: { text?: string; coding?: Array<{ display?: string }> }) =>
-  c?.text ?? c?.coding?.[0]?.display
+type SummaryLocale = 'en' | 'zh-TW'
+type CodedText = {
+  text?: string
+  coding?: Array<{ code?: string; display?: string; system?: string }>
+}
+
+const HAN_SCRIPT = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
+
+const codeText = (concept?: CodedText, locale: SummaryLocale = 'zh-TW') => {
+  const codedDisplays = (concept?.coding ?? [])
+    .map((coding) => coding.display?.trim())
+    .filter((display): display is string => Boolean(display))
+  if (locale === 'en') {
+    const englishCodedDisplay = codedDisplays.find((display) => !HAN_SCRIPT.test(display))
+    const sourceText = concept?.text?.trim()
+    return englishCodedDisplay
+      || (sourceText && !HAN_SCRIPT.test(sourceText) ? sourceText : undefined)
+      || codedDisplays[0]
+      || sourceText
+  }
+  return concept?.text?.trim() || codedDisplays[0]
+}
+
+/** ICD concepts carry a bilingual `text`/`coding.display` pair from the
+ * bridge. In English citations retain the official dotted code and use its
+ * English display instead of exposing the zh-TW convenience text. */
+function diagnosisCodeText(concept?: CodedText, locale: SummaryLocale = 'zh-TW') {
+  if (locale !== 'en') return codeText(concept, locale)
+  const coding = concept?.coding?.find((item) => item.display?.trim() || item.code?.trim())
+  const codedLabel = [coding?.code?.trim(), coding?.display?.trim()]
+    .filter(Boolean)
+    .join(' ')
+  return codedLabel || concept?.text?.trim()
+}
+
+const ENCOUNTER_TYPE_BY_CODE: Record<string, string> = {
+  emergency: 'Emergency',
+  inpatient: 'Inpatient',
+  outpatient: 'Outpatient',
+  pharmacy: 'Pharmacy',
+}
+
+function encounterTypeText(encounter: EncounterEntity, locale: SummaryLocale): string {
+  const concept = encounter.type?.[0]
+  if (locale !== 'en') return codeText(concept, locale) ?? encounter.class?.display ?? 'Encounter'
+
+  const typeCode = concept?.coding?.[0]?.code?.trim().toLowerCase()
+  if (typeCode && ENCOUNTER_TYPE_BY_CODE[typeCode]) return ENCOUNTER_TYPE_BY_CODE[typeCode]
+
+  const codedDisplay = concept?.coding?.find((coding) => coding.display?.trim())?.display?.trim()
+  if (codedDisplay && !/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(codedDisplay)) {
+    return codedDisplay
+  }
+
+  const encounterClass = classifyEncounterClass(encounter.class)
+  if (encounterClass === 'inpatient') return 'Inpatient'
+  if (encounterClass === 'emergency') return 'Emergency'
+  if (encounterClass === 'outpatient') return 'Outpatient'
+  return encounter.class?.display?.trim() || concept?.text?.trim() || 'Encounter'
+}
+
+function diagnosticReportText(
+  report: DiagnosticReportEntity,
+  locale: SummaryLocale,
+): string {
+  const fallback = codeText(report.code, locale) ?? 'Report'
+  const orderCode = report.code?.coding?.[0]?.code
+  // Reuse the Reports area's curated NHI/HIS order-name dictionary. The
+  // catalog is locale-bound rather than audience-bound, so select the patient
+  // branch only for zh-TW to retain the official Health Bank name there.
+  return getOrderNameDisplay(
+    orderCode,
+    fallback,
+    locale === 'en' ? 'medical' : 'patient',
+    locale,
+  )
+}
 
 /** Stable identity used to merge the same drug across prescribing and
  * dispensing records. Prefer the NHI/Rx code; fall back to normalized names
@@ -212,18 +288,25 @@ export function classifyEncounterClass(
  * Key prefixes: E=Encounter, M=MedicationRequest, P=Procedure,
  * L=DiagnosticReport, C=Condition, K=CarePlan, D=clinical document.
  */
-export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCatalogEntry[] {
+export function buildSourceCatalog(
+  input: SummaryCatalogInput,
+  locale: SummaryLocale = 'zh-TW',
+): SummarySourceCatalogEntry[] {
   const entries: SummarySourceCatalogEntry[] = []
 
   sortByDateDesc(input.encounters ?? [], (e) => e.period?.start)
     .forEach((e, i) => {
-      const type = codeText(e.type?.[0]) ?? e.class?.display ?? 'Encounter'
-      const reason = codeText(e.reasonCode?.[0])
+      const type = encounterTypeText(e, locale)
+      const reason = diagnosisCodeText(e.reasonCode?.[0], locale)
       entries.push({
         key: `E${i + 1}`,
         resourceType: 'Encounter',
         resourceId: e.id,
-        display: reason ? `${type}（${reason}）` : type,
+        display: reason
+          ? locale === 'en'
+            ? `${type} (${reason})`
+            : `${type}（${reason}）`
+          : type,
         date: day(e.period?.start),
         organization: e.serviceProvider?.display,
         encounterClass: classifyEncounterClass(e.class),
@@ -251,7 +334,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `P${i + 1}`,
         resourceType: 'Procedure',
         resourceId: p.id,
-        display: codeText(p.code) ?? 'Procedure',
+        display: codeText(p.code, locale) ?? 'Procedure',
         date: day(p.performedDateTime ?? p.performedPeriod?.start),
         organization: p.performer?.[0]?.actor?.display ?? p.performer?.[0]?.display,
       })
@@ -263,7 +346,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `L${i + 1}`,
         resourceType: 'DiagnosticReport',
         resourceId: r.id,
-        display: codeText(r.code) ?? 'Report',
+        display: diagnosticReportText(r, locale),
         date: day(r.effectiveDateTime ?? r.issued),
         organization: r.performer?.[0]?.display,
       })
@@ -276,7 +359,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `O${index + 1}`,
         resourceType: 'Observation',
         resourceId: observation.id,
-        display: codeText(observation.code) ?? 'Observation',
+        display: codeText(observation.code, locale) ?? 'Observation',
         date: day(observation.effectiveDateTime),
         organization: observation.performer?.[0]?.display,
       })
@@ -288,7 +371,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `C${i + 1}`,
         resourceType: 'Condition',
         resourceId: c.id,
-        display: codeText(c.code) ?? 'Condition',
+        display: diagnosisCodeText(c.code, locale) ?? 'Condition',
         date: day(c.recordedDate ?? c.onsetDateTime),
       })
     })
@@ -299,7 +382,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `A${index + 1}`,
         resourceType: 'AllergyIntolerance',
         resourceId: allergy.id,
-        display: codeText(allergy.code) ?? 'Allergy',
+        display: codeText(allergy.code, locale) ?? 'Allergy',
         date: day(allergy.recordedDate ?? allergy.onsetDateTime),
       })
     })
@@ -310,7 +393,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `I${index + 1}`,
         resourceType: 'Immunization',
         resourceId: immunization.id,
-        display: codeText(immunization.vaccineCode) ?? 'Immunization',
+        display: codeText(immunization.vaccineCode, locale) ?? 'Immunization',
         date: day(immunization.occurrenceDateTime),
         organization: immunization.performer?.[0]?.actor?.display,
       })
@@ -322,7 +405,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `R${index + 1}`,
         resourceType: 'Consent',
         resourceId: consent.id,
-        display: codeText(consent.category?.[0]) ?? codeText(consent.scope) ?? 'Advance directive',
+        display: codeText(consent.category?.[0], locale) ?? codeText(consent.scope, locale) ?? 'Advance directive',
         date: day(consent.dateTime),
         organization: consent.organization?.[0]?.display,
       })
@@ -334,7 +417,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `V${index + 1}`,
         resourceType: 'Device',
         resourceId: device.id,
-        display: codeText(device.type) ?? device.deviceName?.[0]?.name ?? 'Device',
+        display: codeText(device.type, locale) ?? device.deviceName?.[0]?.name ?? 'Device',
         date: day(device.manufactureDate),
         organization: device.owner?.display,
       })
@@ -346,7 +429,9 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `X${index + 1}`,
         resourceType: 'ImagingStudy',
         resourceId: study.id,
-        display: study.description || codeText(study.procedureCode?.[0]) || study.modality?.[0]?.display || 'Imaging study',
+        display: locale === 'en'
+          ? codeText(study.procedureCode?.[0], locale) || study.description || study.modality?.[0]?.display || 'Imaging study'
+          : study.description || codeText(study.procedureCode?.[0], locale) || study.modality?.[0]?.display || 'Imaging study',
         date: day(study.started),
         organization: study.location?.display,
       })
@@ -361,7 +446,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
         key: `K${i + 1}`,
         resourceType: 'CarePlan',
         resourceId: cp.id,
-        display: cp.title?.trim() || codeText(cp.category?.[0]) || cp.description?.trim() || 'CarePlan',
+        display: cp.title?.trim() || codeText(cp.category?.[0], locale) || cp.description?.trim() || 'CarePlan',
         date: day(cp.period?.start ?? cp.created),
         organization: cp.author?.display?.trim() || undefined,
       })
@@ -381,7 +466,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
     ...(input.compositions ?? []).map((document) => ({
       resourceType: 'Composition' as const,
       resourceId: document.id,
-      display: document.title?.trim() || codeText(document.type) || 'Clinical document',
+      display: document.title?.trim() || codeText(document.type, locale) || 'Clinical document',
       date: day(document.date),
       organization: document.author?.[0]?.display?.trim() || undefined,
       getContentText: () => listClinicalDocuments({ compositions: [document] })[0]?.text ?? '',
@@ -390,7 +475,7 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
       resourceType: 'DocumentReference' as const,
       resourceId: document.id,
       display:
-        codeText(document.type) ||
+        codeText(document.type, locale) ||
         document.description?.trim() ||
         document.content?.[0]?.attachment?.title?.trim() ||
         'Clinical document',
@@ -415,12 +500,16 @@ export function buildSourceCatalog(input: SummaryCatalogInput): SummarySourceCat
 // Both the summary hook AND the safety hook need the catalog for the same
 // bundle; memoise by input reference (react-query hands both the same object)
 // so the 160+-entry build runs once per bundle, not once per hook.
-const catalogCache = new WeakMap<object, SummarySourceCatalogEntry[]>()
-export function getSourceCatalog(input: SummaryCatalogInput): SummarySourceCatalogEntry[] {
-  const cached = catalogCache.get(input)
+const catalogCache = new WeakMap<object, Partial<Record<SummaryLocale, SummarySourceCatalogEntry[]>>>()
+export function getSourceCatalog(
+  input: SummaryCatalogInput,
+  locale: SummaryLocale = 'zh-TW',
+): SummarySourceCatalogEntry[] {
+  const localizedCache = catalogCache.get(input)
+  const cached = localizedCache?.[locale]
   if (cached) return cached
-  const built = buildSourceCatalog(input)
-  catalogCache.set(input, built)
+  const built = buildSourceCatalog(input, locale)
+  catalogCache.set(input, { ...localizedCache, [locale]: built })
   return built
 }
 
@@ -904,6 +993,53 @@ export interface FinalizeMedicalSummaryOptions {
   locale?: 'en' | 'zh-TW'
 }
 
+/**
+ * English summaries must not silently copy Chinese prose from the source
+ * record. Source metadata is deliberately excluded: organization names and
+ * catalog displays are app-resolved evidence, not generated summary content.
+ *
+ * The same check works before and after finalizeResult because the generated
+ * user-facing fields keep the same names in both shapes.
+ */
+export function isMedicalSummaryLanguageConsistent(
+  result: MedicalSummaryAiResult | MedicalSummaryResult,
+  locale: 'en' | 'zh-TW',
+): boolean {
+  if (locale !== 'en') return true
+
+  const medicationReview = result.medicationReview
+  const generatedText = [
+    result.headline,
+    ...result.summary.map((item) => item.text),
+    ...(result.investigations ?? []).flatMap((item) => [
+      item.label,
+      item.trend,
+      item.interpretation,
+    ]),
+    ...(result.medicationEducation ?? []).flatMap((item) => [
+      item.name,
+      item.benefit,
+      item.attention,
+    ]),
+    medicationReview?.overview,
+    ...(medicationReview?.regimen ?? []).flatMap((item) => [
+      item.group,
+      item.name,
+      item.sig,
+    ]),
+    ...(medicationReview?.changes ?? []).flatMap((item) => [
+      item.medication,
+      item.summary,
+    ]),
+    ...(medicationReview?.reconciliation ?? []).map((item) => item.text),
+    ...(result.problems ?? []).flatMap((item) => [item.label, item.basis]),
+    ...result.decisions.flatMap((item) => [item.text, item.rationale]),
+    ...result.timeline.map((item) => item.label),
+  ]
+
+  return generatedText.every((text) => !text || !HAN_SCRIPT.test(text))
+}
+
 type RawMedicationRegimenItem = {
   group: string
   name: string
@@ -1042,10 +1178,10 @@ type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations' |
 export class GenerateMedicalSummaryUseCase {
   buildMessages(input: GenerateMedicalSummaryInput): AiMessage[] {
     const system = input.audience === 'patient' ? SYSTEM_PATIENT : SYSTEM_MEDICAL
-    const lang =
+    const languageContract =
       input.locale === 'zh-TW'
-        ? '\n\nWrite every "headline", "text", "rationale", "label", "trend", "interpretation", "name", "benefit" and "attention" value in Traditional Chinese (繁體中文).'
-        : '\n\nWrite all values in English.'
+        ? 'OUTPUT LANGUAGE: Traditional Chinese (繁體中文). Write every human-readable generated field in Traditional Chinese.'
+        : 'OUTPUT LANGUAGE: ENGLISH ONLY (MANDATORY). The clinical records and examples may contain Traditional Chinese; translate their meaning into natural English instead of copying Chinese text. Every human-readable generated field — including headline, text, rationale, label, trend, interpretation, name, benefit, attention, overview, group, sig, medication, summary, and basis — must contain no Chinese Han characters. Keep JSON keys, enum values, and source keys unchanged. Before returning, inspect the entire JSON and rewrite any remaining Chinese prose in English.'
     const catalogBlock = input.catalog
       .map((c) => {
         const parts = [c.resourceType, c.date ?? '?', c.organization ?? '', c.display]
@@ -1053,7 +1189,12 @@ export class GenerateMedicalSummaryUseCase {
       })
       .join('\n')
     return [
-      { role: 'system', content: system + lang },
+      {
+        role: 'system',
+        // Bookend the long clinical rules so the requested output language
+        // remains salient even when most source records are in Chinese.
+        content: `${languageContract}\n\n${system}\n\n${languageContract}`,
+      },
       {
         role: 'user',
         // scrubFreeText: outbound PII mask (身分證 / labeled 病歷號/姓名) —
@@ -1061,8 +1202,10 @@ export class GenerateMedicalSummaryUseCase {
         // covers the longitudinal-investigation block appended after it
         // (imaging conclusions can carry patient identifiers).
         content:
+          `${languageContract}\n\n` +
           `Patient clinical data:\n${scrubFreeText(input.clinicalContext)}\n\n` +
-          `SOURCE LIST (cite these keys in "sources" / "timeline.ref"):\n${catalogBlock}`,
+          `SOURCE LIST (cite these keys in "sources" / "timeline.ref"):\n${catalogBlock}\n\n` +
+          `FINAL OUTPUT CHECK: ${languageContract}`,
       },
     ]
   }

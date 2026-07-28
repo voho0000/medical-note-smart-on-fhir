@@ -13,6 +13,7 @@ import {
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
 import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summary.entity'
 import { contentSignature } from '@/src/infrastructure/cache/encrypted-session-cache'
+import { useLanguage } from '@/src/application/providers/language.provider'
 
 export type ClinicalAiDataInput = SummaryCatalogInput & {
   isLoading?: boolean
@@ -53,6 +54,7 @@ export function clinicalAiInputSignature(
  */
 export function useClinicalAiInput() {
   const { patient } = usePatient()
+  const { locale } = useLanguage()
   const { getFullClinicalContext, includedDocumentIds } = useClinicalContext('insights')
   const clinicalData = useClinicalData() as unknown as ClinicalAiDataInput | null
   const dataSelection = useDataSelection()
@@ -77,8 +79,8 @@ export function useClinicalAiInput() {
   )
 
   const catalog = useMemo(
-    () => (scopedClinicalData ? getSourceCatalog(scopedClinicalData) : []),
-    [scopedClinicalData],
+    () => (scopedClinicalData ? getSourceCatalog(scopedClinicalData, locale) : []),
+    [scopedClinicalData, locale],
   )
 
   // Capture the outbound context once. The slot signature and the eventual
