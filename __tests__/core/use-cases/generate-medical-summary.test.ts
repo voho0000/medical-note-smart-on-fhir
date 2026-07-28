@@ -8,7 +8,6 @@ import {
   buildLongitudinalInvestigationContext,
   scopeDocumentSources,
   classifyEncounterClass,
-  isMedicalSummaryLanguageConsistent,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
@@ -509,6 +508,69 @@ describe('parseResult', () => {
   })
 })
 
+describe('modular summary generation contract', () => {
+  const input = {
+    clinicalContext: 'Encounter and laboratory context',
+    catalog: [{
+      key: 'E1',
+      resourceType: 'Encounter',
+      resourceId: 'enc-1',
+      display: 'Outpatient visit',
+    }],
+    locale: 'en' as const,
+    audience: 'medical' as const,
+  }
+
+  it('builds a card-specific output contract instead of requiring the full summary object', () => {
+    const messages = useCase.buildModuleMessages(input, 'timeline')
+    expect(messages[0].content).toContain('Generate ONLY the "timeline" module')
+    expect(messages[0].content).toContain('"timeline":')
+    expect(messages[0].content).toContain('Do not return fields belonging to another module')
+  })
+
+  it('validates each module independently so one malformed card does not discard another', () => {
+    const priorities = useCase.parseModuleResult('priorities', '{"headline":"broken"}')
+    const problems = useCase.parseModuleResult('problems', JSON.stringify({
+      problems: [{
+        label: 'Chronic kidney disease',
+        basis: 'Repeated clinic records',
+        kind: 'diagnosis',
+        sources: ['E1'],
+      }],
+    }))
+
+    expect(priorities).toBeNull()
+    expect(problems?.problems).toHaveLength(1)
+  })
+
+  it('merges a retried module into an existing draft without replacing successful cards', () => {
+    const initial = useCase.createEmptyAiResult()
+    const problems = useCase.parseModuleResult('problems', JSON.stringify({
+      problems: [{
+        label: 'Chronic kidney disease',
+        kind: 'diagnosis',
+        sources: ['E1'],
+      }],
+    }))
+    const priorities = useCase.parseModuleResult('priorities', JSON.stringify({
+      headline: 'Complex cross-facility care',
+      summary: [{ text: 'Kidney function needs follow-up.', sources: ['E1'] }],
+    }))
+    expect(problems).not.toBeNull()
+    expect(priorities).not.toBeNull()
+
+    const withProblems = useCase.mergeModuleResult(initial, 'problems', problems!)
+    const withRetriedPriorities = useCase.mergeModuleResult(
+      withProblems,
+      'priorities',
+      priorities!,
+    )
+
+    expect(withRetriedPriorities.problems[0].label).toBe('Chronic kidney disease')
+    expect(withRetriedPriorities.headline).toBe('Complex cross-facility care')
+  })
+})
+
 describe('medication education prompt contract', () => {
   const input = {
     clinicalContext: 'Medication: Metformin 500mg',
@@ -592,21 +654,6 @@ describe('medication education prompt contract', () => {
 })
 
 describe('medical summary output-language contract', () => {
-  const baseResult = {
-    headline: 'Chronic kidney disease with recent pneumonia',
-    summary: [{ text: 'Kidney function has gradually declined.', sources: [] }],
-    investigations: [],
-    medicationEducation: [],
-    medicationReview: {
-      regimen: [],
-      changes: [],
-      reconciliation: [],
-    },
-    problems: [],
-    decisions: [],
-    timeline: [],
-  }
-
   it('places the English-only instruction around Chinese clinical source text', () => {
     const messages = useCase.buildMessages({
       clinicalContext: '近期診斷為肺炎，腎功能逐漸衰退。',
@@ -626,20 +673,6 @@ describe('medical summary output-language contract', () => {
     expect(messages[1].content).toContain('must contain no Chinese Han characters')
   })
 
-  it('rejects mixed Chinese prose in an English result', () => {
-    expect(isMedicalSummaryLanguageConsistent({
-      ...baseResult,
-      summary: [{ text: '近期診斷為肺炎。', sources: [] }],
-    } as never, 'en')).toBe(false)
-  })
-
-  it('accepts an English result and does not constrain zh-TW medical terms', () => {
-    expect(isMedicalSummaryLanguageConsistent(baseResult as never, 'en')).toBe(true)
-    expect(isMedicalSummaryLanguageConsistent({
-      ...baseResult,
-      summary: [{ text: 'eGFR 呈下降趨勢。', sources: [] }],
-    } as never, 'zh-TW')).toBe(true)
-  })
 })
 
 describe('finalizeResult', () => {

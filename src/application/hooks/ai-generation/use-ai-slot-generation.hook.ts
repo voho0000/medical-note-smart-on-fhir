@@ -112,7 +112,7 @@ export interface AiSlotGenerationConfig<T> {
    *  Writes always go through cacheKeyFor. */
   loadCached?: (slotKey: string) => Promise<T | null>
   /** Streams + parses one generation; null = parse failed → 'PARSE_FAILED'.
-   *  Any internal retry policy (summary retries once) lives in here. */
+   *  Any feature-specific modularization or retry policy lives in here. */
   run: (ctx: AiSlotRunContext) => Promise<T | null>
   /** Demo bundle seeding: build the pre-generated snapshot result (through the
    *  same parse/validate pipeline as a live reply) instead of burning an AI

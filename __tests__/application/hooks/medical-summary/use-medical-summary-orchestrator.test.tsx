@@ -45,6 +45,7 @@ const mockUseMedicalSummary = useMedicalSummary as jest.MockedFunction<typeof us
 const mockUseSafetyAlerts = useSafetyAlerts as jest.MockedFunction<typeof useSafetyAlerts>
 
 const summaryGenerate = jest.fn(async () => {})
+const summaryRetryFailedModules = jest.fn(async () => {})
 const safetyGenerate = jest.fn(async () => {})
 const summaryCancel = jest.fn()
 const safetyCancel = jest.fn()
@@ -161,6 +162,7 @@ function arrange({
     setModel: setSummaryModel,
     recordGenerationCompletion,
     generate: summaryGenerate,
+    retryFailedModules: summaryRetryFailedModules,
     cancel: summaryCancel,
     restoreGenerationSlot: restoreSummaryGenerationSlot,
   })
@@ -1451,6 +1453,25 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(summaryGenerate).toHaveBeenCalledTimes(1)
     expect(safetyGenerate).not.toHaveBeenCalled()
     expect(recordGenerationCompletion).not.toHaveBeenCalled()
+  })
+
+  it('retries only failed summary modules and preserves the successful safety scan', async () => {
+    arrange({
+      summaryResult: {
+        headline: '',
+        moduleErrors: { priorities: 'PARSE_FAILED' },
+      },
+    })
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    expect(result.current.summaryModuleErrors).toEqual({ priorities: 'PARSE_FAILED' })
+    expect(result.current.hasCompleteResult).toBe(false)
+
+    await act(async () => result.current.retryFailed())
+
+    expect(summaryRetryFailedModules).toHaveBeenCalledTimes(1)
+    expect(summaryGenerate).not.toHaveBeenCalled()
+    expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
   it('waits for both audience cache slots before presenting the summary', () => {

@@ -10,7 +10,7 @@
 // remains visible until an explicit regeneration succeeds.
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import {
   ContextOverflowError,
@@ -26,13 +26,15 @@ import {
   generateMedicalSummaryUseCase,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
-  isMedicalSummaryLanguageConsistent,
   MEDICAL_SUMMARY_MODEL_ID,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type {
+  MedicalSummaryModuleErrors,
+  MedicalSummaryModuleId,
   MedicalSummaryResult,
   SummaryCoverageStats,
 } from '@/src/core/entities/medical-summary.entity'
+import { MEDICAL_SUMMARY_MODULE_IDS } from '@/src/core/entities/medical-summary.entity'
 import {
   DEMO_MEDICAL_SUMMARY_GENERATION,
   demoMedicalSummarySnapshots,
@@ -52,12 +54,14 @@ import {
   isAutoAiEnabledForSource,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
-import { useLanguage } from '@/src/application/providers/language.provider'
+import { getUserErrorMessage } from '@/src/core/errors'
+import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 
 // Store + cache-key scheme live in medical-summary-store.ts so the IPS export
 // can peek at generated summaries without importing this full hook graph.
-// The v12 change is clinician-only. Patient summaries from v11/v10/v9/v8/v7/v6/v5 remain valid,
-// so retain them instead of making an audience switch lose its saved summary.
+// v13 modularizes live card generation for both audiences. Patient summaries
+// from v11/v10/v9/v8/v7/v6/v5 remain valid legacy fallbacks; v12 live results
+// intentionally regenerate into the module-aware cache shape.
 const legacyPatientSummaryCacheKeys = (scanKey: string) => [
   aiResultCacheKey('medsummary11', scanKey),
   aiResultCacheKey('medsummary10', scanKey),
@@ -135,6 +139,10 @@ export interface UseMedicalSummaryReturn {
     durationMs: number
   }) => void
   generate: () => Promise<void>
+  /** Regenerate only modules recorded in result.moduleErrors, preserving
+   * successful cards in the same slot. Falls back to a full generation when
+   * the selected slot has no partial result. */
+  retryFailedModules: () => Promise<void>
   cancel: (slotKey?: string) => void
   restoreGenerationSlot: (slotKey: string, result: MedicalSummaryResult | undefined) => void
 }
@@ -145,8 +153,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const modelId = useSummaryPrefsStore((s) => s.modelId)
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
-  const { locale } = useLanguage()
   const autoAiConsent = useAutoAiConsentState()
+  const moduleRetryRequestsRef = useRef(new Map<string, {
+    moduleIds: MedicalSummaryModuleId[]
+    baseResult: MedicalSummaryResult
+  }>())
 
   // v6 first, v5 fallback for patient summaries (see key comments above).
   const loadCached = useCallback(async (slotKey: string) => {
@@ -160,61 +171,108 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         if (cached) break
       }
     }
-    // Do not resurrect a previously cached mixed-language result after the
-    // English-output contract is tightened. The next generation overwrites
-    // this exact locale-bound cache slot.
-    if (cached && !isMedicalSummaryLanguageConsistent(cached, locale)) return null
     return cached
-  }, [audience, locale])
+  }, [audience])
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
-    const outputLocale = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
+    const outputLocale: 'en' | 'zh-TW' = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
     const longitudinalInvestigationContext = ctx.clinicalData
       ? buildLongitudinalInvestigationContext(ctx.clinicalData, ctx.catalog)
       : ''
     const clinicalContext = [ctx.clinicalContext, longitudinalInvestigationContext]
       .filter(Boolean)
       .join('\n\n')
-    const messages = generateMedicalSummaryUseCase.buildMessages({
+    const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
+    moduleRetryRequestsRef.current.delete(ctx.operationKey)
+    const targetModuleIds = retryRequest?.moduleIds ?? [...MEDICAL_SUMMARY_MODULE_IDS]
+    const promptInput = {
       clinicalContext,
       catalog: ctx.catalog,
       locale: outputLocale,
-      audience: ctx.audience === 'patient' ? 'patient' : 'medical',
-    })
-    const overflow = createContextOverflowIssue(
-      messages.map((message) => message.content).join('\n\n'),
-      ctx.modelId,
-      {
-        selectedContext: ctx.clinicalContext,
-        contextLimit: ctx.contextLimit,
-      },
-    )
+      audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,
+    }
+    const requests = targetModuleIds.map((moduleId) => ({
+      moduleId,
+      messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
+    }))
+    const overflow = requests
+      .map(({ messages }) => createContextOverflowIssue(
+        messages.map((message) => message.content).join('\n\n'),
+        ctx.modelId,
+        {
+          selectedContext: ctx.clinicalContext,
+          contextLimit: ctx.contextLimit,
+        },
+      ))
+      .filter((issue): issue is ContextOverflowIssue => issue !== null)
+      .sort((left, right) => right.overBy - left.overBy)[0] ?? null
     if (overflow) {
       throw new ContextOverflowError(overflow, ctx.locale)
     }
 
-    const streamOnce = async () => {
-      let full = ''
-      await ctx.ai.stream(messages, {
+    const runModule = async ({
+      moduleId,
+      messages,
+    }: typeof requests[number]) => {
+      const full = await ctx.ai.stream(messages, {
         modelId: ctx.modelId,
         operationKey: ctx.operationKey,
         throwOnAbort: true,
-        onChunk: (chunk: string) => {
-          full = chunk
-        },
       })
-      return generateMedicalSummaryUseCase.parseResult(full)
+      const parsed = generateMedicalSummaryUseCase.parseModuleResult(moduleId, full)
+      if (!parsed) {
+        return { moduleId, error: 'PARSE_FAILED' as const }
+      }
+      return { moduleId, result: parsed }
     }
 
-    // Flash-Lite occasionally returns malformed/truncated JSON on large
-    // contexts or copies Chinese prose into an English result. Retry either
-    // contract failure once, never in a loop.
-    let parsed = await streamOnce()
-    if (!parsed || !isMedicalSummaryLanguageConsistent(parsed, outputLocale)) {
-      parsed = await streamOnce()
+    // Cloud providers can process the independent cards concurrently. A
+    // user-configured local endpoint remains sequential so a small on-prem
+    // model is not unexpectedly hit with five large prompts at once.
+    const settled: Array<PromiseSettledResult<Awaited<ReturnType<typeof runModule>>>> = []
+    if (isCustomOpenAiModelId(ctx.modelId)) {
+      for (const request of requests) {
+        try {
+          settled.push({ status: 'fulfilled', value: await runModule(request) })
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') throw error
+          settled.push({ status: 'rejected', reason: error })
+        }
+      }
+    } else {
+      settled.push(...await Promise.allSettled(requests.map(runModule)))
     }
-    if (!parsed || !isMedicalSummaryLanguageConsistent(parsed, outputLocale)) return null
-    const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
+
+    const aborted = settled.find((outcome) =>
+      outcome.status === 'rejected' &&
+      outcome.reason instanceof Error &&
+      outcome.reason.name === 'AbortError',
+    )
+    if (aborted?.status === 'rejected') throw aborted.reason
+
+    let draft = generateMedicalSummaryUseCase.createAiDraftFromResult(retryRequest?.baseResult)
+    const moduleErrors: MedicalSummaryModuleErrors = {
+      ...(retryRequest?.baseResult.moduleErrors ?? {}),
+    }
+    settled.forEach((outcome, index) => {
+      const moduleId = requests[index].moduleId
+      if (outcome.status === 'rejected') {
+        moduleErrors[moduleId] = getUserErrorMessage(outcome.reason)
+        return
+      }
+      if ('error' in outcome.value) {
+        moduleErrors[moduleId] = outcome.value.error
+        return
+      }
+      draft = generateMedicalSummaryUseCase.mergeModuleResult(
+        draft,
+        moduleId,
+        outcome.value.result,
+      )
+      delete moduleErrors[moduleId]
+    })
+
+    const finalized = generateMedicalSummaryUseCase.finalizeResult(draft, ctx.catalog, {
       clinicalData: ctx.clinicalData ?? undefined,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       locale: outputLocale,
@@ -222,6 +280,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const generatedAt = Date.now()
     return {
       ...finalized,
+      moduleErrors: Object.keys(moduleErrors).length > 0 ? moduleErrors : undefined,
       generation: {
         source: 'live',
         // This is the resolved model that actually ran, not the raw picker
@@ -281,6 +340,36 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const setModel = useCallback((id: string) => {
     setModelId(id)
   }, [setModelId])
+
+  const generationSlotKey = slot.slotKey
+  const runSlotGeneration = slot.generate
+  const generate = useCallback(async () => {
+    moduleRetryRequestsRef.current.delete(generationSlotKey)
+    await runSlotGeneration()
+  }, [generationSlotKey, runSlotGeneration])
+
+  const retryFailedModules = useCallback(async () => {
+    const exactResult = medicalSummaryStore.getState().byKey[generationSlotKey]
+    const moduleIds = MEDICAL_SUMMARY_MODULE_IDS.filter(
+      (moduleId) => Boolean(exactResult?.moduleErrors?.[moduleId]),
+    )
+    if (!exactResult || moduleIds.length === 0) {
+      await generate()
+      return
+    }
+    const request = {
+      moduleIds,
+      baseResult: exactResult,
+    }
+    moduleRetryRequestsRef.current.set(generationSlotKey, request)
+    try {
+      await runSlotGeneration()
+    } finally {
+      if (moduleRetryRequestsRef.current.get(generationSlotKey) === request) {
+        moduleRetryRequestsRef.current.delete(generationSlotKey)
+      }
+    }
+  }, [generate, generationSlotKey, runSlotGeneration])
 
   const readGenerationSlot = useCallback((slotKey: string) => {
     const state = medicalSummaryStore.getState()
@@ -355,7 +444,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     resolvedModelName: slot.resolvedModelName,
     setModel,
     recordGenerationCompletion,
-    generate: slot.generate,
+    generate,
+    retryFailedModules,
     cancel: slot.cancel,
     restoreGenerationSlot: slot.restoreSlot,
   }

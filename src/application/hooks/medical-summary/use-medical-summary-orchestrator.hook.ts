@@ -34,6 +34,13 @@ function monotonicNow() {
   return globalThis.performance?.now?.() ?? Date.now()
 }
 
+function hasSummaryModuleErrors(result?: MedicalSummaryResult) {
+  return Boolean(
+    result?.moduleErrors &&
+    Object.values(result.moduleErrors).some(Boolean),
+  )
+}
+
 export interface SummaryGenerationBatchInfo {
   id: string
   modelName: string
@@ -124,6 +131,7 @@ export function useMedicalSummaryOrchestrator() {
     setModel: setSummaryModel,
     recordGenerationCompletion,
     generate: generateSummary,
+    retryFailedModules: retryFailedSummaryModules,
     cancel: cancelSummary,
     restoreGenerationSlot: restoreSummaryGenerationSlot,
   } = useMedicalSummary()
@@ -613,11 +621,16 @@ export function useMedicalSummaryOrchestrator() {
     return () => window.removeEventListener(BUNDLE_CHANGED_EVENT, cancelQueuedBundleWork)
   }, [cancelSafety, cancelSummary])
 
-  // Retry only the failed/missing pipeline so a successful safety scan or
-  // summary is not billed twice. It still belongs to one visible batch.
+  // Retry only the failed/missing pipeline. Within the structured summary,
+  // the hook further narrows this to the failed card modules so successful
+  // cards and a successful safety scan are not billed twice.
   const retryFailed = useCallback(async () => {
     const jobs: GenerationPipeline[] = []
-    if (presentedSummaryError || !result) jobs.push({ kind: 'summary', run: generateSummary })
+    if (hasSummaryModuleErrors(result)) {
+      jobs.push({ kind: 'summary', run: retryFailedSummaryModules })
+    } else if (presentedSummaryError || !result) {
+      jobs.push({ kind: 'summary', run: generateSummary })
+    }
     if (presentedSafetyError || !safetyResult) jobs.push({ kind: 'safety', run: generateSafety })
     if (jobs.length === 0) {
       jobs.push(
@@ -626,7 +639,16 @@ export function useMedicalSummaryOrchestrator() {
       )
     }
     await runManualBatch(jobs)
-  }, [generateSafety, generateSummary, presentedSafetyError, presentedSummaryError, result, runManualBatch, safetyResult])
+  }, [
+    generateSafety,
+    generateSummary,
+    presentedSafetyError,
+    presentedSummaryError,
+    result,
+    retryFailedSummaryModules,
+    runManualBatch,
+    safetyResult,
+  ])
 
   // Keep a manual local-model batch active across the intentional gap between
   // sequential summary and safety jobs. Otherwise the newly generated summary
@@ -692,7 +714,8 @@ export function useMedicalSummaryOrchestrator() {
             summaryOutcomeIssue = summarySlot.issue
           } else if (hasFreshResult) {
             summarySettled = true
-            summarySucceeded = true
+            summarySucceeded = !hasSummaryModuleErrors(summarySlot?.result)
+            summaryOutcomeError = summarySucceeded ? null : 'MODULES_FAILED'
           } else {
             summarySettled = true
             summarySucceeded = false
@@ -707,7 +730,8 @@ export function useMedicalSummaryOrchestrator() {
           // A separately hydrated cache may satisfy an expected auto pipeline
           // without starting a network run.
           summarySettled = true
-          summarySucceeded = true
+          summarySucceeded = !hasSummaryModuleErrors(summarySlot?.result)
+          summaryOutcomeError = summarySucceeded ? null : 'MODULES_FAILED'
         }
       }
       if (currentBatch.expectsSafety && !safetySettled && !safetySlot?.isRunning) {
@@ -1055,12 +1079,17 @@ export function useMedicalSummaryOrchestrator() {
     isSafetyGenerating,
     isRestoring,
     summaryError: presentedSummaryError,
+    summaryModuleErrors: presentedResult?.moduleErrors ?? {},
     safetyError: presentedSafetyError,
     summaryIssue: presentedSummaryIssue,
     safetyIssue: presentedSafetyIssue,
     contextOverflowIssue,
     hasAnyResult: Boolean(presentedResult || presentedSafetyResult),
-    hasCompleteResult: Boolean(presentedResult && presentedSafetyResult),
+    hasCompleteResult: Boolean(
+      presentedResult &&
+      presentedSafetyResult &&
+      !hasSummaryModuleErrors(presentedResult)
+    ),
     resolveSafetySource,
     activeGeneration: presentedBatch && !presentedBatch.cancelled ? {
       id: presentedBatch.id,

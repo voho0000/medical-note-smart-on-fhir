@@ -211,6 +211,53 @@ export const MedicalSummaryAiResultSchema = z.object({
 })
 export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema>
 
+// The fixed summary is generated as independently validated modules. Keeping
+// these ids in the domain layer lets generation, cache, orchestration, and UI
+// agree on exactly which card failed without coupling those layers together.
+export const MEDICAL_SUMMARY_MODULE_IDS = [
+  'priorities',
+  'problems',
+  'timeline',
+  'investigations',
+  'medications',
+] as const
+export type MedicalSummaryModuleId = (typeof MEDICAL_SUMMARY_MODULE_IDS)[number]
+
+export const MedicalSummaryPrioritiesModuleSchema = z.object({
+  headline: clampedText(240),
+  summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
+})
+export const MedicalSummaryProblemsModuleSchema = z.object({
+  problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
+})
+export const MedicalSummaryTimelineModuleSchema = z.object({
+  timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
+})
+export const MedicalSummaryInvestigationsModuleSchema = z.object({
+  investigations: z.array(SummaryInvestigationSchema).default([]).transform((a) => a.slice(0, 8)),
+})
+export const MedicalSummaryMedicationsModuleSchema = z.object({
+  medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
+  medicationReview: SummaryMedicationReviewSchema.default({
+    regimen: [],
+    changes: [],
+    reconciliation: [],
+  }),
+})
+
+export interface MedicalSummaryModuleResultMap {
+  priorities: z.infer<typeof MedicalSummaryPrioritiesModuleSchema>
+  problems: z.infer<typeof MedicalSummaryProblemsModuleSchema>
+  timeline: z.infer<typeof MedicalSummaryTimelineModuleSchema>
+  investigations: z.infer<typeof MedicalSummaryInvestigationsModuleSchema>
+  medications: z.infer<typeof MedicalSummaryMedicationsModuleSchema>
+}
+
+export type MedicalSummaryModuleResult<T extends MedicalSummaryModuleId = MedicalSummaryModuleId> =
+  MedicalSummaryModuleResultMap[T]
+
+export type MedicalSummaryModuleErrors = Partial<Record<MedicalSummaryModuleId, string>>
+
 // ---------------------------------------------------------------------------
 // App-side catalog & finalized (verified) result
 // ---------------------------------------------------------------------------
@@ -322,6 +369,10 @@ export interface MedicalSummaryResult {
    * different model or timestamp. Legacy caches may omit it; bundled demo
    * snapshots use explicit pre-generated provenance without a timestamp. */
   generation?: MedicalSummaryGeneration
+  /** Per-card generation failures. Successful modules remain renderable and
+   * cached; Retry regenerates only these ids. Missing means a legacy or fully
+   * successful result. */
+  moduleErrors?: MedicalSummaryModuleErrors
   headline: string
   summary: Array<{ text: string; emphasis: boolean; sourceKeys: string[] }>
   investigations: SummaryInvestigation[]

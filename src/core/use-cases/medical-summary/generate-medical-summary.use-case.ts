@@ -28,7 +28,13 @@ import type {
   ImagingStudyEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import {
+  MEDICAL_SUMMARY_MODULE_IDS,
   MedicalSummaryAiResultSchema,
+  MedicalSummaryInvestigationsModuleSchema,
+  MedicalSummaryMedicationsModuleSchema,
+  MedicalSummaryPrioritiesModuleSchema,
+  MedicalSummaryProblemsModuleSchema,
+  MedicalSummaryTimelineModuleSchema,
   normaliseTimelineCategory,
   normaliseProblemKind,
   normaliseInvestigationKind,
@@ -37,6 +43,9 @@ import {
   normaliseMedicationReconciliationReason,
   type InvestigationDirection,
   type MedicalSummaryAiResult,
+  type MedicalSummaryModuleId,
+  type MedicalSummaryModuleResult,
+  type MedicalSummaryModuleResultMap,
   type MedicalSummaryResult,
   type ResolvedSourceRef,
   type SummaryCoverageStats,
@@ -952,8 +961,30 @@ const SHARED_RULES =
   'Cross-hospital lens: surface care fragmented across providers and follow-up gaps. ' +
   'For duplicate medications, be strict: these are NHI cross-facility records where ONE prescription appears twice (the prescribing clinic AND the 藥局 / pharmacy that dispenses the 慢箋), ' +
   'and same-clinic refills are one ongoing therapy — NEITHER is duplication. Only call out duplication when the SAME drug (or same-class additive drugs) is prescribed by TWO DIFFERENT CLINICS in a short window. ' +
-  'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
+  'Do not output markdown, explanations, or text outside the requested JSON object.'
+
+const FULL_OUTPUT_INSTRUCTION =
+  '\n\nOutput ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
   SCHEMA_HINT
+
+const MODULE_SCHEMA_HINTS: Record<MedicalSummaryModuleId, string> = {
+  priorities:
+    '{"headline": "<one-line patient positioning>", "summary": [{"text": "<narrative segment>", "emphasis": <boolean>, "sources": ["<catalog key>"]}]}',
+  problems:
+    '{"problems": [{"label": "<condition name>", "basis": "<short evidence basis>", "kind": "diagnosis|lab|medication|careplan|discharge|other", "sources": ["<catalog key>"]}]}',
+  timeline:
+    '{"timeline": [{"ref": "<catalog key>", "label": "<one-line event label>", "category": "diagnosis|procedure|medication|encounter|lab|followup"}]}',
+  investigations:
+    '{"investigations": [{"label": "<disease-relevant test or imaging group>", "kind": "lab|imaging|pathology|other", "direction": "improving|stable|worsening|fluctuating|single|unknown", "trend": "<actual serial values or finding>", "interpretation": "<why this matters>", "sources": ["<catalog key>"]}]}',
+  medications:
+    '{"medicationEducation": [{"name": "<medicine or group>", "benefit": "<benefit>", "attention": "<one practical reminder>", "sources": ["<catalog key>"]}], "medicationReview": {"overview": "<clinician synthesis>", "regimen": [{"group": "<treatment area>", "name": "<medicine or group>", "sig": "<recorded sig only>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify>", "sources": ["<catalog key>"]}]}}',
+}
+
+const MODULE_OUTPUT_INSTRUCTION = (moduleId: MedicalSummaryModuleId) =>
+  `\n\nMODULAR OUTPUT CONTRACT: Generate ONLY the "${moduleId}" module. ` +
+  'Do not return fields belonging to another module. ' +
+  'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
+  MODULE_SCHEMA_HINTS[moduleId]
 
 const SYSTEM_MEDICAL =
   'You are preparing a structured cross-hospital patient summary for a physician who is seeing this patient ' +
@@ -991,53 +1022,6 @@ export interface FinalizeMedicalSummaryOptions {
   clinicalData?: SummaryCatalogInput
   audience?: 'medical' | 'patient'
   locale?: 'en' | 'zh-TW'
-}
-
-/**
- * English summaries must not silently copy Chinese prose from the source
- * record. Source metadata is deliberately excluded: organization names and
- * catalog displays are app-resolved evidence, not generated summary content.
- *
- * The same check works before and after finalizeResult because the generated
- * user-facing fields keep the same names in both shapes.
- */
-export function isMedicalSummaryLanguageConsistent(
-  result: MedicalSummaryAiResult | MedicalSummaryResult,
-  locale: 'en' | 'zh-TW',
-): boolean {
-  if (locale !== 'en') return true
-
-  const medicationReview = result.medicationReview
-  const generatedText = [
-    result.headline,
-    ...result.summary.map((item) => item.text),
-    ...(result.investigations ?? []).flatMap((item) => [
-      item.label,
-      item.trend,
-      item.interpretation,
-    ]),
-    ...(result.medicationEducation ?? []).flatMap((item) => [
-      item.name,
-      item.benefit,
-      item.attention,
-    ]),
-    medicationReview?.overview,
-    ...(medicationReview?.regimen ?? []).flatMap((item) => [
-      item.group,
-      item.name,
-      item.sig,
-    ]),
-    ...(medicationReview?.changes ?? []).flatMap((item) => [
-      item.medication,
-      item.summary,
-    ]),
-    ...(medicationReview?.reconciliation ?? []).map((item) => item.text),
-    ...(result.problems ?? []).flatMap((item) => [item.label, item.basis]),
-    ...result.decisions.flatMap((item) => [item.text, item.rationale]),
-    ...result.timeline.map((item) => item.label),
-  ]
-
-  return generatedText.every((text) => !text || !HAN_SCRIPT.test(text))
 }
 
 type RawMedicationRegimenItem = {
@@ -1175,8 +1159,21 @@ type FinalizableMedicalSummary = Omit<MedicalSummaryAiResult, 'investigations' |
   medicationReview?: MedicalSummaryAiResult['medicationReview']
 }
 
+const MODULE_RESULT_SCHEMAS = {
+  priorities: MedicalSummaryPrioritiesModuleSchema,
+  problems: MedicalSummaryProblemsModuleSchema,
+  timeline: MedicalSummaryTimelineModuleSchema,
+  investigations: MedicalSummaryInvestigationsModuleSchema,
+  medications: MedicalSummaryMedicationsModuleSchema,
+} as const
+
 export class GenerateMedicalSummaryUseCase {
-  buildMessages(input: GenerateMedicalSummaryInput): AiMessage[] {
+  readonly moduleIds = MEDICAL_SUMMARY_MODULE_IDS
+
+  private buildMessagesForOutput(
+    input: GenerateMedicalSummaryInput,
+    outputInstruction: string,
+  ): AiMessage[] {
     const system = input.audience === 'patient' ? SYSTEM_PATIENT : SYSTEM_MEDICAL
     const languageContract =
       input.locale === 'zh-TW'
@@ -1193,7 +1190,7 @@ export class GenerateMedicalSummaryUseCase {
         role: 'system',
         // Bookend the long clinical rules so the requested output language
         // remains salient even when most source records are in Chinese.
-        content: `${languageContract}\n\n${system}\n\n${languageContract}`,
+        content: `${languageContract}\n\n${system}${outputInstruction}\n\n${languageContract}`,
       },
       {
         role: 'user',
@@ -1208,6 +1205,20 @@ export class GenerateMedicalSummaryUseCase {
           `FINAL OUTPUT CHECK: ${languageContract}`,
       },
     ]
+  }
+
+  /** Legacy/full-result entry point retained for demo snapshots and consumers
+   * that still need to validate a complete object in one pass. Live summary
+   * generation uses buildModuleMessages instead. */
+  buildMessages(input: GenerateMedicalSummaryInput): AiMessage[] {
+    return this.buildMessagesForOutput(input, FULL_OUTPUT_INSTRUCTION)
+  }
+
+  buildModuleMessages(
+    input: GenerateMedicalSummaryInput,
+    moduleId: MedicalSummaryModuleId,
+  ): AiMessage[] {
+    return this.buildMessagesForOutput(input, MODULE_OUTPUT_INSTRUCTION(moduleId))
   }
 
   /**
@@ -1242,6 +1253,147 @@ export class GenerateMedicalSummaryUseCase {
       .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
       .join('; ')
     return fail(`schema mismatch — ${issues}`)
+  }
+
+  parseModuleResult<T extends MedicalSummaryModuleId>(
+    moduleId: T,
+    text: string,
+  ): MedicalSummaryModuleResultMap[T] | null {
+    const fail = (reason: string): null => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[medical-summary:${moduleId}] parseResult failed (${reason}); reply head:`,
+          (text ?? '').slice(0, 300),
+        )
+      } else {
+        console.warn(`[medical-summary:${moduleId}] parseResult failed (${reason})`)
+      }
+      return null
+    }
+    const raw = tryExtractJsonValue(text)
+    if (raw === null) return fail('no parseable JSON found')
+    const parsed = MODULE_RESULT_SCHEMAS[moduleId].safeParse(raw)
+    if (parsed.success) return parsed.data as MedicalSummaryModuleResultMap[T]
+    const issues = parsed.error.issues
+      .slice(0, 8)
+      .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+      .join('; ')
+    return fail(`schema mismatch — ${issues}`)
+  }
+
+  createEmptyAiResult(): MedicalSummaryAiResult {
+    return {
+      headline: '',
+      summary: [],
+      investigations: [],
+      medicationEducation: [],
+      medicationReview: {
+        regimen: [],
+        changes: [],
+        reconciliation: [],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+  }
+
+  /** Convert a finalized partial result back to the AI-shaped draft so a
+   * failed module can be replaced without regenerating successful cards. */
+  createAiDraftFromResult(result?: MedicalSummaryResult): MedicalSummaryAiResult {
+    if (!result) return this.createEmptyAiResult()
+    return {
+      headline: result.headline,
+      summary: result.summary.map((item) => ({
+        text: item.text,
+        emphasis: item.emphasis,
+        sources: item.sourceKeys,
+      })),
+      investigations: result.investigations.map((item) => ({
+        label: item.label,
+        kind: item.kind,
+        direction: item.direction,
+        trend: item.trend,
+        interpretation: item.interpretation,
+        sources: item.sourceKeys,
+      })),
+      medicationEducation: result.medicationEducation.map((item) => ({
+        name: item.name,
+        benefit: item.benefit,
+        attention: item.attention,
+        sources: item.sourceKeys,
+      })),
+      medicationReview: {
+        overview: result.medicationReview.overview,
+        regimen: result.medicationReview.regimen.map((item) => ({
+          group: item.group,
+          name: item.name,
+          sig: item.sig,
+          sources: item.sourceKeys,
+        })),
+        changes: result.medicationReview.changes.map((item) => ({
+          type: item.type,
+          medication: item.medication,
+          summary: item.summary,
+          sources: item.sourceKeys,
+        })),
+        reconciliation: result.medicationReview.reconciliation.map((item) => ({
+          reason: item.reason,
+          text: item.text,
+          sources: item.sourceKeys,
+        })),
+      },
+      problems: result.problems.map((item) => ({
+        label: item.label,
+        basis: item.basis,
+        kind: item.kind,
+        sources: item.sourceKeys,
+      })),
+      decisions: result.decisions.map((item) => ({
+        text: item.text,
+        urgency: item.urgency,
+        rationale: item.rationale,
+        sources: item.sourceKeys,
+      })),
+      timeline: result.timeline.map((item) => ({
+        ref: item.key,
+        label: item.label,
+        category: item.category,
+      })),
+    }
+  }
+
+  mergeModuleResult<T extends MedicalSummaryModuleId>(
+    draft: MedicalSummaryAiResult,
+    moduleId: T,
+    moduleResult: MedicalSummaryModuleResult<T>,
+  ): MedicalSummaryAiResult {
+    switch (moduleId) {
+      case 'priorities': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['priorities']
+        return { ...draft, headline: value.headline, summary: value.summary }
+      }
+      case 'problems': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['problems']
+        return { ...draft, problems: value.problems }
+      }
+      case 'timeline': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['timeline']
+        return { ...draft, timeline: value.timeline }
+      }
+      case 'investigations': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['investigations']
+        return { ...draft, investigations: value.investigations }
+      }
+      case 'medications': {
+        const value = moduleResult as MedicalSummaryModuleResultMap['medications']
+        return {
+          ...draft,
+          medicationEducation: value.medicationEducation,
+          medicationReview: value.medicationReview,
+        }
+      }
+    }
   }
 
   /**

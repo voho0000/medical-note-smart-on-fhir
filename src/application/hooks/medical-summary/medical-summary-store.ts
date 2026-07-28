@@ -11,9 +11,9 @@ import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.e
 
 export const SUMMARY_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000
 
-// v12: surface clinically meaningful treatment patterns and true overlapping
-// prescriptions from two non-pharmacy institutions. Older results regenerate.
-export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary12', scanKey)
+// v13: each fixed summary card is generated and validated independently.
+// Older all-or-nothing live results regenerate into the modular cache shape.
+export const summaryCacheKey = (scanKey: string) => aiResultCacheKey('medsummary13', scanKey)
 
 // Module-level per-slot result cache (survives tab switches; wiped on bundle
 // import so nothing stale renders against fresh clinical data).

@@ -82,10 +82,12 @@ import {
 import { buildSummaryGenerationInfo } from "./utils/summary-generation-info"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
+import { MEDICAL_SUMMARY_MODULE_IDS } from "@/src/core/entities/medical-summary.entity"
 import type {
   EncounterClass,
   InvestigationDirection,
   InvestigationKind,
+  MedicalSummaryModuleId,
   MedicationChangeType,
   ProblemKind,
   ResolvedSourceRef,
@@ -189,6 +191,7 @@ export default function MedicalSummaryFeature() {
     isSafetyGenerating,
     isRestoring,
     summaryError,
+    summaryModuleErrors,
     safetyError,
     contextOverflowIssue,
     hasAnyResult,
@@ -214,20 +217,43 @@ export default function MedicalSummaryFeature() {
     () => (isPatient ? { ...t.safetyAlerts, ...t.safetyAlerts.patient } : t.safetyAlerts),
     [isPatient, t.safetyAlerts],
   )
-  const generationErrors = useMemo(() => [
-    summaryError ? {
-      label: ms.prioritiesTitle,
-      message: summaryError === "PARSE_FAILED"
-        ? ms.parseError
-        : summaryError,
-    } : null,
-    safetyError ? {
-      label: ms.careSafetyTitle,
-      message: safetyError === "PARSE_FAILED"
-        ? safetyText.parseError
-        : safetyError,
-    } : null,
-  ].filter((item): item is { label: string; message: string } => item !== null), [ms, safetyError, safetyText.parseError, summaryError])
+  const summaryModuleLabels = useMemo<Record<MedicalSummaryModuleId, string>>(() => ({
+    priorities: ms.prioritiesTitle,
+    problems: ms.problemsTitle,
+    timeline: ms.timelineTitle,
+    investigations: ms.investigationsTitle,
+    medications: isPatient ? ms.medicationEducationTitle : ms.medicationReviewTitle,
+  }), [isPatient, ms])
+  const hasSummaryModuleErrors = Object.values(summaryModuleErrors).some(Boolean)
+  const generationErrors = useMemo(() => {
+    const moduleErrors = MEDICAL_SUMMARY_MODULE_IDS.flatMap((moduleId) => {
+      const error = summaryModuleErrors[moduleId]
+      return error ? [{
+        label: summaryModuleLabels[moduleId],
+        message: error === "PARSE_FAILED" ? ms.parseError : error,
+      }] : []
+    })
+    const genericSummaryError = summaryError && summaryError !== "MODULES_FAILED"
+      ? [{
+          label: ms.prioritiesTitle,
+          message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
+        }]
+      : []
+    const safetyErrors = safetyError
+      ? [{
+          label: ms.careSafetyTitle,
+          message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
+        }]
+      : []
+    return [...moduleErrors, ...genericSummaryError, ...safetyErrors]
+  }, [
+    ms,
+    safetyError,
+    safetyText.parseError,
+    summaryError,
+    summaryModuleErrors,
+    summaryModuleLabels,
+  ])
   const displayedGenerationErrors = useMemo(() => {
     if (
       !contextOverflowIssue ||
@@ -393,16 +419,20 @@ export default function MedicalSummaryFeature() {
   const cardRefs = useRef<Partial<Record<MedicalSummaryCardId, HTMLDivElement | null>>>({})
 
   const showSafetyCard = Boolean(safetyResult || (!safetyError && result))
+  const moduleSucceeded = useCallback(
+    (moduleId: MedicalSummaryModuleId) => Boolean(result && !summaryModuleErrors[moduleId]),
+    [result, summaryModuleErrors],
+  )
   const availableCardIds = useMemo<MedicalSummaryCardId[]>(() => {
     const ids: MedicalSummaryCardId[] = []
-    if (result) ids.push("problems")
-    if (result?.timeline.length) ids.push("timeline")
+    if (moduleSucceeded("problems")) ids.push("problems")
+    if (moduleSucceeded("timeline") && result?.timeline.length) ids.push("timeline")
     if (showSafetyCard) ids.push("safety")
     if (result?.decisions.length) ids.push("decisions")
-    if (result) ids.push("investigations")
-    if (result) ids.push("medications")
+    if (moduleSucceeded("investigations")) ids.push("investigations")
+    if (moduleSucceeded("medications")) ids.push("medications")
     return ids
-  }, [result, showSafetyCard])
+  }, [moduleSucceeded, result, showSafetyCard])
 
   const cardLayout = useMedicalSummaryCardLayout({ audience, availableIds: availableCardIds })
 
@@ -555,7 +585,7 @@ export default function MedicalSummaryFeature() {
   }, [])
 
   const summaryCards: Partial<Record<MedicalSummaryCardId, ReactNode>> = {
-    problems: result ? (
+    problems: result && moduleSucceeded("problems") ? (
       <div
         id="medical-summary-card-problems"
         ref={(node) => { cardRefs.current.problems = node }}
@@ -575,7 +605,7 @@ export default function MedicalSummaryFeature() {
         />
       </div>
     ) : null,
-    timeline: result?.timeline.length ? (
+    timeline: result && moduleSucceeded("timeline") && result.timeline.length ? (
       <div
         id="medical-summary-card-timeline"
         ref={(node) => { cardRefs.current.timeline = node }}
@@ -634,7 +664,7 @@ export default function MedicalSummaryFeature() {
         />
       </div>
     ) : null,
-    investigations: result ? (
+    investigations: result && moduleSucceeded("investigations") ? (
       <div
         id="medical-summary-card-investigations"
         ref={(node) => { cardRefs.current.investigations = node }}
@@ -659,7 +689,7 @@ export default function MedicalSummaryFeature() {
         />
       </div>
     ) : null,
-    medications: result ? (
+    medications: result && moduleSucceeded("medications") ? (
       <div
         id="medical-summary-card-medications"
         ref={(node) => { cardRefs.current.medications = node }}
@@ -972,7 +1002,7 @@ export default function MedicalSummaryFeature() {
             runningAriaTemplate={ms.summaryGenerationRunningProvenance}
           />
 
-          {result ? (
+          {result && moduleSucceeded("priorities") ? (
             <CurrentPrioritiesCard
               result={result}
               title={ms.prioritiesTitle}
@@ -982,7 +1012,9 @@ export default function MedicalSummaryFeature() {
               typeLabel={typeLabel}
               unverifiedLabel={ms.unverified}
               onNavigate={navigateToResource}
-              updating={isSummaryGenerating}
+              updating={isSummaryGenerating && (
+                !hasSummaryModuleErrors || Boolean(summaryModuleErrors.priorities)
+              )}
             />
           ) : null}
 
