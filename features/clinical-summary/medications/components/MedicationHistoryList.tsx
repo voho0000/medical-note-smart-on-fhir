@@ -203,6 +203,21 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
             if (m.durationDays) parts.push(`${m.durationDays} ${mt.durationDaysUnit ?? 'days'}`)
             if (m.pharmacy) parts.push(m.pharmacy)
             if (isMedical && m.icdCode) parts.push(`${m.icdCode}${m.icdText ? ` ${m.icdText}` : ''}`)
+            if (m.drugTerminology?.ingredientText) {
+              parts.push(m.drugTerminology.ingredientText)
+            }
+            if (m.drugTerminology?.doseForm) {
+              parts.push(m.drugTerminology.doseForm)
+            }
+            if (m.drugTerminology?.atcCode) {
+              const atcName = isMedical
+                ? m.drugTerminology.atcNameEn || m.drugTerminology.atcNameZh
+                : m.drugTerminology.atcNameZh || m.drugTerminology.atcNameEn
+              parts.push(`ATC ${m.drugTerminology.atcCode}${atcName ? ` ${atcName}` : ''}`)
+            }
+            if (m.drugTerminology) {
+              parts.push(mt.terminologySource ?? '健保署藥品主檔補充')
+            }
             return (
               <MedicationHistoryDetail
                 key={m.id || i}

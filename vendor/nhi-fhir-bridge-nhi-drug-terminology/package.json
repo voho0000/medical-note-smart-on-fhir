@@ -1,0 +1,38 @@
+{
+  "name": "@nhi-fhir-bridge/nhi-drug-terminology",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Versioned offline Taiwan NHI drug terminology resolved by exact drug code and prescription date.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "data",
+    "README.md",
+    "NOTICE.md"
+  ],
+  "scripts": {
+    "snapshot:build": "node scripts/build-snapshot.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src tests",
+    "format": "biome format --write src tests"
+  },
+  "dependencies": {
+    "js-sha1": "^0.7.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

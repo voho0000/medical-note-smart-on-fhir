@@ -147,7 +147,14 @@ export function useMedicationTimeline(
       const endMs = startMs + supplyDays * 24 * 60 * 60 * 1000
 
       const isChronic = chronicDrugs.has(drugKey)
-      const drugName = pickLocalizedText(med.medicationCodeableConcept, audience, locale) || drugKey
+      const officialName = audience === 'medical'
+        ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
+        : locale === 'en'
+          ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
+          : med.drugTerminology?.officialNameZh || med.drugTerminology?.officialNameEn
+      const drugName = officialName
+        || pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+        || drugKey
       const categoryKey = categoryKeyOf(med)
       // Category labels follow UI locale (not audience) — see
       // medications/utils/fhir-helpers.ts `pickByLocale` rationale.

@@ -5,13 +5,18 @@ declare const self: DedicatedWorkerGlobalScope
 self.postMessage({ type: 'progress', phase: 'ready' })
 
 self.onmessage = (event: MessageEvent<{ bytes: ArrayBuffer }>) => {
-  void import('../services/sdk-import-converter')
-    .then(({ convertLocalImportBytes }) => {
+  void Promise.all([
+    import('../services/sdk-import-converter'),
+    import('@/src/application/services/local-fhir-import-enrichment.service'),
+  ])
+    .then(async ([{ convertLocalImportBytes }, { enrichLocalFhirImport }]) => {
       try {
         self.postMessage({ type: 'progress', phase: 'parsed' })
         const result = convertLocalImportBytes(event.data.bytes)
         self.postMessage({ type: 'progress', phase: 'converted' })
-        self.postMessage({ type: 'success', result })
+        const bundle = await enrichLocalFhirImport(result.bundle)
+        self.postMessage({ type: 'progress', phase: 'enriched' })
+        self.postMessage({ type: 'success', result: { ...result, bundle } })
       } catch (error) {
         const detail = error instanceof Error ? error.message : 'Unknown conversion error'
         self.postMessage({
