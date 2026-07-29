@@ -63,7 +63,7 @@ describe('buildClinicalContextCoverageSection', () => {
         sourceMetadata: {
           source: 'health-bank-sdk-json',
           convertedAt: '2000-01-01T00:00:00Z',
-          converterVersion: '0.1.0',
+          converterVersion: '0.1.3',
           resourceCounts: {},
           warnings: [],
           labDuplicateMerge: {
@@ -91,7 +91,44 @@ describe('buildClinicalContextCoverageSection', () => {
     expect(context).toContain('full-text imaging/pathology reports may contain this personal information')
     expect(context).toContain('does not infer Patient demographics from report text')
     expect(context).toContain('Do not infer absent structured fields or treat report-text demographics as verified Patient fields')
-    expect(context).toContain('same_day_lab_rows_merged=2')
+    expect(context).toContain('exact_lab_retransmissions_merged=2')
+    expect(context).toContain('same_day_distinct_value_groups_preserved=1')
     expect(context).toContain('inferred_lab_units=4')
+  })
+
+  it('warns AI context that legacy SDK conversions may have dropped distinct values', () => {
+    const section = buildClinicalContextCoverageSection(
+      ALL_DATA_SELECTION,
+      ALL_DATA_FILTERS,
+      {
+        sourceMetadata: {
+          source: 'health-bank-sdk-json',
+          converterVersion: '0.1.2',
+          labDuplicateMerge: {
+            sourceCount: 10,
+            convertedCount: 7,
+            mergedCount: 3,
+            conflictingValueGroupCount: 2,
+          },
+          unitInference: {
+            policyVersion: 'sdk-unit-policy-v1',
+            inferredCount: 0,
+            unitlessCount: 7,
+            unresolvedCount: 7,
+          },
+          sourceCapabilities: [],
+          warnings: [],
+          resourceCounts: {},
+        },
+      } as any,
+      [],
+      NOW,
+    )
+
+    const context = section?.items.join('\n')
+    expect(context).toContain('legacy_same_day_lab_rows_merged=3')
+    expect(context).toContain('distinct_value_groups_potentially_dropped=2')
+    expect(context).toContain('re-import the original SDK JSON with converter 0.1.3 or later')
+    expect(context).not.toContain('same_day_distinct_value_groups_preserved=')
   })
 })
