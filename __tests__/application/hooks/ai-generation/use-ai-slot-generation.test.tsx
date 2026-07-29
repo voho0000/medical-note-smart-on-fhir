@@ -21,6 +21,9 @@ import {
 
 let mockPatientId = 'demo-patient-1'
 let mockClinicalContext = 'demo context'
+let mockClinicalContextForProfile:
+  | ((profile: { filters?: { labDepth?: string } } | undefined) => string)
+  | null = null
 let mockClinicalData: Record<string, unknown> = {
   isLoading: false,
   isFetching: false,
@@ -38,8 +41,20 @@ jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
   usePatient: () => ({ patient: { id: mockPatientId } }),
 }))
 jest.mock('@/src/application/hooks/use-clinical-context.hook', () => ({
-  useClinicalContext: () => ({
-    getFullClinicalContext: () => mockClinicalContext,
+  useClinicalContext: (
+    _consumer: unknown,
+    options?: { profile?: { filters?: { labDepth?: string } } },
+  ) => ({
+    getFullClinicalContext: () => (
+      mockClinicalContextForProfile
+        ? mockClinicalContextForProfile(options?.profile)
+        : mockClinicalContext
+    ),
+    getFormattedClinicalContext: () => (
+      mockClinicalContextForProfile
+        ? mockClinicalContextForProfile(options?.profile)
+        : mockClinicalContext
+    ),
     includedDocumentIds: [],
   }),
 }))
@@ -102,6 +117,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     jest.clearAllMocks()
     mockPatientId = 'demo-patient-1'
     mockClinicalContext = 'demo context'
+    mockClinicalContextForProfile = null
     mockClinicalData = {
       isLoading: false,
       isFetching: false,
@@ -682,6 +698,58 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(result.current.result?.headline).toBe('local-model-a:32768')
   })
 
+  it('temporarily compacts clinical input for a 32k custom model before generation', async () => {
+    mockPatientId = 'smart-patient-1'
+    mockOpenAiCompatible = {
+      enabled: true,
+      baseUrl: 'https://gateway.example/v1',
+      modelId: 'small-local-model',
+      apiKey: null,
+      transport: 'direct',
+      contextWindowTokens: 32_768,
+      contextWindowSource: 'manual',
+    }
+    mockClinicalContextForProfile = (profile) => (
+      profile?.filters?.labDepth === '3'
+        ? `compact-${'record '.repeat(1_000)}`
+        : `full-${'record '.repeat(30_000)}`
+    )
+    const store = createAiResultStore<{ headline: string }>()
+    const run = jest.fn(async (ctx: {
+      clinicalContext: string
+      contextAdaptation: {
+        tier: string
+        originalTokens: number
+        adaptedTokens: number
+      } | null
+    }) => ({
+      headline: `${ctx.contextAdaptation?.tier}:${ctx.clinicalContext.slice(0, 7)}`,
+    }))
+
+    const { result } = renderHook(() => useAiSlotGeneration({
+      defaultModelId: 'gemini-3.1-flash-lite',
+      selectedModelId: CUSTOM_OPENAI_MODEL_ID,
+      autoRunEnabled: false,
+      requireDataReadyToGenerate: true,
+      store,
+      cacheKeyFor: (slotKey) => `test:${slotKey}`,
+      cacheMaxAgeMs: 60_000,
+      run,
+    }))
+
+    await waitFor(() => expect(result.current.dataReady).toBe(true))
+    await waitFor(() => expect(result.current.isHydrated).toBe(true))
+    await act(async () => result.current.generate())
+
+    expect(run).toHaveBeenCalledTimes(1)
+    const context = run.mock.calls[0][0]
+    expect(context.clinicalContext.startsWith('compact-')).toBe(true)
+    expect(context.contextAdaptation?.tier).toBe('compact')
+    expect(context.contextAdaptation?.adaptedTokens)
+      .toBeLessThan(context.contextAdaptation?.originalTokens ?? 0)
+    expect(result.current.result?.headline).toBe('compact:compact')
+  })
+
   it('keeps any-model busy state inside the exact Bundle and clinical-input scope', async () => {
     mockPatientId = 'smart-patient-1'
     const store = createAiResultStore<{ headline: string }>()
@@ -728,11 +796,22 @@ describe('useAiSlotGeneration demo snapshot', () => {
 
     mockLocale = 'zh-TW'
     mockClinicalContext = 'different selected clinical input'
+    mockClinicalData = {
+      ...mockClinicalData,
+      encounters: [
+        { id: 'demo-encounter-1' },
+        { id: 'changed-encounter' },
+      ],
+    }
     rerender({ selectedModelId: 'gpt-5.6-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
     expect(result.current.isAnyRunning).toBe(false)
 
     mockClinicalContext = 'demo context'
+    mockClinicalData = {
+      ...mockClinicalData,
+      encounters: [{ id: 'demo-encounter-1' }],
+    }
     mockPatientId = 'smart-patient-2'
     rerender({ selectedModelId: 'gpt-5.6-terra' })
     expect(result.current.scopeKey).not.toBe(originalScope)
@@ -997,6 +1076,13 @@ describe('useAiSlotGeneration demo snapshot', () => {
     const firstSlot = result.current.slotKey
 
     mockClinicalContext = 'complete visits, reports, and medications'
+    mockClinicalData = {
+      ...mockClinicalData,
+      encounters: [
+        { id: 'demo-encounter-1' },
+        { id: 'demo-encounter-2' },
+      ],
+    }
     rerender()
 
     await waitFor(() => {

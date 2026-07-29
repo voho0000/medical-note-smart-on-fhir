@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -103,7 +103,6 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     openAiCompatibleProfiles,
   } = useAllApiKeys()
   const { user, isAnonymous, loading: authLoading } = useAuth()
-  const { getFullClinicalContext } = useClinicalContext("insights")
   const {
     isLoading: clinicalDataLoading,
     isFetching: clinicalDataFetching,
@@ -117,13 +116,15 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     model,
     openAiCompatibleProfiles,
   )
+  const contextLimit = modelContextLimit(model, openAiCompatible)
+  const fittedClinicalInput = useClinicalAiInput(contextLimit)
   const autoAiConsent = useAutoAiConsentState()
   const [hydratedCacheIdentity, setHydratedCacheIdentity] = useState<string | null>(null)
   const [bundleRevision, setBundleRevision] = useState(0)
   const previousRuntimeIdentity = useRef<string | null>(null)
 
   const { prompts, handlePromptChange } = useInsightPanels(panels)
-  const context = useMemo(() => getFullClinicalContext(), [getFullClinicalContext])
+  const context = fittedClinicalInput.clinicalContext
   const modelProvider = getModelDefinition(model)?.provider
   const hasModelProviderKey = hasDirectModelAccess(
     model,
@@ -138,7 +139,6 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     ? isOpenAiCompatibleRuntimeReady(openAiCompatible)
     : hasModelProviderKey || hasModelProxy
   const runtimeModelId = modelRuntimeIdentity(model, openAiCompatible)
-  const contextLimit = modelContextLimit(model, openAiCompatible)
   const autoRunScope = authLoading
     ? "auth-loading"
     : hasModelProviderKey
@@ -159,7 +159,15 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     responses,
     panelStatus,
     setResponses,
-  } = useInsightGeneration({ panels, prompts, context, model, contextLimit })
+  } = useInsightGeneration({
+    panels,
+    prompts,
+    context,
+    model,
+    contextLimit,
+    contextAdaptation: fittedClinicalInput.contextAdaptation,
+    inputSignature: fittedClinicalInput.inputSignature,
+  })
 
   // A new local Bundle is a new authorization and result scope even when it has
   // the same patient id and formatted clinical context as the previous import.
@@ -208,6 +216,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     && !clinicalDataFetching
     && !clinicalDataError
     && !hasBlockingQueryIssues
+    && fittedClinicalInput.dataReady
   const runtimeIdentity = patientId && context.trim() && clinicalDataReady
     ? `${bundleRevision}:${patientId}:${contextSig}:${runtimeModelId}:${INSIGHTS_PIPELINE_VERSION}`
     : ""

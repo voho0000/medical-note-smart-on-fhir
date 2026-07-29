@@ -15,6 +15,7 @@ import { ContextTokenMeter } from "./ContextTokenMeter"
 import type { DataItem, DataType } from "../hooks/useDataCategories"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
+import type { DocumentMode } from "@/src/core/utils/clinical-documents.utils"
 import type { FilterValue } from "@/src/core/interfaces/data-category.interface"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 
@@ -23,6 +24,8 @@ interface DataSelectionTabProps {
   dataCategories: DataItem[]
   selectedData: DataSelection
   filters: DataFilters
+  displayedDocumentMode?: DocumentMode
+  displayedDocumentIds?: string[]
   onToggle: (id: DataType, checked: boolean) => void
   onToggleAll: (checked: boolean) => void
   onFilterChange: (key: keyof DataFilters, value: FilterValue) => void
@@ -54,6 +57,8 @@ export function DataSelectionTab({
   dataCategories,
   selectedData,
   filters,
+  displayedDocumentMode,
+  displayedDocumentIds,
   onToggle,
   onToggleAll,
   onFilterChange,
@@ -217,7 +222,11 @@ export function DataSelectionTab({
                       </div>
                       {item.id === 'documents' && isSelected && (
                         <div className="mt-2 pl-9">
-                          <DocumentChecklist clinicalData={clinicalData} />
+                          <DocumentChecklist
+                            clinicalData={clinicalData}
+                            displayedDocumentMode={displayedDocumentMode}
+                            displayedDocumentIds={displayedDocumentIds}
+                          />
                         </div>
                       )}
                       {item.id === 'labReports' && isSelected && (

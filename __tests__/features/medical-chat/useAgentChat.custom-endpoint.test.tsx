@@ -23,8 +23,12 @@ jest.mock('@/src/application/stores/chat.store', () => ({
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
   usePatient: () => ({ patient: null }),
 }))
-jest.mock('@/src/application/hooks/use-clinical-context.hook', () => ({
-  useClinicalContext: () => ({ getFullClinicalContext: mockGetFullClinicalContext }),
+jest.mock('@/src/application/hooks/ai-generation/use-clinical-ai-input.hook', () => ({
+  useClinicalAiInput: () => ({
+    clinicalContext: mockGetFullClinicalContext(),
+    dataReady: true,
+    contextAdaptation: null,
+  }),
 }))
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({

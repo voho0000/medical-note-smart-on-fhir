@@ -2,10 +2,11 @@
 "use client"
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
+import { toast } from "sonner"
 import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
 import { useAiConfigStore, useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
-import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useFhirTools } from "@/src/application/hooks/ai/use-fhir-tools.hook"
@@ -44,6 +45,7 @@ import {
 } from '@/src/shared/utils/model-access.utils'
 import { truncateToContextWindow } from '@/src/shared/utils/context-window-manager'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
+import { formatClinicalContextAdaptationNotice } from '@/src/core/utils/adaptive-clinical-context.utils'
 
 const standardChatStream = createAiStreamOrchestrator()
 
@@ -65,16 +67,35 @@ function usesStandardChat(
 export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
-  const { perplexityKey } = useAllApiKeys()
+  const {
+    apiKey,
+    geminiKey,
+    claudeKey,
+    perplexityKey,
+    openAiCompatibleProfiles,
+  } = useAllApiKeys()
   const { patient } = usePatient()
   // A tool-less local model cannot fetch FHIR records on demand. Give standard
-  // chat the exact same user-selected, PII-scrubbed snapshot used by summaries.
-  const { getFullClinicalContext } = useClinicalContext('insights')
-  const selectedClinicalContext = useMemo(
-    () => getFullClinicalContext(),
-    [getFullClinicalContext],
+  // chat the same model-fitted, PII-scrubbed snapshot used by summaries.
+  const selectedOpenAiCompatible = resolveOpenAiCompatibleProfile(
+    modelId,
+    openAiCompatibleProfiles,
   )
-  const { t } = useLanguage()
+  const contextModelId = gateModelForKeys(modelId, {
+    openAiKey: apiKey,
+    geminiKey,
+    claudeKey,
+    customAvailable: isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible),
+  })
+  const contextOpenAiCompatible = resolveOpenAiCompatibleProfile(
+    contextModelId,
+    openAiCompatibleProfiles,
+  )
+  const fittedClinicalInput = useClinicalAiInput(
+    modelContextLimit(contextModelId, contextOpenAiCompatible),
+  )
+  const selectedClinicalContext = fittedClinicalInput.clinicalContext
+  const { t, locale } = useLanguage()
   const { user, isAnonymous } = useAuth()
   // The proxy accepts any Firebase token — a real account OR an anonymous
   // (free-tier) one. Gate proxy use on "we have a token", not "real account".
@@ -267,6 +288,20 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
 
         if (isStandardChat) {
+          if (!fittedClinicalInput.dataReady) {
+            throw new Error(t.medicalChat.localStandardContextTooLarge)
+          }
+          if (fittedClinicalInput.contextAdaptation) {
+            toast.info(
+              formatClinicalContextAdaptationNotice(
+                fittedClinicalInput.contextAdaptation,
+                locale,
+              ),
+              {
+                id: `clinical-context-fit:chat:${fittedClinicalInput.inputSignature}:${fittedClinicalInput.contextAdaptation.tier}`,
+              },
+            )
+          }
           // Standard chat deliberately sends no `tools` field. It answers from
           // the user-selected clinical snapshot instead of pretending it can
           // query the complete FHIR record or current literature on demand.
@@ -479,7 +514,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
       }
     },
-    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, perplexityKey, t, isLocalMode]
+    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, fittedClinicalInput.dataReady, fittedClinicalInput.contextAdaptation, fittedClinicalInput.inputSignature, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, perplexityKey, t, locale, isLocalMode]
   )
 
   const handleReset = useCallback(() => {

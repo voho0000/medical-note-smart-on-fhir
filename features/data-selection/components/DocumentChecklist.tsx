@@ -14,10 +14,30 @@ import {
 } from "@/src/core/utils/clinical-documents.utils"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 
-export function DocumentChecklist({ clinicalData }: { clinicalData: ClinicalDataCollection }) {
+interface DocumentChecklistProps {
+  clinicalData: ClinicalDataCollection
+  /** Transient values actually used by a context-limited model. The provider
+   * remains the persistence target, so removing these props restores the
+   * original saved document settings immediately. */
+  displayedDocumentMode?: DocumentMode
+  displayedDocumentIds?: string[]
+}
+
+export function DocumentChecklist({
+  clinicalData,
+  displayedDocumentMode,
+  displayedDocumentIds,
+}: DocumentChecklistProps) {
   const { t } = useLanguage()
-  const { documentMode, documentIds, setDocumentMode, setDocumentIds } = useDataSelection()
+  const {
+    documentMode: savedDocumentMode,
+    documentIds: savedDocumentIds,
+    setDocumentMode,
+    setDocumentIds,
+  } = useDataSelection()
   const ds = t.dataSelection as unknown as Record<string, string>
+  const documentMode = displayedDocumentMode ?? savedDocumentMode
+  const documentIds = displayedDocumentIds ?? savedDocumentIds
 
   const docs = useMemo(() => listClinicalDocuments(clinicalData), [clinicalData])
   const selectedIds = useMemo(

@@ -11,9 +11,14 @@ import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 interface PreviewTabProps {
   formattedClinicalContext: string
   maskedClinicalContext: string
+  scopeNotice?: string
 }
 
-export function PreviewTab({ formattedClinicalContext, maskedClinicalContext }: PreviewTabProps) {
+export function PreviewTab({
+  formattedClinicalContext,
+  maskedClinicalContext,
+  scopeNotice,
+}: PreviewTabProps) {
   const { t } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
   const { copied, copy } = useCopyToClipboard()
@@ -66,6 +71,11 @@ export function PreviewTab({ formattedClinicalContext, maskedClinicalContext }: 
           aria-label={ds.maskIdentifiers}
         />
       </div>
+      {scopeNotice ? (
+        <div className="rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs leading-relaxed text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100">
+          {scopeNotice}
+        </div>
+      ) : null}
       <pre
         data-testid="clinical-context-preview"
         className="min-h-[250px] overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 font-mono text-xs leading-relaxed text-foreground"

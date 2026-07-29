@@ -11,9 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
-import { useAllApiKeys } from "@/src/application/stores/ai-config.store"
-import { useEffectiveModel } from "@/src/application/stores/model-prefs.store"
-import { gateModelForKeys } from "@/src/shared/constants/ai-models.constants"
+import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
 import { estimateTokens } from "@/src/shared/utils/token-estimator"
 import {
   DEFAULT_RESPONSE_RESERVE,
@@ -22,11 +20,8 @@ import {
   type ContextOverflowIssue,
   type ContextBudgetLevel,
 } from "@/src/shared/utils/context-budget"
-import {
-  isOpenAiCompatibleRuntimeReady,
-  resolveOpenAiCompatibleProfile,
-} from '@/src/shared/utils/openai-compatible.utils'
-import { modelContextLimit, modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
+import { formatClinicalContextAdaptationNotice } from '@/src/core/utils/adaptive-clinical-context.utils'
+import { useResolvedDataSelectionModel } from '../hooks/useResolvedDataSelectionModel'
 
 const LEVEL_BAR: Record<ContextBudgetLevel, string> = {
   ok: "bg-emerald-500",
@@ -50,34 +45,21 @@ interface ContextTokenMeterProps {
 }
 
 export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: ContextTokenMeterProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
   // The main Data Selection drawer edits the summary/insights profile. Read
   // that exact consumer here too so a stale legacy chat profile cannot make
   // the meter disagree with the subsequent summary request.
   const { getClinicalContext, formatClinicalContext } = useClinicalContext('insights')
-  const defaultModelId = useEffectiveModel("insights")
-  const { apiKey, geminiKey, claudeKey, openAiCompatibleProfiles } = useAllApiKeys()
-  const selectedOpenAiCompatible = resolveOpenAiCompatibleProfile(
-    modelId ?? defaultModelId,
-    openAiCompatibleProfiles,
+  const {
+    modelId: effectiveModelId,
+    contextLimit,
+    modelLabel,
+  } = useResolvedDataSelectionModel(
+    modelId,
+    fallbackModelId,
   )
-  const effectiveModelId = modelId
-    ? gateModelForKeys(
-        modelId,
-        {
-          openAiKey: apiKey,
-          geminiKey,
-          claudeKey,
-          customAvailable: isOpenAiCompatibleRuntimeReady(selectedOpenAiCompatible),
-        },
-        fallbackModelId ?? defaultModelId,
-      )
-    : defaultModelId
-  const openAiCompatible = resolveOpenAiCompatibleProfile(
-    effectiveModelId,
-    openAiCompatibleProfiles,
-  )
+  const fittedClinicalInput = useClinicalAiInput(contextLimit)
 
   // Debounced snapshot of the formatted context. We recompute sections on a
   // trailing timer rather than every render.
@@ -106,9 +88,17 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
     }
   }, [getClinicalContext, formatClinicalContext])
 
-  const contextLimit = modelContextLimit(effectiveModelId, openAiCompatible)
+  const fittedTotal = useMemo(
+    () => estimateTokens(fittedClinicalInput.clinicalContext),
+    [fittedClinicalInput.clinicalContext],
+  )
+  const showsAdaptedScope = Boolean(
+    fittedClinicalInput.dataReady &&
+    fittedClinicalInput.contextAdaptation,
+  )
+  const displayedTotal = showsAdaptedScope ? fittedTotal : total
   const budget = evaluateContextBudget(
-    total,
+    displayedTotal,
     effectiveModelId,
     DEFAULT_RESPONSE_RESERVE,
     contextLimit,
@@ -118,17 +108,18 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
     [sections],
   )
 
-  const modelLabel = modelDisplayLabel(effectiveModelId, openAiCompatible)
   const pct = Math.round(budget.fraction * 100)
 
   return (
     <div className="rounded-md border bg-muted/20 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[0.6875rem] font-medium text-muted-foreground">
-          {ds.tokenMeterLabel ?? "已選病歷內容"}
+          {showsAdaptedScope
+            ? locale === 'zh-TW' ? '本次實際送出內容' : 'Actual content for this run'
+            : ds.tokenMeterLabel ?? "已選病歷內容"}
         </span>
         <span className={`text-[0.6875rem] tabular-nums ${LEVEL_TEXT[budget.level]}`}>
-          ~{fmt(total)} / {fmt(budget.usable)} tok · {pct}%
+          ~{fmt(displayedTotal)} / {fmt(budget.usable)} tok · {pct}%
         </span>
       </div>
       <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
@@ -141,7 +132,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
         <span className="truncate text-[0.625rem] text-muted-foreground">
           {(ds.tokenMeterModel ?? "模型") + ": " + modelLabel}
         </span>
-        {topSections.length > 0 && (
+        {topSections.length > 0 && !showsAdaptedScope && (
           <span className="truncate text-[0.625rem] text-muted-foreground" title={topSections.map((s) => `${s.title}: ${s.tokens}`).join("\n")}>
             {ds.tokenMeterTop ?? "最大宗"}: {topSections.map((s) => `${s.title} ${fmt(s.tokens)}`).join(" · ")}
           </span>
@@ -150,6 +141,30 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
       <p className="mt-1 text-[0.625rem] leading-snug text-muted-foreground">
         {ds.tokenMeterRequestHint ?? "產生摘要時還會加入 AI 指令、輸出格式與來源索引；送出前會顯示完整輸入量。"}
       </p>
+      {showsAdaptedScope && fittedClinicalInput.contextAdaptation ? (
+        <div
+          role="note"
+          data-testid="model-fitted-scope"
+          className="mt-2 rounded-md border border-violet-300 bg-violet-50 px-2.5 py-2 text-[0.6875rem] leading-relaxed text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100"
+        >
+          <p className="font-medium">
+            {locale === 'zh-TW'
+              ? `原始選擇約 ${formatApproxTokenCount(total)} tokens → 本次實際送出約 ${formatApproxTokenCount(fittedTotal)} tokens`
+              : `Saved selection: about ${formatApproxTokenCount(total)} tokens → actual content for this run: about ${formatApproxTokenCount(fittedTotal)} tokens`}
+          </p>
+          <p>
+            {formatClinicalContextAdaptationNotice(
+              fittedClinicalInput.contextAdaptation,
+              locale,
+            )}
+          </p>
+          <p className="mt-0.5 opacity-80">
+            {locale === 'zh-TW'
+              ? '下方控制項與「預覽」已同步顯示本次實際範圍；切回較大模型會自動恢復原本儲存的設定。'
+              : 'The controls and Preview now show the effective scope for this run; switching back to a larger model restores your saved settings.'}
+          </p>
+        </div>
+      ) : null}
       {overflowIssue ? (
         <div
           role="status"
@@ -167,7 +182,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue }: C
                 .replace("{target}", formatApproxTokenCount(overflowIssue.suggestedSelectedMax))}
             </p>
           ) : null}
-          {overflowIssue.suggestedSelectedMax !== null && total <= overflowIssue.suggestedSelectedMax ? (
+          {overflowIssue.suggestedSelectedMax !== null && displayedTotal <= overflowIssue.suggestedSelectedMax ? (
             <p className="mt-0.5 font-medium text-emerald-700 dark:text-emerald-300">
               {ds.tokenMeterTargetReached ?? "目前已低於建議值；關閉後可重新產生，系統會再次檢查完整輸入。"}
             </p>

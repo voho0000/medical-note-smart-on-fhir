@@ -24,6 +24,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -62,10 +63,14 @@ import {
   modelDisplayLabel,
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
+import {
+  formatClinicalContextAdaptationNotice,
+  type ClinicalContextAdaptation,
+} from '@/src/core/utils/adaptive-clinical-context.utils'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
-  /** Exact text whose signature is part of this run's slot key. */
+  /** Exact model-fitted text sent by this run. */
   clinicalContext: string
   clinicalData: ClinicalAiDataInput | null
   catalog: SummarySourceCatalogEntry[]
@@ -80,6 +85,8 @@ export interface AiSlotRunContext {
   operationKey: string
   /** Full context window, including the dynamic custom-endpoint setting. */
   contextLimit: number
+  /** Transient model-aware reduction applied to this request, if any. */
+  contextAdaptation: ClinicalContextAdaptation | null
 }
 
 export interface AiSlotDemoContext {
@@ -191,14 +198,6 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     retainResultOnModelChange = false,
   } = config
 
-  const {
-    patientId,
-    dataReady,
-    clinicalContext,
-    inputSignature,
-    clinicalData: scopedClinicalData,
-    catalog,
-  } = useClinicalAiInput()
   const ai = useUnifiedAi()
   const stopAi = ai.stop
   const { locale } = useLanguage()
@@ -256,6 +255,15 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     () => modelContextLimit(resolvedModelId, openAiCompatible),
     [resolvedModelId, openAiCompatible],
   )
+  const {
+    patientId,
+    dataReady,
+    clinicalContext,
+    inputSignature,
+    clinicalData: scopedClinicalData,
+    catalog,
+    contextAdaptation,
+  } = useClinicalAiInput(resolvedContextLimit)
 
   // A cache/result slot is reusable only for the exact selected clinical
   // input. While data is loading or background-fetching inputSignature is
@@ -438,6 +446,14 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const generate = useCallback(async () => {
     if (!slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
+    if (contextAdaptation) {
+      toast.info(
+        formatClinicalContextAdaptationNotice(contextAdaptation, locale),
+        {
+          id: `clinical-context-fit:${inputSignature}:${contextAdaptation.contextLimit}:${contextAdaptation.tier}`,
+        },
+      )
+    }
     const cancellationEpoch = cancellationEpochsRef.current.get(slotKey) ?? 0
     const generatedResult = await runGenerationJob({
       store,
@@ -458,6 +474,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           modelName: resolvedModelName,
           operationKey: slotKey,
           contextLimit: resolvedContextLimit,
+          contextAdaptation,
         }),
     })
     if (
@@ -472,7 +489,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, clinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, inputSignature])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its

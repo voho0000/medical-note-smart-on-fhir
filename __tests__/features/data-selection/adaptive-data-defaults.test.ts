@@ -1,4 +1,5 @@
 import {
+  autoSelectAllTokenLimit,
   estimateFullRecordTokens,
   AUTO_SELECT_ALL_TOKENS,
 } from '@/features/data-selection/hooks/useAdaptiveDataDefaults'
@@ -11,6 +12,13 @@ const obs = (i: number) => ({
 })
 
 describe('estimateFullRecordTokens', () => {
+  it('lowers auto-select-all headroom for a configured 32k endpoint', () => {
+    expect(autoSelectAllTokenLimit([])).toBe(AUTO_SELECT_ALL_TOKENS)
+    expect(autoSelectAllTokenLimit([32_768])).toBeLessThan(20_000)
+    expect(autoSelectAllTokenLimit([131_072, 32_768]))
+      .toBe(autoSelectAllTokenLimit([32_768]))
+  })
+
   it('a tiny structured-only record estimates well under the auto-select threshold', () => {
     const data = { observations: [obs(1), obs(2), obs(3)], diagnosticReports: [], medications: [] } as any
     const tokens = estimateFullRecordTokens(data)

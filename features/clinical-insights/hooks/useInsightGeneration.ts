@@ -1,6 +1,7 @@
 // Custom Hook: Insight Generation State Management
 // Business logic delegated to Use Case
 import { useCallback, useRef } from 'react'
+import { toast } from 'sonner'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { getUserErrorMessage } from '@/src/core/errors'
 import { useGenerateInsight } from '@/src/application/hooks/clinical-insights/use-generate-insight.hook'
@@ -8,6 +9,10 @@ import { useInsightResponsesStore } from './useInsightResponsesStore'
 import type { ResponseEntry, PanelStatus } from '../types'
 import { preflightContextWarning } from '@/src/shared/utils/context-budget'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import {
+  formatClinicalContextAdaptationNotice,
+  type ClinicalContextAdaptation,
+} from '@/src/core/utils/adaptive-clinical-context.utils'
 
 interface Panel {
   id: string
@@ -21,6 +26,8 @@ interface UseInsightGenerationProps {
   context: string
   model: string
   contextLimit: number
+  contextAdaptation: ClinicalContextAdaptation | null
+  inputSignature: string
 }
 
 interface UseInsightGenerationReturn {
@@ -39,6 +46,8 @@ export function useInsightGeneration({
   context,
   model,
   contextLimit,
+  contextAdaptation,
+  inputSignature,
 }: UseInsightGenerationProps): UseInsightGenerationReturn {
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
@@ -80,6 +89,14 @@ export function useInsightGeneration({
         return [{ panel, messages: generateInsight.buildMessages(input) }]
       })
       if (prepared.length === 0) return
+      if (contextAdaptation) {
+        toast.info(
+          formatClinicalContextAdaptationNotice(contextAdaptation, locale),
+          {
+            id: `clinical-context-fit:insights:${inputSignature}:${contextAdaptation.tier}`,
+          },
+        )
+      }
 
       // The responses store + ai instance survive patient switches (module
       // store, forceMounted tab), but panel ids are stable across patients — a
@@ -144,7 +161,7 @@ export function useInsightGeneration({
       if (runIdRef.current !== runId || ownerChanged()) return
       completeBatch(activePanelIds, entries, errors)
     },
-    [ai, completeBatch, context, contextLimit, generateInsight, locale, model, panels, prompts, setPanelStatus],
+    [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, panels, prompts, setPanelStatus],
   )
 
   const runPanel = useCallback(

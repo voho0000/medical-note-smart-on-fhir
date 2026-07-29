@@ -2,7 +2,11 @@
 "use client"
 
 import { useCallback, useMemo } from "react"
-import { useDataSelection, type DataConsumer } from "@/src/application/providers/data-selection.provider"
+import {
+  useDataSelection,
+  type ConsumerProfile,
+  type DataConsumer,
+} from "@/src/application/providers/data-selection.provider"
 import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clinical-data-query.hook"
 import type { ClinicalContextSection } from "@/src/core/entities/clinical-context.entity"
 import { formatClinicalContext } from "./clinical-context/formatters"
@@ -33,13 +37,23 @@ export type UseClinicalContextReturn = {
 
 export { ClinicalContextSection }
 
-export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextReturn {
+export interface UseClinicalContextOptions {
+  /** Transient model-fit view. The saved Data Selection profile is untouched. */
+  profile?: ConsumerProfile
+  /** Shared maximum for selected document bodies in this generated context. */
+  documentTokenBudget?: number
+}
+
+export function useClinicalContext(
+  consumer?: DataConsumer,
+  options: UseClinicalContextOptions = {},
+): UseClinicalContextReturn {
   const ds = useDataSelection()
   // Each consumer (chat / insights / ips) reads its own profile. The main scope
   // editor targets summary/insights and mirrors chat only for stored-profile
   // compatibility; agent chat queries FHIR on demand instead of preloading it.
   const activeConsumer: DataConsumer = consumer ?? 'chat'
-  const profile = ds.getProfile(activeConsumer)
+  const profile = options.profile ?? ds.getProfile(activeConsumer)
   const selectedData = profile.selection
   const filters = profile.filters
   const { patient } = usePatient()
@@ -130,8 +144,8 @@ export function useClinicalContext(consumer?: DataConsumer): UseClinicalContextR
     return resolveSelectedDocuments(allDocuments, profile.documentMode, profile.documentIds)
   }, [selectedData.documents, clinicalData, allDocuments, profile.documentMode, profile.documentIds])
   const documentsSection = useMemo(
-    () => formatDocumentsSection(selectedDocuments ?? []),
-    [selectedDocuments],
+    () => formatDocumentsSection(selectedDocuments ?? [], options.documentTokenBudget),
+    [selectedDocuments, options.documentTokenBudget],
   )
   const includedDocumentIds = useMemo(
     () => (selectedDocuments ?? []).map((document) => document.id),
