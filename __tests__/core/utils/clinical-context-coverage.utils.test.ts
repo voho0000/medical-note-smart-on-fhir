@@ -63,7 +63,7 @@ describe('buildClinicalContextCoverageSection', () => {
         sourceMetadata: {
           source: 'health-bank-sdk-json',
           convertedAt: '2000-01-01T00:00:00Z',
-          converterVersion: '0.1.3',
+          converterVersion: '0.1.4',
           resourceCounts: {},
           warnings: [],
           labDuplicateMerge: {
@@ -91,7 +91,7 @@ describe('buildClinicalContextCoverageSection', () => {
     expect(context).toContain('full-text imaging/pathology reports may contain this personal information')
     expect(context).toContain('does not infer Patient demographics from report text')
     expect(context).toContain('Do not infer absent structured fields or treat report-text demographics as verified Patient fields')
-    expect(context).toContain('exact_lab_retransmissions_merged=2')
+    expect(context).toContain('evidence_qualified_lab_duplicates_merged=2')
     expect(context).toContain('same_day_distinct_value_groups_preserved=1')
     expect(context).toContain('inferred_lab_units=4')
   })

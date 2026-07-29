@@ -10,7 +10,7 @@ The source of truth remains NHI-FHIR-BRIDGE. Regenerate `browser.js` there with
 `npm run build:browser --workspace @nhi-fhir-bridge/sdk-json`, then update this
 artifact and its declaration together.
 
-Vendored package version: `0.1.3`.
+Vendored package version: `0.1.4`.
 
 The artifact intentionally excludes the SDK CLI and fixture helpers, which use
 Node.js file-system and crypto APIs.

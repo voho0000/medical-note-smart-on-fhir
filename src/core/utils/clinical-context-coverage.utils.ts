@@ -119,7 +119,7 @@ export function buildClinicalContextCoverageSection(
     : null
   const sdkAudit = sdkMetadata
     ? sdkPreservesDistinctSameDayLabResults(sdkMetadata.converterVersion)
-      ? `SDK conversion audit: converter_version=${sdkMetadata.converterVersion}; exact_lab_retransmissions_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; same_day_distinct_value_groups_preserved=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}.`
+      ? `SDK conversion audit: converter_version=${sdkMetadata.converterVersion}; evidence_qualified_lab_duplicates_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; same_day_distinct_value_groups_preserved=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}.`
       : `SDK conversion audit: converter_version=${sdkMetadata.converterVersion}; legacy_same_day_lab_rows_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; distinct_value_groups_potentially_dropped=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}. This legacy conversion predates fail-closed preservation of distinct same-day results; re-import the original SDK JSON with converter 0.1.3 or later before relying on laboratory completeness.`
     : ''
 

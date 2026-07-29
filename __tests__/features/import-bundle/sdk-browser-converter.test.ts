@@ -88,7 +88,7 @@ describe('vendored Health Bank SDK browser converter', () => {
       conflictingValueGroupCount: 1,
     })
     expect(result.sourceMetadata?.source).toBe('health-bank-sdk-json')
-    expect(result.sourceMetadata?.converterVersion).toBe('0.1.3')
+    expect(result.sourceMetadata?.converterVersion).toBe('0.1.4')
     const imagingReport = entries.find(({ resource }) =>
       resource.resourceType === 'DiagnosticReport'
       && resource.category?.some((category) =>
@@ -156,6 +156,103 @@ describe('vendored Health Bank SDK browser converter', () => {
       convertedCount: 1,
       mergedCount: 1,
       conflictingValueGroupCount: 0,
+    })
+  })
+
+  it('merges a qualified bilingual WBC pair and keeps the informative reference range', async () => {
+    const common = {
+      'r7.1': '4',
+      'r7.2': '南區業務組',
+      'r7.3': '1234567890',
+      'r7.4': '甲醫院',
+      'r7.5': '20260525',
+      'r7.6': '20260525',
+      'r7.8': '08011C',
+      'r7.9': '全套血液檢查',
+      'r7.11': '4.1',
+    }
+    const input = {
+      myhealthbank: {
+        bdata: {
+          'b1.1': 'F22345XXXX',
+          'b1.2': '1150723',
+          r7: [
+            {
+              ...common,
+              'r7.7': '202606241524',
+              'r7.10': '白血球計數',
+              'r7.12': '[無][無]',
+            },
+            {
+              ...common,
+              'r7.7': '202605260056',
+              'r7.10': 'WBC',
+              'r7.12': '[3.9][10.6]',
+            },
+          ],
+        },
+      },
+    }
+    const encoded = new TextEncoder().encode(JSON.stringify(input))
+    const result = await prepareLocalImportFile({
+      arrayBuffer: async () => encoded.buffer,
+    } as File)
+    const observations = (result.bundle.entry as Array<{
+      resource: {
+        resourceType?: string
+        code?: { text?: string }
+        referenceRange?: Array<{ text?: string }>
+      }
+    }>).filter(({ resource }) => resource.resourceType === 'Observation')
+
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.resource.code?.text).toBe('WBC')
+    expect(observations[0]?.resource.referenceRange?.[0]?.text).toBe('[3.9][10.6]')
+    expect(result.sourceMetadata?.labDuplicateMerge).toMatchObject({
+      sourceCount: 2,
+      convertedCount: 1,
+      mergedCount: 1,
+      conflictingValueGroupCount: 0,
+    })
+  })
+
+  it('does not merge bilingual aliases with different meaningful reference ranges', async () => {
+    const common = {
+      'r7.1': '4',
+      'r7.2': '南區業務組',
+      'r7.3': '1234567890',
+      'r7.4': '甲醫院',
+      'r7.5': '20260525',
+      'r7.6': '20260525',
+      'r7.8': '08011C',
+      'r7.9': '全套血液檢查',
+      'r7.11': '4.1',
+    }
+    const input = {
+      myhealthbank: {
+        bdata: {
+          'b1.1': 'F22345XXXX',
+          'b1.2': '1150723',
+          r7: [
+            { ...common, 'r7.10': '白血球計數', 'r7.12': '[4.0][11.0]' },
+            { ...common, 'r7.10': 'WBC', 'r7.12': '[3.9][10.6]' },
+          ],
+        },
+      },
+    }
+    const encoded = new TextEncoder().encode(JSON.stringify(input))
+    const result = await prepareLocalImportFile({
+      arrayBuffer: async () => encoded.buffer,
+    } as File)
+    const observations = (result.bundle.entry as Array<{
+      resource: { resourceType?: string }
+    }>).filter(({ resource }) => resource.resourceType === 'Observation')
+
+    expect(observations).toHaveLength(2)
+    expect(result.sourceMetadata?.labDuplicateMerge).toMatchObject({
+      sourceCount: 2,
+      convertedCount: 2,
+      mergedCount: 0,
     })
   })
 })

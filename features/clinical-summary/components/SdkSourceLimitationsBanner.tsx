@@ -38,8 +38,8 @@ export function SdkSourceLimitationsBanner() {
         <p>
           {preservesDistinctLabs
             ? isZh
-              ? `內容完全相同的檢驗重傳資料合併 ${merged} 筆${conflicts > 0 ? `；另有 ${conflicts} 組同日不同數值，已全部保留` : ''}。`
-              : `${merged} exact laboratory retransmission row(s) merged${conflicts > 0 ? `; all results were preserved in ${conflicts} same-day group(s) with distinct values` : ''}.`
+              ? `經來源情境、結果與檢驗身分確認為相同的重複表示，合併 ${merged} 筆${conflicts > 0 ? `；另有 ${conflicts} 組同日不同數值，已全部保留` : ''}。`
+              : `${merged} evidence-qualified duplicate laboratory representation row(s) merged${conflicts > 0 ? `; all results were preserved in ${conflicts} same-day group(s) with distinct values` : ''}.`
             : isZh
               ? `這份資料由舊版轉換器 ${sourceMetadata.converterVersion} 產生，曾合併 ${merged} 筆同日檢驗；其中 ${conflicts} 組不同數值可能只保留一筆。請重新匯入原始 SDK JSON，以 0.1.3 或更新版本完整保留。`
               : `This data was produced by legacy converter ${sourceMetadata.converterVersion}, which merged ${merged} same-day laboratory row(s); ${conflicts} distinct-value group(s) may have retained only one result. Re-import the original SDK JSON with version 0.1.3 or later.`}

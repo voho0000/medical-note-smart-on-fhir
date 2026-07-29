@@ -33,13 +33,13 @@ describe('SdkSourceLimitationsBanner', () => {
     jest.mocked(useLanguage).mockReturnValue({ locale: 'zh-TW' } as any)
   })
 
-  it('states that version 0.1.3 preserved distinct same-day results', () => {
-    mockSdkSource('0.1.3', 48, 46)
+  it('states that version 0.1.4 merged qualified duplicates and preserved distinct results', () => {
+    mockSdkSource('0.1.4', 394, 44)
 
     render(<SdkSourceLimitationsBanner />)
 
-    expect(screen.getByText(/內容完全相同的檢驗重傳資料合併 48 筆/))
-      .toHaveTextContent('另有 46 組同日不同數值，已全部保留')
+    expect(screen.getByText(/確認為相同的重複表示，合併 394 筆/))
+      .toHaveTextContent('另有 44 組同日不同數值，已全部保留')
     expect(screen.queryByText(/請重新匯入原始 SDK JSON/)).not.toBeInTheDocument()
   })
 
