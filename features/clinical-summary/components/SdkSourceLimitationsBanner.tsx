@@ -43,8 +43,8 @@ export function SdkSourceLimitationsBanner() {
         </p>
         <p>
           {isZh
-            ? '來源限制：SDK 不提供姓名、生日、性別、用藥劑量、檢驗原始單位／異常旗標與報告分類；門診與急診也無法區分。'
-            : 'Source limits: the SDK omits demographics, medication dosage, original lab units/abnormal flags, and report categories; it also cannot distinguish outpatient from emergency claims.'}
+            ? '來源限制：SDK 未提供可穩定映射的結構化姓名、出生日期、性別或年齡欄位；但影像／病理報告全文可能包含這些個人資料。轉換器不會由報告文字推測 Patient 人口學欄位。SDK 也未提供用藥劑量、檢驗原始單位／異常旗標與完整報告分類；門診與急診無法區分。'
+            : 'Source limits: the SDK provides no reliably mappable structured name, birth date, sex, or age fields, but full-text imaging/pathology reports may contain this personal information. The converter does not infer Patient demographics from report text. Medication dosage, original lab units/abnormal flags, complete report classification, and outpatient-versus-emergency status are also unavailable.'}
         </p>
       </div>
     </details>

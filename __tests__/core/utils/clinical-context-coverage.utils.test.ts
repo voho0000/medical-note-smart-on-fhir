@@ -85,8 +85,13 @@ describe('buildClinicalContextCoverageSection', () => {
       NOW,
     )
 
-    expect(section?.items.join('\n')).toContain('converted locally from Health Bank SDK JSON')
-    expect(section?.items.join('\n')).toContain('same_day_lab_rows_merged=2')
-    expect(section?.items.join('\n')).toContain('inferred_lab_units=4')
+    const context = section?.items.join('\n')
+    expect(context).toContain('converted locally from Health Bank SDK JSON')
+    expect(context).toContain('no reliably mappable structured patient name, birth date, sex, or age fields')
+    expect(context).toContain('full-text imaging/pathology reports may contain this personal information')
+    expect(context).toContain('does not infer Patient demographics from report text')
+    expect(context).toContain('Do not infer absent structured fields or treat report-text demographics as verified Patient fields')
+    expect(context).toContain('same_day_lab_rows_merged=2')
+    expect(context).toContain('inferred_lab_units=4')
   })
 })
