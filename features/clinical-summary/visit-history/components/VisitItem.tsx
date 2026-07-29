@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { VisitDetailContent, visitHasDetails } from "./VisitDetailContent"
 import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
@@ -244,22 +245,35 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                 {hasIcdCodes ? (
                   <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden align-middle">
                     {/* Default: primary only. Click "+N" to reveal secondaries inline. */}
-                    {(icdExpanded ? reasonCodes : reasonCodes.slice(0, 1)).map((rc, i) => (
-                      <span
-                        key={`${rc.code}-${i}`}
-                        title={(t.visitHistory as any).icdCodesTooltip}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="inline-flex h-5 min-w-0 max-w-[16rem] items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0 text-xs text-amber-800 select-text cursor-text"
-                      >
-                        <span className="font-mono font-medium">{rc.code}</span>
-                        {rc.description && (
-                          <span className="min-w-0 truncate text-amber-700/80">
-                            {rc.description}
-                          </span>
-                        )}
-                      </span>
-                    ))}
+                    {(icdExpanded ? reasonCodes : reasonCodes.slice(0, 1)).map((rc, i) => {
+                      const fullIcdLabel = [rc.code, rc.description].filter(Boolean).join(' ')
+                      return (
+                        <Tooltip key={`${rc.code}-${i}`}>
+                          <TooltipTrigger asChild>
+                            <span
+                              aria-label={fullIcdLabel}
+                              tabIndex={0}
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="inline-flex h-5 min-w-0 max-w-[16rem] items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0 text-xs text-amber-800 select-text cursor-text"
+                            >
+                              <span className="font-mono font-medium">{rc.code}</span>
+                              {rc.description && (
+                                <span className="min-w-0 truncate text-amber-700/80">
+                                  {rc.description}
+                                </span>
+                              )}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            className="max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed"
+                          >
+                            {fullIcdLabel}
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    })}
                     {hasSecondaryIcds && (
                       <button
                         type="button"
