@@ -26,6 +26,7 @@ import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/
 // header's overflow menu can navigate to right-panel tabs (e.g. open
 // Settings → 顯示). Only useRightPanel is imported here now.
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
+import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -55,6 +56,10 @@ const MedicalCalculatorFeature = dynamic(() => import("@/features/medical-calcul
   ssr: false,
   loading: FeatureLoading,
 })
+const PersonalizedGuidanceFeature = dynamic(() => import("@/features/clinical-decision-support/LiveFeature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
 const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
   ssr: false,
   loading: FeatureLoading,
@@ -79,6 +84,7 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'medical-chat': MedicalChatFeature,
   'ips-export': IpsExportFeature,
   'medical-calculator': MedicalCalculatorFeature,
+  [CLINICAL_DECISION_SUPPORT_FEATURE_ID]: PersonalizedGuidanceFeature,
   'settings': SettingsFeature,
 }
 

@@ -61,6 +61,7 @@ export const en = {
     medicalSummary: 'Summary',
     ipsExport: 'Export',
     medicalCalculator: 'Calculator',
+    personalizedGuidance: 'Care guidance',
     settings: 'Settings',
     // Right-panel overflow menu (tabs collapsed out of the tab bar)
     more: 'More',

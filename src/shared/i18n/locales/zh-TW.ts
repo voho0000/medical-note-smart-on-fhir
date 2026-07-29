@@ -63,6 +63,7 @@ export const zhTW = {
     medicalSummary: '醫療摘要',
     ipsExport: '匯出',
     medicalCalculator: '計算機',
+    personalizedGuidance: '個人化指引',
     settings: '設定',
     // Right-panel overflow menu (tabs collapsed out of the tab bar)
     more: '更多',

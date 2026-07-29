@@ -1,5 +1,6 @@
 // Right Panel Feature Registry - Central configuration for right panel features
 // This allows contributors to easily add/remove/replace features in the right panel
+import { CLINICAL_DECISION_SUPPORT_MODULE } from '@/features/clinical-decision-support/module'
 
 export interface RightPanelFeatureConfig {
   id: string
@@ -75,11 +76,12 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     forceMount: true,
     contentClassName: 'flex-1 overflow-hidden mt-1',
   },
+  CLINICAL_DECISION_SUPPORT_MODULE.rightPanel,
   {
     id: 'ips-export',
     name: 'IPS Export',
     tabLabel: 'ipsExport',
-    order: 5,
+    order: 6,
     enabled: true,
     // AI-inferred suggestions + per-item confirmations are expensive (LLM call)
     // and clinically reviewed state — they must survive tab switches.
@@ -101,7 +103,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     id: 'settings',
     name: 'Settings',
     tabLabel: 'settings',
-    order: 6,
+    order: 7,
     enabled: true,
     pinLocked: true,
     iconOnly: true,

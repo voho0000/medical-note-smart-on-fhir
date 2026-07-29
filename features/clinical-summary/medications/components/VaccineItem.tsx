@@ -5,9 +5,11 @@
 // boosters), the secondary doses are revealed via an expandable accordion.
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
+import { useResourceNavigationStore } from '@/src/application/stores/resource-navigation.store'
 import type { VaccineRow } from '../hooks/useVaccineRows'
 import { medicationCategoryChipClass } from './medication-chip-styles'
 
@@ -19,15 +21,58 @@ function Sep() {
   return <span className="text-muted-foreground/40 select-none" aria-hidden>·</span>
 }
 
+function HistoricalDose({
+  dose,
+  sequence,
+  billingIcdTooltip,
+}: {
+  dose: VaccineRow['doses'][number]
+  sequence: number
+  billingIcdTooltip?: string
+}) {
+  const anchorRef = useResourceAnchor<HTMLLIElement>('Immunization', dose.id)
+  return (
+    <li ref={anchorRef} className="flex flex-wrap items-center gap-x-1.5">
+      <span className="mr-0.5 font-medium text-foreground/70">#{sequence}</span>
+      {dose.dateLabel && <span>{dose.dateLabel}</span>}
+      {dose.provider && (<><Sep /><span>{dose.provider}</span></>)}
+      {dose.icdCode && (
+        <>
+          <Sep />
+          <span title={billingIcdTooltip} className="cursor-help">
+            <span className="font-mono">{dose.icdCode}</span>
+            {dose.icdText && <span className="ml-1">{dose.icdText}</span>}
+          </span>
+        </>
+      )}
+    </li>
+  )
+}
+
 export function VaccineItem({ vaccine }: VaccineItemProps) {
   const { t } = useLanguage()
   const mt = (t.medications as any)
   const [expanded, setExpanded] = useState(false)
   const doseCount = vaccine.doses.length
   const latest = vaccine.doses[0]
+  const latestAnchorRef = useResourceAnchor<HTMLDivElement>('Immunization', latest?.id)
+  const pendingNav = useResourceNavigationStore((state) => state.pending)
+  const navSeq = useResourceNavigationStore((state) => state.seq)
+
+  useEffect(() => {
+    if (
+      pendingNav?.resourceType === 'Immunization'
+      && vaccine.doses.some((dose) => dose.id === pendingNav.resourceId)
+      && latest?.id !== pendingNav.resourceId
+    ) {
+      const timer = window.setTimeout(() => setExpanded(true), 0)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [latest?.id, navSeq, pendingNav, vaccine.doses])
 
   return (
-    <div className="rounded-md border px-2.5 py-1 leading-tight">
+    <div ref={latestAnchorRef} className="rounded-md border px-2.5 py-1 leading-tight">
       {/* ── Line 1: vaccine name + category + dose count ──────────────── */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -86,21 +131,13 @@ export function VaccineItem({ vaccine }: VaccineItemProps) {
       {/* ── Expanded dose history ────────────────────────────────────── */}
       {expanded && doseCount > 1 && (
         <ul className="mt-1 ml-3 border-l border-muted-foreground/20 pl-2 space-y-0.5 text-[0.625rem] text-muted-foreground">
-          {vaccine.doses.map((d, i) => (
-            <li key={d.id} className="flex flex-wrap items-center gap-x-1.5">
-              <span className="font-medium text-foreground/70 mr-0.5">#{doseCount - i}</span>
-              {d.dateLabel && <span>{d.dateLabel}</span>}
-              {d.provider && (<><Sep /><span>{d.provider}</span></>)}
-              {d.icdCode && (
-                <>
-                  <Sep />
-                  <span title={mt.billingIcdTooltip} className="cursor-help">
-                    <span className="font-mono">{d.icdCode}</span>
-                    {d.icdText && <span className="ml-1">{d.icdText}</span>}
-                  </span>
-                </>
-              )}
-            </li>
+          {vaccine.doses.map((dose, index) => (
+            <HistoricalDose
+              key={dose.id}
+              dose={dose}
+              sequence={doseCount - index}
+              billingIcdTooltip={mt.billingIcdTooltip}
+            />
           ))}
         </ul>
       )}

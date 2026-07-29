@@ -35,9 +35,12 @@ export function leftTabForResourceType(resourceType: string): string | null {
       return 'reports'
     case 'MedicationRequest':
     case 'MedicationStatement':
+    case 'Immunization':
       return 'meds'
     case 'Condition':
       return 'patient'
+    case 'AllergyIntolerance':
+      return 'meds'
     // Care plans render in the 病人資訊 tab (CarePlansCard).
     case 'CarePlan':
       return 'patient'

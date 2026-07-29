@@ -246,6 +246,8 @@ export interface ObservationEntity {
   valueQuantity?: {
     value?: number
     unit?: string
+    system?: string
+    code?: string
   }
   valueString?: string
   valueCodeableConcept?: {
@@ -286,6 +288,8 @@ export interface ObservationEntity {
     valueQuantity?: {
       value?: number
       unit?: string
+      system?: string
+      code?: string
     }
     valueString?: string
     interpretation?: {

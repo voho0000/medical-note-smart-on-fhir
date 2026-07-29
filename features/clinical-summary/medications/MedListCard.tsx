@@ -63,9 +63,20 @@ export function MedListCard() {
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
   useEffect(() => {
-    if (!pendingNav || !['MedicationRequest', 'MedicationStatement'].includes(pendingNav.resourceType)) return
+    if (!pendingNav || ![
+      'MedicationRequest',
+      'MedicationStatement',
+      'AllergyIntolerance',
+      'Immunization',
+    ].includes(pendingNav.resourceType)) return
     const timer = window.setTimeout(() => {
-      setTab('medications')
+      setTab(
+        pendingNav.resourceType === 'AllergyIntolerance'
+          ? 'allergies'
+          : pendingNav.resourceType === 'Immunization'
+            ? 'vaccines'
+            : 'medications',
+      )
       setView('list')
       setSearchQuery('')
     }, 0)

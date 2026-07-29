@@ -9,26 +9,30 @@ describe('right-panel registry', () => {
       'medical-summary',
       'medical-chat',
       'medical-calculator',
+      'clinical-decision-support',
       'ips-export',
       'settings',
     ])
     expect(featureIds).not.toContain('data-selection')
   })
 
-  it('has no overflow by default, but restores it for overrides and plug-ins', () => {
+  it('keeps CDSS in the default tab bar and applies overrides and plug-ins', () => {
     const features = getEnabledRightPanelFeatures()
     const defaults = groupRightPanelFeatures(features, {})
 
-    expect(defaults.overflowFeatures).toHaveLength(0)
+    expect(defaults.overflowFeatures.map((feature) => feature.id)).toEqual([])
     expect(defaults.pinnedFeatures.map((feature) => feature.id)).toEqual([
       'medical-summary',
       'medical-chat',
       'medical-calculator',
+      'clinical-decision-support',
       'ips-export',
     ])
 
     const customized = groupRightPanelFeatures(features, { 'medical-calculator': false })
-    expect(customized.overflowFeatures.map((feature) => feature.id)).toEqual(['medical-calculator'])
+    expect(customized.overflowFeatures.map((feature) => feature.id)).toEqual([
+      'medical-calculator',
+    ])
 
     const pluggedIn = groupRightPanelFeatures([
       ...features,
@@ -41,7 +45,9 @@ describe('right-panel registry', () => {
         pinned: false,
       },
     ], {})
-    expect(pluggedIn.overflowFeatures.map((feature) => feature.id)).toEqual(['future-feature'])
+    expect(pluggedIn.overflowFeatures.map((feature) => feature.id)).toEqual([
+      'future-feature',
+    ])
   })
 
   it('lets medical summary scroll with the panel so only its card chips stay sticky', () => {

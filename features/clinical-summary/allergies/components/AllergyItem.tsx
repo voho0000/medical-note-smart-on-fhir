@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import type { AllergyEntity } from '@/src/core/entities/clinical-data.entity'
 import { getCodeableConceptText, formatDate } from '@/src/shared/utils/fhir-helpers'
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useResourceAnchor } from '@/src/application/hooks/use-resource-anchor.hook'
 
 interface AllergyItemProps {
   allergy: AllergyEntity
@@ -10,6 +11,7 @@ interface AllergyItemProps {
 
 export function AllergyItem({ allergy }: AllergyItemProps) {
   const { t } = useLanguage()
+  const anchorRef = useResourceAnchor<HTMLLIElement>('AllergyIntolerance', allergy.id)
   const substance = getCodeableConceptText(allergy.code)
   const clinicalStatus = allergy.clinicalStatus
   const verificationStatus = allergy.verificationStatus
@@ -26,7 +28,7 @@ export function AllergyItem({ allergy }: AllergyItemProps) {
   const getCriticalityLabel = (crit: string) => t.allergies.criticality[crit as keyof typeof t.allergies.criticality] || crit
 
   return (
-    <li className="rounded-md border p-3">
+    <li ref={anchorRef} className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
