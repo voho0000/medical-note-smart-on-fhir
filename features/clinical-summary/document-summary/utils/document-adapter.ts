@@ -18,6 +18,7 @@ import {
   isIpsComposition,
   isPreventiveMedicineComposition,
 } from './loinc-document-types'
+import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
 
 const DISCHARGE_SUMMARY_LOINC = '18842-5'
 
@@ -104,25 +105,6 @@ function pickRenderableAttachment(
 }
 
 /**
- * "出院病摘 — 長庚嘉義 2025-05-18~2025-05-22" → "長庚嘉義" (institution segment).
- * Returns undefined if the title doesn't follow the bridge's `<type> — <inst> <period>` shape.
- *
- * The bridge title is the only place 健保存摺 ships the institution name today
- * (custodian/author references aren't set), so this string heuristic is the
- * cleanest path until the bridge adds dedicated fields.
- */
-function extractInstitutionFromTitle(title?: string): string | undefined {
-  if (!title) return undefined
-  // Bridge separator: " — " (em-dash) or " - " (hyphen with spaces).
-  const sepMatch = title.match(/\s[—-]\s(.+)$/)
-  if (!sepMatch) return undefined
-  const afterDash = sepMatch[1].trim()
-  // Strip trailing " YYYY-MM-DD~YYYY-MM-DD" or " YYYY-MM-DD" date suffix.
-  const inst = afterDash.replace(/\s+\d{4}-\d{2}-\d{2}(?:~\d{4}-\d{2}-\d{2})?\s*$/, '').trim()
-  return inst || undefined
-}
-
-/**
  * Adapt a FHIR Composition to a DocumentEntry. Returns null when the
  * Composition has no renderable narrative content (every section.text.div is
  * empty/whitespace), since the structured data is already shown in other
@@ -188,11 +170,13 @@ export function documentReferenceToEntry(
     att.title?.trim() ||
     '—'
 
-  const institution = extractInstitutionFromTitle(att.title)
   const period = docRef.context?.period
   const encounterRef = docRef.context?.encounter?.[0]?.reference
   const encounterId = encounterRef ? encounterRef.replace(/^Encounter\//, '') : undefined
   const encounter = encounterId ? encounterMap?.get(encounterId) : undefined
+  const institution =
+    encounter?.serviceProvider?.display?.trim() ||
+    extractInstitutionFromDocumentTitle(att.title)
   const primaryDiagnosis = extractPrimaryDiagnosis(encounter, locale)
 
   return {

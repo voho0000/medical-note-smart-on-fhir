@@ -64,6 +64,7 @@ import {
 } from '@/src/shared/utils/investigation-trend.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
 import { getOrderNameDisplay } from '@/src/shared/utils/nhi-order-names'
+import { extractInstitutionFromDocumentTitle } from '@/src/shared/utils/document-institution'
 
 // Same pinned fast model as the safety scan: clean JSON, big context window
 // for multi-year cross-hospital bundles, and it never rides the user's
@@ -302,6 +303,15 @@ export function buildSourceCatalog(
   locale: SummaryLocale = 'zh-TW',
 ): SummarySourceCatalogEntry[] {
   const entries: SummarySourceCatalogEntry[] = []
+  const encounterOrganizationById = new Map(
+    (input.encounters ?? [])
+      .filter((encounter) => encounter.id)
+      .map((encounter) => [encounter.id, encounter.serviceProvider?.display?.trim() || undefined]),
+  )
+  const linkedEncounterOrganization = (reference?: string): string | undefined => {
+    const id = referenceId(reference)
+    return id ? encounterOrganizationById.get(id) : undefined
+  }
 
   sortByDateDesc(input.encounters ?? [], (e) => e.period?.start)
     .forEach((e, i) => {
@@ -477,7 +487,9 @@ export function buildSourceCatalog(
       resourceId: document.id,
       display: document.title?.trim() || codeText(document.type, locale) || 'Clinical document',
       date: day(document.date),
-      organization: document.author?.[0]?.display?.trim() || undefined,
+      organization:
+        document.author?.[0]?.display?.trim() ||
+        linkedEncounterOrganization(document.encounter?.reference),
       getContentText: () => listClinicalDocuments({ compositions: [document] })[0]?.text ?? '',
     })),
     ...(input.documentReferences ?? []).map((document) => ({
@@ -491,7 +503,10 @@ export function buildSourceCatalog(
       // Admission date is the meaningful date for NHI discharge summaries;
       // DocumentReference.date is often only the batch registration timestamp.
       date: day(document.context?.period?.start ?? document.date),
-      organization: document.author?.[0]?.display?.trim() || undefined,
+      organization:
+        document.author?.[0]?.display?.trim() ||
+        linkedEncounterOrganization(document.context?.encounter?.[0]?.reference) ||
+        extractInstitutionFromDocumentTitle(document.content?.[0]?.attachment?.title),
       getContentText: () => listClinicalDocuments({ documentReferences: [document] })[0]?.text ?? '',
     })),
   ]

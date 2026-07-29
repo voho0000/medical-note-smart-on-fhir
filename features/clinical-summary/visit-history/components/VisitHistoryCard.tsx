@@ -18,6 +18,11 @@ import { useDocumentSummaries } from "@/features/clinical-summary/document-summa
 import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import { VisitItem } from "./VisitItem"
+import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
+import {
+  navigationEncounterId,
+  visibleCountForNavigation,
+} from "../utils/source-navigation"
 
 type VisitTypeFilter = 'all' | 'outpatient' | 'inpatient' | 'emergency' | 'pharmacy'
 type SortMode = 'date-desc' | 'date-asc' | 'abnormal'
@@ -55,6 +60,8 @@ export function VisitHistoryCard() {
   // let the user page in more. (Filters/search usually narrow it below the cap.)
   const VISIT_PAGE_SIZE = 25
   const [visibleCount, setVisibleCount] = useState(VISIT_PAGE_SIZE)
+  const pendingNavigation = useResourceNavigationStore((state) => state.pending)
+  const navigationSequence = useResourceNavigationStore((state) => state.seq)
 
   // ── Data derivation ────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
@@ -191,13 +198,56 @@ export function VisitHistoryCard() {
     })()
 
     return [...result].sort(cmp)
-  }, [visitHistory, typeFilter, institutionFilter, contentFlags, searchQuery, sortMode, visitStats, docsByEncounter])
+  }, [
+    visitHistory,
+    typeFilter,
+    institutionFilter,
+    contentFlags,
+    searchQuery,
+    sortMode,
+    visitStats,
+    docsByEncounter,
+    encounterDetails,
+  ])
 
-  // Reset the render window whenever the filtered set changes shape, so a new
-  // filter/search always starts from the top of a fresh page.
+  // Procedure resources render inside their parent visit rather than as
+  // top-level cards. Reveal that visit first; once expanded, ProcedureRow's
+  // resource anchor consumes the pending request and pinpoints the exact row.
+  // The same reveal step also makes older Encounter citations navigable when
+  // progressive rendering has not mounted their row yet.
   useEffect(() => {
-    setVisibleCount(VISIT_PAGE_SIZE)
-  }, [typeFilter, institutionFilter, contentFlags, searchQuery, sortMode])
+    const encounterId = navigationEncounterId(pendingNavigation, procedures)
+    if (!encounterId) return
+
+    const navigationVisibleCount = visibleCountForNavigation(
+      visitHistory,
+      encounterId,
+      VISIT_PAGE_SIZE,
+    )
+    if (!navigationVisibleCount) return
+
+    // Schedule after the current commit: the navigation request itself is an
+    // external store update, and the destination reveal is its UI response.
+    const revealTimer = window.setTimeout(() => {
+      setTypeFilter('all')
+      setInstitutionFilter('all')
+      setContentFlags(new Set())
+      setSearchQuery('')
+      setSortMode('date-desc')
+      setVisibleCount(navigationVisibleCount)
+
+      if (pendingNavigation?.resourceType === 'Procedure') {
+        setExpandedVisitIds((previous) => {
+          if (previous.has(encounterId)) return previous
+          const next = new Set(previous)
+          next.add(encounterId)
+          return next
+        })
+      }
+    }, 0)
+
+    return () => window.clearTimeout(revealTimer)
+  }, [pendingNavigation, navigationSequence, procedures, visitHistory])
 
   const visibleVisits = filteredVisits.slice(0, visibleCount)
   const remainingVisits = filteredVisits.length - visibleVisits.length
@@ -206,6 +256,7 @@ export function VisitHistoryCard() {
   const handleFilterChange = (f: VisitTypeFilter) => {
     setTypeFilter(f)
     setExpandedVisitIds(new Set())
+    setVisibleCount(VISIT_PAGE_SIZE)
   }
   const toggleContent = (f: ContentFlag) => {
     setContentFlags((prev) => {
@@ -214,6 +265,7 @@ export function VisitHistoryCard() {
       return next
     })
     setExpandedVisitIds(new Set())
+    setVisibleCount(VISIT_PAGE_SIZE)
   }
   const clearAllFilters = () => {
     setTypeFilter('all')
@@ -221,6 +273,7 @@ export function VisitHistoryCard() {
     setContentFlags(new Set())
     setSearchQuery('')
     setSortMode('date-desc')
+    setVisibleCount(VISIT_PAGE_SIZE)
   }
   const hasActiveFilters =
     typeFilter !== 'all' ||
@@ -263,14 +316,20 @@ export function VisitHistoryCard() {
                   data-1p-ignore="true"
                   data-lpignore="true"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setVisibleCount(VISIT_PAGE_SIZE)
+                  }}
                   placeholder={vt.searchPlaceholder}
                   className="w-full rounded-md border bg-background pl-7 pr-7 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 {searchQuery && (
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => {
+                      setSearchQuery('')
+                      setVisibleCount(VISIT_PAGE_SIZE)
+                    }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     aria-label="Clear search"
                   >
@@ -280,7 +339,10 @@ export function VisitHistoryCard() {
               </div>
               <select
                 value={sortMode}
-                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                onChange={(e) => {
+                  setSortMode(e.target.value as SortMode)
+                  setVisibleCount(VISIT_PAGE_SIZE)
+                }}
                 className="rounded-md border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
                 aria-label={vt.sortLabel}
               >
@@ -313,7 +375,11 @@ export function VisitHistoryCard() {
               {institutions.length > 0 && (
                 <select
                   value={institutionFilter}
-                  onChange={(e) => { setInstitutionFilter(e.target.value); setExpandedVisitIds(new Set()) }}
+                  onChange={(e) => {
+                    setInstitutionFilter(e.target.value)
+                    setExpandedVisitIds(new Set())
+                    setVisibleCount(VISIT_PAGE_SIZE)
+                  }}
                   className="rounded-md border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
                   aria-label={vt.institutionAll}
                 >

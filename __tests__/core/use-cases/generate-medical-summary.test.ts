@@ -248,6 +248,49 @@ describe('buildSourceCatalog — clinical documents', () => {
       ['D1', 'doc-selected'],
     ])
   })
+
+  it('uses the linked Encounter institution when a discharge summary has no author', () => {
+    const catalog = buildSourceCatalog({
+      encounters: [{
+        id: 'enc-discharge',
+        serviceProvider: { display: '長庚嘉義' },
+      }],
+      documentReferences: [{
+        id: 'discharge-without-author',
+        type: { text: '出院病摘' },
+        context: {
+          encounter: [{ reference: 'Encounter/enc-discharge' }],
+          period: { start: '2025-05-18' },
+        },
+        content: [{
+          attachment: {
+            title: '出院病摘 — 長庚嘉義 2025-05-18~2025-05-22',
+          },
+        }],
+      }],
+    } as never)
+
+    expect(catalog.find((source) => source.resourceId === 'discharge-without-author')).toMatchObject({
+      resourceType: 'DocumentReference',
+      organization: '長庚嘉義',
+    })
+  })
+
+  it('falls back to the bridge document title when no structured institution exists', () => {
+    const catalog = buildSourceCatalog({
+      documentReferences: [{
+        id: 'title-only-document',
+        content: [{
+          attachment: {
+            title: '出院病摘 — 長庚嘉義 2025-05-18~2025-05-22',
+          },
+        }],
+      }],
+    } as never)
+
+    expect(catalog.find((source) => source.resourceId === 'title-only-document')?.organization)
+      .toBe('長庚嘉義')
+  })
 })
 
 describe('buildLongitudinalInvestigationContext', () => {

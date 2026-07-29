@@ -3,6 +3,7 @@
 import { cn } from "@/src/shared/utils/cn.utils"
 import { formatDateTime } from "../utils/formatters"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import type { EncounterDiagnosis } from "../hooks/useEncounterDetails"
 
 export type EncounterMedication = {
@@ -102,9 +103,10 @@ export function DiagnosisTag({ diagnosis }: { diagnosis: EncounterDiagnosis }) {
 
 export function ProcedureRow({ procedure }: { procedure: EncounterProcedure }) {
   const { t, locale } = useLanguage()
+  const anchorRef = useResourceAnchor('Procedure', procedure.id)
   
   return (
-    <div className="rounded-lg border bg-background p-3 shadow-sm">
+    <div ref={anchorRef} className="rounded-lg border bg-background p-3 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-col gap-1">
           <span className="text-sm font-semibold text-foreground">{procedure.title}</span>
