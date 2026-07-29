@@ -155,23 +155,6 @@ export interface MedicationEntity {
     }>
   }>
   /**
-   * App-side terminology resolved from an exact NHI drug code plus authoredOn
-   * date. These fields are derived from the pinned official drug-master
-   * snapshot, never copied from or written over the source MedicationRequest.
-   */
-  drugTerminology?: {
-    source: 'nhi-official-drug-master'
-    snapshotId: string
-    officialNameZh?: string
-    officialNameEn?: string
-    ingredientText?: string
-    doseForm?: string
-    atcCode?: string
-    atcNameZh?: string
-    atcNameEn?: string
-    officialProductUrl?: string
-  }
-  /**
    * Originating FHIR resource type. 'MedicationRequest' = 醫師處方/健保開立紀錄
    * (bridge default); 'MedicationStatement' = 病人目前服用中的藥物清單 (IPS
    * default). Drives the source hint shown in MedListCard; not part of the

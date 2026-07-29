@@ -216,7 +216,6 @@ export interface MedicationRequest {
   requester?: Reference
   reasonCode?: CodeableConcept[]
   courseOfTherapyType?: CodeableConcept
-  supportingInformation?: Reference[]
   // Marker stamped by LocalBundleService.parse (MedicationRequest vs
   // MedicationStatement); bridge data omits it
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'

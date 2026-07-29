@@ -78,7 +78,6 @@ export function useMedicationRows(
 
     const enriched = medications.map((med: any, idx: number) => {
       const dosage = med.dosageInstruction?.[0] || med.dosage?.[0]
-      const drugTerminology = med.drugTerminology
 
       // Audience-aware drug-name resolution. Bridge v0.6.10+ puts the
       // localized (zh-TW) name in `.text` and the English name in
@@ -99,12 +98,6 @@ export function useMedicationRows(
       } else {
         medicationName = ''
       }
-      const officialName = audience === 'medical'
-        ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
-        : locale === 'en'
-          ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
-          : drugTerminology?.officialNameZh || drugTerminology?.officialNameEn
-      if (officialName) medicationName = officialName
       if (!medicationName) medicationName = 'Unknown Medication'
 
       const status = med.status?.toLowerCase() || "unknown"
@@ -200,13 +193,6 @@ export function useMedicationRows(
         med.medicationReference?.display,            // fallback name
         med?.category?.[0]?.text,                    // 分類 中文
         med?.category?.[0]?.coding?.[0]?.display,    // 分類 英文
-        drugTerminology?.officialNameZh,             // 官方藥名 中文
-        drugTerminology?.officialNameEn,             // 官方藥名 英文
-        drugTerminology?.ingredientText,              // 成分
-        drugTerminology?.doseForm,                    // 劑型
-        drugTerminology?.atcCode,                     // ATC 碼
-        drugTerminology?.atcNameZh,                   // ATC 分類 中文
-        drugTerminology?.atcNameEn,                   // ATC 分類 英文
         med?.reasonCode?.[0]?.text,                  // 適應症 中文
         med?.reasonCode?.[0]?.coding?.[0]?.display,  // 適應症 英文
         icdCode,                                     // 診斷 ICD 碼
@@ -234,7 +220,6 @@ export function useMedicationRows(
         isInactive,
         isChronic,
         category,
-        drugTerminology,
         pharmacy,
         icdCode,
         icdText,

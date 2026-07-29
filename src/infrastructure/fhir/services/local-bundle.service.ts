@@ -31,7 +31,6 @@ import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
   ClinicalDataCollection,
   ClinicalSourceMetadata,
-  MedicationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import {
   getSessionBundleKey,
@@ -443,95 +442,6 @@ function toDateStr(dateStr?: string): string | null {
   return dateStr.slice(0, 10)
 }
 
-const NHI_DRUG_CODE_SYSTEM =
-  'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
-const NHI_DRUG_SNAPSHOT_TAG_SYSTEM =
-  'https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot'
-const NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM =
-  'https://nhi-fhir-bridge.github.io/IdentifierSystem/nhi-drug-official-url'
-
-function terminologyFromMedicationKnowledge(
-  request: any,
-  knowledgeById: Map<string, any>,
-): MedicationEntity['drugTerminology'] | undefined {
-  const references = Array.isArray(request.supportingInformation)
-    ? request.supportingInformation
-    : []
-  for (const candidate of references) {
-    const ref = typeof candidate?.reference === 'string'
-      ? candidate.reference
-      : ''
-    if (!ref) continue
-    const id = referenceId(ref)
-    const knowledge = id ? knowledgeById.get(id) : undefined
-    if (!knowledge) continue
-
-    const snapshotTag = Array.isArray(knowledge.meta?.tag)
-      ? knowledge.meta.tag.find(
-        (tag: any) =>
-          tag?.system === NHI_DRUG_SNAPSHOT_TAG_SYSTEM
-          && typeof tag?.code === 'string',
-      )
-      : undefined
-    const drugCoding = Array.isArray(knowledge.code?.coding)
-      ? knowledge.code.coding.find(
-        (coding: any) => coding?.system === NHI_DRUG_CODE_SYSTEM,
-      )
-      : undefined
-    const snapshotId = snapshotTag?.code ?? drugCoding?.version
-    if (typeof snapshotId !== 'string' || !snapshotId) continue
-
-    const classification = knowledge.medicineClassification?.[0]
-      ?.classification?.[0]
-    const atcCoding = classification?.coding?.[0]
-    const officialProductIdentifier = Array.isArray(knowledge.identifier)
-      ? knowledge.identifier.find(
-        (identifier: any) =>
-          identifier?.system === NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM,
-      )
-      : undefined
-
-    const officialNameZh = typeof knowledge.code?.text === 'string'
-      ? knowledge.code.text
-      : undefined
-    const officialNameEn = typeof drugCoding?.display === 'string'
-      ? drugCoding.display
-      : undefined
-    const atcNameEn = typeof atcCoding?.display === 'string'
-      ? atcCoding.display
-      : undefined
-    const classificationText = typeof classification?.text === 'string'
-      ? classification.text
-      : undefined
-
-    return {
-      source: 'nhi-official-drug-master',
-      snapshotId,
-      ...(officialNameZh ? { officialNameZh } : {}),
-      ...(officialNameEn && officialNameEn !== officialNameZh
-        ? { officialNameEn }
-        : {}),
-      ...(typeof knowledge.ingredient?.[0]?.itemCodeableConcept?.text === 'string'
-        ? { ingredientText: knowledge.ingredient[0].itemCodeableConcept.text }
-        : {}),
-      ...(typeof knowledge.doseForm?.text === 'string'
-        ? { doseForm: knowledge.doseForm.text }
-        : {}),
-      ...(typeof atcCoding?.code === 'string'
-        ? { atcCode: atcCoding.code }
-        : {}),
-      ...(atcNameEn ? { atcNameEn } : {}),
-      ...(classificationText && classificationText !== atcNameEn
-        ? { atcNameZh: classificationText }
-        : {}),
-      ...(typeof officialProductIdentifier?.value === 'string'
-        ? { officialProductUrl: officialProductIdentifier.value }
-        : {}),
-    }
-  }
-  return undefined
-}
-
 // Attach encounter references for non-medication resources by same-day match.
 // Used by Observation / Procedure / Condition / DiagnosticReport / ImagingStudy — these
 // don't carry a "requester / provider" field, so date alone is the best we
@@ -886,9 +796,6 @@ export const LocalBundleService = {
     // map is keyed by the (now-canonicalised) Medication id.
     const medicationResources = byType('Medication')
     const medicationMap = new Map(medicationResources.map((m: any) => [m.id, m]))
-    const medicationKnowledgeMap = new Map(
-      byType('MedicationKnowledge').map((resource: any) => [resource.id, resource]),
-    )
 
     // Promote a referenced Medication.code into medicationCodeableConcept so the
     // display helpers (which only look at medicationCodeableConcept) find a drug
@@ -925,17 +832,10 @@ export const LocalBundleService = {
     // Stamp MedicationRequest with its source type too so downstream code can
     // tell a mixed-source list from a pure one. Resolve its medicationReference
     // as well (IPS-style orders reference a Medication rather than inlining it).
-    const medicationRequests = byType('MedicationRequest').map((m: any) => {
-      const drugTerminology = terminologyFromMedicationKnowledge(
-        m,
-        medicationKnowledgeMap,
-      )
-      return {
-        ...resolveMedicationCode(m),
-        _sourceResourceType: 'MedicationRequest' as const,
-        ...(drugTerminology ? { drugTerminology } : {}),
-      }
-    })
+    const medicationRequests = byType('MedicationRequest').map((m: any) => ({
+      ...resolveMedicationCode(m),
+      _sourceResourceType: 'MedicationRequest' as const,
+    }))
 
     // Pre-process resources: attach encounter refs where missing.
     // Medications use provider-aware matching (date + requester); everything

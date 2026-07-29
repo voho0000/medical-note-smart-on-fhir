@@ -111,11 +111,6 @@ export class FhirMapper implements IDataMapper {
   static toMedication(fhirResource: MedicationRequest | MedicationStatement): MedicationEntity {
     const statement = fhirResource as MedicationStatement
     const request = fhirResource as MedicationRequest
-    const drugTerminology = (
-      fhirResource as MedicationRequest & {
-        drugTerminology?: MedicationEntity['drugTerminology']
-      }
-    ).drugTerminology
     const isStatement = fhirResource.resourceType === 'MedicationStatement'
       || request._sourceResourceType === 'MedicationStatement'
 
@@ -137,7 +132,6 @@ export class FhirMapper implements IDataMapper {
       requester: request.requester,
       informationSource: statement.informationSource,
       reasonCode: fhirResource.reasonCode,
-      ...(drugTerminology ? { drugTerminology } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id

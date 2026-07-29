@@ -7,7 +7,6 @@ import type {
   MedicationRequest,
   DosageInstruction,
 } from '@/src/shared/types/fhir.types'
-import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
 export type {
   CodeableConcept,
@@ -47,8 +46,6 @@ export interface MedicationRow {
    *  Sourced from FHIR MedicationRequest.category[0]. Empty when no category
    *  is attached (older bundles or uncategorised one-off meds). */
   category?: string
-  /** Official, date-effective drug-master data added by the App. */
-  drugTerminology?: MedicationEntity['drugTerminology']
   // ── Refill-history aggregate (derived across all MedicationRequests for
   //    this drug). Lets a single row surface compliance / adherence info
   //    without forcing the user to expand the per-drug accordion in the

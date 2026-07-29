@@ -1,5 +1,4 @@
 import type { PreparedLocalImport } from './sdk-import-converter'
-import { enrichLocalFhirImport } from '@/src/application/services/local-fhir-import-enrichment.service'
 export type { PreparedLocalImport } from './sdk-import-converter'
 
 type WorkerSuccess = {
@@ -19,7 +18,7 @@ type WorkerUnavailable = {
 
 type WorkerProgress = {
   type: 'progress'
-  phase: 'ready' | 'parsed' | 'converted' | 'enriched'
+  phase: 'ready' | 'parsed' | 'converted'
 }
 
 type WorkerResponse =
@@ -37,11 +36,7 @@ async function convertOnMainThread(bytes: ArrayBuffer): Promise<PreparedLocalImp
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   const { convertLocalImportBytes } = await import('./sdk-import-converter')
   try {
-    const prepared = convertLocalImportBytes(bytes)
-    return {
-      ...prepared,
-      bundle: await enrichLocalFhirImport(prepared.bundle),
-    }
+    return convertLocalImportBytes(bytes)
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Unknown conversion error'
     throw new Error(
