@@ -14,19 +14,23 @@ interface DiagnosticReportLike {
 
 export type ReportGroup = 'lab' | 'imaging' | 'procedures' | 'vitals' | 'other'
 
-// 健康存摺 SDK r8 does not provide DiagnosticReport.category or ImagingStudy.
-// Its NHI order code and title are therefore the only safe classification
-// signals. Keep these rules deliberately narrow: never inspect the report
-// conclusion, because a non-imaging report may mention a prior X-ray/CT.
+export const HEALTH_BANK_SDK_SECTION_SYSTEM =
+  'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'
+
+// 健康存摺 SDK r8 combines imaging and pathology reports. Older converted
+// bundles did not preserve that source-section signal, so their NHI order code
+// and title remain the compatibility fallback. Never inspect the conclusion:
+// an unrelated report may mention a prior X-ray, CT, biopsy, or pathology.
 const NHI_IMAGING_ORDER_CODE = /^(?:32|33)\d{3}[A-Z]$/i
-const NHI_IMAGING_ORDER_CODES = new Set([
+const NHI_IMAGING_OR_PATHOLOGY_ORDER_CODES = new Set([
   '18005C', // Echocardiography
   '18007C', // Color Doppler echocardiography
   '19005C', // Ultrasonography, other
   '19009C', // Abdominal ultrasonography
   '21010C', // Bladder ultrasonography
+  '25004C', // Surgical pathology, level IV
 ])
-const IMAGING_ORDER_TITLE_PATTERNS = [
+const IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS = [
   /\bx[\s-]?ray\b/i,
   /\bradiograph(?:y|ic)?\b/i,
   /\bcomputed tomography\b/i,
@@ -38,11 +42,16 @@ const IMAGING_ORDER_TITLE_PATTERNS = [
   /\bsonograph(?:y|ic)?\b/i,
   /\bmammograph(?:y|ic)?\b/i,
   /\bpet(?:\s*[-/]?\s*ct|\s+scan)\b/i,
+  /\bpatholog(?:y|ic|ical)?\b/i,
+  /\bhistopatholog(?:y|ic|ical)?\b/i,
+  /\bcytolog(?:y|ic|ical)?\b/i,
+  /\bbiopsy\b/i,
   /[XＸ]光/,
   /放射(?:線|學)|影像醫學/,
   /電腦斷層|磁振|核磁共振/,
   /超音波|超聲波/,
   /乳房攝影|核子醫學|正子造影/,
+  /病理|組織切片|細胞學/,
 ]
 
 function collectCategoryTokens(input?: CodeableConcept | CodeableConcept[]): Set<string> {
@@ -68,6 +77,10 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
       for (const coding of concept.coding) {
         const system = coding.system?.toLowerCase() || ''
         const code = coding.code?.toLowerCase() || ''
+
+        if (system === HEALTH_BANK_SDK_SECTION_SYSTEM.toLowerCase() && code === 'r8') {
+          return 'imaging'
+        }
         
         // Check for observation-category system
         if (system.includes('observation-category')) {
@@ -90,7 +103,11 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
           if (code === 'lab' || code === 'hm' || code === 'ch' || code === 'mb') {
             return 'lab'
           }
-          if (code === 'rad' || code === 'img' || code === 'ct' || code === 'mr' || code === 'us') {
+          if ([
+            'rad', 'img', 'ct', 'mr', 'us',
+            // Pathology shares the future Imaging/Pathology product tab.
+            'pat', 'path', 'sp', 'cyt',
+          ].includes(code)) {
             return 'imaging'
           }
         }
@@ -149,6 +166,9 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
     token.includes("img") || 
     token.includes("imaging") || 
     token.includes("radiology") || 
+    token.includes("pathology") ||
+    token.includes("histology") ||
+    token.includes("cytology") ||
     token.includes("ct") || 
     token.includes("mri") || 
     token.includes("x-ray") || 
@@ -163,7 +183,9 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
 /**
  * Classify a DiagnosticReport using its explicit FHIR category first, then
  * linked ImagingStudy metadata, and finally narrow NHI code/title rules for
- * category-less Health Bank SDK r8 reports.
+ * older category-less Health Bank SDK r8 reports. The internal `imaging` group
+ * intentionally contains both imaging and pathology; the UI tab will be
+ * renamed to reflect that product meaning.
  */
 export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | null): ReportGroup {
   if (!report) return 'other'
@@ -177,7 +199,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
     .map((coding) => coding.code?.trim().toUpperCase())
     .filter((code): code is string => !!code)
   if (orderCodes.some((code) =>
-    NHI_IMAGING_ORDER_CODE.test(code) || NHI_IMAGING_ORDER_CODES.has(code),
+    NHI_IMAGING_ORDER_CODE.test(code) || NHI_IMAGING_OR_PATHOLOGY_ORDER_CODES.has(code),
   )) {
     return 'imaging'
   }
@@ -186,7 +208,7 @@ export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | n
     report.code?.text,
     ...codings.map((coding) => coding.display),
   ].filter((value): value is string => !!value).join(' ')
-  if (IMAGING_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
+  if (IMAGING_OR_PATHOLOGY_ORDER_TITLE_PATTERNS.some((pattern) => pattern.test(orderTitle))) {
     return 'imaging'
   }
 

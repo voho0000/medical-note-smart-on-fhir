@@ -65,6 +65,25 @@ describe('useReportsData — ImagingStudy metadata', () => {
     expect(rows[0].meta).toMatch(/影像|Imaging/)
   })
 
+  it('puts a category-less Health Bank pathology report in the same group', () => {
+    const rows = run([{
+      id: 'sdk-r8-pathology',
+      status: 'final',
+      code: {
+        coding: [{ system: 'nhi', code: '25004C' }],
+        text: '第四級外科病理',
+      },
+      effectiveDateTime: '2026-06-03',
+      conclusion: 'Pathology report content',
+    }], [])
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: 'sdk-r8-pathology',
+      group: 'imaging',
+    })
+  })
+
   it('renders a standalone ImagingStudy in the Imaging group', () => {
     const rows = run([], [study])
 

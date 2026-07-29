@@ -45,6 +45,27 @@ describe('imagingReportsCategory — ImagingStudy', () => {
     expect(imagingReportsCategory.getCount(data, filters, clinicalData)).toBe(1)
   })
 
+  it('includes a category-less Health Bank pathology report for AI selection', () => {
+    const clinicalData = {
+      diagnosticReports: [{
+        id: 'sdk-r8-pathology',
+        status: 'final',
+        code: {
+          coding: [{ system: 'nhi', code: '25004C' }],
+          text: '第四級外科病理',
+        },
+        effectiveDateTime: '2026-06-03',
+        conclusion: 'Pathology report content',
+      }],
+      imagingStudies: [],
+      observations: [],
+      encounters: [],
+    }
+
+    const data = imagingReportsCategory.extractData(clinicalData)
+    expect(data.map((report) => report.id)).toEqual(['sdk-r8-pathology'])
+  })
+
   it('includes a linked metadata-only report once and exposes study text to AI context', () => {
     const clinicalData = {
       diagnosticReports: [{

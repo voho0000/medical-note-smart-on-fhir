@@ -1,4 +1,7 @@
-import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
+import {
+  HEALTH_BANK_SDK_SECTION_SYSTEM,
+  inferGroupFromDiagnosticReport,
+} from '@/src/shared/utils/report-grouping-helpers'
 
 describe('inferGroupFromDiagnosticReport', () => {
   it('recognizes a category-less Health Bank chest X-ray by NHI order code', () => {
@@ -14,6 +17,29 @@ describe('inferGroupFromDiagnosticReport', () => {
   it('recognizes category-less imaging reports by the order title', () => {
     expect(inferGroupFromDiagnosticReport({
       code: { text: 'Radiography of chest' },
+    })).toBe('imaging')
+  })
+
+  it('puts every explicitly tagged SDK r8 report in the shared imaging/pathology group', () => {
+    expect(inferGroupFromDiagnosticReport({
+      category: [{
+        coding: [{
+          system: HEALTH_BANK_SDK_SECTION_SYSTEM,
+          code: 'r8',
+          display: 'Imaging or pathology report',
+        }],
+        text: '影像或病理檢查報告',
+      }],
+      code: { text: 'Unmapped r8 report' },
+    })).toBe('imaging')
+  })
+
+  it('recognizes an older category-less Health Bank pathology report', () => {
+    expect(inferGroupFromDiagnosticReport({
+      code: {
+        coding: [{ system: 'nhi', code: '25004C' }],
+        text: '第四級外科病理',
+      },
     })).toBe('imaging')
   })
 
