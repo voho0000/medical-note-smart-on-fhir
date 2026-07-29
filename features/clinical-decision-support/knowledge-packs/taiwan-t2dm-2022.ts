@@ -4,7 +4,7 @@ import type {
   CdssRecommendation,
   GuidelineReference,
 } from '../types'
-import { assessment, localize } from './shared'
+import { assessment, localize, pdfPageUrl } from './shared'
 import evidenceIndex from './evidence-indexes/taiwan-t2dm-2022.json'
 
 const GUIDELINE_URL = 'https://www.endo-dm.org.tw/dia/journal/bookdia.asp?id=88'
@@ -20,10 +20,6 @@ function required<T>(value: T | undefined): T {
 const guidelineDocument = required(evidenceIndex.documents.find(
   (document) => document.id === 'taiwan-t2dm-clinical-care-guideline-2022',
 ))
-
-function pdfPageUrl(url: string, page: number): string {
-  return `${url}#page=${page}`
-}
 
 function indexedReference(input: {
   locale: CdssLocale

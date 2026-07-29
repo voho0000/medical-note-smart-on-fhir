@@ -1,5 +1,5 @@
 import type { CdssKnowledgePack } from '../types'
-import { assessment, localize } from './shared'
+import { assessment, localize, pdfPageUrl } from './shared'
 import evidenceIndex from './evidence-indexes/taiwan-nhi-2026.json'
 
 const chapter5 = evidenceIndex.documents.find(
@@ -33,10 +33,6 @@ if (
 }
 
 const resolvedChapter2 = chapter2
-
-function pdfPageUrl(url: string, page: number): string {
-  return `${url}#page=${page}`
-}
 
 function chapter2Reference(
   locale: 'zh-TW' | 'en',
