@@ -52,7 +52,10 @@ import {
   type SummarySourceCatalogEntry,
 } from '@/src/core/entities/medical-summary.entity'
 import { referenceId } from '@/src/core/utils/observation-selectors'
-import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
+import {
+  inferGroupFromCategory,
+  inferGroupFromDiagnosticReport,
+} from '@/src/shared/utils/report-grouping-helpers'
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
@@ -726,7 +729,7 @@ function collectLongitudinalImagingPoints(
 ): LongitudinalImagingPoint[] {
   const points: LongitudinalImagingPoint[] = []
   for (const report of input.diagnosticReports ?? []) {
-    if (inferGroupFromCategory(report.category) !== 'imaging') continue
+    if (inferGroupFromDiagnosticReport(report) !== 'imaging') continue
     const reportKey = report.id ? sourceByResourceId.get(report.id)?.key : undefined
     const date = day(report.effectiveDateTime ?? report.issued)
     if (!reportKey || !date) continue

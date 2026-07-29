@@ -8,7 +8,10 @@ import type {
   ClinicalDataQueryKey,
   ClinicalDataQueryStatus,
 } from '@/src/core/entities/clinical-data.entity'
-import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
+import {
+  inferGroupFromCategory,
+  inferGroupFromDiagnosticReport,
+} from '@/src/shared/utils/report-grouping-helpers'
 import {
   selectLabOrphanObservations,
   selectOtherObservations,
@@ -48,10 +51,9 @@ function hasQueryIssue(
 
 function reportCount(source: CoverageSource, group: 'lab' | 'imaging'): number {
   return (source.diagnosticReports ?? []).filter((report) => {
-    const inferred = inferGroupFromCategory(report.category)
     return group === 'lab'
-      ? inferred === 'lab'
-      : inferred === 'imaging' || (report.imagingStudy?.length ?? 0) > 0
+      ? inferGroupFromCategory(report.category) === 'lab'
+      : inferGroupFromDiagnosticReport(report) === 'imaging'
   }).length
 }
 
