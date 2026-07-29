@@ -1,4 +1,5 @@
 import { sha1 } from "js-sha1";
+import { ATC_LEVEL_2_HIERARCHY_MANIFEST } from "./atc-level2";
 import { NHI_DRUG_TERMINOLOGY_MANIFEST } from "./snapshot";
 import {
 	ATC_CODE_SYSTEM,
@@ -11,6 +12,8 @@ const SNAPSHOT_TAG_SYSTEM =
 	"https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot";
 const EFFECTIVE_PERIOD_TAG_SYSTEM =
 	"https://nhi-fhir-bridge.github.io/CodeSystem/drug-master-effective-period";
+const ATC_HIERARCHY_TAG_SYSTEM =
+	"https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot";
 const RECORD_IDENTIFIER_SYSTEM =
 	"https://nhi-fhir-bridge.github.io/IdentifierSystem/drug-terminology-record";
 const OFFICIAL_URL_IDENTIFIER_SYSTEM =
@@ -54,6 +57,11 @@ export function buildMedicationKnowledge(
 			code: `from:${record.validFrom}`,
 			display: "Official drug record effective start",
 		},
+		{
+			system: ATC_HIERARCHY_TAG_SYSTEM,
+			code: ATC_LEVEL_2_HIERARCHY_MANIFEST.snapshotId,
+			display: "ATC level 2 hierarchy snapshot",
+		},
 	];
 	if (record.validTo) {
 		tags.push({
@@ -62,7 +70,6 @@ export function buildMedicationKnowledge(
 			display: "Official drug record effective end",
 		});
 	}
-
 	const resource: Record<string, unknown> = {
 		resourceType: "MedicationKnowledge",
 		id: knowledgeId(record),
@@ -93,23 +100,40 @@ export function buildMedicationKnowledge(
 		];
 	}
 	if (record.atcCode) {
+		const classifications: Array<Record<string, unknown>> = [
+			{
+				coding: [
+					{
+						system: ATC_CODE_SYSTEM,
+						code: record.atcCode,
+						...(record.atcNameEn ? { display: record.atcNameEn } : {}),
+					},
+				],
+				text: record.atcNameZh || record.atcNameEn || record.atcCode,
+			},
+		];
+		if (record.atcLevel2) {
+			classifications.push({
+				coding: [
+					{
+						system: ATC_CODE_SYSTEM,
+						version: record.atcLevel2.hierarchySnapshotId,
+						code: record.atcLevel2.code,
+						display: record.atcLevel2.nameEn,
+					},
+				],
+				text:
+					record.atcLevel2.nameZh ||
+					record.atcLevel2.nameEn ||
+					record.atcLevel2.code,
+			});
+		}
 		resource.medicineClassification = [
 			{
 				type: {
 					text: "Anatomical Therapeutic Chemical classification",
 				},
-				classification: [
-					{
-						coding: [
-							{
-								system: ATC_CODE_SYSTEM,
-								code: record.atcCode,
-								...(record.atcNameEn ? { display: record.atcNameEn } : {}),
-							},
-						],
-						text: record.atcNameZh || record.atcNameEn || record.atcCode,
-					},
-				],
+				classification: classifications,
 			},
 		];
 	}
@@ -186,6 +210,7 @@ export function buildDrugTerminologyProvenance(
 			[
 				"drug-terminology-provenance",
 				manifest.snapshotId,
+				ATC_LEVEL_2_HIERARCHY_MANIFEST.snapshotId,
 				...targetReferences,
 			].join("|"),
 		).slice(0, 32),
@@ -230,6 +255,17 @@ export function buildDrugTerminologyProvenance(
 						value: manifest.sourceResourceId,
 					},
 					display: `健保用藥品項查詢項目檔 (${manifest.sourceUpdatedDate}, SHA-256 ${manifest.sourceSha256})`,
+				},
+			},
+			{
+				role: "source",
+				what: {
+					identifier: {
+						system:
+							"https://nhi-fhir-bridge.github.io/IdentifierSystem/terminology-snapshot",
+						value: ATC_LEVEL_2_HIERARCHY_MANIFEST.snapshotId,
+					},
+					display: ATC_LEVEL_2_HIERARCHY_MANIFEST.sourceTitle,
 				},
 			},
 		],

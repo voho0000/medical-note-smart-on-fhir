@@ -1,6 +1,6 @@
 // Medication Item Component — dense 2-line layout so 10+ drugs fit on screen.
 // Line 1: drug name (truncate) + chronic badge + status badge
-// Line 2: dose · freq · route · date range · pharmacy · billing ICD (medical) · refill count
+// Line 2: dose · freq · route · date range · pharmacy · ATC/ICD (medical) · refill count
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLanguage } from "@/src/application/providers/language.provider"
@@ -14,6 +14,7 @@ import {
   medicationIcdChipClass,
   medicationIcdTextClass,
 } from './medication-chip-styles'
+import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
 
 interface MedicationItemProps {
   medication: MedicationRow
@@ -71,11 +72,11 @@ export function MedicationItem({
     medication.daysRemaining !== undefined &&
     medication.daysRemaining > 0
   const terminology = medication.drugTerminology
-  const alternateOfficialName = [
-    terminology?.officialNameZh,
-    terminology?.officialNameEn,
-  ].find((name) => name && name !== medication.title)
-  const atcName = terminology?.atcNameEn || terminology?.atcNameZh
+  const fullMedicationTitle = [
+    medication.title,
+    medication.secondaryTitle,
+    isMedical && terminology?.atcCode ? `ATC ${terminology.atcCode}` : undefined,
+  ].filter(Boolean).join(' · ')
 
   // ── Line-2 inline parts (collapse empties) ────────────────────────────
   // Single-word dose/freq/route join into "5mg · PO · QD"; date range and
@@ -156,12 +157,30 @@ export function MedicationItem({
       {/* ── Line 1 ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <span
-            className="text-[0.8125rem] font-semibold truncate"
-            title={medication.title}
-          >
-            {medication.title}
-          </span>
+          <MedicationTerminologyTooltip medication={medication} enabled={isMedical}>
+            <span
+              className={cn(
+                "flex min-w-0 flex-1 items-baseline gap-1",
+                isMedical && terminology && "cursor-help",
+              )}
+              title={fullMedicationTitle}
+              tabIndex={isMedical && terminology ? 0 : undefined}
+            >
+              <span
+                className={cn(
+                  "truncate text-[0.8125rem] font-semibold",
+                  medication.secondaryTitle ? "max-w-[62%] shrink-0" : "min-w-0",
+                )}
+              >
+                {medication.title}
+              </span>
+              {isMedical && medication.secondaryTitle && (
+                <span className="min-w-0 truncate text-[0.6875rem] font-normal text-muted-foreground">
+                  · {medication.secondaryTitle}
+                </span>
+              )}
+            </span>
+          </MedicationTerminologyTooltip>
           {medication.category && (
             <span
               title={medication.category}
@@ -220,64 +239,6 @@ export function MedicationItem({
               {node}
             </span>
           ))}
-        </div>
-      )}
-
-      {terminology && (
-        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[0.625rem] text-muted-foreground">
-          {alternateOfficialName && (
-            <span className="max-w-full truncate" title={alternateOfficialName}>
-              {alternateOfficialName}
-            </span>
-          )}
-          {terminology.ingredientText && (
-            <>
-              {alternateOfficialName && <Sep />}
-              <span className="max-w-full truncate" title={terminology.ingredientText}>
-                {terminology.ingredientText}
-              </span>
-            </>
-          )}
-          {terminology.doseForm && (
-            <>
-              {(alternateOfficialName || terminology.ingredientText) && <Sep />}
-              <span>{terminology.doseForm}</span>
-            </>
-          )}
-          {terminology.atcCode && (
-            <>
-              {(alternateOfficialName || terminology.ingredientText || terminology.doseForm) && <Sep />}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    tabIndex={0}
-                    className="cursor-help font-mono text-foreground/75"
-                  >
-                    ATC {terminology.atcCode}{atcName ? ` ${atcName}` : ''}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[min(90vw,28rem)] whitespace-normal text-xs leading-relaxed">
-                  {mt.terminologyAtcTooltip}
-                </TooltipContent>
-              </Tooltip>
-            </>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                tabIndex={0}
-                className="inline-flex cursor-help items-center rounded-full border border-teal-200 bg-teal-50 px-1.5 py-0 font-medium text-teal-700 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-300"
-              >
-                {mt.terminologySource}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-[min(90vw,28rem)] whitespace-normal text-xs leading-relaxed">
-              {mt.terminologySourceTooltip}
-              <span className="mt-1 block font-mono text-[0.625rem] opacity-80">
-                {terminology.snapshotId}
-              </span>
-            </TooltipContent>
-          </Tooltip>
         </div>
       )}
     </div>

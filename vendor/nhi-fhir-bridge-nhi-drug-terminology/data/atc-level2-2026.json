@@ -1,0 +1,177 @@
+{
+	"manifest": {
+		"snapshotId": "atc-level2-2026",
+		"schemaVersion": "atc-level2-hierarchy-v1",
+		"release": "2026",
+		"sourceTitle": "WHO Collaborating Centre for Drug Statistics Methodology, ATC classification index with DDDs, 2026",
+		"sourceUrl": "https://atcddd.fhi.no/atc_ddd_index/",
+		"sourceUpdatedDate": "2026-01-20",
+		"retrievedDate": "2026-07-30",
+		"categoryCount": 94,
+		"officialEnglishCanonicalSha256": "c42d788875229564d82ffcc2ca6b8a5a047cb599988046cf607b02bcbb06e8e7",
+		"englishNameAuthority": "WHO Collaborating Centre for Drug Statistics Methodology",
+		"chineseNameAuthority": "NHI-FHIR-BRIDGE curated zh-TW display translation",
+		"chineseNamePolicy": "The zh-TW labels are application display translations, not official WHO translations.",
+		"copyrightNotice": "Use requires reference to the WHO Collaborating Centre. Commercial copying or distribution is not allowed by the source copyright notice."
+	},
+	"categories": [
+		["A01", "STOMATOLOGICAL PREPARATIONS", "口腔製劑"],
+		["A02", "DRUGS FOR ACID RELATED DISORDERS", "胃酸相關疾病用藥"],
+		[
+			"A03",
+			"DRUGS FOR FUNCTIONAL GASTROINTESTINAL DISORDERS",
+			"胃腸功能障礙用藥"
+		],
+		["A04", "ANTIEMETICS AND ANTINAUSEANTS", "止吐與止噁心藥"],
+		["A05", "BILE AND LIVER THERAPY", "膽道與肝臟治療用藥"],
+		["A06", "DRUGS FOR CONSTIPATION", "便秘用藥"],
+		[
+			"A07",
+			"ANTIDIARRHEALS, INTESTINAL ANTIINFLAMMATORY/ANTIINFECTIVE AGENTS",
+			"止瀉、腸道抗發炎／抗感染藥"
+		],
+		[
+			"A08",
+			"ANTIOBESITY PREPARATIONS, EXCL. DIET PRODUCTS",
+			"抗肥胖製劑（不含代餐）"
+		],
+		["A09", "DIGESTIVES, INCL. ENZYMES", "消化劑（含酵素）"],
+		["A10", "DRUGS USED IN DIABETES", "糖尿病用藥"],
+		["A11", "VITAMINS", "維生素"],
+		["A12", "MINERAL SUPPLEMENTS", "礦物質補充劑"],
+		["A13", "TONICS", "滋補劑"],
+		["A14", "ANABOLIC AGENTS FOR SYSTEMIC USE", "全身性合成代謝劑"],
+		["A15", "APPETITE STIMULANTS", "食慾促進劑"],
+		[
+			"A16",
+			"OTHER ALIMENTARY TRACT AND METABOLISM PRODUCTS",
+			"其他消化道與代謝用藥"
+		],
+		["B01", "ANTITHROMBOTIC AGENTS", "抗血栓劑"],
+		["B02", "ANTIHEMORRHAGICS", "抗出血劑"],
+		["B03", "ANTIANEMIC PREPARATIONS", "抗貧血製劑"],
+		["B05", "BLOOD SUBSTITUTES AND PERFUSION SOLUTIONS", "血液代用品與灌流液"],
+		["B06", "OTHER HEMATOLOGICAL AGENTS", "其他血液學用藥"],
+		["C01", "CARDIAC THERAPY", "心臟治療用藥"],
+		["C02", "ANTIHYPERTENSIVES", "降血壓劑"],
+		["C03", "DIURETICS", "利尿劑"],
+		["C04", "PERIPHERAL VASODILATORS", "周邊血管擴張劑"],
+		["C05", "VASOPROTECTIVES", "血管保護劑"],
+		["C07", "BETA BLOCKING AGENTS", "β 受體阻斷劑"],
+		["C08", "CALCIUM CHANNEL BLOCKERS", "鈣離子通道阻斷劑"],
+		[
+			"C09",
+			"AGENTS ACTING ON THE RENIN-ANGIOTENSIN SYSTEM",
+			"作用於腎素－血管張力素系統的藥物"
+		],
+		["C10", "LIPID MODIFYING AGENTS", "血脂調節劑"],
+		["D01", "ANTIFUNGALS FOR DERMATOLOGICAL USE", "皮膚用抗黴菌劑"],
+		["D02", "EMOLLIENTS AND PROTECTIVES", "潤膚與保護劑"],
+		[
+			"D03",
+			"PREPARATIONS FOR TREATMENT OF WOUNDS AND ULCERS",
+			"傷口與潰瘍治療製劑"
+		],
+		[
+			"D04",
+			"ANTIPRURITICS, INCL. ANTIHISTAMINES, ANESTHETICS, ETC.",
+			"止癢劑（含抗組織胺、麻醉劑等）"
+		],
+		["D05", "ANTIPSORIATICS", "乾癬治療劑"],
+		[
+			"D06",
+			"ANTIBIOTICS AND CHEMOTHERAPEUTICS FOR DERMATOLOGICAL USE",
+			"皮膚用抗生素與化學治療劑"
+		],
+		[
+			"D07",
+			"CORTICOSTEROIDS, DERMATOLOGICAL PREPARATIONS",
+			"皮膚用皮質類固醇製劑"
+		],
+		["D08", "ANTISEPTICS AND DISINFECTANTS", "消毒劑與殺菌劑"],
+		["D09", "MEDICATED DRESSINGS", "藥物敷料"],
+		["D10", "ANTI-ACNE PREPARATIONS", "抗痤瘡製劑"],
+		["D11", "OTHER DERMATOLOGICAL PREPARATIONS", "其他皮膚用製劑"],
+		[
+			"G01",
+			"GYNECOLOGICAL ANTIINFECTIVES AND ANTISEPTICS",
+			"婦科用抗感染劑與消毒劑"
+		],
+		["G02", "OTHER GYNECOLOGICALS", "其他婦科用藥"],
+		[
+			"G03",
+			"SEX HORMONES AND MODULATORS OF THE GENITAL SYSTEM",
+			"性荷爾蒙與生殖系統調節劑"
+		],
+		["G04", "UROLOGICALS", "泌尿系統用藥"],
+		[
+			"H01",
+			"PITUITARY AND HYPOTHALAMIC HORMONES AND ANALOGUES",
+			"腦下垂體與下視丘荷爾蒙及類似物"
+		],
+		["H02", "CORTICOSTEROIDS FOR SYSTEMIC USE", "全身性皮質類固醇"],
+		["H03", "THYROID THERAPY", "甲狀腺治療用藥"],
+		["H04", "PANCREATIC HORMONES", "胰臟荷爾蒙"],
+		["H05", "CALCIUM HOMEOSTASIS", "鈣恆定調節劑"],
+		["J01", "ANTIBACTERIALS FOR SYSTEMIC USE", "全身性抗菌劑"],
+		["J02", "ANTIMYCOTICS FOR SYSTEMIC USE", "全身性抗黴菌劑"],
+		["J04", "ANTIMYCOBACTERIALS", "抗分枝桿菌劑"],
+		["J05", "ANTIVIRALS FOR SYSTEMIC USE", "全身性抗病毒劑"],
+		["J06", "IMMUNE SERA AND IMMUNOGLOBULINS", "免疫血清與免疫球蛋白"],
+		["J07", "VACCINES", "疫苗"],
+		["L01", "ANTINEOPLASTIC AGENTS", "抗腫瘤劑"],
+		["L02", "ENDOCRINE THERAPY", "內分泌治療"],
+		["L03", "IMMUNOSTIMULANTS", "免疫刺激劑"],
+		["L04", "IMMUNOSUPPRESSANTS", "免疫抑制劑"],
+		[
+			"M01",
+			"ANTIINFLAMMATORY AND ANTIRHEUMATIC PRODUCTS",
+			"抗發炎與抗風濕製劑"
+		],
+		[
+			"M02",
+			"TOPICAL PRODUCTS FOR JOINT AND MUSCULAR PAIN",
+			"關節與肌肉疼痛局部用藥"
+		],
+		["M03", "MUSCLE RELAXANTS", "肌肉鬆弛劑"],
+		["M04", "ANTIGOUT PREPARATIONS", "抗痛風製劑"],
+		["M05", "DRUGS FOR TREATMENT OF BONE DISEASES", "骨骼疾病治療用藥"],
+		[
+			"M09",
+			"OTHER DRUGS FOR DISORDERS OF THE MUSCULO-SKELETAL SYSTEM",
+			"其他肌肉骨骼系統疾病用藥"
+		],
+		["N01", "ANESTHETICS", "麻醉劑"],
+		["N02", "ANALGESICS", "止痛劑"],
+		["N03", "ANTIEPILEPTICS", "抗癲癇劑"],
+		["N04", "ANTI-PARKINSON DRUGS", "抗巴金森氏症用藥"],
+		["N05", "PSYCHOLEPTICS", "精神安定類藥物"],
+		["N06", "PSYCHOANALEPTICS", "精神興奮／抗憂鬱與失智相關用藥"],
+		["N07", "OTHER NERVOUS SYSTEM DRUGS", "其他神經系統用藥"],
+		["P01", "ANTIPROTOZOALS", "抗原蟲劑"],
+		["P02", "ANTHELMINTICS", "驅蟲劑"],
+		[
+			"P03",
+			"ECTOPARASITICIDES, INCL. SCABICIDES, INSECTICIDES AND REPELLENTS",
+			"外寄生蟲防治劑（含疥瘡治療劑、殺蟲劑與驅避劑）"
+		],
+		["R01", "NASAL PREPARATIONS", "鼻用製劑"],
+		["R02", "THROAT PREPARATIONS", "咽喉製劑"],
+		["R03", "DRUGS FOR OBSTRUCTIVE AIRWAY DISEASES", "阻塞性呼吸道疾病用藥"],
+		["R05", "COUGH AND COLD PREPARATIONS", "咳嗽與感冒製劑"],
+		["R06", "ANTIHISTAMINES FOR SYSTEMIC USE", "全身性抗組織胺"],
+		["R07", "OTHER RESPIRATORY SYSTEM PRODUCTS", "其他呼吸系統用藥"],
+		["S01", "OPHTHALMOLOGICALS", "眼科用藥"],
+		["S02", "OTOLOGICALS", "耳科用藥"],
+		["S03", "OPHTHALMOLOGICAL AND OTOLOGICAL PREPARATIONS", "眼科與耳科用製劑"],
+		["V01", "ALLERGENS", "過敏原"],
+		["V03", "ALL OTHER THERAPEUTIC PRODUCTS", "其他治療用產品"],
+		["V04", "DIAGNOSTIC AGENTS", "診斷用製劑"],
+		["V06", "GENERAL NUTRIENTS", "一般營養劑"],
+		["V07", "ALL OTHER NON-THERAPEUTIC PRODUCTS", "其他非治療用產品"],
+		["V08", "CONTRAST MEDIA", "顯影劑"],
+		["V09", "DIAGNOSTIC RADIOPHARMACEUTICALS", "診斷用放射性藥品"],
+		["V10", "THERAPEUTIC RADIOPHARMACEUTICALS", "治療用放射性藥品"],
+		["V20", "SURGICAL DRESSINGS", "外科敷料"]
+	]
+}

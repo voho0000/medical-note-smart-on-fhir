@@ -169,6 +169,13 @@ export interface MedicationEntity {
     atcCode?: string
     atcNameZh?: string
     atcNameEn?: string
+    /** Governed three-character ATC therapeutic subgroup. Unlike atcCode,
+     *  this is resolved from the versioned hierarchy rather than sliced and
+     *  labelled inside the App. */
+    atcLevel2Code?: string
+    atcLevel2NameZh?: string
+    atcLevel2NameEn?: string
+    atcHierarchySnapshotId?: string
     officialProductUrl?: string
   }
   /**

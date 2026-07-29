@@ -26,6 +26,7 @@ import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
+import { enrichBundleWithNhiDrugTerminology } from './nhi-drug-terminology-enrichment.service'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
 import type {
@@ -72,6 +73,10 @@ let memBundle: object | null = null
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false
 let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
+// A stored bundle can be requested concurrently by the Patient and clinical
+// data repositories during startup. Share one terminology migration per
+// plaintext bundle object so the 12 MB snapshot is never parsed twice.
+const terminologyMigrationByBundle = new WeakMap<object, Promise<object>>()
 
 interface PersistedBundleEnvelope {
   __mediprismaBundle: 1
@@ -449,6 +454,30 @@ const NHI_DRUG_SNAPSHOT_TAG_SYSTEM =
   'https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot'
 const NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM =
   'https://nhi-fhir-bridge.github.io/IdentifierSystem/nhi-drug-official-url'
+const ATC_HIERARCHY_TAG_SYSTEM =
+  'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
+
+function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {
+  const entries = Array.isArray((bundle as { entry?: unknown }).entry)
+    ? (bundle as { entry: any[] }).entry
+    : []
+  const governedKnowledge = entries
+    .map((entry: any) => entry?.resource)
+    .filter((resource: any) =>
+      resource?.resourceType === 'MedicationKnowledge'
+      && Array.isArray(resource.meta?.tag)
+      && resource.meta.tag.some(
+        (tag: any) => tag?.system === NHI_DRUG_SNAPSHOT_TAG_SYSTEM,
+      ))
+  if (governedKnowledge.length === 0) return false
+  return governedKnowledge.every((resource: any) =>
+    Array.isArray(resource.meta?.tag)
+    && resource.meta.tag.some(
+      (tag: any) =>
+        tag?.system === ATC_HIERARCHY_TAG_SYSTEM
+        && typeof tag?.code === 'string',
+    ))
+}
 
 function terminologyFromMedicationKnowledge(
   request: any,
@@ -481,9 +510,33 @@ function terminologyFromMedicationKnowledge(
     const snapshotId = snapshotTag?.code ?? drugCoding?.version
     if (typeof snapshotId !== 'string' || !snapshotId) continue
 
-    const classification = knowledge.medicineClassification?.[0]
-      ?.classification?.[0]
-    const atcCoding = classification?.coding?.[0]
+    const classifications = Array.isArray(
+      knowledge.medicineClassification?.[0]?.classification,
+    )
+      ? knowledge.medicineClassification[0].classification
+      : []
+    const atcConcepts = classifications
+      .map((classification: any) => {
+        const coding = Array.isArray(classification?.coding)
+          ? classification.coding.find(
+            (candidate: any) =>
+              candidate?.system === 'http://www.whocc.no/atc'
+              && typeof candidate?.code === 'string',
+          )
+          : undefined
+        return { classification, coding }
+      })
+      .filter(({ coding }: any) => coding)
+    const fullAtc = atcConcepts.find(
+      ({ coding }: any) => /^[A-Z]\d{2}[A-Z]{2}\d{2}$/.test(coding.code),
+    )
+    const level2Atc = atcConcepts.find(
+      ({ coding }: any) => /^[A-Z]\d{2}$/.test(coding.code),
+    )
+    const atcCoding = fullAtc?.coding
+    const classification = fullAtc?.classification
+    const level2Coding = level2Atc?.coding
+    const level2Classification = level2Atc?.classification
     const officialProductIdentifier = Array.isArray(knowledge.identifier)
       ? knowledge.identifier.find(
         (identifier: any) =>
@@ -503,6 +556,14 @@ function terminologyFromMedicationKnowledge(
     const classificationText = typeof classification?.text === 'string'
       ? classification.text
       : undefined
+    const atcLevel2NameEn = typeof level2Coding?.display === 'string'
+      ? level2Coding.display
+      : undefined
+    const atcLevel2NameZh =
+      typeof level2Classification?.text === 'string'
+      && level2Classification.text !== atcLevel2NameEn
+        ? level2Classification.text
+        : undefined
 
     return {
       source: 'nhi-official-drug-master',
@@ -523,6 +584,14 @@ function terminologyFromMedicationKnowledge(
       ...(atcNameEn ? { atcNameEn } : {}),
       ...(classificationText && classificationText !== atcNameEn
         ? { atcNameZh: classificationText }
+        : {}),
+      ...(typeof level2Coding?.code === 'string'
+        ? { atcLevel2Code: level2Coding.code }
+        : {}),
+      ...(atcLevel2NameEn ? { atcLevel2NameEn } : {}),
+      ...(atcLevel2NameZh ? { atcLevel2NameZh } : {}),
+      ...(typeof level2Coding?.version === 'string'
+        ? { atcHierarchySnapshotId: level2Coding.version }
         : {}),
       ...(typeof officialProductIdentifier?.value === 'string'
         ? { officialProductUrl: officialProductIdentifier.value }
@@ -1016,8 +1085,41 @@ export const LocalBundleService = {
   },
 
   async parseStored(): Promise<LocalBundleData | null> {
-    const bundle = await this.load()
+    let bundle = await this.load()
     if (!bundle) return null
+
+    // Bundles persisted before App-side drug terminology existed do not carry
+    // MedicationKnowledge, so medical users would fall back to the source
+    // Chinese product name after a reload. Upgrade them once, locally and
+    // fail-closed, then re-encrypt the enriched FHIR under the same import id.
+    // The raw SDK JSON is neither needed nor recovered.
+    if (!hasNhiDrugTerminologyKnowledge(bundle)) {
+      let migration = terminologyMigrationByBundle.get(bundle)
+      if (!migration) {
+        migration = (async () => {
+          const result = await enrichBundleWithNhiDrugTerminology(
+            bundle as Record<string, unknown>,
+          )
+          if (
+            result.report.status === 'enriched'
+            && result.report.linkedRequestCount > 0
+          ) {
+            await this.save(result.bundle, {
+              ...(memBundleImportId ? { importId: memBundleImportId } : {}),
+              demo: memBundleIsDemo,
+              ...(memBundleSourceMetadata
+                ? { sourceMetadata: memBundleSourceMetadata }
+                : {}),
+            })
+            return result.bundle
+          }
+          return bundle
+        })()
+        terminologyMigrationByBundle.set(bundle, migration)
+      }
+      bundle = await migration
+    }
+
     return this.parse(bundle, memBundleSourceMetadata ?? undefined)
   },
 }

@@ -14,3 +14,15 @@ Insurance Administration and Taiwan Food and Drug Administration open data.
 The 97 MB source CSV and TFDA source archive are not redistributed. The
 runtime snapshot contains normalized terminology fields, effective periods,
 source metadata, and cryptographic hashes. It contains no patient data.
+
+The package also contains the three-character ATC level 2 hierarchy from:
+
+- WHO Collaborating Centre for Drug Statistics Methodology
+- ATC classification index with DDDs, 2026
+- https://atcddd.fhi.no/atc_ddd_index/
+
+The WHO source copyright notice requires attribution and does not allow
+commercial copying or distribution. The bundled hierarchy is therefore part
+of this private module and must not be republished as a commercial terminology
+dataset. The English hierarchy names are official. The zh-TW labels are
+NHI-FHIR-BRIDGE display translations and are not official WHO translations.

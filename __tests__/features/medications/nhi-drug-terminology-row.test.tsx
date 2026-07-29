@@ -36,13 +36,14 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     jest.useRealTimers()
   })
 
-  it('shows the official English name to medical users and searches all enriched fields', () => {
+  it('prioritizes ingredient + strength and retains the product name for medical users', () => {
     const { result } = renderHook(() =>
       useMedicationRows([medication], 'medical', 'zh-TW'),
     )
 
     expect(result.current[0]).toMatchObject({
-      title: 'Official English name',
+      title: 'BUPROPION HYDROCHLORIDE 150 MG',
+      secondaryTitle: 'Official English name',
       drugTerminology: medication.drugTerminology,
     })
     expect(result.current[0].searchHaystack).toEqual(
@@ -62,5 +63,56 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     )
 
     expect(result.current[0].title).toBe('官方中文藥名')
+  })
+
+  it('does not replace a zh-TW patient source name with an English-only enrichment', () => {
+    const englishOnlyTerminology = {
+      ...medication,
+      drugTerminology: {
+        ...medication.drugTerminology,
+        officialNameZh: undefined,
+      },
+    }
+    const { result } = renderHook(() =>
+      useMedicationRows([englishOnlyTerminology], 'patient', 'zh-TW'),
+    )
+
+    expect(result.current[0].title).toBe('來源中文藥名')
+  })
+
+  it('aggregates refill counts across package-code variants of one official product', () => {
+    const productUrl =
+      'https://lmspiq.fda.gov.tw/web/DRPIQ/DRPIQ1000Result?licId=01034670'
+    const folicBase = {
+      ...medication,
+      medicationCodeableConcept: {
+        text: '"強生"葉酸膜衣錠５毫克',
+        coding: [{ code: 'AC34670100', display: 'FOLACIN F.C. TABLETS 5MG' }],
+      },
+      drugTerminology: {
+        ...medication.drugTerminology,
+        officialProductUrl: productUrl,
+        ingredientText: 'FOLIC ACID 5 MG',
+        doseForm: '膜衣錠',
+      },
+    }
+    const packageVariant = {
+      ...folicBase,
+      id: 'mr-2',
+      authoredOn: '2024-04-02',
+      medicationCodeableConcept: {
+        ...folicBase.medicationCodeableConcept,
+        coding: [{ code: 'AC346701G0', display: 'FOLACIN F.C. TABLETS 5MG' }],
+      },
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([folicBase, packageVariant], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current).toHaveLength(2)
+    expect(result.current[0].drugKey).toBe(result.current[1].drugKey)
+    expect(result.current[0].refillCount).toBe(2)
+    expect(result.current[1].refillCount).toBe(2)
   })
 })

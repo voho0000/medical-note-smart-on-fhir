@@ -4,10 +4,13 @@ Versioned, offline Taiwan NHI drug terminology for application-side
 enrichment. It is intentionally not invoked by the Health Bank SDK converter.
 
 Current snapshot: `nhi-drug-terminology-20260728`.
+ATC hierarchy snapshot: `atc-level2-2026`.
 
 - 224,553 official history rows accepted; zero rejected.
 - 45,177 date-effective semantic records covering 45,175 NHI drug codes.
 - 42,705 records carry a valid full ATC code; 40,963 also have an ATC display.
+- All 42,705 ATC-coded records resolve to one of the 94 governed level 2
+  categories in the bundled 2026 hierarchy.
 - Runtime JSON is about 12 MB uncompressed and 2 MB with ordinary HTTP gzip.
   Browser apps should lazy-import the package only when medication enrichment
   is requested.
@@ -19,7 +22,10 @@ Current snapshot: `nhi-drug-terminology-20260728`.
 
 - Input key: exact NHI drug code plus ISO prescription date.
 - Output: official Chinese/English names, ingredient text, strength, dosage
-  form, exact full ATC code and available ATC display.
+  form, exact full ATC code and its governed ATC level 2 category.
+- ATC level 2 English names are pinned from the WHO Collaborating Centre's
+  2026 ATC Index. `nameZh` is a Bridge-maintained zh-TW display translation,
+  explicitly not an official WHO translation.
 - No drug-name matching, regex fallback, live network request, or disease
   inference.
 - A future prescription date, missing effective version, or overlapping
@@ -38,6 +44,9 @@ import {
 const result = resolveNhiDrugTerminology("AC49322100", "2024-04-01");
 if (result.status === "resolved") {
   const knowledge = buildMedicationKnowledge(result.record);
+  // result.record.atcLevel2:
+  // { code: "N06", nameEn: "PSYCHOANALEPTICS",
+  //   nameZh: "精神興奮／抗憂鬱與失智相關用藥", ... }
 }
 ```
 
@@ -72,3 +81,21 @@ The builder validates the schema-relevant fields, normalizes ROC effective
 dates, collapses adjacent administrative/price rows with identical clinical
 semantics, and emits source/canonical SHA-256 values. Keep previous snapshots
 append-only when an application has already recorded their snapshot IDs.
+
+## Updating the ATC level 2 hierarchy
+
+Save the 14 official ATC Index pages for `A`, `B`, `C`, `D`, `G`, `H`, `J`,
+`L`, `M`, `N`, `P`, `R`, `S`, and `V` as individual HTML files. Then rebuild
+the hierarchy while preserving the separately reviewed zh-TW display labels:
+
+```sh
+npm run atc-level2:build --workspace @nhi-fhir-bridge/nhi-drug-terminology -- \
+  /path/to/who-level-one-pages \
+  packages/nhi-drug-terminology/data/atc-level2-2026.json \
+  packages/nhi-drug-terminology/data/atc-level2-2026.json \
+  2026 2026-01-20 YYYY-MM-DD
+```
+
+The builder extracts only exact three-character level 2 nodes and verifies
+that every anatomical group page is present. Tests pin the category count and
+the SHA-256 of the official English `code|name` pairs.

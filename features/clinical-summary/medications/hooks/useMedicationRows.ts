@@ -5,6 +5,7 @@ import {
   formatDate,
   extractFrequencyFromText,
   isChronicPrescription,
+  medicationClinicalIdentityKey,
   pickLocalizedText,
   pickByLocale,
 } from '../utils/fhir-helpers'
@@ -34,13 +35,6 @@ export function useMedicationRows(
 
     const inactiveStatuses = new Set(["stopped", "completed"])
 
-    const drugKeyOf = (m: any): string =>
-      m?.medicationCodeableConcept?.coding?.[0]?.code ||
-      m?.medicationCodeableConcept?.text ||
-      m?.medicationReference?.display ||
-      m?.code?.text ||
-      ''
-
     // The bridge emits one MedicationRequest per refill. The chronic
     // (courseOfTherapyType.continuous) flag is set per refill, so a single
     // drug may appear as a mix of "chronic" and "acute" refills depending on
@@ -52,7 +46,7 @@ export function useMedicationRows(
     for (const m of medications) {
       if (!m) continue
       if (!isChronicPrescription(m)) continue
-      const key = drugKeyOf(m)
+      const key = medicationClinicalIdentityKey(m)
       if (key) chronicDrugKeys.add(key)
     }
 
@@ -62,7 +56,7 @@ export function useMedicationRows(
     const refillsByDrug = new Map<string, { count: number; firstDate?: string }>()
     for (const m of medications) {
       if (!m) continue
-      const key = drugKeyOf(m)
+      const key = medicationClinicalIdentityKey(m)
       if (!key) continue
       const date = m.authoredOn || m.effectiveDateTime
       const entry = refillsByDrug.get(key)
@@ -85,27 +79,37 @@ export function useMedicationRows(
       // `.coding[].display`; medical users get English (pharmacology
       // familiarity), patient users get Chinese. Older bundles with only
       // English `.text` fall through gracefully.
-      let medicationName: string
+      let sourceMedicationName: string
       if (med.medicationCodeableConcept) {
-        medicationName = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+        sourceMedicationName = pickLocalizedText(med.medicationCodeableConcept, audience, locale)
       } else if (med.medicationReference?.display) {
-        medicationName = med.medicationReference.display
+        sourceMedicationName = med.medicationReference.display
       } else if (med.code) {
-        medicationName = pickLocalizedText(med.code, audience, locale)
+        sourceMedicationName = pickLocalizedText(med.code, audience, locale)
       } else if (med.medication?.text) {
-        medicationName = med.medication.text
+        sourceMedicationName = med.medication.text
       } else if (med.resource?.code) {
-        medicationName = pickLocalizedText(med.resource.code, audience, locale)
+        sourceMedicationName = pickLocalizedText(med.resource.code, audience, locale)
       } else {
-        medicationName = ''
+        sourceMedicationName = ''
       }
-      const officialName = audience === 'medical'
+      const officialProductName = audience === 'medical'
         ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
         : locale === 'en'
           ? drugTerminology?.officialNameEn || drugTerminology?.officialNameZh
-          : drugTerminology?.officialNameZh || drugTerminology?.officialNameEn
-      if (officialName) medicationName = officialName
+          : drugTerminology?.officialNameZh
+      const ingredientName = audience === 'medical'
+        ? drugTerminology?.ingredientText?.trim()
+        : undefined
+      let medicationName = ingredientName || officialProductName || sourceMedicationName
       if (!medicationName) medicationName = 'Unknown Medication'
+      const secondaryTitle =
+        audience === 'medical' &&
+        ingredientName &&
+        officialProductName &&
+        ingredientName.localeCompare(officialProductName, undefined, { sensitivity: 'accent' }) !== 0
+          ? officialProductName
+          : undefined
 
       const status = med.status?.toLowerCase() || "unknown"
       const statusInactive = inactiveStatuses.has(status)
@@ -156,7 +160,7 @@ export function useMedicationRows(
       // Inactive = explicitly stopped/completed OR computed endDate has passed
       const isInactive = statusInactive || (daysRemaining !== undefined && daysRemaining < 0)
       // Drug-level chronic: true if any refill of this drug was chronic
-      const drugKey = drugKeyOf(med)
+      const drugKey = medicationClinicalIdentityKey(med)
       const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
 
       const refillAgg = drugKey ? refillsByDrug.get(drugKey) : undefined
@@ -207,6 +211,9 @@ export function useMedicationRows(
         drugTerminology?.atcCode,                     // ATC 碼
         drugTerminology?.atcNameZh,                   // ATC 分類 中文
         drugTerminology?.atcNameEn,                   // ATC 分類 英文
+        drugTerminology?.atcLevel2Code,               // ATC 第二層代碼
+        drugTerminology?.atcLevel2NameZh,             // ATC 第二層 中文
+        drugTerminology?.atcLevel2NameEn,             // ATC 第二層 英文
         med?.reasonCode?.[0]?.text,                  // 適應症 中文
         med?.reasonCode?.[0]?.coding?.[0]?.display,  // 適應症 英文
         icdCode,                                     // 診斷 ICD 碼
@@ -220,7 +227,9 @@ export function useMedicationRows(
         // stable across the now-more-frequent memo recomputes — a random id
         // would remount id-less rows on every focus/day tick.
         id: med.id || `med-${idx}`,
+        drugKey,
         title: medicationName,
+        secondaryTitle,
         status,
         detail: detail || undefined,
         dose: doseSummary || undefined,

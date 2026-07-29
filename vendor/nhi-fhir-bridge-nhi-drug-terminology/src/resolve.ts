@@ -1,5 +1,7 @@
+import { ATC_LEVEL_2_HIERARCHY, resolveAtcLevel2 } from "./atc-level2";
 import { NHI_DRUG_TERMINOLOGY_SNAPSHOT } from "./snapshot";
 import type {
+	AtcLevel2HierarchySnapshot,
 	NhiDrugSnapshotRow,
 	NhiDrugTerminologyCoverageReport,
 	NhiDrugTerminologyRecord,
@@ -29,6 +31,7 @@ function rowToRecord(
 	row: NhiDrugSnapshotRow,
 	snapshotId: string,
 	rowIndex: number,
+	atcLevel2Hierarchy: AtcLevel2HierarchySnapshot,
 ): NhiDrugTerminologyRecord {
 	const [
 		nhiDrugCode,
@@ -46,6 +49,9 @@ function rowToRecord(
 		officialProductUrl,
 		compoundType,
 	] = row;
+	const atcLevel2 = atcCode
+		? resolveAtcLevel2(atcCode, atcLevel2Hierarchy)
+		: undefined;
 	return {
 		nhiDrugCode,
 		validFrom,
@@ -59,6 +65,7 @@ function rowToRecord(
 		...(atcCode ? { atcCode } : {}),
 		...(atcNameEn ? { atcNameEn } : {}),
 		...(atcNameZh ? { atcNameZh } : {}),
+		...(atcLevel2 ? { atcLevel2 } : {}),
 		...(officialProductUrl ? { officialProductUrl } : {}),
 		...(compoundType ? { compoundType } : {}),
 		snapshotId,
@@ -83,6 +90,7 @@ function emptyStatusCounts(): Record<
 
 export function createNhiDrugTerminologyResolver(
 	snapshot: NhiDrugTerminologySnapshot,
+	atcLevel2Hierarchy: AtcLevel2HierarchySnapshot = ATC_LEVEL_2_HIERARCHY,
 ): NhiDrugTerminologyResolver {
 	const rowsByCode = new Map<
 		string,
@@ -124,7 +132,12 @@ export function createNhiDrugTerminologyResolver(
 			return { ...base, status: "date-not-covered" };
 		}
 		const candidates = matches.map(({ row, rowIndex }) =>
-			rowToRecord(row, snapshot.manifest.snapshotId, rowIndex),
+			rowToRecord(
+				row,
+				snapshot.manifest.snapshotId,
+				rowIndex,
+				atcLevel2Hierarchy,
+			),
 		);
 		if (candidates.length !== 1) {
 			return { ...base, status: "conflict", candidates };
@@ -134,6 +147,7 @@ export function createNhiDrugTerminologyResolver(
 
 	return {
 		snapshot,
+		atcLevel2Hierarchy,
 		resolve,
 		resolveMany(inputs) {
 			const resolutions = inputs.map(({ nhiDrugCode, prescriptionDate }) =>

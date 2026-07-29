@@ -25,7 +25,14 @@ export type Medication = MedicationRequest
 
 export interface MedicationRow {
   id: string
+  /** Stable source medication key used for grouping; never infer identity from
+   *  the audience-facing title because different products can share an
+   *  ingredient name. */
+  drugKey?: string
   title: string
+  /** Optional product/brand name shown after the medical ingredient title on
+   *  the same line. Patient rows intentionally leave this empty. */
+  secondaryTitle?: string
   status: string
   dose?: string
   route?: string

@@ -117,6 +117,88 @@ export function isChronicPrescription(med: any): boolean {
   return false
 }
 
+function normalizedMedicationIdentityPart(value: unknown): string {
+  return typeof value === 'string'
+    ? value.normalize('NFKC').trim().replace(/\s+/g, ' ').toUpperCase()
+    : ''
+}
+
+/** Original medication code carried by the source resource.
+ *
+ * This remains the per-prescription audit identifier. It is intentionally
+ * separate from `medicationClinicalIdentityKey`, because NHI can issue more
+ * than one reimbursement/package code for the same licensed clinical product.
+ */
+export function medicationSourceCode(medication: any): string {
+  const concept =
+    medication?.medicationCodeableConcept
+    || medication?.code
+    || medication?.resource?.code
+  const coding = Array.isArray(concept?.coding)
+    ? concept.coding.find(
+      (candidate: any) =>
+        typeof candidate?.code === 'string'
+        && candidate.code.trim().length > 0,
+    )
+    : undefined
+  return typeof coding?.code === 'string' ? coding.code.trim() : ''
+}
+
+/** Stable clinical product identity for display grouping.
+ *
+ * Exact source codes remain untouched on every MedicationRequest. For grouping
+ * only, package/reimbursement variants such as NHI `...00` and `...G0` may
+ * collapse when the governed terminology proves they share the same official
+ * product licence, ingredient/strength, and dose form. Missing terminology
+ * fails closed to the complete source code so unrelated products are never
+ * merged merely because their ingredient labels look alike.
+ */
+export function medicationClinicalIdentityKey(medication: any): string {
+  const terminology = medication?.drugTerminology
+  const officialProductUrl = normalizedMedicationIdentityPart(
+    terminology?.officialProductUrl,
+  )
+  const ingredient = normalizedMedicationIdentityPart(
+    terminology?.ingredientText,
+  )
+  const doseForm = normalizedMedicationIdentityPart(
+    terminology?.doseForm,
+  )
+
+  if (officialProductUrl && ingredient && doseForm) {
+    return [
+      'official-product',
+      officialProductUrl,
+      ingredient,
+      doseForm,
+    ].join('|')
+  }
+
+  const concept =
+    medication?.medicationCodeableConcept
+    || medication?.code
+    || medication?.resource?.code
+  const coding = Array.isArray(concept?.coding)
+    ? concept.coding.find(
+      (candidate: any) =>
+        typeof candidate?.code === 'string'
+        && candidate.code.trim().length > 0,
+    )
+    : undefined
+  const sourceCode = normalizedMedicationIdentityPart(coding?.code)
+  const sourceSystem = normalizedMedicationIdentityPart(coding?.system)
+  if (sourceCode) {
+    return `source-code|${sourceSystem}|${sourceCode}`
+  }
+
+  const fallbackDisplay = normalizedMedicationIdentityPart(
+    concept?.text
+    || medication?.medicationReference?.display
+    || medication?.medication?.text,
+  )
+  return fallbackDisplay ? `source-display|${fallbackDisplay}` : ''
+}
+
 // Medication-specific helper
 export function extractFrequencyFromText(text?: string): string {
   if (!text) return ""

@@ -33,6 +33,7 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
   const { audience } = useAudience()
   const mt = (t.medications as any)
   const fallbackCategoryLabel = mt.timelineOtherCategory ?? '其他'
+  const atcCategoryLabels: Record<string, string> = mt.timelineAtcCategories ?? {}
   const rangeLabels: Record<TimeRange, string> = {
     '3m': mt.timelineRange3m ?? '3個月',
     '6m': mt.timelineRange6m ?? '6個月',
@@ -68,7 +69,14 @@ export function MedicationTimeline({ medications }: MedicationTimelineProps) {
     return () => ro.disconnect()
   }, [])
 
-  const data = useMedicationTimeline(medications, audience, range, fallbackCategoryLabel, locale)
+  const data = useMedicationTimeline(
+    medications,
+    audience,
+    range,
+    fallbackCategoryLabel,
+    locale,
+    atcCategoryLabels,
+  )
 
   return (
     <div className="space-y-2">

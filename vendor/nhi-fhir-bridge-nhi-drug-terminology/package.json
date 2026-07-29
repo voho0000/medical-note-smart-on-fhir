@@ -1,6 +1,6 @@
 {
   "name": "@nhi-fhir-bridge/nhi-drug-terminology",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Versioned offline Taiwan NHI drug terminology resolved by exact drug code and prescription date.",
@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "snapshot:build": "node scripts/build-snapshot.mjs",
+    "atc-level2:build": "node scripts/build-atc-level2-hierarchy.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src tests",

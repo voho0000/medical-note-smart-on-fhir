@@ -40,6 +40,8 @@ const TODAY_LINE = '#ef4444'        // red-500
 interface HoverState {
   bar: RefillBar
   drugName: string
+  drugProductName?: string
+  drugTerminology?: TimelineDrug['drugTerminology']
   xPx: number
   yPx: number
 }
@@ -66,7 +68,7 @@ function buildYearTicks(domainStartMs: number, domainEndMs: number, chartWidth: 
 }
 
 export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: TimelineSvgProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const [hover, setHover] = useState<HoverState | null>(null)
   const mt = (t.medications as any)
@@ -97,6 +99,7 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
 
   const yearTicks = buildYearTicks(domainStartMs, domainEndMs, chartWidth, xScale)
   const todayX = xScale(Date.now())
+  const tooltipWidth = Math.min(280, width - 8)
 
   return (
     <div className="relative w-full overflow-x-auto">
@@ -182,7 +185,10 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                 <div
                   // @ts-expect-error xmlns is valid here
                   xmlns="http://www.w3.org/1999/xhtml"
-                  title={drug.drugName}
+                  title={[
+                    drug.drugName,
+                    drug.drugProductName,
+                  ].filter(Boolean).join(' · ')}
                   style={{
                     fontSize: 11,
                     lineHeight: `${ROW_HEIGHT}px`,
@@ -221,6 +227,8 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                       setHover({
                         bar,
                         drugName: drug.drugName,
+                        drugProductName: drug.drugProductName,
+                        drugTerminology: drug.drugTerminology,
                         xPx: rect.left - (containerRect?.left ?? 0) + rect.width / 2,
                         yPx: rect.top - (containerRect?.top ?? 0),
                       })
@@ -239,12 +247,82 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
         <div
           className="absolute z-10 pointer-events-none rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-md"
           style={{
-            left: Math.min(Math.max(hover.xPx - 100, 4), width - 220),
-            top: hover.yPx - 70,
-            width: 220,
+            left: Math.min(Math.max(hover.xPx - tooltipWidth / 2, 4), width - tooltipWidth - 4),
+            top: Math.max(4, hover.yPx - 150),
+            width: tooltipWidth,
           }}
         >
           <div className="font-semibold truncate">{hover.drugName}</div>
+          {hover.drugProductName && (
+            <div className="truncate text-[0.6875rem] text-muted-foreground">
+              {hover.drugProductName}
+            </div>
+          )}
+          {audience === 'medical' && hover.drugTerminology && (
+            <dl className="mt-1 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 border-t pt-1 text-[0.6875rem]">
+              {hover.drugTerminology.officialNameZh && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {mt.terminologyOfficialNameZhLabel ?? '中文品名'}
+                  </dt>
+                  <dd className="truncate">{hover.drugTerminology.officialNameZh}</dd>
+                </>
+              )}
+              {hover.drugTerminology.officialNameEn && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {mt.terminologyOfficialNameEnLabel ?? 'English name'}
+                  </dt>
+                  <dd className="truncate">{hover.drugTerminology.officialNameEn}</dd>
+                </>
+              )}
+              {hover.drugTerminology.doseForm && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {mt.terminologyDoseFormLabel ?? 'Dose form'}
+                  </dt>
+                  <dd className="truncate">{hover.drugTerminology.doseForm}</dd>
+                </>
+              )}
+              {hover.drugTerminology.atcCode && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {mt.terminologyAtcLabel ?? 'ATC'}
+                  </dt>
+                  <dd className="truncate">
+                    {hover.drugTerminology.atcCode}
+                    {(hover.drugTerminology.atcNameEn || hover.drugTerminology.atcNameZh) && (
+                      <> · {hover.drugTerminology.atcNameEn || hover.drugTerminology.atcNameZh}</>
+                    )}
+                  </dd>
+                </>
+              )}
+              {hover.drugTerminology.atcLevel2Code && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {mt.terminologyAtcLevel2Label ?? 'ATC subgroup'}
+                  </dt>
+                  <dd className="truncate">
+                    {hover.drugTerminology.atcLevel2Code}
+                    {(hover.drugTerminology.atcLevel2NameEn
+                      || hover.drugTerminology.atcLevel2NameZh) && (
+                      <> · {
+                        locale === 'en'
+                          ? hover.drugTerminology.atcLevel2NameEn
+                            || hover.drugTerminology.atcLevel2NameZh
+                          : hover.drugTerminology.atcLevel2NameZh
+                            || hover.drugTerminology.atcLevel2NameEn
+                      }</>
+                    )}
+                  </dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">
+                {mt.terminologySnapshotLabel ?? 'Version'}
+              </dt>
+              <dd className="truncate">{hover.drugTerminology.snapshotId}</dd>
+            </dl>
+          )}
           <div className="text-muted-foreground">
             {shortYmd(hover.bar.startMs)} → {shortYmd(hover.bar.endMs)}
             <span className="ml-1">({hover.bar.supplyDays}d)</span>

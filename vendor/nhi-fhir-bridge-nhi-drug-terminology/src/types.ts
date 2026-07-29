@@ -4,6 +4,40 @@ export const NHI_DRUG_CODE_SYSTEM =
 	"https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code";
 export const ATC_CODE_SYSTEM = "http://www.whocc.no/atc";
 
+export type AtcLevel2HierarchyManifest = {
+	snapshotId: string;
+	schemaVersion: "atc-level2-hierarchy-v1";
+	release: string;
+	sourceTitle: string;
+	sourceUrl: string;
+	sourceUpdatedDate: string;
+	retrievedDate: string;
+	categoryCount: number;
+	officialEnglishCanonicalSha256: string;
+	englishNameAuthority: string;
+	chineseNameAuthority: string;
+	chineseNamePolicy: string;
+	copyrightNotice: string;
+};
+
+export type AtcLevel2CategoryRow = readonly [
+	code: string,
+	nameEn: string,
+	nameZh: string,
+];
+
+export type AtcLevel2HierarchySnapshot = {
+	manifest: AtcLevel2HierarchyManifest;
+	categories: readonly AtcLevel2CategoryRow[];
+};
+
+export type AtcLevel2Category = {
+	code: string;
+	nameEn: string;
+	nameZh?: string;
+	hierarchySnapshotId: string;
+};
+
 export type NhiDrugSnapshotManifest = {
 	snapshotId: string;
 	schemaVersion: "nhi-drug-terminology-snapshot-v1";
@@ -67,6 +101,7 @@ export type NhiDrugTerminologyRecord = {
 	atcCode?: string;
 	atcNameEn?: string;
 	atcNameZh?: string;
+	atcLevel2?: AtcLevel2Category;
 	officialProductUrl?: string;
 	compoundType?: string;
 	snapshotId: string;
@@ -102,6 +137,7 @@ export type NhiDrugTerminologyCoverageReport = {
 
 export type NhiDrugTerminologyResolver = {
 	readonly snapshot: NhiDrugTerminologySnapshot;
+	readonly atcLevel2Hierarchy: AtcLevel2HierarchySnapshot;
 	resolve(
 		nhiDrugCode: string,
 		prescriptionDate: string,

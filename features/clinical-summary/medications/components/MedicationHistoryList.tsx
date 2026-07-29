@@ -19,6 +19,7 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationRow } from '../types'
 import { medicationHistoryCategoryChipClass } from './medication-chip-styles'
+import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
 
 export interface MedicationHistoryGroup {
   name: string
@@ -42,7 +43,7 @@ function isInjectable(m: MedicationRow): boolean {
     if (INJECTION_ABBR.has(route.toUpperCase())) return true
     if (INJECTION_RE.test(route)) return true
   }
-  return INJECTION_RE.test(m.title || '')
+  return INJECTION_RE.test(`${m.title || ''} ${m.secondaryTitle || ''}`)
 }
 
 /** Most recent activity date for a prescription (end → stopped → start). */
@@ -143,6 +144,13 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
   const latest = group.medications[0]
   const latestDate = latestDateOf(latest)
   const timesUnit = mt.refillTimes ?? '次'
+  const fullMedicationTitle = [
+    group.name,
+    isMedical ? latest?.secondaryTitle : undefined,
+    isMedical && latest?.drugTerminology?.atcCode
+      ? `ATC ${latest.drugTerminology.atcCode}`
+      : undefined,
+  ].filter(Boolean).join(' · ')
   const groupAnchorRef = useResourceAnchor<HTMLLIElement>(
     ['MedicationRequest', 'MedicationStatement'],
     group.medications.map((medication) => medication.id),
@@ -170,9 +178,30 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
           )}
           aria-hidden
         />
-        <span className="truncate text-[0.8125rem] font-medium" title={group.name}>
-          {group.name}
-        </span>
+        <MedicationTerminologyTooltip medication={latest} enabled={isMedical}>
+          <span
+            className={cn(
+              "flex min-w-0 flex-1 items-baseline gap-1",
+              isMedical && latest?.drugTerminology && "cursor-help",
+            )}
+            title={fullMedicationTitle}
+            tabIndex={isMedical && latest?.drugTerminology ? 0 : undefined}
+          >
+            <span
+              className={cn(
+                "truncate text-[0.8125rem] font-medium",
+                isMedical && latest?.secondaryTitle ? "max-w-[62%] shrink-0" : "min-w-0",
+              )}
+            >
+              {group.name}
+            </span>
+            {isMedical && latest?.secondaryTitle && (
+              <span className="min-w-0 truncate text-[0.6875rem] font-normal text-muted-foreground">
+                · {latest.secondaryTitle}
+              </span>
+            )}
+          </span>
+        </MedicationTerminologyTooltip>
         {latest?.category && (
           <span
             title={latest.category}
@@ -203,21 +232,6 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
             if (m.durationDays) parts.push(`${m.durationDays} ${mt.durationDaysUnit ?? 'days'}`)
             if (m.pharmacy) parts.push(m.pharmacy)
             if (isMedical && m.icdCode) parts.push(`${m.icdCode}${m.icdText ? ` ${m.icdText}` : ''}`)
-            if (m.drugTerminology?.ingredientText) {
-              parts.push(m.drugTerminology.ingredientText)
-            }
-            if (m.drugTerminology?.doseForm) {
-              parts.push(m.drugTerminology.doseForm)
-            }
-            if (m.drugTerminology?.atcCode) {
-              const atcName = isMedical
-                ? m.drugTerminology.atcNameEn || m.drugTerminology.atcNameZh
-                : m.drugTerminology.atcNameZh || m.drugTerminology.atcNameEn
-              parts.push(`ATC ${m.drugTerminology.atcCode}${atcName ? ` ${atcName}` : ''}`)
-            }
-            if (m.drugTerminology) {
-              parts.push(mt.terminologySource ?? '健保署藥品主檔補充')
-            }
             return (
               <MedicationHistoryDetail
                 key={m.id || i}

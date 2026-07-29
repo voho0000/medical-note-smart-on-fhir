@@ -39,6 +39,10 @@ function bundleWith(...inputResources: Record<string, unknown>[]) {
 }
 
 describe('App-side NHI drug terminology enrichment', () => {
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
   it('does not load or alter anything when no exact NHI medication is eligible', async () => {
     const source = bundleWith(
       { resourceType: 'Patient', id: 'p1' },
@@ -106,13 +110,24 @@ describe('App-side NHI drug terminology enrichment', () => {
         itemCodeableConcept: { text: 'BUPROPION HYDROCHLORIDE 150 MG' },
       }],
       medicineClassification: [{
-        classification: [{
-          coding: [{
-            system: 'http://www.whocc.no/atc',
-            code: 'N06AX12',
-            display: 'bupropion',
-          }],
-        }],
+        classification: [
+          {
+            coding: [{
+              system: 'http://www.whocc.no/atc',
+              code: 'N06AX12',
+              display: 'bupropion',
+            }],
+          },
+          {
+            coding: [{
+              system: 'http://www.whocc.no/atc',
+              version: 'atc-level2-2026',
+              code: 'N06',
+              display: 'PSYCHOANALEPTICS',
+            }],
+            text: '精神興奮／抗憂鬱與失智相關用藥',
+          },
+        ],
       }],
     })
     expect(provenance).toMatchObject({
@@ -122,6 +137,10 @@ describe('App-side NHI drug terminology enrichment', () => {
       entity: [{
         what: {
           display: expect.stringContaining('SHA-256'),
+        },
+      }, {
+        what: {
+          identifier: { value: 'atc-level2-2026' },
         },
       }],
     })
@@ -145,6 +164,53 @@ describe('App-side NHI drug terminology enrichment', () => {
       linkedRequestCount: 1,
       knowledgeResourceCount: 0,
     })
+  })
+
+  it('upgrades a vendored 0.1 knowledge resource in place with level 2 hierarchy', async () => {
+    const current = await enrichBundleWithNhiDrugTerminology(
+      bundleWith(
+        { resourceType: 'Patient', id: 'p1' },
+        medicationRequest(),
+      ),
+    )
+    const oldBundle = JSON.parse(
+      JSON.stringify(current.bundle),
+    ) as Record<string, any>
+    const oldKnowledge = resources(oldBundle, 'MedicationKnowledge')[0]
+    oldKnowledge.medicineClassification[0].classification =
+      oldKnowledge.medicineClassification[0].classification
+        .filter((classification: any) =>
+          classification?.coding?.[0]?.code !== 'N06')
+    oldKnowledge.meta.tag = oldKnowledge.meta.tag.filter(
+      (tag: any) =>
+        tag?.system
+        !== 'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot',
+    )
+
+    const upgraded = await enrichBundleWithNhiDrugTerminology(oldBundle)
+    const knowledge = resources(upgraded.bundle, 'MedicationKnowledge')
+    const provenance = resources(upgraded.bundle, 'Provenance')
+
+    expect(knowledge).toHaveLength(1)
+    expect(knowledge[0].medicineClassification[0].classification)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          coding: [expect.objectContaining({
+            code: 'N06',
+            version: 'atc-level2-2026',
+          })],
+        }),
+      ]))
+    expect(provenance).toHaveLength(1)
+    expect(provenance[0].entity).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        what: expect.objectContaining({
+          identifier: expect.objectContaining({
+            value: 'atc-level2-2026',
+          }),
+        }),
+      }),
+    ]))
   })
 
   it('fails closed for a missing date and for multiple NHI codes', async () => {
@@ -221,7 +287,34 @@ describe('App-side NHI drug terminology enrichment', () => {
         doseForm: '持續性藥效膜衣錠',
         atcCode: 'N06AX12',
         atcNameEn: 'bupropion',
+        atcLevel2Code: 'N06',
+        atcLevel2NameEn: 'PSYCHOANALEPTICS',
+        atcLevel2NameZh: '精神興奮／抗憂鬱與失智相關用藥',
+        atcHierarchySnapshotId: 'atc-level2-2026',
       },
     })
+  })
+
+  it('upgrades a stored pre-terminology bundle before medical rows are parsed', async () => {
+    const stored = bundleWith(
+      { resourceType: 'Patient', id: 'p1' },
+      medicationRequest(),
+    )
+    jest.spyOn(LocalBundleService, 'load').mockResolvedValue(stored)
+    const save = jest.spyOn(LocalBundleService, 'save').mockResolvedValue()
+
+    const parsed = await LocalBundleService.parseStored()
+
+    expect(parsed?.collection.medications[0]?.drugTerminology).toMatchObject({
+      officialNameZh: '〝皇佳〞慮舒妥 持續性藥效膜衣錠150毫克',
+      officialNameEn: 'Buprotrin sustained release F.C. Tablets 150mg 〝Royal〞',
+      atcCode: 'N06AX12',
+      atcLevel2Code: 'N06',
+    })
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(resources(
+      save.mock.calls[0][0] as Record<string, any>,
+      'MedicationKnowledge',
+    )).toHaveLength(1)
   })
 })

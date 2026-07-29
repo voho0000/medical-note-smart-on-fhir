@@ -80,6 +80,23 @@ describe('groupMedications — active-list merge', () => {
     expect(groupMedications([a, b]).activeMedications).toHaveLength(2)
   })
 
+  it('does not merge distinct products that share the same ingredient title', () => {
+    const a = row({
+      drugKey: 'NHI-A',
+      title: 'DAPAGLIFLOZIN 10 MG',
+      secondaryTitle: 'FORXIGA 10MG',
+      pharmacy: 'A院',
+    })
+    const b = row({
+      drugKey: 'NHI-B',
+      title: 'DAPAGLIFLOZIN 10 MG',
+      secondaryTitle: 'ANOTHER PRODUCT 10MG',
+      pharmacy: 'A院',
+    })
+
+    expect(groupMedications([a, b]).activeMedications).toHaveLength(2)
+  })
+
   it('treats a missing institution as its own bucket (no cross-merge with named orgs)', () => {
     const named = row({ title: 'X藥', pharmacy: 'A院', endDate: '2026-07-23' })
     const bare = row({ title: 'X藥', pharmacy: undefined, endDate: '2026-07-29' })

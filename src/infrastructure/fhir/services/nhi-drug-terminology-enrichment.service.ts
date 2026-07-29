@@ -14,6 +14,8 @@ import type {
 
 const NHI_DRUG_CODE_SYSTEM =
   'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
+const ATC_HIERARCHY_TAG_SYSTEM =
+  'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
 
 type FhirResource = Record<string, unknown> & {
   resourceType?: string
@@ -233,12 +235,14 @@ export async function enrichBundleWithNhiDrugTerminology(
 
     const nextEntries = [...entries]
     const knowledgeById = new Map<string, FhirResource>()
-    for (const entry of entries) {
+    const knowledgeEntryIndexById = new Map<string, number>()
+    for (const [entryIndex, entry] of entries.entries()) {
       if (
         entry.resource?.resourceType === 'MedicationKnowledge'
         && typeof entry.resource.id === 'string'
       ) {
         knowledgeById.set(entry.resource.id, entry.resource)
+        knowledgeEntryIndexById.set(entry.resource.id, entryIndex)
       }
     }
 
@@ -260,9 +264,54 @@ export async function enrichBundleWithNhiDrugTerminology(
         resolution.record,
       ) as FhirResource
       if (typeof knowledge.id !== 'string' || !knowledge.id) continue
-      const effectiveKnowledge = knowledgeById.get(knowledge.id) ?? knowledge
-      if (!knowledgeById.has(knowledge.id)) {
+      const existingKnowledge = knowledgeById.get(knowledge.id)
+      const existingHasHierarchyTag = Array.isArray(
+        (existingKnowledge as any)?.meta?.tag,
+      ) && (existingKnowledge as any).meta.tag.some(
+        (tag: any) =>
+          tag?.system === ATC_HIERARCHY_TAG_SYSTEM
+          && typeof tag?.code === 'string',
+      )
+      const existingClassifications = Array.isArray(
+        (existingKnowledge as any)?.medicineClassification?.[0]?.classification,
+      )
+        ? (existingKnowledge as any).medicineClassification[0].classification
+        : []
+      const existingHasFullAtc = existingClassifications.some(
+        (classification: any) =>
+          Array.isArray(classification?.coding)
+          && classification.coding.some(
+            (coding: any) =>
+              coding?.system === 'http://www.whocc.no/atc'
+              && typeof coding?.code === 'string'
+              && /^[A-Z]\d{2}[A-Z]{2}\d{2}$/.test(coding.code),
+          ),
+      )
+      const existingHasLevel2 = existingClassifications.some(
+        (classification: any) =>
+          Array.isArray(classification?.coding)
+          && classification.coding.some(
+            (coding: any) =>
+              coding?.system === 'http://www.whocc.no/atc'
+              && typeof coding?.code === 'string'
+              && /^[A-Z]\d{2}$/.test(coding.code),
+          ),
+      )
+      const existingIsCurrent = existingHasHierarchyTag
+        && (!existingHasFullAtc || existingHasLevel2)
+      const effectiveKnowledge =
+        existingKnowledge && existingIsCurrent ? existingKnowledge : knowledge
+      if (!existingKnowledge) {
         generatedKnowledge.set(knowledge.id, knowledge)
+        knowledgeById.set(knowledge.id, knowledge)
+      } else if (!existingIsCurrent) {
+        const existingIndex = knowledgeEntryIndexById.get(knowledge.id)
+        if (existingIndex !== undefined) {
+          nextEntries[existingIndex] = {
+            ...nextEntries[existingIndex],
+            resource: knowledge,
+          }
+        }
         knowledgeById.set(knowledge.id, knowledge)
       }
       linkedKnowledge.set(knowledge.id, effectiveKnowledge)
@@ -295,16 +344,48 @@ export async function enrichBundleWithNhiDrugTerminology(
     if (
       provenance
       && typeof provenance.id === 'string'
-      && !nextEntries.some(
+    ) {
+      const exactIndex = nextEntries.findIndex(
         (entry) =>
           entry.resource?.resourceType === 'Provenance'
           && entry.resource.id === provenance.id,
       )
-    ) {
-      nextEntries.push({
-        fullUrl: `urn:uuid:${provenance.id}`,
-        resource: provenance,
-      })
+      if (exactIndex < 0) {
+        const targetReferences = new Set(
+          Array.isArray((provenance as any).target)
+            ? (provenance as any).target
+              .map((target: any) => target?.reference)
+              .filter((reference: unknown): reference is string =>
+                typeof reference === 'string')
+            : [],
+        )
+        const previousVersionIndex = nextEntries.findIndex((entry) => {
+          const resource = entry.resource as any
+          if (
+            resource?.resourceType !== 'Provenance'
+            || resource?.activity?.coding?.[0]?.code
+              !== 'official-drug-master-lookup'
+          ) return false
+          const references = Array.isArray(resource.target)
+            ? resource.target
+              .map((target: any) => target?.reference)
+              .filter((reference: unknown): reference is string =>
+                typeof reference === 'string')
+            : []
+          return references.length === targetReferences.size
+            && references.every((reference: string) =>
+              targetReferences.has(reference))
+        })
+        const nextProvenanceEntry = {
+          fullUrl: `urn:uuid:${provenance.id}`,
+          resource: provenance,
+        }
+        if (previousVersionIndex >= 0) {
+          nextEntries[previousVersionIndex] = nextProvenanceEntry
+        } else {
+          nextEntries.push(nextProvenanceEntry)
+        }
+      }
     }
 
     return {
