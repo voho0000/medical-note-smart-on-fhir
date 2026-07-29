@@ -1048,12 +1048,15 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     const contextInput = await screen.findByRole('spinbutton', {
       name: '內容視窗（tokens）',
     })
+    const contextSource = screen.getByTestId('openai-compatible-context-window-source')
     await waitFor(() => expect(contextInput).toHaveValue(262144))
+    expect(contextSource).toHaveTextContent('來源：端點偵測')
     expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(32768)
     expect(screen.getByText(/端點回報 262,144 tokens/)).toBeInTheDocument()
 
     fireEvent.change(contextInput, { target: { value: '65536' } })
     expect(contextInput).toHaveValue(65536)
+    expect(contextSource).toHaveTextContent('來源：手動自訂')
     expect(screen.getByRole('button', { name: '套用偵測值' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
@@ -1091,6 +1094,8 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       name: '內容視窗（tokens）',
     })
     await waitFor(() => expect(contextInput).toHaveValue(262144))
+    expect(screen.getByTestId('openai-compatible-context-window-source'))
+      .toHaveTextContent('來源：端點偵測')
     fireEvent.click(screen.getByRole('button', { name: '儲存並啟用' }))
 
     await waitFor(() => {
@@ -1099,6 +1104,16 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         contextWindowSource: 'detected',
       })
     })
+  })
+
+  it('shows when the context window is a system suggestion before testing', () => {
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+
+    expect(screen.getByRole('spinbutton', { name: '內容視窗（tokens）' })).toHaveValue(32768)
+    expect(screen.getByTestId('openai-compatible-context-window-source'))
+      .toHaveTextContent('來源：系統建議')
   })
 
   it('does not overwrite a saved manual context window during connection testing', async () => {
