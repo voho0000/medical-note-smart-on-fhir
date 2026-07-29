@@ -260,6 +260,16 @@ function LabPivotTable({
                         {cell.unit}
                       </div>
                     )}
+                    {cell.unitInferred && (
+                      <div
+                        className="text-[0.5625rem] font-normal leading-tight text-sky-700 dark:text-sky-300 whitespace-nowrap"
+                        title={locale.startsWith('zh')
+                          ? '健康存摺 SDK 未提供單位；此單位由轉換器依規則推估'
+                          : 'The SDK did not provide a unit; the converter inferred it under an audited policy'}
+                      >
+                        {locale.startsWith('zh') ? '推估單位' : 'inferred unit'}
+                      </div>
+                    )}
                   </td>
                 )
               })}

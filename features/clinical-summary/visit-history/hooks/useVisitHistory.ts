@@ -3,7 +3,7 @@ import { extractEncounterIcds, type IcdCode } from "@/src/shared/utils/icd-looku
 import { getEncounterChannelText, getEncounterKindText } from "@/src/shared/utils/encounter-type.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
-type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
+type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
 export interface VisitRecord {
   id: string
@@ -68,8 +68,20 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
           encounter.type?.[0]?.text ||
           ''
         ).toLowerCase()
+        const kindCodes = (encounter.type ?? []).flatMap((concept: any) =>
+          (concept?.coding ?? []).map((coding: any) =>
+            String(coding?.code ?? '').toLowerCase(),
+          ),
+        )
 
-        if (['emer', 'emergency', 'ed'].includes(classCode) ||
+        // SDK r1 intentionally says only "門急診": AMB is a required FHIR
+        // fallback, not evidence that the visit was outpatient. Detect the
+        // explicit bridge kind before substring checks, otherwise "門急診"
+        // is incorrectly swallowed by the emergency branch below.
+        if (kindCodes.includes('outpatient-or-emergency')) {
+          type = 'outpatient-or-emergency'
+        }
+        else if (['emer', 'emergency', 'ed'].includes(classCode) ||
             reasonText.includes('emergency') ||
             serviceTypeText.includes('急診') || typeText.includes('急診')) {
           type = 'emergency'

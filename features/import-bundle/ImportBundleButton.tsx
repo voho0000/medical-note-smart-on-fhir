@@ -34,7 +34,7 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
   const fileRef = useRef<BundleFileInputHandle>(null)
   const { t } = useLanguage()
   const i18n = t.importBundle
-  const { clear, loading, error, hasBundle, bundleIsActive, isDemo } = useImportBundle()
+  const { importFile, clear, loading, error, hasBundle, bundleIsActive, isDemo } = useImportBundle()
   // Clearing wipes the whole patient context in one click — confirm first
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
 
@@ -127,7 +127,11 @@ export function ImportBundleButton({ iconOnlyOnMobile = false }: ImportBundleBut
       {error && (
         <p className="text-xs text-destructive px-1">{error}</p>
       )}
-      <BundleFileInput ref={fileRef} testId="import-bundle-input" />
+      <BundleFileInput
+        ref={fileRef}
+        testId="import-bundle-input"
+        importFile={importFile}
+      />
     </div>
   )
 }

@@ -163,6 +163,7 @@ export class FhirMapper implements IDataMapper {
   static toObservation(fhirResource: Observation): ObservationEntity {
     return {
       id: fhirResource.id || '',
+      meta: fhirResource.meta,
       code: fhirResource.code,
       valueQuantity: fhirResource.valueQuantity,
       valueString: fhirResource.valueString,
@@ -182,6 +183,7 @@ export class FhirMapper implements IDataMapper {
       specimen: fhirResource.specimen,
       encounter: fhirResource.encounter,
       performer: fhirResource.performer,
+      note: fhirResource.note,
       referenceRange: fhirResource.referenceRange,
       interpretation: fhirResource.interpretation,
       sourceSystem: FHIR_SOURCE_SYSTEM,

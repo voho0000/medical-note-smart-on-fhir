@@ -13,6 +13,7 @@ import { getAnalyteDisplayForMode, getOriginalAnalyteDisplayForObs, bpComponentA
 import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useReportNameMode } from '../context/report-name-mode.context'
+import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 
 interface ObservationTrendDialogProps {
   observation: Observation | null
@@ -94,6 +95,7 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
 
   const unit = observation?.valueQuantity?.unit ||
     (hasComponents ? observation?.component?.[0]?.valueQuantity?.unit : undefined)
+  const unitInferred = isInferredObservationUnit(observation)
   const referenceRange = observation?.referenceRange?.[0]
 
   // Text-based report (imaging / ECG / pathology) — chronological list of conclusions
@@ -125,7 +127,16 @@ export function ObservationTrendDialog({ observation, reportTitle, reportLookupT
             {dialogTitle || observationCode || '檢驗項目'}
           </DialogTitle>
           <div className="space-y-1 text-sm text-muted-foreground">
-            {unit && <div>單位: {unit}</div>}
+            {unit && (
+              <div>
+                {locale.startsWith('zh') ? '單位' : 'Unit'}: {unit}
+                {unitInferred && (
+                  <span className="ml-1 text-sky-700 dark:text-sky-300">
+                    ({locale.startsWith('zh') ? '推估單位' : 'inferred'})
+                  </span>
+                )}
+              </div>
+            )}
             {referenceRange && (
               <div>
                 參考範圍: {' '}

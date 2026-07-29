@@ -129,6 +129,11 @@ export function ObservationHistoryTable({ data }: ObservationHistoryTableProps) 
                   {typeof item.value === 'number'
                     ? `${formatNumberSmart(item.value)} ${item.unit || ''}`
                     : item.value}
+                  {item.unitInferred && (
+                    <span className="ml-1 text-[0.625rem] font-normal text-sky-700">
+                      推估單位
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {getStatusBadge(status)}

@@ -111,6 +111,9 @@ export function buildClinicalContextCoverageSection(
     { label: 'Immunizations', selected: selection.immunizations, sourceCount: data.immunizations?.length ?? 0, includedCount: scoped.immunizations?.length ?? 0, queryKeys: ['Immunization'] },
     { label: 'Documents', selected: selection.documents, sourceCount: sourceDocumentCount, includedCount: includedDocumentCount, queryKeys: ['Composition', 'DocumentReference'] },
   ]
+  const sdkMetadata = data.sourceMetadata?.source === 'health-bank-sdk-json'
+    ? data.sourceMetadata
+    : null
 
   return {
     title: 'Data Coverage Manifest',
@@ -120,6 +123,10 @@ export function buildClinicalContextCoverageSection(
       // prompt signature and invalidate cached AI results on every tab focus.
       `Export metadata: generated_at=${localIsoDay(nowMs)}; contains_phi=possible; deidentified=false. Direct-identifier masking is not guaranteed full de-identification.`,
       'Counts are FHIR source records before display grouping; status distinguishes exclusion, source absence, filtered-empty data, included data, and unavailable queries.',
+      ...(sdkMetadata ? [
+        'Source boundary: converted locally from Health Bank SDK JSON. The SDK does not provide patient demographics, medication dosage, laboratory source units, laboratory abnormal flags, or diagnostic-report categories; outpatient and emergency claims are not distinguishable. Do not infer absent source fields.',
+        `SDK conversion audit: same_day_lab_rows_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; conflicting_value_groups=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}.`,
+      ] : []),
       ...rows.map((row) => {
         if (!row.selected) return `${row.label}: status=excluded`
         const query = stateText(row.queryKeys, statuses)

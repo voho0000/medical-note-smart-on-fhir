@@ -235,6 +235,14 @@ export interface AllergyEntity {
 export interface ObservationEntity {
   id?: string
   resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
   code?: {
     text?: string
     coding?: Array<{
@@ -328,6 +336,7 @@ export interface ObservationEntity {
     reference?: string
   }
   performer?: Array<{ display?: string; reference?: string }>
+  note?: Array<{ text?: string }>
   // Specimen routing signal (set by NHI-FHIR-Bridge based on the NHI 醫令碼).
   // categorizeObservation uses this as the authoritative blood vs urine
   // boundary; missing this field caused blood-typing / antibody / antigen
@@ -913,6 +922,30 @@ export interface ClinicalDataQueryStatus {
  * truth for "is this a report member?" and "is this a vital?". Re-deriving
  * those rules per-feature is exactly what produced duplicate / mislabeled rows.
  */
+export interface ClinicalSourceMetadata {
+  source: 'health-bank-sdk-json'
+  convertedAt: string
+  converterVersion: string
+  resourceCounts: Record<string, number>
+  warnings: Array<{ code: string; count?: number }>
+  labDuplicateMerge: {
+    sourceCount: number
+    convertedCount: number
+    mergedCount: number
+    conflictingValueGroupCount: number
+  }
+  unitInference: {
+    policyVersion: string
+    inferredCount: number
+    unitlessCount: number
+    unresolvedCount: number
+  }
+  sourceCapabilities: Array<{
+    key: string
+    availability: 'provided' | 'not-provided' | 'not-distinguished' | 'embedded' | 'partial'
+  }>
+}
+
 export interface ClinicalDataCollection {
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
@@ -929,6 +962,10 @@ export interface ClinicalDataCollection {
   consents: ConsentEntity[]
   devices: DeviceEntity[]
   carePlans: CarePlanEntity[]
+  /** Encrypted sidecar describing an SDK→FHIR conversion. It contains counts
+   * and source limitations only — never the uploaded SDK JSON or clinical
+   * values. */
+  sourceMetadata?: ClinicalSourceMetadata
   /**
    * Per-search outcome for SMART data. Optional because imported/local bundles
    * do not perform network searches. This prevents an authorization or server

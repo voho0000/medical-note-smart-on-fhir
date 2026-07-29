@@ -1095,6 +1095,7 @@ export const en = {
   visitHistory: {
     badges: {
       outpatient: 'Outpatient',
+      'outpatient-or-emergency': 'Outpatient or emergency — not distinguishable',
       inpatient: 'Inpatient',
       emergency: 'Emergency',
       home: 'Home Care',
@@ -1812,7 +1813,7 @@ export const en = {
     demoData: 'Demo data',
     exitDemo: 'Exit demo · back to home',
     clearTitle: 'Clear local data',
-    importTitle: 'Import FHIR Bundle JSON',
+    importTitle: 'Import a FHIR Bundle or Health Bank SDK JSON',
   },
 
   feedback: {

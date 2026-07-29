@@ -182,7 +182,7 @@ export function WelcomeOnboarding() {
           {w.dragHint ?? 'Tip: you can also drag a .json file anywhere on this screen to import.'}
         </p>
 
-        <BundleFileInput ref={localCardFileRef} />
+        <BundleFileInput ref={localCardFileRef} importFile={importFile} />
 
         <div className="mt-8 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Shield className="h-3.5 w-3.5" />

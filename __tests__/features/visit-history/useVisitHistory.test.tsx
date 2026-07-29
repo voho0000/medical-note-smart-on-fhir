@@ -125,6 +125,27 @@ describe('useVisitHistory — bridge bug regression locks', () => {
   })
 
   describe('visit-type classification fallbacks', () => {
+    it('keeps SDK 門急診 explicitly ambiguous instead of classifying it as emergency or outpatient', () => {
+      const { result } = render([
+        {
+          id: 'sdk-r1',
+          status: 'finished',
+          class: { code: 'AMB' },
+          type: [{
+            text: '門急診',
+            coding: [{
+              system: ENCOUNTER_KIND_SYSTEM,
+              code: 'outpatient-or-emergency',
+              display: '門急診',
+            }],
+          }],
+          period: { start: '2026-05-13T00:00:00+08:00' },
+        },
+      ])
+
+      expect(result.current[0].type).toBe('outpatient-or-emergency')
+    })
+
     it('classifies by class.code when type[].text is missing', () => {
       const { result } = render([
         {

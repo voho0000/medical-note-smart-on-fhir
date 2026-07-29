@@ -55,6 +55,10 @@ export interface ReferenceRange {
 export interface Observation {
   id?: string
   resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Coding[]
+  }
   code?: CodeableConcept
   status?: string
   category?: CodeableConcept[]

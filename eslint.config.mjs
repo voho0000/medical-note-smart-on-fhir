@@ -21,6 +21,7 @@ const config = [
       "out/**",
       "coverage/**",
       ".claude/**",
+      "vendor/**",
       "next-env.d.ts",
     ],
   },

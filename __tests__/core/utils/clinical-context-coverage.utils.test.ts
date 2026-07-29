@@ -54,4 +54,39 @@ describe('buildClinicalContextCoverageSection', () => {
     expect(section?.items.join('\n')).not.toContain('secret-med')
     expect(section?.items.join('\n')).not.toContain('Medications: status=excluded; source_records=1')
   })
+
+  it('adds SDK source limitations and conversion audit counts to AI context', () => {
+    const section = buildClinicalContextCoverageSection(
+      ALL_DATA_SELECTION,
+      ALL_DATA_FILTERS,
+      {
+        sourceMetadata: {
+          source: 'health-bank-sdk-json',
+          convertedAt: '2000-01-01T00:00:00Z',
+          converterVersion: '0.1.0',
+          resourceCounts: {},
+          warnings: [],
+          labDuplicateMerge: {
+            sourceCount: 5,
+            convertedCount: 3,
+            mergedCount: 2,
+            conflictingValueGroupCount: 1,
+          },
+          unitInference: {
+            policyVersion: 'sdk-unit-policy-v1',
+            inferredCount: 4,
+            unitlessCount: 1,
+            unresolvedCount: 1,
+          },
+          sourceCapabilities: [],
+        },
+      } as any,
+      [],
+      NOW,
+    )
+
+    expect(section?.items.join('\n')).toContain('converted locally from Health Bank SDK JSON')
+    expect(section?.items.join('\n')).toContain('same_day_lab_rows_merged=2')
+    expect(section?.items.join('\n')).toContain('inferred_lab_units=4')
+  })
 })

@@ -14,6 +14,7 @@ import {
 } from "@/src/application/stores/resource-navigation.store"
 import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { FhirDataIssuesBanner } from "@/features/clinical-summary/components/FhirDataIssuesBanner"
+import { SdkSourceLimitationsBanner } from "@/features/clinical-summary/components/SdkSourceLimitationsBanner"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -78,6 +79,7 @@ export default function ClinicalSummaryFeature() {
 
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col">
+      <SdkSourceLimitationsBanner />
       <FhirDataIssuesBanner />
       <Tabs
         value={activeTab}

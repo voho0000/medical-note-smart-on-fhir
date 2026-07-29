@@ -205,6 +205,26 @@ describe('FhirMapper', () => {
   })
 
   describe('toObservation', () => {
+    it('preserves SDK unit-inference provenance tags and notes', () => {
+      const fhirObservation = {
+        id: 'sdk-inferred-unit',
+        meta: {
+          tag: [{
+            system: 'https://nhi-fhir-bridge.github.io/CodeSystem/sdk-unit-origin',
+            code: 'bridge-inferred',
+          }],
+        },
+        code: { text: 'Glucose' },
+        valueQuantity: { value: 98, unit: 'mg/dL' },
+        note: [{ text: 'Unit inferred under sdk-unit-policy-v1.' }],
+      }
+
+      const result = FhirMapper.toObservation(fhirObservation)
+
+      expect(result.meta).toEqual(fhirObservation.meta)
+      expect(result.note).toEqual(fhirObservation.note)
+    })
+
     it('should map FHIR Observation with valueQuantity', () => {
       const fhirObservation = {
         id: 'obs-123',

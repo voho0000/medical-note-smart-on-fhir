@@ -27,6 +27,8 @@ import {
   notifyBundleChangeSettled,
   notifyBundleChanged,
 } from '@/src/shared/utils/reset-on-bundle-change'
+import type { ClinicalSourceMetadata } from '@/src/core/entities/clinical-data.entity'
+import { prepareLocalImportFile } from '../services/local-import-file.service'
 
 export interface UseImportBundleReturn {
   /** Parse + persist a FHIR Bundle file. Throws on validation error;
@@ -68,7 +70,11 @@ export function useImportBundle(): UseImportBundleReturn {
 
   // Shared persist core for both real imports and the demo loader: validate,
   // save, mark/unmark demo, then refresh presence state + invalidate queries.
-  const persistBundle = useCallback(async (bundle: any, demo: boolean) => {
+  const persistBundle = useCallback(async (
+    bundle: any,
+    demo: boolean,
+    sourceMetadata?: ClinicalSourceMetadata,
+  ) => {
     if (bundle?.resourceType !== 'Bundle') {
       throw new Error('Not a FHIR Bundle (resourceType must be "Bundle")')
     }
@@ -87,7 +93,11 @@ export function useImportBundle(): UseImportBundleReturn {
     // automatic-snapshot policy.
     const localImportId = generateId()
     const localImportConsent = startLocalImportAiConsent(localImportId)
-    await LocalBundleService.save(bundle, { importId: localImportId, demo })
+    await LocalBundleService.save(bundle, {
+      importId: localImportId,
+      demo,
+      sourceMetadata,
+    })
     // Importing NEW data must not leave the PREVIOUS bundle's derived results
     // around, or the render goes inconsistent (old AI summary / safety scan /
     // report interpretation shown against new clinical data — worst when the two
@@ -116,8 +126,8 @@ export function useImportBundle(): UseImportBundleReturn {
     setError(null)
     try {
       await serializeLocalBundleMutation(async () => {
-        const bundle = JSON.parse(await file.text())
-        await persistBundle(bundle, false)
+        const prepared = await prepareLocalImportFile(file)
+        await persistBundle(prepared.bundle, false, prepared.sourceMetadata)
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to parse bundle'

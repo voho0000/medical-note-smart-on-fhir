@@ -18,6 +18,7 @@ import {
 import { normalizeAnalyteUnit } from '@/src/shared/utils/unit-scale'
 import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
 import { FHIR_SYSTEMS } from '@/src/shared/constants/fhir-systems.constants'
+import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 
 export interface LabCell {
   value: string
@@ -28,6 +29,7 @@ export interface LabCell {
   isAbnormal?: boolean
   effectiveDateTime?: string
   status?: string
+  unitInferred?: boolean
 }
 
 export interface LabRow {
@@ -75,7 +77,7 @@ function cellContainsNumericValue(cell: LabCell): boolean {
 // Exported for unit-test access; the cumulative-report cell colouring
 // depends on its isAbnormal output, so we lock it down separately from
 // the React hook.
-export function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string; status?: string } {
+export function formatValue(obs: any): { value: string; unit?: string; numericValue?: number; isAbnormal: boolean; interpretationCode?: string; status?: string; unitInferred: boolean } {
   let value = '—'
   let unit: string | undefined
   let numericValue: number | undefined
@@ -95,7 +97,15 @@ export function formatValue(obs: any): { value: string; unit?: string; numericVa
   // source reference ranges may flag the value.
   const isAbnormal = isObservationAbnormal(obs)
 
-  return { value, unit, numericValue, isAbnormal, interpretationCode: interp, status: typeof obs.status === 'string' ? obs.status.toLowerCase() : undefined }
+  return {
+    value,
+    unit,
+    numericValue,
+    isAbnormal,
+    interpretationCode: interp,
+    status: typeof obs.status === 'string' ? obs.status.toLowerCase() : undefined,
+    unitInferred: isInferredObservationUnit(obs),
+  }
 }
 
 // NHI system URI used by the 健康存摺 bridge
@@ -254,7 +264,7 @@ export function buildLabPivots(
 
       const { mapKey, testKey, displayName } = buildTestEntry(obs, cat.id, nameMode)
       const fv = formatValue(obs)
-      const { value, unit, numericValue, interpretationCode, status } = fv
+      const { value, unit, numericValue, interpretationCode, status, unitInferred } = fv
       const { isAbnormal } = fv
 
       if (!testMap.has(mapKey)) {
@@ -301,6 +311,7 @@ export function buildLabPivots(
         interpretationCode,
         effectiveDateTime: obs.effectiveDateTime,
         status,
+        unitInferred,
       }
       // Same analyte, same day: default is last-write-wins (a revised result
       // supersedes the earlier one). EXCEPTION — a qualitative + quantitative
@@ -321,6 +332,7 @@ export function buildLabPivots(
           isAbnormal: !!prev.isAbnormal || !!cell.isAbnormal,
           interpretationCode: prev.interpretationCode || cell.interpretationCode,
           status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,
+          unitInferred: !!prev.unitInferred || !!cell.unitInferred,
         })
       } else if (prev && incomingNumeric !== isNumericCellValue(prev.value)) {
         const qual = incomingNumeric ? prev : cell
@@ -331,6 +343,7 @@ export function buildLabPivots(
           interpretationCode: qual.interpretationCode || quant.interpretationCode,
           effectiveDateTime: cell.effectiveDateTime || prev.effectiveDateTime,
           status: qual.status === quant.status ? qual.status : [qual.status, quant.status].filter(Boolean).join('|') || undefined,
+          unitInferred: !!qual.unitInferred || !!quant.unitInferred,
         })
       } else if (prev) {
         // Never overwrite a same-analyte/same-day source record. A pivot cell is
@@ -343,6 +356,7 @@ export function buildLabPivots(
           isAbnormal: !!prev.isAbnormal || !!cell.isAbnormal,
           interpretationCode: prev.interpretationCode || cell.interpretationCode,
           status: prev.status === cell.status ? prev.status : [prev.status, cell.status].filter(Boolean).join('|') || undefined,
+          unitInferred: !!prev.unitInferred || !!cell.unitInferred,
         })
       } else {
         row.values.set(date, cell)

@@ -620,7 +620,12 @@ export function useReportsData(
         // or translation is appended. Falls back to displayTitle when groupText is
         // empty so the lookup key is never blank.
         rawTitle: groupText || deriveGroupTitle(displayTitle),
-        meta: `${category || (isLinkedImagingStudy ? 'ImagingStudy' : 'Laboratory')} • ${head.status || linkedStudies[0]?.status || '—'}`,
+        // An SDK r8 report has no source category. Do not silently call every
+        // uncategorised report "Laboratory"; that turns source absence into a
+        // clinical assertion. Linked ImagingStudy remains explicit.
+        meta: `${category || (isLinkedImagingStudy
+          ? 'ImagingStudy'
+          : (locale === 'zh-TW' ? '未分類' : 'Unclassified'))} • ${head.status || linkedStudies[0]?.status || '—'}`,
         obs: obsWithSummary,
         group: isLinkedImagingStudy ? 'imaging' : inferGroupFromCategory(head.category),
         institution,

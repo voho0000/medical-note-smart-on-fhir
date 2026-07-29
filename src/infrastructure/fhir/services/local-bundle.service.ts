@@ -28,7 +28,10 @@ import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import { referenceId } from '@/src/core/utils/observation-selectors'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
-import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
+import type {
+  ClinicalDataCollection,
+  ClinicalSourceMetadata,
+} from '@/src/core/entities/clinical-data.entity'
 import {
   getSessionBundleKey,
   clearSessionBundleKey,
@@ -67,11 +70,13 @@ const IMG_STORE = 'images'
 let memBundle: object | null = null
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false
+let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
 
 interface PersistedBundleEnvelope {
   __mediprismaBundle: 1
   importId: string
   demo: boolean
+  sourceMetadata?: ClinicalSourceMetadata
   bundle: object
 }
 
@@ -533,12 +538,17 @@ export const LocalBundleService = {
   // lives in memory only for this session — never plaintext at rest.
   async save(
     bundle: object,
-    options: { importId?: string; demo?: boolean } = {},
+    options: {
+      importId?: string
+      demo?: boolean
+      sourceMetadata?: ClinicalSourceMetadata
+    } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
       ? options.importId.trim()
       : null
     const demo = options.demo === true
+    const sourceMetadata = options.sourceMetadata
     if (typeof window !== 'undefined') {
       try {
         await extractAndStoreImages(bundle)
@@ -550,12 +560,19 @@ export const LocalBundleService = {
     memBundle = bundle
     memBundleImportId = importId
     memBundleIsDemo = demo
+    memBundleSourceMetadata = sourceMetadata ?? null
     if (typeof window === 'undefined') return
     try {
       const key = await getSessionBundleKey({ create: true })
       if (!key) throw new Error('bundle session key unavailable')
       const persisted: object = importId
-        ? { __mediprismaBundle: 1, importId, demo, bundle } satisfies PersistedBundleEnvelope
+        ? {
+            __mediprismaBundle: 1,
+            importId,
+            demo,
+            ...(sourceMetadata ? { sourceMetadata } : {}),
+            bundle,
+          } satisfies PersistedBundleEnvelope
         : bundle
       await idbPut(await encryptJson(key, persisted))
       localStorage.setItem(
@@ -582,6 +599,7 @@ export const LocalBundleService = {
     memBundle = null
     memBundleImportId = null
     memBundleIsDemo = false
+    memBundleSourceMetadata = null
     if (typeof window === 'undefined') return
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(DEMO_FLAG_KEY)
@@ -644,6 +662,7 @@ export const LocalBundleService = {
             memBundle = decrypted.bundle
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
+            memBundleSourceMetadata = decrypted.sourceMetadata ?? null
             localStorage.setItem(
               STORAGE_KEY,
               `${IMPORT_MARKER_PREFIX}${decrypted.importId}`,
@@ -656,6 +675,7 @@ export const LocalBundleService = {
           memBundle = bundle
           memBundleImportId = null
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
+          memBundleSourceMetadata = null
           return bundle
         } catch {
           await this.clear()
@@ -668,6 +688,7 @@ export const LocalBundleService = {
         memBundle = fromIdb as object
         memBundleImportId = null
         memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
+        memBundleSourceMetadata = null
         try {
           const key = await getSessionBundleKey({ create: true })
           if (key) await idbPut(await encryptJson(key, fromIdb))
@@ -690,6 +711,7 @@ export const LocalBundleService = {
           memBundle = parsed
           memBundleImportId = null
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
+          memBundleSourceMetadata = null
           // Move it (encrypted) to IndexedDB and shrink the marker so we don't
           // re-migrate.
           try {
@@ -710,7 +732,10 @@ export const LocalBundleService = {
     return null
   },
 
-  parse(bundle: any): LocalBundleData | null {
+  parse(
+    bundle: any,
+    sourceMetadata?: ClinicalSourceMetadata,
+  ): LocalBundleData | null {
     // Canonicalise identity FIRST: stamp ids onto id-less resources and rewrite
     // urn:uuid / absolute references to the relative ResourceType/id form, so
     // every downstream step (patient-id gate, report-member linking, the inline
@@ -837,7 +862,19 @@ export const LocalBundleService = {
     const comps  = byType('Composition')
     const imms   = byType('Immunization')
     const consents = byType('Consent')
-    const devices  = byType('Device')
+    // The SDK converter records its unit-inference software as a Device linked
+    // from Provenance. It is an audit agent, not a device implanted in or used
+    // by the patient, and must never enter clinical Device cards, AI context,
+    // or IPS exports.
+    const devices = byType('Device').filter((resource: any) => {
+      const names = Array.isArray(resource.deviceName)
+        ? resource.deviceName.map((item: any) => String(item?.name ?? ''))
+        : []
+      const isSdkUnitPolicyAgent = names.some((name: string) =>
+        name.startsWith('NHI-FHIR-Bridge sdk-unit-policy-'),
+      )
+      return !isSdkUnitPolicyAgent
+    })
     const carePlans = byType('CarePlan')
 
     // Build observation map for DiagnosticReport expansion
@@ -872,6 +909,7 @@ export const LocalBundleService = {
       consents:         consents.map((r: any) => FhirMapper.toConsent(r)),
       devices:          devices.map((r: any) => FhirMapper.toDevice(r)),
       carePlans:        carePlans.map((r: any) => FhirMapper.toCarePlan(r)),
+      ...(sourceMetadata ? { sourceMetadata } : {}),
     }
 
     return { patient, collection }
@@ -880,6 +918,6 @@ export const LocalBundleService = {
   async parseStored(): Promise<LocalBundleData | null> {
     const bundle = await this.load()
     if (!bundle) return null
-    return this.parse(bundle)
+    return this.parse(bundle, memBundleSourceMetadata ?? undefined)
   },
 }

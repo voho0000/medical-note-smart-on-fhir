@@ -15,7 +15,7 @@ import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.h
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 import { cn } from "@/src/shared/utils/cn.utils"
 
-type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
+type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
 interface VisitItemProps {
   visit: VisitRecord
@@ -36,6 +36,7 @@ const getTypeBadge = (type: VisitType, labels: any) => {
   // 門診 blue · 急診 rose · 住院 violet — still distinct at a glance.
   const typeMap: Record<VisitType, { label: string; className: string }> = {
     outpatient: { label: labels.outpatient, className: 'border-blue-200 bg-blue-50 text-blue-700' },
+    'outpatient-or-emergency': { label: labels['outpatient-or-emergency'], className: 'border-sky-200 bg-sky-50 text-sky-700' },
     inpatient:  { label: labels.inpatient,  className: 'border-violet-200 bg-violet-50 text-violet-700' },
     emergency:  { label: labels.emergency,  className: 'border-rose-200 bg-rose-50 text-rose-700' },
     home:       { label: labels.home,       className: '' },

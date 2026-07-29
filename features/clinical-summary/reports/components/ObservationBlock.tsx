@@ -10,6 +10,7 @@ import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
+import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 
 interface ObservationBlockProps {
   observation: Observation
@@ -103,6 +104,9 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
     ? getOriginalValueWithUnit(observation.valueQuantity)
     : observation.valueString || codedValue || '—'
   const isLongText = !observation.valueQuantity && (observation.valueString?.length ?? 0) > 80
+  const inferredUnitLabel = isInferredObservationUnit(observation)
+    ? (locale.startsWith('zh') ? ' · 推估單位' : ' · inferred unit')
+    : ''
 
   // Procedure detail container: flat list of attribute rows, no main row.
   // Components flagged `_isSubHeader` (a grouped session's sub-procedure name)
@@ -153,7 +157,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
         {/* Main observation row */}
         <ObsRow
           name={title || '—'}
-          value={primaryValue}
+          value={`${primaryValue}${inferredUnitLabel}`}
           originalValue={originalPrimaryValue}
           interp={interp}
           refText={ref}

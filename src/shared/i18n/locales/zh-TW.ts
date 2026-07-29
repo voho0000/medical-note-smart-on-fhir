@@ -1097,6 +1097,7 @@ export const zhTW = {
   visitHistory: {
     badges: {
       outpatient: '門診',
+      'outpatient-or-emergency': '門急診',
       inpatient: '住院',
       emergency: '急診',
       home: '居家照護',
@@ -1814,7 +1815,7 @@ export const zhTW = {
     demoData: '示範資料',
     exitDemo: '結束示範，返回首頁',
     clearTitle: '清除本地資料',
-    importTitle: '匯入 FHIR Bundle JSON',
+    importTitle: '匯入 FHIR Bundle 或健康存摺 SDK JSON',
   },
 
   feedback: {
