@@ -34,7 +34,19 @@ const UCUM_SYSTEM = 'http://unitsofmeasure.org'
 const NHI_DRUG_CODE_SYSTEM = 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
 
 const HBA1C_LOINC = '4548-4'
-const EGFR_LOINC = '77147-7'
+const EGFR_LOINC = new Set(['69405-9', '77147-7'])
+const EGFR_UCUM_UNITS = new Set([
+  'ml/min/1.73m2',
+  'ml/min/1.73m^2',
+  'ml/min/{1.73_m2}',
+  'ml/min/{1.73m2}',
+])
+const SERUM_CREATININE_LOINC = '2160-0'
+const HEMOGLOBIN_LOINC = '718-7'
+const BICARBONATE_LOINC = new Set(['1963-8', '2028-9'])
+const CALCIUM_LOINC = new Set(['17861-6', '2000-8'])
+const PHOSPHATE_LOINC = new Set(['2777-1'])
+const ALBUMIN_LOINC = new Set(['1751-7'])
 const POTASSIUM_LOINC = '2823-3'
 const TOTAL_CHOLESTEROL_LOINC = '2093-3'
 const LDL_LOINC = new Set(['13457-7', '18262-6', '2089-1'])
@@ -209,6 +221,18 @@ function medicationSource(medication: MedicationEntity): CdssFactSource {
   }
 }
 
+function carePlanSource(carePlan: CarePlanEntity): CdssFactSource {
+  return {
+    resourceType: 'CarePlan',
+    resourceId: carePlan.id,
+    date: dateOnly(carePlan.period?.start ?? carePlan.created),
+    status: carePlan.status,
+    value: carePlan.title ?? carePlan.description ?? 'CKD care plan',
+    facility: carePlan.author?.display,
+    sourceSystem: carePlan.sourceSystem,
+  }
+}
+
 function collectDiagnoses(
   conditions: readonly ConditionEntity[],
   encounters: readonly EncounterEntity[],
@@ -257,6 +281,13 @@ function collectDmDiagnoses(
   encounters: readonly EncounterEntity[],
 ): DiagnosisCandidate[] {
   return collectDiagnoses(conditions, encounters, (code) => /^E11(?:\.|$)/.test(code))
+}
+
+function collectCkdDiagnoses(
+  conditions: readonly ConditionEntity[],
+  encounters: readonly EncounterEntity[],
+): DiagnosisCandidate[] {
+  return collectDiagnoses(conditions, encounters, (code) => /^N18(?:\.|$)/.test(code))
 }
 
 function diagnosisPriority(candidate: DiagnosisCandidate): number {
@@ -346,14 +377,35 @@ function diagnosisFact(
 }
 
 function validatedEgfrObservations(observations: readonly ObservationEntity[]): ObservationEntity[] {
-  const accepted = new Set(['ml/min/1.73m2', 'ml/min/{1.73_m2}'])
   return observations
     .filter((observation) => (
       isGovernedObservation(observation)
-      && hasCoding(observation.code?.coding, LOINC_SYSTEM, EGFR_LOINC)
-      && hasExpectedUnit(observation.valueQuantity, accepted)
+      && observation.code?.coding?.some((coding) => (
+        coding.system === LOINC_SYSTEM
+        && typeof coding.code === 'string'
+        && EGFR_LOINC.has(coding.code)
+      )) === true
+      && hasExpectedUnit(observation.valueQuantity, EGFR_UCUM_UNITS)
     ))
     .sort((a, b) => dateValue(a.effectiveDateTime) - dateValue(b.effectiveDateTime))
+}
+
+function persistentReducedEgfrPair(
+  observations: readonly ObservationEntity[],
+): readonly [ObservationEntity, ObservationEntity] | undefined {
+  const reduced = observations.filter((observation) => (
+    observation.valueQuantity?.value !== undefined
+    && observation.valueQuantity.value < 60
+  ))
+  if (reduced.length < 2) return undefined
+
+  const latest = reduced.at(-1)!
+  const latestDate = dateValue(latest.effectiveDateTime)
+  const minimumIntervalMs = 90 * 24 * 60 * 60 * 1000
+  const earlier = reduced.find((observation) => (
+    latestDate - dateValue(observation.effectiveDateTime) >= minimumIntervalMs
+  ))
+  return earlier ? [earlier, latest] : undefined
 }
 
 function isUacrObservation(observation: ObservationEntity): boolean {
@@ -589,19 +641,32 @@ function averageDailyUnits(medication: MedicationEntity): number | undefined {
   return undefined
 }
 
+function ckdCareProgramText(carePlan: CarePlanEntity): string {
+  return [
+    carePlan.title,
+    carePlan.description,
+    ...(carePlan.category ?? []).flatMap((category) => [
+      category.text,
+      ...(category.coding ?? []).map((coding) => coding.display),
+    ]),
+  ].filter(Boolean).join(' ')
+}
+
+function activeCkdCarePrograms(carePlans: readonly CarePlanEntity[]): CarePlanEntity[] {
+  return carePlans
+    .filter((carePlan) => (
+      carePlan.status === 'active'
+      && /初期慢性腎(?:臟)?病|早期\s*CKD|末期腎臟病前期|pre-esrd/i.test(
+        ckdCareProgramText(carePlan),
+      )
+    ))
+    .sort((a, b) => (
+      dateValue(b.period?.start ?? b.created) - dateValue(a.period?.start ?? a.created)
+    ))
+}
+
 function activeCkdCareProgramTitle(carePlans: readonly CarePlanEntity[]): string | undefined {
-  return carePlans.find((carePlan) => {
-    if (carePlan.status !== 'active') return false
-    const searchable = [
-      carePlan.title,
-      carePlan.description,
-      ...(carePlan.category ?? []).flatMap((category) => [
-        category.text,
-        ...(category.coding ?? []).map((coding) => coding.display),
-      ]),
-    ].filter(Boolean).join(' ')
-    return /初期慢性腎(?:臟)?病|末期腎臟病前期|pre-esrd/i.test(searchable)
-  })?.title
+  return activeCkdCarePrograms(carePlans)[0]?.title
 }
 
 function sglt2Indication(medication: MedicationEntity): {
@@ -685,12 +750,27 @@ function ageFact(patient: PatientEntity, now: Date): CdssFact | undefined {
   }
 }
 
+function sexFact(patient: PatientEntity): CdssFact | undefined {
+  if (patient.gender !== 'male' && patient.gender !== 'female') return undefined
+  return {
+    zh: patient.gender === 'male' ? '男' : '女',
+    en: patient.gender === 'male' ? 'Male' : 'Female',
+    sources: [{
+      resourceType: 'Patient',
+      resourceId: patient.id,
+      value: patient.gender,
+    }],
+  }
+}
+
 export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssPatientProfile {
   const now = input.now ?? new Date()
   const facts: Record<string, CdssFact> = {}
 
   const age = ageFact(input.patient, now)
   if (age) facts.age = age
+  const sex = sexFact(input.patient)
+  if (sex) facts.sex = sex
 
   const hba1c = findLatestValidatedObservation(input.observations, HBA1C_LOINC, new Set(['%']))
   if (hba1c?.valueQuantity?.value !== undefined) {
@@ -736,6 +816,59 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       unit: 'mL/min/1.73m²',
       date: dateOnly(latestEgfr?.effectiveDateTime),
       sources,
+    }
+  }
+  const persistentEgfrPair = persistentReducedEgfrPair(egfrValues)
+  if (persistentEgfrPair) {
+    const [earlier, latest] = persistentEgfrPair
+    const earlierDate = dateOnly(earlier.effectiveDateTime)
+    const latestDate = dateOnly(latest.effectiveDateTime)
+    facts.ckdChronicity = {
+      zh: `至少兩次 eGFR <60，間隔達 3 個月（${earlierDate} → ${latestDate}）`,
+      en: `At least two eGFR values below 60 separated by at least 3 months (${earlierDate} to ${latestDate})`,
+      date: latestDate,
+      sources: [earlier, latest].map((observation) => observationSource(
+        observation,
+        observation.valueQuantity!.value!,
+        'mL/min/1.73m²',
+      )),
+    }
+  }
+
+  const ckdDiagnoses = collectCkdDiagnoses(input.conditions, input.encounters)
+  const ckdDiagnosis = [...ckdDiagnoses]
+    .sort((a, b) => dateValue(b.date) - dateValue(a.date))[0]
+  if (ckdDiagnosis) {
+    facts.ckdDiagnosis = diagnosisFact(
+      ckdDiagnosis,
+      '慢性腎臟病診斷',
+      'Chronic kidney disease diagnosis',
+    )
+  }
+
+  const ckdCarePrograms = activeCkdCarePrograms(input.carePlans)
+  if (ckdCarePrograms.length > 0) {
+    const labels = ckdCarePrograms.map((carePlan) => (
+      carePlan.title ?? carePlan.description ?? 'CKD care plan'
+    ))
+    facts.ckdCareProgram = {
+      zh: `進行中：${labels.join('、')}`,
+      en: `Active: ${labels.join(', ')}`,
+      date: dateOnly(ckdCarePrograms[0].period?.start ?? ckdCarePrograms[0].created),
+      sources: ckdCarePrograms.map(carePlanSource),
+    }
+    const hasEarlyProgram = ckdCarePrograms.some((carePlan) => (
+      /初期慢性腎(?:臟)?病|早期\s*CKD/i.test(ckdCareProgramText(carePlan))
+    ))
+    const hasPreEsrdProgram = ckdCarePrograms.some((carePlan) => (
+      /末期腎臟病前期|pre-esrd/i.test(ckdCareProgramText(carePlan))
+    ))
+    if (hasEarlyProgram && hasPreEsrdProgram) {
+      facts.ckdCareProgramOverlap = {
+        zh: '同時存在初期 CKD 與 Pre-ESRD 進行中照護計畫',
+        en: 'Both Early CKD and Pre-ESRD care plans are active',
+        sources: ckdCarePrograms.map(carePlanSource),
+      }
     }
   }
 
@@ -830,6 +963,56 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   const potassiumFact = potassium ? observationFact(potassium, 'mmol/L') : undefined
   if (potassiumFact) facts.potassium = potassiumFact
 
+  const serumCreatinine = findLatestValidatedObservation(
+    input.observations,
+    SERUM_CREATININE_LOINC,
+    new Set(['mg/dl']),
+  )
+  const serumCreatinineFact = serumCreatinine
+    ? observationFact(serumCreatinine, 'mg/dL')
+    : undefined
+  if (serumCreatinineFact) facts.serumCreatinine = serumCreatinineFact
+
+  const hemoglobin = findLatestValidatedObservation(
+    input.observations,
+    HEMOGLOBIN_LOINC,
+    new Set(['g/dl']),
+  )
+  const hemoglobinFact = hemoglobin ? observationFact(hemoglobin, 'g/dL') : undefined
+  if (hemoglobinFact) facts.hemoglobin = hemoglobinFact
+
+  const bicarbonate = findLatestValidatedObservationFromCodes(
+    input.observations,
+    BICARBONATE_LOINC,
+    new Set(['mmol/l', 'meq/l']),
+  )
+  const bicarbonateFact = bicarbonate ? observationFact(bicarbonate, 'mmol/L') : undefined
+  if (bicarbonateFact) facts.bicarbonate = bicarbonateFact
+
+  const calcium = findLatestValidatedObservationFromCodes(
+    input.observations,
+    CALCIUM_LOINC,
+    new Set(['mg/dl']),
+  )
+  const calciumFact = calcium ? observationFact(calcium, 'mg/dL') : undefined
+  if (calciumFact) facts.calcium = calciumFact
+
+  const phosphate = findLatestValidatedObservationFromCodes(
+    input.observations,
+    PHOSPHATE_LOINC,
+    new Set(['mg/dl']),
+  )
+  const phosphateFact = phosphate ? observationFact(phosphate, 'mg/dL') : undefined
+  if (phosphateFact) facts.phosphate = phosphateFact
+
+  const albumin = findLatestValidatedObservationFromCodes(
+    input.observations,
+    ALBUMIN_LOINC,
+    new Set(['g/dl']),
+  )
+  const albuminFact = albumin ? observationFact(albumin, 'g/dL') : undefined
+  if (albuminFact) facts.albumin = albuminFact
+
   const totalCholesterol = findLatestValidatedObservation(
     input.observations,
     TOTAL_CHOLESTEROL_LOINC,
@@ -856,9 +1039,45 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   const statinAssessment = assessMedicationClass(classifiedMedications, 'statin')
   const aceArbAssessment = assessMedicationClass(classifiedMedications, 'ace-inhibitor-or-arb')
   const finerenoneAssessment = assessMedicationClass(classifiedMedications, 'finerenone')
+  const medicationDataDates = input.medications
+    .map((medication) => dateOnly(medication.authoredOn))
+    .filter((date): date is string => Boolean(date))
+    .sort()
+  const medicationClassTimeline = (
+    assessment: ReturnType<typeof assessMedicationClass>,
+  ) => {
+    const dates = assessment.medications
+      .filter((item) => item.state === assessment.state)
+      .map((item) => dateOnly(item.medication.authoredOn))
+      .filter((date): date is string => Boolean(date))
+      .sort()
+    return {
+      ...(dates.at(-1) ? { lastPrescriptionDate: dates.at(-1) } : {}),
+      ...(medicationDataDates[0] ? { dataWindowStartDate: medicationDataDates[0] } : {}),
+      ...(medicationDataDates.at(-1) ? {
+        dataWindowEndDate: medicationDataDates.at(-1),
+      } : {}),
+    }
+  }
+  const medicationClassNames = (
+    assessment: ReturnType<typeof assessMedicationClass>,
+  ) => assessment.medications
+    .filter((item) => item.state === assessment.state)
+    .map((item) => item.name)
+  const insulinTimeline = medicationClassTimeline(insulinAssessment)
+  const sulfonylureaTimeline = medicationClassTimeline(sulfonylureaAssessment)
+  const sglt2Timeline = medicationClassTimeline(sglt2Assessment)
+  const statinTimeline = medicationClassTimeline(statinAssessment)
+  const aceArbTimeline = medicationClassTimeline(aceArbAssessment)
+  const finerenoneTimeline = medicationClassTimeline(finerenoneAssessment)
   const hypoglycemiaAssessments = [insulinAssessment, sulfonylureaAssessment]
   const medicationClassState = (
-    ['confirmed-current', 'active-order-unconfirmed', 'on-hold'] as const
+    [
+      'confirmed-current',
+      'active-order-unconfirmed',
+      'on-hold',
+      'historical-record-current-status-unknown',
+    ] as const
   ).find((state) => (
     insulinAssessment.state === state || sulfonylureaAssessment.state === state
   )) ?? (
@@ -894,15 +1113,21 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
             en: `Insulin/sulfonylurea on hold: ${hypoglycemiaRiskNames.join(', ')}`,
             sources: hypoglycemiaMedicationSources,
           }
-    : medicationClassState === 'uncertain'
-      ? {
-          zh: `有 ${classifiedMedications.unclassifiedAntidiabeticCount} 筆降糖藥無法辨識成分`,
-          en: `${classifiedMedications.unclassifiedAntidiabeticCount} glucose-lowering medication record(s) have an unrecognized ingredient`,
-        }
-      : {
-          zh: '現有資料未見胰島素或磺醯脲',
-          en: 'No insulin or sulfonylurea appears in the available medication data',
-        }
+        : medicationClassState === 'historical-record-current-status-unknown'
+          ? {
+              zh: `有歷史胰島素／磺醯脲處方，近期是否持續未知：${hypoglycemiaRiskNames.join('、')}`,
+              en: `Historical insulin/sulfonylurea record; current use is unknown: ${hypoglycemiaRiskNames.join(', ')}`,
+              sources: hypoglycemiaMedicationSources,
+            }
+          : medicationClassState === 'uncertain'
+            ? {
+                zh: `有 ${classifiedMedications.unclassifiedAntidiabeticCount} 筆降糖藥無法辨識成分`,
+                en: `${classifiedMedications.unclassifiedAntidiabeticCount} glucose-lowering medication record(s) have an unrecognized ingredient`,
+              }
+            : {
+                zh: '現有資料未見胰島素或磺醯脲',
+                en: 'No insulin or sulfonylurea appears in the available medication data',
+              }
 
   const classFact = (
     assessment: ReturnType<typeof assessMedicationClass>,
@@ -914,6 +1139,13 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       .map((item) => item.name)
     const suffixZh = names.length > 0 ? `：${names.join('、')}` : ''
     const suffixEn = names.length > 0 ? `: ${names.join(', ')}` : ''
+    const timeline = medicationClassTimeline(assessment)
+    const timelineZh = assessment.state === 'historical-record-current-status-unknown'
+      ? `（最後處方 ${timeline.lastPrescriptionDate ?? '日期不明'}；用藥資料範圍 ${timeline.dataWindowStartDate ?? '不明'}–${timeline.dataWindowEndDate ?? '不明'}）`
+      : ''
+    const timelineEn = assessment.state === 'historical-record-current-status-unknown'
+      ? ` (last prescription ${timeline.lastPrescriptionDate ?? 'unknown'}; medication data window ${timeline.dataWindowStartDate ?? 'unknown'}–${timeline.dataWindowEndDate ?? 'unknown'})`
+      : ''
     const labels = {
       'confirmed-current': {
         zh: `已確認使用 ${classZh}${suffixZh}`,
@@ -926,6 +1158,10 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       'on-hold': {
         zh: `${classZh} 暫停中${suffixZh}`,
         en: `${classEn} is on hold${suffixEn}`,
+      },
+      'historical-record-current-status-unknown': {
+        zh: `有歷史 ${classZh} 處方，近期是否持續未知${suffixZh}${timelineZh}`,
+        en: `Historical ${classEn} record; current use is unknown${suffixEn}${timelineEn}`,
       },
       uncertain: {
         zh: `${classZh} 成分辨識不完整`,
@@ -1028,7 +1264,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     }
   }
 
-  const eligibility = eligibilityDiagnosis
+  const dmEligibility = eligibilityDiagnosis
     ? {
         basis: eligibilityDiagnosis.basis,
         resourceType: eligibilityDiagnosis.resourceType,
@@ -1045,6 +1281,46 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
           code: HBA1C_LOINC,
         } as const
       : undefined
+  const ckdEligibility = ckdDiagnosis
+    ? {
+        basis: ckdDiagnosis.basis,
+        resourceType: ckdDiagnosis.resourceType,
+        resourceId: ckdDiagnosis.resourceId,
+        codingSystem: ckdDiagnosis.coding.system!,
+        code: ckdDiagnosis.coding.code!,
+      } as const
+    : ckdCarePrograms[0]
+      ? {
+          basis: 'care_plan',
+          resourceType: 'CarePlan',
+          resourceId: ckdCarePrograms[0].id,
+          codingSystem: 'https://twcore.mohw.gov.tw/CodeSystem/ckd-care-program',
+          code: /末期腎臟病前期|pre-esrd/i.test(ckdCareProgramText(ckdCarePrograms[0]))
+            ? 'pre-esrd'
+            : 'early-ckd',
+        } as const
+      : persistentEgfrPair
+        ? {
+            basis: 'chronic_labs',
+            resourceType: 'Observation',
+            resourceId: persistentEgfrPair[1].id,
+            codingSystem: LOINC_SYSTEM,
+            code: persistentEgfrPair[1].code?.coding?.find((coding) => (
+              coding.system === LOINC_SYSTEM
+              && typeof coding.code === 'string'
+              && EGFR_LOINC.has(coding.code)
+            ))?.code ?? '77147-7',
+          } as const
+        : undefined
+
+  const eligibleDiseasePackIds = [
+    ...(dmEligibility ? ['dm-poc'] : []),
+    ...(ckdEligibility ? ['ckd-poc'] : []),
+  ]
+  const diseasePackEligibility = {
+    ...(dmEligibility ? { 'dm-poc': dmEligibility } : {}),
+    ...(ckdEligibility ? { 'ckd-poc': ckdEligibility } : {}),
+  }
 
   const dcsiEvidence = deriveDcsiEvidence({
     conditions: input.conditions,
@@ -1122,58 +1398,67 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   } as const
 
   return {
-    id: `${input.patient.id}:dm-cdss`,
-    profileVersion: 'dm-cdss-profile-v1',
-    ...(eligibility ? {
-      eligibleDiseasePackIds: ['dm-poc'],
-      diseasePackEligibility: { 'dm-poc': eligibility },
+    id: `${input.patient.id}:cdss`,
+    profileVersion: 'multi-disease-cdss-profile-v2',
+    ...(input.patient.gender ? {
+      demographics: { sex: input.patient.gender },
+    } : {}),
+    ...(eligibleDiseasePackIds.length > 0 ? {
+      eligibleDiseasePackIds,
+      diseasePackEligibility,
     } : {}),
     facts,
     medicationClassContexts: {
       insulin: {
         state: insulinAssessment.state,
-        medicationNames: insulinAssessment.medications.map((item) => item.name),
+        medicationNames: medicationClassNames(insulinAssessment),
         factKey: 'hypoglycemiaRiskMedications',
+        ...insulinTimeline,
         allergyState: allergyAssessments.insulin.state,
         allergyNames: allergyAssessments.insulin.allergyNames,
         allergyFactKey: 'insulinAllergy',
       },
       sulfonylurea: {
         state: sulfonylureaAssessment.state,
-        medicationNames: sulfonylureaAssessment.medications.map((item) => item.name),
+        medicationNames: medicationClassNames(sulfonylureaAssessment),
         factKey: 'hypoglycemiaRiskMedications',
+        ...sulfonylureaTimeline,
         allergyState: allergyAssessments.sulfonylurea.state,
         allergyNames: allergyAssessments.sulfonylurea.allergyNames,
         allergyFactKey: 'sulfonylureaAllergy',
       },
       'sglt2-inhibitor': {
         state: sglt2Assessment.state,
-        medicationNames: sglt2Assessment.medications.map((item) => item.name),
+        medicationNames: medicationClassNames(sglt2Assessment),
         factKey: 'sglt2Therapy',
+        ...sglt2Timeline,
         allergyState: allergyAssessments['sglt2-inhibitor'].state,
         allergyNames: allergyAssessments['sglt2-inhibitor'].allergyNames,
         allergyFactKey: 'sglt2Allergy',
       },
       statin: {
         state: statinAssessment.state,
-        medicationNames: statinAssessment.medications.map((item) => item.name),
+        medicationNames: medicationClassNames(statinAssessment),
         factKey: 'statinTherapy',
+        ...statinTimeline,
         allergyState: allergyAssessments.statin.state,
         allergyNames: allergyAssessments.statin.allergyNames,
         allergyFactKey: 'statinAllergy',
       },
       'ace-inhibitor-or-arb': {
         state: aceArbAssessment.state,
-        medicationNames: aceArbAssessment.medications.map((item) => item.name),
+        medicationNames: medicationClassNames(aceArbAssessment),
         factKey: 'aceArbTherapy',
+        ...aceArbTimeline,
         allergyState: allergyAssessments['ace-inhibitor-or-arb'].state,
         allergyNames: allergyAssessments['ace-inhibitor-or-arb'].allergyNames,
         allergyFactKey: 'aceArbAllergy',
       },
       finerenone: {
         state: finerenoneAssessment.state,
-        medicationNames: finerenoneAssessment.medications.map((item) => item.name),
+        medicationNames: medicationClassNames(finerenoneAssessment),
         factKey: 'finerenoneTherapy',
+        ...finerenoneTimeline,
         allergyState: allergyAssessments.finerenone.state,
         allergyNames: allergyAssessments.finerenone.allergyNames,
         allergyFactKey: 'finerenoneAllergy',

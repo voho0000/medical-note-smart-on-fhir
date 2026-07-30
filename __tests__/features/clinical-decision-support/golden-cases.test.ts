@@ -112,7 +112,8 @@ describe('DM CDSS cross-patient golden cases', () => {
     const automatedIds = result.automatedChecks?.map((item) => item.id)
 
     expect(ids).toContain('older-adult-safety')
-    expect(automatedIds).toContain('glycemic-safety-older-adult')
+    expect(ids).toContain('glycemic-safety-older-adult')
+    expect(automatedIds ?? []).not.toContain('glycemic-safety-older-adult')
   })
 
   it('keeps statin initiation actionable when LDL-C is missing', () => {
@@ -136,8 +137,8 @@ describe('DM CDSS cross-patient golden cases', () => {
 
     expect(ids.filter((id) => id === 'complication-screening')).toHaveLength(1)
     expect(ids).not.toContain('care-gap-inventory')
-    expect(ids).not.toContain('glycemic-safety-older-adult')
-    expect(result.automatedChecks?.map((item) => item.id)).toContain(
+    expect(ids).toContain('glycemic-safety-older-adult')
+    expect(result.automatedChecks?.map((item) => item.id) ?? []).not.toContain(
       'glycemic-safety-older-adult',
     )
   })
@@ -163,6 +164,13 @@ describe('DM CDSS cross-patient golden cases', () => {
       expectedState: 'on-hold',
       expectedStatus: 'review',
       expectedTitle: 'statin 暫停中',
+    },
+    {
+      label: 'historical MedicationRequest',
+      medication: statinMedication({ sourceType: 'MedicationRequest', status: 'completed' }),
+      expectedState: 'historical-record-current-status-unknown',
+      expectedStatus: 'review',
+      expectedTitle: '有 statin 歷史處方，近期是否持續未知',
     },
   ])('distinguishes $label from confirmed medication use', ({
     medication,

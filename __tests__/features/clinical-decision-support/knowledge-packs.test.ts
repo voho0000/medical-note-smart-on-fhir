@@ -140,11 +140,13 @@ describe('CDSS knowledge-pack registry', () => {
     expect('dcsi' in result).toBe(false)
   })
 
-  it('enables the three independently registered sources', () => {
+  it('enables the independently registered diabetes and CKD sources', () => {
     expect(getEnabledKnowledgePacks().map((pack) => pack.metadata('zh-TW').id)).toEqual([
       'ada-2026',
       'taiwan-t2dm-2022',
       'taiwan-nhi-diabetes',
+      'kdigo-ckd-2024',
+      'taiwan-ckd-2025',
     ])
   })
 
@@ -343,13 +345,69 @@ describe('CDSS knowledge-pack registry', () => {
       locale: 'zh-TW',
     })
 
-    const glycemic = result.automatedChecks?.find(
+    const glycemic = result.recommendations.find(
       (item) => item.id === 'glycemic-safety-older-adult',
     )
-    expect(glycemic?.label).toContain('暫無低血糖高風險藥物需降階')
-    expect(result.recommendations.map((item) => item.id)).not.toContain(
-      'glycemic-safety-older-adult',
+    expect(glycemic).toMatchObject({
+      status: 'needs-data',
+      priority: 'medium',
+    })
+    expect(glycemic?.title).toContain('ADL／IADL')
+    expect(glycemic?.recommendation).toContain('尚未完成高齡糖尿病目標判讀')
+  })
+
+  it('distinguishes complex/intermediate from very complex/poor health at HbA1c 6.6%', () => {
+    const guideline = getDefaultClinicalGuidelinePack()
+    const build = (
+      healthStatus: 'complex-intermediate' | 'very-complex-poor-health',
+    ) => guideline.build({
+      profile: {
+        ...profile,
+        eligibleDiseasePackIds: ['dm-poc'],
+        diseasePackEligibility: {
+          'dm-poc': {
+            basis: 'condition',
+            resourceType: 'Condition',
+            codingSystem: 'http://hl7.org/fhir/sid/icd-10-cm',
+            code: 'E11.9',
+          },
+        },
+        olderAdultContext: { healthStatus },
+        facts: {
+          age: { zh: '94 歲', en: 'Age 94', numericValue: 94 },
+          HbA1c: { zh: '6.6%', en: '6.6%', numericValue: 6.6 },
+          hypoglycemiaRiskMedications: {
+            zh: '現有資料未見胰島素或磺醯脲',
+            en: 'No insulin or sulfonylurea appears in the available data',
+          },
+        },
+        medicationClassContexts: {
+          insulin: {
+            state: 'not-found',
+            medicationNames: [],
+            factKey: 'hypoglycemiaRiskMedications',
+          },
+          sulfonylurea: {
+            state: 'not-found',
+            medicationNames: [],
+            factKey: 'hypoglycemiaRiskMedications',
+          },
+        },
+      },
+      locale: 'zh-TW',
+    })
+
+    const complex = build('complex-intermediate')
+    expect(complex.automatedChecks?.find(
+      (item) => item.id === 'glycemic-safety-older-adult',
+    )?.label).toContain('complex／intermediate health')
+
+    const veryComplex = build('very-complex-poor-health').recommendations.find(
+      (item) => item.id === 'glycemic-safety-older-adult',
     )
+    expect(veryComplex).toMatchObject({ status: 'review', priority: 'medium' })
+    expect(veryComplex?.title).toContain('不依單一 A1c 判斷')
+    expect(veryComplex?.recommendation).toContain('避免低血糖與有症狀高血糖')
   })
 
   it('keeps hypoglycemia review active when insulin is actually present', () => {
@@ -455,13 +513,16 @@ describe('CDSS knowledge-pack registry', () => {
     )
     expect(kidneyMedication).toMatchObject({
       priority: 'high',
-      title: 'CKD＋高血壓：現有資料未見 ACEI／ARB',
+      status: 'review',
+      title: 'CKD＋高血壓：目前 ACEI／ARB 用藥狀態尚未確認',
     })
     expect(lipid).toMatchObject({
-      priority: 'high',
-      status: 'actionable',
+      priority: 'medium',
+      status: 'review',
       title: 'ASCVD：現有資料未見 statin',
     })
+    expect(lipid?.recommendation).toContain('預期效益時間')
+    expect(lipid?.recommendation).toContain('最大耐受強度')
     expect(lipid?.patientEvidence.map((item) => item.label)).toEqual([
       'ASCVD',
       '總膽固醇',
@@ -476,6 +537,182 @@ describe('CDSS knowledge-pack registry', () => {
     )?.references[0].url).toBe(
       '/clinical-guidelines/taiwan-t2dm-2022/2022-t2dm-guideline.pdf#page=152',
     )
+  })
+
+  it.each([
+    {
+      potassium: 5.1,
+      expectedStatus: 'review',
+      expectedTitle: '血鉀 5.1 mmol/L，現在不應開始',
+      expectedRecommendation: '不應開始 finerenone',
+    },
+    {
+      potassium: 4.9,
+      expectedStatus: 'review',
+      expectedTitle: '僅在臨床判斷下考慮並加密監測',
+      expectedRecommendation: '並非一律禁止',
+    },
+    {
+      potassium: undefined,
+      expectedStatus: 'needs-data',
+      expectedTitle: '先補近期血鉀',
+      expectedRecommendation: '階段式提示',
+    },
+  ])(
+    'stages finerenone review at potassium $potassium',
+    ({ potassium, expectedStatus, expectedTitle, expectedRecommendation }) => {
+      const guideline = getDefaultClinicalGuidelinePack()
+      const result = guideline.build({
+        profile: {
+          ...profile,
+          eligibleDiseasePackIds: ['dm-poc'],
+          diseasePackEligibility: {
+            'dm-poc': {
+              basis: 'condition',
+              resourceType: 'Condition',
+              codingSystem: 'http://hl7.org/fhir/sid/icd-10-cm',
+              code: 'E11.22',
+            },
+          },
+          facts: {
+            eGFR: { zh: '32', en: '32', numericValue: 32 },
+            kidneyDiagnosis: { zh: '糖尿病腎臟病', en: 'Diabetic kidney disease' },
+            hypertensionDiagnosis: { zh: '高血壓', en: 'Hypertension' },
+            urineAlbuminRatio: { zh: '36.44 mg/g', en: '36.44 mg/g', numericValue: 36.44 },
+            ...(potassium !== undefined
+              ? {
+                  potassium: {
+                    zh: `${potassium} mmol/L`,
+                    en: `${potassium} mmol/L`,
+                    numericValue: potassium,
+                  },
+                }
+              : {}),
+            aceArbTherapy: { zh: '已確認使用 valsartan', en: 'Confirmed valsartan use' },
+            finerenoneTherapy: { zh: '現有資料未見 finerenone', en: 'No finerenone' },
+          },
+          medicationClassContexts: {
+            'ace-inhibitor-or-arb': {
+              state: 'confirmed-current',
+              medicationNames: ['valsartan'],
+              factKey: 'aceArbTherapy',
+            },
+            finerenone: {
+              state: 'not-found',
+              medicationNames: [],
+              factKey: 'finerenoneTherapy',
+            },
+          },
+          observationContexts: {
+            uacr: { useState: 'quantitative_comparable' },
+          },
+        },
+        locale: 'zh-TW',
+      })
+      const kidneyMedication = result.recommendations.find(
+        (item) => item.id === 'kidney-medication-strategy',
+      )
+
+      expect(kidneyMedication?.status).toBe(expectedStatus)
+      expect(kidneyMedication?.title).toContain(expectedTitle)
+      expect(kidneyMedication?.recommendation).toContain(expectedRecommendation)
+      expect(kidneyMedication?.missingData).toContain('UACR >30 mg/g 是否為持續性')
+    },
+  )
+
+  it('keeps a historical ACEI/ARB prescription in review with its last date', () => {
+    const guideline = getDefaultClinicalGuidelinePack()
+    const result = guideline.build({
+      profile: {
+        ...profile,
+        eligibleDiseasePackIds: ['dm-poc'],
+        diseasePackEligibility: {
+          'dm-poc': {
+            basis: 'condition',
+            resourceType: 'Condition',
+            codingSystem: 'http://hl7.org/fhir/sid/icd-10-cm',
+            code: 'E11.22',
+          },
+        },
+        facts: {
+          eGFR: { zh: '32', en: '32', numericValue: 32 },
+          kidneyDiagnosis: { zh: '糖尿病腎臟病', en: 'Diabetic kidney disease' },
+          hypertensionDiagnosis: { zh: '高血壓', en: 'Hypertension' },
+          aceArbTherapy: {
+            zh: '有歷史 ACEI／ARB 處方：valsartan（最後處方 2026-04-12）',
+            en: 'Historical valsartan prescription (last prescription 2026-04-12)',
+          },
+        },
+        medicationClassContexts: {
+          'ace-inhibitor-or-arb': {
+            state: 'historical-record-current-status-unknown',
+            medicationNames: ['valsartan'],
+            factKey: 'aceArbTherapy',
+            lastPrescriptionDate: '2026-04-12',
+            dataWindowStartDate: '2025-05-20',
+            dataWindowEndDate: '2026-06-25',
+          },
+        },
+      },
+      locale: 'zh-TW',
+    })
+    const kidneyMedication = result.recommendations.find(
+      (item) => item.id === 'kidney-medication-strategy',
+    )
+
+    expect(kidneyMedication).toMatchObject({
+      status: 'review',
+      title: 'CKD＋高血壓：有 ACEI／ARB 歷史處方，近期是否持續未知（最後處方 2026-04-12）',
+    })
+    expect(kidneyMedication?.recommendation).toContain('不把資料缺口當作未使用')
+  })
+
+  it('keeps cardiorenal SGLT2 benefit independent of HbA1c and uses the FDA perioperative hold', () => {
+    const result = getDefaultClinicalGuidelinePack().build({
+      profile: {
+        ...profile,
+        eligibleDiseasePackIds: ['dm-poc'],
+        diseasePackEligibility: {
+          'dm-poc': {
+            basis: 'condition',
+            resourceType: 'Condition',
+            codingSystem: 'http://hl7.org/fhir/sid/icd-10-cm',
+            code: 'E11.22',
+          },
+        },
+        facts: {
+          HbA1c: { zh: '6.6%', en: '6.6%', numericValue: 6.6 },
+          eGFR: { zh: '32', en: '32', numericValue: 32 },
+          kidneyDiagnosis: { zh: '糖尿病腎臟病', en: 'Diabetic kidney disease' },
+          forxiga: { zh: 'Forxiga 10 mg', en: 'Forxiga 10 mg' },
+          forxigaUseStatus: {
+            zh: '病歷記載目前使用中；本次仍需核對',
+            en: 'Recorded as currently used; reconcile at this visit',
+          },
+        },
+        medicationContexts: {
+          forxiga: {
+            sourceResourceType: 'MedicationStatement',
+            status: 'active',
+            useState: 'confirmed_current',
+          },
+        },
+      },
+      locale: 'zh-TW',
+    })
+    const sglt2 = result.recommendations.find(
+      (item) => item.id === 'sglt2-concordance',
+    )
+
+    expect(sglt2?.recommendation).toContain('不因 HbA1c 偏低而單獨停藥')
+    expect(sglt2?.nextActions.join(' ')).toContain('至少停 3 天')
+    expect(sglt2?.nextActions.join(' ')).toContain('不要把顯影劑檢查一律設為停藥條件')
+    expect(sglt2?.guidelineReferences.find(
+      (item) => item.id === 'FDA-FARXIGA-2024-2.4',
+    )).toMatchObject({
+      page: 4,
+      recommendationId: 'Section 2.4',
+    })
   })
 
   it('checks metformin prerequisites only for the type 2 diabetes coverage route', () => {
@@ -568,8 +805,8 @@ describe('CDSS knowledge-pack registry', () => {
       recommendations: [recommendation('older-adult-safety', 'safety')],
     })
 
-    expect(result.knowledgePacks).toHaveLength(3)
-    expect(result.recommendations[0].sourceAssessments).toHaveLength(3)
+    expect(result.knowledgePacks).toHaveLength(5)
+    expect(result.recommendations[0].sourceAssessments).toHaveLength(5)
     expect(result.recommendations[0].sourceAssessments?.map((item) => item.sourceId)).toEqual(
       result.knowledgePacks.map((pack) => pack.id),
     )

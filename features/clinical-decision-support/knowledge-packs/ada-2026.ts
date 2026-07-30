@@ -195,6 +195,17 @@ function references(
           summaryZh: '使用最大耐受 statin，目標 LDL-C 降低至少 50% 且 <55 mg/dL；無法耐受時仍採最大耐受劑量。',
           summaryEn: 'Use a maximally tolerated statin to lower LDL-C by at least 50% and below 55 mg/dL; use the maximum tolerated dose when the intended intensity is not tolerated.',
         }),
+        exactReference({
+          locale,
+          id: '13.2-lipids',
+          sourceUrl: OLDER_ADULTS_URL,
+          targetText: 'Very complex/poor health',
+          recommendationId: 'Table 13.2',
+          locatorZh: '第 13 節 → Table 13.2 → 高齡者血脂治療',
+          locatorEn: 'Section 13 → Table 13.2 → lipid treatment in older adults',
+          summaryZh: '高齡者需依健康狀態與實際獲益評估 statin；very complex／poor health 應特別考量獲益可能性。',
+          summaryEn: 'In older adults, evaluate statin therapy using health status and likelihood of benefit; in very complex/poor health, explicitly consider the likelihood of benefit.',
+        }),
       ]
     case 'complication-screening':
       return [

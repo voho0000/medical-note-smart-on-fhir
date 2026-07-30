@@ -1,15 +1,18 @@
 "use client"
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { FileSearch, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { createFhirCdssPatientProfile } from './adapters/fhir-cdss-profile'
-import { getDefaultClinicalGuidelinePack } from './guideline-packs/registry'
+import {
+  getDefaultClinicalGuidelinePack,
+  getEnabledClinicalGuidelinePacks,
+} from './guideline-packs/registry'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
-import type { CdssLocale } from './types'
+import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
 function LoadingState({ locale }: { locale: CdssLocale }) {
   return (
@@ -57,11 +60,66 @@ function StateMessage({
   )
 }
 
+function DiseaseSwitcher({
+  locale,
+  packs,
+  selectedPackId,
+  onSelect,
+}: {
+  locale: CdssLocale
+  packs: readonly ClinicalGuidelinePack[]
+  selectedPackId: string
+  onSelect: (packId: string) => void
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2"
+      data-testid="cdss-disease-switch"
+    >
+      <span className="text-xs font-medium text-muted-foreground">
+        {locale === 'en' ? 'Disease' : '疾病'}
+      </span>
+      <div
+        className="inline-flex rounded-md border border-border bg-muted/30 p-0.5"
+        role="group"
+        aria-label={locale === 'en' ? 'Select disease guidance' : '選擇疾病指引'}
+      >
+        {packs.map((pack) => {
+          const selected = pack.id === selectedPackId
+          return (
+            <button
+              key={pack.id}
+              type="button"
+              className={[
+                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                selected
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+              aria-pressed={selected}
+              data-testid={`cdss-disease-switch-${pack.id}`}
+              onClick={() => onSelect(pack.id)}
+            >
+              {pack.label[locale === 'en' ? 'en' : 'zh']}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function LiveClinicalDecisionSupportFeature() {
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const clinicalData = useClinicalData()
   const { locale } = useLanguage()
   const cdssLocale: CdssLocale = locale === 'en' ? 'en' : 'zh-TW'
+  const guidelinePacks = useMemo(() => getEnabledClinicalGuidelinePacks(), [])
+  const [selectedPackId, setSelectedPackId] = useState(
+    getDefaultClinicalGuidelinePack().id,
+  )
+  const selectedPack = guidelinePacks.find((pack) => pack.id === selectedPackId)
+    ?? getDefaultClinicalGuidelinePack()
 
   const profile = useMemo(() => {
     if (!patient) return null
@@ -90,9 +148,10 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   const result = useMemo(() => {
     if (!profile) return null
-    const pack = getDefaultClinicalGuidelinePack()
-    return pack.applies(profile) ? pack.build({ profile, locale: cdssLocale }) : null
-  }, [cdssLocale, profile])
+    return selectedPack.applies(profile)
+      ? selectedPack.build({ profile, locale: cdssLocale })
+      : null
+  }, [cdssLocale, profile, selectedPack])
 
   if (patientLoading || clinicalData.isLoading || clinicalData.isFetching) {
     return <LoadingState locale={cdssLocale} />
@@ -116,8 +175,8 @@ export default function LiveClinicalDecisionSupportFeature() {
         locale={cdssLocale}
         title={cdssLocale === 'en' ? 'No patient record is loaded' : '尚未載入病人病歷'}
         body={cdssLocale === 'en'
-          ? 'Load the patient record before running diabetes decision support.'
-          : '請先載入病人資料，再執行糖尿病決策支援。'}
+          ? 'Load the patient record before running personalized disease guidance.'
+          : '請先載入病人資料，再執行個人化疾病指引。'}
       />
     )
   }
@@ -135,14 +194,33 @@ export default function LiveClinicalDecisionSupportFeature() {
   }
 
   if (!profile || !result) {
+    const isCkd = selectedPack.diseaseCode === 'CKD'
     return (
-      <StateMessage
-        locale={cdssLocale}
-        title={cdssLocale === 'en' ? 'Diabetes pathway not activated' : '本次未啟動糖尿病決策路徑'}
-        body={cdssLocale === 'en'
-          ? 'This data slice does not contain a governed type 2 diabetes diagnosis or a validated HbA1c result in the diagnostic range. This does not prove that diabetes is absent.'
-          : '本次資料切片沒有可治理的第二型糖尿病診斷，也沒有單位已驗證且落在診斷範圍的 HbA1c；這不代表病人沒有糖尿病。'}
-      />
+      <div className="@container mx-auto w-full max-w-[84rem] space-y-3 py-1">
+        <DiseaseSwitcher
+          locale={cdssLocale}
+          packs={guidelinePacks}
+          selectedPackId={selectedPack.id}
+          onSelect={setSelectedPackId}
+        />
+        <StateMessage
+          locale={cdssLocale}
+          title={isCkd
+            ? cdssLocale === 'en'
+              ? 'Chronic kidney disease pathway not activated'
+              : '本次未啟動慢性腎臟病決策路徑'
+            : cdssLocale === 'en'
+              ? 'Diabetes pathway not activated'
+              : '本次未啟動糖尿病決策路徑'}
+          body={isCkd
+            ? cdssLocale === 'en'
+              ? 'This data slice does not contain a governed N18 diagnosis, an active CKD care plan, or repeated eGFR values below 60 separated by at least 3 months. This does not prove that CKD is absent.'
+              : '本次資料切片沒有可治理的 N18 診斷、進行中的 CKD 照護計畫，也沒有相隔至少 3 個月的兩次 eGFR <60；這不代表病人沒有慢性腎臟病。'
+            : cdssLocale === 'en'
+              ? 'This data slice does not contain a governed type 2 diabetes diagnosis or a validated HbA1c result in the diagnostic range. This does not prove that diabetes is absent.'
+              : '本次資料切片沒有可治理的第二型糖尿病診斷，也沒有單位已驗證且落在診斷範圍的 HbA1c；這不代表病人沒有糖尿病。'}
+        />
+      </div>
     )
   }
 
@@ -160,21 +238,26 @@ export default function LiveClinicalDecisionSupportFeature() {
           ? `Clinical rules ${result.packVersion}`
           : `臨床規則版本 ${result.packVersion}`}
       >
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center">
           <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
             {result.title}
           </h2>
-          <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[11px]">
-            {cdssLocale === 'en' ? 'Read only' : '唯讀建議'}
-          </Badge>
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] text-rose-800 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-200">
-            {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
-          </Badge>
-          <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200">
-            {cdssLocale === 'en' ? `${needsDataCount} need data` : `${needsDataCount} 需資料`}
-          </Badge>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <DiseaseSwitcher
+            locale={cdssLocale}
+            packs={guidelinePacks}
+            selectedPackId={selectedPack.id}
+            onSelect={setSelectedPackId}
+          />
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Badge className="h-5 bg-rose-100 px-1.5 text-[11px] tabular-nums text-rose-800 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-200">
+              {cdssLocale === 'en' ? `${highPriorityCount} priority` : `${highPriorityCount} 優先`}
+            </Badge>
+            <Badge className="h-5 bg-amber-100 px-1.5 text-[11px] tabular-nums text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200">
+              {cdssLocale === 'en' ? `${needsDataCount} need data` : `${needsDataCount} 需資料`}
+            </Badge>
+          </div>
         </div>
       </header>
 

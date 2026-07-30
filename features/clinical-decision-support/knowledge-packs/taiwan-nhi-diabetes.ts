@@ -70,6 +70,8 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
   assess({ profile, recommendation, locale }) {
     const metadata = this.metadata(locale)
     const isMedication = recommendation.domain === 'medication'
+    const isSglt2Decision = recommendation.id === 'sglt2-concordance'
+      || recommendation.id === 'ckd-kidney-protection'
     if (!isMedication) {
       return assessment({
         sourceId: metadata.id,
@@ -78,7 +80,11 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
         version: metadata.version,
         effectiveFrom: metadata.effectiveFrom,
         status: 'not-applicable',
-        summary: localize(locale, '本項是臨床照護問題，不屬於糖尿病藥品給付判定。', 'This is a clinical-care question rather than a diabetes drug-coverage determination.'),
+        summary: localize(
+          locale,
+          '本項是臨床照護問題，不屬於藥品給付判定。',
+          'This is a clinical-care question rather than a drug-coverage determination.',
+        ),
       })
     }
     if (recommendation.id === 'ascvd-lipid-strategy') {
@@ -241,7 +247,7 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
       })
     }
 
-    if (recommendation.id !== 'sglt2-concordance') {
+    if (!isSglt2Decision) {
       return assessment({
         sourceId: metadata.id,
         sourceKind: metadata.kind,
@@ -257,7 +263,10 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
       })
     }
 
-    const hasActiveOrder = profile.medicationContexts?.forxiga?.useState === 'active_order_unconfirmed'
+    const sglt2State = profile.medicationClassContexts?.['sglt2-inhibitor']?.state
+    const hasActiveOrder = sglt2State === 'active-order-unconfirmed'
+      || sglt2State === 'confirmed-current'
+      || profile.medicationContexts?.forxiga?.useState === 'active_order_unconfirmed'
       || profile.medicationContexts?.forxiga?.useState === 'confirmed_current'
     const sglt2Context = profile.coverageContexts?.taiwanNhiSglt2
     const verified: string[] = []
@@ -265,7 +274,11 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
     const conflicts: string[] = []
 
     if (hasActiveOrder) {
-      verified.push(localize(locale, '已有 dapagliflozin 處方', 'Dapagliflozin prescription is present'))
+      verified.push(localize(
+        locale,
+        '已有 SGLT2 抑制劑處方／用藥紀錄',
+        'An SGLT2 inhibitor prescription/use record is present',
+      ))
     }
     if (sglt2Context?.dailyUnits !== undefined) {
       if (sglt2Context.dailyUnits <= 1) {
@@ -558,7 +571,7 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
       summary,
       verifiedData: verified,
       missingData: missing,
-      references: recommendation.id === 'sglt2-concordance'
+      references: isSglt2Decision
         ? [
             {
               id: 'TW-NHI-5.1.5-1150723',

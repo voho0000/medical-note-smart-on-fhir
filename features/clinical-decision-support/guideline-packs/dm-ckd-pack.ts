@@ -14,6 +14,9 @@ import { attachKnowledgeAssessments } from '../knowledge-packs/registry'
 const TAIWAN_DKD_GUIDELINE_URL = 'https://www.endo-dm.org.tw/DB/book/131/2024%20%E5%8F%B0%E7%81%A3%E7%B3%96%E5%B0%BF%E7%97%85%E8%85%8E%E8%87%9F%E7%96%BE%E7%97%85%E8%87%A8%E5%BA%8A%E7%85%A7%E8%AD%B7%E6%8C%87%E5%BC%95_%E7%B7%A8%E6%8E%92%20v10_FINAL%28%E6%9B%B4%E6%96%B0%E4%BD%9C%E8%80%85%29.pdf?v=1777515319'
 const ADA_PHARMACOLOGY_2026_URL = 'https://diabetesjournals.org/care/article/49/Supplement_1/S183/163934/9-Pharmacologic-Approaches-to-Glycemic-Treatment'
 const ADA_OLDER_ADULTS_2026_URL = 'https://diabetesjournals.org/care/article/49/Supplement_1/S277/163921/13-Older-Adults-Standards-of-Care-in-Diabetes-2026'
+const FDA_FARXIGA_2024_LABEL_URL = 'https://www.accessdata.fda.gov/drugsatfda_docs/label/2024/202293s031lbl.pdf'
+const FDA_KERENDIA_LABEL_URL = 'https://www.accessdata.fda.gov/drugsatfda_docs/label/2025/215341s009lbl.pdf'
+const KDIGO_CKD_2024_URL = 'https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf'
 
 function text(locale: CdssLocale, zh: string, en: string): string {
   return locale === 'en' ? en : zh
@@ -341,12 +344,12 @@ function buildSglt2Review(
     recommendation: text(
       locale,
       `${hasGovernedCkdEvidence && eGfr !== undefined && eGfr >= 20
-        ? '目前病歷有受治理的慢性腎臟病證據，且腎絲球過濾率落在指引討論範圍；SGLT2 抑制劑是可評估的治療類別之一。'
+        ? '目前病歷有受治理的慢性腎臟病證據，且腎絲球過濾率落在指引討論範圍；若確認正在使用且耐受，心腎適應症不因 HbA1c 偏低而單獨停藥。'
         : hasGovernedCkdEvidence
           ? '目前病歷有受治理的慢性腎臟病證據，但 SGLT2 抑制劑是否適用仍需依完整腎功能與臨床狀況判斷。'
           : '目前資料不足以確認糖尿病合併慢性腎臟病的指引適用前提；請先核對本次處方適應症。'}${isUnconfirmedOrder ? '目前只看到有效處方，不能當作病人確實正在服用。' : '仍需核對實際服用情形。'}請確認適應症、耐受性、體液狀態與暫停用藥情境。`,
       `${hasGovernedCkdEvidence && eGfr !== undefined && eGfr >= 20
-        ? 'The record contains governed CKD evidence and the eGFR is within the guideline discussion range; an SGLT2 inhibitor is one treatment class to evaluate. '
+        ? 'The record contains governed CKD evidence and the eGFR is within the guideline discussion range. If current use and tolerance are confirmed, do not stop a cardiorenal indication solely because A1c is low. '
         : hasGovernedCkdEvidence
           ? 'The record contains governed CKD evidence, but SGLT2 inhibitor suitability still depends on complete kidney and clinical context. '
           : 'The available data do not establish the CKD prerequisite for this guideline pathway; first verify the indication for the prescription. '}${isUnconfirmedOrder ? 'The current record is an active order, not confirmation that the patient is taking it. ' : 'Actual use still requires reconciliation. '}Confirm indication, tolerance, volume status, and temporary hold situations.`,
@@ -365,7 +368,11 @@ function buildSglt2Review(
     ],
     nextActions: [
       text(locale, '完成處方與實際用藥核對，包含服用方式、依從性與不良反應。', 'Reconcile the prescription with actual use, including administration, adherence, and adverse effects.'),
-      text(locale, '依完整病歷確認適應症與監測計畫，並提供院內生病日／處置期暫停原則。', 'Confirm indication and monitoring from the full chart, and provide the local sick-day and peri-procedural hold protocol.'),
+      text(
+        locale,
+        'dapagliflozin 在重大手術或預期長時間禁食前至少停 3 天；恢復進食且臨床穩定後再恢復。不要把顯影劑檢查一律設為停藥條件。',
+        'Withhold dapagliflozin for at least 3 days before major surgery or procedures with prolonged fasting; resume after oral intake has restarted and the patient is clinically stable. Do not use contrast exposure alone as a universal hold rule.',
+      ),
     ],
     guidelineReferences: [
       taiwanKidneyReference(
@@ -386,6 +393,21 @@ function buildSglt2Review(
           locale,
           '第二型糖尿病合併慢性腎臟病（腎絲球過濾率 20–60 或白蛋白尿）應考慮具實證效益的 SGLT2 抑制劑或 GLP-1 受體促效劑，目的同時包含延緩腎病與降低心血管事件。',
           'For type 2 diabetes with CKD (eGFR 20–60 and/or albuminuria), use an SGLT2 inhibitor or GLP-1 RA with demonstrated benefit for kidney and cardiovascular outcomes.',
+        ),
+      },
+      {
+        id: 'FDA-FARXIGA-2024-2.4',
+        title: 'FARXIGA (dapagliflozin) Prescribing Information',
+        publisher: 'U.S. Food and Drug Administration',
+        version: '2024',
+        url: `${FDA_FARXIGA_2024_LABEL_URL}#page=4`,
+        page: 4,
+        recommendationId: 'Section 2.4',
+        locator: text(locale, '第 2.4 節：手術暫停', 'Section 2.4: temporary interruption for surgery'),
+        summary: text(
+          locale,
+          '重大手術或伴隨長時間禁食的處置前至少停用 3 天；病人臨床穩定且恢復口服進食後再恢復。',
+          'Withhold for at least 3 days before major surgery or procedures with prolonged fasting and resume when clinically stable with oral intake restored.',
         ),
       },
     ],
@@ -416,9 +438,16 @@ function buildGlycemicSafety(
     insulinState === 'on-hold'
     || sulfonylureaState === 'on-hold'
   )
+  const hasHistoricalMedication = (
+    insulinState === 'historical-record-current-status-unknown'
+    || sulfonylureaState === 'historical-record-current-status-unknown'
+  )
   const medicationClassificationUncertain = (
     insulinState === 'uncertain' || sulfonylureaState === 'uncertain'
   )
+  const healthStatus = profile.olderAdultContext?.healthStatus
+  const healthStatusMissing = healthStatus === undefined
+  const veryComplexHealth = healthStatus === 'very-complex-poor-health'
   const hba1c = numberFromFact(profile, 'HbA1c')
   const hba1cCurrent = isFresh(profile, 'HbA1c')
   const hba1cNeedsUpdate = !hba1cCurrent
@@ -462,6 +491,24 @@ function buildGlycemicSafety(
               '胰島素／磺醯脲暫停中，核對停藥原因與目前血糖',
               'Insulin/sulfonylurea is on hold; review the reason and current glycemia',
             )
+          : hasHistoricalMedication
+            ? text(
+                locale,
+                '有歷史胰島素／磺醯脲處方，近期是否持續未知',
+                'A historical insulin/sulfonylurea record exists; current use is unknown',
+              )
+            : healthStatusMissing
+              ? text(
+                  locale,
+                  `${hba1c !== undefined ? `HbA1c ${hba1c}%：` : ''}先完成健康、ADL／IADL、認知與衰弱分層`,
+                  `${hba1c !== undefined ? `HbA1c ${hba1c}%: ` : ''}complete health, ADL/IADL, cognition, and frailty stratification first`,
+                )
+              : veryComplexHealth
+                ? text(
+                    locale,
+                    `${hba1c !== undefined ? `HbA1c ${hba1c}%：` : ''}very complex／poor health，不依單一 A1c 判斷`,
+                    `${hba1c !== undefined ? `HbA1c ${hba1c}%: ` : ''}very complex/poor health; do not rely on A1c alone`,
+                  )
           : hba1cNeedsUpdate
             ? text(
                 locale,
@@ -470,8 +517,12 @@ function buildGlycemicSafety(
               )
             : text(
                 locale,
-                `${hba1c !== undefined ? `HbA1c ${hba1c}%：` : ''}暫無低血糖高風險藥物需降階`,
-                `${hba1c !== undefined ? `HbA1c ${hba1c}%: ` : ''}no hypoglycemia-prone medicine currently needs deintensification`,
+                healthStatus === 'complex-intermediate'
+                  ? `${hba1c !== undefined ? `HbA1c ${hba1c}%：` : ''}已納入 complex／intermediate health 個人化判讀`
+                  : `${hba1c !== undefined ? `HbA1c ${hba1c}%：` : ''}已納入 healthy older adult 個人化判讀`,
+                healthStatus === 'complex-intermediate'
+                  ? `${hba1c !== undefined ? `HbA1c ${hba1c}%: ` : ''}interpreted in a complex/intermediate-health context`
+                  : `${hba1c !== undefined ? `HbA1c ${hba1c}%: ` : ''}interpreted in a healthy older-adult context`,
               )
 
   return {
@@ -479,14 +530,24 @@ function buildGlycemicSafety(
     domain: 'target',
     priority: hasHighRiskMedication
       ? 'high'
-      : medicationClassificationUncertain || hasUnconfirmedOrder || hasHeldMedication || hba1cNeedsUpdate
+      : medicationClassificationUncertain
+        || hasUnconfirmedOrder
+        || hasHeldMedication
+        || hasHistoricalMedication
+        || healthStatusMissing
+        || veryComplexHealth
+        || hba1cNeedsUpdate
         ? 'medium'
         : 'routine',
     status: medicationClassificationUncertain
       ? 'needs-data'
-      : hasHighRiskMedication || hasUnconfirmedOrder || hasHeldMedication
+      : hasHighRiskMedication
+        || hasUnconfirmedOrder
+        || hasHeldMedication
+        || hasHistoricalMedication
+        || veryComplexHealth
         ? 'review'
-        : hba1cNeedsUpdate
+        : healthStatusMissing || hba1cNeedsUpdate
           ? 'needs-data'
           : 'no-action',
     ...evidence,
@@ -502,7 +563,15 @@ function buildGlycemicSafety(
             ? '系統找到有效處方，但不能視為病人確實正在使用；先核對實際服用與近期低血糖，再決定是否需要簡化。'
             : hasHeldMedication
               ? '系統找到暫停中的低血糖高風險藥物；先核對暫停原因、是否預計恢復及目前血糖。'
-              : '現有資料未見胰島素或磺醯脲，目前不需針對這兩類藥加藥、減藥或人工重查；糖化血色素目標仍依共病、功能與病人目標個人化。',
+              : hasHistoricalMedication
+                ? '系統找到歷史胰島素／磺醯脲處方；先核對近期是否仍使用、最後處方與低血糖事件，不能把歷史紀錄當成現行用藥，也不能當成完全未使用。'
+                : healthStatusMissing
+                  ? '沒有 insulin／sulfonylurea 只回答了低血糖藥物風險，尚未完成高齡糖尿病目標判讀。請先依共病、ADL／IADL、認知與衰弱分成 healthy、complex／intermediate 或 very complex／poor health。'
+                  : veryComplexHealth
+                    ? 'very complex／poor health 不應依賴單一 A1c 設定治療強度；以避免低血糖與有症狀高血糖、降低治療負擔及維持功能為主。'
+                    : healthStatus === 'complex-intermediate'
+                      ? 'complex／intermediate health 的目標需個人化，常以 A1c <8% 為參考；仍需依功能、認知、衰弱、低血糖風險與病人偏好調整。'
+                      : '健康、功能與認知完整的高齡者可採較接近一般成人但仍個人化的目標；現有資料未見 insulin／sulfonylurea，不代表要依單一 A1c 加藥或減藥。',
       medicationClassificationUncertain
         ? 'Complete ingredient mapping for the unrecognized medicine first. The system should then rerun classification instead of asking the clinician to reread the entire medication list.'
         : hasHighRiskMedication
@@ -511,14 +580,29 @@ function buildGlycemicSafety(
             ? 'The system found an active order, which does not confirm actual use. Reconcile use and recent hypoglycemia before deciding whether simplification is needed.'
             : hasHeldMedication
               ? 'The system found a hypoglycemia-prone medicine on hold. Review the reason, whether it may be resumed, and current glycemia.'
-              : 'No insulin or sulfonylurea appears in the available medication data, so no action on these classes or manual recheck is needed. Individualize the HbA1c goal using comorbidity, function, and the person’s goals.',
+              : hasHistoricalMedication
+                ? 'The system found a historical insulin/sulfonylurea record. Reconcile current use, the last prescription, and hypoglycemia; history is neither confirmed current use nor proof of nonuse.'
+                : healthStatusMissing
+                  ? 'Absence of insulin or a sulfonylurea addresses only hypoglycemia-prone medicines; it does not complete goal interpretation. Classify health using comorbidity, ADL/IADL, cognition, and frailty as healthy, complex/intermediate, or very complex/poor health.'
+                  : veryComplexHealth
+                    ? 'For very complex/poor health, do not rely on A1c alone to set treatment intensity. Prioritize avoidance of hypoglycemia and symptomatic hyperglycemia, lower treatment burden, and preserve function.'
+                    : healthStatus === 'complex-intermediate'
+                      ? 'For complex/intermediate health, individualize the goal, often using A1c below 8% as a reference, then adjust for function, cognition, frailty, hypoglycemia risk, and preferences.'
+                      : 'An older adult with intact health, function, and cognition may use a goal closer to that of younger adults, still individualized. No insulin or sulfonylurea appears, but a single A1c should not trigger automatic treatment changes.',
     ),
     rationale: text(
       locale,
-      `${age} 歲；高齡者是否需要降階，應以低血糖史、功能狀態及胰島素／磺醯脲的實際使用為主，不只看單一 HbA1c。`,
-      `Age ${age}; in an older adult, hypoglycemia history, function, and actual insulin/sulfonylurea use are more useful than HbA1c alone when considering deintensification.`,
+      `${age} 歲；高齡者的 A1c 判讀必須結合健康與功能分層。SGLT2 抑制劑的心腎保護適應症應獨立於 A1c 判斷，不因 HbA1c 6.6% 之類的單一低值自動停藥。`,
+      `Age ${age}; A1c interpretation in an older adult requires health and functional stratification. A cardiorenal indication for an SGLT2 inhibitor is assessed independently of A1c and should not be stopped automatically because of a single low value such as 6.6%.`,
     ),
     missingData: [
+      ...(healthStatusMissing
+        ? [text(
+            locale,
+            '健康狀態分層：共病負擔、ADL／IADL、認知與衰弱',
+            'Health-status classification using comorbidity, ADL/IADL, cognition, and frailty',
+          )]
+        : []),
       ...(hba1cNeedsUpdate
         ? [text(
             locale,
@@ -534,6 +618,8 @@ function buildGlycemicSafety(
           ? [text(locale, '實際服用情形與近期低血糖事件', 'Actual use and recent hypoglycemia events')]
           : hasHeldMedication
             ? [text(locale, '暫停原因、是否預計恢復與近期低血糖事件', 'Reason for hold, plan to resume, and recent hypoglycemia events')]
+            : hasHistoricalMedication
+              ? [text(locale, '近期是否持續使用及最後處方後的用藥紀錄', 'Whether use continued and medication records after the last prescription')]
             : []),
     ],
     nextActions: medicationClassificationUncertain
@@ -546,6 +632,12 @@ function buildGlycemicSafety(
           ? [text(locale, '核對實際服用；若正在使用，再依低血糖與治療負擔評估簡化。', 'Reconcile actual use; if taking it, assess simplification using hypoglycemia and treatment burden.')]
           : hasHeldMedication
             ? [text(locale, '核對暫停原因與恢復計畫，避免未評估即重新啟用。', 'Review the reason for the hold and the restart plan before resuming therapy.')]
+            : hasHistoricalMedication
+              ? [text(locale, '核對近期實際用藥與低血糖；維持 review，不直接加藥或減藥。', 'Reconcile recent use and hypoglycemia; keep this as review rather than automatically adding or stopping therapy.')]
+              : healthStatusMissing
+                ? [text(locale, '完成健康、ADL／IADL、認知與衰弱分層後重新判讀個人化目標。', 'Complete health, ADL/IADL, cognition, and frailty stratification, then reinterpret the individualized goal.')]
+                : veryComplexHealth
+                  ? [text(locale, '以低血糖、症狀性高血糖、治療負擔與照護目標決定是否調整。', 'Use hypoglycemia, symptomatic hyperglycemia, treatment burden, and care goals to decide whether to adjust therapy.')]
             : hba1cNeedsUpdate
               ? [text(locale, '更新 HbA1c；無低血糖事件時，不需針對胰島素／磺醯脲處理。', 'Update HbA1c; if there is no hypoglycemia, no insulin/sulfonylurea action is needed.')]
               : [
@@ -557,7 +649,7 @@ function buildGlycemicSafety(
       publisher: 'American Diabetes Association',
       version: '2026',
       url: ADA_OLDER_ADULTS_2026_URL,
-      recommendationId: '13.14b–13.14d',
+      recommendationId: '13.7b–13.7c, 13.14b–13.14d',
       summary: text(
         locale,
         '高齡者需在個人化目標內平衡低血糖、治療負擔與心腎保護；當傷害或負擔大於效益時應考慮降階或簡化。',
@@ -648,20 +740,35 @@ function buildKidneyMedicationStrategy(
   const hasHypertension = Boolean(profile.facts.hypertensionDiagnosis)
   const aceArbState = medicationClassState(profile, 'ace-inhibitor-or-arb')
   const finerenoneState = medicationClassState(profile, 'finerenone')
+  const potassium = numberFromFact(profile, 'potassium')
   const aceArbPresent = aceArbState === 'confirmed-current'
   const finerenonePresent = finerenoneState === 'confirmed-current'
+  const aceArbContext = profile.medicationClassContexts?.['ace-inhibitor-or-arb']
   const aceArbAllergy = hasDocumentedClassAllergy(profile, 'ace-inhibitor-or-arb')
   const aceArbIndicated = hasHypertension && (
     (uacr !== undefined && uacr >= 30)
     || (eGfr !== undefined && eGfr < 60)
   )
-  const canAssessFinerenone = (
+  const finerenoneLabThresholdsMet = (
     aceArbPresent
     && uacr !== undefined
-    && uacr >= 30
+    && uacr > 30
     && eGfr !== undefined
-    && eGfr >= 25
+    && eGfr > 25
   )
+  const finerenonePotassiumMissing = finerenoneLabThresholdsMet && potassium === undefined
+  const finerenonePotassiumTooHigh = (
+    finerenoneLabThresholdsMet
+    && potassium !== undefined
+    && potassium > 5
+  )
+  const finerenonePotassiumCaution = (
+    finerenoneLabThresholdsMet
+    && potassium !== undefined
+    && potassium > 4.8
+    && potassium <= 5
+  )
+  const finerenoneStageReview = finerenoneLabThresholdsMet && !finerenonePresent
   const evidence = evidenceForOverview([
     patientEvidence(profile, locale, 'kidneyDiagnosis', '腎臟診斷', 'Kidney diagnosis'),
     patientEvidence(profile, locale, 'hypertensionDiagnosis', '高血壓診斷', 'Hypertension'),
@@ -691,18 +798,43 @@ function buildKidneyMedicationStrategy(
             'CKD＋高血壓：ACEI／ARB 暫停中',
             'CKD with hypertension: ACE inhibitor/ARB therapy is on hold',
           )
+        : aceArbIndicated
+            && aceArbState === 'historical-record-current-status-unknown'
+          ? text(
+              locale,
+              `CKD＋高血壓：有 ACEI／ARB 歷史處方，近期是否持續未知${aceArbContext?.lastPrescriptionDate ? `（最後處方 ${aceArbContext.lastPrescriptionDate}）` : ''}`,
+              `CKD with hypertension: a historical ACE inhibitor/ARB record is present; current use is unknown${aceArbContext?.lastPrescriptionDate ? ` (last prescription ${aceArbContext.lastPrescriptionDate})` : ''}`,
+            )
         : aceArbIndicated && !aceArbPresent
     ? text(
         locale,
-        'CKD＋高血壓：現有資料未見 ACEI／ARB',
-        'CKD with hypertension: no ACE inhibitor or ARB appears in the available medication data',
+        'CKD＋高血壓：目前 ACEI／ARB 用藥狀態尚未確認',
+        'CKD with hypertension: current ACE inhibitor/ARB use is not established',
       )
-    : canAssessFinerenone && !finerenonePresent
+    : finerenonePotassiumTooHigh
       ? text(
           locale,
-          'ACEI／ARB 治療下仍有白蛋白尿：可評估 finerenone',
-          'Persistent albuminuria on ACE inhibitor/ARB therapy: consider finerenone',
+          `finerenone 階段式評估：血鉀 ${potassium} mmol/L，現在不應開始`,
+          `Staged finerenone review: potassium ${potassium} mmol/L; do not initiate now`,
         )
+      : finerenonePotassiumMissing
+        ? text(
+            locale,
+            'finerenone 階段式評估：先補近期血鉀',
+            'Staged finerenone review: obtain a current potassium first',
+          )
+        : finerenonePotassiumCaution
+          ? text(
+              locale,
+              `finerenone 階段式評估：血鉀 ${potassium} mmol/L，僅在臨床判斷下考慮並加密監測`,
+              `Staged finerenone review: potassium ${potassium} mmol/L; consider only with clinical judgment and additional monitoring`,
+            )
+          : finerenoneStageReview
+            ? text(
+                locale,
+                'finerenone 階段式評估：先確認持續白蛋白尿與最大耐受 RASi',
+                'Staged finerenone review: first confirm persistent albuminuria and maximally tolerated RAS inhibition',
+              )
       : text(
           locale,
           '腎臟保護用藥已核對；依 eGFR、UACR 與血鉀追蹤',
@@ -713,10 +845,9 @@ function buildKidneyMedicationStrategy(
     id: 'kidney-medication-strategy',
     domain: 'medication',
     priority: aceArbIndicated && !aceArbPresent ? 'high' : 'medium',
-    status: aceArbIndicated && !aceArbPresent && !aceArbAllergy
-      && aceArbState === 'not-found'
-      ? 'actionable'
-      : 'review',
+    status: finerenonePotassiumMissing
+        ? 'needs-data'
+        : 'review',
     ...evidence,
     hideNarrative: true,
     title,
@@ -728,10 +859,19 @@ function buildKidneyMedicationStrategy(
           ? '系統已找到有效處方，但不能視為病人確實正在使用；先核對實際服用、耐受性與血壓。'
           : aceArbIndicated && aceArbState === 'on-hold'
             ? '系統已找到暫停中的 ACEI／ARB；先核對暫停原因、腎功能、血鉀與恢復計畫。'
+            : aceArbIndicated
+                && aceArbState === 'historical-record-current-status-unknown'
+              ? '系統已找到 ACEI／ARB 歷史處方；先依最後處方日期與用藥資料涵蓋範圍，核對近期是否持續、既往耐受性與停藥原因，不把資料缺口當作未使用。'
             : aceArbIndicated && !aceArbPresent
-        ? '病歷已符合評估 ACEI／ARB 的情境；過敏／不耐受紀錄未見此類藥，仍需排除其他禁忌，再依血壓與腎功能評估開始治療。'
-        : canAssessFinerenone && !finerenonePresent
-          ? '若已使用最大耐受 ACEI／ARB 且 UACR 仍 ≥30 mg/g，可依 eGFR、血鉀與給付條件評估 finerenone。'
+        ? '現有資料尚未證明目前是否使用 ACEI／ARB；先完成現行與歷史用藥核對、既往耐受與停藥原因確認，不直接形成開始用藥指示。'
+        : finerenonePotassiumTooHigh
+          ? '目前血鉀 >5.0 mmol/L，依 FDA 標籤不應開始 finerenone；先處理高血鉀並重新評估。'
+          : finerenonePotassiumMissing
+            ? 'finerenone 只能作階段式提示：先補近期血鉀，並確認 UACR >30 mg/g 為持續性、eGFR >25 mL/min/1.73m²，且已使用最大耐受 RASi。'
+            : finerenonePotassiumCaution
+              ? '血鉀 >4.8 且 ≤5.0 mmol/L 並非一律禁止；可依臨床判斷考慮，但需確認持續 UACR >30、eGFR >25、最大耐受 RASi，並加密血鉀監測。'
+              : finerenoneStageReview
+                ? '只有在確認持續 UACR >30 mg/g、eGFR >25 mL/min/1.73m²、正常血鉀及最大耐受 RASi 後，才進入 finerenone 評估；開始後 4 週複查血鉀。'
           : '目前未辨識出需要立即補上的腎臟保護藥物；依 UACR、eGFR、血壓與血鉀持續追蹤。',
       aceArbIndicated && aceArbAllergy
         ? 'The system found an ACE inhibitor/ARB allergy or intolerance record. Verify the reaction and alternatives rather than recommending the same class.'
@@ -739,10 +879,19 @@ function buildKidneyMedicationStrategy(
           ? 'The system found an active order, which does not confirm actual use. Reconcile use, tolerance, and blood pressure first.'
           : aceArbIndicated && aceArbState === 'on-hold'
             ? 'The system found ACE inhibitor/ARB therapy on hold. Review the reason, kidney function, potassium, and restart plan.'
+            : aceArbIndicated
+                && aceArbState === 'historical-record-current-status-unknown'
+              ? 'A historical ACE inhibitor/ARB prescription is present. Use the last prescription date and medication-data window to reconcile current use, prior tolerance, and the reason it may have stopped rather than treating missing current data as nonuse.'
             : aceArbIndicated && !aceArbPresent
-        ? 'The chart meets a scenario for ACE inhibitor/ARB assessment. No class allergy/intolerance appears in the available record; exclude other contraindications, then consider initiation using blood pressure and kidney function.'
-        : canAssessFinerenone && !finerenonePresent
-          ? 'If albuminuria remains at least 30 mg/g despite a maximally tolerated ACE inhibitor/ARB, consider finerenone using eGFR, potassium, and coverage criteria.'
+        ? 'The available data do not establish current ACE inhibitor/ARB use. Reconcile current and historical therapy, prior tolerance, and reasons for discontinuation rather than generating an initiation instruction.'
+        : finerenonePotassiumTooHigh
+          ? 'Current potassium is above 5.0 mmol/L; the FDA label says not to initiate finerenone. Address hyperkalemia and reassess.'
+          : finerenonePotassiumMissing
+            ? 'Finerenone is only a staged prompt: obtain current potassium and confirm persistent UACR above 30 mg/g, eGFR above 25 mL/min/1.73m², and maximally tolerated RAS inhibition.'
+            : finerenonePotassiumCaution
+              ? 'Potassium >4.8 and ≤5.0 mmol/L is not an absolute prohibition. It may be considered with clinical judgment only after confirming persistent UACR above 30, eGFR above 25, maximally tolerated RAS inhibition, and additional potassium monitoring.'
+              : finerenoneStageReview
+                ? 'Proceed to finerenone assessment only after confirming persistent UACR above 30 mg/g, eGFR above 25 mL/min/1.73m², normal potassium, and maximally tolerated RAS inhibition; recheck potassium 4 weeks after initiation.'
           : 'No immediate kidney-protective medication gap was identified; continue follow-up using UACR, eGFR, blood pressure, and potassium.',
     ),
     rationale: text(
@@ -756,10 +905,19 @@ function buildKidneyMedicationStrategy(
         ? [text(locale, '實際服用情形與耐受性', 'Actual use and tolerance')]
         : aceArbIndicated && aceArbState === 'on-hold'
           ? [text(locale, '暫停原因與是否預計恢復', 'Reason for hold and restart plan')]
+          : aceArbIndicated
+              && aceArbState === 'historical-record-current-status-unknown'
+            ? [text(locale, '目前是否持續、既往耐受性與可能停藥原因', 'Current use, prior tolerance, and possible reason for discontinuation')]
           : aceArbIndicated && !aceArbPresent
       ? [text(locale, '其他禁忌或既往停藥原因', 'Other contraindications or reason for prior discontinuation')]
-      : canAssessFinerenone && !finerenonePresent
-        ? [text(locale, 'ACEI／ARB 是否已達最大耐受劑量', 'Whether ACE inhibitor/ARB therapy is at the maximally tolerated dose')]
+      : finerenoneStageReview
+        ? [
+            text(locale, 'UACR >30 mg/g 是否為持續性', 'Whether UACR above 30 mg/g is persistent'),
+            text(locale, 'RASi 是否已達最大耐受劑量', 'Whether RAS inhibition is at the maximally tolerated dose'),
+            ...(finerenonePotassiumMissing
+              ? [text(locale, '近期血鉀', 'Current potassium')]
+              : []),
+          ]
         : undefined,
     nextActions: aceArbIndicated && aceArbAllergy
       ? [text(locale, '核對反應與嚴重度，依血壓與腎臟風險評估替代治療。', 'Verify the reaction and severity, then assess an alternative using blood pressure and kidney risk.')]
@@ -767,16 +925,52 @@ function buildKidneyMedicationStrategy(
         ? [text(locale, '核對實際服用與耐受性，再決定維持或調整。', 'Reconcile actual use and tolerance before maintaining or changing therapy.')]
         : aceArbIndicated && aceArbState === 'on-hold'
           ? [text(locale, '核對暫停原因、血鉀與腎功能，再決定是否恢復或改用替代方案。', 'Review the reason for hold, potassium, and kidney function before resuming or choosing an alternative.')]
+          : aceArbIndicated
+              && aceArbState === 'historical-record-current-status-unknown'
+            ? [text(locale, '核對最後處方後是否仍持續、既往耐受性與停藥原因；若重新開始，2–4 週後檢查血壓、creatinine 與血鉀。', 'Reconcile use after the last prescription, prior tolerance, and the reason for discontinuation; if restarted, check blood pressure, creatinine, and potassium in 2–4 weeks.')]
           : aceArbIndicated && !aceArbPresent
-      ? [text(locale, '系統未見 ACEI／ARB 過敏／不耐受；排除其他禁忌後，依本次血壓決定是否開始。', 'No ACE inhibitor/ARB allergy or intolerance appears in the record; exclude other contraindications and use today’s blood pressure to decide whether to start.')]
-      : canAssessFinerenone && !finerenonePresent
-        ? [text(locale, '確認 ACEI／ARB 劑量與近期血鉀，再評估 finerenone。', 'Confirm ACE inhibitor/ARB dose and recent potassium, then assess finerenone.')]
+      ? [text(locale, '先完成現行與歷史用藥核對，再由臨床人員決定是否開始或重新開始；若開始，2–4 週後檢查血壓、creatinine 與血鉀。', 'Complete current and historical medication reconciliation before a clinician decides whether to initiate or restart; if started, check blood pressure, creatinine, and potassium in 2–4 weeks.')]
+      : finerenonePotassiumTooHigh
+        ? [text(locale, '現在不要開始 finerenone；先處理高血鉀並複查。', 'Do not initiate finerenone now; address hyperkalemia and repeat potassium.')]
+        : finerenoneStageReview
+          ? [text(locale, '確認持續 UACR、最大耐受 RASi 與血鉀條件；若開始 finerenone，4 週後複查血鉀。', 'Confirm persistent UACR, maximally tolerated RAS inhibition, and potassium eligibility; if finerenone is started, recheck potassium in 4 weeks.')]
         : [text(locale, '依 CKD 分期追蹤 eGFR、UACR 與血鉀。', 'Monitor eGFR, UACR, and potassium according to CKD stage.')],
-    guidelineReferences: [],
+    guidelineReferences: [
+      {
+        id: 'KDIGO-CKD-2024-RASi-monitoring',
+        title: 'KDIGO 2024 Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease',
+        publisher: 'Kidney Disease: Improving Global Outcomes',
+        version: '2024',
+        url: `${KDIGO_CKD_2024_URL}#page=49`,
+        page: 49,
+        recommendationId: 'Practice Points 3.6.2, 3.6.4, and 3.6.7',
+        summary: text(
+          locale,
+          '開始或增加 RASi 後 2–4 週檢查血壓、creatinine 與血鉀；4 週內 creatinine 上升超過 30% 才進一步評估原因；eGFR 低於 30 本身不是停藥理由。',
+          'Check blood pressure, creatinine, and potassium 2–4 weeks after starting or increasing RAS inhibition; investigate causes if creatinine rises by more than 30% within 4 weeks; eGFR below 30 alone is not a reason to stop.',
+        ),
+      },
+      ...(finerenoneStageReview
+        ? [{
+            id: 'FDA-KERENDIA-potassium',
+            title: 'KERENDIA (finerenone) Prescribing Information',
+            publisher: 'U.S. Food and Drug Administration',
+            version: '2025',
+            url: `${FDA_KERENDIA_LABEL_URL}#page=5`,
+            page: 5,
+            recommendationId: 'Section 2.3',
+            summary: text(
+              locale,
+              '血鉀 >5.0 mmol/L 不應開始；>4.8 且 ≤5.0 mmol/L 可依臨床判斷並加密監測；開始或調整劑量後 4 週複查血鉀。',
+              'Do not initiate when potassium is above 5.0 mmol/L; >4.8 and ≤5.0 mmol/L may be considered with clinical judgment and additional monitoring; recheck potassium 4 weeks after initiation or dose adjustment.',
+            ),
+          } satisfies GuidelineReference]
+        : []),
+    ],
     safetyBoundary: text(
       locale,
-      '不因處方清單缺少某藥就自動開藥；仍需排除禁忌、急性腎損傷、低血壓與高血鉀。',
-      'Absence from the medication list does not automatically trigger prescribing; contraindications, acute kidney injury, hypotension, and hyperkalemia still require review.',
+      '不因處方清單缺少某藥就自動開藥。ACEI／ARB 開始或重新開始後 2–4 週檢查血壓、creatinine 與血鉀；4 週內 creatinine 上升 >30% 才觸發原因評估，eGFR <30 本身不是停藥理由。',
+      'Absence from the medication list does not automatically trigger prescribing. After starting or restarting an ACE inhibitor/ARB, check blood pressure, creatinine, and potassium in 2–4 weeks; evaluate causes when creatinine rises by more than 30% within 4 weeks, and do not stop solely because eGFR is below 30.',
     ),
   }
 }
@@ -788,6 +982,14 @@ function buildAscvdLipidStrategy(
   const statinState = medicationClassState(profile, 'statin')
   const statinPresent = statinState === 'confirmed-current'
   const statinAllergy = hasDocumentedClassAllergy(profile, 'statin')
+  const age = numberFromFact(profile, 'age')
+  const geriatricBenefitReview = (
+    (age !== undefined && age >= 85)
+    || profile.olderAdultContext?.healthStatus === 'very-complex-poor-health'
+    || profile.olderAdultContext?.frailtyStatus === 'frail'
+    || profile.olderAdultContext?.cognitiveStatus === 'moderate-to-severe-impairment'
+  )
+  const statinContext = profile.medicationClassContexts?.statin
   const ldl = numberFromFact(profile, 'LDL')
   const ldlCurrent = ldl !== undefined && isFresh(profile, 'LDL')
   const evidence = evidenceForOverview([
@@ -812,6 +1014,12 @@ function buildAscvdLipidStrategy(
         )
       : statinState === 'on-hold'
         ? text(locale, 'ASCVD：statin 暫停中', 'ASCVD: statin therapy is on hold')
+        : statinState === 'historical-record-current-status-unknown'
+          ? text(
+              locale,
+              `ASCVD：有 statin 歷史處方，近期是否持續未知${statinContext?.lastPrescriptionDate ? `（最後處方 ${statinContext.lastPrescriptionDate}）` : ''}`,
+              `ASCVD: a historical statin record is present; current use is unknown${statinContext?.lastPrescriptionDate ? ` (last prescription ${statinContext.lastPrescriptionDate})` : ''}`,
+            )
         : statinAllergy
           ? text(
               locale,
@@ -833,7 +1041,7 @@ function buildAscvdLipidStrategy(
   const status: CdssRecommendation['status'] = statinPresent
     ? (!ldlCurrent ? 'needs-data' : 'review')
     : statinState === 'not-found' && !statinAllergy
-      ? 'actionable'
+      ? geriatricBenefitReview ? 'review' : 'actionable'
       : statinState === 'uncertain'
         ? 'needs-data'
         : 'review'
@@ -856,6 +1064,12 @@ function buildAscvdLipidStrategy(
             '先核對暫停原因與恢復計畫；若無法耐受原強度，評估最大耐受劑量或替代降脂治療。',
             'Review the reason for the hold and restart plan; if the intended intensity is not tolerated, assess the maximum tolerated dose or alternative lipid-lowering therapy.',
           )
+        : statinState === 'historical-record-current-status-unknown'
+          ? text(
+              locale,
+              '系統已找到 statin 歷史處方；先依最後處方日期與資料涵蓋範圍核對目前是否持續及既往耐受性，再依預期效益時間、交互作用與照護目標決定最大耐受強度。',
+              'A historical statin prescription is present. Reconcile current use and prior tolerance using the last prescription date and data window, then choose the maximum tolerated intensity using time to benefit, interactions, and care goals.',
+            )
         : statinAllergy
           ? text(
               locale,
@@ -870,14 +1084,20 @@ function buildAscvdLipidStrategy(
               )
             : text(
                 locale,
-                '糖尿病合併 ASCVD 已可評估高強度 statin；LDL-C 用於判斷降幅、達標與後續加藥，不阻擋本次開始評估。',
-                'Diabetes with ASCVD is sufficient to assess high-intensity statin therapy. LDL-C is used for response, goal attainment, and add-on therapy and does not block this assessment.',
+                geriatricBenefitReview
+                  ? '糖尿病合併 ASCVD 原則上支持高強度 statin，但本病例需先確認是否仍使用及既往耐受性，再以預期效益時間、交互作用、衰弱／認知與照護目標決定最大耐受強度；不直接形成開始高強度 statin 指示。'
+                  : '糖尿病合併 ASCVD 已可評估高強度 statin；LDL-C 用於判斷降幅、達標與後續加藥，不阻擋本次開始評估。',
+                geriatricBenefitReview
+                  ? 'Diabetes with ASCVD generally supports high-intensity statin therapy, but this case first requires confirmation of current use and prior tolerance. Use time to benefit, interactions, frailty/cognition, and care goals to choose the maximum tolerated intensity rather than generating a direct initiation instruction.'
+                  : 'Diabetes with ASCVD is sufficient to assess high-intensity statin therapy. LDL-C is used for response, goal attainment, and add-on therapy and does not block this assessment.',
               )
 
   return {
     id: 'ascvd-lipid-strategy',
     domain: 'medication',
-    priority: statinPresent ? 'medium' : 'high',
+    priority: statinState === 'not-found' && !statinAllergy && !geriatricBenefitReview
+      ? 'high'
+      : 'medium',
     status,
     ...evidence,
     hideNarrative: true,
@@ -898,12 +1118,22 @@ function buildAscvdLipidStrategy(
         ? [text(locale, '實際服用情形與耐受性', 'Actual use and tolerance')]
         : statinState === 'on-hold'
           ? [text(locale, '暫停原因與是否預計恢復', 'Reason for hold and restart plan')]
+          : statinState === 'historical-record-current-status-unknown'
+            ? [text(locale, '目前是否持續、既往耐受性與可能停藥原因', 'Current use, prior tolerance, and possible reason for discontinuation')]
           : statinAllergy
             ? [text(locale, '過敏／不耐受反應詳情與曾耐受劑量', 'Details of the allergy/intolerance and previously tolerated dose')]
             : statinState === 'uncertain'
               ? [text(locale, '無法辨識藥品的標準成分', 'Standard ingredient for the unrecognized medicine')]
               : !statinPresent
-                ? [text(locale, '其他禁忌或既往停藥原因', 'Other contraindications or reason for prior discontinuation')]
+                ? [text(
+                    locale,
+                    geriatricBenefitReview
+                      ? '目前是否仍使用、既往耐受性、衰弱／認知、預期效益時間與照護目標'
+                      : '其他禁忌或既往停藥原因',
+                    geriatricBenefitReview
+                      ? 'Current use, prior tolerance, frailty/cognition, time to benefit, and care goals'
+                      : 'Other contraindications or reason for prior discontinuation',
+                  )]
                 : []),
     ],
     nextActions: [
@@ -913,11 +1143,21 @@ function buildAscvdLipidStrategy(
           ? text(locale, '核對是否實際使用；同時取得 LDL-C 供後續達標判斷。', 'Confirm actual use and obtain LDL-C for subsequent goal assessment.')
           : statinState === 'on-hold'
             ? text(locale, '核對暫停原因，決定恢復最大耐受劑量或改用替代治療。', 'Review the reason for the hold and decide whether to resume the maximum tolerated dose or use an alternative.')
+            : statinState === 'historical-record-current-status-unknown'
+              ? text(locale, '核對最後處方後是否仍持續與既往耐受性，再依預期效益時間、交互作用及照護目標決定最大耐受強度。', 'Reconcile use after the last prescription and prior tolerance, then choose the maximum tolerated intensity using time to benefit, interactions, and care goals.')
             : statinAllergy
               ? text(locale, '核對反應與嚴重度，評估可耐受 statin 劑量或非 statin 治療。', 'Verify the reaction and severity, then assess a tolerated statin dose or nonstatin therapy.')
               : statinState === 'uncertain'
                 ? text(locale, '補上藥品代碼或成分映射後自動重跑。', 'Add the drug code or ingredient mapping and rerun automatically.')
-                : text(locale, '系統未見 statin 過敏／不耐受；排除其他禁忌後評估高強度 statin，並補 LDL-C。', 'No statin allergy/intolerance appears in the record; exclude other contraindications, assess high-intensity statin therapy, and obtain LDL-C.'),
+                : text(
+                    locale,
+                    geriatricBenefitReview
+                      ? '先核對目前與歷史用藥及耐受性，再以預期效益時間、交互作用、衰弱／認知與照護目標共同決定最大耐受強度。'
+                      : '系統未見 statin 過敏／不耐受；排除其他禁忌後評估高強度 statin，並補 LDL-C。',
+                    geriatricBenefitReview
+                      ? 'First reconcile current and historical use and tolerance, then choose the maximum tolerated intensity using time to benefit, interactions, frailty/cognition, and care goals.'
+                      : 'No statin allergy/intolerance appears in the record; exclude other contraindications, assess high-intensity statin therapy, and obtain LDL-C.',
+                  ),
     ],
     guidelineReferences: [],
     safetyBoundary: text(
@@ -1083,8 +1323,8 @@ export const DM_CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
   version: '0.2.0-poc',
   enabled: true,
   label: {
-    zh: '糖尿病＋腎臟照護',
-    en: 'Diabetes + kidney care',
+    zh: '糖尿病',
+    en: 'Diabetes',
   },
   applies(profile) {
     return profile.eligibleDiseasePackIds?.includes('dm-poc') === true
@@ -1147,6 +1387,7 @@ export const DM_CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
       profile,
       locale,
       recommendations: decisionRecommendations,
+      sourceIds: ['ada-2026', 'taiwan-t2dm-2022', 'taiwan-nhi-diabetes'],
     })
 
     const highPriorityCount = enriched.recommendations.filter((item) => item.priority === 'high').length

@@ -16,6 +16,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   leftTabForResourceType,
@@ -32,6 +37,7 @@ import type {
   CdssStatus,
   DcsiSummary,
 } from '../types'
+import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 
 interface ClinicalDecisionSupportViewProps {
   result: CdssResult
@@ -101,7 +107,7 @@ function EvidenceSources({
   onNavigate: (target: ResourceNavTarget) => void
   compact?: boolean
 }) {
-  const navigableSources = sources.filter((source) => Boolean(
+  const navigableSources = dedupeFactSources(sources).filter((source) => Boolean(
     source.resourceId && leftTabForResourceType(source.resourceType),
   ))
   if (navigableSources.length === 0) return null
@@ -246,7 +252,7 @@ function EvidenceValue({
   sources?: readonly CdssFactSource[]
   isEnglish: boolean
 }) {
-  const trendPoints = sources?.filter((source): source is CdssFactSource & {
+  const trendPoints = dedupeFactSources(sources ?? []).filter((source): source is CdssFactSource & {
     date: string
     value: number
   } => (
@@ -866,21 +872,39 @@ export function ClinicalDecisionSupportView({
     <div className="space-y-3" data-testid="clinical-decision-support-view">
       {result.knowledgePacks && result.knowledgePacks.length > 0 ? (
         <section
-          className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-muted/20 px-3 py-2"
+          className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-lg border border-border bg-muted/20 px-3 py-2"
           aria-label={isEnglish ? 'Enabled knowledge packs' : '已啟用知識包'}
           data-testid="cdss-enabled-knowledge-packs"
         >
-          <span className="mr-1 text-xs font-semibold text-muted-foreground">
+          <span className="mr-1 shrink-0 whitespace-nowrap text-xs font-semibold text-muted-foreground">
             {isEnglish ? 'Enabled sources' : '已啟用來源'}
           </span>
-          {result.knowledgePacks.map((pack) => (
-            <Badge key={pack.id} variant="outline" className="h-6 bg-background px-2 text-xs">
-              {pack.label}
-              <span className="ml-1 font-normal text-muted-foreground">
-                · {pack.version}
-              </span>
-            </Badge>
-          ))}
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
+            {result.knowledgePacks.map((pack) => {
+              const labelIncludesVersion = pack.label
+                .toLocaleLowerCase()
+                .includes(pack.version.toLocaleLowerCase())
+              const fullLabel = labelIncludesVersion
+                ? pack.label
+                : `${pack.label} · ${pack.version}`
+              return (
+                <Tooltip key={pack.id}>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="outline"
+                      className="h-6 min-w-0 flex-1 overflow-hidden bg-background px-2 text-xs"
+                      title={fullLabel}
+                    >
+                      <span className="truncate">{fullLabel}</span>
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-lg">
+                    {fullLabel}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </div>
         </section>
       ) : null}
 

@@ -6,6 +6,7 @@ import type {
 } from '../types'
 
 const CURRENT_MEDICATION_STATUSES = new Set(['active', 'on-hold'])
+const HISTORICAL_MEDICATION_STATUSES = new Set(['completed', 'stopped'])
 const ANTIDIABETIC_CATEGORY = /antidiabetic|anti-diabetic|抗糖尿病|降血糖/i
 const RXNORM_SYSTEM = 'http://www.nlm.nih.gov/research/umls/rxnorm'
 
@@ -122,6 +123,9 @@ function medicationRecordState(
   medication: MedicationEntity,
 ): Exclude<CdssMedicationClassState, 'not-found' | 'uncertain'> {
   if ((medication.status ?? '').toLowerCase() === 'on-hold') return 'on-hold'
+  if (HISTORICAL_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())) {
+    return 'historical-record-current-status-unknown'
+  }
   return medication._sourceResourceType === 'MedicationStatement'
     ? 'confirmed-current'
     : 'active-order-unconfirmed'
@@ -149,11 +153,17 @@ export function classifyCurrentMedications(
   classified: readonly ClassifiedMedication[]
   unclassifiedAntidiabeticCount: number
 } {
-  const current = currentMedicationRecords(medications)
+  const governedRecords = medications.filter((medication) => (
+    Boolean(medication.id)
+    && (
+      CURRENT_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())
+      || HISTORICAL_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())
+    )
+  ))
   const classified: ClassifiedMedication[] = []
   let unclassifiedAntidiabeticCount = 0
 
-  for (const medication of current) {
+  for (const medication of governedRecords) {
     const searchable = searchableMedicationText(medication)
     const matchedClasses = medicationClassesFromEvidence({
       texts: [searchable],
@@ -171,6 +181,7 @@ export function classifyCurrentMedications(
 
     if (
       matchedClasses.length === 0
+      && CURRENT_MEDICATION_STATUSES.has((medication.status ?? '').toLowerCase())
       && ANTIDIABETIC_CATEGORY.test(searchable)
       && !RECOGNIZED_OTHER_ANTIDIABETIC.test(searchable)
     ) {
@@ -195,7 +206,9 @@ export function assessMedicationClass(
         ? 'confirmed-current'
         : medications.some((item) => item.state === 'active-order-unconfirmed')
           ? 'active-order-unconfirmed'
-          : 'on-hold'
+          : medications.some((item) => item.state === 'on-hold')
+            ? 'on-hold'
+            : 'historical-record-current-status-unknown'
       : ingredientAmbiguityAffectsClass && classified.unclassifiedAntidiabeticCount > 0
         ? 'uncertain'
         : 'not-found',

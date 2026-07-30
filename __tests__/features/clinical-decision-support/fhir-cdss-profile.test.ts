@@ -328,6 +328,81 @@ describe('FHIR CDSS UACR normalization across patients and facilities', () => {
   })
 })
 
+describe('FHIR CDSS governed eGFR normalization', () => {
+  it.each([
+    ['69405-9', 'mL/min/1.73m2', undefined],
+    ['69405-9', 'mL/min/{1.73_m2}', 'mL/min/{1.73_m2}'],
+    ['77147-7', 'mL/min/1.73m²', undefined],
+    ['77147-7', 'mL/min/{1.73m2}', 'mL/min/{1.73m2}'],
+    ['77147-7', 'mL/min/1.73m^2', 'mL/min/1.73m^2'],
+  ])(
+    'accepts LOINC %s with equivalent UCUM representation %s',
+    (loinc, unit, code) => {
+      const result = profile([
+        observation(`egfr-${loinc}-${unit}`, {
+          code: { coding: [{ system: LOINC_SYSTEM, code: loinc }] },
+          valueQuantity: {
+            value: 34,
+            unit,
+            system: UCUM_SYSTEM,
+            ...(code ? { code } : {}),
+          },
+        }),
+      ])
+
+      expect(result.facts.eGFR).toMatchObject({
+        numericValue: 34,
+        date: '2026-06-01',
+      })
+    },
+  )
+
+  it('builds a current trend and CKD eligibility from LOINC 69405-9 results', () => {
+    const dates = [
+      ['2025-09-10', 35],
+      ['2025-12-12', 34],
+      ['2026-02-15', 33],
+      ['2026-04-20', 32],
+      ['2026-06-25', 34],
+    ] as const
+    const result = profile(dates.map(([effectiveDateTime, value], index) => (
+      observation(`egfr-69405-${index}`, {
+        effectiveDateTime,
+        code: { coding: [{ system: LOINC_SYSTEM, code: '69405-9' }] },
+        valueQuantity: {
+          value,
+          unit: 'mL/min/{1.73_m2}',
+          system: UCUM_SYSTEM,
+          code: 'mL/min/{1.73_m2}',
+        },
+      })
+    )))
+
+    expect(result.facts.eGFR.numericValue).toBe(34)
+    expect(result.facts.eGFRTrend.sources).toHaveLength(4)
+    expect(result.facts.ckdChronicity).toBeDefined()
+    expect(result.diseasePackEligibility?.['ckd-poc']).toMatchObject({
+      basis: 'chronic_labs',
+      code: '69405-9',
+    })
+  })
+
+  it('rejects an otherwise matching eGFR value with a non-UCUM system', () => {
+    const result = profile([
+      observation('egfr-wrong-system', {
+        code: { coding: [{ system: LOINC_SYSTEM, code: '69405-9' }] },
+        valueQuantity: {
+          value: 34,
+          unit: 'mL/min/1.73m2',
+          system: 'https://example.org/local-units',
+        },
+      }),
+    ])
+
+    expect(result.facts.eGFR).toBeUndefined()
+  })
+})
+
 describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
   function medication(
     id: string,
@@ -388,7 +463,10 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
       medication('old-su', 'Gliclazide 30 mg', 'completed'),
     ])
 
-    expect(result.medicationClassContexts?.sulfonylurea?.state).toBe('not-found')
+    expect(result.medicationClassContexts?.sulfonylurea?.state).toBe(
+      'historical-record-current-status-unknown',
+    )
+    expect(result.facts.hypoglycemiaRiskMedications.zh).toContain('近期是否持續未知')
   })
 
   it('marks the assessment uncertain only when an active antidiabetic ingredient is unmapped', () => {
@@ -419,6 +497,62 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     })
     expect(result.facts.statinTherapy.zh).toContain('Atorvastatin')
     expect(result.facts.aceArbTherapy.zh).toContain('Losartan')
+  })
+
+  it('keeps historical ARB and statin prescriptions visible with dates and data coverage', () => {
+    const result = profile([], [
+      {
+        ...medication('old-statin', 'Rosuvastatin 10 mg', 'completed', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2025-05-20',
+      },
+      {
+        ...medication('old-arb', 'Valsartan 80 mg', 'completed', 'ANTIHYPERTENSIVE AGENTS'),
+        authoredOn: '2026-04-12',
+      },
+      {
+        ...medication('coverage-end', 'Metformin 500 mg', 'active'),
+        authoredOn: '2026-06-25',
+      },
+    ])
+
+    expect(result.medicationClassContexts).toMatchObject({
+      statin: {
+        state: 'historical-record-current-status-unknown',
+        lastPrescriptionDate: '2025-05-20',
+        dataWindowStartDate: '2025-05-20',
+        dataWindowEndDate: '2026-06-25',
+      },
+      'ace-inhibitor-or-arb': {
+        state: 'historical-record-current-status-unknown',
+        lastPrescriptionDate: '2026-04-12',
+        dataWindowStartDate: '2025-05-20',
+        dataWindowEndDate: '2026-06-25',
+      },
+    })
+    expect(result.facts.statinTherapy.zh).toContain('最後處方 2025-05-20')
+    expect(result.facts.statinTherapy.zh).toContain('用藥資料範圍 2025-05-20–2026-06-25')
+    expect(result.facts.aceArbTherapy.zh).toContain('Valsartan')
+  })
+
+  it('prefers a current class record without mixing historical names into current use', () => {
+    const result = profile([], [
+      {
+        ...medication('old-statin', 'Rosuvastatin 10 mg', 'completed', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2025-05-20',
+      },
+      {
+        ...medication('current-statin', 'Atorvastatin 20 mg', 'active', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2026-06-25',
+      },
+    ])
+
+    expect(result.medicationClassContexts?.statin).toMatchObject({
+      state: 'active-order-unconfirmed',
+      medicationNames: ['Atorvastatin 20 mg'],
+      lastPrescriptionDate: '2026-06-25',
+    })
+    expect(result.facts.statinTherapy.zh).toContain('Atorvastatin 20 mg')
+    expect(result.facts.statinTherapy.zh).not.toContain('Rosuvastatin 10 mg')
   })
 })
 

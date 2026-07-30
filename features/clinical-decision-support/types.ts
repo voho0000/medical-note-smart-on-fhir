@@ -10,7 +10,13 @@ export type CdssDomain =
   | 'complication'
   | 'safety'
   | 'care-gap'
-export type CdssKnowledgeSourceId = 'ada-2026' | 'taiwan-t2dm-2022' | 'taiwan-nhi-diabetes'
+export type CdssKnowledgeSourceId =
+  | 'ada-2026'
+  | 'taiwan-t2dm-2022'
+  | 'taiwan-nhi-diabetes'
+  | 'kdigo-ckd-2024'
+  | 'kdigo-anemia-2026'
+  | 'taiwan-ckd-2025'
 export type CdssKnowledgeSourceKind = 'guideline' | 'coverage'
 export type CdssMedicationClassId =
   | 'insulin'
@@ -23,6 +29,7 @@ export type CdssMedicationClassState =
   | 'confirmed-current'
   | 'active-order-unconfirmed'
   | 'on-hold'
+  | 'historical-record-current-status-unknown'
   | 'not-found'
   | 'uncertain'
 export type CdssMedicationAllergyState =
@@ -85,6 +92,7 @@ export interface CdssFactSource {
     | 'AllergyIntolerance'
     | 'Procedure'
     | 'Immunization'
+    | 'CarePlan'
   resourceId: string
   date?: string
   status?: string
@@ -136,11 +144,30 @@ export interface CdssScreeningContext {
 
 export interface CdssPatientProfile {
   id: string
-  profileVersion?: 'dm-cdss-profile-v1'
+  profileVersion?: 'dm-cdss-profile-v1' | 'multi-disease-cdss-profile-v2'
+  /** Governed demographics used by reusable clinical equations. */
+  demographics?: {
+    sex?: 'male' | 'female' | 'other' | 'unknown'
+  }
+  /** Clinician-reviewed geriatric context. The adapter leaves this absent
+   * unless governed data can establish it; age alone never implies frailty. */
+  olderAdultContext?: {
+    healthStatus?: 'healthy' | 'complex-intermediate' | 'very-complex-poor-health'
+    adlImpairmentCount?: number
+    iadlImpairmentCount?: number
+    cognitiveStatus?: 'intact' | 'mild-to-moderate-impairment' | 'moderate-to-severe-impairment'
+    frailtyStatus?: 'not-frail' | 'prefrail' | 'frail'
+    sourceFactKeys?: readonly string[]
+  }
   eligibleDiseasePackIds?: readonly string[]
   diseasePackEligibility?: Readonly<Record<string, {
-    basis: 'condition' | 'encounter_diagnosis' | 'hba1c_diagnostic_range'
-    resourceType: 'Condition' | 'Encounter' | 'Observation'
+    basis:
+      | 'condition'
+      | 'encounter_diagnosis'
+      | 'hba1c_diagnostic_range'
+      | 'care_plan'
+      | 'chronic_labs'
+    resourceType: 'Condition' | 'Encounter' | 'Observation' | 'CarePlan'
     resourceId?: string
     codingSystem: string
     code: string
@@ -155,6 +182,9 @@ export interface CdssPatientProfile {
     state: CdssMedicationClassState
     medicationNames: readonly string[]
     factKey: string
+    lastPrescriptionDate?: string
+    dataWindowStartDate?: string
+    dataWindowEndDate?: string
     allergyState?: CdssMedicationAllergyState
     allergyNames?: readonly string[]
     allergyFactKey?: string
