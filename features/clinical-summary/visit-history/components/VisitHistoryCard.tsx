@@ -14,6 +14,7 @@ import { useVisitHistory, type VisitCareDiscipline } from "../hooks/useVisitHist
 import { useEncounterDetails } from "../hooks/useEncounterDetails"
 import { useClinicalNotes } from "../hooks/useClinicalNotes"
 import { useVisitStats } from "../hooks/useVisitStats"
+import { useMedicationRows } from "@/features/clinical-summary/medications/hooks/useMedicationRows"
 import { useDocumentSummaries } from "@/features/clinical-summary/document-summary/hooks/useDocumentSummaries"
 import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
@@ -68,9 +69,14 @@ export function VisitHistoryCard() {
 
   // ── Data derivation ────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
+  // Build the exact same audience-aware medication view model used by the
+  // dedicated 用藥 tab. Encounter details keep the raw resources only for
+  // their Encounter links; names, terminology, categories and status display
+  // all come from this shared row model.
+  const medicationRows = useMedicationRows(medications, audience, locale)
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
-    clinicalNotes, conditions, locale, audience,
+    clinicalNotes, conditions, locale, audience, medicationRows,
   )
   // ICD dict prefers Chinese when UI is zh-TW; English coding[].display when UI is en.
   const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
@@ -187,7 +193,8 @@ export function VisitHistoryCard() {
             }
           }
           for (const m of d.medications) {
-            if (m.name) parts.push(m.name)
+            if (m.title) parts.push(m.title)
+            if (m.searchHaystack) parts.push(m.searchHaystack)
           }
           for (const p of d.procedures) {
             if (p.title) parts.push(p.title)

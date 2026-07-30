@@ -63,7 +63,14 @@ const getCareDisciplineBadge = (
   )
 }
 
-export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
+export function VisitItem({
+  visit,
+  details,
+  documents,
+  abnormalCount = 0,
+  isExpanded,
+  onToggle,
+}: VisitItemProps) {
   const { t, locale } = useLanguage()
   const docStrings = useDocumentSummaryStrings()
   const { detail: rightDetail, toggleDetail } = useRightDetail()
@@ -74,6 +81,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
   const docs = documents ?? []
   const hasDetails = visitHasDetails(details, documents)
   const isRightActive = rightDetail?.sourceId === visit.id
+  const showMedicationExecutionPeriods = visit.type === 'inpatient'
 
   // Date label: a "住院日 ~ 出院日" range for inpatient stays that carry a
   // discharge date (Encounter.period.end on a different day); otherwise the
@@ -100,7 +108,14 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
           {visit.location && <span className="text-xs font-normal text-muted-foreground">· {visit.location}</span>}
         </span>
       ),
-      node: <VisitDetailContent details={details} documents={documents} abnormalCount={abnormalCount} />,
+      node: (
+        <VisitDetailContent
+          details={details}
+          documents={documents}
+          abnormalCount={abnormalCount}
+          showMedicationExecutionPeriods={showMedicationExecutionPeriods}
+        />
+      ),
     })
   }
 
@@ -331,7 +346,12 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
 
       {isExpanded && (
         <div className="min-w-0 max-w-full overflow-hidden border-t bg-muted/30 px-3 py-3 text-sm">
-          <VisitDetailContent details={details} documents={documents} abnormalCount={abnormalCount} />
+          <VisitDetailContent
+            details={details}
+            documents={documents}
+            abnormalCount={abnormalCount}
+            showMedicationExecutionPeriods={showMedicationExecutionPeriods}
+          />
         </div>
       )}
     </div>

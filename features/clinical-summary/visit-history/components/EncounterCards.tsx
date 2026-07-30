@@ -6,15 +6,6 @@ import { useLanguage } from "@/src/application/providers/language.provider"
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import type { EncounterDiagnosis } from "../hooks/useEncounterDetails"
 
-export type EncounterMedication = {
-  id: string
-  name: string
-  status?: string
-  detail?: string
-  when?: string
-  isChronic?: boolean
-}
-
 export type EncounterProcedure = {
   id: string
   title: string
@@ -24,46 +15,6 @@ export type EncounterProcedure = {
   category?: string
   outcome?: string
   report: string[]
-}
-
-export function MedicationRow({ medication }: { medication: EncounterMedication }) {
-  const { t } = useLanguage()
-  const mt = (t.medications as any)
-  // Single-row, low-padding layout — sized to match the 用藥 tab's
-  // MedicationItem (px-2.5 py-1, 13px title, [10px] badges) so a med reads the
-  // same whether seen here or in the dedicated tab. The per-med date is
-  // intentionally dropped — every med in an encounter shares the encounter's
-  // date (already shown in the visit header) and the bridge's time is always
-  // midnight, so it was pure redundancy. name + 慢箋 + dosing detail flow on the
-  // left (wrapping only on very narrow panels); status stays pinned right.
-  return (
-    <div className="rounded-md border bg-background px-2.5 py-1 leading-tight">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-x-1.5 gap-y-0.5 flex-wrap min-w-0">
-          <span className="text-[0.8125rem] font-semibold text-foreground">{medication.name}</span>
-          {medication.isChronic && (
-            <span
-              title={mt.chronicTooltip ?? 'Continuous long term therapy'}
-              className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.625rem] font-medium text-violet-700"
-            >
-              {mt.chronic ?? '慢箋'}
-            </span>
-          )}
-          {medication.detail && <span className="text-[0.625rem] text-muted-foreground">{medication.detail}</span>}
-        </div>
-        {medication.status && (
-          <span className={cn(
-            "shrink-0 inline-flex items-center rounded-full border px-1.5 py-0 text-[0.625rem] capitalize",
-            medication.status === "active"
-              ? "border-sky-200 bg-sky-50 text-sky-700"
-              : "border-muted bg-muted/60 text-muted-foreground"
-          )}>
-            {medication.status}
-          </span>
-        )}
-      </div>
-    </div>
-  )
 }
 
 export function DiagnosisTag({ diagnosis }: { diagnosis: EncounterDiagnosis }) {

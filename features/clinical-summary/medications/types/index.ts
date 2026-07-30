@@ -23,6 +23,13 @@ export type DurationLike = Duration
 export type PeriodLike = Period
 export type Medication = MedicationRequest
 
+export interface MedicationExecutionPeriod {
+  /** Source-reported execution start; kept as ISO/FHIR date or dateTime. */
+  start?: string
+  /** Source-reported execution end; kept as ISO/FHIR date or dateTime. */
+  end?: string
+}
+
 export interface MedicationRow {
   id: string
   /** Stable source medication key used for grouping; never infer identity from

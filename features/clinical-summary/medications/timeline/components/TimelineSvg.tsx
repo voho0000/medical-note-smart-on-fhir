@@ -258,8 +258,16 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
               {hover.drugProductName}
             </div>
           )}
-          {audience === 'medical' && hover.drugTerminology && (
+          {hover.drugTerminology && (
             <dl className="mt-1 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 border-t pt-1 text-[0.6875rem]">
+              {hover.drugTerminology.ingredientText && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {mt.terminologyIngredientLabel ?? 'Ingredient / strength'}
+                  </dt>
+                  <dd className="truncate">{hover.drugTerminology.ingredientText}</dd>
+                </>
+              )}
               {hover.drugTerminology.officialNameZh && (
                 <>
                   <dt className="text-muted-foreground">
@@ -321,6 +329,9 @@ export function TimelineSvg({ categories, domainStartMs, domainEndMs, width }: T
                 {mt.terminologySnapshotLabel ?? 'Version'}
               </dt>
               <dd className="truncate">{hover.drugTerminology.snapshotId}</dd>
+              <div className="col-span-2 mt-0.5 border-t pt-0.5 text-muted-foreground">
+                {mt.terminologySource ?? 'NHI drug master'}
+              </div>
             </dl>
           )}
           <div className="text-muted-foreground">

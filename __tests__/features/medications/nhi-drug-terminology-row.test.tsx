@@ -115,4 +115,27 @@ describe('useMedicationRows — official NHI terminology view model', () => {
     expect(result.current[0].refillCount).toBe(2)
     expect(result.current[1].refillCount).toBe(2)
   })
+
+  it('uses the exact source period end instead of adding the inclusive day count again', () => {
+    const inpatientOrder = {
+      ...medication,
+      status: 'completed',
+      authoredOn: '2025-05-20T00:00:00+08:00',
+      dispenseRequest: {
+        validityPeriod: {
+          start: '2025-05-20T00:00:00+08:00',
+          end: '2025-05-21T23:59:59+08:00',
+        },
+      },
+    }
+
+    const { result } = renderHook(() =>
+      useMedicationRows([inpatientOrder], 'medical', 'zh-TW'),
+    )
+
+    expect(result.current[0].durationDays).toBe(2)
+    expect(result.current[0].endDate).toBe(
+      new Date(inpatientOrder.dispenseRequest.validityPeriod.end).toLocaleDateString(),
+    )
+  })
 })

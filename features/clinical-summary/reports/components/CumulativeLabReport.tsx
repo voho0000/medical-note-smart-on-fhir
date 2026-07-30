@@ -138,6 +138,19 @@ function LabPivotTable({
     groupedColumns.push({ sg: null, tests: pivot.rows })
   }
   const flatTests = groupedColumns.flatMap((g) => g.tests)
+  const inferredUnitInHeader = new Map(
+    flatTests.map((test) => {
+      const unitBearingCells = [...test.values.values()].filter(
+        (cell) => !isMissingLabValue(cell.value) && !!cell.unit,
+      )
+      return [
+        test.mapKey,
+        !!test.unit &&
+          unitBearingCells.length > 0 &&
+          unitBearingCells.every((cell) => cell.unitInferred),
+      ] as const
+    }),
+  )
 
   const heightClass = fullHeight ? 'max-h-[calc(100vh-220px)]' : 'max-h-[60vh]'
   const hasSubgroups = groupedColumns.some((g) => g.sg !== null)
@@ -194,6 +207,8 @@ function LabPivotTable({
             {flatTests.map((test) => {
               const { name, abbr } = columnParts(test.testKey, test.displayName)
               const isFocused = test.testKey === focusAnalyteKey
+              const showInferredUnitInHeader =
+                inferredUnitInHeader.get(test.mapKey) === true
               return (
                 <th
                   key={test.mapKey}
@@ -211,6 +226,16 @@ function LabPivotTable({
                           when both are present; medical audience shows the unit
                           alone (abbr is null). */}
                       {abbr ?? ''}{abbr && test.unit ? ' · ' : ''}{test.unit ?? ''}
+                    </div>
+                  )}
+                  {showInferredUnitInHeader && (
+                    <div
+                      className="text-[0.5625rem] font-normal leading-tight text-sky-700 dark:text-sky-300 whitespace-nowrap"
+                      title={locale.startsWith('zh')
+                        ? '健康存摺 SDK 未提供單位；此欄單位由轉換器依規則推估'
+                        : 'The SDK did not provide a unit; this column unit was inferred under an audited policy'}
+                    >
+                      {locale.startsWith('zh') ? '推估單位' : 'inferred unit'}
                     </div>
                   )}
                 </th>
@@ -241,6 +266,8 @@ function LabPivotTable({
               </td>
               {flatTests.map((test) => {
                 const cell = test.values.get(date)
+                const showInferredUnitInHeader =
+                  inferredUnitInHeader.get(test.mapKey) === true
                 if (!cell) {
                   return <EmptyCell key={test.mapKey} mapKey={test.mapKey} label={missingValueLabel} />
                 }
@@ -260,7 +287,7 @@ function LabPivotTable({
                         {cell.unit}
                       </div>
                     )}
-                    {cell.unitInferred && (
+                    {cell.unitInferred && !showInferredUnitInHeader && (
                       <div
                         className="text-[0.5625rem] font-normal leading-tight text-sky-700 dark:text-sky-300 whitespace-nowrap"
                         title={locale.startsWith('zh')

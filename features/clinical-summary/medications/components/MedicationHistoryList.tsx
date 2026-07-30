@@ -146,8 +146,8 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
   const timesUnit = mt.refillTimes ?? '次'
   const fullMedicationTitle = [
     group.name,
-    isMedical ? latest?.secondaryTitle : undefined,
-    isMedical && latest?.drugTerminology?.atcCode
+    latest?.secondaryTitle,
+    latest?.drugTerminology?.atcCode
       ? `ATC ${latest.drugTerminology.atcCode}`
       : undefined,
   ].filter(Boolean).join(' · ')
@@ -178,14 +178,14 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
           )}
           aria-hidden
         />
-        <MedicationTerminologyTooltip medication={latest} enabled={isMedical}>
+        <MedicationTerminologyTooltip medication={latest} enabled>
           <span
             className={cn(
               "flex min-w-0 flex-1 items-baseline gap-1",
-              isMedical && latest?.drugTerminology && "cursor-help",
+              latest?.drugTerminology && "cursor-help",
             )}
             title={fullMedicationTitle}
-            tabIndex={isMedical && latest?.drugTerminology ? 0 : undefined}
+            tabIndex={latest?.drugTerminology ? 0 : undefined}
           >
             <span
               className={cn(

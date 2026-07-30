@@ -14,8 +14,12 @@ import {
 import { decodeBase64Utf8 } from "@/src/shared/utils/base64.utils"
 import type { Observation, ReportImage, Row } from "@/features/clinical-summary/reports/types"
 import type { EncounterObservation } from "../components/EncounterObservationCard"
-import type { EncounterMedication, EncounterProcedure } from "../components/EncounterCards"
+import type { EncounterProcedure } from "../components/EncounterCards"
 import type { ClinicalNote } from "./useClinicalNotes"
+import type {
+  MedicationExecutionPeriod,
+  MedicationRow,
+} from "@/features/clinical-summary/medications/types"
 
 // Clinical reading order across categories (blood count → coag → biochem → …
 // → urine). Lab tests within a single visit arrive interleaved from multiple
@@ -133,6 +137,15 @@ export type EncounterMedSeries = {
   lastDate?: string
   /** Each refill, sorted oldest-first by authoredOn. */
   refills: EncounterMedication[]
+}
+
+/** The visit view uses the exact same presentation model as the dedicated
+ *  medication tab. `when` is encounter-only metadata used to sort refills;
+ *  it does not create a second medication-row UI contract. */
+export type EncounterMedication = MedicationRow & {
+  when?: string
+  /** Source-reported inpatient execution start/end (SDK r2_1 or FHIR Period). */
+  executionPeriod?: MedicationExecutionPeriod
 }
 
 export type EncounterDetails = {
@@ -424,15 +437,15 @@ function toEncounterReportRow(report: any, title: string, text: string, images: 
  *  `medications` list (the renderer falls back to those for the non-grouped
  *  display path). */
 function buildMedSeries(medications: EncounterMedication[]): EncounterMedSeries[] {
-  const byName = new Map<string, EncounterMedication[]>()
-  const nameOrder: string[] = []
+  const byIdentity = new Map<string, EncounterMedication[]>()
+  const identityOrder: string[] = []
   for (const m of medications) {
-    const key = m.name
-    if (!byName.has(key)) {
-      byName.set(key, [])
-      nameOrder.push(key)
+    const key = m.drugKey || m.title
+    if (!byIdentity.has(key)) {
+      byIdentity.set(key, [])
+      identityOrder.push(key)
     }
-    byName.get(key)!.push(m)
+    byIdentity.get(key)!.push(m)
   }
   // Helper: pull a sortable ISO-ish prefix out of "when" (which is a
   // locale-formatted string like "2025/05/18 08:00"). Falls back to '' so
@@ -442,12 +455,13 @@ function buildMedSeries(medications: EncounterMedication[]): EncounterMedSeries[
     // Replace separators so a lexicographic compare works on YYYY?MM?DD prefix.
     return m.when.replace(/[/.]/g, '-')
   }
-  return nameOrder.map((name) => {
-    const refills = byName.get(name)!
+  return identityOrder.map((identity) => {
+    const refills = byIdentity.get(identity)!
     refills.sort((a, b) => sortKey(a).localeCompare(sortKey(b)))
     const dated = refills.map(sortKey).filter(Boolean)
+    const name = refills[refills.length - 1]?.title || identity
     return {
-      id: name,
+      id: identity,
       name,
       isChronic: refills.some((r) => r.isChronic),
       firstDate: dated[0]?.slice(0, 10),
@@ -466,9 +480,13 @@ export function useEncounterDetails(
   conditions: any[],
   locale: string = "en-US",
   audience: 'medical' | 'patient' = 'medical',
+  standardMedicationRows: MedicationRow[] = [],
 ) {
   return useMemo(() => {
     const map = new Map<string, EncounterDetails>()
+    const standardMedicationRowsById = new Map(
+      standardMedicationRows.map((row) => [row.id, row]),
+    )
     // getAnalyteDisplayForObs only branches on zh-TW vs en; collapse the
     // incoming locale string to the DisplayLang the helper expects.
     const displayLang: DisplayLang = locale === 'zh-TW' ? 'zh-TW' : 'en'
@@ -504,11 +522,15 @@ export function useEncounterDetails(
         if (key) chronicDrugKeys.add(key)
       }
 
-      medications.forEach((med: any) => {
+      medications.forEach((med: any, medicationIndex: number) => {
         const encounterId = getReferenceId(med?.encounter)
         if (!encounterId) return
         const entry = ensureEntry(encounterId)
-        const medId = med?.id || `${encounterId}-med-${entry.medications.length}`
+        const standardRowByPosition = standardMedicationRows[medicationIndex]
+        const medId =
+          med?.id ||
+          standardRowByPosition?.id ||
+          `${encounterId}-med-${entry.medications.length}`
         if (entry.medications.some((item) => item.id === medId)) return
 
         const drugKey =
@@ -520,14 +542,45 @@ export function useEncounterDetails(
         const isChronic = !!drugKey && chronicDrugKeys.has(drugKey)
         const rawDetail =
           med?.dosageInstruction?.[0]?.text || medicationQuantityDetail(med)
+        const standardRow =
+          standardMedicationRowsById.get(medId) ||
+          (!med?.id ? standardRowByPosition : undefined)
+        const executionStart =
+          med?.dispenseRequest?.validityPeriod?.start ||
+          med?.authoredOn ||
+          med?.effectiveDateTime
+        const executionEnd =
+          med?.dispenseRequest?.validityPeriod?.end ||
+          executionStart
+        const status = String(med?.status || 'unknown').toLowerCase()
+        const detail = localizeMedicationQuantityDetail(rawDetail, locale)
+        const localizedName = getMedicationNameLocalized(med, audience, locale)
+        const fallbackRow: MedicationRow = {
+          id: medId,
+          drugKey: drugKey || undefined,
+          title: localizedName,
+          status,
+          detail,
+          isInactive: status === 'stopped' || status === 'completed',
+          isChronic,
+          refillCount: 1,
+          searchHaystack: [localizedName, drugKey, detail]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase(),
+        }
 
         entry.medications.push({
-          id: medId,
-          name: getMedicationNameLocalized(med, audience, locale),
-          status: med?.status,
-          detail: localizeMedicationQuantityDetail(rawDetail, locale),
+          ...(standardRow || fallbackRow),
           when: formatDateTime(med?.authoredOn, locale),
-          isChronic,
+          ...(executionStart
+            ? {
+                executionPeriod: {
+                  start: executionStart,
+                  end: executionEnd,
+                },
+              }
+            : {}),
         })
       })
     }
@@ -655,5 +708,15 @@ export function useEncounterDetails(
     })
 
     return map
-  }, [medications, diagnosticReports, observations, procedures, clinicalNotes, conditions, locale, audience])
+  }, [
+    medications,
+    diagnosticReports,
+    observations,
+    procedures,
+    clinicalNotes,
+    conditions,
+    locale,
+    audience,
+    standardMedicationRows,
+  ])
 }

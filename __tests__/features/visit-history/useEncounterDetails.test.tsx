@@ -6,6 +6,7 @@
 // is what users reported looked clinically wrong.
 import { renderHook } from '@testing-library/react'
 import { useEncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
+import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 
 const obs = (id: string, text: string) => ({
   id,
@@ -109,6 +110,53 @@ describe('useEncounterDetails — medication quantity localization', () => {
 
     expect(details.medications[0].detail)
       .toBe('Total quantity 7 · Days supplied 28')
+  })
+
+  it('attaches the canonical medication row used by the dedicated medication tab', () => {
+    const standardRow: MedicationRow = {
+      id: 'm1',
+      drugKey: 'AC49322100',
+      title: 'BUPROPION HYDROCHLORIDE 150 MG',
+      secondaryTitle: 'Official English name',
+      status: 'active',
+      isInactive: false,
+      isChronic: true,
+      category: '抗憂鬱劑',
+      drugTerminology: {
+        source: 'nhi-official-drug-master',
+        snapshotId: 'nhi-drug-terminology-20260728',
+        officialNameZh: '官方中文藥名',
+        officialNameEn: 'Official English name',
+        ingredientText: 'BUPROPION HYDROCHLORIDE 150 MG',
+        atcCode: 'N06AX12',
+      },
+      refillCount: 1,
+      searchHaystack: 'bupropion n06ax12 官方中文藥名',
+    }
+    const sourceMedication = medication({
+      medicationCodeableConcept: {
+        text: '來源中文藥名',
+        coding: [{ code: 'AC49322100', display: 'Source English name' }],
+      },
+    })
+    const { result } = renderHook(() =>
+      useEncounterDetails(
+        [sourceMedication],
+        [],
+        [],
+        [],
+        [],
+        [],
+        'zh-TW',
+        'medical',
+        [standardRow],
+      ),
+    )
+    const encounterMedication = result.current.get('e1')!.medications[0]
+
+    expect(encounterMedication.title).toBe('BUPROPION HYDROCHLORIDE 150 MG')
+    expect(encounterMedication.isChronic).toBe(true)
+    expect(encounterMedication.drugTerminology).toBe(standardRow.drugTerminology)
   })
 })
 

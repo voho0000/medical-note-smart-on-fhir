@@ -10,8 +10,10 @@ jest.mock('@/src/application/providers/audience.provider', () => ({
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
+    locale: 'zh-TW',
     t: {
       medications: {
+        executionPeriod: '執行',
         terminologySource: '健保署藥品主檔補充',
         terminologyIngredientLabel: '成分／含量',
         terminologyOfficialNameZhLabel: '中文品名',
@@ -71,17 +73,26 @@ function medicationRow(title: string, secondaryTitle?: string): MedicationRow {
 }
 
 describe('MedicationItem audience-aware compact terminology', () => {
-  it('keeps the patient row Chinese-only and two lines tall', () => {
+  it('keeps the patient row Chinese-only and compact while exposing full terminology on hover', () => {
     mockAudience = 'patient'
     const { container } = render(
       <MedicationItem medication={medicationRow('愛克痰發泡錠600毫克')} />,
     )
 
-    expect(screen.getByText('愛克痰發泡錠600毫克')).toBeInTheDocument()
-    expect(screen.queryByText('ACTEIN EFFERVESCENT TABLETS 600MG')).not.toBeInTheDocument()
-    expect(screen.queryByText('ACETYLCYSTEINE 600 MG')).not.toBeInTheDocument()
-    expect(screen.queryByText('ATC R05CB01')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('medication-terminology-tooltip')).not.toBeInTheDocument()
+    expect(screen.getAllByText('愛克痰發泡錠600毫克')).toHaveLength(2)
+    const compactTitle = container.querySelector('[tabindex="0"]') as HTMLElement
+    expect(within(compactTitle)
+      .queryByText('ACTEIN EFFERVESCENT TABLETS 600MG')).not.toBeInTheDocument()
+    expect(within(compactTitle)
+      .queryByText('ACETYLCYSTEINE 600 MG')).not.toBeInTheDocument()
+    expect(within(container.firstElementChild?.children[1] as HTMLElement)
+      .queryByText(/R05CB01/)).not.toBeInTheDocument()
+    const tooltip = screen.getByTestId('medication-terminology-tooltip')
+    expect(within(tooltip).getByText('愛克痰發泡錠600毫克')).toBeInTheDocument()
+    expect(within(tooltip).getByText('ACTEIN EFFERVESCENT TABLETS 600MG')).toBeInTheDocument()
+    expect(within(tooltip).getByText('ACETYLCYSTEINE 600 MG')).toBeInTheDocument()
+    expect(within(tooltip).getByText('R05CB01 · acetylcysteine')).toBeInTheDocument()
+    expect(compactTitle).toBeInTheDocument()
     expect(container.firstElementChild?.children).toHaveLength(2)
   })
 
@@ -106,6 +117,34 @@ describe('MedicationItem audience-aware compact terminology', () => {
     expect(within(tooltip).getByText(/健保署藥品主檔補充/)).toBeInTheDocument()
     const metadataLine = container.firstElementChild?.children[1]
     expect(metadataLine).not.toHaveTextContent('R05CB01')
+    expect(container.firstElementChild?.children).toHaveLength(2)
+  })
+
+  it('shows exact inpatient execution periods on the shared compact row', () => {
+    mockAudience = 'medical'
+    const { container } = render(
+      <MedicationItem
+        medication={medicationRow(
+          'POTASSIUM CRESOLSULFONATE 90 MG',
+          '美致康膠囊「成大」',
+        )}
+        executionPeriods={[
+          {
+            start: '2025-05-20T00:00:00+08:00',
+            end: '2025-05-21T23:59:59+08:00',
+          },
+          {
+            start: '2025-05-22T00:00:00+08:00',
+            end: '2025-05-28T23:59:59+08:00',
+          },
+        ]}
+      />,
+    )
+
+    const metadataLine = container.firstElementChild?.children[1]
+    expect(metadataLine).toHaveTextContent(
+      '執行 2025/05/20–2025/05/21、2025/05/22–2025/05/28',
+    )
     expect(container.firstElementChild?.children).toHaveLength(2)
   })
 })

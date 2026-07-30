@@ -144,15 +144,35 @@ export function useMedicationRows(
         validityPeriod: med.dispenseRequest?.validityPeriod,
       })
 
-      // Compute endDate from startDate + durationDays
+      // A source Period already contains the exact final calendar date. Do not
+      // reconstruct it from the inclusive day count: start 5/20, end 5/21 is
+      // two source days, but start + 2 would incorrectly display 5/22.
+      const explicitEndDateRaw =
+        med.dispenseRequest?.validityPeriod?.end ||
+        dosage?.timing?.repeat?.boundsPeriod?.end
+      const hasDurationEvidence =
+        !!med.dispenseRequest?.expectedSupplyDuration ||
+        !!dosage?.timing?.repeat?.boundsDuration
       let endDate: string | undefined
       let daysRemaining: number | undefined
-      if (startDateRaw && durationDays) {
+      if (explicitEndDateRaw) {
+        const end = new Date(explicitEndDateRaw)
+        if (!Number.isNaN(end.getTime())) {
+          endDate = explicitEndDateRaw
+          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+        }
+      } else if (startDateRaw && durationDays && hasDurationEvidence) {
         const start = new Date(startDateRaw)
         if (!Number.isNaN(start.getTime())) {
           const end = new Date(start)
           end.setDate(end.getDate() + durationDays)
           endDate = end.toISOString()
+          daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+        }
+      } else if (stopDateRaw) {
+        const end = new Date(stopDateRaw)
+        if (!Number.isNaN(end.getTime())) {
+          endDate = stopDateRaw
           daysRemaining = Math.ceil((end.getTime() - nowMs) / (1000 * 60 * 60 * 24))
         }
       }
