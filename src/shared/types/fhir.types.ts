@@ -86,6 +86,10 @@ export interface Observation {
 export interface DiagnosticReport {
   id?: string
   resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Coding[]
+  }
   identifier?: Identifier[]
   status?: string
   category?: CodeableConcept | CodeableConcept[]

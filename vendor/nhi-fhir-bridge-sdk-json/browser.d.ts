@@ -25,12 +25,20 @@ export type SdkUnitInferenceReport = {
   sourceQuantityCount: number
   sourceUnitCount: number
   inferredCount: number
+  loincAdjustedCount: number
+  mapperEvidenceCount: number
   fixedCount: number
   referenceRangeCount: number
   magnitudeCount: number
   unitlessCount: number
   unresolvedCount: number
   ambiguousScaleCount: number
+  byLoinc: Record<string, {
+    loinc: string
+    inferred: number
+    unitless: number
+    unresolved: number
+  }>
 }
 
 export type SdkConversionReport = {

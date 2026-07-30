@@ -325,6 +325,12 @@ describe('FhirMapper', () => {
     it('should map FHIR DiagnosticReport without observations', () => {
       const fhirReport = {
         id: 'report-123',
+        meta: {
+          tag: [{
+            system: 'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section',
+            code: 'r8',
+          }],
+        },
         code: {
           coding: [{ code: 'LAB', display: 'Laboratory' }],
           text: 'Lab Report'
@@ -339,6 +345,7 @@ describe('FhirMapper', () => {
       const result = FhirMapper.toDiagnosticReport(fhirReport, [])
 
       expect(result.id).toBe('report-123')
+      expect(result.meta).toEqual(fhirReport.meta)
       expect(result.code).toEqual(fhirReport.code)
       expect(result.status).toBe('final')
       expect(result.conclusion).toBe('All values within normal range')

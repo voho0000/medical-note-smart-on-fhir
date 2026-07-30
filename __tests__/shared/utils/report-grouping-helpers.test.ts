@@ -22,14 +22,13 @@ describe('inferGroupFromDiagnosticReport', () => {
 
   it('puts every explicitly tagged SDK r8 report in the shared imaging/pathology group', () => {
     expect(inferGroupFromDiagnosticReport({
-      category: [{
-        coding: [{
+      meta: {
+        tag: [{
           system: HEALTH_BANK_SDK_SECTION_SYSTEM,
           code: 'r8',
           display: 'Imaging or pathology report',
         }],
-        text: '影像或病理檢查報告',
-      }],
+      },
       code: { text: 'Unmapped r8 report' },
     })).toBe('imaging')
   })

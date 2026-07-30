@@ -200,6 +200,7 @@ export class FhirMapper implements IDataMapper {
   static toDiagnosticReport(fhirResource: DiagnosticReport, observations: ObservationEntity[]): DiagnosticReportEntity {
     const report: DiagnosticReportEntity = {
       id: fhirResource.id || '',
+      meta: fhirResource.meta,
       identifier: fhirResource.identifier,
       code: fhirResource.code,
       result: fhirResource.result,

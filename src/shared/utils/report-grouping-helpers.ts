@@ -7,6 +7,9 @@ interface CodeableConcept {
 }
 
 interface DiagnosticReportLike {
+  meta?: {
+    tag?: Array<{ system?: string; code?: string; display?: string }>
+  }
   category?: CodeableConcept | CodeableConcept[]
   code?: CodeableConcept
   imagingStudy?: Array<{ reference?: string }>
@@ -189,6 +192,12 @@ export function inferGroupFromCategory(category?: CodeableConcept | CodeableConc
  */
 export function inferGroupFromDiagnosticReport(report?: DiagnosticReportLike | null): ReportGroup {
   if (!report) return 'other'
+
+  const isHealthBankSdkR8 = report.meta?.tag?.some((tag) =>
+    tag.system?.toLowerCase() === HEALTH_BANK_SDK_SECTION_SYSTEM.toLowerCase()
+    && tag.code?.toLowerCase() === 'r8',
+  )
+  if (isHealthBankSdkR8) return 'imaging'
 
   const categoryGroup = inferGroupFromCategory(report.category)
   if (categoryGroup !== 'other') return categoryGroup

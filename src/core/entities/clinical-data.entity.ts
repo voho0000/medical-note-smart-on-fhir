@@ -376,6 +376,14 @@ export interface ObservationEntity {
 
 export interface DiagnosticReportEntity {
   id: string
+  meta?: {
+    source?: string
+    tag?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
   identifier?: Array<{
     system?: string
     value?: string

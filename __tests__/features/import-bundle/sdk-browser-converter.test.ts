@@ -66,6 +66,9 @@ describe('vendored Health Bank SDK browser converter', () => {
         resourceType?: string
         identifier?: Array<{ value?: string }>
         valueQuantity?: { value?: number }
+        meta?: {
+          tag?: Array<{ system?: string; code?: string; display?: string }>
+        }
         category?: Array<{
           coding?: Array<{ system?: string; code?: string }>
           text?: string
@@ -88,22 +91,26 @@ describe('vendored Health Bank SDK browser converter', () => {
       conflictingValueGroupCount: 1,
     })
     expect(result.sourceMetadata?.source).toBe('health-bank-sdk-json')
-    expect(result.sourceMetadata?.converterVersion).toBe('0.1.4')
-    const imagingReport = entries.find(({ resource }) =>
-      resource.resourceType === 'DiagnosticReport'
-      && resource.category?.some((category) =>
-        category.coding?.some((coding) => coding.code === 'r8'),
-      ),
-    )?.resource
-    expect(imagingReport?.category?.find((category) =>
-      category.coding?.some((coding) => coding.code === 'r8'),
-    )).toMatchObject({
-      coding: [{
+    expect(result.sourceMetadata?.converterVersion).toBe('0.1.5')
+    const r8Reports = entries
+      .filter(({ resource }) =>
+        resource.resourceType === 'DiagnosticReport'
+        && resource.meta?.tag?.some((tag) =>
+          tag.system === 'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section'
+          && tag.code === 'r8',
+        ),
+      )
+      .map(({ resource }) => resource)
+    expect(r8Reports).toHaveLength(2)
+    expect(r8Reports[0]?.meta?.tag).toEqual(expect.arrayContaining([
+      expect.objectContaining({
         system: 'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section',
         code: 'r8',
-      }],
-      text: '影像或病理檢查報告',
-    })
+      }),
+    ]))
+    expect(r8Reports.flatMap((report) => report.category ?? [])
+      .flatMap((category) => category.coding ?? [])
+      .some((coding) => coding.code === 'r8')).toBe(false)
     const pathologyReport = entries.find(({ resource }) =>
       resource.resourceType === 'DiagnosticReport'
       && resource.category?.some((category) =>
@@ -111,7 +118,7 @@ describe('vendored Health Bank SDK browser converter', () => {
       ),
     )?.resource
     expect(pathologyReport?.category?.flatMap((category) => category.coding ?? [])
-      .map((coding) => coding.code)).toEqual(expect.arrayContaining(['PAT', 'r8']))
+      .map((coding) => coding.code)).toEqual(['PAT'])
   })
 
   it('still merges exact clinical retransmissions', async () => {
@@ -253,6 +260,75 @@ describe('vendored Health Bank SDK browser converter', () => {
       sourceCount: 2,
       convertedCount: 2,
       mergedCount: 0,
+    })
+  })
+
+  it('uses shared mapper evidence for SDK eGFR LOINC and UCUM unit', async () => {
+    const input = {
+      myhealthbank: {
+        bdata: {
+          'b1.1': 'F22345XXXX',
+          'b1.2': '1150723',
+          r7: [{
+            'r7.4': '甲醫院',
+            'r7.5': '20260602',
+            'r7.6': '20260602',
+            'r7.8': '09015C',
+            'r7.9': 'Creatinine, serum',
+            'r7.10': 'Estimated GFR',
+            'r7.11': '32',
+            'r7.12': '[N:≧60,s3:30~59,s4:15~29,s5 15]',
+          }],
+        },
+      },
+    }
+    const encoded = new TextEncoder().encode(JSON.stringify(input))
+    const result = await prepareLocalImportFile({
+      arrayBuffer: async () => encoded.buffer,
+    } as File)
+    const egfr = (result.bundle.entry as Array<{
+      resource: {
+        resourceType?: string
+        code?: {
+          text?: string
+          coding?: Array<{ system?: string; code?: string }>
+        }
+        valueQuantity?: {
+          value?: number
+          unit?: string
+          system?: string
+          code?: string
+        }
+        meta?: {
+          tag?: Array<{ system?: string; code?: string }>
+        }
+      }
+    }>)
+      .map(({ resource }) => resource)
+      .find((resource) =>
+        resource.resourceType === 'Observation'
+        && resource.code?.text === 'Estimated GFR',
+      )
+
+    expect(egfr?.code?.coding?.find((coding) =>
+      coding.system === 'http://loinc.org',
+    )?.code).toBe('69405-9')
+    expect(egfr?.valueQuantity).toMatchObject({
+      value: 32,
+      unit: 'mL/min/1.73 m²',
+      system: 'http://unitsofmeasure.org',
+      code: 'mL/min/{1.73_m2}',
+    })
+    expect(egfr?.meta?.tag).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        system: 'https://nhi-fhir-bridge.github.io/CodeSystem/sdk-unit-policy',
+        code: 'mapper-evidence',
+      }),
+    ]))
+    expect(result.sourceMetadata?.converterVersion).toBe('0.1.5')
+    expect(result.sourceMetadata?.unitInference).toMatchObject({
+      policyVersion: 'sdk-unit-policy-v2',
+      inferredCount: 1,
     })
   })
 })
