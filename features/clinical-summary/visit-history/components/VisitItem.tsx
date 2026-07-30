@@ -48,6 +48,21 @@ const getTypeBadge = (type: VisitType, labels: any) => {
   return <Badge variant="outline" className={cn("h-5 px-1.5 py-0 text-[0.6875rem]", className || undefined)}>{label}</Badge>
 }
 
+const getCareDisciplineBadge = (
+  discipline: VisitRecord['careDiscipline'],
+  labels: Record<VisitRecord['careDiscipline'], string>,
+) => {
+  return (
+    <Badge
+      variant="outline"
+      data-care-discipline={discipline}
+      className="h-5 border-border bg-muted/60 px-1.5 py-0 text-[0.6875rem] font-medium text-muted-foreground"
+    >
+      {labels[discipline]}
+    </Badge>
+  )
+}
+
 export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
   const { t, locale } = useLanguage()
   const docStrings = useDocumentSummaryStrings()
@@ -80,6 +95,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
       title: (
         <span className="flex items-center gap-1.5">
           {getTypeBadge(visit.type, t.visitHistory.badges)}
+          {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
           <span>{dateLabel}</span>
           {visit.location && <span className="text-xs font-normal text-muted-foreground">· {visit.location}</span>}
         </span>
@@ -126,6 +142,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
         <div className="flex items-center justify-between gap-1.5 leading-5">
           <div className="flex flex-1 items-center gap-x-1.5 overflow-hidden min-w-0">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
+            {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
             {visit.location && (
               <span
                 className="inline-flex h-5 max-w-[9rem] shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0 text-[0.6875rem] text-muted-foreground"

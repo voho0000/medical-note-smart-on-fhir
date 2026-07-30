@@ -1144,6 +1144,13 @@ export const en = {
       other: 'Visit',
     },
     filterAll: 'All',
+    careDisciplineLabel: 'Care discipline',
+    careDisciplines: {
+      all: 'All',
+      western: 'Western medicine',
+      tcm: 'Chinese medicine',
+      dental: 'Dentistry',
+    },
     physician: 'Physician:',
     reason: 'Reason:',
     diagnosis: 'Diagnosis:',

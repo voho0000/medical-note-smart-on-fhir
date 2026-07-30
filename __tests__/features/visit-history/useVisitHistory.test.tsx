@@ -176,6 +176,64 @@ describe('useVisitHistory — bridge bug regression locks', () => {
     })
   })
 
+  describe('NHI care-discipline classification', () => {
+    it.each([
+      ['western', 'outpatient', '門診'],
+      ['tcm', 'tcm-outpatient', '中醫門診'],
+      ['dental', 'dental-outpatient', '牙科門診'],
+    ])('classifies %s from the bridge v1.6 encounter-kind code', (
+      expectedDiscipline,
+      kindCode,
+      kindText,
+    ) => {
+      const { result } = render([{
+        id: `enc-${kindCode}`,
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [
+          {
+            text: kindText,
+            coding: [{
+              system: ENCOUNTER_KIND_SYSTEM,
+              code: kindCode,
+              display: kindText,
+            }],
+          },
+          {
+            text: '申報資料',
+            coding: [{
+              system: ENCOUNTER_CHANNEL_SYSTEM,
+              code: 'claims',
+              display: '申報資料',
+            }],
+          },
+        ],
+        period: { start: '2026-06-23T00:00:00+08:00' },
+      }])
+
+      expect(result.current[0].careDiscipline).toBe(expectedDiscipline)
+      expect(result.current[0].type).toBe('outpatient')
+    })
+
+    it.each([
+      ['tcm', '中醫門診'],
+      ['dental', '牙醫門診'],
+    ])('falls back to legacy %s text when the code is absent', (
+      expectedDiscipline,
+      kindText,
+    ) => {
+      const { result } = render([{
+        id: `legacy-${expectedDiscipline}`,
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: kindText }],
+        period: { start: '2025-04-11T00:00:00+08:00' },
+      }])
+
+      expect(result.current[0].careDiscipline).toBe(expectedDiscipline)
+    })
+  })
+
   describe('ICD display cleanup', () => {
     it('strips compact duplicate ICD code from reasonCode.text descriptions', () => {
       const { result } = render([

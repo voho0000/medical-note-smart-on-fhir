@@ -25,6 +25,35 @@ describe('VisitItem ICD tooltip', () => {
     })
   })
 
+  it.each([
+    ['western', '西醫'],
+    ['tcm', '中醫'],
+    ['dental', '牙醫'],
+  ] as const)('shows the %s care-discipline badge', (careDiscipline, label) => {
+    render(
+      <LanguageProvider>
+        <RightDetailProvider>
+          <VisitItem
+            visit={{
+              id: `visit-${careDiscipline}`,
+              type: 'outpatient',
+              careDiscipline,
+              date: '2026-06-23',
+              icdCodes: [],
+              status: 'finished',
+            }}
+            isExpanded={false}
+            onToggle={() => undefined}
+          />
+        </RightDetailProvider>
+      </LanguageProvider>,
+    )
+
+    const badge = screen.getByText(label)
+    expect(badge).toHaveAttribute('data-care-discipline', careDiscipline)
+    expect(badge).toHaveClass('bg-muted/60', 'text-muted-foreground')
+  })
+
   it('shows the complete code and diagnosis in an explicit tooltip', async () => {
     render(
       <LanguageProvider>
@@ -33,6 +62,7 @@ describe('VisitItem ICD tooltip', () => {
             visit={{
               id: 'visit-1',
               type: 'outpatient',
+              careDiscipline: 'western',
               date: '2026-02-10',
               institution: '示範北辰醫院',
               reason: 'I35.9 - 非風濕性未明示主動脈瓣疾患',

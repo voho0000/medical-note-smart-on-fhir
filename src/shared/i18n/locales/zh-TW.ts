@@ -1146,6 +1146,13 @@ export const zhTW = {
       other: '就診',
     },
     filterAll: '全部',
+    careDisciplineLabel: '醫療類別',
+    careDisciplines: {
+      all: '全部',
+      western: '西醫',
+      tcm: '中醫',
+      dental: '牙醫',
+    },
     physician: '主治醫師：',
     reason: '就診原因：',
     diagnosis: '診斷：',

@@ -1,13 +1,22 @@
 import { useMemo } from "react"
 import { extractEncounterIcds, type IcdCode } from "@/src/shared/utils/icd-lookup"
-import { getEncounterChannelText, getEncounterKindText } from "@/src/shared/utils/encounter-type.utils"
+import {
+  getEncounterChannelText,
+  getEncounterKindCode,
+  getEncounterKindText,
+} from "@/src/shared/utils/encounter-type.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
+export type VisitCareDiscipline = 'western' | 'tcm' | 'dental'
 
 export interface VisitRecord {
   id: string
   type: VisitType
+  /** NHI care discipline. Bridge v1.6 emits explicit tcm-outpatient and
+   *  dental-outpatient encounter-kind codes; all other encounter kinds belong
+   *  to the existing western-medicine stream. */
+  careDiscipline: VisitCareDiscipline
   date: string
   /** Encounter.period.end — discharge date for inpatient stays; absent for
    *  single-day visits and for inpatient records with no discharge data. */
@@ -62,12 +71,25 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         // v0.9.1 and earlier always put kind in type[0], but FHIR R4 doesn't
         // guarantee that order, so we look it up by coding.system when
         // available and fall back to position only for legacy bundles.
+        const codedKindText = getEncounterKindText(encounter)
+        const kindCode = (getEncounterKindCode(encounter) || '').toLowerCase()
         const typeText = (
-          getEncounterKindText(encounter) ||
+          codedKindText ||
           encounter.type?.[0]?.coding?.[0]?.display ||
           encounter.type?.[0]?.text ||
           ''
         ).toLowerCase()
+        // Health Bank / bridge v1.6 carries TCM and dental visits as explicit
+        // encounter-kind codes. Text fallbacks keep older bridge bundles usable
+        // without guessing from the institution name.
+        const careDiscipline: VisitCareDiscipline =
+          kindCode === 'tcm-outpatient' || typeText.includes('中醫') ||
+          typeText.includes('traditional chinese medicine')
+            ? 'tcm'
+            : kindCode === 'dental-outpatient' || typeText.includes('牙科') ||
+              typeText.includes('牙醫') || typeText.includes('dental')
+              ? 'dental'
+              : 'western'
         const kindCodes = (encounter.type ?? []).flatMap((concept: any) =>
           (concept?.coding ?? []).map((coding: any) =>
             String(coding?.code ?? '').toLowerCase(),
@@ -164,6 +186,7 @@ export function useVisitHistory(encounters: any[], icdDict?: Map<string, string>
         return {
           id: encounter.id,
           type,
+          careDiscipline,
           date: encounter.period?.start || '',
           endDate: encounter.period?.end || undefined,
           location,

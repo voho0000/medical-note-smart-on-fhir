@@ -10,7 +10,7 @@ import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { dateSearchTokens } from "@/src/shared/utils/date.utils"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
-import { useVisitHistory } from "../hooks/useVisitHistory"
+import { useVisitHistory, type VisitCareDiscipline } from "../hooks/useVisitHistory"
 import { useEncounterDetails } from "../hooks/useEncounterDetails"
 import { useClinicalNotes } from "../hooks/useClinicalNotes"
 import { useVisitStats } from "../hooks/useVisitStats"
@@ -25,10 +25,12 @@ import {
 } from "../utils/source-navigation"
 
 type VisitTypeFilter = 'all' | 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'pharmacy'
+type CareDisciplineFilter = 'all' | VisitCareDiscipline
 type SortMode = 'date-desc' | 'date-asc' | 'abnormal'
 type ContentFlag = 'tests' | 'medications' | 'procedures' | 'discharge'
 
 const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'outpatient-or-emergency', 'inpatient', 'emergency', 'pharmacy']
+const CARE_DISCIPLINES: CareDisciplineFilter[] = ['all', 'western', 'tcm', 'dental']
 
 export function VisitHistoryCard() {
   const { t, locale } = useLanguage()
@@ -50,6 +52,7 @@ export function VisitHistoryCard() {
   // Set (not a single id) so several visits can stay expanded at once —
   // opening one no longer collapses the others.
   const [expandedVisitIds, setExpandedVisitIds] = useState<Set<string>>(new Set())
+  const [careDisciplineFilter, setCareDisciplineFilter] = useState<CareDisciplineFilter>('all')
   const [typeFilter, setTypeFilter] = useState<VisitTypeFilter>('all')
   const [institutionFilter, setInstitutionFilter] = useState<string>('all')
   const [contentFlags, setContentFlags] = useState<Set<ContentFlag>>(new Set())
@@ -124,6 +127,17 @@ export function VisitHistoryCard() {
     return c
   }, [visitHistory])
 
+  const careDisciplineCounts = useMemo(() => {
+    const counts: Record<CareDisciplineFilter, number> = {
+      all: visitHistory.length,
+      western: 0,
+      tcm: 0,
+      dental: 0,
+    }
+    for (const visit of visitHistory) counts[visit.careDiscipline]++
+    return counts
+  }, [visitHistory])
+
   // ── Filter + sort pipeline ─────────────────────────────────────────────
   const filteredVisits = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -133,6 +147,8 @@ export function VisitHistoryCard() {
     const wantsDischarge = contentFlags.has('discharge')
 
     const result = visitHistory.filter((v) => {
+      // care discipline (western medicine / TCM / dentistry)
+      if (careDisciplineFilter !== 'all' && v.careDiscipline !== careDisciplineFilter) return false
       // type
       if (typeFilter !== 'all' && v.type !== typeFilter) return false
       // institution
@@ -208,6 +224,7 @@ export function VisitHistoryCard() {
     return [...result].sort(cmp)
   }, [
     visitHistory,
+    careDisciplineFilter,
     typeFilter,
     institutionFilter,
     contentFlags,
@@ -238,6 +255,7 @@ export function VisitHistoryCard() {
     // external store update, and the destination reveal is its UI response.
     const revealTimer = window.setTimeout(() => {
       setTypeFilter('all')
+      setCareDisciplineFilter('all')
       setInstitutionFilter('all')
       setContentFlags(new Set())
       setSearchQuery('')
@@ -266,6 +284,11 @@ export function VisitHistoryCard() {
     setExpandedVisitIds(new Set())
     setVisibleCount(VISIT_PAGE_SIZE)
   }
+  const handleCareDisciplineFilterChange = (f: CareDisciplineFilter) => {
+    setCareDisciplineFilter(f)
+    setExpandedVisitIds(new Set())
+    setVisibleCount(VISIT_PAGE_SIZE)
+  }
   const toggleContent = (f: ContentFlag) => {
     setContentFlags((prev) => {
       const next = new Set(prev)
@@ -276,6 +299,7 @@ export function VisitHistoryCard() {
     setVisibleCount(VISIT_PAGE_SIZE)
   }
   const clearAllFilters = () => {
+    setCareDisciplineFilter('all')
     setTypeFilter('all')
     setInstitutionFilter('all')
     setContentFlags(new Set())
@@ -284,6 +308,7 @@ export function VisitHistoryCard() {
     setVisibleCount(VISIT_PAGE_SIZE)
   }
   const hasActiveFilters =
+    careDisciplineFilter !== 'all' ||
     typeFilter !== 'all' ||
     institutionFilter !== 'all' ||
     contentFlags.size > 0 ||
@@ -364,6 +389,22 @@ export function VisitHistoryCard() {
                 by the content toggles (multi-select) + result count — all the
                 filters grouped together, separate from search/sort above. ──── */}
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              {/* NHI care discipline is independent from visit setting:
+                  e.g. both western and dental records can be outpatient. */}
+              <select
+                value={careDisciplineFilter}
+                onChange={(e) => handleCareDisciplineFilterChange(
+                  e.target.value as CareDisciplineFilter,
+                )}
+                className="rounded-md border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
+                aria-label={vt.careDisciplineLabel}
+              >
+                {CARE_DISCIPLINES.map((discipline) => (
+                  <option key={discipline} value={discipline}>
+                    {vt.careDisciplines[discipline]} ({careDisciplineCounts[discipline]})
+                  </option>
+                ))}
+              </select>
               {/* 就診類型 is single-select (擇一), so a dropdown is both
                   semantically right and far more compact than five chips; counts
                   stay visible inside each option, e.g. "門診 (117)". */}
