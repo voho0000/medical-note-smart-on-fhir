@@ -341,7 +341,6 @@ describe('personalized CKD guidance', () => {
   it('uses standardized-BP caution, staged finerenone criteria, medication safety, and serial CKD-MBD inputs', () => {
     const ibuprofen: MedicationEntity = {
       id: 'ibuprofen-order',
-      resourceType: 'MedicationRequest',
       _sourceResourceType: 'MedicationRequest',
       status: 'active',
       authoredOn: '2026-06-18',
