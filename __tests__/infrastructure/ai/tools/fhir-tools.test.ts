@@ -531,6 +531,20 @@ describe('createFhirTools (unified)', () => {
       const r = await call('queryPatientInfo')
       expect(r.data.birthDate).toBeUndefined()
     })
+
+    it('labels demographics that came from the local user profile', async () => {
+      const localTools = createFhirTools(() => ({
+        patient: {
+          ...samplePatient,
+          demographicsSource: 'user-entered-local-profile',
+        },
+        collection: sampleCollection,
+      }))
+      const r = await (localTools.queryPatientInfo as any).execute({})
+      expect(r.data.source).toBe('user-entered-local-profile')
+      expect(r.data.name).toBeUndefined()
+      expect(r.data.birthDate).toBeUndefined()
+    })
   })
 
   describe('Realistic LLM query scenarios', () => {

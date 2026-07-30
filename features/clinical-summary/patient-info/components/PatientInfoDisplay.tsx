@@ -19,18 +19,32 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
     !!patientInfo.maritalStatus ||
     (patientInfo.languages?.length ?? 0) > 0 ||
     (patientInfo.contacts?.length ?? 0) > 0
+  const isUserEntered = (field: 'name' | 'gender' | 'birthDate') =>
+    patientInfo.userEnteredFields?.includes(field) ?? false
 
   return (
     <div className="text-sm space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2">
         <span className="font-medium text-muted-foreground">{t.patient.name}：</span>
-        <span className="sm:col-span-2">{patientInfo.name}</span>
+        <ValueWithSource
+          value={patientInfo.name}
+          userEntered={isUserEntered('name')}
+          label={t.patient.userEntered}
+        />
 
         <span className="font-medium text-muted-foreground">{t.patient.gender}：</span>
-        <span className="sm:col-span-2">{patientInfo.gender}</span>
+        <ValueWithSource
+          value={patientInfo.gender}
+          userEntered={isUserEntered('gender')}
+          label={t.patient.userEntered}
+        />
 
         <span className="font-medium text-muted-foreground">{t.patient.age}：</span>
-        <span className="sm:col-span-2">{patientInfo.age}</span>
+        <ValueWithSource
+          value={patientInfo.age}
+          userEntered={isUserEntered('birthDate')}
+          label={t.patient.userEntered}
+        />
 
         {patientInfo.id && (
           <>
@@ -54,7 +68,12 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
               <FieldRow key={`id-${i}`} label={id.label} value={id.value} />
             ))}
             {patientInfo.birthDate && (
-              <FieldRow label={t.patient.birthDate} value={patientInfo.birthDate} />
+              <FieldRow
+                label={t.patient.birthDate}
+                value={patientInfo.birthDate}
+                userEntered={isUserEntered('birthDate')}
+                userEnteredLabel={t.patient.userEntered}
+              />
             )}
             {(patientInfo.telecom ?? []).map((tel, i) => (
               <FieldRow key={`tel-${i}`} label={tel.label} value={tel.value} />
@@ -85,11 +104,49 @@ export function PatientInfoDisplay({ patientInfo }: PatientInfoDisplayProps) {
   )
 }
 
-function FieldRow({ label, value }: { label: string; value: string }) {
+function UserEnteredBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex rounded-full border border-sky-300 bg-sky-50 px-1.5 py-0.5 text-[10px] leading-none text-sky-700 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+      {label}
+    </span>
+  )
+}
+
+function ValueWithSource({
+  value,
+  userEntered,
+  label,
+}: {
+  value: string
+  userEntered: boolean
+  label: string
+}) {
+  return (
+    <span className="sm:col-span-2 flex min-w-0 flex-wrap items-center gap-1.5">
+      <span className="break-words">{value}</span>
+      {userEntered && <UserEnteredBadge label={label} />}
+    </span>
+  )
+}
+
+function FieldRow({
+  label,
+  value,
+  userEntered = false,
+  userEnteredLabel = '',
+}: {
+  label: string
+  value: string
+  userEntered?: boolean
+  userEnteredLabel?: string
+}) {
   return (
     <>
       <span className="font-medium text-muted-foreground break-words min-w-0">{label}：</span>
-      <span className="sm:col-span-2 break-words min-w-0">{value}</span>
+      <span className="sm:col-span-2 flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="break-words">{value}</span>
+        {userEntered && <UserEnteredBadge label={userEnteredLabel} />}
+      </span>
     </>
   )
 }

@@ -52,6 +52,128 @@ export interface PatientEntity {
     name?: { text?: string; given?: string[]; family?: string }
     telecom?: { system?: string; value?: string; use?: string }[]
   }[]
+  /** Present only when the App has overlaid locally-entered SDK demographics.
+   * The source FHIR Patient remains unchanged in the encrypted Bundle. */
+  demographicsSource?: 'user-entered-local-profile'
+  userEnteredDemographicFields?: PatientDemographicField[]
+}
+
+export type PatientDemographicField = 'name' | 'gender' | 'birthDate'
+
+export interface UserEnteredPatientProfile {
+  source: 'user-entered'
+  name?: string
+  gender?: 'male' | 'female' | 'other'
+  birthDate?: string
+  updatedAt: string
+}
+
+export interface UserEnteredPatientProfileInput {
+  name?: string
+  gender?: 'male' | 'female' | 'other'
+  birthDate?: string
+}
+
+const PROFILE_GENDERS = new Set(['male', 'female', 'other'])
+const FHIR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+function localDateString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function isValidPatientBirthDate(
+  value: string,
+  today = new Date(),
+): boolean {
+  if (!FHIR_DATE_PATTERN.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) return false
+  if (parsed.toISOString().slice(0, 10) !== value) return false
+  return value <= localDateString(today)
+}
+
+/** Build the only accepted shape for encrypted, user-entered demographics.
+ * Empty strings are treated as "not supplied"; invalid dates fail closed. */
+export function createUserEnteredPatientProfile(
+  input: UserEnteredPatientProfileInput,
+  now = new Date(),
+): UserEnteredPatientProfile | null {
+  const name = typeof input.name === 'string'
+    ? input.name.trim().replace(/\s+/g, ' ').slice(0, 100)
+    : ''
+  const gender = PROFILE_GENDERS.has(input.gender ?? '')
+    ? input.gender
+    : undefined
+  const birthDate = typeof input.birthDate === 'string' && input.birthDate.trim()
+    ? input.birthDate.trim()
+    : undefined
+
+  if (birthDate && !isValidPatientBirthDate(birthDate, now)) {
+    throw new Error('Invalid patient birth date')
+  }
+  if (!name && !gender && !birthDate) return null
+
+  return {
+    source: 'user-entered',
+    ...(name ? { name } : {}),
+    ...(gender ? { gender } : {}),
+    ...(birthDate ? { birthDate } : {}),
+    updatedAt: now.toISOString(),
+  }
+}
+
+/** Parse untrusted decrypted storage without inventing or guessing values. */
+export function parseUserEnteredPatientProfile(
+  value: unknown,
+): UserEnteredPatientProfile | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Partial<UserEnteredPatientProfile>
+  if (candidate.source !== 'user-entered') return null
+  if (
+    typeof candidate.updatedAt !== 'string'
+    || Number.isNaN(Date.parse(candidate.updatedAt))
+  ) {
+    return null
+  }
+  try {
+    const profile = createUserEnteredPatientProfile({
+      name: candidate.name,
+      gender: candidate.gender,
+      birthDate: candidate.birthDate,
+    }, new Date(candidate.updatedAt))
+    return profile ? { ...profile, updatedAt: candidate.updatedAt } : null
+  } catch {
+    return null
+  }
+}
+
+export function applyUserEnteredPatientProfile(
+  patient: PatientEntity,
+  profile: UserEnteredPatientProfile | null,
+): PatientEntity {
+  if (!profile) return patient
+
+  const fields: PatientDemographicField[] = []
+  const next: PatientEntity = { ...patient }
+  if (profile.name) {
+    next.name = [{ use: 'usual', text: profile.name }]
+    fields.push('name')
+  }
+  if (profile.gender) {
+    next.gender = profile.gender
+    fields.push('gender')
+  }
+  if (profile.birthDate) {
+    next.birthDate = profile.birthDate
+    next.age = calculateAge(profile.birthDate) ?? undefined
+    fields.push('birthDate')
+  }
+  next.demographicsSource = 'user-entered-local-profile'
+  next.userEnteredDemographicFields = fields
+  return next
 }
 
 export function calculateAge(birthDate?: string | null): number | null {

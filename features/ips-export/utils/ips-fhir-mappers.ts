@@ -176,7 +176,18 @@ export function buildPatient(patient: PatientEntity | null): { entry: IpsBundleE
 
   const resource: FhirResource = {
     resourceType: 'Patient',
-    meta: { profile: [IPS_PROFILES.patient] },
+    meta: {
+      profile: [IPS_PROFILES.patient],
+      ...(patient?.demographicsSource === 'user-entered-local-profile'
+        ? {
+            tag: [{
+              system: 'https://mediprisma.app/fhir/CodeSystem/data-origin',
+              code: 'user-entered-local-profile',
+              display: 'User-entered local patient profile',
+            }],
+          }
+        : {}),
+    },
     name: nameArray,
     ...(identifiers ? { identifier: identifiers } : {}),
     ...(patient?.gender ? { gender: patient.gender } : {}),

@@ -28,7 +28,12 @@ import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
 import { enrichBundleWithNhiDrugTerminology } from './nhi-drug-terminology-enrichment.service'
 import { referenceId } from '@/src/core/utils/observation-selectors'
-import type { PatientEntity } from '@/src/core/entities/patient.entity'
+import {
+  applyUserEnteredPatientProfile,
+  parseUserEnteredPatientProfile,
+  type PatientEntity,
+  type UserEnteredPatientProfile,
+} from '@/src/core/entities/patient.entity'
 import type {
   ClinicalDataCollection,
   ClinicalSourceMetadata,
@@ -73,6 +78,7 @@ let memBundle: object | null = null
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false
 let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
+let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
 // A stored bundle can be requested concurrently by the Patient and clinical
 // data repositories during startup. Share one terminology migration per
 // plaintext bundle object so the 12 MB snapshot is never parsed twice.
@@ -83,6 +89,7 @@ interface PersistedBundleEnvelope {
   importId: string
   demo: boolean
   sourceMetadata?: ClinicalSourceMetadata
+  patientProfile?: UserEnteredPatientProfile
   bundle: object
 }
 
@@ -701,6 +708,7 @@ export const LocalBundleService = {
       importId?: string
       demo?: boolean
       sourceMetadata?: ClinicalSourceMetadata
+      patientProfile?: UserEnteredPatientProfile | null
     } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
@@ -708,6 +716,7 @@ export const LocalBundleService = {
       : null
     const demo = options.demo === true
     const sourceMetadata = options.sourceMetadata
+    const patientProfile = parseUserEnteredPatientProfile(options.patientProfile)
     if (typeof window !== 'undefined') {
       try {
         await extractAndStoreImages(bundle)
@@ -720,6 +729,7 @@ export const LocalBundleService = {
     memBundleImportId = importId
     memBundleIsDemo = demo
     memBundleSourceMetadata = sourceMetadata ?? null
+    memUserEnteredPatientProfile = patientProfile
     if (typeof window === 'undefined') return
     try {
       const key = await getSessionBundleKey({ create: true })
@@ -730,6 +740,7 @@ export const LocalBundleService = {
             importId,
             demo,
             ...(sourceMetadata ? { sourceMetadata } : {}),
+            ...(patientProfile ? { patientProfile } : {}),
             bundle,
           } satisfies PersistedBundleEnvelope
         : bundle
@@ -759,6 +770,7 @@ export const LocalBundleService = {
     memBundleImportId = null
     memBundleIsDemo = false
     memBundleSourceMetadata = null
+    memUserEnteredPatientProfile = null
     if (typeof window === 'undefined') return
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(DEMO_FLAG_KEY)
@@ -822,6 +834,9 @@ export const LocalBundleService = {
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
             memBundleSourceMetadata = decrypted.sourceMetadata ?? null
+            memUserEnteredPatientProfile = parseUserEnteredPatientProfile(
+              decrypted.patientProfile,
+            )
             localStorage.setItem(
               STORAGE_KEY,
               `${IMPORT_MARKER_PREFIX}${decrypted.importId}`,
@@ -835,6 +850,7 @@ export const LocalBundleService = {
           memBundleImportId = null
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           memBundleSourceMetadata = null
+          memUserEnteredPatientProfile = null
           return bundle
         } catch {
           await this.clear()
@@ -848,6 +864,7 @@ export const LocalBundleService = {
         memBundleImportId = null
         memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
         memBundleSourceMetadata = null
+        memUserEnteredPatientProfile = null
         try {
           const key = await getSessionBundleKey({ create: true })
           if (key) await idbPut(await encryptJson(key, fromIdb))
@@ -871,6 +888,7 @@ export const LocalBundleService = {
           memBundleImportId = null
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           memBundleSourceMetadata = null
+          memUserEnteredPatientProfile = null
           // Move it (encrypted) to IndexedDB and shrink the marker so we don't
           // re-migrate.
           try {
@@ -1110,6 +1128,7 @@ export const LocalBundleService = {
               ...(memBundleSourceMetadata
                 ? { sourceMetadata: memBundleSourceMetadata }
                 : {}),
+              patientProfile: memUserEnteredPatientProfile,
             })
             return result.bundle
           }
@@ -1120,6 +1139,62 @@ export const LocalBundleService = {
       bundle = await migration
     }
 
-    return this.parse(bundle, memBundleSourceMetadata ?? undefined)
+    const parsed = this.parse(bundle, memBundleSourceMetadata ?? undefined)
+    if (!parsed) return null
+    return {
+      ...parsed,
+      patient: applyUserEnteredPatientProfile(
+        parsed.patient,
+        memUserEnteredPatientProfile,
+      ),
+    }
+  },
+
+  getUserEnteredPatientProfile(): UserEnteredPatientProfile | null {
+    return memUserEnteredPatientProfile
+      ? { ...memUserEnteredPatientProfile }
+      : null
+  },
+
+  /** Persist an SDK demographic overlay in the same AES-GCM envelope as the
+   * Bundle. The original FHIR Patient is never mutated. */
+  async setUserEnteredPatientProfile(
+    profile: UserEnteredPatientProfile | null,
+  ): Promise<void> {
+    const bundle = await this.load()
+    if (!bundle || !memBundleImportId) {
+      throw new Error('No active local import is available')
+    }
+    if (memBundleSourceMetadata?.source !== 'health-bank-sdk-json') {
+      throw new Error('Patient profile editing is only available for SDK imports')
+    }
+    const normalized = parseUserEnteredPatientProfile(profile)
+    if (profile && !normalized) {
+      throw new Error('Invalid user-entered patient profile')
+    }
+    if (typeof window === 'undefined') {
+      throw new Error('Encrypted browser storage is unavailable')
+    }
+
+    const key = await getSessionBundleKey()
+    if (!key) throw new Error('Encrypted browser storage is unavailable')
+    const persisted = {
+      __mediprismaBundle: 1,
+      importId: memBundleImportId,
+      demo: memBundleIsDemo,
+      ...(memBundleSourceMetadata
+        ? { sourceMetadata: memBundleSourceMetadata }
+        : {}),
+      ...(normalized ? { patientProfile: normalized } : {}),
+      bundle,
+    } satisfies PersistedBundleEnvelope
+
+    // Update in-memory state only after the encrypted IndexedDB write succeeds.
+    await idbPut(await encryptJson(key, persisted))
+    localStorage.setItem(
+      STORAGE_KEY,
+      `${IMPORT_MARKER_PREFIX}${memBundleImportId}`,
+    )
+    memUserEnteredPatientProfile = normalized
   },
 }

@@ -68,6 +68,24 @@ describe('buildIpsBundle — structure', () => {
     expect(patient.birthDate).toBe('1980-01-15')
   })
 
+  it('marks user-entered patient demographics in the exported Patient', () => {
+    const bundle = buildIpsBundle({
+      patient: {
+        ...PATIENT,
+        demographicsSource: 'user-entered-local-profile',
+        userEnteredDemographicFields: ['name', 'gender', 'birthDate'],
+      },
+      data: emptyCollection(),
+    })
+    const patient = bundle.entry
+      .map((entry: any) => entry.resource)
+      .find((resource: any) => resource.resourceType === 'Patient')
+
+    expect(patient.meta.tag).toContainEqual(expect.objectContaining({
+      code: 'user-entered-local-profile',
+    }))
+  })
+
   it('preserves Patient identifiers in the IPS Patient resource', () => {
     const bundle = buildIpsBundle({
       patient: {

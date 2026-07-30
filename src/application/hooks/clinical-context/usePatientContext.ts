@@ -23,6 +23,10 @@ export function usePatientContext(includePatientInfo: boolean): ClinicalContextS
     if (age !== "Unknown") {
       items.push(`Age: ${age}`)
     }
+
+    if (currentPatient.demographicsSource === 'user-entered-local-profile') {
+      items.push('Demographics source: User-entered local profile (not provided by the SDK)')
+    }
     
     if (items.length === 0) return null
     

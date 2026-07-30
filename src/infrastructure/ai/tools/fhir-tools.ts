@@ -171,6 +171,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
           data: {
             gender: patient.gender,
             age: calculateAge(patient.birthDate),
+            ...(patient.demographicsSource === 'user-entered-local-profile'
+              ? { source: 'user-entered-local-profile' }
+              : {}),
           },
         })
       },
