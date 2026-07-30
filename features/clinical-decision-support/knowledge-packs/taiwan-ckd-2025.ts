@@ -86,7 +86,7 @@ function references(
           summaryEn: 'Refer CKD G4-G5 to nephrology; consider earlier referral at G3b for diabetic kidney disease.',
         }),
       ]
-    case 'ckd-kidney-protection':
+    case 'ckd-sglt2-strategy':
       return [reference({
         locale,
         id: 'A8-1-4',
@@ -99,7 +99,7 @@ function references(
         summaryZh: '糖尿病與非糖尿病 CKD 在適用腎功能範圍內，SGLT2 抑制劑可降低 GFR 下降與末期腎病風險；仍需依新版條件與個別安全性評估。',
         summaryEn: 'For diabetic and nondiabetic CKD within the applicable kidney-function range, SGLT2 inhibitors reduce GFR decline and kidney-failure risk; apply current eligibility and individual safety review.',
       })]
-    case 'ckd-complication-monitoring':
+    case 'ckd-anemia-monitoring':
       return [reference({
         locale,
         id: 'B4',

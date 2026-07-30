@@ -7,6 +7,7 @@ import {
 import type {
   CarePlanEntity,
   EncounterEntity,
+  MedicationEntity,
   ObservationEntity,
 } from '@/src/core/entities/clinical-data.entity'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
@@ -114,6 +115,36 @@ function lab(
   }
 }
 
+function bloodPressure(value: { systolic: number; diastolic: number }): ObservationEntity {
+  return {
+    id: 'blood-pressure',
+    resourceType: 'Observation',
+    status: 'final',
+    effectiveDateTime: '2026-06-20',
+    code: { coding: [{ system: LOINC_SYSTEM, code: '85354-9' }] },
+    component: [
+      {
+        code: { coding: [{ system: LOINC_SYSTEM, code: '8480-6' }] },
+        valueQuantity: {
+          value: value.systolic,
+          unit: 'mmHg',
+          system: UCUM_SYSTEM,
+          code: 'mm[Hg]',
+        },
+      },
+      {
+        code: { coding: [{ system: LOINC_SYSTEM, code: '8462-4' }] },
+        valueQuantity: {
+          value: value.diastolic,
+          unit: 'mmHg',
+          system: UCUM_SYSTEM,
+          code: 'mm[Hg]',
+        },
+      },
+    ],
+  }
+}
+
 const ckdCarePlans: CarePlanEntity[] = [
   {
     id: 'early-ckd',
@@ -134,13 +165,14 @@ function buildProfile(input?: {
   encounters?: EncounterEntity[]
   observations?: ObservationEntity[]
   carePlans?: CarePlanEntity[]
+  medications?: MedicationEntity[]
 }) {
   return createFhirCdssPatientProfile({
     patient: input?.patient ?? patient,
     conditions: [],
     encounters: input?.encounters ?? [],
     observations: input?.observations ?? [],
-    medications: [],
+    medications: input?.medications ?? [],
     allergies: [],
     carePlans: input?.carePlans ?? [],
     procedures: [],
@@ -248,7 +280,7 @@ describe('personalized CKD guidance', () => {
     ))).toBe(true)
 
     const coverage = result.recommendations.find(
-      (item) => item.id === 'ckd-kidney-protection',
+      (item) => item.id === 'ckd-sglt2-strategy',
     )?.sourceAssessments?.find(
       (source) => source.sourceId === 'taiwan-nhi-diabetes',
     )
@@ -269,6 +301,116 @@ describe('personalized CKD guidance', () => {
     ]))
   })
 
+  it('expands CKD into independently actionable clinical modules while collapsing no-action checks', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-05-01', 34),
+        semiquantitativeUacr(),
+      ],
+      carePlans: ckdCarePlans,
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const allIds = [
+      ...result.recommendations.map((item) => item.id),
+      ...(result.automatedChecks ?? []).map((item) => item.id),
+    ]
+
+    expect(allIds).toEqual(expect.arrayContaining([
+      'ckd-classification',
+      'ckd-monitoring',
+      'ckd-kidney-failure-risk',
+      'ckd-blood-pressure-volume',
+      'ckd-rasi-strategy',
+      'ckd-sglt2-strategy',
+      'ckd-finerenone-strategy',
+      'ckd-cardiovascular-risk',
+      'ckd-medication-safety',
+      'ckd-anemia-monitoring',
+      'ckd-potassium-acidosis',
+      'ckd-mbd-monitoring',
+      'ckd-nutrition',
+      'immunization-review',
+      'ckd-referral-care',
+    ]))
+    expect(result.recommendations.length).toBeGreaterThan(6)
+    expect(result.automatedChecks?.map((item) => item.id)).toContain('ckd-monitoring')
+  })
+
+  it('uses standardized-BP caution, staged finerenone criteria, medication safety, and serial CKD-MBD inputs', () => {
+    const ibuprofen: MedicationEntity = {
+      id: 'ibuprofen-order',
+      resourceType: 'MedicationRequest',
+      _sourceResourceType: 'MedicationRequest',
+      status: 'active',
+      authoredOn: '2026-06-18',
+      medicationCodeableConcept: { text: 'Ibuprofen 400 mg tablet' },
+    }
+    const profile = buildProfile({
+      patient: { ...patient, gender: 'male' },
+      encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-05-01', 34),
+        quantitativeUacr(80),
+        bloodPressure({ systolic: 132, diastolic: 72 }),
+        lab('potassium', '2823-3', 4.9, 'mmol/L'),
+        lab('calcium', '17861-6', 9.1, 'mg/dL'),
+        lab('phosphate', '2777-1', 3.5, 'mg/dL'),
+        lab('pth', '2731-8', 76, 'pg/mL'),
+        lab('alp', '6768-6', 88, 'U/L'),
+      ],
+      medications: [ibuprofen],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const bloodPressureDecision = result.recommendations.find(
+      (item) => item.id === 'ckd-blood-pressure-volume',
+    )
+    const finerenone = result.recommendations.find(
+      (item) => item.id === 'ckd-finerenone-strategy',
+    )
+    const medicationSafety = result.recommendations.find(
+      (item) => item.id === 'ckd-medication-safety',
+    )
+    const mbd = result.automatedChecks?.find(
+      (item) => item.id === 'ckd-mbd-monitoring',
+    )
+    const nutrition = result.recommendations.find(
+      (item) => item.id === 'ckd-nutrition',
+    )
+
+    expect(bloodPressureDecision).toMatchObject({
+      status: 'review',
+      title: '血壓 132/72 mmHg：先確認量測方式與個人化目標',
+    })
+    expect(bloodPressureDecision?.safetyBoundary).toContain('非標準化血壓不可直接套用 <120')
+    expect(finerenone).toMatchObject({
+      status: 'needs-data',
+      title: 'Finerenone 前置條件尚未完整',
+    })
+    expect(finerenone?.recommendation).toContain('4.8–5.0')
+    expect(finerenone?.missingData).toEqual(expect.arrayContaining([
+      '持續 UACR >30 mg/g 的重複定量紀錄',
+      '最大耐受 RASi 持續使用與耐受紀錄',
+    ]))
+    expect(medicationSafety).toMatchObject({
+      status: 'review',
+      priority: 'high',
+      overviewEvidenceFactKey: 'currentNsaid',
+    })
+    expect(profile.facts.parathyroidHormone.numericValue).toBe(76)
+    expect(profile.facts.alkalinePhosphatase.numericValue).toBe(88)
+    expect(mbd?.label).toBe('CKD-MBD 核心檢驗已有可用紀錄')
+    expect(nutrition?.guidelineReferences).toHaveLength(0)
+    expect(nutrition?.sourceAssessments?.find(
+      (source) => source.sourceId === 'kdigo-ckd-2024',
+    )?.references[0]).toMatchObject({
+      recommendationId: expect.stringContaining('3.3.1.1'),
+      page: 42,
+    })
+  })
+
   it('interprets hemoglobin 12.1 g/dL as mild anemia in a male without prompting ESA', () => {
     const profile = buildProfile({
       patient: { ...patient, gender: 'male' },
@@ -285,7 +427,7 @@ describe('personalized CKD guidance', () => {
     })
     const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
     const complication = result.recommendations.find(
-      (item) => item.id === 'ckd-complication-monitoring',
+      (item) => item.id === 'ckd-anemia-monitoring',
     )
 
     expect(complication).toMatchObject({
@@ -320,10 +462,10 @@ describe('personalized CKD guidance', () => {
     })
     const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
     const automated = result.automatedChecks?.find(
-      (item) => item.id === 'ckd-complication-monitoring',
+      (item) => item.id === 'ckd-potassium-acidosis',
     )
 
-    expect(automated?.label).toContain('未觸發貧血、鉀異常或重要酸中毒提示')
+    expect(automated?.label).toContain('未觸發重要酸中毒提示')
   })
 
   it('flags bicarbonate below 18 mmol/L for clinical assessment', () => {
@@ -342,7 +484,7 @@ describe('personalized CKD guidance', () => {
     })
     const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
     const complication = result.recommendations.find(
-      (item) => item.id === 'ckd-complication-monitoring',
+      (item) => item.id === 'ckd-potassium-acidosis',
     )
 
     expect(complication).toMatchObject({

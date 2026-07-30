@@ -71,7 +71,7 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
     const metadata = this.metadata(locale)
     const isMedication = recommendation.domain === 'medication'
     const isSglt2Decision = recommendation.id === 'sglt2-concordance'
-      || recommendation.id === 'ckd-kidney-protection'
+      || recommendation.id === 'ckd-sglt2-strategy'
     if (!isMedication) {
       return assessment({
         sourceId: metadata.id,
@@ -87,7 +87,10 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
         ),
       })
     }
-    if (recommendation.id === 'ascvd-lipid-strategy') {
+    if (
+      recommendation.id === 'ascvd-lipid-strategy'
+      || recommendation.id === 'ckd-cardiovascular-risk'
+    ) {
       const ldl = (
         !profile.freshnessContexts?.LDL
         || profile.freshnessContexts.LDL.state === 'current'
@@ -193,7 +196,10 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
       })
     }
 
-    if (recommendation.id === 'kidney-medication-strategy') {
+    if (
+      recommendation.id === 'kidney-medication-strategy'
+      || recommendation.id === 'ckd-rasi-strategy'
+    ) {
       const aceArbPresent = (
         profile.medicationClassContexts?.['ace-inhibitor-or-arb']?.state === 'confirmed-current'
       )

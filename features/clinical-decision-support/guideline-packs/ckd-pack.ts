@@ -16,6 +16,7 @@ import {
   classifyUacr,
   type CkdGStage,
 } from '../risk-stratification/ckd'
+import { IMMUNIZATION_CLINICAL_MODULE } from '../clinical-modules/immunization-module'
 
 function text(locale: CdssLocale, zh: string, en: string): string {
   return locale === 'en' ? en : zh
@@ -59,6 +60,38 @@ function medicationClassState(
 function stageFromProfile(profile: CdssPatientProfile): CkdGStage | undefined {
   return classifyEgfr(numberFromFact(profile, 'eGFR'))
     ?? ckdStageFromDiagnosis(profile.diseasePackEligibility?.['ckd-poc']?.code)
+}
+
+function quantitativeUacrFromProfile(
+  profile: CdssPatientProfile,
+): number | undefined {
+  return numberFromFact(profile, 'urineAlbuminRatioQuantitative')
+    ?? (
+      profile.observationContexts?.uacr?.useState === 'quantitative_comparable'
+        ? numberFromFact(profile, 'urineAlbuminRatio')
+        : undefined
+    )
+}
+
+function bloodPressureValues(
+  profile: CdssPatientProfile,
+): { systolic: number; diastolic: number } | undefined {
+  const value = profile.facts.bloodPressure?.sources?.[0]?.value
+  if (typeof value !== 'string') return undefined
+  const match = value.match(/^(\d{2,3})\/(\d{2,3})$/)
+  if (!match) return undefined
+  return {
+    systolic: Number(match[1]),
+    diastolic: Number(match[2]),
+  }
+}
+
+function isAdvancedCkd(stage: CkdGStage | undefined): boolean {
+  return stage === 'G3b' || stage === 'G4' || stage === 'G5'
+}
+
+function isG3ToG5(stage: CkdGStage | undefined): boolean {
+  return stage === 'G3a' || isAdvancedCkd(stage)
 }
 
 function buildClassification(
@@ -407,273 +440,820 @@ function buildKidneyFailureRisk(
   }
 }
 
-function buildKidneyProtection(
+function buildBloodPressureVolume(
   profile: CdssPatientProfile,
   locale: CdssLocale,
 ): CdssRecommendation {
-  const eGfr = numberFromFact(profile, 'eGFR')
-  const uacr = numberFromFact(profile, 'urineAlbuminRatioQuantitative')
-    ?? (
-      profile.observationContexts?.uacr?.useState === 'quantitative_comparable'
-        ? numberFromFact(profile, 'urineAlbuminRatio')
-        : undefined
-    )
-  const sglt2State = medicationClassState(profile, 'sglt2-inhibitor')
-  const aceArbState = medicationClassState(profile, 'ace-inhibitor-or-arb')
-  const hasDiabetes = profile.eligibleDiseasePackIds?.includes('dm-poc') === true
-  const aStage = classifyUacr(uacr)
-  const needsRasReview = (
-    (aStage === 'A2' || aStage === 'A3')
-    && aceArbState !== 'confirmed-current'
+  const bp = bloodPressureValues(profile)
+  const current = profile.freshnessContexts?.bloodPressure?.state === 'current'
+  const usableBp = current ? bp : undefined
+  const age = numberFromFact(profile, 'age')
+  const geriatric = profile.olderAdultContext
+  const needsIndividualTarget = (
+    (age !== undefined && age >= 90)
+    || geriatric?.frailtyStatus === 'frail'
+    || geriatric?.healthStatus === 'very-complex-poor-health'
   )
-  const sglt2NeedsReconciliation = (
-    sglt2State === 'active-order-unconfirmed'
-    || sglt2State === 'on-hold'
-    || sglt2State === 'historical-record-current-status-unknown'
-    || sglt2State === 'uncertain'
-  )
-  const sglt2Candidate = (
-    eGfr !== undefined
-    && eGfr >= 20
-    && (
-      uacr !== undefined && uacr >= 200
-      || Boolean(profile.facts.heartFailureDiagnosis)
-      || (eGfr <= 45)
-    )
-  )
-  const status = sglt2NeedsReconciliation || needsRasReview || (
-    sglt2State === 'not-found' && sglt2Candidate
-  ) ? 'review' : uacr === undefined ? 'needs-data' : 'no-action'
+  const aboveIntensiveTarget = usableBp !== undefined && usableBp.systolic >= 120
+  const status: CdssRecommendation['status'] = !usableBp
+    ? 'needs-data'
+    : aboveIntensiveTarget
+      ? 'review'
+      : 'no-action'
 
   return {
-    id: 'ckd-kidney-protection',
-    domain: 'medication',
+    id: 'ckd-blood-pressure-volume',
+    domain: 'target',
     priority: status === 'no-action' ? 'routine' : 'medium',
     status,
-    overviewEvidenceFactKey: 'sglt2Therapy',
-    title: sglt2NeedsReconciliation
-      ? text(
-          locale,
-          '核對 SGLT2 抑制劑實際使用，並完成 CKD 腎臟保護治療檢視',
-          'Reconcile actual SGLT2 inhibitor use and complete the CKD kidney-protection review',
-        )
-      : aceArbState === 'historical-record-current-status-unknown'
+    overviewEvidenceFactKey: 'bloodPressure',
+    title: !usableBp
+      ? text(locale, '缺少近期可判讀的血壓與體液狀態', 'Recent interpretable blood pressure and volume status are missing')
+      : aboveIntensiveTarget
         ? text(
             locale,
-            '有 ACEI／ARB 歷史處方，近期是否持續未知',
-            'A historical ACE inhibitor/ARB record exists; current use is unknown',
+            `血壓 ${usableBp.systolic}/${usableBp.diastolic} mmHg：先確認量測方式與個人化目標`,
+            `Blood pressure ${usableBp.systolic}/${usableBp.diastolic} mmHg: verify measurement method and individualized target`,
           )
-      : sglt2State === 'not-found' && sglt2Candidate
-        ? text(
+        : text(
             locale,
-            '依 eGFR、UACR／心衰竭條件評估 SGLT2 抑制劑',
-            'Evaluate an SGLT2 inhibitor using eGFR and UACR/heart-failure criteria',
-          )
-        : uacr === undefined
-          ? text(
-              locale,
-              '缺少定量 UACR，RAS 抑制劑適用條件尚未完整',
-              'Quantitative UACR is missing, so RAS-inhibitor criteria are incomplete',
-            )
-          : text(
-              locale,
-              'CKD 腎臟保護藥物類別已完成自動核對',
-              'CKD kidney-protective medication classes checked',
-            ),
+            `近期血壓 ${usableBp.systolic}/${usableBp.diastolic} mmHg，未觸發本版血壓目標提示`,
+            `Recent blood pressure is ${usableBp.systolic}/${usableBp.diastolic} mmHg; no target prompt is triggered`,
+          ),
     recommendation: text(
       locale,
-      `${sglt2State === 'confirmed-current' && sglt2Candidate ? '若確認正在使用且耐受，因 CKD／心衰竭的心腎適應症不因 HbA1c 偏低而單獨停藥。' : ''}以 eGFR、定量 UACR、糖尿病、心衰竭、血壓、血鉀、過敏／不耐受與實際用藥狀態共同評估 SGLT2 抑制劑及 ACEI／ARB；不可只看單一數值自動開停藥。`,
-      `${sglt2State === 'confirmed-current' && sglt2Candidate ? 'If current use and tolerance are confirmed, do not stop a CKD/heart-failure cardiorenal indication solely because A1c is low. ' : ''}Evaluate SGLT2 inhibitors and ACE inhibitors/ARBs using eGFR, quantitative UACR, diabetes, heart failure, blood pressure, potassium, allergy/intolerance, and actual medication use; do not start or stop therapy automatically from one value.`,
+      needsIndividualTarget
+        ? '先確認標準化診間血壓、姿勢性症狀、跌倒風險與體液狀態；此病人屬高齡／脆弱情境，不直接套用 SBP <120 mmHg，應依耐受性與照護目標個人化。'
+        : '若為高血壓且使用標準化診間量測，可將可耐受的 SBP <120 mmHg 作為討論目標；同時核對姿勢性症狀、體液狀態與藥物。',
+      needsIndividualTarget
+        ? 'Verify standardized office blood pressure, orthostatic symptoms, fall risk, and volume status. In this older/vulnerable context, do not apply SBP below 120 mm Hg automatically; individualize to tolerance and goals of care.'
+        : 'For high blood pressure measured with a standardized office method, SBP below 120 mm Hg when tolerated can be discussed while reviewing orthostatic symptoms, volume status, and medications.',
     ),
     rationale: text(
       locale,
-      hasDiabetes
-        ? '病人同時符合糖尿病與 CKD 路徑；腎臟保護治療需整合兩個疾病情境，但仍各自保留來源與安全條件。'
-        : 'CKD 腎臟保護治療可適用於部分非糖尿病患者，需依個別適應症與安全條件判斷。',
-      hasDiabetes
-        ? 'The patient meets both diabetes and CKD pathways. Kidney-protective treatment should integrate both contexts while retaining each source and safety criterion.'
-        : 'Kidney-protective therapy can apply to selected people without diabetes and requires individual indication and safety assessment.',
+      'KDIGO 的 <120 mmHg 建議以標準化診間量測與可耐受為前提；衰弱、跌倒風險、有限預期壽命或症狀性姿勢性低血壓應採較寬鬆策略。',
+      'The KDIGO target below 120 mm Hg assumes standardized office measurement and tolerance; frailty, fall risk, limited life expectancy, or symptomatic orthostasis support a less intensive approach.',
     ),
     patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'bloodPressure', '近期血壓', 'Recent blood pressure'),
       patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+    ]),
+    missingData: [
+      ...(!usableBp
+        ? [text(locale, '標準化診間血壓與量測日期', 'Standardized office blood pressure and measurement date')]
+        : []),
+      ...(status !== 'no-action'
+        ? [text(locale, '姿勢性症狀、跌倒風險與體液狀態', 'Orthostatic symptoms, fall risk, and volume status')]
+        : []),
+    ],
+    nextActions: [text(
+      locale,
+      '先查完整病歷；必要時以正確袖帶與標準化流程重測，脆弱或有症狀者加做坐／站立血壓。',
+      'Review the complete chart and repeat using the correct cuff and standardized technique when needed; add seated/standing measurements for vulnerable or symptomatic patients.',
+    )],
+    guidelineReferences: [],
+    safetyBoundary: text(
+      locale,
+      '非標準化血壓不可直接套用 <120 mmHg；本模組不依單次血壓自動調藥。',
+      'Do not apply the below-120 target to nonstandardized measurements; this module never adjusts treatment automatically from one blood pressure.',
+    ),
+  }
+}
+
+function buildRasStrategy(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation {
+  const uacr = quantitativeUacrFromProfile(profile)
+  const aStage = classifyUacr(uacr)
+  const state = medicationClassState(profile, 'ace-inhibitor-or-arb')
+  const context = profile.medicationClassContexts?.['ace-inhibitor-or-arb']
+  const indicated = aStage === 'A2' || aStage === 'A3'
+  const reconciled = state === 'confirmed-current'
+  const status: CdssRecommendation['status'] = uacr === undefined
+    ? 'needs-data'
+    : indicated && !reconciled
+      ? 'review'
+      : 'no-action'
+  const historyDetail = context?.lastPrescriptionDate
+    ? text(
+        locale,
+        `；最後處方 ${context.lastPrescriptionDate}`,
+        `; last prescription ${context.lastPrescriptionDate}`,
+      )
+    : ''
+
+  return {
+    id: 'ckd-rasi-strategy',
+    domain: 'medication',
+    priority: status === 'no-action' ? 'routine' : 'medium',
+    status,
+    overviewEvidenceFactKey: 'aceArbTherapy',
+    title: state === 'historical-record-current-status-unknown'
+      ? text(
+          locale,
+          `有 ACEI／ARB 歷史處方，近期是否持續未知${historyDetail}`,
+          `A historical ACE inhibitor/ARB record exists; current use is unknown${historyDetail}`,
+        )
+      : state === 'active-order-unconfirmed'
+        ? text(locale, '有 ACEI／ARB 近期處方，實際使用待核對', 'A recent ACE inhibitor/ARB order exists; actual use needs reconciliation')
+        : indicated && state === 'not-found'
+          ? text(locale, `${aStage} 白蛋白尿：評估 ACEI／ARB 適用性`, `${aStage} albuminuria: assess ACE inhibitor/ARB suitability`)
+          : uacr === undefined
+            ? text(locale, '缺少定量 UACR，ACEI／ARB 適用條件未完整', 'Quantitative UACR is missing, so ACE inhibitor/ARB criteria are incomplete')
+            : text(locale, 'ACEI／ARB 類別已完成自動核對', 'ACE inhibitor/ARB class checked'),
+    recommendation: text(
+      locale,
+      indicated
+        ? '依白蛋白尿、糖尿病、血壓、血鉀、creatinine、過敏／不耐受與實際用藥狀態評估 ACEI 或 ARB；先核對歷史處方與停藥原因，不把資料缺漏當成未使用。'
+        : '目前定量 UACR 未觸發本版的白蛋白尿 RASi 提示；仍依高血壓、心衰竭等其他適應症與完整病歷評估。',
+      indicated
+        ? 'Assess an ACE inhibitor or ARB using albuminuria, diabetes, blood pressure, potassium, creatinine, allergy/intolerance, and actual use. Reconcile historical prescriptions and reasons for stopping rather than treating missing data as nonuse.'
+        : 'Current quantitative UACR does not trigger the albuminuria RASi prompt in this version; assess other indications such as hypertension or heart failure using the complete chart.',
+    ),
+    rationale: text(
+      locale,
+      'KDIGO 依糖尿病與 A2/A3 白蛋白尿建議 RAS 抑制劑，且治療後的腎功能與血鉀變化需有時間關係。',
+      'KDIGO recommends RAS inhibition according to diabetes and A2/A3 albuminuria, with kidney function and potassium interpreted in relation to treatment timing.',
+    ),
+    patientEvidence: compactEvidence([
       patientEvidence(profile, locale, 'urineAlbuminOverview', '尿白蛋白', 'Urine albumin'),
-      patientEvidence(profile, locale, 'sglt2Therapy', 'SGLT2 抑制劑', 'SGLT2 inhibitor'),
       patientEvidence(profile, locale, 'aceArbTherapy', 'ACEI／ARB', 'ACE inhibitor/ARB'),
+      patientEvidence(profile, locale, 'bloodPressure', '近期血壓', 'Recent blood pressure'),
+      patientEvidence(profile, locale, 'serumCreatinine', 'Creatinine', 'Creatinine'),
       patientEvidence(profile, locale, 'potassium', '血鉀', 'Potassium'),
     ]),
     missingData: [
       ...(uacr === undefined
         ? [text(locale, '定量 UACR（mg/g）', 'Quantitative UACR (mg/g)')]
         : []),
-      ...(sglt2NeedsReconciliation
-        ? [text(locale, '實際服用、耐受性、近期急性病況與體液狀態', 'Actual use, tolerance, recent acute illness, and volume status')]
+      ...(indicated && !reconciled
+        ? [text(locale, '目前實際使用、既往耐受性與停藥原因', 'Actual current use, prior tolerance, and reason for stopping')]
         : []),
-      ...(aceArbState === 'historical-record-current-status-unknown'
-        ? [text(locale, 'ACEI／ARB 近期是否持續、既往耐受性與停藥原因', 'Current ACE inhibitor/ARB continuation, prior tolerance, and reason it may have stopped')]
+      ...(indicated && !profile.facts.bloodPressure
+        ? [text(locale, '近期血壓', 'Recent blood pressure')]
+        : []),
+      ...(indicated && !profile.facts.potassium
+        ? [text(locale, '血鉀', 'Potassium')]
+        : []),
+      ...(indicated && !profile.facts.serumCreatinine
+        ? [text(locale, 'Creatinine', 'Creatinine')]
         : []),
     ],
-    nextActions: [
-      text(
-        locale,
-        '核對實際用藥與適應症。ACEI／ARB 開始、重新開始或增加劑量後 2–4 週檢查血壓、creatinine 與血鉀；dapagliflozin 僅在重大手術／長時間禁食等適當情境暫停，不因顯影劑檢查一律停藥。',
-        'Reconcile actual use and indication. Check blood pressure, creatinine, and potassium 2–4 weeks after starting, restarting, or increasing an ACE inhibitor/ARB. Hold dapagliflozin for appropriate situations such as major surgery/prolonged fasting, not universally for contrast exposure.',
-      ),
-    ],
+    nextActions: [text(
+      locale,
+      '若開始、重新開始或增加劑量，2–4 週檢查血壓、creatinine 與血鉀；4 週內 creatinine 上升 >30% 才觸發原因評估，eGFR 低於 30 本身不是停藥理由。',
+      'If started, restarted, or titrated, check blood pressure, creatinine, and potassium in 2–4 weeks. A creatinine rise over 30% within 4 weeks triggers evaluation; eGFR below 30 alone is not a reason to stop.',
+    )],
     guidelineReferences: [],
     safetyBoundary: text(
       locale,
-      '這是藥物類別核對，不是個別病人的開藥、停藥或劑量指示。',
-      'This is a medication-class review, not an instruction to start, stop, or dose a medicine.',
+      '這是適用性與用藥核對，不是自動開藥、增量或停藥指示；避免 ACEI、ARB 與直接腎素抑制劑合併。',
+      'This is a suitability and medication-reconciliation prompt, not an automatic start, titration, or stop instruction; avoid combining ACE inhibitors, ARBs, and direct renin inhibitors.',
     ),
   }
 }
 
-function buildComplicationMonitoring(
+function buildSglt2Strategy(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation {
+  const eGfr = numberFromFact(profile, 'eGFR')
+  const uacr = quantitativeUacrFromProfile(profile)
+  const heartFailure = Boolean(profile.facts.heartFailureDiagnosis)
+  const state = medicationClassState(profile, 'sglt2-inhibitor')
+  const current = state === 'confirmed-current'
+  const needsReconciliation = (
+    state === 'active-order-unconfirmed'
+    || state === 'on-hold'
+    || state === 'historical-record-current-status-unknown'
+    || state === 'uncertain'
+  )
+  const candidate = (
+    eGfr !== undefined
+    && eGfr >= 20
+    && (
+      heartFailure
+      || (uacr !== undefined && uacr >= 200)
+      || eGfr <= 45
+    )
+  )
+  const needsUacr = eGfr !== undefined && eGfr > 45 && !heartFailure && uacr === undefined
+  const status: CdssRecommendation['status'] = current
+    ? 'no-action'
+    : needsReconciliation || (candidate && state === 'not-found')
+      ? 'review'
+      : eGfr === undefined || needsUacr
+        ? 'needs-data'
+        : 'no-action'
+
+  return {
+    id: 'ckd-sglt2-strategy',
+    domain: 'medication',
+    priority: status === 'no-action' ? 'routine' : 'medium',
+    status,
+    overviewEvidenceFactKey: 'sglt2Therapy',
+    title: needsReconciliation
+      ? text(locale, '核對 SGLT2 抑制劑實際使用與心腎適應症', 'Reconcile actual SGLT2 inhibitor use and cardiorenal indication')
+      : candidate && state === 'not-found'
+        ? text(locale, '依 eGFR、UACR／心衰竭條件評估 SGLT2 抑制劑', 'Evaluate an SGLT2 inhibitor using eGFR and UACR/heart-failure criteria')
+        : current
+          ? text(locale, 'SGLT2 抑制劑目前使用紀錄已確認', 'Current SGLT2 inhibitor use is confirmed')
+          : eGfr === undefined || needsUacr
+            ? text(locale, 'SGLT2 抑制劑適用性仍缺必要腎臟資料', 'Required kidney data are missing for SGLT2 inhibitor assessment')
+            : text(locale, '目前未觸發本版 SGLT2 抑制劑提示', 'No SGLT2 inhibitor prompt is triggered in this version'),
+    recommendation: text(
+      locale,
+      current
+        ? '若確認正在使用且耐受，因 CKD／心衰竭的心腎適應症繼續使用，不因 HbA1c 偏低而單獨停藥；同步核對急性病況與體液狀態。'
+        : '以 eGFR、定量 UACR、心衰竭、實際用藥、耐受性與近期急性病況共同評估；有處方不等同已服用，缺少處方也不等同從未使用。',
+      current
+        ? 'If current use and tolerance are confirmed, continue for CKD/heart-failure cardiorenal benefit and do not stop solely because A1c is low; also review acute illness and volume status.'
+        : 'Assess using eGFR, quantitative UACR, heart failure, actual use, tolerance, and recent acute illness. An order does not prove use, and absence of an order does not prove never-use.',
+    ),
+    rationale: text(
+      locale,
+      'KDIGO 建議 eGFR ≥20 且 UACR ≥200 mg/g 或合併心衰竭者使用；eGFR 20–45 且 UACR <200 mg/g 亦可評估。',
+      'KDIGO recommends treatment at eGFR at least 20 with UACR at least 200 mg/g or heart failure, and suggests consideration at eGFR 20–45 with UACR below 200 mg/g.',
+    ),
+    patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+      patientEvidence(profile, locale, 'urineAlbuminOverview', '尿白蛋白', 'Urine albumin'),
+      patientEvidence(profile, locale, 'heartFailureDiagnosis', '心衰竭', 'Heart failure'),
+      patientEvidence(profile, locale, 'sglt2Therapy', 'SGLT2 抑制劑', 'SGLT2 inhibitor'),
+    ]),
+    missingData: [
+      ...(eGfr === undefined ? [text(locale, 'eGFR', 'eGFR')] : []),
+      ...(needsUacr ? [text(locale, '定量 UACR（mg/g）', 'Quantitative UACR (mg/g)')] : []),
+      ...(needsReconciliation
+        ? [text(locale, '實際服用、耐受性、近期急性病況與體液狀態', 'Actual use, tolerance, recent acute illness, and volume status')]
+        : []),
+    ],
+    nextActions: [text(
+      locale,
+      'dapagliflozin 在重大手術或長時間禁食前至少停 3 天，恢復進食且臨床穩定後再恢復；不要把顯影劑檢查一律設為停藥。',
+      'Hold dapagliflozin for at least 3 days before major surgery or prolonged fasting and resume after eating and clinical stability return; do not apply a universal contrast-related hold.',
+    )],
+    guidelineReferences: [],
+    safetyBoundary: text(
+      locale,
+      '本模組不自動開停藥，也不取代酮酸中毒、急性病、體液不足與手術禁食風險評估。',
+      'This module never starts or stops therapy automatically and does not replace assessment of ketoacidosis, acute illness, volume depletion, or perioperative fasting risk.',
+    ),
+  }
+}
+
+function buildFinerenoneStrategy(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation | undefined {
+  if (profile.eligibleDiseasePackIds?.includes('dm-poc') !== true) return undefined
+  const eGfr = numberFromFact(profile, 'eGFR')
+  const uacr = quantitativeUacrFromProfile(profile)
+  const potassium = numberFromFact(profile, 'potassium')
+  const rasState = medicationClassState(profile, 'ace-inhibitor-or-arb')
+  const state = medicationClassState(profile, 'finerenone')
+  const qualifyingReadings = (profile.observationContexts?.uacr?.readings ?? [])
+    .filter((reading) => (
+      reading.kind === 'quantitative'
+      && reading.numericValueMgG !== undefined
+      && reading.numericValueMgG > 30
+      && Boolean(reading.date)
+    ))
+  const persistentAlbuminuria = new Set(qualifyingReadings.map((reading) => reading.date)).size >= 2
+  const candidate = eGfr !== undefined && eGfr > 25 && uacr !== undefined && uacr > 30
+  const potassiumBlocksInitiation = potassium !== undefined && potassium > 5
+  const potassiumNeedsJudgment = potassium !== undefined && potassium >= 4.8 && potassium <= 5
+  const stateNeedsReview = state !== 'not-found'
+  const prerequisitesComplete = (
+    candidate
+    && persistentAlbuminuria
+    && rasState === 'confirmed-current'
+    && potassium !== undefined
+    && potassium <= 5
+  )
+  const status: CdssRecommendation['status'] = stateNeedsReview || potassiumBlocksInitiation
+    ? 'review'
+    : eGfr === undefined || uacr === undefined || potassium === undefined
+      ? 'needs-data'
+      : candidate && !prerequisitesComplete
+        ? 'needs-data'
+        : candidate
+          ? 'review'
+          : 'no-action'
+
+  return {
+    id: 'ckd-finerenone-strategy',
+    domain: 'medication',
+    priority: status === 'no-action' ? 'routine' : 'medium',
+    status,
+    overviewEvidenceFactKey: 'finerenoneTherapy',
+    title: potassiumBlocksInitiation
+      ? text(locale, `血鉀 ${potassium} mmol/L：不應開始 finerenone`, `Potassium ${potassium} mmol/L: do not initiate finerenone`)
+      : stateNeedsReview
+        ? text(locale, '已有 finerenone 紀錄，核對實際使用與血鉀監測', 'A finerenone record exists; reconcile actual use and potassium monitoring')
+        : candidate && prerequisitesComplete
+          ? text(locale, '糖尿病 CKD：可進一步評估 finerenone', 'Diabetic CKD: finerenone can be assessed further')
+          : candidate
+            ? text(locale, 'Finerenone 前置條件尚未完整', 'Finerenone prerequisites are incomplete')
+            : status === 'needs-data'
+              ? text(locale, 'Finerenone 適用性仍缺必要資料', 'Required data are missing for finerenone assessment')
+              : text(locale, '目前未觸發本版 finerenone 提示', 'No finerenone prompt is triggered in this version'),
+    recommendation: text(
+      locale,
+      potassiumNeedsJudgment
+        ? `目前血鉀 ${potassium} mmol/L 落在 4.8–5.0；只有在確認持續 UACR >30 mg/g、eGFR >25、最大耐受 RASi，並能加密監測時才依臨床判斷評估。`
+        : 'Finerenone 僅作階段式提示：先確認持續 UACR >30 mg/g、eGFR >25、正常血鉀及最大耐受 RASi，再依效益、風險與病人目標評估。',
+      potassiumNeedsJudgment
+        ? `Potassium ${potassium} mmol/L is in the 4.8–5.0 range. Consider only with clinical judgment after confirming persistent UACR above 30 mg/g, eGFR above 25, maximally tolerated RASi, and capacity for closer monitoring.`
+        : 'Finerenone is presented only as a staged prompt: first confirm persistent UACR above 30 mg/g, eGFR above 25, normal potassium, and maximally tolerated RASi, then assess benefit, risk, and patient goals.',
+    ),
+    rationale: text(
+      locale,
+      'KDIGO 將非類固醇 MRA 定位於 T2D、持續白蛋白尿且已接受最大耐受 RASi 的高風險 CKD。',
+      'KDIGO positions a nonsteroidal MRA for high-risk CKD with T2D, persistent albuminuria, and maximally tolerated RAS inhibition.',
+    ),
+    patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+      patientEvidence(profile, locale, 'urineAlbuminOverview', '尿白蛋白', 'Urine albumin'),
+      patientEvidence(profile, locale, 'potassium', '血鉀', 'Potassium'),
+      patientEvidence(profile, locale, 'aceArbTherapy', 'ACEI／ARB', 'ACE inhibitor/ARB'),
+      patientEvidence(profile, locale, 'finerenoneTherapy', 'Finerenone', 'Finerenone'),
+    ]),
+    missingData: [
+      ...(eGfr === undefined ? [text(locale, 'eGFR', 'eGFR')] : []),
+      ...(uacr === undefined ? [text(locale, '定量 UACR（mg/g）', 'Quantitative UACR (mg/g)')] : []),
+      ...(candidate && !persistentAlbuminuria
+        ? [text(locale, '持續 UACR >30 mg/g 的重複定量紀錄', 'Repeat quantitative results confirming persistent UACR above 30 mg/g')]
+        : []),
+      ...(candidate && rasState !== 'confirmed-current'
+        ? [text(locale, '最大耐受 RASi 持續使用與耐受紀錄', 'Documented continued maximally tolerated RASi use and tolerance')]
+        : []),
+      ...(potassium === undefined ? [text(locale, '近期血鉀', 'Recent potassium')] : []),
+    ],
+    nextActions: [text(
+      locale,
+      '若經臨床決策開始，4 週複查血鉀與腎功能；K >5.0 mmol/L 不應開始，4.8–5.0 mmol/L 需依臨床判斷並加密監測。',
+      'If initiated after clinical review, recheck potassium and kidney function at 4 weeks. Do not initiate above 5.0 mmol/L; 4.8–5.0 mmol/L requires clinical judgment and closer monitoring.',
+    )],
+    guidelineReferences: [],
+    safetyBoundary: text(
+      locale,
+      '本模組不由單次 UACR 或血鉀自動開藥；需先排除高血鉀、低血壓、急性病況及其他禁忌。',
+      'This module never initiates treatment from a single UACR or potassium result; hyperkalemia, hypotension, acute illness, and other contraindications must be reviewed first.',
+    ),
+  }
+}
+
+function buildCardiovascularRisk(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation {
+  const age = numberFromFact(profile, 'age')
+  const state = medicationClassState(profile, 'statin')
+  const context = profile.medicationClassContexts?.statin
+  const hasDiabetes = profile.eligibleDiseasePackIds?.includes('dm-poc') === true
+  const hasAscvd = Boolean(profile.facts.ascvdDiagnosis)
+  const shouldReview = (age !== undefined && age >= 50) || hasDiabetes || hasAscvd
+  const vulnerable = (
+    (age !== undefined && age >= 90)
+    || profile.olderAdultContext?.frailtyStatus === 'frail'
+    || profile.olderAdultContext?.healthStatus === 'very-complex-poor-health'
+  )
+  const status: CdssRecommendation['status'] = age === undefined
+    ? 'needs-data'
+    : shouldReview && state !== 'confirmed-current'
+      ? 'review'
+      : 'no-action'
+
+  return {
+    id: 'ckd-cardiovascular-risk',
+    domain: 'medication',
+    priority: status === 'no-action' ? 'routine' : 'medium',
+    status,
+    overviewEvidenceFactKey: 'statinTherapy',
+    title: state === 'historical-record-current-status-unknown'
+      ? text(
+          locale,
+          `有 statin 歷史處方，近期是否持續未知${context?.lastPrescriptionDate ? `；最後處方 ${context.lastPrescriptionDate}` : ''}`,
+          `A historical statin record exists; current use is unknown${context?.lastPrescriptionDate ? `; last prescription ${context.lastPrescriptionDate}` : ''}`,
+        )
+      : shouldReview && state === 'not-found'
+        ? text(locale, 'CKD 心血管風險：核對 statin 適用性與目前用藥', 'CKD cardiovascular risk: reconcile statin suitability and current use')
+        : state === 'active-order-unconfirmed'
+          ? text(locale, '有 statin 近期處方，實際使用待核對', 'A recent statin order exists; actual use needs reconciliation')
+          : text(locale, 'CKD 心血管風險藥物已完成自動核對', 'CKD cardiovascular-risk medication checked'),
+    recommendation: text(
+      locale,
+      vulnerable
+        ? '先確認是否仍使用及既往耐受性，再以預期效益時間、交互作用、衰弱程度與照護目標決定最大耐受強度；不要直接提示開始高強度 statin。'
+        : '依年齡、CKD 分期、ASCVD／糖尿病、目前用藥與耐受性評估 statin 或 statin/ezetimibe；先核對完整用藥，不把資料缺漏當成未使用。',
+      vulnerable
+        ? 'First confirm current use and prior tolerance, then use time to benefit, interactions, frailty, and goals of care to determine maximally tolerated intensity; do not directly prompt high-intensity statin initiation.'
+        : 'Assess a statin or statin/ezetimibe using age, CKD stage, ASCVD/diabetes, current medication use, and tolerance. Reconcile the full medication history rather than treating missing data as nonuse.',
+    ),
+    rationale: text(
+      locale,
+      'KDIGO 對成人 CKD 的 statin 建議以年齡與風險分層；高齡或衰弱者仍需整合可耐受性、交互作用與病人目標。',
+      'KDIGO stratifies statin guidance in adult CKD by age and risk; older or frail adults still require integration of tolerance, interactions, and patient goals.',
+    ),
+    patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'age', '年齡', 'Age'),
+      patientEvidence(profile, locale, 'ckdDiagnosis', 'CKD 診斷', 'CKD diagnosis'),
+      patientEvidence(profile, locale, 'ascvdDiagnosis', 'ASCVD', 'ASCVD'),
+      patientEvidence(profile, locale, 'LDL', 'LDL-C', 'LDL-C'),
+      patientEvidence(profile, locale, 'statinTherapy', 'Statin', 'Statin'),
+    ]),
+    missingData: status === 'review'
+      ? [
+          text(locale, '目前實際用藥、既往耐受性與停藥原因', 'Actual current use, prior tolerance, and reason for stopping'),
+          text(locale, '慢性透析／腎移植狀態與照護目標', 'Chronic dialysis/transplant status and goals of care'),
+        ]
+      : [],
+    nextActions: [text(
+      locale,
+      '查找完整處方、藥物不良反應與交互作用；依預期效益時間與病人偏好決定是否續用及強度。',
+      'Review the complete prescription history, adverse effects, and interactions, then decide continuation and intensity using time to benefit and patient preferences.',
+    )],
+    guidelineReferences: [],
+    safetyBoundary: text(
+      locale,
+      '本模組不由 LDL 單一數值或 CKD 診斷自動指定成分與強度。',
+      'This module does not select an agent or intensity automatically from a single LDL value or CKD diagnosis.',
+    ),
+  }
+}
+
+function buildMedicationSafety(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation {
+  const medicationOverview = profile.facts.medicationListOverview
+  const currentNsaid = profile.facts.currentNsaid
+  const status: CdssRecommendation['status'] = currentNsaid
+    ? 'review'
+    : medicationOverview
+      ? 'no-action'
+      : 'needs-data'
+
+  return {
+    id: 'ckd-medication-safety',
+    domain: 'safety',
+    priority: currentNsaid ? 'high' : status === 'needs-data' ? 'medium' : 'routine',
+    status,
+    overviewEvidenceFactKey: currentNsaid ? 'currentNsaid' : 'medicationListOverview',
+    title: currentNsaid
+      ? text(locale, '辨識到可能的 NSAID，需核對適應症與腎臟風險', 'A potential NSAID was identified; review indication and kidney risk')
+      : medicationOverview
+        ? text(locale, '目前用藥已完成常見 NSAID 自動掃描', 'Current medication data screened for common NSAIDs')
+        : text(locale, '缺少可核對的目前用藥清單', 'A current medication list is unavailable for review'),
+    recommendation: text(
+      locale,
+      currentNsaid
+        ? '確認是否實際使用、劑量、期間與替代方案；同時依 eGFR 檢查腎排除藥物劑量、窄治療窗藥物及電解質監測。'
+        : '核對處方藥、成藥、止痛藥、中草藥與保健品；依 eGFR 檢查腎排除藥物劑量、潛在腎毒性、交互作用與監測需求。',
+      currentNsaid
+        ? 'Confirm actual use, dose, duration, and alternatives; also review kidney-cleared dosing, narrow-therapeutic-index medicines, and electrolyte monitoring according to eGFR.'
+        : 'Reconcile prescriptions, OTC products, analgesics, herbal remedies, and supplements; review kidney-cleared dosing, potential nephrotoxicity, interactions, and monitoring according to eGFR.',
+    ),
+    rationale: text(
+      locale,
+      'CKD 會改變藥物清除與不良反應風險；KDIGO 建議腎毒性、窄治療窗藥物及成藥／草藥納入藥物治理。',
+      'CKD changes drug clearance and adverse-effect risk; KDIGO recommends stewardship for nephrotoxins, narrow-therapeutic-index medicines, and OTC/herbal products.',
+    ),
+    patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'medicationListOverview', '目前用藥資料', 'Current medication data'),
+      patientEvidence(profile, locale, 'currentNsaid', '可能的 NSAID', 'Potential NSAID'),
+      patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+      patientEvidence(profile, locale, 'potassium', '血鉀', 'Potassium'),
+    ]),
+    missingData: medicationOverview
+      ? [text(locale, '成藥、中草藥、保健品與院外用藥', 'OTC, herbal, supplement, and outside-facility medicines')]
+      : [text(locale, '完整目前用藥清單（含成藥、中草藥與保健品）', 'Complete current medication list, including OTC, herbal, and supplements')],
+    nextActions: [text(
+      locale,
+      '先做藥物整合；有疑義時由藥師／臨床團隊逐項核對適應症、腎功能劑量與監測。',
+      'Reconcile medications first, then have the pharmacist/clinical team review indication, kidney-function dosing, and monitoring item by item when needed.',
+    )],
+    guidelineReferences: [],
+    safetyBoundary: text(
+      locale,
+      '自動掃描僅辨識常見名稱，未辨識到不代表沒有腎毒性藥物，也不應自行停用必要治療。',
+      'The automated scan recognizes only common names; no match does not prove absence of nephrotoxins and is not a reason to stop necessary treatment.',
+    ),
+  }
+}
+
+function buildAnemiaMonitoring(
   profile: CdssPatientProfile,
   locale: CdssLocale,
 ): CdssRecommendation {
   const stage = stageFromProfile(profile)
-  const advanced = stage === 'G3b' || stage === 'G4' || stage === 'G5'
   const sex = profile.demographics?.sex
   const hemoglobin = numberFromFact(profile, 'hemoglobin')
-  const bicarbonate = numberFromFact(profile, 'bicarbonate')
-  const potassium = numberFromFact(profile, 'potassium')
   const anemiaThreshold = sex === 'male' ? 13 : sex === 'female' ? 12 : undefined
   const hasAnemia = (
     hemoglobin !== undefined
     && anemiaThreshold !== undefined
     && hemoglobin < anemiaThreshold
   )
-  const hasClinicallyImportantAcidosis = (
-    bicarbonate !== undefined && bicarbonate < 18
-  )
-  const hasPotassiumAbnormality = (
-    potassium !== undefined && (potassium < 3.5 || potassium > 5.5)
-  )
-  const required = advanced
-    ? [
-        ['hemoglobin', '血紅素', 'Hemoglobin'],
-        ['potassium', '血鉀', 'Potassium'],
-        ['bicarbonate', '碳酸氫鹽／總二氧化碳', 'Bicarbonate/total CO2'],
-        ['calcium', '血鈣', 'Calcium'],
-        ['phosphate', '血磷', 'Phosphate'],
-      ] as const
-    : [
-        ['hemoglobin', '血紅素', 'Hemoglobin'],
-        ['potassium', '血鉀', 'Potassium'],
-      ] as const
-  const missing = required.filter(([key]) => !profile.facts[key])
-  const hasInterpretedAbnormality = (
-    hasAnemia || hasClinicallyImportantAcidosis || hasPotassiumAbnormality
-  )
-  const anemiaWorkup = hasAnemia
-    ? [
-        text(locale, 'CBC 連續趨勢與網狀紅血球', 'CBC trend and reticulocyte count'),
-        text(locale, 'ferritin 與 TSAT', 'Ferritin and TSAT'),
-      ]
-    : []
-  const status: CdssRecommendation['status'] = hasInterpretedAbnormality
+  const status: CdssRecommendation['status'] = hasAnemia
     ? 'review'
-    : missing.length > 0
+    : hemoglobin !== undefined && anemiaThreshold === undefined
       ? 'needs-data'
-      : 'no-action'
-  const title = hasAnemia
-    ? text(
-        locale,
-        `Hb ${hemoglobin} g/dL：${sex === 'male' ? '男性' : '女性'}貧血，先評估原因與趨勢`,
-        `Hemoglobin ${hemoglobin} g/dL: anemia for ${sex === 'male' ? 'a male' : 'a female'} patient; evaluate cause and trend`,
-      )
-    : hasClinicallyImportantAcidosis
-      ? text(
-          locale,
-          `Bicarbonate ${bicarbonate} mmol/L：評估具臨床重要性的代謝性酸中毒`,
-          `Bicarbonate ${bicarbonate} mmol/L: assess clinically important metabolic acidosis`,
-        )
-      : hasPotassiumAbnormality
-        ? text(
-            locale,
-            `血鉀 ${potassium} mmol/L：評估鉀異常`,
-            `Potassium ${potassium} mmol/L: assess the potassium abnormality`,
-          )
-        : missing.length > 0
-          ? text(
-              locale,
-              `${stage ?? 'CKD'} 併發症監測尚缺 ${missing.length} 項`,
-              `${stage ?? 'CKD'} complication monitoring is missing ${missing.length} item(s)`,
-            )
-          : text(
-              locale,
-              `${stage ?? 'CKD'} 併發症檢驗已判讀；目前未觸發貧血、鉀異常或重要酸中毒提示`,
-              `${stage ?? 'CKD'} complication laboratories interpreted; no anemia, potassium abnormality, or clinically important acidosis prompt is triggered`,
-            )
+      : hemoglobin === undefined && isAdvancedCkd(stage)
+        ? 'needs-data'
+        : 'no-action'
 
   return {
-    id: 'ckd-complication-monitoring',
+    id: 'ckd-anemia-monitoring',
     domain: 'complication',
     priority: status === 'no-action' ? 'routine' : 'medium',
     status,
     overviewEvidenceFactKey: profile.facts.hemoglobin ? 'hemoglobin' : 'eGFR',
-    title,
+    title: hasAnemia
+      ? text(
+          locale,
+          `Hb ${hemoglobin} g/dL：${sex === 'male' ? '男性' : '女性'}貧血，先評估原因與趨勢`,
+          `Hemoglobin ${hemoglobin} g/dL: anemia for ${sex === 'male' ? 'a male' : 'a female'} patient; evaluate cause and trend`,
+        )
+      : status === 'needs-data'
+        ? text(locale, `${stage ?? 'CKD'}：貧血評估資料尚未完整`, `${stage ?? 'CKD'}: anemia assessment data are incomplete`)
+        : text(locale, '目前未觸發 CKD 貧血提示', 'No CKD anemia prompt is triggered'),
     recommendation: text(
       locale,
       hasAnemia
         ? `依性別門檻，Hb ${hemoglobin} g/dL 屬貧血。先看 CBC 連續趨勢、網狀紅血球、ferritin 與 TSAT，並評估出血、營養缺乏、發炎及其他原因；單一輕度貧血不直接觸發 ESA。`
-        : hasClinicallyImportantAcidosis
-          ? `Bicarbonate ${bicarbonate} mmol/L 低於 KDIGO 2024 所舉具臨床重要酸中毒的範例門檻 18 mmol/L；先確認檢驗與臨床狀態、評估原因，再決定處理。`
-          : hasPotassiumAbnormality
-            ? '先確認檢驗可靠性、急性病況、藥物與腎功能，再依院內流程處理鉀異常。'
-            : missing.length > 0
-              ? '先查完整病歷是否已有結果；若無，再依 CKD 分期與臨床狀況安排貧血、電解質、酸鹼與礦物質骨代謝評估。'
-              : `目前已判讀可用數值；${bicarbonate !== undefined && bicarbonate >= 18 ? `bicarbonate ${bicarbonate} mmol/L 未達 <18 mmol/L 的重要酸中毒提示門檻，不需因此啟動治療。` : '依採檢日期與 CKD 分期持續追蹤。'}`,
+        : '依 CKD 分期與症狀核對 Hb；若異常，先完成貧血原因與鐵狀態評估。',
       hasAnemia
         ? `Using the sex-specific threshold, hemoglobin ${hemoglobin} g/dL meets anemia criteria. Review the CBC trend, reticulocyte count, ferritin, and TSAT and assess bleeding, nutritional deficiency, inflammation, and other causes; a single mild value does not trigger ESA therapy.`
-        : hasClinicallyImportantAcidosis
-          ? `Bicarbonate ${bicarbonate} mmol/L is below the KDIGO 2024 example threshold of 18 mmol/L for clinically important acidosis. Confirm the result and clinical state, assess causes, and then decide management.`
-          : hasPotassiumAbnormality
-            ? 'Confirm result reliability, acute illness, medicines, and kidney function, then manage the potassium abnormality using the institutional pathway.'
-            : missing.length > 0
-              ? 'Search the complete chart first. If absent, arrange anemia, electrolyte, acid-base, and mineral-bone assessment according to CKD stage and clinical context.'
-              : `Available values have been interpreted. ${bicarbonate !== undefined && bicarbonate >= 18 ? `Bicarbonate ${bicarbonate} mmol/L does not meet the <18 mmol/L prompt threshold for clinically important acidosis and does not trigger treatment on that basis.` : 'Continue monitoring according to collection dates and CKD stage.'}`,
+        : 'Review hemoglobin according to CKD stage and symptoms; if abnormal, first evaluate anemia causes and iron status.',
     ),
     rationale: text(
       locale,
-      'CKD 進展時，腎性貧血、鉀異常、代謝性酸中毒與 CKD-MBD 的風險增加。',
-      'As CKD advances, risks of kidney anemia, potassium disorders, metabolic acidosis, and CKD-MBD increase.',
+      'CKD 進展時貧血風險增加，但治療需建立在趨勢、症狀、鐵狀態與其他病因評估。',
+      'Anemia risk rises as CKD advances, but management depends on trends, symptoms, iron status, and assessment of other causes.',
     ),
     patientEvidence: compactEvidence([
       patientEvidence(profile, locale, 'hemoglobin', '血紅素', 'Hemoglobin'),
-      patientEvidence(profile, locale, 'potassium', '血鉀', 'Potassium'),
-      patientEvidence(profile, locale, 'bicarbonate', '碳酸氫鹽／總二氧化碳', 'Bicarbonate/total CO2'),
-      patientEvidence(profile, locale, 'calcium', '血鈣', 'Calcium'),
-      patientEvidence(profile, locale, 'phosphate', '血磷', 'Phosphate'),
+      patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
       patientEvidence(profile, locale, 'albumin', '白蛋白', 'Albumin'),
     ]),
     missingData: [
-      ...missing.map(([, zh, en]) => text(locale, zh, en)),
-      ...anemiaWorkup,
+      ...(hemoglobin === undefined && isAdvancedCkd(stage)
+        ? [text(locale, '血紅素', 'Hemoglobin')]
+        : []),
+      ...(hemoglobin !== undefined && anemiaThreshold === undefined
+        ? [text(locale, '公式所需性別', 'Sex needed for interpretation')]
+        : []),
+      ...(hasAnemia
+        ? [
+            text(locale, 'CBC 連續趨勢與網狀紅血球', 'CBC trend and reticulocyte count'),
+            text(locale, 'ferritin 與 TSAT', 'Ferritin and TSAT'),
+          ]
+        : []),
     ],
     nextActions: [text(
       locale,
       hasAnemia
-        ? '查找 CBC trend、reticulocyte、ferritin 與 TSAT；依完整評估結果決定後續，不由 Hb 12.1 g/dL 直接提示 ESA。'
-        : hasClinicallyImportantAcidosis
-          ? '複核 bicarbonate 與相關臨床狀態，評估酸中毒原因及是否需要處理。'
-          : missing.length > 0
-        ? '先查找缺項的既有檢驗；需要時才安排採檢，並依結果進一步評估。'
-        : '核對採檢日期與異常值；依分期及院內流程安排後續。',
+        ? '查找 CBC trend、reticulocyte、ferritin 與 TSAT；依完整評估結果決定後續，不由單一輕度 Hb 直接提示 ESA。'
+        : '先查完整病歷；依分期、症狀與採檢日期決定是否需要更新。',
       hasAnemia
-        ? 'Retrieve CBC trend, reticulocyte count, ferritin, and TSAT; base next steps on the complete evaluation rather than prompting ESA from hemoglobin 12.1 g/dL alone.'
-        : hasClinicallyImportantAcidosis
-          ? 'Repeat or verify bicarbonate with the clinical context, assess causes of acidosis, and decide whether treatment is needed.'
-          : missing.length > 0
-        ? 'Retrieve existing results for missing items first; test only when needed and evaluate further according to results.'
-        : 'Review dates and abnormal values, then schedule follow-up according to stage and institutional workflow.',
+        ? 'Retrieve CBC trend, reticulocyte count, ferritin, and TSAT; base next steps on the complete evaluation rather than prompting ESA from one mild hemoglobin result.'
+        : 'Review the complete chart and decide whether an update is needed using stage, symptoms, and collection date.',
     )],
     guidelineReferences: [],
     safetyBoundary: text(
       locale,
-      '缺少資料不等於已有併發症；單一輕度貧血不直接觸發 ESA，bicarbonate ≥18 mmol/L 不因本規則觸發酸中毒治療。',
-      'Missing data do not establish a complication; a single mild anemia result does not trigger ESA therapy, and bicarbonate at or above 18 mmol/L does not trigger acidosis treatment under this rule.',
+      '本卡未啟用 KDIGO 2026 貧血來源；缺少資料不等於已有貧血，單一輕度異常不直接觸發 ESA。',
+      'The KDIGO 2026 anemia source is not enabled for this card; missing data do not establish anemia, and one mild abnormal result does not trigger ESA therapy.',
+    ),
+  }
+}
+
+function buildPotassiumAcidosis(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation {
+  const stage = stageFromProfile(profile)
+  const potassium = numberFromFact(profile, 'potassium')
+  const bicarbonate = numberFromFact(profile, 'bicarbonate')
+  const potassiumAbnormal = potassium !== undefined && (potassium < 3.5 || potassium > 5.5)
+  const importantAcidosis = bicarbonate !== undefined && bicarbonate < 18
+  const missing = isAdvancedCkd(stage)
+    ? [
+        ...(!profile.facts.potassium ? [text(locale, '血鉀', 'Potassium')] : []),
+        ...(!profile.facts.bicarbonate ? [text(locale, '碳酸氫鹽／總二氧化碳', 'Bicarbonate/total CO2')] : []),
+      ]
+    : []
+  const status: CdssRecommendation['status'] = potassiumAbnormal || importantAcidosis
+    ? 'review'
+    : missing.length > 0
+      ? 'needs-data'
+      : 'no-action'
+
+  return {
+    id: 'ckd-potassium-acidosis',
+    domain: 'complication',
+    priority: potassiumAbnormal ? 'high' : status === 'no-action' ? 'routine' : 'medium',
+    status,
+    overviewEvidenceFactKey: importantAcidosis ? 'bicarbonate' : 'potassium',
+    title: potassiumAbnormal
+      ? text(locale, `血鉀 ${potassium} mmol/L：評估鉀異常`, `Potassium ${potassium} mmol/L: assess the abnormality`)
+      : importantAcidosis
+        ? text(
+            locale,
+            `Bicarbonate ${bicarbonate} mmol/L：評估具臨床重要性的代謝性酸中毒`,
+            `Bicarbonate ${bicarbonate} mmol/L: assess clinically important metabolic acidosis`,
+          )
+        : missing.length > 0
+          ? text(locale, `${stage}：鉀與酸鹼監測尚缺 ${missing.length} 項`, `${stage}: potassium/acid-base monitoring is missing ${missing.length} item(s)`)
+          : text(
+              locale,
+              `鉀與酸鹼數值已判讀；${bicarbonate !== undefined ? `bicarbonate ${bicarbonate} mmol/L` : '目前資料'}未觸發重要酸中毒提示`,
+              `Potassium and acid-base values interpreted; ${bicarbonate !== undefined ? `bicarbonate ${bicarbonate} mmol/L` : 'current data'} does not trigger an important-acidosis prompt`,
+            ),
+    recommendation: text(
+      locale,
+      importantAcidosis
+        ? `Bicarbonate ${bicarbonate} mmol/L 低於 KDIGO 2024 所舉具臨床重要酸中毒的範例門檻 18 mmol/L；先確認檢驗與臨床狀態、評估原因，再決定處理。`
+        : potassiumAbnormal
+          ? '先確認檢驗可靠性、急性病況、藥物、飲食與腎功能，再依院內流程處理鉀異常。'
+          : bicarbonate !== undefined && bicarbonate >= 18
+            ? `Bicarbonate ${bicarbonate} mmol/L 未達 <18 mmol/L 的重要酸中毒提示門檻，不因本數值自動啟動治療。`
+            : '依 CKD 分期與臨床狀況核對鉀與酸鹼資料。',
+      importantAcidosis
+        ? `Bicarbonate ${bicarbonate} mmol/L is below the KDIGO 2024 example threshold of 18 mmol/L for clinically important acidosis. Confirm the result and clinical state, assess causes, and then decide management.`
+        : potassiumAbnormal
+          ? 'Confirm result reliability, acute illness, medicines, diet, and kidney function, then manage using the institutional pathway.'
+          : bicarbonate !== undefined && bicarbonate >= 18
+            ? `Bicarbonate ${bicarbonate} mmol/L does not meet the below-18 prompt threshold for clinically important acidosis and does not trigger treatment automatically.`
+            : 'Review potassium and acid-base data according to CKD stage and clinical context.',
+    ),
+    rationale: text(
+      locale,
+      'CKD、藥物與急性病況都可能造成鉀或酸鹼異常，需將數值與臨床情境一起判讀。',
+      'CKD, medications, and acute illness can all cause potassium or acid-base abnormalities; values require clinical context.',
+    ),
+    patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'potassium', '血鉀', 'Potassium'),
+      patientEvidence(profile, locale, 'bicarbonate', '碳酸氫鹽／總二氧化碳', 'Bicarbonate/total CO2'),
+      patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+      patientEvidence(profile, locale, 'medicationListOverview', '目前用藥資料', 'Current medication data'),
+    ]),
+    missingData: missing,
+    nextActions: [text(
+      locale,
+      status === 'review'
+        ? '複核檢驗與臨床狀態，查找近期藥物變動並依嚴重度與院內流程處理。'
+        : '先查找缺項的既有檢驗；需要時才安排採檢。',
+      status === 'review'
+        ? 'Verify the laboratory and clinical state, review recent medication changes, and manage according to severity and the institutional pathway.'
+        : 'Retrieve existing results for missing items first and test only when needed.',
+    )],
+    guidelineReferences: [],
+    safetyBoundary: text(
+      locale,
+      'K 3.5–5.5 mmol/L 與 bicarbonate ≥18 mmol/L 僅代表未觸發本卡門檻，不等同完全正常或不需追蹤。',
+      'Potassium 3.5–5.5 mmol/L and bicarbonate at least 18 mmol/L only mean this card’s thresholds are not triggered; they do not prove complete normality or eliminate follow-up.',
+    ),
+  }
+}
+
+function buildCkdMbd(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation | undefined {
+  const stage = stageFromProfile(profile)
+  if (!isG3ToG5(stage)) return undefined
+  const required = [
+    ['calcium', '血鈣', 'Calcium'],
+    ['phosphate', '血磷', 'Phosphate'],
+    ['parathyroidHormone', 'PTH', 'PTH'],
+  ] as const
+  const missing = required.filter(([key]) => !profile.facts[key])
+  const status: CdssRecommendation['status'] = missing.length > 0 ? 'needs-data' : 'no-action'
+
+  return {
+    id: 'ckd-mbd-monitoring',
+    domain: 'complication',
+    priority: status === 'no-action' ? 'routine' : 'medium',
+    status,
+    overviewEvidenceFactKey: profile.facts.parathyroidHormone ? 'parathyroidHormone' : 'eGFR',
+    title: missing.length > 0
+      ? text(locale, `${stage} CKD-MBD 評估尚缺 ${missing.length} 項`, `${stage} CKD-MBD assessment is missing ${missing.length} item(s)`)
+      : text(locale, 'CKD-MBD 核心檢驗已有可用紀錄', 'Core CKD-MBD laboratory records are available'),
+    recommendation: text(
+      locale,
+      missing.length > 0
+        ? '先查完整病歷；依 CKD 分期與既有趨勢補齊鈣、磷與 PTH，必要時納入 alkaline phosphatase 與 25-OH vitamin D。'
+        : '以連續的血磷、血鈣與 PTH 共同判讀；不要由單一數值自動診斷 CKD-MBD 或啟動治療。',
+      missing.length > 0
+        ? 'Review the complete chart and complete calcium, phosphate, and PTH according to CKD stage and prior trends; add alkaline phosphatase and 25-OH vitamin D when indicated.'
+        : 'Interpret serial phosphate, calcium, and PTH together; do not diagnose CKD-MBD or initiate therapy automatically from one value.',
+    ),
+    rationale: text(
+      locale,
+      'KDIGO CKD-MBD 建議依連續的磷、鈣與 PTH 整體判讀，而不是只看一個異常值。',
+      'KDIGO CKD-MBD recommends decisions based on serial phosphate, calcium, and PTH considered together rather than one abnormal value.',
+    ),
+    patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'calcium', '血鈣', 'Calcium'),
+      patientEvidence(profile, locale, 'phosphate', '血磷', 'Phosphate'),
+      patientEvidence(profile, locale, 'parathyroidHormone', 'PTH', 'PTH'),
+      patientEvidence(profile, locale, 'alkalinePhosphatase', 'Alkaline phosphatase', 'Alkaline phosphatase'),
+      patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+    ]),
+    missingData: missing.map(([, zh, en]) => text(locale, zh, en)),
+    nextActions: [text(
+      locale,
+      '核對採檢日期、趨勢與實驗室參考值；缺項先查既有結果，再依分期安排。',
+      'Review collection dates, trends, and laboratory reference ranges; retrieve existing results before ordering missing tests according to stage.',
+    )],
+    guidelineReferences: [{
+      id: 'KDIGO-CKD-MBD-2017-4.1.1',
+      title: 'KDIGO 2017 Clinical Practice Guideline Update for CKD-MBD',
+      publisher: 'Kidney Disease: Improving Global Outcomes',
+      version: '2017',
+      url: 'https://kdigo.org/wp-content/uploads/2018/04/2017-KDIGO-CKD-MBD-GL-Update.pdf',
+      directLink: true,
+      recommendationId: 'Recommendation 4.1.1',
+      locator: text(
+        locale,
+        '第 4.1 節 → CKD-MBD 生化異常',
+        'Section 4.1 → CKD-MBD biochemical abnormalities',
+      ),
+      summary: text(
+        locale,
+        'CKD G3a–G5D 的處置應依連續的血磷、血鈣與 PTH 整體判讀。',
+        'In CKD G3a–G5D, decisions should be based on serial phosphate, calcium, and PTH considered together.',
+      ),
+    }],
+    safetyBoundary: text(
+      locale,
+      '本卡不設定跨實驗室通用的 PTH／磷治療門檻，也不由單次檢驗自動給藥。',
+      'This card does not impose universal PTH/phosphate treatment thresholds across laboratories and never treats from a single result.',
+    ),
+  }
+}
+
+function buildNutrition(
+  profile: CdssPatientProfile,
+  locale: CdssLocale,
+): CdssRecommendation | undefined {
+  const stage = stageFromProfile(profile)
+  if (!isG3ToG5(stage)) return undefined
+  const age = numberFromFact(profile, 'age')
+  const vulnerable = (
+    (age !== undefined && age >= 65)
+    || profile.olderAdultContext?.frailtyStatus === 'frail'
+    || profile.olderAdultContext?.frailtyStatus === 'prefrail'
+  )
+
+  return {
+    id: 'ckd-nutrition',
+    domain: 'target',
+    priority: vulnerable ? 'medium' : 'routine',
+    status: 'review',
+    overviewEvidenceFactKey: profile.facts.albumin ? 'albumin' : 'eGFR',
+    title: vulnerable
+      ? text(locale, `${stage} 高齡／脆弱情境：營養目標需避免過度限制`, `${stage} older/vulnerable context: avoid over-restrictive nutrition targets`)
+      : text(locale, `${stage}：檢視蛋白質、鈉與整體飲食品質`, `${stage}: review protein, sodium, and overall diet quality`),
+    recommendation: text(
+      locale,
+      vulnerable
+        ? '先評估體重趨勢、食慾、肌少症／衰弱與實際攝取，再個人化蛋白質與熱量；不要僵硬套用低蛋白。鈉攝取可朝 <2 g/day 調整，但仍需兼顧營養與病人偏好。'
+        : '成人 G3–G5 可將蛋白質約 0.8 g/kg/day、避免 >1.3 g/kg/day，鈉 <2 g/day 作為營養師共同討論的參考，並優先健康、多樣與較多植物性食物。',
+      vulnerable
+        ? 'First assess weight trend, appetite, sarcopenia/frailty, and actual intake, then individualize protein and calories; do not apply a low-protein diet rigidly. Sodium below 2 g/day can be discussed while preserving nutrition and patient preferences.'
+        : 'For adults with G3–G5, discuss protein around 0.8 g/kg/day, avoidance of intake above 1.3 g/kg/day, and sodium below 2 g/day with a renal dietitian while prioritizing a healthy, diverse, plant-forward diet.',
+    ),
+    rationale: text(
+      locale,
+      'KDIGO 的一般蛋白質與鈉目標需由腎臟營養專業依共病個人化；高齡合併衰弱或肌少症者可能需要較高蛋白與熱量。',
+      'KDIGO protein and sodium targets require renal-nutrition individualization; older adults with frailty or sarcopenia may need higher protein and calorie targets.',
+    ),
+    patientEvidence: compactEvidence([
+      patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+      patientEvidence(profile, locale, 'albumin', '白蛋白', 'Albumin'),
+      patientEvidence(profile, locale, 'potassium', '血鉀', 'Potassium'),
+      patientEvidence(profile, locale, 'phosphate', '血磷', 'Phosphate'),
+    ]),
+    missingData: [
+      text(locale, '體重與近期體重變化', 'Weight and recent weight trend'),
+      text(locale, '食慾、實際蛋白質／鈉攝取與飲食型態', 'Appetite, actual protein/sodium intake, and dietary pattern'),
+      text(locale, '肌少症、衰弱與營養風險評估', 'Sarcopenia, frailty, and nutrition-risk assessment'),
+    ],
+    nextActions: [text(
+      locale,
+      '有營養風險、進階 CKD 或多重飲食限制時，轉介腎臟營養師共同設定可執行目標。',
+      'For nutrition risk, advanced CKD, or multiple dietary restrictions, involve a renal dietitian to set feasible goals.',
+    )],
+    guidelineReferences: [],
+    safetyBoundary: text(
+      locale,
+      '白蛋白不是單獨的營養診斷；未先評估肌少症、熱量與代謝穩定性前，不自動建議低或極低蛋白飲食。',
+      'Albumin alone is not a nutrition diagnosis; do not recommend a low- or very-low-protein diet automatically without assessing sarcopenia, calories, and metabolic stability.',
     ),
   }
 }
@@ -800,7 +1380,7 @@ function toAutomatedCheck(item: CdssRecommendation) {
 export const CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
   id: 'ckd-cdss',
   diseaseCode: 'CKD',
-  version: '0.1.0-poc',
+  version: '0.3.0-poc',
   enabled: true,
   label: {
     zh: '慢性腎臟病',
@@ -814,8 +1394,17 @@ export const CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
       buildClassification(profile, locale),
       buildMonitoring(profile, locale),
       buildKidneyFailureRisk(profile, locale),
-      buildKidneyProtection(profile, locale),
-      buildComplicationMonitoring(profile, locale),
+      buildBloodPressureVolume(profile, locale),
+      buildRasStrategy(profile, locale),
+      buildSglt2Strategy(profile, locale),
+      buildFinerenoneStrategy(profile, locale),
+      buildCardiovascularRisk(profile, locale),
+      buildMedicationSafety(profile, locale),
+      buildAnemiaMonitoring(profile, locale),
+      buildPotassiumAcidosis(profile, locale),
+      buildCkdMbd(profile, locale),
+      buildNutrition(profile, locale),
+      IMMUNIZATION_CLINICAL_MODULE.build({ profile, locale }),
       buildReferralCare(profile, locale),
     ].filter((item): item is CdssRecommendation => Boolean(item))
 
@@ -852,7 +1441,7 @@ export const CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
         `This run generated ${decisions.length} CKD decision prompts: ${highPriorityCount} high priority and ${needsDataCount} requiring data retrieval or completion.`,
       ),
       packId: 'ckd-cdss',
-      packVersion: '0.2.0-poc',
+      packVersion: '0.3.0-poc',
       knowledgePacks: enriched.knowledgePacks,
       recommendations: enriched.recommendations,
       automatedChecks: automated.map(toAutomatedCheck),
@@ -864,8 +1453,8 @@ export const CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
         ),
         text(
           locale,
-          '本版未計算個別藥物劑量、腎功能劑量調整或透析時機。',
-          'This version does not calculate individual medicine doses, renal dose adjustments, or dialysis timing.',
+          '本版會提示腎功能劑量與腎毒性藥物檢視，但未計算個別藥物劑量或透析時機。',
+          'This version prompts renal-dose and nephrotoxin review but does not calculate individual doses or dialysis timing.',
         ),
         text(
           locale,

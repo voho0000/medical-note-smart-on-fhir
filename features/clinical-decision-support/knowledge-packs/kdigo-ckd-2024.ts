@@ -76,31 +76,89 @@ function references(
         summaryZh: 'CKD G3-G5 應使用外部驗證的風險方程式；5 年風險 3%-5% 可輔助轉介，2 年風險 >10% 與 >40% 可輔助多專業照護及腎臟替代治療準備時機。',
         summaryEn: 'Use an externally validated equation in CKD G3-G5. Five-year risk of 3%-5% can inform referral, while 2-year risk above 10% and 40% can inform multidisciplinary care and KRT preparation.',
       })]
-    case 'ckd-kidney-protection':
-      return [
-        reference({
-          locale,
-          id: '3.6',
-          page: 43,
-          recommendationId: 'Recommendations 3.6.1-3.6.4',
-          evidenceGrade: '1B / 2C',
-          locatorZh: '第 3 章 → RAS 抑制劑',
-          locatorEn: 'Chapter 3 → renin-angiotensin system inhibitors',
-          summaryZh: '依糖尿病與 A2/A3 白蛋白尿條件評估 ACEI 或 ARB，避免 ACEI、ARB 與直接腎素抑制劑合併。',
-          summaryEn: 'Evaluate an ACE inhibitor or ARB according to diabetes and A2/A3 albuminuria, and avoid combining ACE inhibitors, ARBs, and direct renin inhibitors.',
-        }),
-        reference({
-          locale,
-          id: '3.7',
-          page: 44,
-          recommendationId: 'Recommendations 3.7.1-3.7.3',
-          evidenceGrade: '1A / 2B',
-          locatorZh: '第 3 章 → SGLT2 抑制劑',
-          locatorEn: 'Chapter 3 → SGLT2 inhibitors',
-          summaryZh: '成人 CKD 在 eGFR ≥20 且 ACR ≥200 mg/g 或合併心衰竭時建議 SGLT2 抑制劑；eGFR 20-45 且 ACR <200 mg/g 時亦可評估。',
-          summaryEn: 'Recommend an SGLT2 inhibitor for adults with CKD and eGFR at least 20 with ACR at least 200 mg/g, or with heart failure; also consider it at eGFR 20-45 with ACR below 200 mg/g.',
-        }),
-      ]
+    case 'ckd-blood-pressure-volume':
+      return [reference({
+        locale,
+        id: '3.4.1',
+        page: 43,
+        recommendationId: 'Recommendation 3.4.1; Practice Point 3.4.1',
+        evidenceGrade: '2B',
+        locatorZh: '第 3 章 → CKD 血壓控制',
+        locatorEn: 'Chapter 3 → blood pressure control in CKD',
+        summaryZh: '高血壓 CKD 成人在標準化診間量測且可耐受時，可將 SBP <120 mmHg 作為目標；衰弱、跌倒風險、有限預期壽命或症狀性姿勢性低血壓應較寬鬆。',
+        summaryEn: 'For adults with high blood pressure and CKD, target SBP below 120 mm Hg when tolerated using standardized office measurement; use a less intensive approach with frailty, fall risk, limited life expectancy, or symptomatic orthostasis.',
+      })]
+    case 'ckd-rasi-strategy':
+      return [reference({
+        locale,
+        id: '3.6',
+        page: 44,
+        recommendationId: 'Recommendations 3.6.1-3.6.4; Practice Points 3.6.1-3.6.7',
+        evidenceGrade: '1B / 2C',
+        locatorZh: '第 3 章 → RAS 抑制劑',
+        locatorEn: 'Chapter 3 → renin-angiotensin system inhibitors',
+        summaryZh: '依糖尿病與 A2/A3 白蛋白尿評估 ACEI 或 ARB；開始或增量後 2–4 週監測，4 週內 creatinine 上升 >30% 才觸發原因評估，eGFR <30 本身不是停藥理由。',
+        summaryEn: 'Assess an ACE inhibitor or ARB according to diabetes and A2/A3 albuminuria; monitor 2–4 weeks after initiation or titration, evaluate a creatinine rise over 30% within 4 weeks, and do not stop solely because eGFR falls below 30.',
+      })]
+    case 'ckd-sglt2-strategy':
+      return [reference({
+        locale,
+        id: '3.7',
+        page: 44,
+        recommendationId: 'Recommendations 3.7.1-3.7.3',
+        evidenceGrade: '1A / 2B',
+        locatorZh: '第 3 章 → SGLT2 抑制劑',
+        locatorEn: 'Chapter 3 → SGLT2 inhibitors',
+        summaryZh: '成人 CKD 在 eGFR ≥20 且 ACR ≥200 mg/g 或合併心衰竭時建議 SGLT2 抑制劑；eGFR 20–45 且 ACR <200 mg/g 時亦可評估。',
+        summaryEn: 'Recommend an SGLT2 inhibitor for adults with CKD and eGFR at least 20 with ACR at least 200 mg/g, or with heart failure; also consider it at eGFR 20–45 with ACR below 200 mg/g.',
+      })]
+    case 'ckd-finerenone-strategy':
+      return [reference({
+        locale,
+        id: '3.8',
+        page: 44,
+        recommendationId: 'Recommendation 3.8.1; Practice Points 3.8.1-3.8.4',
+        evidenceGrade: '2A',
+        locatorZh: '第 3 章 → 非類固醇 MRA',
+        locatorEn: 'Chapter 3 → nonsteroidal mineralocorticoid receptor antagonists',
+        summaryZh: 'T2D 合併 CKD 只有在 eGFR >25、正常血鉀、持續 UACR >30 mg/g 且已使用最大耐受 RASi 後，才進一步評估具心腎效益的非類固醇 MRA。',
+        summaryEn: 'In T2D with CKD, assess a nonsteroidal MRA with proven cardiorenal benefit only after confirming eGFR above 25, normal potassium, persistent UACR above 30 mg/g, and maximally tolerated RASi.',
+      })]
+    case 'ckd-cardiovascular-risk':
+      return [reference({
+        locale,
+        id: '3.15.1',
+        page: 46,
+        recommendationId: 'Recommendations 3.15.1.1-3.15.1.3',
+        evidenceGrade: '1A / 1B / 2A',
+        locatorZh: '第 3 章 → CKD 血脂管理',
+        locatorEn: 'Chapter 3 → lipid management in CKD',
+        summaryZh: '成人 CKD 的 statin 建議依年齡、eGFR 與 ASCVD／糖尿病風險分層；仍需核對透析／移植狀態、耐受性與病人目標。',
+        summaryEn: 'Statin guidance in adult CKD is stratified by age, eGFR, and ASCVD/diabetes risk; dialysis/transplant status, tolerance, and patient goals still require review.',
+      })]
+    case 'ckd-medication-safety':
+      return [reference({
+        locale,
+        id: '4.1-4.2',
+        page: 50,
+        recommendationId: 'Practice Points 4.1.1-4.1.3; 4.2.1-4.2.3',
+        locatorZh: '第 4 章 → 藥物安全與依 GFR 調整劑量',
+        locatorEn: 'Chapter 4 → medication safety and GFR-based dosing',
+        summaryZh: 'CKD 應權衡潛在腎毒性、監測 eGFR／電解質／必要藥物濃度、核對成藥與草藥，並依 GFR 評估腎排除藥物劑量。',
+        summaryEn: 'In CKD, balance nephrotoxicity, monitor eGFR/electrolytes/drug levels when indicated, review OTC and herbal products, and consider GFR for kidney-cleared dosing.',
+      })]
+    case 'ckd-nutrition':
+      return [reference({
+        locale,
+        id: '3.3',
+        page: 42,
+        recommendationId: 'Recommendation 3.3.1.1; Practice Points 3.3.1.1-3.3.1.5; Recommendation 3.3.2.1',
+        evidenceGrade: '2C',
+        locatorZh: '第 3 章 → 蛋白質與鈉攝取',
+        locatorEn: 'Chapter 3 → protein and sodium intake',
+        summaryZh: '一般成人 G3–G5 建議蛋白質約 0.8 g/kg/day、避免 >1.3 g/kg/day，鈉 <2 g/day；高齡合併衰弱或肌少症應考慮較高蛋白與熱量。',
+        summaryEn: 'For most adults with G3–G5, maintain protein around 0.8 g/kg/day, avoid above 1.3 g/kg/day, and keep sodium below 2 g/day; older adults with frailty or sarcopenia may need higher protein and calories.',
+      })]
     case 'ckd-referral-care':
       return [reference({
         locale,
@@ -112,7 +170,7 @@ function references(
         summaryZh: '轉介條件包含 eGFR <30、顯著白蛋白尿、持續血尿、難治型高血壓、持續鉀異常、酸中毒、貧血及其他 CKD 併發症。',
         summaryEn: 'Referral circumstances include eGFR below 30, significant albuminuria, persistent hematuria, refractory hypertension, persistent potassium abnormalities, acidosis, anemia, and other CKD complications.',
       })]
-    case 'ckd-complication-monitoring':
+    case 'ckd-potassium-acidosis':
       return [reference({
         locale,
         id: '3.10.1',

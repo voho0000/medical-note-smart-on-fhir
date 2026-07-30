@@ -19,6 +19,8 @@ import type {
 import {
   assessMedicationClass,
   classifyCurrentMedications,
+  currentMedicationRecords,
+  medicationDisplayName,
   medicationClassSources,
 } from './medication-classifier'
 import { assessMedicationClassAllergies } from './allergy-classifier'
@@ -46,6 +48,8 @@ const HEMOGLOBIN_LOINC = '718-7'
 const BICARBONATE_LOINC = new Set(['1963-8', '2028-9'])
 const CALCIUM_LOINC = new Set(['17861-6', '2000-8'])
 const PHOSPHATE_LOINC = new Set(['2777-1'])
+const PARATHYROID_HORMONE_LOINC = new Set(['2731-8'])
+const ALKALINE_PHOSPHATASE_LOINC = new Set(['6768-6'])
 const ALBUMIN_LOINC = new Set(['1751-7'])
 const POTASSIUM_LOINC = '2823-3'
 const TOTAL_CHOLESTEROL_LOINC = '2093-3'
@@ -76,6 +80,7 @@ const EXCLUDED_CONDITION_STATUS = new Set(['inactive', 'resolved', 'entered-in-e
 const EXCLUDED_VERIFICATION_STATUS = new Set(['refuted', 'entered-in-error'])
 const EXCLUDED_ENCOUNTER_STATUS = new Set(['cancelled', 'entered-in-error'])
 const EXCLUDED_MEDICATION_STATUS = new Set(['cancelled', 'entered-in-error'])
+const COMMON_NSAID_PATTERN = /\b(?:ibuprofen|naproxen|diclofenac|ketorolac|celecoxib|etoricoxib|indomethacin|mefenamic acid|meloxicam|piroxicam|nsaid)\b|布洛芬|萘普生|雙氯芬酸|酮咯酸|塞來昔布|依托考昔|吲哚美辛|甲芬那酸|美洛昔康|非類固醇消炎/i
 
 type CodingLike = { system?: string; code?: string; display?: string }
 
@@ -218,6 +223,46 @@ function medicationSource(medication: MedicationEntity): CdssFactSource {
       ? medication.informationSource?.display
       : medication.requester?.display,
     sourceSystem: medication.sourceSystem,
+  }
+}
+
+function medicationSearchText(medication: MedicationEntity): string {
+  return [
+    medicationDisplayName(medication),
+    medication.medicationReference?.display,
+    ...(medication.medicationCodeableConcept?.coding ?? []).flatMap((coding) => [
+      coding.code,
+      coding.display,
+    ]),
+  ].filter(Boolean).join(' ')
+}
+
+function currentMedicationOverviewFact(
+  medications: readonly MedicationEntity[],
+): CdssFact | undefined {
+  const current = currentMedicationRecords(medications)
+  if (current.length === 0) return undefined
+  const names = current.map(medicationDisplayName)
+  const display = names.slice(0, 5).join('、')
+  const suffix = names.length > 5 ? `等 ${names.length} 筆` : `${names.length} 筆`
+  return {
+    zh: `資料切片內目前用藥 ${suffix}：${display}`,
+    en: `${names.length} current medication record(s) in the available data slice: ${names.slice(0, 5).join(', ')}`,
+    sources: current.map(medicationSource),
+  }
+}
+
+function currentNsaidFact(
+  medications: readonly MedicationEntity[],
+): CdssFact | undefined {
+  const matches = currentMedicationRecords(medications)
+    .filter((medication) => COMMON_NSAID_PATTERN.test(medicationSearchText(medication)))
+  if (matches.length === 0) return undefined
+  const names = matches.map(medicationDisplayName)
+  return {
+    zh: `辨識到可能的 NSAID：${names.join('、')}`,
+    en: `Potential NSAID record(s) identified: ${names.join(', ')}`,
+    sources: matches.map(medicationSource),
   }
 }
 
@@ -1005,6 +1050,26 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   const phosphateFact = phosphate ? observationFact(phosphate, 'mg/dL') : undefined
   if (phosphateFact) facts.phosphate = phosphateFact
 
+  const parathyroidHormone = findLatestValidatedObservationFromCodes(
+    input.observations,
+    PARATHYROID_HORMONE_LOINC,
+    new Set(['pg/ml', 'ng/l']),
+  )
+  const parathyroidHormoneFact = parathyroidHormone
+    ? observationFact(parathyroidHormone, 'pg/mL')
+    : undefined
+  if (parathyroidHormoneFact) facts.parathyroidHormone = parathyroidHormoneFact
+
+  const alkalinePhosphatase = findLatestValidatedObservationFromCodes(
+    input.observations,
+    ALKALINE_PHOSPHATASE_LOINC,
+    new Set(['u/l', '[iu]/l', 'iu/l']),
+  )
+  const alkalinePhosphataseFact = alkalinePhosphatase
+    ? observationFact(alkalinePhosphatase, 'U/L')
+    : undefined
+  if (alkalinePhosphataseFact) facts.alkalinePhosphatase = alkalinePhosphataseFact
+
   const albumin = findLatestValidatedObservationFromCodes(
     input.observations,
     ALBUMIN_LOINC,
@@ -1030,6 +1095,11 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   )
   const ldlFact = ldl ? observationFact(ldl, 'mg/dL') : undefined
   if (ldlFact) facts.LDL = ldlFact
+
+  const medicationListOverview = currentMedicationOverviewFact(input.medications)
+  if (medicationListOverview) facts.medicationListOverview = medicationListOverview
+  const currentNsaid = currentNsaidFact(input.medications)
+  if (currentNsaid) facts.currentNsaid = currentNsaid
 
   const classifiedMedications = classifyCurrentMedications(input.medications)
   const allergyAssessments = assessMedicationClassAllergies(input.allergies)
