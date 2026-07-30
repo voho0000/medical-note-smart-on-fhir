@@ -41,7 +41,7 @@ Feature 不應：
 | `feedback` | 回報問題／建議 | Header overflow；外部 URL 或 `/api/feedback` |
 | `import-bundle` | 匯入 JSON、載入 demo、清除本地資料 | `LocalBundleService` |
 | `ips-export` | 產生 IPS Bundle／Markdown、推論待確認問題 | `Feature.tsx`；人工逐項確認 |
-| `medical-calculator` | 57 個臨床公式／評分、病人數值帶入 | 10 類 calculator definitions |
+| `medical-calculator` | 58 個臨床公式／評分、病人數值帶入 | 10 類 calculator definitions；KFRE 核心可供個人化指引共用 |
 | `medical-chat` | 單一路徑 Agent 對話、語音、圖片、範本、追問 | `Feature.tsx`、`useAgentChat` |
 | `medical-summary` | 固定 schema AI 簡報、source navigation、卡片版面 | 右側預設 feature |
 | `proactive-safety-alerts` | 結構化用藥／檢驗安全提醒卡 | 由 Medical Summary orchestrator 使用 |

@@ -71,6 +71,24 @@ const FACTORS: Record<ConvertDim, Record<string, number>> = {
   hemoglobin: { 'g/dl': 1, 'g/l': 0.1, 'mmol/l': 1.6113 },
   // FiO₂: base %. A fraction (0.21) → percent (21%); unit "1" or "fraction".
   fio2: { '%': 1, '1': 100, fraction: 100 },
+  // Urine albumin/creatinine ratio: base mg/g.
+  // 1 mg/mmol ≈ 8.84 mg/g; µg/mg and mcg/mg are numerically equivalent to mg/g.
+  'albumin-creatinine-ratio': {
+    'mg/g': 1,
+    'mg/g{creat}': 1,
+    'mg/gcreat': 1,
+    'mg/gcreatinine': 1,
+    'ug/mg': 1,
+    'ug/mg{creat}': 1,
+    'ug/mgcreat': 1,
+    'ug/mgcreatinine': 1,
+    'mcg/mg': 1,
+    'mcg/mgcreatinine': 1,
+    'mg/mmol': 8.84,
+    'mg/mmol{creat}': 8.84,
+    'mg/mmolcreat': 8.84,
+    'mg/mmolcreatinine': 8.84,
+  },
 }
 
 export interface UnitConversion {
