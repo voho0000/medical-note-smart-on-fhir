@@ -8,6 +8,7 @@ import {
   ChevronDown,
   CircleArrowRight,
   CircleHelp,
+  ClipboardList,
   ExternalLink,
   FileSearch,
   Gauge,
@@ -59,6 +60,73 @@ const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
   'needs-data': 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
   'no-special-rule': 'bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200',
   'not-applicable': 'bg-muted text-muted-foreground',
+}
+
+const SUMMARY_FOCUS_LIMIT = 3
+const SUMMARY_MISSING_LIMIT = 4
+
+function summarizeMissingInput(input: string, locale: CdssLocale) {
+  const normalized = input.normalize('NFKC').toLocaleLowerCase()
+  if (
+    normalized.includes('uacr')
+    || normalized.includes('urine albumin-to-creatinine')
+    || normalized.includes('urine albumin/creatinine')
+  ) {
+    return {
+      key: 'quantitative-uacr',
+      label: locale === 'en'
+        ? 'Quantitative UACR (mg/g; valid value above 0)'
+        : '定量 UACR（mg/g；需為有效正值）',
+    }
+  }
+
+  return {
+    key: normalized
+      .replace(/[、，,；;：:（）()[\]\s]/g, '')
+      .replace(/[><=≥≤]/g, ''),
+    label: input,
+  }
+}
+
+export function buildClinicalDecisionSummary(
+  result: CdssResult,
+  locale: CdssLocale,
+) {
+  const actionRecommendations = result.recommendations.filter(
+    (recommendation) => (
+      recommendation.status === 'actionable'
+      || recommendation.status === 'review'
+    ),
+  ).slice(0, SUMMARY_FOCUS_LIMIT)
+  const missingInputByKey = new Map<string, {
+    label: string
+    recommendationIds: Set<string>
+  }>()
+  result.recommendations.forEach((recommendation) => {
+    recommendation.missingData?.forEach((input) => {
+      const summarized = summarizeMissingInput(input, locale)
+      const existing = missingInputByKey.get(summarized.key)
+      if (existing) {
+        existing.recommendationIds.add(recommendation.id)
+        return
+      }
+      missingInputByKey.set(summarized.key, {
+        label: summarized.label,
+        recommendationIds: new Set([recommendation.id]),
+      })
+    })
+  })
+  const allMissingInputs = Array.from(missingInputByKey.values()).map((item) => ({
+    label: item.label,
+    relatedRecommendationCount: item.recommendationIds.size,
+  }))
+
+  return {
+    actionRecommendations,
+    missingInputs: allMissingInputs.slice(0, SUMMARY_MISSING_LIMIT),
+    missingInputCount: allMissingInputs.length,
+    automatedCheckCount: result.automatedChecks?.length ?? 0,
+  }
 }
 
 function compactSourceMetadata(source: CdssFactSource): string {
@@ -867,9 +935,127 @@ export function ClinicalDecisionSupportView({
     : result.recommendations.some((item) => item.id === requestedExpandedId)
       ? requestedExpandedId
       : (result.recommendations[0]?.id ?? null)
+  const clinicalSummary = buildClinicalDecisionSummary(result, locale)
 
   return (
     <div className="space-y-3" data-testid="clinical-decision-support-view">
+      <section
+        className="rounded-lg border border-primary/25 bg-primary/[0.035] px-3 py-3"
+        aria-labelledby="cdss-clinical-summary-title"
+        data-testid="cdss-clinical-summary"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <ClipboardList className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <h3
+            id="cdss-clinical-summary-title"
+            className="text-sm font-semibold text-foreground"
+          >
+            {isEnglish ? 'Clinical summary' : '臨床摘要'}
+          </h3>
+          <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
+            {isEnglish
+              ? `${result.recommendations.length} decision modules`
+              : `${result.recommendations.length} 個決策模組`}
+          </Badge>
+          {clinicalSummary.automatedCheckCount > 0 ? (
+            <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
+              {isEnglish
+                ? `${clinicalSummary.automatedCheckCount} checks complete`
+                : `${clinicalSummary.automatedCheckCount} 項已核對`}
+            </Badge>
+          ) : null}
+        </div>
+
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          {result.summary}
+        </p>
+
+        <div className="mt-3 grid gap-3 @min-[42rem]:grid-cols-[minmax(15rem,1fr)_minmax(0,1.35fr)]">
+          <div>
+            <h4 className="text-xs font-semibold text-foreground">
+              {isEnglish ? 'Data to complete' : '需補資料'}
+            </h4>
+            {clinicalSummary.missingInputs.length > 0 ? (
+              <ul className="mt-1.5 space-y-2 text-xs">
+                {clinicalSummary.missingInputs.map((item) => (
+                  <li key={item.label} className="flex gap-1.5">
+                    <span className="text-amber-700 dark:text-amber-300" aria-hidden="true">•</span>
+                    <span className="min-w-0">
+                      <span className="font-medium leading-relaxed text-foreground">
+                        {item.label}
+                      </span>
+                      {item.relatedRecommendationCount > 1 ? (
+                        <span className="mt-0.5 block leading-relaxed text-muted-foreground">
+                          {isEnglish
+                            ? `Affects ${item.relatedRecommendationCount} decision modules`
+                            : `同時影響 ${item.relatedRecommendationCount} 個決策模組`}
+                        </span>
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                {isEnglish
+                  ? 'No explicit missing input is listed in the current decision modules.'
+                  : '目前決策模組沒有列出明確缺少的輸入資料。'}
+              </p>
+            )}
+            {clinicalSummary.missingInputCount > clinicalSummary.missingInputs.length ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {isEnglish
+                  ? `Plus ${clinicalSummary.missingInputCount - clinicalSummary.missingInputs.length} additional inputs in the modules below.`
+                  : `另有 ${clinicalSummary.missingInputCount - clinicalSummary.missingInputs.length} 項，請見下方模組。`}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="@min-[42rem]:border-l @min-[42rem]:border-border @min-[42rem]:pl-3">
+            <h4 className="text-xs font-semibold text-foreground">
+              {isEnglish ? 'Recommended actions' : '建議處理'}
+            </h4>
+            {clinicalSummary.actionRecommendations.length > 0 ? (
+              <ol className="mt-1.5 space-y-2">
+                {clinicalSummary.actionRecommendations.map((recommendation, index) => (
+                  <li
+                    key={recommendation.id}
+                    className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-1.5 text-xs"
+                  >
+                    <span
+                      className="font-semibold tabular-nums text-primary"
+                      aria-hidden="true"
+                    >
+                      {index + 1}.
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-semibold leading-relaxed text-foreground">
+                          {recommendation.title}
+                        </span>
+                        <Badge className={cn('h-5 px-1.5 text-[11px]', statusStyle[recommendation.status])}>
+                          <StatusIcon status={recommendation.status} />
+                          {label[recommendation.status]}
+                        </Badge>
+                      </span>
+                      <span className="mt-0.5 block leading-relaxed text-muted-foreground">
+                        {recommendation.nextActions[0]}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                {isEnglish
+                  ? 'Complete the data on the left before determining further action.'
+                  : '目前先補齊左側資料，完成後再判斷進一步處理。'}
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
       {result.knowledgePacks && result.knowledgePacks.length > 0 ? (
         <section
           className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-lg border border-border bg-muted/20 px-3 py-2"
