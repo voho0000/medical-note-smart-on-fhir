@@ -129,6 +129,7 @@ export function ChatToolbar({
       )}
       <Button
         type="button"
+        data-tour="chat-template-manage"
         size="sm"
         variant="outline"
         onClick={onManageTemplates}

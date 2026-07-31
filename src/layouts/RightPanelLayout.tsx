@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { ComponentType, memo, ReactNode } from "react"
+import { ComponentType, memo, ReactNode, useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
 import { MoreHorizontal, SlidersHorizontal } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -29,6 +29,7 @@ import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
 import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
+import { useRightFeatureTourStore } from '@/features/right-feature-tour/right-feature-tour.store'
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -133,7 +134,7 @@ function RightPanelContent() {
 
 export function RightPanelFeature() {
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" data-tour="right-panel">
       <RightPanelContent />
     </div>
   )
@@ -207,8 +208,45 @@ function RightPanelContentInner() {
   const { audience } = useAudience()
   const features = getEnabledRightPanelFeatures(audience)
   const { activeTab, setActiveTab } = useRightPanel()
+  const tourActive = useRightFeatureTourStore((state) => state.active)
+  const tourStep = useRightFeatureTourStore((state) => state.stepId)
+  const preTourTabRef = useRef<string | null>(null)
+  const wasTourActiveRef = useRef(false)
   const pinOverrides = useRightPanelTabsStore((s) => s.pinOverrides)
   const setPinned = useRightPanelTabsStore((s) => s.setPinned)
+
+  // Each step opens the feature it explains. Preserve the user's original
+  // right-panel tab and restore it when the tour is completed or skipped.
+  useEffect(() => {
+    if (tourActive && !wasTourActiveRef.current) {
+      preTourTabRef.current = activeTab
+      wasTourActiveRef.current = true
+    }
+
+    if (!tourActive && wasTourActiveRef.current) {
+      wasTourActiveRef.current = false
+      setActiveTab(preTourTabRef.current ?? 'medical-summary')
+      preTourTabRef.current = null
+      return
+    }
+
+    if (!tourActive || !tourStep) return
+    const targetTab: Partial<Record<typeof tourStep, string>> = {
+      overview: 'medical-summary',
+      summary: 'medical-summary',
+      'summary-settings': 'medical-summary',
+      chat: 'medical-chat',
+      calculator: 'medical-calculator',
+      guidance: CLINICAL_DECISION_SUPPORT_FEATURE_ID,
+      export: 'ips-export',
+      settings: 'settings',
+      finish: 'medical-summary',
+    }
+    const target = targetTab[tourStep]
+    if (target && features.some((feature) => feature.id === target)) {
+      setActiveTab(target)
+    }
+  }, [activeTab, features, setActiveTab, tourActive, tourStep])
 
   // Pluggability guard: the provider's default (or a stale selection) may
   // point at a feature that has been unplugged in the registry — fall back
@@ -250,6 +288,7 @@ function RightPanelContentInner() {
       <TabsTrigger
         key={feature.id}
         value={feature.id}
+        data-tour={`right-tab-${feature.id}`}
         className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
         title={label}
         aria-label={label}
@@ -287,6 +326,7 @@ function RightPanelContentInner() {
       className="h-full flex flex-col"
     >
       <TabsList
+        data-tour="right-tabs"
         className="w-full grid gap-1 h-12 shrink-0 bg-muted/50 p-1 border"
         style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
@@ -298,6 +338,7 @@ function RightPanelContentInner() {
         {showOverflowMenu ? (
           <DropdownMenu>
             <DropdownMenuTrigger
+              data-tour="right-tabs-overflow"
               className="text-sm font-medium min-w-0 flex items-center justify-center gap-1.5 rounded-lg text-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground/90 transition-colors data-[state=open]:bg-background data-[state=open]:text-foreground dark:data-[state=open]:bg-card"
               title={t.tabs.more}
               aria-label={t.tabs.more}
@@ -344,6 +385,7 @@ function RightPanelContentInner() {
         <TabsContent
           key={feature.id}
           value={feature.id}
+          data-tour={`right-content-${feature.id}`}
           className={feature.contentClassName || 'flex-1 mt-1'}
           forceMount={feature.forceMount ? true : undefined}
         >

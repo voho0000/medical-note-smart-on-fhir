@@ -1375,23 +1375,18 @@ export const DM_CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
       }
     }
 
-    const priorityOrder: Readonly<Record<CdssRecommendation['priority'], number>> = {
-      high: 0,
-      medium: 1,
-      routine: 2,
-    }
-    recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
-    const automatedRecommendations = recommendations.filter((item) => item.status === 'no-action')
-    const decisionRecommendations = recommendations.filter((item) => item.status !== 'no-action')
     const enriched = attachKnowledgeAssessments({
       profile,
       locale,
-      recommendations: decisionRecommendations,
+      recommendations,
       sourceIds: ['ada-2026', 'taiwan-t2dm-2022', 'taiwan-nhi-diabetes'],
     })
+    const enrichedRecommendations = enriched.recommendations
+    const automatedRecommendations = enrichedRecommendations.filter((item) => item.status === 'no-action')
+    const decisionRecommendations = enrichedRecommendations.filter((item) => item.status !== 'no-action')
 
-    const highPriorityCount = enriched.recommendations.filter((item) => item.priority === 'high').length
-    const needsDataCount = enriched.recommendations.filter((item) => item.status === 'needs-data').length
+    const highPriorityCount = decisionRecommendations.filter((item) => item.priority === 'high').length
+    const needsDataCount = decisionRecommendations.filter((item) => item.status === 'needs-data').length
     return {
       title: text(locale, '糖尿病個人化照護指引', 'Personalized diabetes care guidance'),
       summary: text(
@@ -1402,7 +1397,7 @@ export const DM_CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
       packId: 'dm-ckd-cdss',
       packVersion: '0.2.0-poc',
       knowledgePacks: enriched.knowledgePacks,
-      recommendations: enriched.recommendations,
+      recommendations: decisionRecommendations,
       automatedChecks: automatedRecommendations.map((item) => {
         const overviewEvidence = item.patientEvidence.find((evidence) => (
           item.overviewEvidenceFactKey
@@ -1422,6 +1417,8 @@ export const DM_CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
             : item.nextActions[0],
           factKeys: item.patientEvidence.flatMap((evidence) => evidence.factKeys),
           sources: item.patientEvidence.flatMap((evidence) => evidence.sources ?? []),
+          recommendation: item,
+          displayOrder: enrichedRecommendations.indexOf(item),
         }
       }),
       notEvaluated: [

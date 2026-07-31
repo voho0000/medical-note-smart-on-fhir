@@ -328,6 +328,10 @@ export interface CdssAutomatedCheck {
   value: string
   factKeys?: readonly string[]
   sources?: readonly CdssFactSource[]
+  /** Preserve the completed module so the UI can keep it in the main module list. */
+  recommendation?: CdssRecommendation
+  /** Position in the pack's sorted module list before completed modules are separated. */
+  displayOrder?: number
 }
 
 export interface CdssClinicalHandoff {

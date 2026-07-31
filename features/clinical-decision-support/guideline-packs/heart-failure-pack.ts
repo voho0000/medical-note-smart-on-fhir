@@ -848,13 +848,6 @@ export const HEART_FAILURE_GUIDELINE_PACK: ClinicalGuidelinePack = {
       buildMedicationSafety(profile, locale),
       buildMonitoring(profile, locale),
     ].filter((item): item is CdssRecommendation => Boolean(item))
-    const priorityOrder: Readonly<Record<CdssRecommendation['priority'], number>> = {
-      high: 0,
-      medium: 1,
-      routine: 2,
-    }
-    recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
-
     const highPriorityCount = recommendations.filter(
       (item) => item.priority === 'high',
     ).length

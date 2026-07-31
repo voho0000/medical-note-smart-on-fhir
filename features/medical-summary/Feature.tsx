@@ -783,7 +783,10 @@ export default function MedicalSummaryFeature() {
             ) : null}
           </TabsTrigger>
         </TabsList>
-        <div className="ml-auto flex min-w-0 flex-nowrap items-center justify-end gap-1.5">
+        <div
+          data-tour="medical-summary-controls"
+          className="ml-auto flex min-w-0 flex-nowrap items-center justify-end gap-1.5"
+        >
           {activeView === "standard" ? (
             <ModelPicker
               modelId={model}

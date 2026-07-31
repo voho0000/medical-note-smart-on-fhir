@@ -577,28 +577,22 @@ export const HYPERLIPIDEMIA_GUIDELINE_PACK: ClinicalGuidelinePack = {
       buildMonitoringAndMarkers(profile, locale),
     ].filter((item): item is CdssRecommendation => Boolean(item))
 
-    const priorityOrder: Readonly<Record<CdssRecommendation['priority'], number>> = {
-      high: 0,
-      medium: 1,
-      routine: 2,
-    }
-    recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
-
-    const automated = recommendations.filter((item) => item.status === 'no-action')
-    const decisions = recommendations.filter((item) => item.status !== 'no-action')
     const enriched = attachKnowledgeAssessments({
       profile,
       locale,
-      recommendations: decisions,
+      recommendations,
       sourceIds: [
         'aha-acc-dyslipidemia-2026',
         'taiwan-lipid-2022',
       ],
     })
-    const highPriorityCount = enriched.recommendations.filter(
+    const enrichedRecommendations = enriched.recommendations
+    const automated = enrichedRecommendations.filter((item) => item.status === 'no-action')
+    const decisions = enrichedRecommendations.filter((item) => item.status !== 'no-action')
+    const highPriorityCount = decisions.filter(
       (item) => item.priority === 'high',
     ).length
-    const needsDataCount = enriched.recommendations.filter(
+    const needsDataCount = decisions.filter(
       (item) => item.status === 'needs-data',
     ).length
 
@@ -612,8 +606,12 @@ export const HYPERLIPIDEMIA_GUIDELINE_PACK: ClinicalGuidelinePack = {
       packId: 'hyperlipidemia-cdss',
       packVersion: '0.1.0-poc',
       knowledgePacks: enriched.knowledgePacks,
-      recommendations: enriched.recommendations,
-      automatedChecks: automated.map(toAutomatedCheck),
+      recommendations: decisions,
+      automatedChecks: automated.map((item) => ({
+        ...toAutomatedCheck(item),
+        recommendation: item,
+        displayOrder: enrichedRecommendations.indexOf(item),
+      })),
       notEvaluated: [
         text(
           locale,

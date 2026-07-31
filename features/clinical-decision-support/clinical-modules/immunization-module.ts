@@ -91,7 +91,26 @@ function buildImmunizationRecommendation(
         ? text(locale, '依當季政策例行更新，不需另佔門診決策列。', 'Update routinely under current seasonal policy; no separate visit action is needed.')
         : text(locale, '先查完整接種史；只對確認到期的疫苗安排補接種。', 'Reconcile the complete vaccination history and schedule only vaccines confirmed due.'),
     ],
-    guidelineReferences: [],
+    guidelineReferences: [{
+      id: 'TW-CKD-IMMUNIZATION-2026-KEY-STATEMENTS',
+      title: text(
+        locale,
+        '台灣腎臟病患疫苗接種建議指引',
+        'Taiwan Consensus of Immunizations in Chronic Kidney Disease and Kidney Transplantation',
+      ),
+      publisher: text(locale, '台灣腎臟醫學會', 'Taiwan Society of Nephrology'),
+      version: '2026-01',
+      url: 'https://www.tsn.org.tw/archive/20260107/df4c2ca1-dfa8-4a77-9eb8-10b422754204/df4c2ca1-dfa8-4a77-9eb8-10b422754204.pdf#page=3',
+      directLink: true,
+      page: 3,
+      recommendationId: text(locale, '關鍵聲明 5、12、15–16', 'Key statements 5, 12, and 15–16'),
+      locator: text(locale, '表一 → 疫苗接種關鍵聲明', 'Table 1 → key vaccination statements'),
+      summary: text(
+        locale,
+        '18 歲以上 CKD 病人建議依既往劑型接種肺炎鏈球菌疫苗；所有 CKD 病人每年接種流感疫苗，COVID-19 疫苗則依共識時程與疾管署最新政策安排。',
+        'Adults with CKD should receive pneumococcal vaccination according to prior products; all people with CKD should receive annual influenza vaccination, while COVID-19 vaccination follows the consensus schedule and the latest Taiwan CDC policy.',
+      ),
+    }],
     safetyBoundary: text(
       locale,
       '本模組不依缺少紀錄直接宣告未接種，也不取代疫苗禁忌、過敏與當季政策核對。',

@@ -26,6 +26,7 @@ import { ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown } from "lucide-reac
 import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
 import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
 import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/features/left-browser-tour"
+import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { useAutoAiConsentState } from "@/src/application/hooks/ai-generation/auto-ai-consent"
 
@@ -52,25 +53,30 @@ function PageContent() {
   // null = normal resizable split. Kept in-session (not persisted) to avoid the
   // SSR/localStorage hydration mismatch class of bugs.
   const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
-  const tourActive = useLeftBrowserTourStore((state) => state.active)
-  const startTour = useLeftBrowserTourStore((state) => state.start)
+  const leftTourActive = useLeftBrowserTourStore((state) => state.active)
+  const startLeftTour = useLeftBrowserTourStore((state) => state.start)
+  const rightTourActive = useRightFeatureTourStore((state) => state.active)
+  const startRightTour = useRightFeatureTourStore((state) => state.start)
+  const anyTourActive = leftTourActive || rightTourActive
   const tourWasActiveRef = useRef(false)
   const preTourLayoutRef = useRef<{
     mobileView: 'left' | 'right'
     collapsed: 'left' | 'right' | null
   } | null>(null)
 
-  // The guided tour always demonstrates the source record. Make the left pane
-  // visible for its duration, then return the user's mobile/collapsed layout.
+  // Guided tours make their corresponding panel visible, then return the
+  // user's mobile/collapsed layout when the tour is closed or completed.
   useEffect(() => {
-    if (tourActive && !tourWasActiveRef.current) {
-      tourWasActiveRef.current = true
-      preTourLayoutRef.current = { mobileView, collapsed }
-      setMobileView('left')
+    if (anyTourActive) {
+      if (!tourWasActiveRef.current) {
+        tourWasActiveRef.current = true
+        preTourLayoutRef.current = { mobileView, collapsed }
+      }
+      setMobileView(rightTourActive ? 'right' : 'left')
       setCollapsed(null)
       return
     }
-    if (!tourActive && tourWasActiveRef.current) {
+    if (tourWasActiveRef.current) {
       tourWasActiveRef.current = false
       const previous = preTourLayoutRef.current
       preTourLayoutRef.current = null
@@ -79,7 +85,7 @@ function PageContent() {
         setCollapsed(previous.collapsed)
       }
     }
-  }, [collapsed, mobileView, setMobileView, tourActive])
+  }, [anyTourActive, collapsed, mobileView, rightTourActive, setMobileView])
 
   // Resource navigation (cited source clicked in the Medical Summary tab): the
   // target lives in the LEFT panel, so make sure it's visible BEFORE its
@@ -119,6 +125,9 @@ function PageContent() {
   useEffect(() => {
     clearDetail()
   }, [patient?.id, clearDetail])
+  useEffect(() => {
+    if (rightTourActive) clearDetail()
+  }, [clearDetail, rightTourActive])
 
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
@@ -163,7 +172,11 @@ function PageContent() {
             </div>
             <TourHelpButton disabled={!dataLoaded} />
             <HeaderAuthButton />
-            <HeaderOverflowMenu tourDisabled={!dataLoaded} onStartTour={startTour} />
+            <HeaderOverflowMenu
+              tourDisabled={!dataLoaded}
+              onStartLeftTour={startLeftTour}
+              onStartRightTour={startRightTour}
+            />
           </div>
         </div>
         {/* Centred collapse handle — straddles the header's bottom edge so it
@@ -360,6 +373,7 @@ function PageContent() {
 
       <FirstRunOnboardingDialog />
       <LeftBrowserTour eligible={tourEligible} />
+      <RightFeatureTour />
     </div>
   )
 }

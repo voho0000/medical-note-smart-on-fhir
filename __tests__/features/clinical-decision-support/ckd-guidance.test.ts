@@ -4,6 +4,7 @@ import {
   getClinicalGuidelinePack,
   getEnabledClinicalGuidelinePacks,
 } from '@/features/clinical-decision-support/guideline-packs/registry'
+import { buildPhysicianSemanticCard } from '@/features/clinical-decision-support/utils/build-physician-semantic-card'
 import type {
   CarePlanEntity,
   EncounterEntity,
@@ -271,6 +272,7 @@ describe('personalized CKD guidance', () => {
     )).toMatchObject({
       status: 'needs-data',
       overviewEvidenceFactKey: 'urineAlbuminOverview',
+      recommendation: '半定量 UACR 不列入 A 分期；補定量 UACR。',
     })
     expect(result.recommendations.find(
       (item) => item.id === 'ckd-kidney-failure-risk',
@@ -306,6 +308,44 @@ describe('personalized CKD guidance', () => {
         page: 3,
       }),
     ]))
+  })
+
+  it('names only the classification input that is actually missing', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('N18.32')],
+      observations: [quantitativeUacr(80)],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const classification = result.recommendations.find(
+      (item) => item.id === 'ckd-classification',
+    )
+
+    expect(classification).toMatchObject({
+      status: 'needs-data',
+      title: 'CKD 分期 G3b / A2｜待補：可比較的近期 eGFR',
+      recommendation: '待補：可比較的近期 eGFR。',
+      nextActions: ['查找或補做：可比較的近期 eGFR。'],
+    })
+    expect(classification?.title).not.toContain('待補：定量 UACR')
+  })
+
+  it('keeps the CKD module order fixed when early modules are already checked', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-05-01', 34),
+        quantitativeUacr(80),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+
+    expect(result.automatedChecks?.find(
+      (item) => item.id === 'ckd-classification',
+    )?.displayOrder).toBe(0)
+    expect(result.automatedChecks?.find(
+      (item) => item.id === 'ckd-monitoring',
+    )?.displayOrder).toBe(1)
   })
 
   it('expands CKD into independently actionable clinical modules while collapsing no-action checks', () => {
@@ -352,6 +392,16 @@ describe('personalized CKD guidance', () => {
         label: 'Recommendation 4.1.1',
         text: expect.stringContaining('serial assessments of phosphate, calcium, and PTH'),
       }],
+    })
+    const semanticCards = result.recommendations.map((recommendation) => (
+      buildPhysicianSemanticCard(recommendation, 'zh-TW')
+    ))
+    expect(semanticCards.every((card) => card.guidelineRules.length > 0)).toBe(true)
+    expect(semanticCards.find(
+      (card) => card.id === 'immunization-review',
+    )?.guidelineRules[0].reference).toMatchObject({
+      recommendationId: '關鍵聲明 5、12、15–16',
+      page: 3,
     })
   })
 
@@ -418,6 +468,20 @@ describe('personalized CKD guidance', () => {
     expect(profile.facts.parathyroidHormone.numericValue).toBe(76)
     expect(profile.facts.alkalinePhosphatase.numericValue).toBe(88)
     expect(mbd?.label).toBe('CKD-MBD 核心檢驗已有可用紀錄')
+    expect(nutrition).toMatchObject({
+      status: 'review',
+      title: 'G3b 高齡情境：先評估肌少症與衰弱再設定營養目標',
+      overviewEvidenceFactKey: 'eGFR',
+    })
+    expect(nutrition?.recommendation).toContain('年齡本身不等於衰弱')
+    expect(nutrition?.missingData).toEqual(expect.arrayContaining([
+      '近期體重變化（需連續量測或訪談確認）',
+      '食慾、實際蛋白質／熱量／鈉攝取與飲食型態（需訪談）',
+      '肌少症、衰弱與營養風險的正式評估',
+    ]))
+    expect(nutrition?.safetyBoundary).toContain(
+      '血清白蛋白、年齡或單次體重都不能單獨診斷營養不良、肌少症或衰弱',
+    )
     expect(nutrition?.guidelineReferences).toHaveLength(0)
     expect(nutrition?.sourceAssessments?.find(
       (source) => source.sourceId === 'kdigo-ckd-2024',

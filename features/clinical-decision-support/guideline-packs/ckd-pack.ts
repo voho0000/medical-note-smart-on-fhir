@@ -107,7 +107,7 @@ function buildClassification(
     )
   const gStage = stageFromProfile(profile)
   const aStage = classifyUacr(quantitativeUacr)
-  const hasSemiquantitativeUacr = (
+  const hasSemiquantitativeUacr = quantitativeUacr === undefined && (
     profile.observationContexts?.uacr?.latestReading?.kind === 'semiquantitative'
   )
   const missing: string[] = []
@@ -119,6 +119,7 @@ function buildClassification(
   }
 
   const stageLabel = `${gStage ?? 'G?'} / ${aStage ?? 'A?'}`
+  const missingLabel = missing.join(text(locale, '、', ', '))
   return {
     id: 'ckd-classification',
     domain: 'diagnosis',
@@ -132,26 +133,26 @@ function buildClassification(
     title: missing.length > 0
       ? text(
           locale,
-          `CKD 分期目前為 ${stageLabel}；補齊定量 UACR 完成 G/A 風險分層`,
-          `CKD classification is ${stageLabel}; obtain quantitative UACR to complete G/A risk stratification`,
+          `CKD 分期 ${stageLabel}｜待補：${missingLabel}`,
+          `CKD ${stageLabel} | Needed: ${missingLabel}`,
         )
       : text(
           locale,
-          `CKD 已完成 G/A 分期：${stageLabel}`,
-          `CKD G/A classification complete: ${stageLabel}`,
+          `CKD G/A 分期：${stageLabel}`,
+          `CKD G/A category: ${stageLabel}`,
         ),
     recommendation: text(
       locale,
       hasSemiquantitativeUacr
-        ? '病歷已有半定量 UACR，但不可直接轉換成 KDIGO A1/A2/A3；保留原始結果並補做定量 UACR。'
+        ? '半定量 UACR 不列入 A 分期；補定量 UACR。'
         : missing.length > 0
-          ? '依病因、eGFR 與定量 UACR 完成 CKD 分期；單次異常不作為慢性化的唯一證據。'
-          : '以目前 eGFR 與定量 UACR 維持 G/A 分期，後續依風險層級安排追蹤。',
+          ? `待補：${missingLabel}。`
+          : 'G/A 分期已完成；依風險安排追蹤。',
       hasSemiquantitativeUacr
-        ? 'A semiquantitative UACR is present but cannot be converted directly to KDIGO A1/A2/A3. Preserve the original result and obtain a quantitative UACR.'
+        ? 'Do not use semiquantitative UACR for A staging; obtain quantitative UACR.'
         : missing.length > 0
-          ? 'Complete CKD classification using cause, eGFR, and quantitative UACR; do not use a single abnormal result as the sole evidence of chronicity.'
-          : 'Maintain the G/A classification using the current eGFR and quantitative UACR, and monitor according to risk.',
+          ? `Needed: ${missingLabel}.`
+          : 'G/A staging is complete; monitor according to risk.',
     ),
     rationale: text(
       locale,
@@ -168,13 +169,13 @@ function buildClassification(
     nextActions: missing.length > 0
       ? [text(
           locale,
-          '先查找完整病歷；若沒有近期定量結果，安排 eGFR 與定量 UACR。',
-          'Search the complete chart first; if no recent quantitative result exists, obtain eGFR and quantitative UACR.',
+          `查找或補做：${missingLabel}。`,
+          `Retrieve or obtain: ${missingLabel}.`,
         )]
       : [text(
           locale,
-          '依 G/A 風險層級與既有照護計畫安排後續追蹤。',
-          'Schedule follow-up according to the G/A risk category and current care plan.',
+          '依 G/A 風險安排追蹤。',
+          'Follow up according to G/A risk.',
         )],
     guidelineReferences: [],
     safetyBoundary: text(
@@ -1292,56 +1293,68 @@ function buildNutrition(
   const stage = stageFromProfile(profile)
   if (!isG3ToG5(stage)) return undefined
   const age = numberFromFact(profile, 'age')
-  const vulnerable = (
-    (age !== undefined && age >= 65)
-    || profile.olderAdultContext?.frailtyStatus === 'frail'
-    || profile.olderAdultContext?.frailtyStatus === 'prefrail'
+  const isOlderAdult = age !== undefined && age >= 65
+  const frailtyStatus = profile.olderAdultContext?.frailtyStatus
+  const hasStructuredFrailtyAssessment = (
+    frailtyStatus === 'frail'
+    || frailtyStatus === 'prefrail'
   )
+  const needsCloserNutritionReview = isOlderAdult || hasStructuredFrailtyAssessment
+  const frailtyAssessmentMissing = frailtyStatus === undefined
 
   return {
     id: 'ckd-nutrition',
     domain: 'target',
-    priority: vulnerable ? 'medium' : 'routine',
+    priority: needsCloserNutritionReview ? 'medium' : 'routine',
     status: 'review',
-    overviewEvidenceFactKey: profile.facts.albumin ? 'albumin' : 'eGFR',
-    title: vulnerable
-      ? text(locale, `${stage} 高齡／脆弱情境：營養目標需避免過度限制`, `${stage} older/vulnerable context: avoid over-restrictive nutrition targets`)
-      : text(locale, `${stage}：檢視蛋白質、鈉與整體飲食品質`, `${stage}: review protein, sodium, and overall diet quality`),
+    overviewEvidenceFactKey: profile.facts.bodyWeight ? 'bodyWeight' : 'eGFR',
+    title: hasStructuredFrailtyAssessment
+      ? text(locale, `${stage} 已有衰弱評估：營養目標需避免過度限制`, `${stage} with documented frailty assessment: avoid over-restrictive nutrition targets`)
+      : isOlderAdult
+        ? text(locale, `${stage} 高齡情境：先評估肌少症與衰弱再設定營養目標`, `${stage} older-adult context: assess sarcopenia and frailty before setting nutrition targets`)
+        : text(locale, `${stage}：先完成飲食與營養風險評估`, `${stage}: complete dietary and nutrition-risk assessment first`),
     recommendation: text(
       locale,
-      vulnerable
-        ? '先評估體重趨勢、食慾、肌少症／衰弱與實際攝取，再個人化蛋白質與熱量；不要僵硬套用低蛋白。鈉攝取可朝 <2 g/day 調整，但仍需兼顧營養與病人偏好。'
-        : '成人 G3–G5 可將蛋白質約 0.8 g/kg/day、避免 >1.3 g/kg/day，鈉 <2 g/day 作為營養師共同討論的參考，並優先健康、多樣與較多植物性食物。',
-      vulnerable
-        ? 'First assess weight trend, appetite, sarcopenia/frailty, and actual intake, then individualize protein and calories; do not apply a low-protein diet rigidly. Sodium below 2 g/day can be discussed while preserving nutrition and patient preferences.'
-        : 'For adults with G3–G5, discuss protein around 0.8 g/kg/day, avoidance of intake above 1.3 g/kg/day, and sodium below 2 g/day with a renal dietitian while prioritizing a healthy, diverse, plant-forward diet.',
+      hasStructuredFrailtyAssessment
+        ? '病歷已有前期衰弱／衰弱評估；請由醫師或腎臟營養師確認近期體重變化、食慾與實際攝取，再個人化蛋白質與熱量，避免僵硬套用低蛋白。系統無法由一般檢驗推定實際蛋白質、熱量或鈉攝取。'
+        : isOlderAdult
+          ? '年齡本身不等於衰弱。請先以正式評估確認肌少症、衰弱與營養風險，並由醫師或腎臟營養師訪談近期體重變化、食慾與實際攝取後，再設定蛋白質、熱量與鈉目標。'
+          : '目前病歷中的腎功能與一般檢驗只能提示需要營養評估，無法判定實際蛋白質、熱量或鈉攝取，也無法診斷肌少症或衰弱。請先由醫師或腎臟營養師完成飲食訪談與營養風險評估，再以 KDIGO 目標作為共同決策參考。',
+      hasStructuredFrailtyAssessment
+        ? 'Prefrailty or frailty is documented. A clinician or renal dietitian should confirm recent weight change, appetite, and actual intake before individualizing protein and calories; do not apply a low-protein diet rigidly. Routine laboratory data cannot determine actual protein, calorie, or sodium intake.'
+        : isOlderAdult
+          ? 'Age alone does not establish frailty. Formally assess sarcopenia, frailty, and nutrition risk, and have a clinician or renal dietitian review recent weight change, appetite, and actual intake before setting protein, calorie, and sodium targets.'
+          : 'Kidney function and routine laboratory data can indicate a need for nutrition assessment, but cannot determine actual protein, calorie, or sodium intake or diagnose sarcopenia or frailty. Complete a dietary interview and nutrition-risk assessment before using KDIGO targets for shared decision-making.',
     ),
     rationale: text(
       locale,
-      'KDIGO 的一般蛋白質與鈉目標需由腎臟營養專業依共病個人化；高齡合併衰弱或肌少症者可能需要較高蛋白與熱量。',
-      'KDIGO protein and sodium targets require renal-nutrition individualization; older adults with frailty or sarcopenia may need higher protein and calorie targets.',
+      'KDIGO 的一般蛋白質約 0.8 g/kg/day、避免 >1.3 g/kg/day 與鈉 <2 g/day，可作為成人 G3–G5 的討論起點，但仍需依實際攝取、營養狀態、代謝穩定性、共病與病人偏好個人化；年齡本身不等於衰弱。',
+      'KDIGO protein around 0.8 g/kg/day, avoidance of intake above 1.3 g/kg/day, and sodium below 2 g/day can serve as discussion starting points for adults with G3–G5, but require individualization to actual intake, nutrition status, metabolic stability, comorbidities, and patient preferences; age alone does not establish frailty.',
     ),
     patientEvidence: compactEvidence([
       patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
+      patientEvidence(profile, locale, 'bodyWeight', '目前體重', 'Current weight'),
       patientEvidence(profile, locale, 'albumin', '白蛋白', 'Albumin'),
       patientEvidence(profile, locale, 'potassium', '血鉀', 'Potassium'),
       patientEvidence(profile, locale, 'phosphate', '血磷', 'Phosphate'),
     ]),
     missingData: [
-      text(locale, '體重與近期體重變化', 'Weight and recent weight trend'),
-      text(locale, '食慾、實際蛋白質／鈉攝取與飲食型態', 'Appetite, actual protein/sodium intake, and dietary pattern'),
-      text(locale, '肌少症、衰弱與營養風險評估', 'Sarcopenia, frailty, and nutrition-risk assessment'),
+      text(locale, '近期體重變化（需連續量測或訪談確認）', 'Recent weight change (requires serial measurement or interview)'),
+      text(locale, '食慾、實際蛋白質／熱量／鈉攝取與飲食型態（需訪談）', 'Appetite, actual protein/calorie/sodium intake, and dietary pattern (requires interview)'),
+      frailtyAssessmentMissing
+        ? text(locale, '肌少症、衰弱與營養風險的正式評估', 'Formal assessment of sarcopenia, frailty, and nutrition risk')
+        : text(locale, '肌少症與營養風險的正式評估', 'Formal assessment of sarcopenia and nutrition risk'),
     ],
     nextActions: [text(
       locale,
-      '有營養風險、進階 CKD 或多重飲食限制時，轉介腎臟營養師共同設定可執行目標。',
-      'For nutrition risk, advanced CKD, or multiple dietary restrictions, involve a renal dietitian to set feasible goals.',
+      '由醫師或腎臟營養師完成飲食訪談及營養／肌少症／衰弱評估；資料完整後，再共同設定可執行的蛋白質、熱量與鈉目標。',
+      'Have a clinician or renal dietitian complete the dietary interview and nutrition, sarcopenia, and frailty assessments; set feasible protein, calorie, and sodium targets only after these data are available.',
     )],
     guidelineReferences: [],
     safetyBoundary: text(
       locale,
-      '白蛋白不是單獨的營養診斷；未先評估肌少症、熱量與代謝穩定性前，不自動建議低或極低蛋白飲食。',
-      'Albumin alone is not a nutrition diagnosis; do not recommend a low- or very-low-protein diet automatically without assessing sarcopenia, calories, and metabolic stability.',
+      '血清白蛋白、年齡或單次體重都不能單獨診斷營養不良、肌少症或衰弱；未完成飲食訪談與功能評估前，系統不產生個人化低蛋白或熱量處方。',
+      'Serum albumin, age, or a single weight cannot independently diagnose malnutrition, sarcopenia, or frailty; the system does not generate an individualized low-protein or calorie prescription before dietary interview and functional assessment.',
     ),
   }
 }
@@ -1496,35 +1509,30 @@ export const CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
       buildReferralCare(profile, locale),
     ].filter((item): item is CdssRecommendation => Boolean(item))
 
-    const priorityOrder: Readonly<Record<CdssRecommendation['priority'], number>> = {
-      high: 0,
-      medium: 1,
-      routine: 2,
-    }
-    recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
     // KFRE is a longitudinal risk module, not merely a completed safety check.
     // Keep it visible as a primary card even when the current risk is below
     // KDIGO action thresholds, so clinicians can see and document the result.
-    const automated = recommendations.filter(
-      (item) => item.status === 'no-action' && item.id !== 'ckd-kidney-failure-risk',
-    )
-    const decisions = recommendations.filter(
-      (item) => item.status !== 'no-action' || item.id === 'ckd-kidney-failure-risk',
-    )
     const enriched = attachKnowledgeAssessments({
       profile,
       locale,
-      recommendations: decisions,
+      recommendations,
       sourceIds: [
         'kdigo-ckd-2024',
         'taiwan-ckd-2025',
         'taiwan-nhi-diabetes',
       ],
     })
-    const highPriorityCount = enriched.recommendations.filter(
+    const enrichedRecommendations = enriched.recommendations
+    const automated = enrichedRecommendations.filter(
+      (item) => item.status === 'no-action' && item.id !== 'ckd-kidney-failure-risk',
+    )
+    const decisions = enrichedRecommendations.filter(
+      (item) => item.status !== 'no-action' || item.id === 'ckd-kidney-failure-risk',
+    )
+    const highPriorityCount = decisions.filter(
       (item) => item.priority === 'high',
     ).length
-    const needsDataCount = enriched.recommendations.filter(
+    const needsDataCount = decisions.filter(
       (item) => item.status === 'needs-data',
     ).length
 
@@ -1538,8 +1546,12 @@ export const CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
       packId: 'ckd-cdss',
       packVersion: '0.3.0-poc',
       knowledgePacks: enriched.knowledgePacks,
-      recommendations: enriched.recommendations,
-      automatedChecks: automated.map(toAutomatedCheck),
+      recommendations: decisions,
+      automatedChecks: automated.map((item) => ({
+        ...toAutomatedCheck(item),
+        recommendation: item,
+        displayOrder: enrichedRecommendations.indexOf(item),
+      })),
       notEvaluated: [
         text(
           locale,
