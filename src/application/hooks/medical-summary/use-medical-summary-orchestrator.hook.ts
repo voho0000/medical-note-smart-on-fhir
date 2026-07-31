@@ -7,10 +7,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMedicalSummary } from './use-medical-summary.hook'
 import { useSafetyAlerts } from '@/src/application/hooks/safety-alerts/use-safety-alerts.hook'
 import {
-  getRememberedLocalImportAiDecision,
+  getTodayLocalImportAiDecision,
   recordAutoAiRealDataDecision,
   recordLocalImportAiDecision,
-  recordRememberedLocalImportAiDecision,
+  recordTodayLocalImportAiDecision,
   markLocalImportAiConsentReady,
   startLocalImportAiConsent,
   useAutoAiConsentState,
@@ -988,8 +988,8 @@ export function useMedicalSummaryOrchestrator() {
       }
       if (!value && autoAiConsent.importId) {
         const updated = recordLocalImportAiDecision(autoAiConsent.importId, 'manual')
-        if (updated && getRememberedLocalImportAiDecision() !== null) {
-          recordRememberedLocalImportAiDecision('manual')
+        if (updated && getTodayLocalImportAiDecision() !== null) {
+          recordTodayLocalImportAiDecision('manual')
         }
       }
       return

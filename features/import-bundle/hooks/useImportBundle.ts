@@ -115,7 +115,7 @@ export function useImportBundle(): UseImportBundleReturn {
         clearLocalImportAiConsent()
       } else if (localImportConsent) {
         markLocalImportAiConsentReady(localImportConsent.importId, Date.now(), {
-          useRememberedDecision: true,
+          useTodayDecision: true,
         })
       }
     } finally {

@@ -20,8 +20,8 @@ const mockRecordLocalImportAiDecision = jest.fn((
   _decision: 'auto' | 'manual',
 ) => true)
 const mockRecordAutoAiRealDataDecision = jest.fn()
-const mockGetRememberedLocalImportAiDecision = jest.fn(() => null as 'auto' | 'manual' | null)
-const mockRecordRememberedLocalImportAiDecision = jest.fn()
+const mockGetTodayLocalImportAiDecision = jest.fn(() => null as 'auto' | 'manual' | null)
+const mockRecordTodayLocalImportAiDecision = jest.fn()
 const mockRequestDemographicsForAi = jest.fn(async () => true)
 
 jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', () => ({
@@ -42,9 +42,9 @@ jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
   recordAutoAiRealDataDecision: (decision: 'auto' | 'manual') => (
     mockRecordAutoAiRealDataDecision(decision)
   ),
-  getRememberedLocalImportAiDecision: () => mockGetRememberedLocalImportAiDecision(),
-  recordRememberedLocalImportAiDecision: (decision: 'auto' | 'manual') => (
-    mockRecordRememberedLocalImportAiDecision(decision)
+  getTodayLocalImportAiDecision: () => mockGetTodayLocalImportAiDecision(),
+  recordTodayLocalImportAiDecision: (decision: 'auto' | 'manual') => (
+    mockRecordTodayLocalImportAiDecision(decision)
   ),
 }))
 jest.mock('@/src/application/providers/ai-demographics-gate.provider', () => ({
@@ -208,7 +208,7 @@ describe('useMedicalSummaryOrchestrator', () => {
     useAiConfigStore.setState({ openAiCompatibleProfiles: [] })
     mockStartLocalImportAiConsent.mockImplementation((importId: string) => ({ importId }))
     mockAutoAiConsent = { source: 'other', decision: null, importId: null }
-    mockGetRememberedLocalImportAiDecision.mockReturnValue(null)
+    mockGetTodayLocalImportAiDecision.mockReturnValue(null)
     mockRequestDemographicsForAi.mockResolvedValue(true)
     arrange()
   })
@@ -1553,14 +1553,14 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(setSafetyAuto).not.toHaveBeenCalled()
   })
 
-  it('updates a remembered local choice when automatic generation is turned off', () => {
+  it('updates today\'s local choice when automatic generation is turned off', () => {
     mockAutoAiConsent = { source: 'local', decision: 'auto', importId: 'import-a' }
-    mockGetRememberedLocalImportAiDecision.mockReturnValue('auto')
+    mockGetTodayLocalImportAiDecision.mockReturnValue('auto')
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
 
     act(() => result.current.setAutoGenerate(false))
 
-    expect(mockRecordRememberedLocalImportAiDecision).toHaveBeenCalledWith('manual')
+    expect(mockRecordTodayLocalImportAiDecision).toHaveBeenCalledWith('manual')
   })
 
   it('publishes refreshed summary and safety results together after a batch settles', async () => {

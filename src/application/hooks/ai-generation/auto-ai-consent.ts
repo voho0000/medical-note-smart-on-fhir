@@ -2,10 +2,10 @@
 
 // Source-aware authorization for automatic cloud-AI analysis.
 //
-// The long-lived SMART decision and the optional remembered local-import
-// decision are intentionally separate. Every local Bundle still receives its
-// own short-lived sessionStorage receipt; a remembered choice may resolve that
-// receipt only after the new Bundle is ready, so imports remain race-safe.
+// The long-lived SMART decision and the optional same-day local-import choice
+// are intentionally separate. Every local Bundle still receives its own
+// short-lived sessionStorage receipt; today's choice may resolve that receipt
+// only after the new Bundle is ready, so imports remain race-safe.
 
 import { useMemo, useSyncExternalStore } from 'react'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
@@ -30,21 +30,29 @@ export interface AutoAiConsentState {
   importId: string | null
 }
 
+interface TodayLocalImportAiDecisionRecord {
+  decision: AutoAiRealDataDecision
+  localDate: string
+  version: 1
+}
+
 export const AUTO_AI_REAL_DATA_DECISION_KEY = 'mediprisma:auto-ai-real-data-decision-v1'
-export const LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY = 'mediprisma:local-import-ai-remembered-decision-v1'
+export const LOCAL_IMPORT_AI_TODAY_DECISION_KEY = 'mediprisma:local-import-ai-today-decision-v1'
 export const LOCAL_IMPORT_AI_CONSENT_KEY = 'mediprisma:local-import-ai-consent-v1'
 export const LOCAL_IMPORT_AI_CONSENT_EVENT = 'mediprisma:local-import-ai-consent-changed'
 export const LOCAL_IMPORT_AI_CONSENT_MAX_AGE_MS = 12 * 60 * 60 * 1000
 export const LOCAL_IMPORT_AI_CONSENT_VERSION = 1 as const
+const LEGACY_LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY = 'mediprisma:local-import-ai-remembered-decision-v1'
+const LOCAL_IMPORT_AI_TODAY_DECISION_VERSION = 1 as const
 
 // `undefined` delegates to sessionStorage. A record/null value is a synchronous
 // fail-closed override used when sessionStorage could not persist a transition.
 // In particular, starting import B must hide import A's stored `auto` decision
 // even when both setItem and removeItem fail.
 let volatileLocalImportConsent: LocalImportAiConsentRecord | null | undefined
-// `undefined` delegates to localStorage; a value/null override keeps this tab
-// safe if replacing or clearing an older remembered grant fails.
-let volatileRememberedLocalImportDecision: AutoAiRealDataDecision | null | undefined
+// `undefined` delegates to localStorage; a record/null override keeps this tab
+// safe if replacing or clearing an older same-day grant fails.
+let volatileTodayLocalImportDecision: TodayLocalImportAiDecisionRecord | null | undefined
 // Tracks imports whose new Bundle has not finished publishing in this runtime.
 // It deliberately is not persisted: after a reload, an encrypted Bundle that
 // successfully loads is already the published data and `ensure…` may advance
@@ -78,36 +86,87 @@ export function recordAutoAiRealDataDecision(decision: AutoAiRealDataDecision): 
   }
 }
 
-/** Read the optional device-level default for future local imports. It never
- * replaces the per-import receipt used by the automatic-AI gate. */
-export function getRememberedLocalImportAiDecision(): AutoAiRealDataDecision | null {
-  if (typeof window === 'undefined') return null
-  if (volatileRememberedLocalImportDecision !== undefined) {
-    return volatileRememberedLocalImportDecision
-  }
+function getLocalCalendarDate(now: number): string | null {
+  if (!Number.isFinite(now) || now < 0) return null
+  const date = new Date(now)
+  if (Number.isNaN(date.getTime())) return null
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseTodayLocalImportAiDecision(
+  raw: string | null,
+  now: number,
+): TodayLocalImportAiDecisionRecord | null {
+  const localDate = getLocalCalendarDate(now)
+  if (!raw || !localDate) return null
   try {
-    const value = localStorage.getItem(LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY)
-    return value === 'auto' || value === 'manual' ? value : null
+    const value: unknown = JSON.parse(raw)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    const candidate = value as Partial<TodayLocalImportAiDecisionRecord>
+    if (candidate.version !== LOCAL_IMPORT_AI_TODAY_DECISION_VERSION) return null
+    if (candidate.decision !== 'auto' && candidate.decision !== 'manual') return null
+    if (candidate.localDate !== localDate) return null
+    return {
+      decision: candidate.decision,
+      localDate: candidate.localDate,
+      version: LOCAL_IMPORT_AI_TODAY_DECISION_VERSION,
+    }
   } catch {
     return null
   }
 }
 
-/** Remember how future local imports should resolve. Automatic analysis is
- * stored only after the current import has already passed explicit consent. */
-export function recordRememberedLocalImportAiDecision(
+/** Read the optional choice for local imports made on the browser's current
+ * calendar date. It never replaces the per-import automatic-AI receipt. */
+export function getTodayLocalImportAiDecision(
+  now: number = Date.now(),
+): AutoAiRealDataDecision | null {
+  if (typeof window === 'undefined') return null
+  if (volatileTodayLocalImportDecision !== undefined) {
+    if (volatileTodayLocalImportDecision === null) return null
+    const localDate = getLocalCalendarDate(now)
+    return localDate === volatileTodayLocalImportDecision.localDate
+      ? volatileTodayLocalImportDecision.decision
+      : null
+  }
+  try {
+    return parseTodayLocalImportAiDecision(
+      localStorage.getItem(LOCAL_IMPORT_AI_TODAY_DECISION_KEY),
+      now,
+    )?.decision ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Apply one choice to later local imports today. Automatic analysis is stored
+ * only after the current import has already passed explicit consent. */
+export function recordTodayLocalImportAiDecision(
   decision: AutoAiRealDataDecision,
+  now: number = Date.now(),
 ): boolean {
+  const localDate = getLocalCalendarDate(now)
   if (
     typeof window === 'undefined'
+    || !localDate
     || (decision !== 'auto' && decision !== 'manual')
   ) return false
 
-  volatileRememberedLocalImportDecision = decision
+  const record: TodayLocalImportAiDecisionRecord = {
+    decision,
+    localDate,
+    version: LOCAL_IMPORT_AI_TODAY_DECISION_VERSION,
+  }
+  const serialized = JSON.stringify(record)
+  volatileTodayLocalImportDecision = record
   try {
-    localStorage.setItem(LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY, decision)
-    if (localStorage.getItem(LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY) === decision) {
-      volatileRememberedLocalImportDecision = undefined
+    localStorage.setItem(LOCAL_IMPORT_AI_TODAY_DECISION_KEY, serialized)
+    localStorage.removeItem(LEGACY_LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY)
+    if (localStorage.getItem(LOCAL_IMPORT_AI_TODAY_DECISION_KEY) === serialized) {
+      volatileTodayLocalImportDecision = undefined
       notifyConsentChanged()
       return true
     }
@@ -116,23 +175,26 @@ export function recordRememberedLocalImportAiDecision(
   }
 
   try {
-    localStorage.removeItem(LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY)
+    localStorage.removeItem(LOCAL_IMPORT_AI_TODAY_DECISION_KEY)
+    localStorage.removeItem(LEGACY_LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY)
   } catch {
     // The in-memory null override still prevents reuse in this runtime.
   }
-  volatileRememberedLocalImportDecision = null
+  volatileTodayLocalImportDecision = null
   notifyConsentChanged()
   return false
 }
 
-/** Restore per-import prompting for local files. */
-export function clearRememberedLocalImportAiDecision(): boolean {
+/** Restore per-import prompting for local files, including any preference from
+ * the brief earlier build that remembered the choice permanently. */
+export function clearTodayLocalImportAiDecision(): boolean {
   if (typeof window === 'undefined') return false
-  volatileRememberedLocalImportDecision = null
+  volatileTodayLocalImportDecision = null
   try {
-    localStorage.removeItem(LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY)
-    if (localStorage.getItem(LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY) === null) {
-      volatileRememberedLocalImportDecision = undefined
+    localStorage.removeItem(LOCAL_IMPORT_AI_TODAY_DECISION_KEY)
+    localStorage.removeItem(LEGACY_LOCAL_IMPORT_AI_REMEMBERED_DECISION_KEY)
+    if (localStorage.getItem(LOCAL_IMPORT_AI_TODAY_DECISION_KEY) === null) {
+      volatileTodayLocalImportDecision = undefined
       notifyConsentChanged()
       return true
     }
@@ -252,12 +314,12 @@ export function startLocalImportAiConsent(
 
 /** Publish a decision only after this exact Bundle has finished loading into
  * the UI. The compare-and-set guard prevents an older import from making a
- * newer scope answerable. Without a remembered choice, or when persisting a
- * remembered auto grant fails, the import safely becomes `pending`. */
+ * newer scope answerable. Without a same-day choice, or when persisting its
+ * automatic grant fails, the import safely becomes `pending`. */
 export function markLocalImportAiConsentReady(
   expectedImportId: string,
   now: number = Date.now(),
-  options: { useRememberedDecision?: boolean } = {},
+  options: { useTodayDecision?: boolean } = {},
 ): boolean {
   if (typeof window === 'undefined') return false
   const current = getLocalImportAiConsent(now)
@@ -269,25 +331,25 @@ export function markLocalImportAiConsentReady(
     return current.decision === 'pending'
   }
 
-  const rememberedDecision = options.useRememberedDecision
-    ? getRememberedLocalImportAiDecision()
+  const todayDecision = options.useTodayDecision
+    ? getTodayLocalImportAiDecision(now)
     : null
   const pending: LocalImportAiConsentRecord = {
     ...current,
     decision: 'pending',
   }
-  const next: LocalImportAiConsentRecord = rememberedDecision
+  const next: LocalImportAiConsentRecord = todayDecision
     ? {
         ...current,
-        decision: rememberedDecision,
+        decision: todayDecision,
         decidedAt: now,
       }
     : pending
   activePreparingLocalImportIds.delete(expectedImportId)
-  // A remembered manual choice is always safe in memory. A remembered auto
+  // A same-day manual choice is always safe in memory. A same-day auto
   // choice must successfully persist its import-scoped receipt before it can
   // authorize a request; otherwise fall back to an answerable prompt.
-  volatileLocalImportConsent = rememberedDecision === 'auto' ? pending : next
+  volatileLocalImportConsent = todayDecision === 'auto' ? pending : next
   if (persistLocalImportAiConsent(next, now)) {
     volatileLocalImportConsent = undefined
   } else {
@@ -415,7 +477,7 @@ export function ensureLocalImportAiConsent(
   if (activeBundleImportId && current?.importId !== activeBundleImportId) {
     const replacement = startLocalImportAiConsent(activeBundleImportId, now)
     if (!replacement) return null
-    markLocalImportAiConsentReady(replacement.importId, now, { useRememberedDecision: true })
+    markLocalImportAiConsentReady(replacement.importId, now, { useTodayDecision: true })
     return getLocalImportAiConsent(now)
   }
   if (current) {
@@ -423,7 +485,7 @@ export function ensureLocalImportAiConsent(
       current.decision === 'preparing'
       && !activePreparingLocalImportIds.has(current.importId)
     ) {
-      markLocalImportAiConsentReady(current.importId, now, { useRememberedDecision: true })
+      markLocalImportAiConsentReady(current.importId, now, { useTodayDecision: true })
       return getLocalImportAiConsent(now)
     }
     return current
@@ -433,7 +495,7 @@ export function ensureLocalImportAiConsent(
     now,
   )
   if (!created) return null
-  markLocalImportAiConsentReady(created.importId, now, { useRememberedDecision: true })
+  markLocalImportAiConsentReady(created.importId, now, { useTodayDecision: true })
   return getLocalImportAiConsent(now)
 }
 
