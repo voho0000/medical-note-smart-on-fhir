@@ -145,42 +145,11 @@ export function ReportsCard() {
   )
   const procedureRows = useProcedureRows(
     rawReportsEnabled ? procedures : EMPTY_RESOURCES,
-    rawReportsEnabled ? observations : EMPTY_RESOURCES,
   )
-
-  // Mark procedure-category observations as seen so they don't appear as orphans
-  const procedureObsIds = useMemo(() => {
-    const ids = new Set<string>()
-    if (!rawReportsEnabled) return ids
-    observations.forEach((obs: any) => {
-      if (!obs?.category || !obs?.id) return
-      const categories = Array.isArray(obs.category) ? obs.category : [obs.category]
-      const isProcedureObs = categories.some((cat: any) => {
-        const coding = cat?.coding?.[0]
-        return coding?.code?.toLowerCase() === 'procedure'
-      })
-      if (isProcedureObs && obs.encounter?.reference) {
-        // Check if this observation is linked to a procedure
-        const hasMatchingProcedure = procedures.some((proc: any) =>
-          proc?.encounter?.reference === obs.encounter.reference
-        )
-        if (hasMatchingProcedure) {
-          ids.add(obs.id)
-        }
-      }
-    })
-    return ids
-  }, [observations, procedures, rawReportsEnabled])
-
-  const allSeenIds = useMemo(() => {
-    const combined = new Set(seenIds)
-    procedureObsIds.forEach(id => combined.add(id))
-    return combined
-  }, [seenIds, procedureObsIds])
 
   const orphanRows = useOrphanObservations(
     rawReportsEnabled ? observations : EMPTY_RESOURCES,
-    allSeenIds,
+    seenIds,
     effectiveNameMode,
   )
 

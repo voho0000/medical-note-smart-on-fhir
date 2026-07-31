@@ -1,6 +1,8 @@
 import {
   BRIDGE_PROCEDURE_CLASSIFICATION_SYSTEM,
   FHIR_PROCEDURE_CATEGORY_SYSTEM,
+  SNOMED_CT_SYSTEM,
+  SNOMED_SURGICAL_PROCEDURE_CODE,
   getProcedureCategoryCode,
 } from '@/features/clinical-summary/reports/utils/procedure-category'
 
@@ -23,6 +25,15 @@ describe('getProcedureCategoryCode', () => {
       coding: [{
         system: FHIR_PROCEDURE_CATEGORY_SYSTEM,
         code: 'surgical-procedure',
+      }],
+    })).toBe('surgical-procedure')
+  })
+
+  it('recognizes the SNOMED CT Surgical procedure category used by bridge 1.6.0', () => {
+    expect(getProcedureCategoryCode({
+      coding: [{
+        system: SNOMED_CT_SYSTEM,
+        code: SNOMED_SURGICAL_PROCEDURE_CODE,
       }],
     })).toBe('surgical-procedure')
   })
