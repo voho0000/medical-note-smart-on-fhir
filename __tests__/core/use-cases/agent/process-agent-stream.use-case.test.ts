@@ -229,6 +229,28 @@ describe('ProcessAgentStreamUseCase', () => {
       expect(result.summary).toContain('Narrow the query')
     })
 
+    it('preserves per-test query coverage for the follow-up answer', () => {
+      const result = useCase.buildToolResultsSummary([{
+        toolName: 'queryDiagnosticReports',
+        result: {
+          success: true,
+          count: 2,
+          requestedQueryTerms: ['CA125', 'CA199'],
+          matchedQueryTerms: ['CA125', 'CA199'],
+          unmatchedQueryTerms: [],
+          data: [
+            { reportName: 'CA-125' },
+            { reportName: 'CA–199腫瘤標記' },
+          ],
+        },
+      }], mockTranslations)
+
+      expect(result.summary).toContain('QUERY-TERM COVERAGE')
+      expect(result.summary).toContain('"matchedQueryTerms": [')
+      expect(result.summary).toContain('"CA199"')
+      expect(result.summary).toContain('CA–199腫瘤標記')
+    })
+
     it('keeps positive records from a partially supported imaging query', () => {
       const result = useCase.buildToolResultsSummary([{
         toolName: 'queryImagingRecords',
@@ -262,6 +284,26 @@ describe('ProcessAgentStreamUseCase', () => {
 
       expect(result.summary).toContain('follow-up summary contains only 10 of the 12')
       expect(result.summary).toContain('Narrow the query')
+    })
+
+    it('keeps all compact analyte groups for a category query', () => {
+      const result = useCase.buildToolResultsSummary([{
+        toolName: 'queryLabResultsByCategory',
+        result: {
+          success: true,
+          count: 12,
+          totalCount: 12,
+          returnedCount: 12,
+          truncated: false,
+          data: Array.from({ length: 12 }, (_, index) => ({
+            analyte: `Tumor marker ${index + 1}`,
+            results: [{ value: index + 1 }],
+          })),
+        },
+      }], mockTranslations)
+
+      expect(result.summary).toContain('Tumor marker 12')
+      expect(result.summary).not.toContain('follow-up summary contains only')
     })
 
     it('should handle multiple tool results', () => {

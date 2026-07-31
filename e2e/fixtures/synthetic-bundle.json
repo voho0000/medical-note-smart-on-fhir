@@ -117,6 +117,66 @@
     },
     {
       "resource": {
+        "resourceType": "Observation",
+        "id": "tumor-afp-2026",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "AFP", "coding": [{ "system": "http://loinc.org", "code": "1834-1", "display": "Alpha-1-Fetoprotein" }] },
+        "effectiveDateTime": "2026-05-15",
+        "valueQuantity": { "value": 2.1, "unit": "ng/mL" },
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "tumor-cea-2026",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "CEA", "coding": [{ "system": "http://loinc.org", "code": "2039-6", "display": "Carcinoembryonic antigen" }] },
+        "effectiveDateTime": "2026-05-15",
+        "valueQuantity": { "value": 3.2, "unit": "ng/mL" },
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "tumor-ca125-2026",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "CA-125", "coding": [{ "system": "http://loinc.org", "code": "10334-1", "display": "Cancer Ag 125" }] },
+        "effectiveDateTime": "2026-05-15",
+        "valueQuantity": { "value": 12.4, "unit": "U/mL" },
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "tumor-ca199-2026",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "CA–199腫瘤標記", "coding": [{ "system": "http://loinc.org", "code": "24108-3", "display": "Cancer Ag 19-9" }] },
+        "effectiveDateTime": "2026-05-15",
+        "valueQuantity": { "value": 31.83, "unit": "U/mL" },
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "tumor-psa-2026",
+        "status": "final",
+        "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory" }] }],
+        "code": { "text": "PSA", "coding": [{ "system": "http://loinc.org", "code": "2857-1", "display": "Prostate specific Ag" }] },
+        "effectiveDateTime": "2026-05-15",
+        "valueQuantity": { "value": 0.64, "unit": "ng/mL" },
+        "performer": [{ "display": "台北測試醫院" }]
+      }
+    },
+    {
+      "resource": {
         "resourceType": "DiagnosticReport",
         "id": "img-cxr",
         "status": "final",

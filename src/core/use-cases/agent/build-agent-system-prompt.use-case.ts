@@ -35,6 +35,7 @@ export interface BuildAgentSystemPromptInput {
       queryConditions: string
       queryObservations: string
       queryDiagnosticReports: string
+      queryLabResultsByCategory: string
       queryImagingRecords: string
       searchObservationByName: string
       listAvailableObservationCodes: string
@@ -111,6 +112,7 @@ ${clinicalContext}
 
 **Reports / Labs / Imaging / Procedures**
 - queryDiagnosticReports — ${t.toolDescriptions.queryDiagnosticReports}
+- queryLabResultsByCategory — ${t.toolDescriptions.queryLabResultsByCategory}
 - queryImagingRecords — ${t.toolDescriptions.queryImagingRecords}
 - queryObservations — ${t.toolDescriptions.queryObservations}
 - searchObservationByName — ${t.toolDescriptions.searchObservationByName}

@@ -147,7 +147,18 @@ export function isAbnormalObservation(obs: any): boolean {
 export function matchSubstring(haystack: string | undefined, needle: string | undefined): boolean {
   if (!needle) return true
   if (!haystack) return false
-  return haystack.toLowerCase().includes(needle.toLowerCase())
+
+  const normalizedHaystack = haystack.normalize('NFKC').toLowerCase()
+  const normalizedNeedle = needle.normalize('NFKC').toLowerCase()
+  if (normalizedHaystack.includes(normalizedNeedle)) return true
+
+  // Clinical names are frequently written with interchangeable separators:
+  // CA199 / CA-199 / CA–199 / CA 19-9, Hb-A1c / HbA1c, Anti HCV / Anti-HCV.
+  // Ignore only spacing and separator characters here; keep clinically
+  // meaningful symbols such as +, <, and > intact.
+  const compact = (value: string) => value.replace(/[\s\p{Pd}\u2212_.]+/gu, '')
+  const compactNeedle = compact(normalizedNeedle)
+  return compactNeedle.length > 0 && compact(normalizedHaystack).includes(compactNeedle)
 }
 
 const CRITICALITY_BY_SEVERITY: Record<string, string[]> = {

@@ -22,6 +22,7 @@ import {
   proceduresSchema,
   encountersSchema,
   diagnosticReportsSchema,
+  labResultsByCategorySchema,
   imagingRecordsSchema,
   immunizationsSchema,
   patientInfoSchema,
@@ -57,6 +58,16 @@ import {
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
 import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
+import {
+  LAB_CATEGORIES,
+  categorizeObservation,
+  compareTestsByPreferred,
+} from '@/src/shared/utils/lab-categories'
+import {
+  getAnalyteCanonicalKey,
+  getAnalyteLabel,
+} from '@/src/shared/utils/lab-normalize'
+import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
 
 export interface AgentDataSource {
   patient: PatientEntity | null
@@ -241,6 +252,56 @@ function diagnosticReportSearchText(report: any): string {
       attachment.text,
     ]),
   ].filter(Boolean).join(' ')
+}
+
+function diagnosticReportQueryTerms(query?: string, queries?: string[]): string[] {
+  const terms = [query, ...(queries ?? [])]
+    .filter((value): value is string => typeof value === 'string')
+    .flatMap(value => value.split(/[,，、;；\n]+/))
+    .map(value => value.trim())
+    .filter(Boolean)
+
+  return [...new Map(terms.map(term => [term.normalize('NFKC').toLowerCase(), term])).values()]
+}
+
+function matchesDiagnosticReportQuery(report: any, queryTerms: string[]): boolean {
+  if (queryTerms.length === 0) return true
+  const searchText = diagnosticReportSearchText(report)
+  return queryTerms.some(term => matchSubstring(searchText, term))
+}
+
+function selectDiagnosticReportPage(
+  reports: any[],
+  queryTerms: string[],
+  limit?: number,
+): any[] {
+  const cap = limit && limit > 0 ? limit : Math.max(10, queryTerms.length)
+  if (queryTerms.length === 0) return reports.slice(0, cap)
+
+  // A pure newest-first cap can hide one requested analyte when another has
+  // many newer repeats. Reserve one representative row per matched query term
+  // before filling the remaining page by recency.
+  const selected: any[] = []
+  const seen = new Set<any>()
+  for (const term of queryTerms) {
+    const representative = reports.find(report =>
+      matchSubstring(diagnosticReportSearchText(report), term)
+    )
+    if (representative && !seen.has(representative)) {
+      selected.push(representative)
+      seen.add(representative)
+    }
+  }
+  for (const report of reports) {
+    if (!seen.has(report)) selected.push(report)
+  }
+  return selected.slice(0, cap)
+}
+
+function labAnalyteKey(observation: any): string {
+  return getAnalyteCanonicalKey(observation)
+    ?? loincOf(observation?.code)
+    ?? getAnalyteLabel(observation).normalize('NFKC').toUpperCase()
 }
 
 function diagnosticReportOutput(report: any) {
@@ -883,9 +944,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     queryDiagnosticReports: tool({
-      description: 'Query DiagnosticReport records for lab panels and report-level tests. Supports fuzzy `query` across report/test names, codes, component observations, conclusions, notes, and attachment titles. Also supports category, date range, and abnormalOnly. For imaging/pathology questions prefer queryImagingRecords, which also covers standalone ImagingStudy resources.',
+      description: 'Query DiagnosticReport records for lab panels and report-level tests. Search is case- and separator-insensitive, so CA199, CA-199, CA–199, and CA 19-9 match. For multiple specific tests use `queries` (for example ["CA125", "CA199"]), or comma-separate them in `query`; matching records plus matchedQueryTerms/unmatchedQueryTerms are returned. Also supports category, date range, and abnormalOnly. For imaging/pathology questions prefer queryImagingRecords, which also covers standalone ImagingStudy resources.',
       inputSchema: diagnosticReportsSchema,
-      execute: async ({ category, query, abnormalOnly, dateFrom, dateTo, limit, summarize }:
+      execute: async ({ category, query, queries, abnormalOnly, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof diagnosticReportsSchema>) => {
         const collection = getData().collection
         const unavailable = unavailableQueryResult(
@@ -898,11 +959,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
         // search failed, but component-result coverage may then be incomplete.
         const queryIssues = queryIssuesFor(collection!, ['Observation'])
         const incomplete = queryIssues.length > 0
+        const requestedQueryTerms = diagnosticReportQueryTerms(query, queries)
 
         const list = collection!.diagnosticReports
         let filtered = list.filter((r: any) =>
           matchDiagnosticReportCategory(r, category)
-          && matchSubstring(diagnosticReportSearchText(r), query)
+          && matchesDiagnosticReportQuery(r, requestedQueryTerms)
         )
         if (dateFrom || dateTo) {
           filtered = filtered.filter((r: any) =>
@@ -917,7 +979,13 @@ export function createFhirTools(getData: () => AgentDataSource) {
         filtered = [...filtered].sort((a, b) =>
           (diagnosticReportDate(b) || '').localeCompare(diagnosticReportDate(a) || '')
         )
-        const capped = applyLimit(filtered, limit, 10)
+        const matchedQueryTerms = requestedQueryTerms.filter(term =>
+          filtered.some(report => matchSubstring(diagnosticReportSearchText(report), term))
+        )
+        const unmatchedQueryTerms = requestedQueryTerms.filter(term =>
+          !matchedQueryTerms.includes(term)
+        )
+        const capped = selectDiagnosticReportPage(filtered, requestedQueryTerms, limit)
         const page = paginationMeta(filtered.length, capped.length)
 
         const summary = filtered.length > 0
@@ -935,6 +1003,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
             incomplete,
             canConcludeAbsence: !incomplete,
             queryIssues,
+            requestedQueryTerms,
+            matchedQueryTerms,
+            unmatchedQueryTerms,
             dateRange: { from: dateFrom, to: dateTo },
             data: capped.map((r: any) => ({
               reportName: pickName(r.code),
@@ -958,8 +1029,79 @@ export function createFhirTools(getData: () => AgentDataSource) {
           incomplete,
           canConcludeAbsence: !incomplete,
           queryIssues,
+          requestedQueryTerms,
+          matchedQueryTerms,
+          unmatchedQueryTerms,
           dateRange: { from: dateFrom, to: dateTo },
           data: capped.map(diagnosticReportOutput),
+        })
+      },
+    }),
+
+    queryLabResultsByCategory: tool({
+      description: 'PRIMARY tool for semantic lab-group questions such as "all tumor markers", "cancer markers", "CBC", "renal/liver biochemistry", "lipids", "diabetes labs", or "urinalysis". Uses the exact same audited lab classification as the cumulative-report UI. `category="tumor"` returns every tumor-marker analyte the patient actually has (for example AFP, CEA, CA-125, CA-199/CA19-9, PSA), not merely the names mentioned by the user. By default returns the latest value for every analyte; set withTrend=true for up to 10 values per analyte.',
+      inputSchema: labResultsByCategorySchema,
+      execute: async ({ category, withTrend, abnormalOnly, dateFrom, dateTo, limit }:
+        z.infer<typeof labResultsByCategorySchema>) => {
+        const collection = getData().collection
+        const unavailable = unavailableQueryResult(
+          collection,
+          ['Observation'],
+          '指定分類的檢驗數據',
+        )
+        if (unavailable) return scrub(unavailable)
+
+        const categoryDefinition = LAB_CATEGORIES.find(item => item.id === category)!
+        const expanded = collection!.observations
+          .flatMap(observation => expandObservationValues(observation))
+          .filter((observation: any) =>
+            String(observation?.status ?? '').toLowerCase() !== 'entered-in-error'
+            && categorizeObservation(observation)?.id === category
+            && isWithinDateRange(observationDate(observation), dateFrom, dateTo)
+            && (!abnormalOnly || isAbnormalObservation(observation))
+          )
+
+        const byAnalyte = new Map<string, any[]>()
+        for (const observation of expanded) {
+          const key = labAnalyteKey(observation)
+          const series = byAnalyte.get(key)
+          if (series) series.push(observation)
+          else byAnalyte.set(key, [observation])
+        }
+
+        const groups = [...byAnalyte.entries()].map(([canonicalKey, observations]) => {
+          const series = [...observations].sort((a, b) =>
+            (observationDate(b) || '').localeCompare(observationDate(a) || '')
+          )
+          return {
+            analyte: getAnalyteLabel(series[0]),
+            canonicalKey,
+            category,
+            observationCount: series.length,
+            latestDate: observationDate(series[0]),
+            results: series.slice(0, withTrend ? 10 : 1).map(observationResult),
+          }
+        }).sort((a, b) =>
+          compareTestsByPreferred(categoryDefinition)(a.analyte, b.analyte)
+        )
+
+        const capped = applyLimit(groups, limit, 50)
+        const page = paginationMeta(groups.length, capped.length)
+        return scrub({
+          success: true,
+          summary: groups.length > 0
+            ? `Found ${groups.length} analyte(s) in lab category "${category}"`
+            : `No observations matched lab category "${category}"`,
+          category,
+          count: groups.length,
+          analyteCount: groups.length,
+          observationCount: expanded.length,
+          ...page,
+          incomplete: false,
+          canConcludeAbsence: true,
+          dateRange: { from: dateFrom, to: dateTo },
+          availableAnalytes: groups.map(group => group.analyte),
+          data: capped,
         })
       },
     }),

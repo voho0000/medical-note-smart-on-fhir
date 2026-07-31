@@ -35,6 +35,7 @@ export async function importBundle(
     localStorage.setItem('medical-note-audience', 'medical')
     localStorage.setItem('medical-note-audience-selected', '1')
     localStorage.setItem('medical-note-onboarding-v1', '1')
+    localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   })
   await page.goto('/')
   // Register before choosing the file so a fast import cannot settle between

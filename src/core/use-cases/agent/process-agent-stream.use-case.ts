@@ -91,6 +91,14 @@ export class ProcessAgentStreamUseCase {
 
         // Handle FHIR tool results (with count field)
         const hasPositiveRecords = Number(r?.count ?? 0) > 0
+        const queryCoverage = Array.isArray(r?.requestedQueryTerms)
+          && r.requestedQueryTerms.length > 0
+          ? `\nQUERY-TERM COVERAGE (use this to answer each requested test separately):\n${JSON.stringify({
+              requestedQueryTerms: r.requestedQueryTerms,
+              matchedQueryTerms: Array.isArray(r?.matchedQueryTerms) ? r.matchedQueryTerms : [],
+              unmatchedQueryTerms: Array.isArray(r?.unmatchedQueryTerms) ? r.unmatchedQueryTerms : [],
+            }, null, 2)}`
+          : ''
         if (
           !r?.success
           || (
@@ -100,7 +108,7 @@ export class ProcessAgentStreamUseCase {
         ) {
           return `${tr.toolName} ${translations.queryFailed}: ${
             r?.summary || translations.noData
-          }\nIMPORTANT: this result is incomplete and MUST NOT be interpreted as clinical absence.\n${
+          }${queryCoverage}\nIMPORTANT: this result is incomplete and MUST NOT be interpreted as clinical absence.\n${
             r?.queryIssues ? JSON.stringify(r.queryIssues, null, 2) : ''
           }`
         }
@@ -111,7 +119,11 @@ export class ProcessAgentStreamUseCase {
         const truncationWarning = r?.truncated || r?.hasMore
           ? `\nIMPORTANT: only ${r?.returnedCount ?? r?.data?.length ?? 0} of ${r?.totalCount ?? r?.count ?? 0} matching records were returned. Narrow the query before concluding a specific record is absent.`
           : ''
-        const summaryData = Array.isArray(r?.data) ? r.data.slice(0, 10) : []
+        // Category results are already compactly grouped by analyte. Preserve
+        // every returned analyte so "all tumor markers" cannot lose the 11th
+        // marker during the follow-up answer-generation round.
+        const followUpDataCap = tr.toolName === 'queryLabResultsByCategory' ? 50 : 10
+        const summaryData = Array.isArray(r?.data) ? r.data.slice(0, followUpDataCap) : []
         const summaryCapWarning = Array.isArray(r?.data) && r.data.length > summaryData.length
           ? `\nIMPORTANT: the follow-up summary contains only ${summaryData.length} of the ${r.data.length} records returned by the tool. Narrow the query before concluding a specific record is absent.`
           : ''
@@ -121,7 +133,7 @@ export class ProcessAgentStreamUseCase {
             : ''
         return `${tr.toolName} ${translations.queryResult}: ${
           r?.success ? countInfo : translations.queryFailed
-        }${truncationWarning}${summaryCapWarning}${completenessWarning}\n${r?.count > 0 ? JSON.stringify(summaryData, null, 2) : translations.noData}`
+        }${queryCoverage}${truncationWarning}${summaryCapWarning}${completenessWarning}\n${r?.count > 0 ? JSON.stringify(summaryData, null, 2) : translations.noData}`
       })
       .join('\n\n')
 
