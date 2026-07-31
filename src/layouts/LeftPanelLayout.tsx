@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getEnabledTabs, getFeaturesForTab, type TabConfig } from "@/src/shared/config/feature-registry"
@@ -15,6 +15,7 @@ import {
 import { LEFT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { FhirDataIssuesBanner } from "@/features/clinical-summary/components/FhirDataIssuesBanner"
 import { SdkSourceLimitationsBanner } from "@/features/clinical-summary/components/SdkSourceLimitationsBanner"
+import { useLeftBrowserTourStore } from "@/features/left-browser-tour"
 
 // ============================================================================
 // TAB CONTENT RENDERER - Renders features for a specific tab
@@ -54,6 +55,10 @@ export default function ClinicalSummaryFeature() {
   // cited source clicked in the Medical Summary tab — can switch to the tab
   // owning that resource type before its anchor scroll-flashes the card.
   const [activeTab, setActiveTab] = useState(defaultTab)
+  const tourActive = useLeftBrowserTourStore((state) => state.active)
+  const tourStep = useLeftBrowserTourStore((state) => state.stepId)
+  const preTourTabRef = useRef<string | null>(null)
+  const wasTourActiveRef = useRef(false)
   const pending = useResourceNavigationStore((s) => s.pending)
   const seq = useResourceNavigationStore((s) => s.seq)
   useEffect(() => {
@@ -65,6 +70,39 @@ export default function ClinicalSummaryFeature() {
     }
     // seq re-fires this even when navigating to the same target twice.
   }, [pending, seq, tabs, clearDetail])
+
+  // A tour step should demonstrate the actual feature rather than merely
+  // pointing at a hidden tab. Preserve the user's starting tab and restore it
+  // when the tour is finished or skipped.
+  useEffect(() => {
+    if (tourActive && !wasTourActiveRef.current) {
+      preTourTabRef.current = activeTab
+      wasTourActiveRef.current = true
+    }
+
+    if (!tourActive && wasTourActiveRef.current) {
+      wasTourActiveRef.current = false
+      setActiveTab(preTourTabRef.current ?? defaultTab)
+      preTourTabRef.current = null
+      clearDetail()
+      return
+    }
+
+    if (!tourActive || !tourStep) return
+
+    const targetTab = (() => {
+      if (tourStep === 'visits') return 'visits'
+      if (['reports', 'trend', 'imaging-ai'].includes(tourStep)) return 'reports'
+      if (['medications', 'medication-timeline', 'right-pane'].includes(tourStep)) return 'meds'
+      if (tourStep === 'documents') return 'documents'
+      return null
+    })()
+
+    if (targetTab && tabs.some((tab) => tab.id === targetTab)) {
+      setActiveTab(targetTab)
+    }
+    if (tourStep !== 'right-pane') clearDetail()
+  }, [activeTab, clearDetail, defaultTab, tabs, tourActive, tourStep])
 
   // Helper to get tab label (supports i18n)
   const getTabLabel = (tab: TabConfig): string => {
@@ -78,7 +116,7 @@ export default function ClinicalSummaryFeature() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] flex-col">
+    <div className="flex h-[calc(100vh-6rem)] flex-col" data-tour="left-panel">
       <SdkSourceLimitationsBanner />
       <FhirDataIssuesBanner />
       <Tabs
@@ -99,6 +137,7 @@ export default function ClinicalSummaryFeature() {
             already uses `truncate` + a `title` tooltip, so narrower per-tab
             widths still render the full label on hover. */}
         <TabsList
+          data-tour="left-tabs"
           // shrink-0: without it the flex column squeezes this h-12 bar by a
           // few px when a tab's content is tall (e.g. 報告), so the tab bar
           // jumped height between tabs. Pin it so the height is stable.
@@ -113,6 +152,7 @@ export default function ClinicalSummaryFeature() {
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
+                data-tour={`left-tab-${tab.id}`}
                 // px-1 keeps the icon+label centred at narrow widths (was
                 // overflowing the trigger with the default px-3 once we
                 // packed 5 tabs into the same width as 4).

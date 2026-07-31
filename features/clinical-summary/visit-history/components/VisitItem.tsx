@@ -126,6 +126,7 @@ export function VisitItem({
   return (
     <div
       ref={anchorRef}
+      data-tour="visit-tour-row"
       className={cn(
         "min-w-0 max-w-full overflow-hidden rounded-lg border transition-colors",
         // 向右展開 active: tint the whole row so it's clear which visit the
@@ -232,6 +233,7 @@ export function VisitItem({
             {hasDetails && (
               <button
                 type="button"
+                data-tour="visit-open-right"
                 onClick={openInRightPane}
                 onMouseDown={(e) => e.stopPropagation()}
                 title={(t.visitHistory as any).openRight ?? '在右側展開'}

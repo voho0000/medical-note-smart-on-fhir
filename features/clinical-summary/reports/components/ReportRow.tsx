@@ -439,6 +439,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
   // toggle the accordion (mirrors TrendButton).
   const renderImageButton = (stopProp?: boolean) => (
     <div
+      data-tour="report-image"
       onClick={(e) => {
         if (stopProp) e.stopPropagation()
         openImageDialog()
@@ -479,6 +480,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
 
   const renderTrendButton = (stopProp?: boolean) => (
     <div
+      data-tour="report-trend"
       onClick={(e) => {
         if (stopProp) e.stopPropagation()
         openTrendDialog()
@@ -580,6 +582,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
       return (
         <>
           <div
+            data-tour="report-tour-row"
             className={cn(
               'w-full min-w-0 max-w-full overflow-hidden rounded-md border bg-muted/40 px-2.5 py-1.5 transition-colors',
               // 向右展開 active: tint the row so it's clear which report the
@@ -643,6 +646,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 {hasText && !isReportRightActive && (
                   <ReportInterpretationButton
                     active={interpretOpen}
+                    dataTour="report-ai-interpretation"
                     onToggle={(e) => {
                       e.stopPropagation()
                       setInterpretOpen((v) => !v)
@@ -658,6 +662,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                     <TooltipTrigger asChild>
                       <button
                         type="button"
+                        data-tour="report-open-right"
                         onClick={openReportRight}
                         aria-label={hasImages ? '在右側面板展開報告與影像' : '在右側面板展開全文'}
                         className={cn(
@@ -979,6 +984,7 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 <ReportInterpretationButton
                   asDiv
                   active={interpretOpen}
+                  dataTour="report-ai-interpretation"
                   onToggle={(e) => {
                     e.stopPropagation()
                     setInterpretOpen((v) => !v)

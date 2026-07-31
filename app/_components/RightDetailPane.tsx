@@ -18,7 +18,7 @@ export function RightDetailPane({
 }) {
   const { t } = useLanguage()
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-sm" data-tour="right-detail-pane">
       <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
         <button
           type="button"

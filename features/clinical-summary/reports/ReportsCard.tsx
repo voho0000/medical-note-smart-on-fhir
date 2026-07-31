@@ -26,6 +26,7 @@ import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
 import { ReportNameModeProvider } from './context/report-name-mode.context'
 import { ReportNameModeSwitch } from './components/ReportNameModeSwitch'
 import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
@@ -39,6 +40,8 @@ export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], imagingStudies = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
+  const tourActive = useLeftBrowserTourStore((state) => state.active)
+  const tourStep = useLeftBrowserTourStore((state) => state.stepId)
   // The cumulative destination only needs Observation pivots. Defer the much
   // heavier raw-report pipeline (DR grouping, narrative dedup, orphan rows,
   // day grouping) until a raw tab is actually requested.
@@ -97,6 +100,29 @@ export function ReportsCard() {
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
+
+  // Open a concrete raw-report view for the trend / imaging tour steps. The
+  // report card unmounts when the outer tour moves away, so its normal default
+  // is restored naturally after the tour.
+  useEffect(() => {
+    if (!tourActive || !tourStep) return
+    const target = tourStep === 'reports'
+      ? 'cumulative'
+      : tourStep === 'trend'
+        ? 'all'
+        : tourStep === 'imaging-ai'
+          ? 'imaging'
+          : null
+    if (!target) return
+    const timer = window.setTimeout(() => {
+      if (target !== 'cumulative') setRawReportsEnabled(true)
+      setSearchQuery('')
+      setPendingTab(null)
+      setActiveTab(target)
+      setVisitedTabs((previous) => previous.has(target) ? previous : new Set(previous).add(target))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [tourActive, tourStep])
   // The same preference follows the user across report views whose titles can
   // be normalized. Procedures have no matching control, so they retain their
   // established standardized labels.
@@ -424,7 +450,7 @@ export function ReportsCard() {
         className={`${expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'} ${activeTab === 'cumulative' ? 'gap-0' : ''}`}
       >
         {/* Desktop tabs */}
-        <TabsList className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+        <TabsList data-tour="report-tabs" className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
             // Spinner appears on the tab the user is currently switching to,
             // for the duration of useTransition's pending window. Tells the
@@ -435,6 +461,7 @@ export function ReportsCard() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
+                data-tour={`report-tab-${tab.value}`}
                 className={`!flex-none !min-w-fit px-2 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
               >
                 {showSpinner && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
@@ -445,7 +472,7 @@ export function ReportsCard() {
         </TabsList>
 
         {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
-        <div className={`${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} md:hidden pr-12`}>
+        <div data-tour="report-tabs" className={`${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} md:hidden pr-12`}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="w-full justify-between">

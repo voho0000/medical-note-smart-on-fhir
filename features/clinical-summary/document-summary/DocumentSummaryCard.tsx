@@ -93,7 +93,7 @@ export function DocumentSummaryCard() {
           </Tooltip>
         </TooltipProvider>
 
-        <ul className="space-y-2">
+        <ul className="space-y-2" data-tour="documents-list">
           {entries.map((entry) => (
             <DocumentEntryCard
               key={entry.id}
@@ -206,6 +206,7 @@ function DocumentEntryCard({
   const rightButton = (
     <div
       role="button"
+      data-tour="document-open-right"
       tabIndex={0}
       onClick={openRight}
       onMouseDown={(e) => e.stopPropagation()}
@@ -231,6 +232,7 @@ function DocumentEntryCard({
   return (
     <li
       ref={anchorRef}
+      data-tour="document-entry"
       className={cn(
         'rounded-md border border-border/60 bg-muted/20 p-2.5 transition-colors',
         isRightActive && 'border-primary/40 bg-primary/5',
