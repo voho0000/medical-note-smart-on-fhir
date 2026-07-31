@@ -69,17 +69,47 @@ const STEPS: TourStep[] = [
   },
   {
     id: 'chat',
-    target: '[data-tour="chat-template-manage"]',
+    target: '[data-tour="medical-chat-controls"]',
     fallbackTarget: '[data-tour="right-tab-medical-chat"]',
-    highlightPadding: 10,
-    title: { 'zh-TW': '建立自己的臨床對話範本', en: 'Create your own clinical chat templates' },
+    highlightPadding: 8,
+    title: { 'zh-TW': '先認識臨床對話與上方工具', en: 'Get to know Clinical chat and its controls' },
     body: {
-      'zh-TW': '點「管理範本」可新增或編輯範本名稱、內容與快捷指令，也能排序並設為預設範本。完成後可從輸入區上方的範本列快速帶入對話。',
-      en: 'Open Manage templates to add or edit names, content, and shortcuts, reorder templates, or choose a default. Then insert one quickly from the template bar.',
+      'zh-TW': '可直接詢問目前病人的診斷、用藥、檢驗或照護問題，AI 會依問題查詢已載入的病歷。上方可查看對話紀錄、切換不保留本次內容的無痕模式、選擇 AI 模型，或開始新對話；登入後才能保存與查看歷史對話。回答仍需由醫療人員核對。',
+      en: 'Ask directly about the current patient’s diagnoses, medications, tests, or care; AI queries the loaded record as needed. The controls above open chat history, enable a temporary unsaved chat, switch AI models, or start a new conversation. Sign in to save and revisit past chats, and clinically verify every answer.',
     },
     fallbackBody: {
-      'zh-TW': '目前尚未顯示範本工具列；進入臨床對話後，可從輸入區上方的「管理範本」建立與編輯自訂範本。',
-      en: 'The template toolbar is not visible yet. In Clinical chat, use Manage templates above the input area to create and edit templates.',
+      'zh-TW': '進入臨床對話後，可直接詢問目前病歷；登入後還能查看對話紀錄、使用無痕模式、切換 AI 模型或開始新對話。',
+      en: 'In Clinical chat, ask about the current record. After signing in, you can also revisit chat history, use temporary mode, switch AI models, or start a new conversation.',
+    },
+  },
+  {
+    id: 'chat-compose',
+    target: '[data-tour="medical-chat-composer"]',
+    fallbackTarget: '[data-tour="right-tab-medical-chat"]',
+    highlightPadding: 8,
+    title: { 'zh-TW': '用文字、圖片、語音或範本開始對話', en: 'Start with text, images, voice, or a template' },
+    body: {
+      'zh-TW': '可在輸入框直接輸入問題，也能貼上或上傳圖片，或點麥克風使用語音輸入。輸入「/」可搜尋快捷範本，也可以直接點上方的範本按鈕帶入內容，再送出問題。',
+      en: 'Type a question, paste or upload an image, or use the microphone for voice input. Type “/” to search shortcut templates, or click a template above the input to insert it before sending.',
+    },
+    fallbackBody: {
+      'zh-TW': '進入臨床對話後，可用文字、圖片、語音或「/」快捷範本輸入問題。',
+      en: 'In Clinical chat, enter questions with text, images, voice, or “/” shortcut templates.',
+    },
+  },
+  {
+    id: 'chat-template',
+    target: '[data-tour="chat-template-tools"]',
+    fallbackTarget: '[data-tour="right-tab-medical-chat"]',
+    highlightPadding: 8,
+    title: { 'zh-TW': '從範本庫挑選，也能建立自己的範本', en: 'Browse the library or create your own templates' },
+    body: {
+      'zh-TW': '點「範本庫」可瀏覽並加入現成範本；點「管理範本」可新增或編輯名稱、內容與快捷指令，也能調整順序並設為預設範本。',
+      en: 'Open the Template library to browse and add ready-made templates. Use Manage templates to add or edit names, content, and shortcuts, reorder items, or choose a default.',
+    },
+    fallbackBody: {
+      'zh-TW': '進入臨床對話後，可從輸入區上方開啟範本庫，或使用「管理範本」建立與編輯自訂範本。',
+      en: 'In Clinical chat, open the Template library above the input area or use Manage templates to create and edit your own.',
     },
   },
   {

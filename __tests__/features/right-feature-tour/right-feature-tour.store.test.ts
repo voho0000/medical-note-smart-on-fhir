@@ -23,8 +23,8 @@ describe('right feature tour store', () => {
 
   it('updates the current step and stops cleanly', () => {
     useRightFeatureTourStore.getState().start()
-    useRightFeatureTourStore.getState().setStep('calculator')
-    expect(useRightFeatureTourStore.getState().stepId).toBe('calculator')
+    useRightFeatureTourStore.getState().setStep('chat-compose')
+    expect(useRightFeatureTourStore.getState().stepId).toBe('chat-compose')
 
     useRightFeatureTourStore.getState().stop()
     expect(useRightFeatureTourStore.getState()).toMatchObject({

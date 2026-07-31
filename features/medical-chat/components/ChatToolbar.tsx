@@ -64,7 +64,7 @@ export function ChatToolbar({
   const insertTemplateLabel = `${t.chat.insertTemplate}：${selectedTemplateLabel}`
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-1.5">
+    <div data-tour="chat-template-tools" className="flex w-full min-w-0 items-center gap-1.5">
       {templates.length > 0 ? (
         <div className="flex h-9 min-w-0 flex-1 items-stretch overflow-hidden rounded-lg border bg-background shadow-xs sm:max-w-[14rem]">
           <Button
@@ -129,7 +129,6 @@ export function ChatToolbar({
       )}
       <Button
         type="button"
-        data-tour="chat-template-manage"
         size="sm"
         variant="outline"
         onClick={onManageTemplates}

@@ -9,6 +9,8 @@ export type RightFeatureTourStepId =
   | 'summary'
   | 'summary-settings'
   | 'chat'
+  | 'chat-compose'
+  | 'chat-template'
   | 'calculator'
   | 'guidance'
   | 'export'

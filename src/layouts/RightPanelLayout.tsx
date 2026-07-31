@@ -237,6 +237,8 @@ function RightPanelContentInner() {
       summary: 'medical-summary',
       'summary-settings': 'medical-summary',
       chat: 'medical-chat',
+      'chat-compose': 'medical-chat',
+      'chat-template': 'medical-chat',
       calculator: 'medical-calculator',
       guidance: CLINICAL_DECISION_SUPPORT_FEATURE_ID,
       export: 'ips-export',

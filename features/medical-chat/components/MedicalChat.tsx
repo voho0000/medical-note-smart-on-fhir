@@ -563,7 +563,7 @@ export default function MedicalChat() {
   const chatContent = (
     <Card className={`flex h-full flex-col overflow-hidden ${isExpanded ? 'rounded-none border-0' : CARD_BORDER_CLASSES.chat} !gap-0 !py-0`}>
       {!isExpanded && (
-        <div className="relative flex items-center justify-between px-2 py-1">
+        <div data-tour="medical-chat-controls" className="relative flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-1">
             {/* Keep the history drawer visible even when signed out — its
                 internal empty-state shows a "sign in to save chats" CTA,
@@ -679,7 +679,7 @@ export default function MedicalChat() {
       </CardContent>
 
       <CardFooter className="flex flex-col gap-2 border-t px-3 sm:px-6 !pt-2 pb-2 shrink-0">
-        <div className="flex w-full flex-col gap-1">
+        <div data-tour="medical-chat-composer" className="flex w-full flex-col gap-1">
           <ChatToolbar
             onInsertTemplate={handleInsertTemplate}
             templates={template.templates}
