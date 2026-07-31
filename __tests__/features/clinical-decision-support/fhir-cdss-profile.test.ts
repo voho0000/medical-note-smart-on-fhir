@@ -529,9 +529,37 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
         dataWindowEndDate: '2026-06-25',
       },
     })
-    expect(result.facts.statinTherapy.zh).toContain('最後處方 2025-05-20')
-    expect(result.facts.statinTherapy.zh).toContain('用藥資料範圍 2025-05-20–2026-06-25')
+    expect(result.facts.statinTherapy.zh).toContain('最近 2025-05-20')
+    expect(result.facts.statinTherapy.zh).toContain('1 筆處方')
+    expect(result.facts.statinTherapy.zh).not.toContain('用藥資料範圍')
     expect(result.facts.aceArbTherapy.zh).toContain('Valsartan')
+  })
+
+  it('deduplicates repeated historical prescriptions in the summary while preserving every source', () => {
+    const result = profile([], [
+      {
+        ...medication('old-statin-1', 'Rosuvastatin 10 mg', 'completed', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2025-03-20',
+      },
+      {
+        ...medication('old-statin-2', '  Rosuvastatin   10 mg  ', 'completed', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2025-05-20',
+      },
+      {
+        ...medication('old-statin-3', 'ROSUVASTATIN 10 MG', 'completed', 'LIPID MODIFYING AGENTS'),
+        authoredOn: '2025-04-20',
+      },
+    ])
+
+    expect(result.medicationClassContexts?.statin).toMatchObject({
+      state: 'historical-record-current-status-unknown',
+      medicationNames: ['Rosuvastatin 10 mg'],
+      lastPrescriptionDate: '2025-05-20',
+    })
+    expect(result.facts.statinTherapy.zh).toBe(
+      '有歷史 statin 處方，近期是否持續未知：Rosuvastatin 10 mg（3 筆處方 · 最近 2025-05-20）',
+    )
+    expect(result.facts.statinTherapy.sources).toHaveLength(3)
   })
 
   it('prefers a current class record without mixing historical names into current use', () => {

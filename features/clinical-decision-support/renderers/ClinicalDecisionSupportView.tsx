@@ -185,19 +185,31 @@ function EvidenceSources({
   const dateRange = dates.length > 1 && dates[0] !== dates.at(-1)
     ? `${dates[0]}–${dates.at(-1)}`
     : dates[0]
+  const isMedicationHistory = navigableSources.every((source) => (
+    source.resourceType === 'MedicationRequest'
+    || source.resourceType === 'MedicationStatement'
+  ))
   const summary = [
-    isEnglish
-      ? `${navigableSources.length} source record${navigableSources.length === 1 ? '' : 's'}`
-      : `${navigableSources.length} 筆原始資料`,
+    isMedicationHistory
+      ? isEnglish
+        ? `${navigableSources.length} medication record${navigableSources.length === 1 ? '' : 's'}`
+        : `${navigableSources.length} 筆用藥歷程`
+      : isEnglish
+        ? `${navigableSources.length} source record${navigableSources.length === 1 ? '' : 's'}`
+        : `${navigableSources.length} 筆原始資料`,
     facilities.size > 0
       ? (isEnglish ? `${facilities.size} facilit${facilities.size === 1 ? 'y' : 'ies'}` : `${facilities.size} 家院所`)
       : undefined,
     dateRange,
   ].filter(Boolean).join(' · ')
   const compactSummary = [
-    isEnglish
-      ? `Sources ${navigableSources.length}`
-      : `來源 ${navigableSources.length}`,
+    isMedicationHistory
+      ? isEnglish
+        ? `Medication history ${navigableSources.length}`
+        : `用藥歷程 ${navigableSources.length} 筆`
+      : isEnglish
+        ? `Sources ${navigableSources.length}`
+        : `來源 ${navigableSources.length}`,
   ].filter(Boolean).join(' · ')
 
   if (compact && navigableSources.length === 1) {

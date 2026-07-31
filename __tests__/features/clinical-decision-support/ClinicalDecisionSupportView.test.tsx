@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import {
   buildClinicalDecisionSummary,
   ClinicalDecisionSupportView,
@@ -113,5 +113,44 @@ describe('clinical decision summary', () => {
     expect(summary).not.toHaveTextContent('補資料 B')
     expect(summary.textContent?.match(/定量 UACR/g)).toHaveLength(1)
     expect(within(summary).getByText('2 項已核對')).toBeInTheDocument()
+  })
+
+  it('keeps medication records behind a compact history control', () => {
+    const medicationHistory: CdssResult = {
+      ...result(),
+      recommendations: [
+        recommendation('statin-history', {
+          overviewEvidenceFactKey: 'statinTherapy',
+          patientEvidence: [{
+            label: '系統核對 statin',
+            value: '有歷史 statin 處方，近期是否持續未知：Rosuvastatin 10 mg（3 筆處方 · 最近 2025-05-20）',
+            factKeys: ['statinTherapy'],
+            sources: [
+              {
+                resourceType: 'MedicationRequest',
+                resourceId: 'statin-1',
+                date: '2025-03-20',
+              },
+              {
+                resourceType: 'MedicationRequest',
+                resourceId: 'statin-2',
+                date: '2025-04-20',
+              },
+              {
+                resourceType: 'MedicationRequest',
+                resourceId: 'statin-3',
+                date: '2025-05-20',
+              },
+            ],
+          }],
+        }),
+      ],
+    }
+
+    render(<ClinicalDecisionSupportView result={medicationHistory} locale="zh-TW" />)
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-statin-history'))
+
+    const detail = screen.getByTestId('cdss-recommendation-detail-statin-history')
+    expect(within(detail).getByText('用藥歷程 3 筆')).toBeInTheDocument()
   })
 })

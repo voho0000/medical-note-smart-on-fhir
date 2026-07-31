@@ -1129,11 +1129,36 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       } : {}),
     }
   }
+  const uniqueMedicationNames = (names: readonly string[]): string[] => {
+    const seen = new Set<string>()
+    return names
+      .map((name) => name.trim().replace(/\s+/g, ' '))
+      .filter((name) => {
+        const key = name.normalize('NFKC').toLocaleLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+  }
   const medicationClassNames = (
     assessment: ReturnType<typeof assessMedicationClass>,
-  ) => assessment.medications
-    .filter((item) => item.state === assessment.state)
-    .map((item) => item.name)
+  ) => uniqueMedicationNames(
+    assessment.medications
+      .filter((item) => item.state === assessment.state)
+      .map((item) => item.name),
+  )
+  const medicationNameSummary = (
+    names: readonly string[],
+    locale: 'zh-TW' | 'en',
+  ): string => {
+    const visibleNames = names.slice(0, 2)
+    const separator = locale === 'en' ? ', ' : '、'
+    const visible = visibleNames.join(separator)
+    if (names.length <= visibleNames.length) return visible
+    return locale === 'en'
+      ? `${visible} and ${names.length - visibleNames.length} more`
+      : `${visible} 等 ${names.length} 種`
+  }
   const insulinTimeline = medicationClassTimeline(insulinAssessment)
   const sulfonylureaTimeline = medicationClassTimeline(sulfonylureaAssessment)
   const sglt2Timeline = medicationClassTimeline(sglt2Assessment)
@@ -1156,37 +1181,39 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       ? 'uncertain'
       : 'not-found'
   )
-  const hypoglycemiaRiskNames = [...new Set(
+  const hypoglycemiaRiskNames = uniqueMedicationNames(
     hypoglycemiaAssessments
       .flatMap((assessment) => assessment.medications)
       .filter((item) => item.state === medicationClassState)
       .map((item) => item.name),
-  )]
+  )
+  const hypoglycemiaRiskSummaryZh = medicationNameSummary(hypoglycemiaRiskNames, 'zh-TW')
+  const hypoglycemiaRiskSummaryEn = medicationNameSummary(hypoglycemiaRiskNames, 'en')
   const hypoglycemiaMedicationSources = hypoglycemiaAssessments
     .filter((assessment) => assessment.state === medicationClassState)
     .flatMap(medicationClassSources)
   facts.hypoglycemiaRiskMedications = medicationClassState === 'confirmed-current'
     ? {
-        zh: `已確認使用：${hypoglycemiaRiskNames.join('、')}`,
-        en: `Confirmed current use: ${hypoglycemiaRiskNames.join(', ')}`,
+        zh: `已確認使用：${hypoglycemiaRiskSummaryZh}`,
+        en: `Confirmed current use: ${hypoglycemiaRiskSummaryEn}`,
         sources: hypoglycemiaMedicationSources,
       }
     : medicationClassState === 'active-order-unconfirmed'
       ? {
-          zh: `已有處方、尚未確認實際使用：${hypoglycemiaRiskNames.join('、')}`,
-          en: `Active order; actual use unconfirmed: ${hypoglycemiaRiskNames.join(', ')}`,
+          zh: `已有處方、尚未確認實際使用：${hypoglycemiaRiskSummaryZh}`,
+          en: `Active order; actual use unconfirmed: ${hypoglycemiaRiskSummaryEn}`,
           sources: hypoglycemiaMedicationSources,
         }
       : medicationClassState === 'on-hold'
         ? {
-            zh: `暫停中的胰島素／磺醯脲：${hypoglycemiaRiskNames.join('、')}`,
-            en: `Insulin/sulfonylurea on hold: ${hypoglycemiaRiskNames.join(', ')}`,
+            zh: `暫停中的胰島素／磺醯脲：${hypoglycemiaRiskSummaryZh}`,
+            en: `Insulin/sulfonylurea on hold: ${hypoglycemiaRiskSummaryEn}`,
             sources: hypoglycemiaMedicationSources,
           }
         : medicationClassState === 'historical-record-current-status-unknown'
           ? {
-              zh: `有歷史胰島素／磺醯脲處方，近期是否持續未知：${hypoglycemiaRiskNames.join('、')}`,
-              en: `Historical insulin/sulfonylurea record; current use is unknown: ${hypoglycemiaRiskNames.join(', ')}`,
+              zh: `有歷史胰島素／磺醯脲處方，近期是否持續未知：${hypoglycemiaRiskSummaryZh}`,
+              en: `Historical insulin/sulfonylurea record; current use is unknown: ${hypoglycemiaRiskSummaryEn}`,
               sources: hypoglycemiaMedicationSources,
             }
           : medicationClassState === 'uncertain'
@@ -1204,17 +1231,18 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     classZh: string,
     classEn: string,
   ): CdssFact => {
-    const names = assessment.medications
-      .filter((item) => item.state === assessment.state)
-      .map((item) => item.name)
-    const suffixZh = names.length > 0 ? `：${names.join('、')}` : ''
-    const suffixEn = names.length > 0 ? `: ${names.join(', ')}` : ''
+    const names = medicationClassNames(assessment)
+    const suffixZh = names.length > 0 ? `：${medicationNameSummary(names, 'zh-TW')}` : ''
+    const suffixEn = names.length > 0 ? `: ${medicationNameSummary(names, 'en')}` : ''
     const timeline = medicationClassTimeline(assessment)
+    const matchingRecordCount = assessment.medications
+      .filter((item) => item.state === assessment.state)
+      .length
     const timelineZh = assessment.state === 'historical-record-current-status-unknown'
-      ? `（最後處方 ${timeline.lastPrescriptionDate ?? '日期不明'}；用藥資料範圍 ${timeline.dataWindowStartDate ?? '不明'}–${timeline.dataWindowEndDate ?? '不明'}）`
+      ? `（${matchingRecordCount} 筆處方 · 最近 ${timeline.lastPrescriptionDate ?? '日期不明'}）`
       : ''
     const timelineEn = assessment.state === 'historical-record-current-status-unknown'
-      ? ` (last prescription ${timeline.lastPrescriptionDate ?? 'unknown'}; medication data window ${timeline.dataWindowStartDate ?? 'unknown'}–${timeline.dataWindowEndDate ?? 'unknown'})`
+      ? ` (${matchingRecordCount} prescription record${matchingRecordCount === 1 ? '' : 's'} · latest ${timeline.lastPrescriptionDate ?? 'unknown'})`
       : ''
     const labels = {
       'confirmed-current': {
