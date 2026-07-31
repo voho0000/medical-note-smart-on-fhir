@@ -14,8 +14,10 @@ import type {
  * Deterministic DCSI rule set. Keep this versioned independently from the UI so
  * a hospital can replace the value sets without changing the clinical module.
  */
-export const DCSI_CODEBOOK_VERSION = 'dcsi-icd10-fhir-2017-v1'
+export const DCSI_CODEBOOK_VERSION = 'dcsi-icd10-fhir-2017-v2'
 export const DCSI_OBSERVATION_WINDOW_DAYS = 365
+export const DCSI_GLASHEEN_2017_SUPPLEMENT_URL =
+  'https://ars.els-cdn.com/content/image/1-s2.0-S105687271631042X-mmc1.docx'
 
 const ICD10_SYSTEMS = new Set([
   'http://hl7.org/fhir/sid/icd-10',
@@ -54,37 +56,41 @@ interface EvidenceCandidate {
 const DIABETES = 'E(?:08|09|10|11|13)'
 
 /**
- * ICD-10-CM translation of the seven updated DCSI domains. Score-2 rules are
- * evaluated first so a specific severe code is never reduced by a broad
- * category rule.
+ * ICD-10-CM translation from Glasheen et al. (2017), Supplementary Appendix
+ * A-1 through A-7. Keep this diagnosis table faithful to the publication.
+ * FHIR-specific procedure and laboratory extensions are evaluated separately
+ * below and must not be represented as codes validated by the paper.
+ *
+ * Score-2 rules are evaluated first so a specific severe code is never reduced
+ * by a broad category rule.
  */
 export const DCSI_ICD10_RULES: readonly DcsiRule[] = [
   // Ophthalmic
   {
     domain: 'ophthalmic',
     score: 2,
-    code: new RegExp(`^${DIABETES}\\.35`),
-    zh: '增殖性糖尿病視網膜病變',
-    en: 'Proliferative diabetic retinopathy',
+    code: new RegExp(`^${DIABETES}\\.3[45]`),
+    zh: '重度非增殖性或增殖性糖尿病視網膜病變',
+    en: 'Severe nonproliferative or proliferative diabetic retinopathy',
   },
   {
     domain: 'ophthalmic',
     score: 2,
-    code: /^(?:H33|H35\.2|H43\.1|H54)(?:\.|$)/,
+    code: /^(?:H33(?:\.|$)|H43\.1|H54(?:\.|$))/,
     zh: '嚴重眼部病變',
     en: 'Severe ophthalmic complication',
   },
   {
     domain: 'ophthalmic',
     score: 1,
-    code: new RegExp(`^${DIABETES}\\.3`),
+    code: new RegExp(`^${DIABETES}\\.3(?![45])`),
     zh: '糖尿病眼部病變',
     en: 'Diabetic ophthalmic complication',
   },
   {
     domain: 'ophthalmic',
     score: 1,
-    code: /^H35\.(?:0|3|6|8)/,
+    code: /^(?:H35\.0|H35\.35|H35\.6|H35\.8|H35\.9)/,
     zh: '視網膜病變',
     en: 'Retinal complication',
   },
@@ -93,23 +99,23 @@ export const DCSI_ICD10_RULES: readonly DcsiRule[] = [
   {
     domain: 'nephropathy',
     score: 2,
-    code: /^(?:N17|N18\.[456]|N19|T82\.4|Z49|Z94\.0|Z99\.2)(?:\.|$)/,
-    zh: '重度腎病變或腎臟替代治療',
-    en: 'Severe kidney disease or kidney replacement therapy',
+    code: /^(?:N18\.[456]|N19)(?:\.|$)/,
+    zh: '重度慢性腎病或腎衰竭',
+    en: 'Severe chronic kidney disease or kidney failure',
   },
   {
     domain: 'nephropathy',
     score: 1,
-    code: new RegExp(`^${DIABETES}\\.2`),
+    code: new RegExp(`^${DIABETES}\\.(?:21|22|29)(?:\\.|$)`),
     zh: '糖尿病腎病變',
     en: 'Diabetic kidney complication',
   },
   {
     domain: 'nephropathy',
     score: 1,
-    code: /^(?:N03|N04|N05|N08\.3|N18\.[123]|R80)(?:\.|$)/,
-    zh: '慢性腎病或蛋白尿',
-    en: 'Chronic kidney disease or proteinuria',
+    code: /^(?:N00|N03|N04|N05|N18\.[1239])(?:\.|$)/,
+    zh: '腎炎、腎病症候群或第 1–3 期／未分期慢性腎病',
+    en: 'Nephritic/nephrotic disease or stage 1–3/unspecified chronic kidney disease',
   },
 
   // Neuropathy (maximum one point)
@@ -123,6 +129,20 @@ export const DCSI_ICD10_RULES: readonly DcsiRule[] = [
   {
     domain: 'neuropathy',
     score: 1,
+    code: /^(?:G90\.01|G90\.09|G90\.8|G90\.9|G99\.0)(?:\.|$)/,
+    zh: '自主神經病變',
+    en: 'Autonomic neuropathy',
+  },
+  {
+    domain: 'neuropathy',
+    score: 1,
+    code: /^(?:G56(?:\.|$)|G57(?:\.|$)|G60\.9(?:\.|$)|G73\.3(?:\.|$))/,
+    zh: '周邊或單神經病變',
+    en: 'Peripheral neuropathy or mononeuropathy',
+  },
+  {
+    domain: 'neuropathy',
+    score: 1,
     code: /^H49(?:\.|$)/,
     zh: '眼球運動神經麻痺',
     en: 'Ocular motor nerve palsy',
@@ -130,18 +150,18 @@ export const DCSI_ICD10_RULES: readonly DcsiRule[] = [
   {
     domain: 'neuropathy',
     score: 1,
-    code: /^(?:G59\.0|G60\.9|G63\.2|G73\.3|G99\.0|M14\.6)(?:\.|$)/,
-    zh: '周邊或自主神經病變',
-    en: 'Peripheral or autonomic neuropathy',
+    code: /^(?:I95\.1(?:\.|$)|K31\.84(?:\.|$)|K59\.1(?:\.|$)|N31\.9(?:\.|$)|M14\.6|S04(?:\.|$))/,
+    zh: '糖尿病相關神經系統表現',
+    en: 'Diabetes-associated neurologic manifestation',
   },
 
   // Cerebrovascular
   {
     domain: 'cerebrovascular',
     score: 2,
-    code: /^(?:I6[0-4]|I69)(?:\.|$)/,
-    zh: '腦中風',
-    en: 'Stroke',
+    code: /^(?:I61|I63|I65|I66|I67\.81)(?:\.|$)/,
+    zh: '腦中風或腦動脈阻塞／狹窄',
+    en: 'Stroke or cerebral arterial occlusion/stenosis',
   },
   {
     domain: 'cerebrovascular',
@@ -155,53 +175,67 @@ export const DCSI_ICD10_RULES: readonly DcsiRule[] = [
   {
     domain: 'cardiovascular',
     score: 2,
-    code: /^(?:I50|I11\.0|I13\.[02])(?:\.|$)/,
-    zh: '心衰竭',
-    en: 'Heart failure',
+    code: /^(?:I21|I22|I23|I46|I47|I48|I49|I50|I71)(?:\.|$)/,
+    zh: '重度心血管病變',
+    en: 'Severe cardiovascular complication',
   },
   {
     domain: 'cardiovascular',
     score: 2,
-    code: /^I2[1-3](?:\.|$)/,
-    zh: '心肌梗塞',
-    en: 'Myocardial infarction',
-  },
-  {
-    domain: 'cardiovascular',
-    score: 2,
-    code: /^(?:I46|I48|I49)(?:\.|$)/,
-    zh: '嚴重心律不整或心跳停止',
-    en: 'Serious arrhythmia or cardiac arrest',
-  },
-  {
-    domain: 'cardiovascular',
-    score: 2,
-    code: /^I71(?:\.|$)/,
-    zh: '主動脈瘤或剝離',
-    en: 'Aortic aneurysm or dissection',
+    code: /^(?:I25\.2(?:\.|$)|I70\.(?:25|26))/,
+    zh: '陳舊性心肌梗塞或合併潰瘍／壞疽的肢體動脈粥樣硬化',
+    en: 'Old myocardial infarction or extremity atherosclerosis with ulceration/gangrene',
   },
   {
     domain: 'cardiovascular',
     score: 1,
-    code: /^(?:I20|I24|I25|I70)(?:\.|$)/,
+    code: /^(?:I20|I24)(?:\.|$)/,
     zh: '缺血性或動脈粥樣硬化心血管病變',
     en: 'Ischemic or atherosclerotic cardiovascular disease',
+  },
+  {
+    domain: 'cardiovascular',
+    score: 1,
+    code: /^I25(?:$|\.(?!2))/,
+    zh: '慢性缺血性心臟病',
+    en: 'Chronic ischemic heart disease',
+  },
+  {
+    domain: 'cardiovascular',
+    score: 1,
+    code: /^I70(?:$|\.(?!(?:25|26)))/,
+    zh: '動脈粥樣硬化',
+    en: 'Atherosclerosis',
   },
 
   // Peripheral vascular
   {
     domain: 'peripheral-vascular',
     score: 2,
-    code: new RegExp(`^(?:${DIABETES}\\.(?:52|62[12])(?:\\.|$)|I70\\.2(?:3|6)|I74\\.3|A48\\.0|L97|L98\\.4)`),
+    code: new RegExp(`^${DIABETES}\\.52(?:\\.|$)`),
+    zh: '糖尿病周邊血管病變合併壞疽',
+    en: 'Diabetic peripheral angiopathy with gangrene',
+  },
+  {
+    domain: 'peripheral-vascular',
+    score: 2,
+    code: /^(?:A48\.0(?:\.|$)|I74\.3(?:\.|$)|L97(?:\.|$)|I96(?:\.|$))/,
     zh: '下肢潰瘍、壞疽或嚴重周邊血管病變',
     en: 'Lower-limb ulcer, gangrene, or severe peripheral vascular disease',
   },
   {
     domain: 'peripheral-vascular',
     score: 1,
-    code: new RegExp(`^(?:${DIABETES}\\.5|I70\\.2|I72\\.4|I73\\.9|I79\\.2)`),
+    code: new RegExp(`^${DIABETES}\\.(?:51|59|621)(?:\\.|$)`),
     zh: '糖尿病周邊血管病變',
     en: 'Diabetic peripheral vascular disease',
+  },
+  {
+    domain: 'peripheral-vascular',
+    score: 1,
+    code: /^(?:I70\.21|I72\.4(?:\.|$)|I73\.89(?:\.|$)|I73\.9(?:\.|$)|S91\.3)/,
+    zh: '周邊血管病變、間歇性跛行或足部傷口',
+    en: 'Peripheral vascular disease, intermittent claudication, or foot wound',
   },
 
   // Acute metabolic complications
@@ -370,6 +404,8 @@ function procedureCandidates(
   procedures: readonly ProcedureEntity[],
   now: Date,
 ): EvidenceCandidate[] {
+  // Local FHIR extension: the 2017 diagnosis tables do not define Procedure
+  // resources. Keep these candidates separate from DCSI_ICD10_RULES.
   return procedures.flatMap((procedure): EvidenceCandidate[] => {
     if (!procedure.id || !procedure.status || !ACCEPTED_PROCEDURE_STATUS.has(procedure.status)) return []
     const date = procedure.performedDateTime ?? procedure.performedPeriod?.start
@@ -417,6 +453,8 @@ function laboratoryCandidates(
   facts: Readonly<Record<string, CdssFact>>,
   now: Date,
 ): EvidenceCandidate[] {
+  // eGFR thresholds come from Appendix A-2. Quantitative UACR in mg/g is a
+  // local FHIR extension; the paper specifies urine microalbumin in mg/L.
   const results: EvidenceCandidate[] = []
   const eGfr = facts.eGFR
   if (

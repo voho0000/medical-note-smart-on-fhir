@@ -545,6 +545,20 @@ describe('createFhirTools (unified)', () => {
       expect(r.data.name).toBeUndefined()
       expect(r.data.birthDate).toBeUndefined()
     })
+
+    it('marks age as approximate when only a birth year is available', async () => {
+      const yearOnlyTools = createFhirTools(() => ({
+        patient: {
+          ...samplePatient,
+          birthDate: '1980',
+        },
+        collection: sampleCollection,
+      }))
+      const r = await (yearOnlyTools.queryPatientInfo as any).execute({})
+      expect(typeof r.data.age).toBe('number')
+      expect(r.data.ageApproximate).toBe(true)
+      expect(r.data.birthDate).toBeUndefined()
+    })
   })
 
   describe('Realistic LLM query scenarios', () => {

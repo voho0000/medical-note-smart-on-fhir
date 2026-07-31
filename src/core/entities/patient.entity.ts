@@ -52,8 +52,8 @@ export interface PatientEntity {
     name?: { text?: string; given?: string[]; family?: string }
     telecom?: { system?: string; value?: string; use?: string }[]
   }[]
-  /** Present only when the App has overlaid locally-entered SDK demographics.
-   * The source FHIR Patient remains unchanged in the encrypted Bundle. */
+  /** Present only when the App has overlaid user-entered demographics.
+   * The source FHIR Patient remains unchanged. */
   demographicsSource?: 'user-entered-local-profile'
   userEnteredDemographicFields?: PatientDemographicField[]
 }
@@ -75,7 +75,9 @@ export interface UserEnteredPatientProfileInput {
 }
 
 const PROFILE_GENDERS = new Set(['male', 'female', 'other'])
-const FHIR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const FHIR_YEAR_PATTERN = /^\d{4}$/
+const FHIR_YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/
+const FHIR_FULL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function localDateString(date: Date): string {
   const year = date.getFullYear()
@@ -88,11 +90,25 @@ export function isValidPatientBirthDate(
   value: string,
   today = new Date(),
 ): boolean {
-  if (!FHIR_DATE_PATTERN.test(value)) return false
+  if (FHIR_YEAR_PATTERN.test(value)) {
+    return value >= '0001' && value <= localDateString(today).slice(0, 4)
+  }
+  if (FHIR_YEAR_MONTH_PATTERN.test(value)) {
+    return value <= localDateString(today).slice(0, 7)
+  }
+  if (!FHIR_FULL_DATE_PATTERN.test(value)) return false
   const parsed = new Date(`${value}T00:00:00Z`)
   if (Number.isNaN(parsed.getTime())) return false
   if (parsed.toISOString().slice(0, 10) !== value) return false
   return value <= localDateString(today)
+}
+
+/** FHIR date values may intentionally carry only year or year-month precision. */
+export function isPartialPatientBirthDate(value?: string | null): boolean {
+  return Boolean(
+    value
+    && (FHIR_YEAR_PATTERN.test(value) || FHIR_YEAR_MONTH_PATTERN.test(value)),
+  )
 }
 
 /** Build the only accepted shape for encrypted, user-entered demographics.
@@ -177,15 +193,21 @@ export function applyUserEnteredPatientProfile(
 }
 
 export function calculateAge(birthDate?: string | null): number | null {
-  if (!birthDate) return null
-  const birth = new Date(birthDate)
-  if (Number.isNaN(birth.getTime())) return null
+  if (!birthDate || !isValidPatientBirthDate(birthDate)) return null
+  const [yearText, monthText, dayText] = birthDate.split('-')
+  const year = Number(yearText)
 
   const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
-  const monthDiff = today.getMonth() - birth.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age -= 1
+  let age = today.getFullYear() - year
+  if (monthText) {
+    const birthMonth = Number(monthText) - 1
+    const monthDiff = today.getMonth() - birthMonth
+    if (
+      monthDiff < 0
+      || (dayText && monthDiff === 0 && today.getDate() < Number(dayText))
+    ) {
+      age -= 1
+    }
   }
   return age >= 0 ? age : null
 }

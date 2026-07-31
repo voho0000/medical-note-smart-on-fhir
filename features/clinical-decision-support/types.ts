@@ -1,3 +1,5 @@
+import type { AkiAssessment } from './risk-stratification/aki'
+
 export type CdssLocale = 'zh-TW' | 'en'
 export type CdssPriority = 'high' | 'medium' | 'routine'
 export type CdssStatus = 'actionable' | 'needs-data' | 'review' | 'no-action'
@@ -17,13 +19,34 @@ export type CdssKnowledgeSourceId =
   | 'kdigo-ckd-2024'
   | 'kdigo-anemia-2026'
   | 'taiwan-ckd-2025'
+  | 'taiwan-hypertension-2022'
+  | 'aha-acc-hypertension-2025'
+  | 'taiwan-lipid-2022'
+  | 'aha-acc-dyslipidemia-2026'
+  | 'ukka-hyperkalemia-2023'
+  | 'acc-aha-af-2023'
 export type CdssKnowledgeSourceKind = 'guideline' | 'coverage'
 export type CdssMedicationClassId =
   | 'insulin'
   | 'sulfonylurea'
   | 'sglt2-inhibitor'
+  | 'arni'
+  | 'hf-evidence-based-beta-blocker'
+  | 'loop-diuretic'
   | 'statin'
+  | 'ezetimibe'
+  | 'pcsk9-inhibitor'
+  | 'bempedoic-acid'
+  | 'fibrate'
+  | 'prescription-omega-3'
   | 'ace-inhibitor-or-arb'
+  | 'calcium-channel-blocker'
+  | 'thiazide-or-thiazide-like-diuretic'
+  | 'beta-blocker'
+  | 'nonselective-beta-blocker'
+  | 'mineralocorticoid-receptor-antagonist'
+  | 'lactulose'
+  | 'rifaximin'
   | 'finerenone'
 export type CdssMedicationClassState =
   | 'confirmed-current'
@@ -145,6 +168,8 @@ export interface CdssScreeningContext {
 export interface CdssPatientProfile {
   id: string
   profileVersion?: 'dm-cdss-profile-v1' | 'multi-disease-cdss-profile-v2'
+  /** ISO timestamp used to interpret laboratory recency reproducibly. */
+  evaluatedAt?: string
   /** Governed demographics used by reusable clinical equations. */
   demographics?: {
     sex?: 'male' | 'female' | 'other' | 'unknown'
@@ -167,6 +192,8 @@ export interface CdssPatientProfile {
       | 'hba1c_diagnostic_range'
       | 'care_plan'
       | 'chronic_labs'
+      | 'ldl_severe_range'
+      | 'triglyceride_severe_range'
     resourceType: 'Condition' | 'Encounter' | 'Observation' | 'CarePlan'
     resourceId?: string
     codingSystem: string
@@ -212,7 +239,19 @@ export interface CdssPatientProfile {
       ckdCareProgramTitle?: string
     }
   }
+  /**
+   * Creatinine-only AKI signal derived from governed FHIR Observations.
+   * Urine output, dialysis, etiology, and the clinical diagnosis remain outside
+   * this automated context and must be verified in the complete chart.
+   */
+  akiAssessment?: AkiAssessment<CdssFactSource>
   dcsiDomainContexts?: Partial<Readonly<Record<DcsiDomainId, CdssDcsiDomainContext>>>
+}
+
+export interface GuidelineCitedStatement {
+  label: string
+  /** Original-language wording reproduced from the cited source. */
+  text: string
 }
 
 export interface GuidelineReference {
@@ -229,6 +268,8 @@ export interface GuidelineReference {
   printedPage?: string
   locator?: string
   summary: string
+  /** Original-language wording for only the statements cited by this decision card. */
+  citedStatements?: readonly GuidelineCitedStatement[]
 }
 
 export interface CdssKnowledgePackMetadata {
@@ -289,6 +330,16 @@ export interface CdssAutomatedCheck {
   sources?: readonly CdssFactSource[]
 }
 
+export interface CdssClinicalHandoff {
+  kind: 'nephrology-consult'
+  title: string
+  summary: string
+  copyLabel: string
+  copiedLabel: string
+  copyText: string
+  safetyNote: string
+}
+
 export interface DcsiDomainAssessment {
   id: DcsiDomainId
   label: string
@@ -324,6 +375,7 @@ export interface CdssResult {
   knowledgePacks?: readonly CdssKnowledgePackMetadata[]
   recommendations: readonly CdssRecommendation[]
   automatedChecks?: readonly CdssAutomatedCheck[]
+  clinicalHandoff?: CdssClinicalHandoff
   notEvaluated: readonly string[]
   disclaimer: string
 }

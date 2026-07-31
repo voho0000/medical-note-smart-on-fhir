@@ -17,6 +17,7 @@ import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constant
 import { generateId } from '@/src/shared/utils/id.utils'
 import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 import type { MedicalSummaryResult } from '@/src/core/entities/medical-summary.entity'
+import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import type { SafetyScanResult } from '@/src/core/entities/safety-alert.entity'
 import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
@@ -110,6 +111,7 @@ type GenerationPipeline = {
 }
 
 export function useMedicalSummaryOrchestrator() {
+  const { requestDemographicsForAi } = useAiDemographicsGate()
   const {
     result,
     resultOwnerRuntimeId: summaryResultOwnerRuntimeId,
@@ -458,11 +460,17 @@ export function useMedicalSummaryOrchestrator() {
   }, [beginBatch, markManualPipelineStarted, runPipelines, scopeKey])
 
   const generate = useCallback(async () => {
+    if (!await requestDemographicsForAi()) return
     await runManualBatch([
       { kind: 'summary', run: generateSummary },
       { kind: 'safety', run: generateSafety },
     ])
-  }, [generateSafety, generateSummary, runManualBatch])
+  }, [
+    generateSafety,
+    generateSummary,
+    requestDemographicsForAi,
+    runManualBatch,
+  ])
 
   const cancelTrackedBatch = useCallback((current: ActiveGenerationBatch) => {
     cancelledScopeKeysRef.current.add(current.scopeKey)
@@ -625,6 +633,7 @@ export function useMedicalSummaryOrchestrator() {
   // the hook further narrows this to the failed card modules so successful
   // cards and a successful safety scan are not billed twice.
   const retryFailed = useCallback(async () => {
+    if (!await requestDemographicsForAi()) return
     const jobs: GenerationPipeline[] = []
     if (hasSummaryModuleErrors(result)) {
       jobs.push({ kind: 'summary', run: retryFailedSummaryModules })
@@ -644,6 +653,7 @@ export function useMedicalSummaryOrchestrator() {
     generateSummary,
     presentedSafetyError,
     presentedSummaryError,
+    requestDemographicsForAi,
     result,
     retryFailedSummaryModules,
     runManualBatch,

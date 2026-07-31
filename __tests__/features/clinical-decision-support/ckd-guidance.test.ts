@@ -61,7 +61,7 @@ function egfr(id: string, date: string, value: number): ObservationEntity {
   }
 }
 
-function semiquantitativeUacr(): ObservationEntity {
+function semiquantitativeUacr(value = '1+ (80)'): ObservationEntity {
   return {
     id: 'semiquant-uacr',
     resourceType: 'Observation',
@@ -71,7 +71,7 @@ function semiquantitativeUacr(): ObservationEntity {
       text: '尿液白蛋白／肌酸酐比（半定量）',
       coding: [{ system: LOINC_SYSTEM, code: '14959-1' }],
     },
-    valueString: '1+ (80)',
+    valueString: value,
   }
 }
 
@@ -182,10 +182,17 @@ function buildProfile(input?: {
 }
 
 describe('personalized CKD guidance', () => {
-  it('registers diabetes and CKD as separate switchable disease packs', () => {
+  it('registers enabled disease packs as separate switchable modules', () => {
     expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).toEqual([
       'dm-ckd-cdss',
       'ckd-cdss',
+      'hyperlipidemia-cdss',
+      'heart-failure-cdss',
+      'cirrhosis-cdss',
+      'aki-alert-cdss',
+      'renal-safety-cdss',
+      'atrial-fibrillation-cdss',
+      'ckd-anemia-cdss',
     ])
     expect(getClinicalGuidelinePack('ckd-cdss')).toBe(CKD_GUIDELINE_PACK)
   })
@@ -336,6 +343,16 @@ describe('personalized CKD guidance', () => {
     ]))
     expect(result.recommendations.length).toBeGreaterThan(6)
     expect(result.automatedChecks?.map((item) => item.id)).toContain('ckd-monitoring')
+    expect(result.recommendations.find(
+      (item) => item.id === 'ckd-mbd-monitoring',
+    )?.guidelineReferences[0]).toMatchObject({
+      page: 17,
+      recommendationId: 'Recommendation 4.1.1',
+      citedStatements: [{
+        label: 'Recommendation 4.1.1',
+        text: expect.stringContaining('serial assessments of phosphate, calcium, and PTH'),
+      }],
+    })
   })
 
   it('uses standardized-BP caution, staged finerenone criteria, medication safety, and serial CKD-MBD inputs', () => {
@@ -514,10 +531,68 @@ describe('personalized CKD guidance', () => {
       priority: 'medium',
       overviewEvidenceFactKey: 'eGFR',
     })
-    expect(kfre?.title).toBe('G3b KFRE：2 年 3.5%／5 年 12.9%')
+    expect(kfre?.title).toBe('KFRE｜G3b：2 年 3.5%／5 年 12.9%')
     expect(kfre?.patientEvidence.map((item) => item.factKeys[0])).toEqual(
       expect.arrayContaining(['age', 'sex', 'eGFR', 'urineAlbuminOverview']),
     )
+    expect(kfre?.rationale).toContain('醫療計算機共用')
     expect(kfre?.safetyBoundary).toContain('非北美區域校正')
+  })
+
+  it('shows a conservative KFRE lower-bound scenario for semiquantitative UACR >300', () => {
+    const profile = buildProfile({
+      patient: { ...patient, gender: 'male' },
+      encounters: [encounterWithDiagnoses('N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 38),
+        egfr('egfr-latest', '2026-05-01', 34),
+        semiquantitativeUacr('2+ (>300 mg/g)'),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const kfre = result.recommendations.find(
+      (item) => item.id === 'ckd-kidney-failure-risk',
+    )
+
+    expect(profile.facts.urineAlbuminRatio.numericValue).toBeUndefined()
+    expect(profile.observationContexts?.uacr.latestReading).toMatchObject({
+      kind: 'semiquantitative',
+      lowerBoundMgG: 300,
+    })
+    expect(kfre).toMatchObject({
+      status: 'needs-data',
+      overviewEvidenceFactKey: 'urineAlbuminOverview',
+    })
+    expect(kfre?.title).toMatch(
+      /^KFRE 下限情境｜G3b：以 UACR 300 mg\/g 代入，2 年至少 \d+\.\d%／5 年至少 \d+\.\d%$/,
+    )
+    expect(kfre?.missingData).toContain(
+      '定量 UACR（mg/g）；目前僅有半定量下限 300 mg/g',
+    )
+    expect(kfre?.safetyBoundary).toContain('只能得到風險下限，不是正式 KFRE')
+  })
+
+  it('keeps a low-risk KFRE result visible as a primary personalized-guidance module', () => {
+    const profile = buildProfile({
+      patient: { ...patient, age: 20, gender: 'female' },
+      encounters: [encounterWithDiagnoses('N18.31')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 58),
+        egfr('egfr-latest', '2026-05-01', 59),
+        quantitativeUacr(1),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const kfre = result.recommendations.find(
+      (item) => item.id === 'ckd-kidney-failure-risk',
+    )
+
+    expect(kfre).toMatchObject({
+      status: 'no-action',
+      priority: 'routine',
+    })
+    expect(kfre?.title).toMatch(/^KFRE｜G3a：/)
+    expect(result.automatedChecks?.map((item) => item.id))
+      .not.toContain('ckd-kidney-failure-risk')
   })
 })

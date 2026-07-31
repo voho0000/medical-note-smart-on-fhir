@@ -39,6 +39,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         gender: '性別',
         age: '年齡',
         birthDate: '出生日期',
+        birthYear: '出生年',
         male: '男性',
         female: '女性',
         other: '其他',
@@ -51,8 +52,10 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         namePlaceholder: '輸入姓名（選填）',
         leaveUnknown: '維持未知',
         ageCalculatedFromBirthDate: '年齡會自動計算',
+        ageCalculatedFromBirthYear: '只需填出生年',
         localProfilePrivacy: '只會加密保存在這個瀏覽器',
         invalidBirthDate: '出生日期無效',
+        invalidBirthYear: '出生年無效',
         profileSaveFailed: '無法安全儲存',
         clearUserEntered: '清除自行填寫資料',
         savingProfile: '儲存中…',
@@ -124,16 +127,11 @@ describe('PatientInfoCard SDK local profile', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('does not expose the editor for non-SDK FHIR data', () => {
+  it('also exposes the editor for a non-SDK local FHIR import', () => {
     mockSourceMetadata = undefined
-    mockLocalProfile = {
-      ...mockLocalProfile,
-      available: false,
-      importId: null,
-    }
     render(<PatientInfoCard />)
 
-    expect(screen.queryByRole('button', { name: '補充資料' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '補充資料' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 

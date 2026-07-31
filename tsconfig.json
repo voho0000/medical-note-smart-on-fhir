@@ -44,6 +44,7 @@
   "exclude": [
     "node_modules",
     "e2e",
-    "out"
+    "out",
+    "tmp"
   ]
 }

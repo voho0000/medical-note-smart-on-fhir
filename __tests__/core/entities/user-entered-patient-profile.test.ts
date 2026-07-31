@@ -32,12 +32,26 @@ describe('user-entered SDK patient profile', () => {
   })
 
   it('rejects impossible and future birth dates', () => {
+    expect(isValidPatientBirthDate('1980', now)).toBe(true)
+    expect(isValidPatientBirthDate('2027', now)).toBe(false)
     expect(isValidPatientBirthDate('2024-02-29', now)).toBe(true)
     expect(isValidPatientBirthDate('2025-02-29', now)).toBe(false)
     expect(isValidPatientBirthDate('2026-07-31', now)).toBe(false)
     expect(() => createUserEnteredPatientProfile({
       birthDate: '2026-07-31',
     }, now)).toThrow('Invalid patient birth date')
+  })
+
+  it('stores a year-only FHIR birth date without inventing January 1', () => {
+    expect(createUserEnteredPatientProfile({
+      gender: 'female',
+      birthDate: '1980',
+    }, now)).toEqual({
+      source: 'user-entered',
+      gender: 'female',
+      birthDate: '1980',
+      updatedAt: now.toISOString(),
+    })
   })
 
   it('fails closed when decrypted storage has an invalid shape', () => {

@@ -8,6 +8,7 @@ describe('right-panel registry', () => {
     expect(featureIds).toEqual([
       'medical-summary',
       'medical-chat',
+      'personalized-education',
       'medical-calculator',
       'clinical-decision-support',
       'ips-export',
@@ -16,7 +17,7 @@ describe('right-panel registry', () => {
     expect(featureIds).not.toContain('data-selection')
   })
 
-  it('keeps CDSS in the default tab bar and applies overrides and plug-ins', () => {
+  it('keeps education and CDSS as separate pinned modules', () => {
     const features = getEnabledRightPanelFeatures()
     const defaults = groupRightPanelFeatures(features, {})
 
@@ -24,6 +25,7 @@ describe('right-panel registry', () => {
     expect(defaults.pinnedFeatures.map((feature) => feature.id)).toEqual([
       'medical-summary',
       'medical-chat',
+      'personalized-education',
       'medical-calculator',
       'clinical-decision-support',
       'ips-export',
@@ -48,6 +50,20 @@ describe('right-panel registry', () => {
     expect(pluggedIn.overflowFeatures.map((feature) => feature.id)).toEqual([
       'future-feature',
     ])
+  })
+
+  it('shows education to citizens and keeps CDSS medical-only', () => {
+    const patientIds = getEnabledRightPanelFeatures('patient').map(
+      (feature) => feature.id,
+    )
+    const medicalIds = getEnabledRightPanelFeatures('medical').map(
+      (feature) => feature.id,
+    )
+
+    expect(patientIds).toContain('personalized-education')
+    expect(patientIds).not.toContain('clinical-decision-support')
+    expect(medicalIds).toContain('personalized-education')
+    expect(medicalIds).toContain('clinical-decision-support')
   })
 
   it('lets medical summary scroll with the panel so only its card chips stay sticky', () => {

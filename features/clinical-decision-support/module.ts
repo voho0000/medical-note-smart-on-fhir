@@ -12,6 +12,7 @@ export const CLINICAL_DECISION_SUPPORT_MODULE = {
     enabled: true,
     pinned: true,
     forceMount: true,
+    audiences: ['medical'],
     contentClassName: 'flex-1 mt-1',
   },
 } as const

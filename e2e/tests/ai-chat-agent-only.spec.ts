@@ -27,12 +27,15 @@ test.describe('AI chat agent-only UI', () => {
 
     const panel = chatPanel(page)
     await panel.getByTestId('model-picker-trigger').click()
-    const keyLink = page.getByTestId('model-picker-key-link-gpt-5.6-luna')
+    await expect(page.getByTestId('model-picker-key-link-gpt-5.6-luna')).toHaveCount(0)
+    await expect(page.getByTestId('model-picker-key-lock-gpt-5.6-luna')).toHaveCount(0)
+
+    const keyLink = page.getByTestId('model-picker-key-link-gpt-5.6-terra')
     await expect(keyLink).toContainText('設定金鑰')
-    await expect(keyLink).toHaveAccessibleName('GPT-5.6 Luna，設定金鑰')
-    await expect(page.getByTestId('model-picker-key-lock-gpt-5.6-luna')).toBeVisible()
+    await expect(keyLink).toHaveAccessibleName('GPT-5.6 Terra，設定金鑰')
+    await expect(page.getByTestId('model-picker-key-lock-gpt-5.6-terra')).toBeVisible()
     await keyLink.click()
 
-    await expect(page.getByRole('tab', { name: '設定' })).toHaveAttribute('data-state', 'active')
+    await expect(page.getByRole('tab', { name: '設定', exact: true })).toHaveAttribute('data-state', 'active')
   })
 })

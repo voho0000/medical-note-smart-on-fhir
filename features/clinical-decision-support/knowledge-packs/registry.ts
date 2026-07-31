@@ -11,6 +11,10 @@ import { TAIWAN_NHI_DIABETES_PACK } from './taiwan-nhi-diabetes'
 import { KDIGO_CKD_2024_PACK } from './kdigo-ckd-2024'
 import { KDIGO_ANEMIA_2026_PACK } from './kdigo-anemia-2026'
 import { TAIWAN_CKD_2025_PACK } from './taiwan-ckd-2025'
+import { TAIWAN_HYPERTENSION_2022_PACK } from './taiwan-hypertension-2022'
+import { AHA_ACC_HYPERTENSION_2025_PACK } from './aha-acc-hypertension-2025'
+import { TAIWAN_LIPID_2022_PACK } from './taiwan-lipid-2022'
+import { AHA_ACC_DYSLIPIDEMIA_2026_PACK } from './aha-acc-dyslipidemia-2026'
 
 // Removing one pack from this registry cleanly removes its evaluation and UI
 // column without changing patient facts, clinical-domain rules, or rendering.
@@ -21,6 +25,10 @@ const knowledgePacks: readonly CdssKnowledgePack[] = [
   KDIGO_CKD_2024_PACK,
   KDIGO_ANEMIA_2026_PACK,
   TAIWAN_CKD_2025_PACK,
+  TAIWAN_HYPERTENSION_2022_PACK,
+  AHA_ACC_HYPERTENSION_2025_PACK,
+  TAIWAN_LIPID_2022_PACK,
+  AHA_ACC_DYSLIPIDEMIA_2026_PACK,
 ]
 
 export function getEnabledKnowledgePacks(): readonly CdssKnowledgePack[] {

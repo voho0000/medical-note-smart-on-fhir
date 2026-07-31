@@ -56,6 +56,7 @@ import {
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { getUserErrorMessage } from '@/src/core/errors'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 
 // Store + cache-key scheme live in medical-summary-store.ts so the IPS export
 // can peek at generated summaries without importing this full hook graph.
@@ -153,6 +154,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const modelId = useSummaryPrefsStore((s) => s.modelId)
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
+  const { demographicsReadyForAi } = useAiDemographicsGate()
   const autoAiConsent = useAutoAiConsentState()
   const moduleRetryRequestsRef = useRef(new Map<string, {
     moduleIds: MedicalSummaryModuleId[]
@@ -346,7 +348,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     selectedModelId: modelId,
     // A demo-first visit must never authorize a later real patient's data.
     // Manual generation remains available; only background cloud runs are gated.
-    autoRunEnabled: isAutoAiEnabledForSource(autoGenerate, autoAiConsent),
+    autoRunEnabled:
+      demographicsReadyForAi &&
+      isAutoAiEnabledForSource(autoGenerate, autoAiConsent),
     // Even a MANUAL generate waits for the full clinical dataset.
     requireDataReadyToGenerate: true,
     store: medicalSummaryStore,

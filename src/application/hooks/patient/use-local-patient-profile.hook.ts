@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { UserEnteredPatientProfile } from '@/src/core/entities/patient.entity'
+import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { serializeLocalBundleMutation } from '@/src/infrastructure/fhir/services/local-bundle-mutation-queue'
 import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
@@ -16,12 +17,22 @@ interface LocalProfileState {
   profile: UserEnteredPatientProfile | null
 }
 
-export function useLocalPatientProfile(enabled: boolean) {
+const subscribeToClientReady = () => () => {}
+const getClientReadySnapshot = () => true
+const getServerReadySnapshot = () => false
+
+export function useLocalPatientProfile(enabled?: boolean) {
   const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [savedState, setSavedState] = useState<LocalProfileState | null>(null)
-  const importId = enabled ? LocalBundleService.getActiveImportId() : null
-  const persistedProfile = enabled
+  const clientReady = useSyncExternalStore(
+    subscribeToClientReady,
+    getClientReadySnapshot,
+    getServerReadySnapshot,
+  )
+  const effectiveEnabled = clientReady && (enabled ?? shouldUseLocalBundle())
+  const importId = effectiveEnabled ? LocalBundleService.getActiveImportId() : null
+  const persistedProfile = effectiveEnabled
     ? LocalBundleService.getUserEnteredPatientProfile()
     : null
   const profile = importId && savedState?.importId === importId
@@ -53,7 +64,7 @@ export function useLocalPatientProfile(enabled: boolean) {
   }, [queryClient])
 
   return {
-    available: enabled && Boolean(importId),
+    available: effectiveEnabled && Boolean(importId),
     importId,
     profile,
     saving,

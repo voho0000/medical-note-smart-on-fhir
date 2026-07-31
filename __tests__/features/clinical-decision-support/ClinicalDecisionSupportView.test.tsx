@@ -153,4 +153,47 @@ describe('clinical decision summary', () => {
     const detail = screen.getByTestId('cdss-recommendation-detail-statin-history')
     expect(within(detail).getByText('用藥歷程 3 筆')).toBeInTheDocument()
   })
+
+  it('renders evidence as one consistent list and groups confirmation items with next steps', () => {
+    const evidenceLayout: CdssResult = {
+      ...result(),
+      recommendations: [
+        recommendation('evidence-layout', {
+          patientEvidence: [
+            {
+              label: 'ASCVD',
+              value: '慢性缺血性心臟病（2026-02-10）',
+              factKeys: ['ascvdDiagnosis'],
+              sources: [{
+                resourceType: 'Condition',
+                resourceId: 'ascvd-1',
+                date: '2026-02-10',
+              }],
+            },
+            {
+              label: 'Statin',
+              value: '現有資料未見 statin',
+              factKeys: ['statinTherapy'],
+            },
+          ],
+          missingData: ['LDL-C 與採檢日期'],
+        }),
+      ],
+    }
+
+    render(<ClinicalDecisionSupportView result={evidenceLayout} locale="zh-TW" />)
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-evidence-layout'))
+
+    const evidence = screen.getByTestId('cdss-patient-evidence-evidence-layout')
+    const actionPlan = screen.getByTestId('cdss-action-plan-evidence-layout')
+
+    expect(within(evidence).getByText('ASCVD')).toBeInTheDocument()
+    expect(within(evidence).getByText('Statin')).toBeInTheDocument()
+    expect(within(evidence).getByRole('button', {
+      name: '在左側開啟來源紀錄',
+    })).toHaveTextContent('查看來源')
+    expect(within(actionPlan).getByText('尚待確認')).toBeInTheDocument()
+    expect(within(actionPlan).getByText('LDL-C 與採檢日期')).toBeInTheDocument()
+    expect(within(actionPlan).getByText('下一步 evidence-layout')).toBeInTheDocument()
+  })
 })

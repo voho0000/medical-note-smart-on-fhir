@@ -35,6 +35,7 @@ import {
   isAutoAiEnabledForSource,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 
 // Persist a completed scan per-patient so a page reload reuses it instead of
 // re-billing the model. Same lifecycle as the bundle: encrypted with the tab
@@ -124,6 +125,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const modelId = useSafetyPrefsStore((s) => s.modelId)
   const setModelId = useSafetyPrefsStore((s) => s.setModelId)
   const autoAiConsent = useAutoAiConsentState()
+  const { demographicsReadyForAi } = useAiDemographicsGate()
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<SafetyScanResult | null> => {
     const messages = generateSafetyAlertsUseCase.buildMessages({
@@ -189,7 +191,9 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     defaultModelId: SAFETY_ALERTS_MODEL_ID,
     selectedModelId: modelId,
     // Do not let a demo preference become authorization for real patient data.
-    autoRunEnabled: isAutoAiEnabledForSource(autoScan, autoAiConsent),
+    autoRunEnabled:
+      demographicsReadyForAi &&
+      isAutoAiEnabledForSource(autoScan, autoAiConsent),
     // A safety result over partial data is itself unsafe and may be cached for
     // 12h, so manual and automatic scans share the same readiness gate.
     requireDataReadyToGenerate: true,

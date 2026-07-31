@@ -64,6 +64,20 @@ describe('Live personalized-guidance disease switch', () => {
               display: 'Chronic kidney disease, stage 3b',
             }],
           },
+          {
+            coding: [{
+              system: 'http://hl7.org/fhir/sid/icd-10-cm',
+              code: 'E78.5',
+              display: 'Hyperlipidemia',
+            }],
+          },
+          {
+            coding: [{
+              system: 'http://hl7.org/fhir/sid/icd-10-cm',
+              code: 'K74.60',
+              display: 'Cirrhosis of liver',
+            }],
+          },
         ],
       }],
       observations: [
@@ -116,6 +130,25 @@ describe('Live personalized-guidance disease switch', () => {
           },
           valueString: '1+ (80)',
         },
+        {
+          id: 'ldl-current',
+          resourceType: 'Observation',
+          status: 'final',
+          effectiveDateTime: '2026-05-01',
+          code: {
+            coding: [{
+              system: 'http://loinc.org',
+              code: '2089-1',
+              display: 'LDL cholesterol',
+            }],
+          },
+          valueQuantity: {
+            value: 126,
+            unit: 'mg/dL',
+            system: 'http://unitsofmeasure.org',
+            code: 'mg/dL',
+          },
+        },
       ],
       medications: [],
       allergies: [],
@@ -138,7 +171,10 @@ describe('Live personalized-guidance disease switch', () => {
 
     const diabetesButton = screen.getByTestId('cdss-disease-switch-dm-ckd-cdss')
     const ckdButton = screen.getByTestId('cdss-disease-switch-ckd-cdss')
+    const lipidButton = screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss')
+    const cirrhosisButton = screen.getByTestId('cdss-disease-switch-cirrhosis-cdss')
 
+    expect(screen.queryByTestId('cdss-disease-switch-hypertension-cdss')).not.toBeInTheDocument()
     expect(diabetesButton).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent('糖尿病個人化照護指引')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
@@ -155,5 +191,22 @@ describe('Live personalized-guidance disease switch', () => {
       'kdigo-ckd-2024,taiwan-ckd-2025,taiwan-nhi-diabetes',
     )
     expect(screen.getByTestId('mock-cdss-result')).not.toHaveTextContent('ada-2026')
+
+    fireEvent.click(lipidButton)
+
+    expect(lipidButton).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
+      '高血脂個人化照護指引',
+    )
+    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
+      'aha-acc-dyslipidemia-2026,taiwan-lipid-2022',
+    )
+
+    fireEvent.click(cirrhosisButton)
+
+    expect(cirrhosisButton).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
+      '肝硬化個人化照護指引',
+    )
   })
 })

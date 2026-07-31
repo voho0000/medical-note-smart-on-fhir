@@ -7,7 +7,6 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useLocalPatientProfile } from '@/src/application/hooks/patient/use-local-patient-profile.hook'
-import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { FeatureCard } from "@/src/shared/components"
 import type { UserEnteredPatientProfile } from '@/src/core/entities/patient.entity'
@@ -18,13 +17,11 @@ import { PatientDemographicsEditorDialog } from './components/PatientDemographic
 export function PatientInfoCard() {
   const { t } = useLanguage()
   const { patient, loading, error } = usePatient()
-  const { sourceMetadata } = useClinicalData()
   const patientInfo = usePatientInfo(patient)
   const [editorOpen, setEditorOpen] = useState(false)
-  const isSdkImport = sourceMetadata?.source === 'health-bank-sdk-json'
-  const localProfile = useLocalPatientProfile(isSdkImport)
+  const localProfile = useLocalPatientProfile()
   const {
-    available: canEditSdkProfile,
+    available: canEditLocalProfile,
     importId,
     profile,
     saving: savingProfile,
@@ -46,7 +43,7 @@ export function PatientInfoCard() {
       error={errorObj}
       isEmpty={!patientInfo}
       emptyMessage={t.errors.fetchPatient}
-      headerAction={canEditSdkProfile ? (
+      headerAction={canEditLocalProfile ? (
         <Button
           type="button"
           variant="outline"
@@ -62,9 +59,9 @@ export function PatientInfoCard() {
       ) : undefined}
     >
       {patientInfo && <PatientInfoDisplay patientInfo={patientInfo} />}
-      {canEditSdkProfile && editorOpen && (
+      {canEditLocalProfile && editorOpen && (
         <PatientDemographicsEditorDialog
-          key={`${importId ?? 'sdk'}:${profile?.updatedAt ?? 'new'}`}
+          key={`${importId ?? 'local'}:${profile?.updatedAt ?? 'new'}`}
           open
           onOpenChange={setEditorOpen}
           profile={profile}

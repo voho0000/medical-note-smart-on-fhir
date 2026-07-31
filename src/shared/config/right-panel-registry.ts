@@ -1,6 +1,7 @@
 // Right Panel Feature Registry - Central configuration for right panel features
 // This allows contributors to easily add/remove/replace features in the right panel
 import { CLINICAL_DECISION_SUPPORT_MODULE } from '@/features/clinical-decision-support/module'
+import { PERSONALIZED_EDUCATION_MODULE } from '@/features/personalized-education/module'
 
 export interface RightPanelFeatureConfig {
   id: string
@@ -11,6 +12,8 @@ export interface RightPanelFeatureConfig {
   order: number
   /** Whether this feature is enabled */
   enabled: boolean
+  /** Roles allowed to see this feature. Omit to show it to both roles. */
+  audiences?: ReadonlyArray<'medical' | 'patient'>
   /**
    * Default tab-bar placement (default true). false = starts in the "more"
    * overflow menu. The menu is hidden when overflow is empty and appears
@@ -76,6 +79,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     forceMount: true,
     contentClassName: 'flex-1 overflow-hidden mt-1',
   },
+  PERSONALIZED_EDUCATION_MODULE.rightPanel,
   CLINICAL_DECISION_SUPPORT_MODULE.rightPanel,
   {
     id: 'ips-export',
@@ -114,9 +118,14 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
 /**
  * Get enabled right panel features sorted by order
  */
-export function getEnabledRightPanelFeatures(): RightPanelFeatureConfig[] {
+export function getEnabledRightPanelFeatures(
+  audience?: 'medical' | 'patient',
+): RightPanelFeatureConfig[] {
   return RIGHT_PANEL_FEATURES
-    .filter(feature => feature.enabled)
+    .filter((feature) => (
+      feature.enabled
+      && (!audience || !feature.audiences || feature.audiences.includes(audience))
+    ))
     .sort((a, b) => a.order - b.order)
 }
 

@@ -37,19 +37,26 @@ function reference(
 }
 
 export const KDIGO_ANEMIA_2026_PACK: CdssKnowledgePack = {
-  enabled: false,
+  enabled: true,
   metadata(locale) {
     return {
       id: 'kdigo-anemia-2026',
       kind: 'guideline',
       label: localize(locale, 'KDIGO 貧血指引', 'KDIGO anemia guideline'),
       version: '2026',
-      effectiveFrom: '2026-04-01',
+      effectiveFrom: '2026-04-17',
     }
   },
   assess({ profile, recommendation, locale }) {
     const metadata = this.metadata(locale)
-    if (recommendation.id !== 'ckd-complication-monitoring') {
+    const supportedRecommendationIds = new Set([
+      'ckd-anemia-monitoring',
+      'ckd-anemia-detection-monitoring',
+      'ckd-anemia-initial-evaluation',
+      'ckd-anemia-iron-pathway',
+      'ckd-anemia-expanded-evaluation-esa-safety',
+    ])
+    if (!supportedRecommendationIds.has(recommendation.id)) {
       return assessment({
         sourceId: metadata.id,
         sourceKind: metadata.kind,

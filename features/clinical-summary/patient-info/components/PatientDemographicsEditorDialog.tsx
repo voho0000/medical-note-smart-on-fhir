@@ -33,6 +33,8 @@ interface PatientDemographicsEditorDialogProps {
   profile: UserEnteredPatientProfile | null
   saving: boolean
   onSave: (profile: UserEnteredPatientProfile | null) => Promise<void>
+  /** AI summaries need sex plus a birth year; the pencil editor remains optional. */
+  requiredForAi?: boolean
 }
 
 function todayLocal(): string {
@@ -49,19 +51,34 @@ export function PatientDemographicsEditorDialog({
   profile,
   saving,
   onSave,
+  requiredForAi = false,
 }: PatientDemographicsEditorDialogProps) {
   const { t } = useLanguage()
   const [name, setName] = useState(profile?.name ?? '')
   const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>(
     profile?.gender ?? '',
   )
-  const [birthDate, setBirthDate] = useState(profile?.birthDate ?? '')
+  const useBirthYearInput =
+    requiredForAi || /^\d{4}$/.test(profile?.birthDate ?? '')
+  const [birthDate, setBirthDate] = useState(
+    useBirthYearInput
+      ? profile?.birthDate?.slice(0, 4) ?? ''
+      : profile?.birthDate ?? '',
+  )
   const [error, setError] = useState('')
   const maxBirthDate = todayLocal()
 
   const submit = async () => {
+    if (requiredForAi && (!gender || !birthDate)) {
+      setError(t.patient.aiProfileRequired)
+      return
+    }
     if (birthDate && !isValidPatientBirthDate(birthDate)) {
-      setError(t.patient.invalidBirthDate)
+      setError(
+        useBirthYearInput
+          ? t.patient.invalidBirthYear
+          : t.patient.invalidBirthDate,
+      )
       return
     }
     setError('')
@@ -89,8 +106,16 @@ export function PatientDemographicsEditorDialog({
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t.patient.profileDialogTitle}</DialogTitle>
-          <DialogDescription>{t.patient.profileDialogDescription}</DialogDescription>
+          <DialogTitle>
+            {requiredForAi
+              ? t.patient.aiProfileDialogTitle
+              : t.patient.profileDialogTitle}
+          </DialogTitle>
+          <DialogDescription>
+            {requiredForAi
+              ? t.patient.aiProfileDialogDescription
+              : t.patient.profileDialogDescription}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -108,7 +133,12 @@ export function PatientDemographicsEditorDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="local-patient-gender">{t.patient.gender}</Label>
+            <Label htmlFor="local-patient-gender">
+              {t.patient.gender}
+              {requiredForAi && (
+                <span className="ml-1 text-destructive" aria-hidden>*</span>
+              )}
+            </Label>
             <Select
               value={gender || 'unspecified'}
               onValueChange={(value) => {
@@ -118,7 +148,11 @@ export function PatientDemographicsEditorDialog({
               }}
               disabled={saving}
             >
-              <SelectTrigger id="local-patient-gender" className="w-full">
+              <SelectTrigger
+                id="local-patient-gender"
+                className="w-full"
+                aria-invalid={requiredForAi && Boolean(error) && !gender}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -131,18 +165,31 @@ export function PatientDemographicsEditorDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="local-patient-birth-date">{t.patient.birthDate}</Label>
+            <Label htmlFor="local-patient-birth-date">
+              {useBirthYearInput ? t.patient.birthYear : t.patient.birthDate}
+              {requiredForAi && (
+                <span className="ml-1 text-destructive" aria-hidden>*</span>
+              )}
+            </Label>
             <Input
               id="local-patient-birth-date"
-              type="date"
+              type={useBirthYearInput ? 'text' : 'date'}
+              inputMode={useBirthYearInput ? 'numeric' : undefined}
+              pattern={useBirthYearInput ? '[0-9]{4}' : undefined}
+              maxLength={useBirthYearInput ? 4 : undefined}
+              placeholder={useBirthYearInput ? '1980' : undefined}
               value={birthDate}
-              max={maxBirthDate}
+              max={useBirthYearInput ? maxBirthDate.slice(0, 4) : maxBirthDate}
               onChange={(event) => setBirthDate(event.target.value)}
               disabled={saving}
-              aria-invalid={Boolean(error)}
+              aria-invalid={Boolean(error) && (
+                !requiredForAi || !birthDate || !isValidPatientBirthDate(birthDate)
+              )}
             />
             <p className="text-xs text-muted-foreground">
-              {t.patient.ageCalculatedFromBirthDate}
+              {useBirthYearInput
+                ? t.patient.ageCalculatedFromBirthYear
+                : t.patient.ageCalculatedFromBirthDate}
             </p>
           </div>
 
@@ -158,7 +205,7 @@ export function PatientDemographicsEditorDialog({
 
         <DialogFooter className="sm:justify-between">
           <div>
-            {profile && (
+            {profile && !requiredForAi && (
               <Button
                 type="button"
                 variant="ghost"

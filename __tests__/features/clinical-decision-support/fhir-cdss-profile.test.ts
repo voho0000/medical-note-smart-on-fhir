@@ -133,6 +133,22 @@ describe('FHIR CDSS UACR normalization across patients and facilities', () => {
     })
   })
 
+  it('captures a strict >300 mg/g semiquantitative UACR as a conservative lower bound', () => {
+    const result = profile([
+      observation('semiquant-uacr-above-300', {
+        code: { text: 'ACR 半定量' },
+        valueString: '2+ (>300 mg/g)',
+      }),
+    ])
+
+    expect(result.observationContexts?.uacr.readings?.[0]).toMatchObject({
+      kind: 'semiquantitative',
+      displayValue: '2+ (>300 mg/g)',
+      lowerBoundMgG: 300,
+    })
+    expect(result.facts.urineAlbuminRatio.numericValue).toBeUndefined()
+  })
+
   it('accepts ug/mg creatinine as numerically equivalent to mg/g', () => {
     const result = profile([
       observation('equivalent-unit-uacr', {
@@ -966,8 +982,8 @@ describe('FHIR DCSI automatic evidence extraction', () => {
           {
             coding: [{
               system: ICD10_SYSTEM,
-              code: 'H35.379',
-              display: 'Puckering of macula, unspecified eye',
+              code: 'H35.351',
+              display: 'Cystoid macular degeneration, right eye',
             }],
           },
           {
@@ -987,7 +1003,7 @@ describe('FHIR DCSI automatic evidence extraction', () => {
       '視網膜病變（糖尿病歸因未確認）',
     )
     expect(result.facts.dcsiOphthalmicEvidence.sources?.[0].coding).toEqual([
-      expect.objectContaining({ code: 'H35.379' }),
+      expect.objectContaining({ code: 'H35.351' }),
       expect.objectContaining({ code: 'H35.81' }),
     ])
   })
@@ -1021,7 +1037,11 @@ describe('FHIR DCSI automatic evidence extraction', () => {
   it('uses a 12-month window for encounters but retains an explicitly active chronic condition', () => {
     const result = dcsiProfile({
       conditions: [{
-        ...activeCondition('old-active-stroke', 'I69.30', 'Stroke sequela'),
+        ...activeCondition(
+          'old-active-cerebrovascular',
+          'I65.23',
+          'Bilateral carotid artery stenosis',
+        ),
         recordedDate: '2020-01-01',
       }],
       encounters: [{
@@ -1036,7 +1056,7 @@ describe('FHIR DCSI automatic evidence extraction', () => {
 
     expect(result.dcsiDomainContexts?.cerebrovascular).toMatchObject({ score: 2 })
     expect(result.facts.dcsiCerebrovascularEvidence.sources).toEqual([
-      expect.objectContaining({ resourceId: 'old-active-stroke' }),
+      expect.objectContaining({ resourceId: 'old-active-cerebrovascular' }),
     ])
   })
 

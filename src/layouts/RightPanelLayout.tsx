@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
 import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
 import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
@@ -27,6 +28,7 @@ import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/
 // Settings → 顯示). Only useRightPanel is imported here now.
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
 import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
+import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -60,6 +62,10 @@ const PersonalizedGuidanceFeature = dynamic(() => import("@/features/clinical-de
   ssr: false,
   loading: FeatureLoading,
 })
+const PersonalizedEducationFeature = dynamic(() => import("@/features/personalized-education/LiveFeature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
 const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
   ssr: false,
   loading: FeatureLoading,
@@ -84,6 +90,7 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'medical-chat': MedicalChatFeature,
   'ips-export': IpsExportFeature,
   'medical-calculator': MedicalCalculatorFeature,
+  [PERSONALIZED_EDUCATION_FEATURE_ID]: PersonalizedEducationFeature,
   [CLINICAL_DECISION_SUPPORT_FEATURE_ID]: PersonalizedGuidanceFeature,
   'settings': SettingsFeature,
 }
@@ -197,7 +204,8 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
 
 function RightPanelContentInner() {
   const { t } = useLanguage()
-  const features = getEnabledRightPanelFeatures()
+  const { audience } = useAudience()
+  const features = getEnabledRightPanelFeatures(audience)
   const { activeTab, setActiveTab } = useRightPanel()
   const pinOverrides = useRightPanelTabsStore((s) => s.pinOverrides)
   const setPinned = useRightPanelTabsStore((s) => s.setPinned)

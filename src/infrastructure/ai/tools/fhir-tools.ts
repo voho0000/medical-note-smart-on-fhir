@@ -76,7 +76,10 @@ function calculateAge(birthDate?: string): number | null {
   const today = new Date()
   let age = today.getFullYear() - birth.getFullYear()
   const m = today.getMonth() - birth.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  if (
+    birthDate.length > 4
+    && (m < 0 || (birthDate.length === 10 && m === 0 && today.getDate() < birth.getDate()))
+  ) age--
   return age
 }
 
@@ -171,6 +174,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
           data: {
             gender: patient.gender,
             age: calculateAge(patient.birthDate),
+            ...(patient.birthDate && patient.birthDate.length < 10
+              ? { ageApproximate: true }
+              : {}),
             ...(patient.demographicsSource === 'user-entered-local-profile'
               ? { source: 'user-entered-local-profile' }
               : {}),

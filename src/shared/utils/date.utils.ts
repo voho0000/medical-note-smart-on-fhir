@@ -87,7 +87,9 @@ export function calculateAge(birthDate?: string | null): string {
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
     age -= 1
   }
-  return age >= 0 ? `${age}` : "Unknown"
+  return age >= 0
+    ? `${birthDate.length < 10 ? '~' : ''}${age}`
+    : "Unknown"
 }
 
 export type TimeRange = "all" | "24h" | "3d" | "1w" | "1m" | "3m" | "6m" | "1y" | "3y" | "5y" | "sinceLastVisit"

@@ -11,6 +11,7 @@ import {
   getDefaultClinicalGuidelinePack,
   getEnabledClinicalGuidelinePacks,
 } from './guideline-packs/registry'
+import { ClinicalHandoffCard } from './renderers/ClinicalHandoffCard'
 import { ClinicalDecisionSupportView } from './renderers/ClinicalDecisionSupportView'
 import type { CdssLocale, ClinicalGuidelinePack } from './types'
 
@@ -195,6 +196,14 @@ export default function LiveClinicalDecisionSupportFeature() {
 
   if (!profile || !result) {
     const isCkd = selectedPack.diseaseCode === 'CKD'
+    const isHypertension = selectedPack.diseaseCode === 'HTN'
+    const isHyperlipidemia = selectedPack.diseaseCode === 'LIPID'
+    const isHeartFailure = selectedPack.diseaseCode === 'HF'
+    const isCirrhosis = selectedPack.diseaseCode === 'CIRRHOSIS'
+    const isAki = selectedPack.diseaseCode === 'AKI'
+    const isRenalSafety = selectedPack.diseaseCode === 'RENAL-SAFETY'
+    const isAtrialFibrillation = selectedPack.diseaseCode === 'AF'
+    const isCkdAnemia = selectedPack.diseaseCode === 'CKD-ANEMIA'
     return (
       <div className="@container mx-auto w-full max-w-[84rem] space-y-3 py-1">
         <DiseaseSwitcher
@@ -209,16 +218,80 @@ export default function LiveClinicalDecisionSupportFeature() {
             ? cdssLocale === 'en'
               ? 'Chronic kidney disease pathway not activated'
               : '本次未啟動慢性腎臟病決策路徑'
-            : cdssLocale === 'en'
-              ? 'Diabetes pathway not activated'
-              : '本次未啟動糖尿病決策路徑'}
+            : isHypertension
+              ? cdssLocale === 'en'
+                ? 'Hypertension pathway not activated'
+                : '本次未啟動高血壓決策路徑'
+              : isHyperlipidemia
+                ? cdssLocale === 'en'
+                  ? 'Dyslipidemia pathway not activated'
+                  : '本次未啟動高血脂決策路徑'
+                : isHeartFailure
+                  ? cdssLocale === 'en'
+                    ? 'Heart-failure pathway not activated'
+                    : '本次未啟動心衰竭決策路徑'
+                  : isCirrhosis
+                    ? cdssLocale === 'en'
+                      ? 'Cirrhosis pathway not activated'
+                      : '本次未啟動肝硬化決策路徑'
+                : isAki
+                  ? cdssLocale === 'en'
+                    ? 'AKI alert pathway not activated'
+                    : '本次未啟動 AKI 警示路徑'
+                  : isRenalSafety
+                    ? cdssLocale === 'en'
+                      ? 'Potassium/kidney safety pathway not activated'
+                      : '本次未啟動血鉀／腎功能安全路徑'
+                    : isAtrialFibrillation
+                      ? cdssLocale === 'en'
+                        ? 'AF anticoagulation pathway not activated'
+                        : '本次未啟動 AF 抗凝路徑'
+                      : isCkdAnemia
+                        ? cdssLocale === 'en'
+                          ? 'CKD anemia pathway not activated'
+                          : '本次未啟動 CKD 貧血路徑'
+                : cdssLocale === 'en'
+                  ? 'Diabetes pathway not activated'
+                  : '本次未啟動糖尿病決策路徑'}
           body={isCkd
             ? cdssLocale === 'en'
               ? 'This data slice does not contain a governed N18 diagnosis, an active CKD care plan, or repeated eGFR values below 60 separated by at least 3 months. This does not prove that CKD is absent.'
               : '本次資料切片沒有可治理的 N18 診斷、進行中的 CKD 照護計畫，也沒有相隔至少 3 個月的兩次 eGFR <60；這不代表病人沒有慢性腎臟病。'
-            : cdssLocale === 'en'
-              ? 'This data slice does not contain a governed type 2 diabetes diagnosis or a validated HbA1c result in the diagnostic range. This does not prove that diabetes is absent.'
-              : '本次資料切片沒有可治理的第二型糖尿病診斷，也沒有單位已驗證且落在診斷範圍的 HbA1c；這不代表病人沒有糖尿病。'}
+            : isHypertension
+              ? cdssLocale === 'en'
+                ? 'This data slice does not contain a governed I10-I13 or I15 hypertension diagnosis. A BP value alone does not activate or exclude the diagnosis.'
+                : '本次資料切片沒有可治理的 I10–I13 或 I15 高血壓診斷；單筆血壓不會用來啟動或排除診斷。'
+              : isHyperlipidemia
+                ? cdssLocale === 'en'
+                  ? 'This data slice does not contain a governed E78 diagnosis, LDL-C ≥190 mg/dL, or triglycerides ≥500 mg/dL. This does not prove that dyslipidemia is absent.'
+                  : '本次資料切片沒有可治理的 E78 血脂異常診斷、LDL-C ≥190 mg/dL 或三酸甘油酯 ≥500 mg/dL；這不代表病人沒有血脂異常。'
+                : isHeartFailure
+                  ? cdssLocale === 'en'
+                    ? 'This data slice does not contain a governed I50, I11.0, I13.0, or I13.2 heart-failure diagnosis. LVEF or BNP alone does not activate or exclude the diagnosis.'
+                    : '本次資料切片沒有可治理的 I50、I11.0、I13.0 或 I13.2 心衰竭診斷；LVEF 或 BNP 單獨不會用來啟動或排除診斷。'
+                  : isCirrhosis
+                    ? cdssLocale === 'en'
+                      ? 'This data slice does not contain a governed K70.3, K71.7, or K74.3-K74.6 cirrhosis diagnosis. Abnormal liver tests alone do not activate or exclude cirrhosis.'
+                      : '本次資料切片沒有可治理的 K70.3、K71.7 或 K74.3–K74.6 肝硬化診斷；肝功能異常不會單獨啟動或排除肝硬化。'
+                : isAki
+                  ? cdssLocale === 'en'
+                    ? 'This data slice does not contain a governed serum creatinine result. This does not prove that AKI is absent; use real-time institutional data when AKI is suspected.'
+                    : '本次資料切片沒有可治理的血清 creatinine；這不代表病人沒有 AKI，臨床懷疑時應以院內即時資料評估。'
+                  : isRenalSafety
+                    ? cdssLocale === 'en'
+                      ? 'This data slice does not contain governed potassium, eGFR, serum creatinine, or CKD data. This does not establish kidney or electrolyte safety.'
+                      : '本次資料切片沒有可治理的血鉀、eGFR、血清 creatinine 或 CKD 資料；這不代表腎功能或電解質安全。'
+                    : isAtrialFibrillation
+                      ? cdssLocale === 'en'
+                        ? 'This data slice does not contain a governed I48 atrial-fibrillation/flutter diagnosis. Medication records alone do not activate or exclude AF.'
+                        : '本次資料切片沒有可治理的 I48 心房顫動／撲動診斷；用藥紀錄不會單獨啟動或排除 AF。'
+                      : isCkdAnemia
+                        ? cdssLocale === 'en'
+                          ? 'The CKD anemia pathway requires governed CKD eligibility. An abnormal hemoglobin alone does not establish CKD anemia.'
+                          : 'CKD 貧血路徑需要可治理的 CKD 適用條件；單一 Hb 異常不會被歸因為 CKD anemia。'
+                : cdssLocale === 'en'
+                  ? 'This data slice does not contain a governed type 2 diabetes diagnosis or a validated HbA1c result in the diagnostic range. This does not prove that diabetes is absent.'
+                  : '本次資料切片沒有可治理的第二型糖尿病診斷，也沒有單位已驗證且落在診斷範圍的 HbA1c；這不代表病人沒有糖尿病。'}
         />
       </div>
     )
@@ -261,6 +334,9 @@ export default function LiveClinicalDecisionSupportFeature() {
         </div>
       </header>
 
+      {result.clinicalHandoff ? (
+        <ClinicalHandoffCard handoff={result.clinicalHandoff} />
+      ) : null}
       <ClinicalDecisionSupportView result={result} locale={cdssLocale} />
     </div>
   )

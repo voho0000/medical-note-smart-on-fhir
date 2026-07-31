@@ -23,6 +23,8 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { useEffect, useState } from "react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown } from "lucide-react"
+import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
+import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
 
 function PageContent() {
   const { t } = useLanguage()
@@ -326,9 +328,12 @@ export default function Page() {
   return (
     <AppProviders>
       <ErrorBoundary>
-        <RightDetailProvider>
-          <PageContent />
-        </RightDetailProvider>
+        <AiDemographicsGateProvider>
+          <RightDetailProvider>
+            <PageContent />
+          </RightDetailProvider>
+          <AiDemographicsGateDialog />
+        </AiDemographicsGateProvider>
       </ErrorBoundary>
     </AppProviders>
   )

@@ -37,6 +37,7 @@ import type {
   CdssSourceAssessmentStatus,
   CdssStatus,
   DcsiSummary,
+  GuidelineReference,
 } from '../types'
 import { dedupeFactSources } from '../utils/dedupe-fact-sources'
 
@@ -227,12 +228,12 @@ function EvidenceSources({
           display: `${evidenceLabel} ${sourceValue ?? evidenceValue}`,
           date: source.date,
         })}
-        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-primary/25 bg-background px-2 text-[11px] font-medium text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={isEnglish ? 'Locate this record in the left panel' : '在左側資料中定位此筆紀錄'}
         aria-label={isEnglish ? 'Open source record in the left panel' : '在左側開啟來源紀錄'}
       >
         <PanelLeftOpen className="h-3.5 w-3.5" />
-        {isEnglish ? 'Source' : '來源'}
+        {isEnglish ? 'View source' : '查看來源'}
       </button>
     )
   }
@@ -240,15 +241,17 @@ function EvidenceSources({
   return (
     <details
       className={cn(
-        'group rounded-md border border-border/70 bg-muted/15',
-        compact ? 'w-fit max-w-full' : 'mt-2',
+        'group rounded-md',
+        compact
+          ? 'w-fit max-w-full text-muted-foreground'
+          : 'mt-2 border border-border/70 bg-muted/15',
       )}
     >
       <summary
         className={cn(
           'flex cursor-pointer list-none items-center gap-1.5 font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           compact
-            ? 'min-h-6 px-1.5 text-[11px]'
+            ? 'min-h-7 rounded-md px-1.5 text-[11px] transition-colors hover:bg-primary/5 hover:text-primary'
             : 'min-h-9 px-2.5 py-1.5 text-xs',
         )}
       >
@@ -259,7 +262,14 @@ function EvidenceSources({
           compact ? 'h-3 w-3' : 'h-3.5 w-3.5',
         )} />
       </summary>
-      <ul className="divide-y divide-border/60 border-t border-border/70 px-2.5">
+      <ul
+        className={cn(
+          'divide-y divide-border/60 px-2.5',
+          compact
+            ? 'mt-1 min-w-[18rem] overflow-hidden rounded-md border border-border/70 bg-background shadow-sm'
+            : 'border-t border-border/70',
+        )}
+      >
         {navigableSources.map((source) => {
           const sourceValue = source.value !== undefined
             ? `${source.value}${source.unit ? ` ${source.unit}` : ''}`
@@ -601,6 +611,147 @@ function DcsiModuleDetail({
   )
 }
 
+function SourceGuidelineReference({
+  reference,
+  isEnglish,
+}: {
+  reference: GuidelineReference
+  isEnglish: boolean
+}) {
+  const citedStatements = reference.citedStatements ?? []
+  const sourceLinkLabel = reference.page
+    ? isEnglish
+      ? `Open official page ${reference.page}`
+      : `開啟官方原文第 ${reference.page} 頁`
+    : isEnglish
+      ? 'Open official recommendation'
+      : '開啟官方原文條文'
+
+  if (citedStatements.length > 0) {
+    return (
+      <details
+        className="group overflow-hidden rounded-md border border-primary/30 bg-primary/5"
+        data-testid={`guideline-statement-toggle-${reference.id}`}
+      >
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2.5 py-2 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+          <BookOpenCheck className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">
+              {reference.recommendationId ?? reference.title}
+            </span>
+            <span className="mt-0.5 block text-[11px] text-muted-foreground">
+              {isEnglish ? 'Show cited text' : '展開引用原文'}
+              {reference.page
+                ? isEnglish
+                  ? ` · official page ${reference.page}`
+                  : ` · 原文第 ${reference.page} 頁`
+                : ''}
+            </span>
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-2.5 border-t border-primary/20 bg-background/80 px-2.5 py-2.5">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {isEnglish
+              ? 'Original-language text for the statements cited by this card. Verify the official source before clinical use.'
+              : '以下僅顯示本卡引用的指引原文；臨床使用前請核對官方來源。'}
+          </p>
+          <dl className="space-y-2">
+            {citedStatements.map((statement) => (
+              <div key={`${reference.id}-${statement.label}`}>
+                <dt className="font-semibold text-foreground">{statement.label}</dt>
+                <dd className="mt-0.5 whitespace-pre-line leading-relaxed text-foreground">
+                  {statement.text}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <a
+            href={reference.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-8 items-center gap-1 font-medium text-primary underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {sourceLinkLabel}
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </div>
+      </details>
+    )
+  }
+
+  if (reference.page || reference.directLink) {
+    return (
+      <a
+        href={reference.url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <BookOpenCheck className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">
+            {reference.recommendationId
+              ? `${reference.recommendationId} · `
+              : ''}
+            {reference.page
+              ? isEnglish
+                ? `Open original page ${reference.page}`
+                : `直接開啟原文第 ${reference.page} 頁`
+              : isEnglish
+                ? 'Open original recommendation'
+                : '直接開啟原文條文'}
+          </span>
+          {reference.locator ? (
+            <span className="mt-0.5 block break-words text-[11px] text-muted-foreground">
+              {reference.locator}
+            </span>
+          ) : null}
+        </span>
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+      </a>
+    )
+  }
+
+  return (
+    <details className="group rounded-md border border-border/70 bg-background">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 px-2.5 py-1.5 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+        <BookOpenCheck className="h-3.5 w-3.5" />
+        {isEnglish ? 'Exact evidence' : '查看精準依據'}
+        {reference.recommendationId ? ` · ${reference.recommendationId}` : ''}
+        <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="space-y-2 border-t border-border/70 px-2.5 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {reference.recommendationId ? (
+            <Badge variant="outline" className="h-6 bg-muted/30 px-2 text-xs">
+              {isEnglish ? 'Recommendation' : '建議條號'} {reference.recommendationId}
+            </Badge>
+          ) : null}
+          {reference.evidenceGrade ? (
+            <Badge variant="outline" className="h-6 bg-muted/30 px-2 text-xs">
+              {isEnglish ? 'Evidence' : '證據等級'} {reference.evidenceGrade}
+            </Badge>
+          ) : null}
+        </div>
+        {reference.locator ? (
+          <p className="font-medium text-foreground">{reference.locator}</p>
+        ) : null}
+        <p className="leading-relaxed text-foreground">{reference.summary}</p>
+        <a
+          href={reference.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-2"
+        >
+          {isEnglish ? 'Open official source' : '開啟官方原文'}
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+    </details>
+  )
+}
+
 function RecommendationDetail({
   recommendation,
   isEnglish,
@@ -699,75 +850,12 @@ function RecommendationDetail({
                     {item.missingData.join(isEnglish ? '; ' : '、')}
                   </div>
                 ) : null}
-                {item.references.map((reference) => reference.page || reference.directLink ? (
-                  <a
+                {item.references.map((reference) => (
+                  <SourceGuidelineReference
                     key={reference.id}
-                    href={reference.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <BookOpenCheck className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">
-                        {reference.recommendationId
-                          ? `${reference.recommendationId} · `
-                          : ''}
-                        {reference.page
-                          ? isEnglish
-                            ? `Open original page ${reference.page}`
-                            : `直接開啟原文第 ${reference.page} 頁`
-                          : isEnglish
-                            ? 'Open original recommendation'
-                            : '直接開啟原文條文'}
-                      </span>
-                      {reference.locator ? (
-                        <span className="mt-0.5 block break-words text-[11px] text-muted-foreground">
-                          {reference.locator}
-                        </span>
-                      ) : null}
-                    </span>
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                  </a>
-                ) : (
-                  <details
-                    key={reference.id}
-                    className="group rounded-md border border-border/70 bg-background"
-                  >
-                    <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 px-2.5 py-1.5 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
-                      <BookOpenCheck className="h-3.5 w-3.5" />
-                      {isEnglish ? 'Exact evidence' : '查看精準依據'}
-                      {reference.recommendationId ? ` · ${reference.recommendationId}` : ''}
-                      <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                    </summary>
-                    <div className="space-y-2 border-t border-border/70 px-2.5 py-2.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {reference.recommendationId ? (
-                          <Badge variant="outline" className="h-6 bg-muted/30 px-2 text-xs">
-                            {isEnglish ? 'Recommendation' : '建議條號'} {reference.recommendationId}
-                          </Badge>
-                        ) : null}
-                        {reference.evidenceGrade ? (
-                          <Badge variant="outline" className="h-6 bg-muted/30 px-2 text-xs">
-                            {isEnglish ? 'Evidence' : '證據等級'} {reference.evidenceGrade}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      {reference.locator ? (
-                        <p className="font-medium text-foreground">{reference.locator}</p>
-                      ) : null}
-                      <p className="leading-relaxed text-foreground">{reference.summary}</p>
-                      <a
-                        href={reference.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-2"
-                      >
-                        {isEnglish ? 'Open official source' : '開啟官方原文'}
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    </div>
-                  </details>
+                    reference={reference}
+                    isEnglish={isEnglish}
+                  />
                 ))}
               </div>
             ))}
@@ -776,27 +864,35 @@ function RecommendationDetail({
       ) : null}
 
       {orderedPatientEvidence.length > 0 ? (
-        <section>
-          <h5 className="text-xs font-semibold text-foreground">{label.evidence}</h5>
-          <dl className="mt-1 flex flex-wrap gap-1.5">
+        <section aria-labelledby={`patient-evidence-${recommendation.id}`}>
+          <h5
+            id={`patient-evidence-${recommendation.id}`}
+            className="text-xs font-semibold text-foreground"
+          >
+            {label.evidence}
+          </h5>
+          <dl
+            className="mt-1.5 divide-y divide-border/60 overflow-hidden rounded-md border border-border/70 bg-background"
+            data-testid={`cdss-patient-evidence-${recommendation.id}`}
+          >
             {orderedPatientEvidence.map((evidence) => {
-              const isLongEvidence = evidence.value.length > 48
               return (
                 <div
                   key={`${recommendation.id}-${evidence.label}`}
-                  className={cn(
-                    'flex min-w-0 items-center gap-x-2 rounded-md border border-border/70 bg-muted/10 px-2.5 py-1.5 text-xs leading-relaxed',
-                    isLongEvidence ? 'basis-full' : 'min-w-[14rem] flex-1 basis-[14rem]',
-                  )}
+                  className="grid min-w-0 gap-x-3 gap-y-1.5 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)_auto] @min-[32rem]:items-center"
                 >
-                  <dt className="shrink-0 font-semibold text-muted-foreground">{evidence.label}</dt>
-                  <dd className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
+                  <dt className="min-w-0 font-medium text-muted-foreground">
+                    {evidence.label}
+                  </dt>
+                  <dd className="min-w-0 font-medium text-foreground">
                     <EvidenceValue
                       value={evidence.value}
                       sources={evidence.sources}
                       isEnglish={isEnglish}
                     />
-                    {evidence.sources && evidence.sources.length > 0 ? (
+                  </dd>
+                  {evidence.sources && evidence.sources.length > 0 ? (
+                    <dd className="min-w-0 @min-[32rem]:justify-self-end">
                       <EvidenceSources
                         sources={evidence.sources}
                         isEnglish={isEnglish}
@@ -805,8 +901,10 @@ function RecommendationDetail({
                         onNavigate={onNavigate}
                         compact
                       />
-                    ) : null}
-                  </dd>
+                    </dd>
+                  ) : (
+                    <dd className="hidden @min-[32rem]:block" aria-hidden="true" />
+                  )}
                 </div>
               )
             })}
@@ -814,36 +912,51 @@ function RecommendationDetail({
         </section>
       ) : null}
 
-      <div className="grid gap-1.5 @min-[48rem]:grid-cols-[minmax(0,0.85fr)_minmax(0,1.65fr)]">
+      <section
+        className="overflow-hidden rounded-md border border-border/70 bg-muted/[0.08]"
+        aria-label={isEnglish ? 'Items to confirm and next steps' : '待確認與建議下一步'}
+        data-testid={`cdss-action-plan-${recommendation.id}`}
+      >
         {recommendation.missingData && recommendation.missingData.length > 0 ? (
-          <section className="flex min-w-0 items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              <strong>{label.missingShort}：</strong>
-              {recommendation.missingData.join(isEnglish ? '; ' : '、')}
-            </span>
-          </section>
+          <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]">
+            <h5 className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {isEnglish ? 'To confirm' : '尚待確認'}
+            </h5>
+            <ul className="space-y-1 text-foreground">
+              {recommendation.missingData.map((item) => (
+                <li key={item} className="flex gap-1.5">
+                  <span className="text-amber-700 dark:text-amber-300" aria-hidden="true">•</span>
+                  <span className="min-w-0">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
 
-        <section
+        <div
           className={cn(
-            'flex min-w-0 items-start gap-2 rounded-md border border-primary/20 bg-primary/[0.04] px-2.5 py-2 text-xs leading-relaxed',
-            !(recommendation.missingData && recommendation.missingData.length > 0) && '@min-[48rem]:col-span-2',
+            'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]',
+            recommendation.missingData && recommendation.missingData.length > 0
+              ? 'border-t border-border/60'
+              : '',
           )}
         >
-          <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-          <div className="min-w-0">
-            <h5 className="inline font-semibold text-primary">{label.nextStep}：</h5>{' '}
+          <h5 className="flex items-center gap-1.5 font-semibold text-primary">
+            <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+            {label.nextStep}
+          </h5>
+          <div className="min-w-0 text-foreground">
             {recommendation.nextActions.length === 1 ? (
-              <span className="font-medium text-foreground">{recommendation.nextActions[0]}</span>
+              <span>{recommendation.nextActions[0]}</span>
             ) : (
-              <ol className="mt-0.5 list-decimal space-y-0.5 pl-4 text-foreground marker:font-semibold">
+              <ol className="list-decimal space-y-1 pl-4 marker:font-semibold">
                 {recommendation.nextActions.map((action) => <li key={action}>{action}</li>)}
               </ol>
             )}
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       {recommendation.guidelineReferences.length > 0 ? (
         <details className="group rounded-md border border-border/70 bg-background">
@@ -912,7 +1025,7 @@ export function ClinicalDecisionSupportView({
     next: isEnglish ? 'Suggested next actions' : '建議下一步',
     guidelines: isEnglish ? 'Guideline summary and location' : '指引摘要與章節定位',
     safety: isEnglish ? 'Decision boundary' : '決策邊界',
-    sourceComparison: isEnglish ? 'Guideline and coverage comparison' : '三來源比較',
+    sourceComparison: isEnglish ? 'Source comparison' : '來源比較',
     notEvaluated: isEnglish ? 'Not evaluated in this POC' : '本次未評估',
     showDetails: isEnglish ? 'Show decision details' : '展開決策詳情',
     hideDetails: isEnglish ? 'Hide decision details' : '收合決策詳情',

@@ -1156,17 +1156,14 @@ export const LocalBundleService = {
       : null
   },
 
-  /** Persist an SDK demographic overlay in the same AES-GCM envelope as the
-   * Bundle. The original FHIR Patient is never mutated. */
+  /** Persist a local-import demographic overlay in the same AES-GCM envelope
+   * as the Bundle. The original FHIR Patient is never mutated. */
   async setUserEnteredPatientProfile(
     profile: UserEnteredPatientProfile | null,
   ): Promise<void> {
     const bundle = await this.load()
     if (!bundle || !memBundleImportId) {
       throw new Error('No active local import is available')
-    }
-    if (memBundleSourceMetadata?.source !== 'health-bank-sdk-json') {
-      throw new Error('Patient profile editing is only available for SDK imports')
     }
     const normalized = parseUserEnteredPatientProfile(profile)
     if (profile && !normalized) {

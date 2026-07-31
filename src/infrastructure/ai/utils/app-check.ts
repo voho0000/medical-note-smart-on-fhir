@@ -10,7 +10,8 @@ export async function getAppCheckToken(): Promise<string | null> {
   try {
     // Dynamic import keeps firebase/app-check out of the SSR/test import graph,
     // mirroring getProxyIdToken — the module is safe to import anywhere.
-    const { appCheck } = await import('@/src/shared/config/firebase.config')
+    const { getOrInitializeAppCheck } = await import('@/src/shared/config/firebase.config')
+    const appCheck = await getOrInitializeAppCheck()
     if (!appCheck) return null
     const { getToken } = await import('firebase/app-check')
     const result = await getToken(appCheck, /* forceRefresh */ false)

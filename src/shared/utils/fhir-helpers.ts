@@ -97,7 +97,7 @@ export function calculateAge(birthDate?: string): string {
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--
     }
-    return age.toString()
+    return `${birthDate.length < 10 ? '~' : ''}${age}`
   } catch (error) {
     console.error("Error calculating age:", error)
     return "N/A"

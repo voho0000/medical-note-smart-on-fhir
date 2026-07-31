@@ -279,12 +279,39 @@ function buildKidneyFailureRisk(
   if (!gStage || gStage === 'G1' || gStage === 'G2') return undefined
   const age = numberFromFact(profile, 'age')
   const eGfr = numberFromFact(profile, 'eGFR')
-  const quantitativeUacr = numberFromFact(profile, 'urineAlbuminRatioQuantitative')
-    ?? (
-      profile.observationContexts?.uacr?.useState === 'quantitative_comparable'
-        ? numberFromFact(profile, 'urineAlbuminRatio')
-        : undefined
-    )
+  const uacrContext = profile.observationContexts?.uacr
+  const latestUacrReading = uacrContext?.latestReading ?? uacrContext?.readings?.[0]
+  const quantitativeUacrIsCurrent = (
+    !profile.freshnessContexts?.quantitativeUacr
+    || profile.freshnessContexts.quantitativeUacr.state === 'current'
+  )
+  const quantitativeUacrCandidate = latestUacrReading
+    ? (
+        latestUacrReading.kind === 'quantitative'
+          ? latestUacrReading.numericValueMgG
+          : undefined
+      )
+    : (
+        numberFromFact(profile, 'urineAlbuminRatioQuantitative')
+        ?? (
+          uacrContext?.useState === 'quantitative_comparable'
+            ? numberFromFact(profile, 'urineAlbuminRatio')
+            : undefined
+        )
+      )
+  const quantitativeUacr = quantitativeUacrIsCurrent
+    ? quantitativeUacrCandidate
+    : undefined
+  const semiquantitativeLowerBound = (
+    quantitativeUacr === undefined
+    && latestUacrReading?.kind === 'semiquantitative'
+    && latestUacrReading.lowerBoundMgG !== undefined
+    && latestUacrReading.lowerBoundMgG > 0
+  )
+    ? latestUacrReading.lowerBoundMgG
+    : undefined
+  const kfreUacrInput = quantitativeUacr ?? semiquantitativeLowerBound
+  const isLowerBoundScenario = semiquantitativeLowerBound !== undefined
   const demographicSex = profile.demographics?.sex
   const sex: KfreSex | undefined = demographicSex === 'male' || demographicSex === 'female'
     ? demographicSex
@@ -292,15 +319,15 @@ function buildKidneyFailureRisk(
   const risk = (
     age !== undefined
     && eGfr !== undefined
-    && quantitativeUacr !== undefined
-    && quantitativeUacr > 0
+    && kfreUacrInput !== undefined
+    && kfreUacrInput > 0
     && sex
   )
     ? calculateKfre({
         ageYears: age,
         sex,
         egfrMlMin173m2: eGfr,
-        urineAcrMgG: quantitativeUacr,
+        urineAcrMgG: kfreUacrInput,
         calibration: 'non-north-america',
       })
     : null
@@ -314,6 +341,12 @@ function buildKidneyFailureRisk(
   const reachesReferralRange = fiveYearRisk !== undefined && fiveYearRisk >= 3
   const priority: CdssRecommendation['priority'] = !risk
     ? 'high'
+    : isLowerBoundScenario
+      ? (
+          exceedsKrtPreparation || exceedsMultidisciplinaryCare
+            ? 'high'
+            : 'medium'
+        )
     : exceedsKrtPreparation || exceedsMultidisciplinaryCare
       ? 'high'
       : reachesReferralRange
@@ -321,6 +354,8 @@ function buildKidneyFailureRisk(
         : 'routine'
   const status: CdssRecommendation['status'] = !risk
     ? 'needs-data'
+    : isLowerBoundScenario
+      ? 'needs-data'
     : exceedsKrtPreparation || exceedsMultidisciplinaryCare
       ? 'actionable'
       : reachesReferralRange
@@ -330,15 +365,45 @@ function buildKidneyFailureRisk(
   const riskTitle = risk
     ? text(
         locale,
-        `${gStage} KFRE：2 年 ${twoYearText}%／5 年 ${fiveYearText}%`,
-        `${gStage} KFRE: ${twoYearText}% at 2 years / ${fiveYearText}% at 5 years`,
+        isLowerBoundScenario
+          ? `KFRE 下限情境｜${gStage}：以 UACR ${semiquantitativeLowerBound} mg/g 代入，2 年至少 ${twoYearText}%／5 年至少 ${fiveYearText}%`
+          : `KFRE｜${gStage}：2 年 ${twoYearText}%／5 年 ${fiveYearText}%`,
+        isLowerBoundScenario
+          ? `KFRE lower-bound scenario | ${gStage}: using UACR ${semiquantitativeLowerBound} mg/g, at least ${twoYearText}% at 2 years / ${fiveYearText}% at 5 years`
+          : `KFRE | ${gStage}: ${twoYearText}% at 2 years / ${fiveYearText}% at 5 years`,
       )
     : undefined
-  const recommendation = !risk
+  const recommendation = risk && isLowerBoundScenario
+    ? (
+        exceedsKrtPreparation
+          ? text(
+              locale,
+              `以半定量 UACR 下限 ${semiquantitativeLowerBound} mg/g 計算時，2 年風險已至少 ${twoYearText}% 並超過 40%；應儘速取得定量 UACR，並結合臨床情境評估腎臟替代治療準備。`,
+              `Using the semiquantitative UACR lower bound of ${semiquantitativeLowerBound} mg/g, the 2-year risk is already at least ${twoYearText}% and above 40%. Obtain quantitative UACR promptly and assess KRT preparation with the clinical context.`,
+            )
+          : exceedsMultidisciplinaryCare
+            ? text(
+                locale,
+                `以半定量 UACR 下限 ${semiquantitativeLowerBound} mg/g 計算時，2 年風險已至少 ${twoYearText}% 並超過 10%；應取得定量 UACR，並評估多專業腎臟照護。`,
+                `Using the semiquantitative UACR lower bound of ${semiquantitativeLowerBound} mg/g, the 2-year risk is already at least ${twoYearText}% and above 10%. Obtain quantitative UACR and assess multidisciplinary kidney care.`,
+              )
+            : reachesReferralRange
+              ? text(
+                  locale,
+                  `以半定量 UACR 下限 ${semiquantitativeLowerBound} mg/g 計算時，5 年風險已至少 ${fiveYearText}% 並達轉介決策區間；應取得定量 UACR，並與其他條件共同評估腎臟專科轉介。`,
+                  `Using the semiquantitative UACR lower bound of ${semiquantitativeLowerBound} mg/g, the 5-year risk is already at least ${fiveYearText}% and reaches the referral decision range. Obtain quantitative UACR and assess nephrology referral with other criteria.`,
+                )
+              : text(
+                  locale,
+                  `以半定量 UACR 下限 ${semiquantitativeLowerBound} mg/g 計算的風險下限尚未達 KDIGO 決策閾值，但不能排除實際 UACR 更高後跨越閾值；仍需取得定量 UACR。`,
+                  `The risk floor calculated from the semiquantitative UACR lower bound of ${semiquantitativeLowerBound} mg/g is below KDIGO decision thresholds, but a higher actual UACR could cross them. Quantitative UACR is still required.`,
+                )
+      )
+    : !risk
     ? text(
         locale,
-        '先補齊 KFRE 必要輸入，再使用適用台灣的非北美校正版計算；不得由半定量 UACR 推估。',
-        'Complete the required KFRE inputs, then calculate with the non–North American calibration applicable to Taiwan; do not estimate from semiquantitative UACR.',
+        '先補齊 KFRE 必要輸入，再使用適用台灣的非北美校正版計算；只有明確提供數值下限的半定量 UACR 才能顯示保守下限情境。',
+        'Complete the required KFRE inputs, then calculate with the non–North American calibration applicable to Taiwan. A conservative lower-bound scenario is shown only when the semiquantitative UACR explicitly provides a numeric lower bound.',
       )
     : exceedsKrtPreparation
       ? text(
@@ -369,7 +434,7 @@ function buildKidneyFailureRisk(
     domain: 'monitoring',
     priority,
     status,
-    overviewEvidenceFactKey: quantitativeUacr === undefined
+    overviewEvidenceFactKey: quantitativeUacr === undefined || isLowerBoundScenario
       ? 'urineAlbuminOverview'
       : sex === undefined
         ? 'sex'
@@ -379,26 +444,30 @@ function buildKidneyFailureRisk(
         quantitativeUacr === undefined || quantitativeUacr <= 0
           ? text(
               locale,
-              `${gStage}：缺少定量 UACR 或數值無法使用，暫不能計算 KFRE`,
-              `${gStage}: quantitative UACR is missing or unusable, so KFRE cannot yet be calculated`,
+              `KFRE｜${gStage}：缺少定量 UACR 或數值無法使用`,
+              `KFRE | ${gStage}: quantitative UACR is missing or unusable`,
             )
           : sex === undefined
             ? text(
                 locale,
-                `${gStage}：缺少公式所需性別，暫不能計算 KFRE`,
-                `${gStage}: the sex input required by the equation is missing, so KFRE cannot yet be calculated`,
+                `KFRE｜${gStage}：缺少公式所需性別`,
+                `KFRE | ${gStage}: the sex input required by the equation is missing`,
               )
             : text(
                 locale,
-                `${gStage}：KFRE 必要輸入不完整`,
-                `${gStage}: required KFRE inputs are incomplete`,
+                `KFRE｜${gStage}：必要輸入不完整`,
+                `KFRE | ${gStage}: required inputs are incomplete`,
               )
       ),
     recommendation,
     rationale: text(
       locale,
-      '4 變數 KFRE 使用年齡、性別、eGFR 與定量 UACR，估算 2 年與 5 年內需透析或腎臟移植的絕對風險。',
-      'The 4-variable KFRE uses age, sex, eGFR, and quantitative UACR to estimate absolute 2- and 5-year risk of dialysis or kidney transplant.',
+      isLowerBoundScenario
+        ? '本卡直接使用醫療計算機共用的 4 變數 KFRE 核心；半定量 UACR 僅以明確數值下限建立方向性的保守情境，不視為正式 KFRE 預估。'
+        : '本卡直接使用醫療計算機共用的 4 變數 KFRE 核心，以年齡、性別、eGFR 與定量 UACR 估算 2 年與 5 年內需透析或腎臟移植的絕對風險。',
+      isLowerBoundScenario
+        ? 'This card directly uses the same shared 4-variable KFRE engine as the medical calculator. A semiquantitative UACR is used only as an explicit numeric lower bound for a directional conservative scenario, not as a formal KFRE estimate.'
+        : 'This card directly uses the same shared 4-variable KFRE engine as the medical calculator, using age, sex, eGFR, and quantitative UACR to estimate absolute 2- and 5-year risk of dialysis or kidney transplant.',
     ),
     patientEvidence: compactEvidence([
       patientEvidence(profile, locale, 'age', '年齡', 'Age'),
@@ -406,7 +475,7 @@ function buildKidneyFailureRisk(
       patientEvidence(profile, locale, 'eGFR', '最新 eGFR', 'Latest eGFR'),
       patientEvidence(profile, locale, 'urineAlbuminOverview', '尿白蛋白', 'Urine albumin'),
     ]),
-    missingData: risk
+    missingData: risk && !isLowerBoundScenario
       ? []
       : [
           ...(age === undefined
@@ -418,24 +487,38 @@ function buildKidneyFailureRisk(
           ...(eGfr === undefined
             ? [text(locale, 'eGFR', 'eGFR')]
             : []),
-          ...(quantitativeUacr === undefined || quantitativeUacr <= 0
+          ...(isLowerBoundScenario
+            ? [text(
+                locale,
+                `定量 UACR（mg/g）；目前僅有半定量下限 ${semiquantitativeLowerBound} mg/g`,
+                `Quantitative UACR (mg/g); only a semiquantitative lower bound of ${semiquantitativeLowerBound} mg/g is currently available`,
+              )]
+            : quantitativeUacr === undefined || quantitativeUacr <= 0
             ? [text(locale, '大於 0 的定量 UACR（mg/g）', 'Quantitative UACR above 0 mg/g')]
             : []),
         ],
     nextActions: [text(
       locale,
-      risk
+      risk && isLowerBoundScenario
+        ? '安排定量 UACR；取得結果後以相同 KFRE 核心重新計算並取代本下限情境。'
+        : risk
         ? '核對 eGFR 與定量 UACR 的日期、單位及穩定性，將 2 年／5 年風險與院內照護流程一併記錄。'
         : '查找或補做必要輸入；資料完整且腎功能穩定後再計算。',
-      risk
+      risk && isLowerBoundScenario
+        ? 'Obtain quantitative UACR, then recalculate with the same KFRE engine and replace this lower-bound scenario.'
+        : risk
         ? 'Verify the dates, units, and stability of eGFR and quantitative UACR, then document the 2- and 5-year risks with the local care pathway.'
         : 'Retrieve or obtain the required inputs and calculate only when data are complete and kidney function is stable.',
     )],
     guidelineReferences: [],
     safetyBoundary: text(
       locale,
-      '使用 Tangri 4 變數 KFRE 與已發表的非北美區域校正；僅在成人 CKD G3-G5、eGFR 穩定且定量 UACR 完整時顯示。IgA 腎病或 ADPKD 應評估疾病專屬模型。',
-      'Uses the Tangri 4-variable KFRE with the published non–North American calibration and displays a result only for adults with stable CKD G3-G5 and complete quantitative UACR. Consider disease-specific models for IgA nephropathy or ADPKD.',
+      isLowerBoundScenario
+        ? `半定量 UACR >${semiquantitativeLowerBound} mg/g 代入 ${semiquantitativeLowerBound} 只能得到風險下限，不是正式 KFRE；不得用「低於閾值」排除較高真實風險，仍須以定量 UACR 重算。`
+        : '使用 Tangri 4 變數 KFRE 與已發表的非北美區域校正；僅在成人 CKD G3-G5、eGFR 穩定且定量 UACR 完整時顯示。IgA 腎病或 ADPKD 應評估疾病專屬模型。',
+      isLowerBoundScenario
+        ? `Entering ${semiquantitativeLowerBound} for semiquantitative UACR >${semiquantitativeLowerBound} mg/g yields only a risk floor, not a formal KFRE estimate. A value below a threshold cannot exclude higher true risk; recalculate with quantitative UACR.`
+        : 'Uses the Tangri 4-variable KFRE with the published non–North American calibration and displays a result only for adults with stable CKD G3-G5 and complete quantitative UACR. Consider disease-specific models for IgA nephropathy or ADPKD.',
     ),
   }
 }
@@ -1175,8 +1258,9 @@ function buildCkdMbd(
       title: 'KDIGO 2017 Clinical Practice Guideline Update for CKD-MBD',
       publisher: 'Kidney Disease: Improving Global Outcomes',
       version: '2017',
-      url: 'https://kdigo.org/wp-content/uploads/2018/04/2017-KDIGO-CKD-MBD-GL-Update.pdf',
+      url: 'https://kdigo.org/wp-content/uploads/2018/04/2017-KDIGO-CKD-MBD-GL-Update.pdf#page=17',
       directLink: true,
+      page: 17,
       recommendationId: 'Recommendation 4.1.1',
       locator: text(
         locale,
@@ -1188,6 +1272,10 @@ function buildCkdMbd(
         'CKD G3a–G5D 的處置應依連續的血磷、血鈣與 PTH 整體判讀。',
         'In CKD G3a–G5D, decisions should be based on serial phosphate, calcium, and PTH considered together.',
       ),
+      citedStatements: [{
+        label: 'Recommendation 4.1.1',
+        text: 'In patients with CKD G3a–G5D, treatments of CKD-MBD should be based on serial assessments of phosphate, calcium, and PTH levels, considered together (Not Graded).',
+      }],
     }],
     safetyBoundary: text(
       locale,
@@ -1414,8 +1502,15 @@ export const CKD_GUIDELINE_PACK: ClinicalGuidelinePack = {
       routine: 2,
     }
     recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
-    const automated = recommendations.filter((item) => item.status === 'no-action')
-    const decisions = recommendations.filter((item) => item.status !== 'no-action')
+    // KFRE is a longitudinal risk module, not merely a completed safety check.
+    // Keep it visible as a primary card even when the current risk is below
+    // KDIGO action thresholds, so clinicians can see and document the result.
+    const automated = recommendations.filter(
+      (item) => item.status === 'no-action' && item.id !== 'ckd-kidney-failure-risk',
+    )
+    const decisions = recommendations.filter(
+      (item) => item.status !== 'no-action' || item.id === 'ckd-kidney-failure-risk',
+    )
     const enriched = attachKnowledgeAssessments({
       profile,
       locale,

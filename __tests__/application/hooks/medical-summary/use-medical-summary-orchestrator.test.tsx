@@ -20,6 +20,7 @@ const mockRecordLocalImportAiDecision = jest.fn((
   _decision: 'auto' | 'manual',
 ) => true)
 const mockRecordAutoAiRealDataDecision = jest.fn()
+const mockRequestDemographicsForAi = jest.fn(async () => true)
 
 jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', () => ({
   useMedicalSummary: jest.fn(),
@@ -39,6 +40,12 @@ jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
   recordAutoAiRealDataDecision: (decision: 'auto' | 'manual') => (
     mockRecordAutoAiRealDataDecision(decision)
   ),
+}))
+jest.mock('@/src/application/providers/ai-demographics-gate.provider', () => ({
+  useAiDemographicsGate: () => ({
+    demographicsReadyForAi: true,
+    requestDemographicsForAi: mockRequestDemographicsForAi,
+  }),
 }))
 
 const mockUseMedicalSummary = useMedicalSummary as jest.MockedFunction<typeof useMedicalSummary>
@@ -195,6 +202,7 @@ describe('useMedicalSummaryOrchestrator', () => {
     useAiConfigStore.setState({ openAiCompatibleProfiles: [] })
     mockStartLocalImportAiConsent.mockImplementation((importId: string) => ({ importId }))
     mockAutoAiConsent = { source: 'other', decision: null, importId: null }
+    mockRequestDemographicsForAi.mockResolvedValue(true)
     arrange()
   })
 
@@ -207,6 +215,17 @@ describe('useMedicalSummaryOrchestrator', () => {
     await act(async () => result.current.generate())
     expect(summaryGenerate).toHaveBeenCalledTimes(1)
     expect(safetyGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start manual generation when required demographics are cancelled', async () => {
+    mockRequestDemographicsForAi.mockResolvedValueOnce(false)
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    await act(async () => result.current.generate())
+
+    expect(mockRequestDemographicsForAi).toHaveBeenCalledTimes(1)
+    expect(summaryGenerate).not.toHaveBeenCalled()
+    expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
   it('aborts a deleted custom-profile batch before its queued safety request starts', async () => {

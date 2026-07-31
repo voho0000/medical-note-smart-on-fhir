@@ -140,13 +140,18 @@ describe('CDSS knowledge-pack registry', () => {
     expect('dcsi' in result).toBe(false)
   })
 
-  it('enables the independently registered diabetes and CKD sources', () => {
+  it('enables all independently registered clinical knowledge sources', () => {
     expect(getEnabledKnowledgePacks().map((pack) => pack.metadata('zh-TW').id)).toEqual([
       'ada-2026',
       'taiwan-t2dm-2022',
       'taiwan-nhi-diabetes',
       'kdigo-ckd-2024',
+      'kdigo-anemia-2026',
       'taiwan-ckd-2025',
+      'taiwan-hypertension-2022',
+      'aha-acc-hypertension-2025',
+      'taiwan-lipid-2022',
+      'aha-acc-dyslipidemia-2026',
     ])
   })
 
@@ -805,8 +810,8 @@ describe('CDSS knowledge-pack registry', () => {
       recommendations: [recommendation('older-adult-safety', 'safety')],
     })
 
-    expect(result.knowledgePacks).toHaveLength(5)
-    expect(result.recommendations[0].sourceAssessments).toHaveLength(5)
+    expect(result.knowledgePacks).toHaveLength(10)
+    expect(result.recommendations[0].sourceAssessments).toHaveLength(10)
     expect(result.recommendations[0].sourceAssessments?.map((item) => item.sourceId)).toEqual(
       result.knowledgePacks.map((pack) => pack.id),
     )

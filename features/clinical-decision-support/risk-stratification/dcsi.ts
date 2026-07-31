@@ -8,9 +8,9 @@ import type {
   DcsiSummary,
   GuidelineReference,
 } from '../types'
+import { DCSI_GLASHEEN_2017_SUPPLEMENT_URL } from './dcsi-codebook'
 
 const DCSI_ORIGINAL_STUDY_URL = 'https://pmc.ncbi.nlm.nih.gov/articles/PMC3810070/'
-const DCSI_ICD10_UPDATE_URL = 'https://pubmed.ncbi.nlm.nih.gov/28416120/'
 const DCSI_TAIWAN_VALIDATION_URL = 'https://www.sciencedirect.com/science/article/pii/S1056872714001500'
 
 const DOMAIN_ORDER: readonly DcsiDomainId[] = [
@@ -237,12 +237,16 @@ function evidenceReferences(locale: CdssLocale): GuidelineReference[] {
       title: 'Diabetes Complications Severity Index (DCSI)—Update and ICD-10 translation',
       publisher: 'Journal of Diabetes and Its Complications',
       version: '2017',
-      url: DCSI_ICD10_UPDATE_URL,
-      locator: text(locale, 'ICD-10 與腎功能分級更新', 'ICD-10 and kidney-severity update'),
+      url: DCSI_GLASHEEN_2017_SUPPLEMENT_URL,
+      locator: text(
+        locale,
+        'Supplementary Appendix A-1～A-7：七類 ICD-10 計分表',
+        'Supplementary Appendix A-1–A-7: seven ICD-10 scoring tables',
+      ),
       summary: text(
         locale,
-        '更新版納入 ICD-10 與 eGFR；腎臟病第 1–3 期計 1 分，第 4–5 期計 2 分。',
-        'The update added ICD-10 and eGFR; CKD stages 1–3 receive 1 point and stages 4–5 receive 2 points.',
+        '更新版附錄提供七類 ICD-10 計分表並納入 eGFR；腎臟病第 1–3 期計 1 分，第 4–5 期計 2 分。',
+        'The update supplies seven ICD-10 scoring tables and adds eGFR; CKD stages 1–3 receive 1 point and stages 4–5 receive 2 points.',
       ),
     },
     {
@@ -341,6 +345,11 @@ export function buildDcsiSummary(
         locale,
         '本 POC 是目前受治理診斷與檢驗的單次快照，未重建原研究使用的 12 個月申報資料觀察窗；需先確認跨院與時間範圍的資料完整性。',
         'This POC is a snapshot of currently governed diagnoses and laboratory results; it does not reconstruct the 12-month claims window used in the research method. Confirm cross-facility and longitudinal completeness.',
+      ),
+      text(
+        locale,
+        'ICD-10 診斷計分依 Glasheen 2017 Supplementary Appendix A-1～A-7；Procedure 判讀與 UACR（mg/g）門檻是本系統的 FHIR 延伸，尚未宣稱為該論文驗證內容。',
+        'ICD-10 diagnosis scoring follows Glasheen 2017 Supplementary Appendix A-1–A-7. Procedure evidence and the UACR (mg/g) threshold are local FHIR extensions and are not claimed as validated by that publication.',
       ),
       text(
         locale,

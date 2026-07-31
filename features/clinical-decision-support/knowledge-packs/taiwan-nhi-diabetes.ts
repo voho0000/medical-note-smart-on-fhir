@@ -1,4 +1,7 @@
-import type { CdssKnowledgePack } from '../types'
+import type {
+  CdssKnowledgePack,
+  GuidelineCitedStatement,
+} from '../types'
 import { assessment, localize, pdfPageUrl } from './shared'
 import evidenceIndex from './evidence-indexes/taiwan-nhi-2026.json'
 
@@ -34,6 +37,57 @@ if (
 
 const resolvedChapter2 = chapter2
 
+function citedStatements(ruleId: string): readonly GuidelineCitedStatement[] {
+  switch (ruleId) {
+    case '5.1':
+      return [
+        {
+          label: '5.1（2）（1）',
+          text: '原則上第二型糖尿病治療應優先使用 metformin，或考慮早期開始使用胰島素。除有過敏、禁忌症、不能耐受或仍無法理想控制血糖的情形下，可使用其他類口服降血糖藥物。',
+        },
+        {
+          label: '5.1（2）（2）',
+          text: 'TZD 製劑、DPP-4抑制劑、SGLT-2抑制劑、以及含該3類成分之複方製劑，限用於已接受過最大耐受劑量的 metformin 仍無法理想控制血糖之第二型糖尿病病人，且 SGLT-2抑制劑與 DPP-4抑制劑及其複方製劑宜二種擇一種使用。',
+        },
+        {
+          label: '5.1（2）（3）',
+          text: '第二型糖尿病病人倘於使用三種口服降血糖藥物治療仍無法理想控制血糖者，宜考慮給予胰島素治療。',
+        },
+        {
+          label: '5.1（2）（4）',
+          text: '特約醫療院所應加強衛教第二型糖尿病病人，鼓勵健康生活型態的飲食和運動，如控制肥胖、限制熱量攝取等措施。',
+        },
+      ]
+    case '5.1.5':
+      return [
+        {
+          label: '5.1.5（1）',
+          text: 'Dapagliflozin（如 Forxiga）、empagliflozin（如 Jardiance）、canagliflozin（如 Canaglu）、ertugliflozin（如 Steglatro）（105/5/1、107/3/1、108/7/1）\n每日最多處方1粒。',
+        },
+        {
+          label: '5.1.5（2）',
+          text: 'Empagliflozin/metformin 複方（如 Jardiance Duo）（107/3/1）\n每日最多處方2粒。',
+        },
+        {
+          label: '5.1.5（3）',
+          text: 'Dapagliflozin 及 metformin 複方（如 Xigduo XR）（107/3/1）\n每日最多處方1粒。',
+        },
+      ]
+    case '2.6.1':
+      return [{
+        label: '2.6.1（心血管疾病或糖尿病患者）',
+        text: '非藥物治療：與藥物治療可並行\n起始藥物治療血脂值：TC≧160mg/dL 或 LDL-C≧100mg/dL\n血脂目標值：TC＜160mg/dL 或 LDL-C＜100mg/dL\n處方規定：第一年應每3-6個月抽血檢查一次，第二年以後應至少每6-12個月抽血檢查一次，同時請注意副作用之產生如肝功能異常，橫紋肌溶解症。',
+      }]
+    case '2.16':
+      return [{
+        label: '2.16（2.慢性腎臟病）',
+        text: '（1）限用於參加「初期慢性腎臟病照護整合方案」或「全民健康保險末期腎臟病前期（Pre-ESRD）之病人照護與衛教計畫」之慢性腎臟病病人，應完全符合下列條件：\nⅠ.接受 dapagliflozin 或 empagliflozin 治療前應穩定接受最大耐受劑量的 ACEI 或 ARB 至少4週。\nⅡ.起始治療 eGFR≧25且≦60mL/min/1.73m2。\nⅢ.uACR≧200且≦5000/mg/g。\nⅣ.須排除有以下任一情形：\ni.第1型糖尿病。\nii.已知為多囊腎、紅斑性狼瘡相關腎病，或抗中性粒細胞胞漿抗體（ANCA）相關血管炎。\niii.六個月內接受化療/免疫抑制治療或其他原發性或繼發性腎臟疾病的免疫治療。\niv.器官移植病史。\nv.急性心肌梗塞、不穩定型心絞痛、中風或12週內短暫性腦缺血發作。\nvi.12週內冠狀動脈血運重建術。\n（2）使用後 eGFR 下降至<15mL/min/1.73m2，應予停藥。\n3.每日最多處方1粒。',
+      }]
+    default:
+      return []
+  }
+}
+
 function chapter2Reference(
   locale: 'zh-TW' | 'en',
   entry: NonNullable<typeof lipidLoweringRule>,
@@ -53,6 +107,7 @@ function chapter2Reference(
       `Chapter 2 → ${entry.ruleId} (${entry.printedPage})`,
     ),
     summary: localize(locale, entry.summary, entry.summary),
+    citedStatements: citedStatements(entry.ruleId),
   }
 }
 
@@ -598,6 +653,7 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
                 sglt2DiabetesRule.summary,
                 'Lists covered SGLT-2 inhibitors and combination products with prescribing limits.',
               ),
+              citedStatements: citedStatements(sglt2DiabetesRule.ruleId),
             },
             {
               id: 'TW-NHI-2.16-1150522',
@@ -618,6 +674,7 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
                 sglt2CardiorenalRule.summary,
                 'Enrollment, prerequisite therapy, eGFR, UACR, and exclusion criteria for dapagliflozin/empagliflozin in CKD.',
               ),
+              citedStatements: citedStatements(sglt2CardiorenalRule.ruleId),
             },
           ]
         : [{
@@ -639,6 +696,7 @@ export const TAIWAN_NHI_DIABETES_PACK: CdssKnowledgePack = {
               generalDiabetesRule.summary,
               'Covers drug classes, metformin prerequisites, selected combination limits, and required treatment records.',
             ),
+            citedStatements: citedStatements(generalDiabetesRule.ruleId),
           }],
     })
   },
