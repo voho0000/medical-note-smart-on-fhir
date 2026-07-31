@@ -6,6 +6,15 @@ jest.mock('ai', () => ({
   Output: { json: () => mockJsonOutput() },
 }))
 
+jest.mock('@/src/shared/config/env.config', () => ({
+  ENV_CONFIG: {
+    hasChatProxy: true,
+    hasGeminiProxy: false,
+    hasClaudeProxy: false,
+    streamIdleTimeoutMs: 60_000,
+  },
+}))
+
 import { AiSdkStreamAdapter } from '@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter'
 
 function textStream(...chunks: string[]) {
@@ -48,6 +57,25 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     }))
     expect(mockStreamText.mock.calls[0][0]).not.toHaveProperty('temperature')
     expect(onChunk).toHaveBeenCalledWith('hello')
+  })
+
+  it('keeps Luna selected and uses the proxy when no personal key is present', async () => {
+    const create = jest.fn(() => ({ model: { kind: 'responses' }, isGemini: false }))
+    const adapter = new AiSdkStreamAdapter({ create } as any)
+
+    await adapter.stream({
+      model: 'gpt-5.6-luna',
+      messages: [{ role: 'user', content: 'hello' }],
+      apiKey: null,
+      signal: new AbortController().signal,
+      onChunk: jest.fn(),
+    })
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      modelId: 'gpt-5.6-luna',
+      apiKey: undefined,
+      useProxy: true,
+    }))
   })
 
   it('applies fixed-one sampling without inspecting a model prefix', async () => {

@@ -95,7 +95,7 @@ describe('MODEL_CATALOG contract', () => {
     }
   })
 
-  it('keeps the requested GPT rollout and Fable availability', () => {
+  it('keeps the requested GPT rollout, free Luna access, and Fable availability', () => {
     expect(GPT_MODELS.map((model) => model.id)).toEqual([
       'gpt-5.4-nano',
       'gpt-5.6-luna',
@@ -103,10 +103,15 @@ describe('MODEL_CATALOG contract', () => {
       'gpt-5.6-sol',
     ])
     expect(GPT_MODELS.filter(modelRequiresUserKey).map((model) => model.id)).toEqual([
-      'gpt-5.6-luna',
       'gpt-5.6-terra',
       'gpt-5.6-sol',
     ])
+    expect(getModelDefinition('gpt-5.6-luna')).toMatchObject({
+      provider: 'openai',
+      access: 'proxy-or-key',
+      apiSurface: 'openai-responses',
+      status: 'available',
+    })
     expect(getModelDefinition('claude-fable-5')).toMatchObject({
       provider: 'claude',
       access: 'key-only',

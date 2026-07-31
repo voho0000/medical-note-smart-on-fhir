@@ -136,7 +136,7 @@ describe('useModelSelection', () => {
     expect(setModel).toHaveBeenCalledWith('claude-fable-5')
   })
 
-  it('keeps only Nano unlocked without an OpenAI key and unlocks every GPT-5.6 model with one', () => {
+  it('keeps Nano and Luna unlocked without an OpenAI key and unlocks every GPT-5.6 model with one', () => {
     const { result, rerender } = renderHook(
       ({ apiKey }: { apiKey: string | null }) => useModelSelection(
         apiKey,
@@ -150,7 +150,7 @@ describe('useModelSelection', () => {
 
     expect(result.current.gptModels.map(({ id, isLocked }) => ({ id, isLocked }))).toEqual([
       { id: 'gpt-5.4-nano', isLocked: false },
-      { id: 'gpt-5.6-luna', isLocked: true },
+      { id: 'gpt-5.6-luna', isLocked: false },
       { id: 'gpt-5.6-terra', isLocked: true },
       { id: 'gpt-5.6-sol', isLocked: true },
     ])

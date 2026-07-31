@@ -51,6 +51,21 @@ describe('AiProviderFactory routing', () => {
     expect(result.model).toEqual({ kind: 'chat-model', modelId: 'gpt-5.4-nano' })
   })
 
+  it('routes the free Luna proxy through the Responses API', () => {
+    const factory = new AiProviderFactory()
+    const result = factory.create({
+      modelId: 'gpt-5.6-luna',
+      useProxy: true,
+    })
+
+    expect(mockResponses).toHaveBeenCalledWith('gpt-5.6-luna')
+    expect(mockChat).not.toHaveBeenCalled()
+    expect(result.model).toEqual({
+      kind: 'responses-model',
+      modelId: 'gpt-5.6-luna',
+    })
+  })
+
   it('fails closed for an unknown model before creating an SDK provider', () => {
     const factory = new AiProviderFactory()
 

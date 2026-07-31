@@ -57,10 +57,6 @@ export class OpenAiService {
       )
     }
 
-    if (shouldUseProxy && modelDef.apiSurface !== 'openai-chat-completions') {
-      throw new Error(`The MediPrisma proxy does not support ${modelDef.apiSurface}`)
-    }
-
     // The API surface comes from the manifest. This keeps non-streaming calls
     // aligned with the SDK factory used by streaming and Agent chat.
     const targetUrl = shouldUseProxy
@@ -143,6 +139,9 @@ export class OpenAiService {
       }
 
       const data = await response.json()
+      const upstreamData = shouldUseProxy && data.openAiResponse
+        ? data.openAiResponse
+        : data
       const text = this.extractOpenAiContent(data, shouldUseProxy, isResponsesApi)
 
       return {
@@ -150,7 +149,7 @@ export class OpenAiService {
         metadata: {
           modelId: request.modelId,
           provider: 'openai',
-          tokensUsed: data.usage?.total_tokens,
+          tokensUsed: upstreamData.usage?.total_tokens,
         },
       }
     } finally {
@@ -160,21 +159,26 @@ export class OpenAiService {
   }
 
   private extractOpenAiContent(data: any, shouldUseProxy: boolean, isResponsesApi: boolean): string {
-    if (shouldUseProxy) {
-      // Proxy response format: { message: "...", openAiResponse: {...} }
-      return data.message || data.text || data.choices?.[0]?.message?.content || ''
-    }
+    // Non-streaming proxy responses may wrap the native upstream response so
+    // callers can use one endpoint for both Chat Completions and Responses.
+    const upstreamData = shouldUseProxy && data.openAiResponse
+      ? data.openAiResponse
+      : data
     if (isResponsesApi) {
-      if (typeof data.output_text === 'string') return data.output_text
-      return (data.output ?? [])
+      if (shouldUseProxy && typeof data.message === 'string') return data.message
+      if (typeof upstreamData.output_text === 'string') return upstreamData.output_text
+      return (upstreamData.output ?? [])
         .filter((item: any) => item?.type === 'message')
         .flatMap((item: any) => item.content ?? [])
         .filter((part: any) => part?.type === 'output_text')
         .map((part: any) => part.text ?? '')
         .join('')
     }
-    // Direct OpenAI API response format
-    return data.choices?.[0]?.message?.content || ''
+    if (shouldUseProxy) {
+      // Chat Completions proxy response: { message, openAiResponse }
+      return data.message || data.text || upstreamData.choices?.[0]?.message?.content || ''
+    }
+    return upstreamData.choices?.[0]?.message?.content || ''
   }
 
   private sanitizeErrorMessage(message: string): string {

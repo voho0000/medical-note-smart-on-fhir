@@ -94,7 +94,7 @@ export const MODEL_CATALOG = [
     },
     provider: 'openai',
     contextLimit: 900_000,
-    access: 'key-only',
+    access: 'proxy-or-key',
     apiSurface: 'openai-responses',
     temperaturePolicy: 'omit',
     conversationMode: 'deep-agent',

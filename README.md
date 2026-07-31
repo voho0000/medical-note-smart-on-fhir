@@ -68,8 +68,8 @@ On-prem 模式只顯示院內／地端 OpenAI-compatible profiles，不接受公
 
 | 類別 | 模型 |
 |------|------|
-| 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、Claude Haiku 4.5 |
-| 進階（需自備金鑰） | GPT-5.6 Luna／GPT-5.6 Terra／GPT-5.6 Sol；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
+| 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、GPT-5.6 Luna、Claude Haiku 4.5 |
+| 進階（需自備金鑰） | GPT-5.6 Terra／GPT-5.6 Sol；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
 
 醫學文獻搜尋使用 Perplexity（cloud 模式的 AI Agent 對話）；on-prem 不掛載外部文獻搜尋工具。
 
@@ -280,8 +280,8 @@ On-prem mode shows only hospital/local OpenAI-compatible profiles. It rejects pu
 
 | Tier | Models |
 |------|--------|
-| Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, Claude Haiku 4.5 |
-| Advanced (your own key) | GPT-5.6 Luna / GPT-5.6 Terra / GPT-5.6 Sol; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
+| Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, GPT-5.6 Luna, Claude Haiku 4.5 |
+| Advanced (your own key) | GPT-5.6 Terra / GPT-5.6 Sol; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
 
 Literature search uses Perplexity in cloud AI Agent chat; on-prem never mounts the external literature-search tool.
 
