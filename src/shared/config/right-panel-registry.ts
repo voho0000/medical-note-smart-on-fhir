@@ -28,6 +28,8 @@ export interface RightPanelFeatureConfig {
   pinLocked?: boolean
   /** Render the tab trigger icon-only at every width (name kept in title/aria). */
   iconOnly?: boolean
+  /** Optional compact status badge shown beside the tab label. */
+  badge?: string
   /** Optional: force mount the tab content (useful for chat to preserve state) */
   forceMount?: boolean
   /** Optional: custom wrapper className for the tab content */

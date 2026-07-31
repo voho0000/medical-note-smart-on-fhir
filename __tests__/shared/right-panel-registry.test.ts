@@ -8,8 +8,8 @@ describe('right-panel registry', () => {
     expect(featureIds).toEqual([
       'medical-summary',
       'medical-chat',
-      'personalized-education',
       'medical-calculator',
+      'personalized-education',
       'clinical-decision-support',
       'ips-export',
       'settings',
@@ -25,8 +25,8 @@ describe('right-panel registry', () => {
     expect(defaults.pinnedFeatures.map((feature) => feature.id)).toEqual([
       'medical-summary',
       'medical-chat',
-      'personalized-education',
       'medical-calculator',
+      'personalized-education',
       'clinical-decision-support',
       'ips-export',
     ])
@@ -52,7 +52,7 @@ describe('right-panel registry', () => {
     ])
   })
 
-  it('shows education to citizens and keeps CDSS medical-only', () => {
+  it('shows education only to citizens and guidance only to medical users', () => {
     const patientIds = getEnabledRightPanelFeatures('patient').map(
       (feature) => feature.id,
     )
@@ -62,8 +62,26 @@ describe('right-panel registry', () => {
 
     expect(patientIds).toContain('personalized-education')
     expect(patientIds).not.toContain('clinical-decision-support')
-    expect(medicalIds).toContain('personalized-education')
+    expect(medicalIds).not.toContain('personalized-education')
     expect(medicalIds).toContain('clinical-decision-support')
+
+    expect(patientIds.indexOf('personalized-education')).toBe(
+      patientIds.indexOf('medical-calculator') + 1,
+    )
+    expect(medicalIds.indexOf('clinical-decision-support')).toBe(
+      medicalIds.indexOf('medical-calculator') + 1,
+    )
+
+    expect(
+      getEnabledRightPanelFeatures('patient').find(
+        (feature) => feature.id === 'personalized-education',
+      )?.badge,
+    ).toBe('Beta')
+    expect(
+      getEnabledRightPanelFeatures('medical').find(
+        (feature) => feature.id === 'clinical-decision-support',
+      )?.badge,
+    ).toBe('Beta')
   })
 
   it('lets medical summary scroll with the panel so only its card chips stay sticky', () => {

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
@@ -284,14 +285,15 @@ function RightPanelContentInner() {
     const Icon = theme.icon
     const activeClasses = TAB_ACTIVE_CLASSES[theme.colorKey] || TAB_ACTIVE_CLASSES.settings
     const label = getTabLabel(feature)
+    const accessibleLabel = feature.badge ? `${label} · ${feature.badge}` : label
     return (
       <TabsTrigger
         key={feature.id}
         value={feature.id}
         data-tour={`right-tab-${feature.id}`}
         className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
-        title={label}
-        aria-label={label}
+        title={accessibleLabel}
+        aria-label={accessibleLabel}
       >
         <Icon className="h-4 w-4 shrink-0" />
         {/* Below sm the multi-way grid leaves ~50px per tab — a 2-3 char
@@ -300,6 +302,15 @@ function RightPanelContentInner() {
             every width. */}
         {!feature.iconOnly && (
           <span className="truncate hidden sm:inline">{label}</span>
+        )}
+        {feature.badge && (
+          <Badge
+            variant="outline"
+            className="hidden border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 sm:inline-flex dark:border-amber-700/70 dark:bg-amber-950/50 dark:text-amber-300"
+            aria-hidden="true"
+          >
+            {feature.badge}
+          </Badge>
         )}
       </TabsTrigger>
     )
@@ -311,6 +322,14 @@ function RightPanelContentInner() {
       <>
         <Icon className="h-4 w-4 shrink-0" />
         {getTabLabel(feature)}
+        {feature.badge && (
+          <Badge
+            variant="outline"
+            className="ml-auto border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-700/70 dark:bg-amber-950/50 dark:text-amber-300"
+          >
+            {feature.badge}
+          </Badge>
+        )}
       </>
     )
   }

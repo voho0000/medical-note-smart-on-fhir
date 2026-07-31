@@ -8,6 +8,7 @@ export const CLINICAL_DECISION_SUPPORT_MODULE = {
     id: CLINICAL_DECISION_SUPPORT_FEATURE_ID,
     name: 'Clinical Decision Support',
     tabLabel: 'personalizedGuidance',
+    badge: 'Beta',
     order: 5,
     enabled: true,
     pinned: true,
