@@ -23,8 +23,13 @@ import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
 import { rowInnerMatch } from './utils/report-search'
 import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
+import { cn } from '@/src/shared/utils/cn.utils'
 import { ReportNameModeProvider } from './context/report-name-mode.context'
 import { ReportNameModeSwitch } from './components/ReportNameModeSwitch'
+import {
+  PROCEDURE_CATEGORY_CODES,
+  type ProcedureCategoryCode,
+} from './utils/procedure-category'
 import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
 import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 
@@ -35,6 +40,7 @@ const EMPTY_EXPANDED_IDS: string[] = []
 const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
 const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'vitals'])
+type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
 
 export function ReportsCard() {
   const { t } = useLanguage()
@@ -99,6 +105,8 @@ export function ReportsCard() {
   }
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [procedureCategoryFilter, setProcedureCategoryFilter] =
+    useState<ProcedureCategoryFilter>('all')
   const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
 
   // Open a concrete raw-report view for the trend / imaging tour steps. The
@@ -275,6 +283,77 @@ export function ReportsCard() {
 
   const groupedRows = useGroupedRows(filteredRows)
 
+  const procedureCategoryCounts = useMemo(() => {
+    const counts: Record<Exclude<ProcedureCategoryFilter, 'all'>, number> = {
+      'surgical-procedure': 0,
+      'major-procedure': 0,
+      'outpatient-treatment': 0,
+      uncategorized: 0,
+    }
+    for (const row of groupedRows.procedures) {
+      counts[row.procedureCategory ?? 'uncategorized'] += 1
+    }
+    return counts
+  }, [groupedRows.procedures])
+
+  const filteredProcedureRows = useMemo(() => {
+    if (procedureCategoryFilter === 'all') return groupedRows.procedures
+    return groupedRows.procedures.filter(
+      (row) => (row.procedureCategory ?? 'uncategorized') === procedureCategoryFilter,
+    )
+  }, [groupedRows.procedures, procedureCategoryFilter])
+
+  const procedureCategoryOptions = useMemo(() => {
+    // Some embedded/test language providers may expose only the Reports
+    // namespace. Keep the card renderable until a procedure tab is present.
+    const labels = t.procedures ?? {
+      categoryAll: 'All',
+      categoryUncategorized: 'Uncategorized',
+      categoryLabels: {
+        'surgical-procedure': 'Surgical procedure',
+        'major-procedure': 'Major procedure',
+        'outpatient-treatment': 'Outpatient treatment',
+      },
+    }
+    const options: Array<{
+      value: ProcedureCategoryFilter
+      label: string
+      count: number
+    }> = [{
+      value: 'all',
+      label: labels.categoryAll,
+      count: groupedRows.procedures.length,
+    }]
+
+    for (const code of PROCEDURE_CATEGORY_CODES) {
+      const count = procedureCategoryCounts[code]
+      if (count > 0 || procedureCategoryFilter === code) {
+        options.push({
+          value: code,
+          label: labels.categoryLabels[code],
+          count,
+        })
+      }
+    }
+
+    if (
+      procedureCategoryCounts.uncategorized > 0
+      || procedureCategoryFilter === 'uncategorized'
+    ) {
+      options.push({
+        value: 'uncategorized',
+        label: labels.categoryUncategorized,
+        count: procedureCategoryCounts.uncategorized,
+      })
+    }
+    return options
+  }, [
+    groupedRows.procedures.length,
+    procedureCategoryCounts,
+    procedureCategoryFilter,
+    t,
+  ])
+
   // Apply multi-region NHI study grouping to the imaging tab. Same-day
   // same-code studies (typical CT/MRI multi-region exams that NHI bills
   // under one code without a body-part field) collapse into a single
@@ -314,18 +393,23 @@ export function ReportsCard() {
       // the cards they can click on match.
       { value: "imaging", label: withCount(reportTabs.imaging, imagingRows.length), rows: imagingRows, isCumulative: false },
       { value: "vitals", label: withCount(reportTabs.vitals, groupedRows.vitals.length), rows: groupedRows.vitals, isCumulative: false },
-      { value: "procedures", label: withCount(reportTabs.procedures, groupedRows.procedures.length), rows: groupedRows.procedures, isCumulative: false },
+      { value: "procedures", label: withCount(reportTabs.procedures, filteredProcedureRows.length), rows: filteredProcedureRows, isCumulative: false },
     ]
     // Always show Cumulative, All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
-    return configs.filter((config) =>
-      config.value === "cumulative" ||
-      config.value === "all" ||
-      config.value === "lab" ||
-      config.value === "imaging" ||
-      config.value === "vitals" ||
-      config.rows.length > 0
+    return configs.filter(
+      // Use the underlying resources rather than lazy-built rows so users can
+      // open Procedures directly from the default cumulative view.
+      (config) => config.value !== "procedures" || procedures.length > 0,
     )
-  }, [groupedRows, imagingRows, labRows, rawReportsEnabled, t])
+  }, [
+    filteredProcedureRows,
+    groupedRows,
+    imagingRows,
+    labRows,
+    procedures.length,
+    rawReportsEnabled,
+    t,
+  ])
 
   // Claim DiagnosticReport / Observation navigations. Row.id is the DR id;
   // orphan-observation rows carry the obs id, so match either directly or
@@ -575,6 +659,41 @@ export function ReportsCard() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+            {activeTab === "procedures" && (
+              <div
+                className="mt-2 flex flex-wrap items-center gap-1.5"
+                role="group"
+                aria-label={t.procedures.categoryFilterLabel}
+              >
+                {procedureCategoryOptions.map((option) => {
+                  const active = procedureCategoryFilter === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setProcedureCategoryFilter(option.value)}
+                      aria-pressed={active}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        active
+                          ? "border-primary bg-primary/10 font-medium text-primary"
+                          : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <span>{option.label}</span>
+                      <span
+                        className={cn(
+                          "min-w-4 rounded-full px-1 text-center text-[0.625rem] tabular-nums",
+                          active ? "bg-primary/15" : "bg-muted",
+                        )}
+                      >
+                        {option.count}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>

@@ -2,6 +2,7 @@
 import { useMemo } from 'react'
 import type { Observation } from '../types'
 import { getCodeableConceptText, getConceptText, formatDate } from '../utils/fhir-helpers'
+import { getProcedureCategoryCode } from '../utils/procedure-category'
 import { useLanguage } from "@/src/application/providers/language.provider"
 
 export function useProcedureRows(procedures: any[], observations: any[] = []) {
@@ -49,6 +50,7 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
     // Pull the display fields for one Procedure resource.
     const extract = (procedure: any) => {
       const performed = procedure?.performedDateTime || procedure?.performedPeriod?.start
+      const procedureCategory = getProcedureCategoryCode(procedure?.category)
       let performer: string | undefined
       if (Array.isArray(procedure?.performer) && procedure.performer.length > 0) {
         performer = procedure.performer
@@ -59,7 +61,10 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
           .join(", ")
       }
       const outcome = getConceptText(procedure?.outcome)
-      const category = getConceptText(procedure?.category)
+      const categoryLabels = t.procedures.categoryLabels
+      const category = procedureCategory
+        ? categoryLabels[procedureCategory]
+        : getConceptText(procedure?.category)
       const location = procedure?.location?.display
       const reasonItems: string[] = Array.isArray(procedure?.reasonCode)
         ? procedure.reasonCode
@@ -91,7 +96,7 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
         ? (codeText || nhiCoding?.display)
         : (nhiCoding?.display || codeText)
       ) || getCodeableConceptText(procedure?.code) || "Procedure"
-      return { performed, performer, outcome, category, location, reason, bodySite,
+      return { performed, procedureCategory, performer, outcome, category, location, reason, bodySite,
         followUp, notes, reports, nhiCoding, pcsCoding, codeText, title }
     }
 
@@ -194,6 +199,7 @@ export function useProcedureRows(procedures: any[], observations: any[] = []) {
         obs: [observation, ...relatedObservations],
         group: "procedures" as const,
         effectiveDate: f.performed,
+        procedureCategory: f.procedureCategory,
         // Number of sub-procedures grouped under this session (0 = standalone).
         relatedCount: children.length,
       }

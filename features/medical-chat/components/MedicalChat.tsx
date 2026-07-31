@@ -196,7 +196,11 @@ export default function MedicalChat() {
   
   // FHIR error handling
   const { error: patientError } = usePatient()
-  const { error: clinicalDataError } = useClinicalData()
+  const {
+    error: clinicalDataError,
+    isLoading: clinicalDataLoading,
+    isFetching: clinicalDataFetching,
+  } = useClinicalData()
   
   // Auto-save chat to Firestore (debounced)
   // Note: patientName is only used for UI display, never stored in Firestore
@@ -407,10 +411,16 @@ export default function MedicalChat() {
   // them; include `isAnonymous`. Only warn once auth has resolved and there is
   // genuinely no path (which means anonymous sign-in itself is unavailable).
   const apiKeyAvailable = hasApiKey()
-  const canUseChat = isCustomEndpoint
+  const hasChatRuntime = isCustomEndpoint
     ? apiKeyAvailable
     : apiKeyAvailable || !!user || isAnonymous
-  const showApiKeyWarning = !authLoading && !canUseChat
+  // A tool object closes over the current React Query snapshot at send time.
+  // Starting an Agent turn while that snapshot is still loading/refetching can
+  // otherwise make an empty interim collection look like a clinical absence.
+  const clinicalDataPending = !!patientId
+    && (clinicalDataLoading || clinicalDataFetching)
+  const canUseChat = hasChatRuntime && !clinicalDataPending
+  const showApiKeyWarning = !authLoading && !hasChatRuntime
 
   // Clear images after sending message
   const clearImagesAfterSend = useCallback(() => {

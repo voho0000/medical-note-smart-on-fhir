@@ -1,5 +1,6 @@
 // Types for Reports - Re-export from shared types
 import type { Observation } from '@/src/shared/types/fhir.types'
+import type { ProcedureCategoryCode } from '../utils/procedure-category'
 
 export type {
   Coding,
@@ -84,6 +85,8 @@ export type Row = {
    *  "+N 相關處置" hint on the collapsed session header so the user knows
    *  expanding reveals nested sub-procedures. Absent / 0 = standalone. */
   relatedCount?: number
+  /** Source-derived Procedure.category used by the procedure filter badges. */
+  procedureCategory?: ProcedureCategoryCode
   /** ImagingStudy resources represented by this row. A linked
    * DiagnosticReport keeps its own id as the row id, so these ids are retained
    * separately for source navigation and deduplication. */

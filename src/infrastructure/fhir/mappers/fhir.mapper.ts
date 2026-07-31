@@ -176,6 +176,8 @@ export class FhirMapper implements IDataMapper {
       valueCodeableConcept: fhirResource.valueCodeableConcept,
       component: fhirResource.component,
       effectiveDateTime: fhirResource.effectiveDateTime,
+      effectivePeriod: fhirResource.effectivePeriod,
+      issued: fhirResource.issued,
       status: fhirResource.status,
       category: fhirResource.category,
       // Specimen is the authoritative blood/urine signal — bridge sets
@@ -206,6 +208,7 @@ export class FhirMapper implements IDataMapper {
       result: fhirResource.result,
       conclusion: fhirResource.conclusion,
       effectiveDateTime: fhirResource.effectiveDateTime,
+      effectivePeriod: fhirResource.effectivePeriod,
       status: fhirResource.status,
       issued: fhirResource.issued,
       category: fhirResource.category,
@@ -290,6 +293,7 @@ export class FhirMapper implements IDataMapper {
     }
     return {
       id: fhirResource.id || '',
+      category: fhirResource.category,
       code: fhirResource.code,
       status: fhirResource.status,
       performedDateTime: fhirResource.performedDateTime,

@@ -194,6 +194,76 @@ describe('ProcessAgentStreamUseCase', () => {
       expect(result.summary).toContain('No data found: No allergies')
     })
 
+    it('warns that an incomplete FHIR query cannot establish absence', () => {
+      const result = useCase.buildToolResultsSummary([{
+        toolName: 'queryImagingRecords',
+        result: {
+          success: false,
+          count: 0,
+          incomplete: true,
+          canConcludeAbsence: false,
+          summary: 'ImagingStudy query unsupported',
+          queryIssues: [{ resourceType: 'ImagingStudy', state: 'unsupported' }],
+        },
+      }], mockTranslations)
+
+      expect(result.summary).toContain('MUST NOT be interpreted as clinical absence')
+      expect(result.summary).toContain('ImagingStudy query unsupported')
+    })
+
+    it('warns when a successful result is truncated', () => {
+      const result = useCase.buildToolResultsSummary([{
+        toolName: 'queryDiagnosticReports',
+        result: {
+          success: true,
+          count: 84,
+          totalCount: 84,
+          returnedCount: 10,
+          truncated: true,
+          hasMore: true,
+          data: Array.from({ length: 10 }, (_, index) => ({ name: `Report ${index}` })),
+        },
+      }], mockTranslations)
+
+      expect(result.summary).toContain('only 10 of 84 matching records were returned')
+      expect(result.summary).toContain('Narrow the query')
+    })
+
+    it('keeps positive records from a partially supported imaging query', () => {
+      const result = useCase.buildToolResultsSummary([{
+        toolName: 'queryImagingRecords',
+        result: {
+          success: true,
+          count: 1,
+          incomplete: true,
+          canConcludeAbsence: false,
+          data: [{ reportName: 'Chest CT' }],
+          queryIssues: [{ resourceType: 'ImagingStudy', state: 'unsupported' }],
+        },
+      }], mockTranslations)
+
+      expect(result.summary).toContain('Chest CT')
+      expect(result.summary).toContain('positive records are valid')
+      expect(result.summary).toContain('MUST NOT infer that any other record is absent')
+    })
+
+    it('warns when follow-up summarization itself omits returned rows', () => {
+      const result = useCase.buildToolResultsSummary([{
+        toolName: 'queryImagingRecords',
+        result: {
+          success: true,
+          count: 12,
+          totalCount: 12,
+          returnedCount: 12,
+          truncated: false,
+          data: Array.from({ length: 12 }, (_, index) => ({ name: `Image ${index}` })),
+        },
+      }], mockTranslations)
+
+      expect(result.summary).toContain('follow-up summary contains only 10 of the 12')
+      expect(result.summary).toContain('Narrow the query')
+    })
+
     it('should handle multiple tool results', () => {
       const toolResults = [
         {

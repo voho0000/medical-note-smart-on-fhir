@@ -113,6 +113,20 @@ describe('createFhirTools (unified)', () => {
       // Two HbA1c values flagged H
       expect(r.count).toBe(2)
     })
+
+    it('does not report an unloaded collection as zero clinical records', async () => {
+      const unloadedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: null,
+      }))
+      const r = await (unloadedTools.queryObservations as any).execute({
+        codeQuery: 'HbA1c',
+      })
+
+      expect(r.success).toBe(false)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+    })
   })
 
   describe('queryDiagnosticReports', () => {
@@ -137,6 +151,234 @@ describe('createFhirTools (unified)', () => {
       const labReport = r.data.find((d: any) => d.reportName === '全套血液檢查')
       expect(labReport.results.length).toBe(2)
       expect(labReport.results.some((x: any) => x.abnormal === true)).toBe(true)
+    })
+
+    it('uses the same category-less imaging inference as the reports UI', async () => {
+      const inferredTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-us',
+            status: 'final',
+            code: { text: '腹部超音波' },
+            issued: '2025-02-01T12:00:00+08:00',
+          } as any],
+        },
+      }))
+      const r = await (inferredTools.queryDiagnosticReports as any).execute({
+        category: 'imaging',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].reportName).toBe('腹部超音波')
+    })
+
+    it('fuzzy-searches a named older report before applying the output cap', async () => {
+      const reports = Array.from({ length: 11 }, (_, index) => ({
+        id: `report-${index + 1}`,
+        status: 'final',
+        code: { text: index === 10 ? 'Target Old Lab' : `Lab ${index + 1}` },
+        category: [{ coding: [{ code: 'LAB' }] }],
+        effectiveDateTime: `2025-${String(12 - index).padStart(2, '0')}-01`,
+      }))
+      const reportTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: { ...sampleCollection, diagnosticReports: reports as any },
+      }))
+
+      const all = await (reportTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+      })
+      const named = await (reportTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+        query: 'target old',
+      })
+
+      expect(all.totalCount).toBe(11)
+      expect(all.returnedCount).toBe(10)
+      expect(all.truncated).toBe(true)
+      expect(all.hasMore).toBe(true)
+      expect(named.count).toBe(1)
+      expect(named.truncated).toBe(false)
+      expect(named.data[0].reportName).toBe('Target Old Lab')
+    })
+
+    it('uses issued as the report date when effectiveDateTime is absent', async () => {
+      const issuedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'issued-only',
+            status: 'final',
+            code: { text: 'Issued-only report' },
+            category: [{ coding: [{ code: 'LAB' }] }],
+            issued: '2025-02-01T12:00:00+08:00',
+          } as any],
+        },
+      }))
+      const r = await (issuedTools.queryDiagnosticReports as any).execute({
+        dateFrom: '2025-01-01',
+        dateTo: '2025-12-31',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].date).toBe('2025-02-01T12:00:00+08:00')
+    })
+
+    it('does not turn a failed DiagnosticReport query into clinical absence', async () => {
+      const failedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [],
+          resourceQueryStatus: {
+            DiagnosticReport: {
+              resourceType: 'DiagnosticReport',
+              state: 'forbidden',
+              httpStatus: 403,
+            },
+          },
+        },
+      }))
+      const r = await (failedTools.queryDiagnosticReports as any).execute({})
+
+      expect(r.success).toBe(false)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+      expect(r.queryIssues[0]).toMatchObject({
+        resourceType: 'DiagnosticReport',
+        state: 'forbidden',
+      })
+    })
+  })
+
+  describe('queryImagingRecords', () => {
+    it('returns a standalone ImagingStudy that queryDiagnosticReports cannot contain', async () => {
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [],
+          imagingStudies: [{
+            id: 'study-1',
+            status: 'available',
+            started: '2024-01-01T09:00:00+08:00',
+            description: 'Brain CT',
+            modality: [{ code: 'CT', display: 'Computed Tomography' }],
+            series: [{
+              bodySite: { code: 'BRAIN', display: 'Brain' },
+            }],
+          } as any],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: 'brain',
+        modality: 'CT',
+      })
+
+      expect(r.success).toBe(true)
+      expect(r.count).toBe(1)
+      expect(r.data[0]).toMatchObject({
+        resourceType: 'ImagingStudy',
+        studyName: 'Brain CT',
+      })
+    })
+
+    it('combines a linked ImagingStudy with its DiagnosticReport without duplicating it', async () => {
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-ct',
+            status: 'final',
+            code: { text: 'Chest CT' },
+            effectiveDateTime: '2026-06-01T09:00:00+08:00',
+            imagingStudy: [{ reference: 'ImagingStudy/study-ct' }],
+            conclusion: 'No focal consolidation.',
+          } as any],
+          imagingStudies: [{
+            id: 'study-ct',
+            status: 'available',
+            started: '2026-06-01T09:00:00+08:00',
+            description: 'CT chest without contrast',
+            modality: [{ code: 'CT' }],
+          } as any],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: 'chest',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].resourceType).toBe('DiagnosticReport')
+      expect(r.data[0].linkedImagingStudies).toHaveLength(1)
+      expect(r.data[0].linkedImagingStudies[0].studyName)
+        .toBe('CT chest without contrast')
+    })
+
+    it('reports image presence and decodes textual report attachments without sending pixels', async () => {
+      const text = Buffer.from('影像報告：未見急性病灶', 'utf8').toString('base64')
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-attachments',
+            status: 'final',
+            code: { text: 'Chest X-ray' },
+            category: [{ coding: [{ code: 'RAD' }] }],
+            effectiveDateTime: '2026-01-01',
+            presentedForm: [
+              { title: 'Report text', contentType: 'text/plain', data: text },
+              { title: 'X-ray image', contentType: 'image/jpeg', data: 'AA==' },
+            ],
+          } as any],
+          imagingStudies: [],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: 'Chest X-ray',
+      })
+
+      expect(r.data[0].imageAttachmentCount).toBe(1)
+      expect(r.data[0].attachments[0].text).toContain('未見急性病灶')
+      expect(r.data[0].attachments[1]).not.toHaveProperty('data')
+    })
+
+    it('does not assert absence when either imaging resource query is incomplete', async () => {
+      const failedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [],
+          imagingStudies: [],
+          resourceQueryStatus: {
+            DiagnosticReport: {
+              resourceType: 'DiagnosticReport',
+              state: 'ok',
+              count: 0,
+            },
+            ImagingStudy: {
+              resourceType: 'ImagingStudy',
+              state: 'unsupported',
+              httpStatus: 400,
+            },
+          },
+        },
+      }))
+
+      const r = await (failedTools.queryImagingRecords as any).execute({})
+
+      expect(r.success).toBe(false)
+      expect(r.count).toBe(0)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
     })
   })
 
@@ -243,6 +485,29 @@ describe('createFhirTools (unified)', () => {
         earliest: '2025-02-11',
         latest: '2026-05-13',
       })
+    })
+
+    it('surfaces resource query failures instead of presenting a complete zero inventory', async () => {
+      const overviewTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          imagingStudies: [],
+          resourceQueryStatus: {
+            ImagingStudy: {
+              resourceType: 'ImagingStudy',
+              state: 'unsupported',
+              httpStatus: 400,
+            },
+          },
+        },
+      }))
+      const r = await (overviewTools.getDataOverview as any).execute({})
+
+      expect(r.success).toBe(true)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+      expect(r.data.imagingStudies.queryStatus).toBe('unsupported')
     })
   })
 

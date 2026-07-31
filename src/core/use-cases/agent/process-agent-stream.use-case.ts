@@ -77,23 +77,51 @@ export class ProcessAgentStreamUseCase {
           }
         }
 
-        // Handle queryPatientInfo (returns patient demographics, not count-based)
-        if (tr.toolName === 'queryPatientInfo') {
+        // These metadata tools return an object rather than a count-based list.
+        if (tr.toolName === 'queryPatientInfo' || tr.toolName === 'getDataOverview') {
           if (r?.success && r?.data) {
-            return `${tr.toolName} ${translations.queryResult}:\n${JSON.stringify(r.data, null, 2)}`
+            const warning = r?.incomplete || r?.canConcludeAbsence === false
+              ? '\nIMPORTANT: this inventory is incomplete and MUST NOT be used to conclude that a resource is absent.'
+              : ''
+            return `${tr.toolName} ${translations.queryResult}:${warning}\n${JSON.stringify(r.data, null, 2)}`
           } else {
             return `${tr.toolName} ${translations.queryFailed}: ${r?.summary || translations.noData}`
           }
         }
 
         // Handle FHIR tool results (with count field)
+        const hasPositiveRecords = Number(r?.count ?? 0) > 0
+        if (
+          !r?.success
+          || (
+            !hasPositiveRecords
+            && (r?.incomplete === true || r?.canConcludeAbsence === false)
+          )
+        ) {
+          return `${tr.toolName} ${translations.queryFailed}: ${
+            r?.summary || translations.noData
+          }\nIMPORTANT: this result is incomplete and MUST NOT be interpreted as clinical absence.\n${
+            r?.queryIssues ? JSON.stringify(r.queryIssues, null, 2) : ''
+          }`
+        }
         const countInfo =
           r?.count === 0
             ? translations.noDataFound.replace('{summary}', r?.summary || '')
             : translations.foundRecords.replace('{count}', String(r?.count || 0))
+        const truncationWarning = r?.truncated || r?.hasMore
+          ? `\nIMPORTANT: only ${r?.returnedCount ?? r?.data?.length ?? 0} of ${r?.totalCount ?? r?.count ?? 0} matching records were returned. Narrow the query before concluding a specific record is absent.`
+          : ''
+        const summaryData = Array.isArray(r?.data) ? r.data.slice(0, 10) : []
+        const summaryCapWarning = Array.isArray(r?.data) && r.data.length > summaryData.length
+          ? `\nIMPORTANT: the follow-up summary contains only ${summaryData.length} of the ${r.data.length} records returned by the tool. Narrow the query before concluding a specific record is absent.`
+          : ''
+        const completenessWarning =
+          r?.incomplete === true || r?.canConcludeAbsence === false
+            ? '\nIMPORTANT: the returned positive records are valid, but one or more related resource queries were incomplete. You may report what was found, but MUST NOT infer that any other record is absent.'
+            : ''
         return `${tr.toolName} ${translations.queryResult}: ${
           r?.success ? countInfo : translations.queryFailed
-        }\n${r?.count > 0 ? JSON.stringify(r?.data?.slice(0, 10) || [], null, 2) : translations.noData}`
+        }${truncationWarning}${summaryCapWarning}${completenessWarning}\n${r?.count > 0 ? JSON.stringify(summaryData, null, 2) : translations.noData}`
       })
       .join('\n\n')
 

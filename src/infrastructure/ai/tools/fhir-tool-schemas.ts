@@ -60,9 +60,21 @@ export const encountersSchema = z.object({
 
 export const diagnosticReportsSchema = z.object({
   category: z.string().optional().describe('Filter by category (e.g., "LAB", "RAD")'),
+  query: z.string().optional().describe('Case-insensitive fuzzy search across report/panel/test name, code, component observation names, conclusion, notes, and attachment titles. Use this for "does the patient have X?" questions.'),
   abnormalOnly: z.boolean().optional().describe('Return only reports containing at least one abnormal observation'),
   dateFrom: z.string().optional().describe('Filter reports from this date (YYYY-MM-DD)'),
   dateTo: z.string().optional().describe('Filter reports until this date (YYYY-MM-DD)'),
+  limit: limitParam,
+  summarize: summarizeParam,
+})
+
+export const imagingRecordsSchema = z.object({
+  query: z.string().optional().describe('Case-insensitive fuzzy search across imaging/pathology report names, codes, conclusions, notes, attachment titles, ImagingStudy descriptions, procedure/reason text, and series metadata.'),
+  modality: z.string().optional().describe('Filter by modality text/code (e.g., CT, MR, US, X-ray).'),
+  bodySite: z.string().optional().describe('Filter by body-site text/code (e.g., chest, brain, abdomen).'),
+  status: z.string().optional().describe('Filter by report/study status (e.g., final, available).'),
+  dateFrom: z.string().optional().describe('Filter imaging records from this date (YYYY-MM-DD)'),
+  dateTo: z.string().optional().describe('Filter imaging records until this date (YYYY-MM-DD)'),
   limit: limitParam,
   summarize: summarizeParam,
 })

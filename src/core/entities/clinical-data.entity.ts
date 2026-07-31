@@ -347,6 +347,11 @@ export interface ObservationEntity {
     reference?: string
   }>
   effectiveDateTime?: string
+  effectivePeriod?: {
+    start?: string
+    end?: string
+  }
+  issued?: string
   status?: string
   category?: Array<{
     coding?: Array<{
@@ -401,6 +406,10 @@ export interface DiagnosticReportEntity {
   }>
   conclusion?: string
   effectiveDateTime?: string
+  effectivePeriod?: {
+    start?: string
+    end?: string
+  }
   _observations?: ObservationEntity[]
   status?: string
   issued?: string
@@ -498,6 +507,15 @@ export interface ImagingStudyEntity {
 
 export interface ProcedureEntity {
   id: string
+  /** Source-derived procedure class from FHIR Procedure.category. */
+  category?: {
+    text?: string
+    coding?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
   code?: {
     text?: string
     coding?: Array<{

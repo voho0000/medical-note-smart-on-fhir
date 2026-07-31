@@ -9,7 +9,11 @@
 import { tool } from 'ai'
 import type { z } from 'zod'
 import type { PatientEntity } from '@/src/core/entities/patient.entity'
-import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
+import type {
+  ClinicalDataCollection,
+  ClinicalDataQueryKey,
+  ClinicalDataQueryStatus,
+} from '@/src/core/entities/clinical-data.entity'
 import {
   conditionsSchema,
   medicationsSchema,
@@ -18,6 +22,7 @@ import {
   proceduresSchema,
   encountersSchema,
   diagnosticReportsSchema,
+  imagingRecordsSchema,
   immunizationsSchema,
   patientInfoSchema,
   encounterDetailsSchema,
@@ -46,6 +51,12 @@ import {
 import { scrubPii } from './_scrub-pii'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 import { pickAiMedicationName } from '@/src/shared/utils/fhir-display-helpers'
+import { referenceId } from '@/src/core/utils/observation-selectors'
+import {
+  imagingStudyModalityText,
+  imagingStudyTitle,
+} from '@/src/shared/utils/imaging-study.utils'
+import { decodeBase64, stripHtmlToText } from '@/src/core/utils/clinical-documents.utils'
 
 export interface AgentDataSource {
   patient: PatientEntity | null
@@ -58,6 +69,16 @@ function pickName(concept: any): string | undefined {
   return concept?.text || concept?.coding?.[0]?.display
 }
 
+function conceptSearchText(concept: any): string {
+  return [
+    concept?.text,
+    ...((concept?.coding ?? []).flatMap((coding: any) => [
+      coding?.code,
+      coding?.display,
+    ])),
+  ].filter(Boolean).join(' ')
+}
+
 function loincOf(concept: any): string | undefined {
   return (concept?.coding ?? []).find((c: any) => /loinc/i.test(c.system || ''))?.code
 }
@@ -67,6 +88,247 @@ function notFoundMessage(noun: string, dateFrom?: string, dateTo?: string): stri
     return `在指定時間範圍內（${dateFrom || '開始'} 至 ${dateTo || '現在'}）沒有找到${noun}`
   }
   return `沒有找到${noun}`
+}
+
+function observationDate(observation: any): string | undefined {
+  return observation?.effectiveDateTime
+    || observation?.effectivePeriod?.start
+    || observation?.issued
+}
+
+function diagnosticReportDate(report: any): string | undefined {
+  return report?.effectiveDateTime
+    || report?.effectivePeriod?.start
+    || report?.issued
+}
+
+function paginationMeta(totalCount: number, returnedCount: number) {
+  return {
+    totalCount,
+    returnedCount,
+    truncated: returnedCount < totalCount,
+    hasMore: returnedCount < totalCount,
+  }
+}
+
+const COMPLETE_QUERY_STATES = new Set(['ok', 'empty'])
+
+interface SafeQueryIssue {
+  resourceType: string
+  state: ClinicalDataQueryStatus['state']
+  httpStatus?: number
+  message?: string
+}
+
+function queryIssuesFor(
+  collection: ClinicalDataCollection,
+  keys: ClinicalDataQueryKey[],
+): SafeQueryIssue[] {
+  return keys.flatMap((key) => {
+    const status = collection.resourceQueryStatus?.[key]
+    if (!status || COMPLETE_QUERY_STATES.has(status.state)) return []
+    return [{
+      resourceType: status.resourceType,
+      state: status.state,
+      httpStatus: status.httpStatus,
+      message: status.message,
+    }]
+  })
+}
+
+function unavailableQueryResult(
+  collection: ClinicalDataCollection | null,
+  keys: ClinicalDataQueryKey[],
+  noun: string,
+) {
+  if (!collection) {
+    return {
+      success: false,
+      summary: `無法確認是否有${noun}：臨床資料尚未載入完成`,
+      count: 0,
+      totalCount: 0,
+      returnedCount: 0,
+      truncated: false,
+      hasMore: false,
+      incomplete: true,
+      canConcludeAbsence: false,
+      queryIssues: [{ resourceType: keys.join(', '), state: 'not-loaded' }],
+      data: [],
+    }
+  }
+
+  const queryIssues = queryIssuesFor(collection, keys)
+  if (queryIssues.length === 0) return null
+  return {
+    success: false,
+    summary: `無法確認是否有${noun}：相關 FHIR 資源查詢未成功`,
+    count: 0,
+    totalCount: 0,
+    returnedCount: 0,
+    truncated: false,
+    hasMore: false,
+    incomplete: true,
+    canConcludeAbsence: false,
+    queryIssues,
+    data: [],
+  }
+}
+
+const attachmentDetailsCache = new WeakMap<object, any[]>()
+
+function attachmentDetails(report: any) {
+  if (report && typeof report === 'object') {
+    const cached = attachmentDetailsCache.get(report)
+    if (cached) return cached
+  }
+  const details = (report?.presentedForm ?? []).map((attachment: any, index: number) => {
+    const contentType = String(attachment?.contentType || '').toLowerCase()
+    const isText = contentType.includes('text')
+      || contentType.includes('html')
+      || contentType.includes('xml')
+      || (!contentType && !!attachment?.data)
+    const decoded = isText && attachment?.data ? decodeBase64(attachment.data) : ''
+    const text = contentType.includes('html') || contentType.includes('xml')
+      ? stripHtmlToText(decoded)
+      : decoded.trim()
+    const maxChars = 12_000
+    return {
+      title: attachment?.title || `Attachment ${index + 1}`,
+      contentType: attachment?.contentType,
+      kind: contentType.startsWith('image/')
+        ? 'image'
+        : isText
+          ? 'text'
+          : 'binary',
+      available: !!(attachment?.data || attachment?._imageRef || attachment?.url),
+      ...(text
+        ? {
+            text: text.slice(0, maxChars),
+            textTruncated: text.length > maxChars,
+          }
+        : {}),
+    }
+  })
+  if (report && typeof report === 'object') {
+    attachmentDetailsCache.set(report, details)
+  }
+  return details
+}
+
+function observationResult(observation: any) {
+  return {
+    name: pickName(observation?.code) || 'Unknown',
+    value: observation?.valueQuantity?.value
+      ?? observation?.valueString
+      ?? observation?.valueCodeableConcept?.text,
+    unit: observation?.valueQuantity?.unit || '',
+    date: observationDate(observation),
+    abnormal: isAbnormalObservation(observation),
+  }
+}
+
+function diagnosticReportSearchText(report: any): string {
+  return [
+    conceptSearchText(report?.code),
+    report?.conclusion,
+    ...((report?.conclusionCode ?? []).map(conceptSearchText)),
+    ...((report?.note ?? []).map((note: any) => note?.text)),
+    ...((report?._observations ?? []).map((observation: any) =>
+      conceptSearchText(observation?.code)
+    )),
+    ...attachmentDetails(report).flatMap((attachment: any) => [
+      attachment.title,
+      attachment.text,
+    ]),
+  ].filter(Boolean).join(' ')
+}
+
+function diagnosticReportOutput(report: any) {
+  const date = diagnosticReportDate(report)
+  const attachments = attachmentDetails(report)
+  return {
+    resourceType: 'DiagnosticReport',
+    reportName: pickName(report?.code),
+    reportCode: report?.code?.coding?.[0]?.code,
+    date,
+    effectiveDateTime: report?.effectiveDateTime,
+    issued: report?.issued,
+    status: report?.status,
+    conclusion: report?.conclusion,
+    conclusionCodes: (report?.conclusionCode ?? []).map(pickName).filter(Boolean),
+    notes: (report?.note ?? []).map((note: any) => note?.text).filter(Boolean),
+    results: (report?._observations ?? []).map(observationResult),
+    attachments,
+    imageAttachmentCount: attachments.filter((attachment: any) => attachment.kind === 'image').length,
+  }
+}
+
+function imagingStudyMetadataForAi(study: any): string {
+  const lines: string[] = []
+  const push = (label: string, value: unknown) => {
+    if (value === undefined || value === null || value === '') return
+    lines.push(`${label}: ${value}`)
+  }
+  const concepts = (values: any[]) =>
+    values.map(conceptSearchText).filter(Boolean).join('; ')
+
+  push('Description', study?.description)
+  push('Status', study?.status)
+  push('Modality', imagingStudyModalityText(study))
+  push('Procedure', concepts(study?.procedureCode ?? []))
+  push('Reason', concepts(study?.reasonCode ?? []))
+  push('Series count', study?.numberOfSeries ?? study?.series?.length)
+  push('Instance count', study?.numberOfInstances)
+  for (const note of study?.note ?? []) push('Note', note?.text)
+
+  for (const [index, series] of (study?.series ?? []).entries()) {
+    const heading = [
+      series?.modality?.display || series?.modality?.code,
+      series?.description,
+    ].filter(Boolean).join(' · ')
+    lines.push(`Series ${series?.number ?? index + 1}${heading ? ` — ${heading}` : ''}`)
+    push('  Body site', series?.bodySite?.display || series?.bodySite?.code)
+    push('  Laterality', series?.laterality?.display || series?.laterality?.code)
+    push('  Instance count', series?.numberOfInstances ?? series?.instance?.length)
+    const titles = (series?.instance ?? [])
+      .map((instance: any) => instance?.title)
+      .filter(Boolean)
+      .slice(0, 50)
+    if (titles.length > 0) push('  Instance titles', titles.join('; '))
+  }
+
+  return lines.join('\n')
+    || 'ImagingStudy metadata is present; no report narrative was supplied.'
+}
+
+function imagingStudySearchText(study: any): string {
+  return [
+    imagingStudyTitle(study),
+    imagingStudyMetadataForAi(study),
+    imagingStudyModalityText(study),
+  ].filter(Boolean).join(' ')
+}
+
+function imagingStudyBodySiteText(study: any): string {
+  return (study?.series ?? []).flatMap((series: any) => [
+    series?.bodySite?.code,
+    series?.bodySite?.display,
+    series?.laterality?.code,
+    series?.laterality?.display,
+  ]).filter(Boolean).join(' ')
+}
+
+function imagingStudyModalitySearchText(study: any): string {
+  return [
+    ...(study?.modality ?? []).flatMap((coding: any) => [
+      coding?.code,
+      coding?.display,
+    ]),
+    ...(study?.series ?? []).flatMap((series: any) => [
+      series?.modality?.code,
+      series?.modality?.display,
+    ]),
+  ].filter(Boolean).join(' ')
 }
 
 function calculateAge(birthDate?: string): number | null {
@@ -190,35 +452,69 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: overviewSchema,
       execute: async () => {
         const { collection } = getData()
-        if (!collection) return scrub({ success: false, summary: 'No data loaded', data: null })
+        if (!collection) {
+          return scrub({
+            success: false,
+            summary: 'Clinical data is not loaded yet',
+            incomplete: true,
+            canConcludeAbsence: false,
+            data: null,
+          })
+        }
 
         const range = (items: any[], getDate: (x: any) => string | undefined) => {
           const dates = items.map(getDate).filter(Boolean).sort() as string[]
           if (dates.length === 0) return null
           return { earliest: dates[0]?.slice(0, 10), latest: dates[dates.length - 1]?.slice(0, 10) }
         }
+        const allQueryIssues = queryIssuesFor(
+          collection,
+          Object.keys(collection.resourceQueryStatus ?? {}) as ClinicalDataQueryKey[],
+        )
+        const statusFor = (key: ClinicalDataQueryKey) =>
+          collection.resourceQueryStatus?.[key]
+            ? { queryStatus: collection.resourceQueryStatus[key]?.state }
+            : {}
 
         return scrub({
           success: true,
-          summary: 'Data inventory across all resource types',
+          summary: allQueryIssues.length > 0
+            ? 'Data inventory loaded, but one or more FHIR resource queries are incomplete'
+            : 'Data inventory across all resource types',
+          incomplete: allQueryIssues.length > 0,
+          canConcludeAbsence: allQueryIssues.length === 0,
+          queryIssues: allQueryIssues,
           data: {
-            conditions: { count: collection.conditions.length },
+            conditions: {
+              count: collection.conditions.length,
+              ...statusFor('Condition'),
+            },
             medications: {
               count: collection.medications.length,
               range: range(collection.medications, (m) => m.authoredOn),
+              medicationRequestQueryStatus:
+                collection.resourceQueryStatus?.MedicationRequest?.state,
+              medicationStatementQueryStatus:
+                collection.resourceQueryStatus?.MedicationStatement?.state,
             },
-            allergies: { count: collection.allergies.length },
+            allergies: {
+              count: collection.allergies.length,
+              ...statusFor('AllergyIntolerance'),
+            },
             encounters: {
               count: collection.encounters.length,
               range: range(collection.encounters, (e) => e.period?.start),
+              ...statusFor('Encounter'),
             },
             diagnosticReports: {
               count: collection.diagnosticReports.length,
-              range: range(collection.diagnosticReports, (r) => r.effectiveDateTime),
+              range: range(collection.diagnosticReports, diagnosticReportDate),
+              ...statusFor('DiagnosticReport'),
             },
             imagingStudies: {
               count: collection.imagingStudies?.length ?? 0,
               range: range(collection.imagingStudies ?? [], (study) => study.started),
+              ...statusFor('ImagingStudy'),
             },
             observations: {
               // Dedup by id — many bridges include vital-signs entries in
@@ -227,14 +523,23 @@ export function createFhirTools(getData: () => AgentDataSource) {
                 ...collection.observations.map((o: any) => o.id).filter(Boolean),
                 ...collection.vitalSigns.map((o: any) => o.id).filter(Boolean),
               ]).size,
+              range: range(
+                [...collection.observations, ...collection.vitalSigns],
+                observationDate,
+              ),
+              ...statusFor('Observation'),
+              vitalSignsQueryStatus:
+                collection.resourceQueryStatus?.['Observation:vital-signs']?.state,
             },
             procedures: {
               count: collection.procedures.length,
               range: range(collection.procedures, (p) => p.performedDateTime || p.performedPeriod?.start),
+              ...statusFor('Procedure'),
             },
             immunizations: {
               count: collection.immunizations.length,
               range: range(collection.immunizations, (i) => i.occurrenceDateTime),
+              ...statusFor('Immunization'),
             },
           },
         })
@@ -489,8 +794,15 @@ export function createFhirTools(getData: () => AgentDataSource) {
       execute: async ({ category, code, codeQuery, abnormalOnly, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof observationsSchema>) => {
         const collection = getData().collection
-        const observations = collection?.observations ?? []
-        const vitals = collection?.vitalSigns ?? []
+        const unavailable = unavailableQueryResult(
+          collection,
+          ['Observation'],
+          '檢驗或觀察數據',
+        )
+        if (unavailable) return scrub(unavailable)
+
+        const observations = collection!.observations
+        const vitals = collection!.vitalSigns
         const seen = new Set<string>()
         const list = [...observations, ...vitals].filter((o: any) => {
           const id = o.id
@@ -510,19 +822,22 @@ export function createFhirTools(getData: () => AgentDataSource) {
             const nameLc = pickName(o.code)?.toLowerCase() ?? ''
             if (!codes.includes(targetLc) && nameLc !== targetLc) return false
           }
-          if (codeQuery && !matchSubstring(pickName(o.code), codeQuery)) return false
+          if (codeQuery && !matchSubstring(conceptSearchText(o.code), codeQuery)) return false
           if (abnormalOnly && !isAbnormalObservation(o)) return false
           return true
         })
 
         if (dateFrom || dateTo) {
-          filtered = filtered.filter((o: any) => isWithinDateRange(o.effectiveDateTime, dateFrom, dateTo))
+          filtered = filtered.filter((o: any) =>
+            isWithinDateRange(observationDate(o), dateFrom, dateTo)
+          )
         }
 
         filtered = [...filtered].sort((a, b) =>
-          (b.effectiveDateTime || '').localeCompare(a.effectiveDateTime || '')
+          (observationDate(b) || '').localeCompare(observationDate(a) || '')
         )
         const capped = applyLimit(filtered, limit)
+        const page = paginationMeta(filtered.length, capped.length)
 
         const summary = filtered.length > 0
           ? `Found ${filtered.length} Observation record(s)`
@@ -533,9 +848,13 @@ export function createFhirTools(getData: () => AgentDataSource) {
             success: true,
             summary,
             count: filtered.length,
+            ...page,
+            incomplete: false,
+            canConcludeAbsence: true,
             dateRange: { from: dateFrom, to: dateTo },
             data: capped.map((o: any) => ({
               code: pickName(o.code),
+              date: observationDate(o),
               effectiveDateTime: o.effectiveDateTime,
               abnormal: isAbnormalObservation(o),
             })),
@@ -546,11 +865,15 @@ export function createFhirTools(getData: () => AgentDataSource) {
           success: true,
           summary,
           count: filtered.length,
+          ...page,
+          incomplete: false,
+          canConcludeAbsence: true,
           dateRange: { from: dateFrom, to: dateTo },
           data: capped.map((o: any) => ({
             code: pickName(o.code),
             value: o.valueQuantity?.value ?? o.valueString,
             unit: o.valueQuantity?.unit,
+            date: observationDate(o),
             effectiveDateTime: o.effectiveDateTime,
             abnormal: isAbnormalObservation(o),
             status: o.status,
@@ -560,14 +883,31 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     queryDiagnosticReports: tool({
-      description: 'PRIMARY tool for lab panel results (CBC, Basic Metabolic Panel, Lipid Panel, etc.). Returns the panel + its component observations. Supports date range and abnormalOnly.',
+      description: 'Query DiagnosticReport records for lab panels and report-level tests. Supports fuzzy `query` across report/test names, codes, component observations, conclusions, notes, and attachment titles. Also supports category, date range, and abnormalOnly. For imaging/pathology questions prefer queryImagingRecords, which also covers standalone ImagingStudy resources.',
       inputSchema: diagnosticReportsSchema,
-      execute: async ({ category, abnormalOnly, dateFrom, dateTo, limit, summarize }:
+      execute: async ({ category, query, abnormalOnly, dateFrom, dateTo, limit, summarize }:
         z.infer<typeof diagnosticReportsSchema>) => {
-        const list = getData().collection?.diagnosticReports ?? []
-        let filtered = list.filter((r: any) => matchDiagnosticReportCategory(r.category, category))
+        const collection = getData().collection
+        const unavailable = unavailableQueryResult(
+          collection,
+          ['DiagnosticReport'],
+          '檢驗或診斷報告',
+        )
+        if (unavailable) return scrub(unavailable)
+        // Report names/conclusions remain usable if the separate Observation
+        // search failed, but component-result coverage may then be incomplete.
+        const queryIssues = queryIssuesFor(collection!, ['Observation'])
+        const incomplete = queryIssues.length > 0
+
+        const list = collection!.diagnosticReports
+        let filtered = list.filter((r: any) =>
+          matchDiagnosticReportCategory(r, category)
+          && matchSubstring(diagnosticReportSearchText(r), query)
+        )
         if (dateFrom || dateTo) {
-          filtered = filtered.filter((r: any) => isWithinDateRange(r.effectiveDateTime, dateFrom, dateTo))
+          filtered = filtered.filter((r: any) =>
+            isWithinDateRange(diagnosticReportDate(r), dateFrom, dateTo)
+          )
         }
         if (abnormalOnly) {
           filtered = filtered.filter((r: any) =>
@@ -575,45 +915,186 @@ export function createFhirTools(getData: () => AgentDataSource) {
           )
         }
         filtered = [...filtered].sort((a, b) =>
-          (b.effectiveDateTime || '').localeCompare(a.effectiveDateTime || '')
+          (diagnosticReportDate(b) || '').localeCompare(diagnosticReportDate(a) || '')
         )
         const capped = applyLimit(filtered, limit, 10)
+        const page = paginationMeta(filtered.length, capped.length)
 
         const summary = filtered.length > 0
           ? `Found ${filtered.length} DiagnosticReport record(s)`
+          : incomplete
+            ? 'Unable to determine absence because Observation result coverage is incomplete'
           : notFoundMessage('檢驗報告', dateFrom, dateTo)
 
         if (summarize) {
           return scrub({
-            success: true,
+            success: filtered.length > 0 || !incomplete,
             summary,
             count: filtered.length,
+            ...page,
+            incomplete,
+            canConcludeAbsence: !incomplete,
+            queryIssues,
             dateRange: { from: dateFrom, to: dateTo },
             data: capped.map((r: any) => ({
               reportName: pickName(r.code),
+              reportCode: r.code?.coding?.[0]?.code,
+              date: diagnosticReportDate(r),
               effectiveDateTime: r.effectiveDateTime,
+              issued: r.issued,
               abnormalCount: (r._observations ?? []).filter(isAbnormalObservation).length,
+              resultCount: (r._observations ?? []).length,
+              imageAttachmentCount: attachmentDetails(r)
+                .filter((attachment: any) => attachment.kind === 'image').length,
             })),
           })
         }
 
         return scrub({
-          success: true,
+          success: filtered.length > 0 || !incomplete,
           summary,
           count: filtered.length,
+          ...page,
+          incomplete,
+          canConcludeAbsence: !incomplete,
+          queryIssues,
           dateRange: { from: dateFrom, to: dateTo },
-          data: capped.map((r: any) => ({
-            reportName: pickName(r.code),
-            effectiveDateTime: r.effectiveDateTime,
-            status: r.status,
-            conclusion: r.conclusion,
-            results: (r._observations ?? []).map((obs: any) => ({
-              name: pickName(obs.code) || 'Unknown',
-              value: obs.valueQuantity?.value ?? obs.valueString ?? obs.valueCodeableConcept?.text,
-              unit: obs.valueQuantity?.unit || '',
-              abnormal: isAbnormalObservation(obs),
+          data: capped.map(diagnosticReportOutput),
+        })
+      },
+    }),
+
+    queryImagingRecords: tool({
+      description: 'PRIMARY tool for imaging and pathology existence/details. Queries BOTH imaging/pathology DiagnosticReports and standalone ImagingStudy resources using the same classification rules as the Imaging UI. Supports fuzzy query, modality, body site, status, and date range. Image attachments are reported as present without sending binary pixels; textual report attachments are decoded.',
+      inputSchema: imagingRecordsSchema,
+      execute: async ({ query, modality, bodySite, status, dateFrom, dateTo, limit, summarize }:
+        z.infer<typeof imagingRecordsSchema>) => {
+        const collection = getData().collection
+        if (!collection) {
+          return scrub(unavailableQueryResult(
+            collection,
+            ['DiagnosticReport', 'ImagingStudy'],
+            '影像或病理檢查',
+          ))
+        }
+
+        const queryIssues = queryIssuesFor(
+          collection,
+          ['DiagnosticReport', 'ImagingStudy'],
+        )
+        const studiesById = new Map(
+          (collection.imagingStudies ?? [])
+            .filter((study: any) => !!study?.id)
+            .map((study: any) => [study.id, study]),
+        )
+        const linkedStudyIds = new Set<string>()
+        const records: any[] = []
+
+        for (const report of collection.diagnosticReports) {
+          if (!matchDiagnosticReportCategory(report, 'imaging')) continue
+          const linkedStudies = (report.imagingStudy ?? [])
+            .map((reference: any) => referenceId(reference?.reference))
+            .filter((id: string | undefined): id is string => !!id)
+            .map((id: string) => {
+              linkedStudyIds.add(id)
+              return studiesById.get(id)
+            })
+            .filter(Boolean)
+
+          const reportSearchText = [
+            diagnosticReportSearchText(report),
+            ...linkedStudies.map(imagingStudySearchText),
+          ].join(' ')
+          const modalityText = [
+            conceptSearchText(report.code),
+            ...linkedStudies.map(imagingStudyModalitySearchText),
+          ].filter(Boolean).join(' ')
+          const bodySiteText = [
+            conceptSearchText(report.code),
+            report.conclusion,
+            ...linkedStudies.map(imagingStudyBodySiteText),
+          ].filter(Boolean).join(' ')
+          const date = diagnosticReportDate(report)
+
+          if (!matchSubstring(reportSearchText, query)) continue
+          if (!matchSubstring(modalityText, modality)) continue
+          if (!matchSubstring(bodySiteText, bodySite)) continue
+          if (
+            !matchStatus(report.status, status)
+            && !linkedStudies.some((study: any) => matchStatus(study.status, status))
+          ) continue
+          if ((dateFrom || dateTo) && !isWithinDateRange(date, dateFrom, dateTo)) continue
+
+          const detail = diagnosticReportOutput(report)
+          records.push({
+            ...detail,
+            linkedImagingStudies: linkedStudies.map((study: any) => ({
+              resourceType: 'ImagingStudy',
+              studyName: imagingStudyTitle(study),
+              date: study.started,
+              status: study.status,
+              modality: imagingStudyModalityText(study),
+              metadata: imagingStudyMetadataForAi(study),
             })),
-          })),
+          })
+        }
+
+        for (const study of collection.imagingStudies ?? []) {
+          if (study?.id && linkedStudyIds.has(study.id)) continue
+          const searchText = imagingStudySearchText(study)
+          const modalitySearchText = imagingStudyModalitySearchText(study)
+          const modalityText = imagingStudyModalityText(study)
+          const bodySiteText = imagingStudyBodySiteText(study)
+          if (!matchSubstring(searchText, query)) continue
+          if (!matchSubstring(modalitySearchText, modality)) continue
+          if (!matchSubstring(bodySiteText, bodySite)) continue
+          if (!matchStatus(study.status, status)) continue
+          if (
+            (dateFrom || dateTo)
+            && !isWithinDateRange(study.started, dateFrom, dateTo)
+          ) continue
+
+          records.push({
+            resourceType: 'ImagingStudy',
+            studyName: imagingStudyTitle(study),
+            date: study.started,
+            status: study.status,
+            modality: modalityText,
+            bodySite: bodySiteText || undefined,
+            metadata: imagingStudyMetadataForAi(study),
+          })
+        }
+
+        records.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+        const capped = applyLimit(records, limit, 20)
+        const page = paginationMeta(records.length, capped.length)
+        const incomplete = queryIssues.length > 0
+        const summary = records.length > 0
+          ? `Found ${records.length} imaging/pathology record(s)`
+          : incomplete
+            ? 'Unable to determine absence because one or more imaging resource queries failed'
+            : notFoundMessage('影像或病理檢查', dateFrom, dateTo)
+
+        return scrub({
+          success: records.length > 0 || !incomplete,
+          summary,
+          count: records.length,
+          ...page,
+          incomplete,
+          canConcludeAbsence: !incomplete,
+          queryIssues,
+          dateRange: { from: dateFrom, to: dateTo },
+          data: summarize
+            ? capped.map((record: any) => ({
+                resourceType: record.resourceType,
+                name: record.reportName || record.studyName,
+                date: record.date,
+                status: record.status,
+                modality: record.modality,
+                resultCount: record.results?.length,
+                imageAttachmentCount: record.imageAttachmentCount,
+              }))
+            : capped,
         })
       },
     }),
@@ -623,9 +1104,14 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: observationSearchSchema,
       execute: async ({ query, withTrend, limit }: z.infer<typeof observationSearchSchema>) => {
         const { collection } = getData()
-        if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
+        const unavailable = unavailableQueryResult(
+          collection,
+          ['Observation'],
+          '指定名稱的檢驗或觀察數據',
+        )
+        if (unavailable) return scrub(unavailable)
 
-        const all = [...collection.observations, ...collection.vitalSigns]
+        const all = [...collection!.observations, ...collection!.vitalSigns]
         const seen = new Set<string>()
         const unique = all.filter((o: any) => {
           if (o.id && seen.has(o.id)) return false
@@ -663,7 +1149,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
         // Expand to every observation sharing a matched LOINC, so display aliases
         // (e.g. "eGFR" vs "Estimated GFR") come along as one series.
         let matches = unique.filter((o: any) => seedKeys.has(codeKey(o.code)))
-        matches = matches.sort((a, b) => (b.effectiveDateTime || '').localeCompare(a.effectiveDateTime || ''))
+        matches = matches.sort((a, b) =>
+          (observationDate(b) || '').localeCompare(observationDate(a) || '')
+        )
 
         // Group by LOINC code → keep N most recent per analyte
         const perCodeLimit = withTrend ? 10 : 1
@@ -684,15 +1172,20 @@ export function createFhirTools(getData: () => AgentDataSource) {
           for (const o of items) flat.push({ name, obs: o })
         }
         const capped = applyLimit(flat, limit, 50)
+        const page = paginationMeta(flat.length, capped.length)
 
         return scrub({
           success: true,
           summary: `Matched ${matches.length} observation(s) across ${byCode.size} code(s) for "${query}"`,
           count: capped.length,
+          ...page,
+          incomplete: false,
+          canConcludeAbsence: true,
           data: capped.map(({ name, obs }) => ({
             code: name,
             value: obs.valueQuantity?.value ?? obs.valueString,
             unit: obs.valueQuantity?.unit,
+            date: observationDate(obs),
             effectiveDateTime: obs.effectiveDateTime,
             abnormal: isAbnormalObservation(obs),
           })),
@@ -730,9 +1223,14 @@ export function createFhirTools(getData: () => AgentDataSource) {
       inputSchema: listObservationCodesSchema,
       execute: async () => {
         const { collection } = getData()
-        if (!collection) return scrub({ success: false, summary: 'No data', data: [] })
+        const unavailable = unavailableQueryResult(
+          collection,
+          ['Observation'],
+          '可查詢的檢驗項目',
+        )
+        if (unavailable) return scrub(unavailable)
 
-        const all = [...collection.observations, ...collection.vitalSigns]
+        const all = [...collection!.observations, ...collection!.vitalSigns]
         const counts = new Map<string, number>()
         for (const o of all) {
           const name = pickName(o.code)
@@ -746,6 +1244,9 @@ export function createFhirTools(getData: () => AgentDataSource) {
           success: true,
           summary: `${data.length} distinct observation codes`,
           count: data.length,
+          ...paginationMeta(data.length, data.length),
+          incomplete: false,
+          canConcludeAbsence: true,
           data,
         })
       },

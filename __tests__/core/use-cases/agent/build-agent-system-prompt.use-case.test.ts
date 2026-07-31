@@ -23,6 +23,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       queryConditions: 'Query conditions',
       queryObservations: 'Query observations',
       queryDiagnosticReports: 'Query reports',
+      queryImagingRecords: 'Query imaging records',
       searchObservationByName: 'Search obs by name',
       listAvailableObservationCodes: 'List obs codes',
       queryProcedures: 'Query procedures',
@@ -65,6 +66,7 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const result = useCase.execute(input)
 
       expect(result).toContain('Base prompt')
+      expect(result).toContain('Query imaging records')
       expect(typeof result).toBe('string')
       expect(result.length).toBeGreaterThan(0)
     })
