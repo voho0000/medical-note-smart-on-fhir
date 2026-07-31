@@ -4,8 +4,10 @@ import { useSafetyPrefsStore } from '@/src/application/hooks/safety-alerts/use-s
 import { useSummaryPrefsStore } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import {
   AUTO_AI_REAL_DATA_DECISION_KEY,
+  clearRememberedLocalImportAiDecision,
   clearLocalImportAiConsent,
   getLocalImportAiConsent,
+  getRememberedLocalImportAiDecision,
   markLocalImportAiConsentReady,
   recordLocalImportAiDecision,
   startLocalImportAiConsent,
@@ -25,6 +27,8 @@ const mockOnboarding = {
   autoScanTitle: '醫療摘要產生方式',
   autoScanBody: '說明',
   localAutoScanBody: '本次匯入只適用這次選擇，重新匯入會再次詢問',
+  localRememberChoice: '不要再顯示此提醒',
+  localRememberChoiceDesc: '之後匯入時沿用本次選擇',
   autoScanPrivacyNote: '雲端提醒',
   autoScanOnLabel: '自動產生醫療摘要',
   autoScanOnDesc: '自動產生說明',
@@ -106,6 +110,7 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
     localStorage.clear()
     sessionStorage.clear()
     clearLocalImportAiConsent()
+    clearRememberedLocalImportAiDecision()
     mockOnboardingCompleted = false
     useSafetyPrefsStore.setState({ autoScan: false })
     useSummaryPrefsStore.setState({ autoGenerate: false })
@@ -154,7 +159,8 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
 
     expect(screen.getByText('試用資料：自動顯示')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /自動產生/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: '不要再顯示此提醒' })).not.toBeInTheDocument()
     expect(localStorage.getItem(AUTO_AI_REAL_DATA_DECISION_KEY)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '下一步' }))
@@ -185,7 +191,8 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
     expect(screen.getByText('本次匯入只適用這次選擇，重新匯入會再次詢問')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /需要時再產生/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /自動產生/ })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '不要再顯示此提醒' })).not.toBeChecked()
     expect(screen.getByText('步驟 1 / 1')).toBeInTheDocument()
   })
 
@@ -196,7 +203,7 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
     render(<FirstRunOnboardingDialog />)
 
     fireEvent.click(screen.getByRole('button', { name: /自動產生/ }))
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' }))
     expect(screen.getByRole('button', { name: '確認並啟用' })).toBeEnabled()
 
     act(() => { startLocalImportAiConsent('import-b') })
@@ -208,7 +215,8 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
 
     expect(screen.getByRole('button', { name: /需要時再產生/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /自動產生/ })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: '不要再顯示此提醒' })).not.toBeChecked()
     expect(getLocalImportAiConsent()?.importId).toBe('import-b')
     expect(getLocalImportAiConsent()?.decision).toBe('pending')
   })
@@ -220,7 +228,7 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
     render(<FirstRunOnboardingDialog />)
 
     fireEvent.click(screen.getByRole('button', { name: /自動產生/ }))
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' }))
     fireEvent.click(screen.getByRole('button', { name: '確認並啟用' }))
 
     expect(getLocalImportAiConsent()).toMatchObject({
@@ -249,6 +257,47 @@ describe('FirstRunOnboardingDialog auto-generate consent', () => {
 
     expect(screen.getByText('醫療摘要產生方式')).toBeInTheDocument()
     expect(screen.getByText('步驟 1 / 1')).toBeInTheDocument()
+  })
+
+  it('can remember the manual choice and silently apply it to later local imports', () => {
+    mockOnboardingCompleted = true
+    localStorage.setItem('fhir_bundle_override', '1')
+    makeLocalImportReady('import-a')
+    render(<FirstRunOnboardingDialog />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '不要再顯示此提醒' }))
+    fireEvent.click(screen.getByRole('button', { name: '繼續' }))
+
+    expect(getRememberedLocalImportAiDecision()).toBe('manual')
+
+    act(() => {
+      startLocalImportAiConsent('import-b')
+      markLocalImportAiConsentReady('import-b', Date.now(), {
+        useRememberedDecision: true,
+      })
+    })
+
+    expect(getLocalImportAiConsent()).toMatchObject({
+      importId: 'import-b',
+      decision: 'manual',
+    })
+    expect(screen.queryByText('醫療摘要產生方式')).not.toBeInTheDocument()
+  })
+
+  it('remembers automatic generation only after cloud-AI consent is confirmed', () => {
+    mockOnboardingCompleted = true
+    localStorage.setItem('fhir_bundle_override', '1')
+    makeLocalImportReady('import-a')
+    render(<FirstRunOnboardingDialog />)
+
+    fireEvent.click(screen.getByRole('button', { name: /自動產生/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '不要再顯示此提醒' }))
+    expect(getRememberedLocalImportAiDecision()).toBeNull()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '我了解上述資料使用方式，並選擇啟用自動摘要' }))
+    fireEvent.click(screen.getByRole('button', { name: '確認並啟用' }))
+
+    expect(getRememberedLocalImportAiDecision()).toBe('auto')
   })
 
   it('does not overwrite the SMART auto preference with a local manual choice', () => {

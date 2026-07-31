@@ -114,7 +114,9 @@ export function useImportBundle(): UseImportBundleReturn {
       if (demo) {
         clearLocalImportAiConsent()
       } else if (localImportConsent) {
-        markLocalImportAiConsentReady(localImportConsent.importId)
+        markLocalImportAiConsentReady(localImportConsent.importId, Date.now(), {
+          useRememberedDecision: true,
+        })
       }
     } finally {
       notifyBundleChangeSettled()

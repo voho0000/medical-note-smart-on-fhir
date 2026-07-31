@@ -25,10 +25,13 @@ import { useSafetyPrefsStore } from '@/src/application/hooks/safety-alerts/use-s
 import { useSummaryPrefsStore } from '@/src/application/hooks/medical-summary/use-medical-summary.hook'
 import { useOnboarding } from '@/src/application/hooks/onboarding/use-onboarding.hook'
 import {
+  clearRememberedLocalImportAiDecision,
   type AutoAiConsentState,
   ensureLocalImportAiConsent,
+  getRememberedLocalImportAiDecision,
   recordAutoAiRealDataDecision,
   recordLocalImportAiDecision,
+  recordRememberedLocalImportAiDecision,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { AuthDialog } from '@/features/auth/components/AuthDialog'
@@ -119,6 +122,9 @@ function FirstRunOnboardingFlow({
       : autoAiOn ? 'auto' : autoAiOff ? 'manual' : null,
   )
   const [autoAiConsent, setAutoAiConsent] = useState(false)
+  const [rememberLocalChoice, setRememberLocalChoice] = useState(
+    consentState.source === 'local' && getRememberedLocalImportAiDecision() !== null,
+  )
 
   // General onboarding gets the full sequence; a demo-first user who later
   // loads real data sees only the just-in-time auto-analysis decision.
@@ -155,6 +161,11 @@ function FirstRunOnboardingFlow({
         !consentState.importId
         || !recordLocalImportAiDecision(consentState.importId, autoAiChoice)
       ) return
+      if (rememberLocalChoice) {
+        recordRememberedLocalImportAiDecision(autoAiChoice)
+      } else {
+        clearRememberedLocalImportAiDecision()
+      }
     } else {
       recordAutoAiRealDataDecision(autoAiChoice)
       setAutoAi(autoAiChoice === 'auto')
@@ -328,6 +339,27 @@ function FirstRunOnboardingFlow({
                           {ob.autoScanConsentRequired}
                         </p>
                       ) : null}
+                    </div>
+                  ) : null}
+                  {consentState.source === 'local' ? (
+                    <div className="flex items-start gap-2.5 rounded-md border bg-muted/35 px-3 py-2.5">
+                      <Checkbox
+                        id="onboarding-remember-local-ai-choice"
+                        checked={rememberLocalChoice}
+                        onCheckedChange={(checked) => setRememberLocalChoice(checked === true)}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <label
+                          htmlFor="onboarding-remember-local-ai-choice"
+                          className="cursor-pointer text-sm leading-snug text-foreground"
+                        >
+                          {ob.localRememberChoice}
+                        </label>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {ob.localRememberChoiceDesc}
+                        </p>
+                      </div>
                     </div>
                   ) : null}
                 </>
