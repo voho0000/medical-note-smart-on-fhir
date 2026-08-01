@@ -148,15 +148,15 @@ describe('DM CDSS cross-patient golden cases', () => {
       label: 'active MedicationRequest',
       medication: statinMedication({ sourceType: 'MedicationRequest' }),
       expectedState: 'active-order-unconfirmed',
-      expectedStatus: 'review',
-      expectedTitle: '尚未確認實際使用',
+      expectedStatus: 'needs-data',
+      expectedTitle: '已有 statin 處方',
     },
     {
       label: 'active MedicationStatement',
       medication: statinMedication({ sourceType: 'MedicationStatement' }),
       expectedState: 'confirmed-current',
       expectedStatus: 'needs-data',
-      expectedTitle: '已確認使用 statin',
+      expectedTitle: '已有 statin 處方',
     },
     {
       label: 'on-hold MedicationRequest',
@@ -170,7 +170,7 @@ describe('DM CDSS cross-patient golden cases', () => {
       medication: statinMedication({ sourceType: 'MedicationRequest', status: 'completed' }),
       expectedState: 'historical-record-current-status-unknown',
       expectedStatus: 'review',
-      expectedTitle: '有 statin 歷史處方，近期是否持續未知',
+      expectedTitle: 'statin 為歷史處方',
     },
   ])('distinguishes $label from confirmed medication use', ({
     medication,

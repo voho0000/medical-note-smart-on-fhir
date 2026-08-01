@@ -112,6 +112,19 @@ function currentMedication(
   }
 }
 
+function activePrescription(
+  id: string,
+  name: string,
+): MedicationEntity {
+  return {
+    id,
+    _sourceResourceType: 'MedicationRequest',
+    status: 'active',
+    authoredOn: '2026-07-01',
+    medicationCodeableConcept: { text: name },
+  }
+}
+
 function lab(
   id: string,
   loinc: string,
@@ -339,9 +352,13 @@ describe('personalized CKD guidance', () => {
 
     expect(classification).toMatchObject({
       status: 'needs-data',
-      title: 'CKD 分期 G3b / A2｜待補：可比較的近期 eGFR',
-      recommendation: '待補：可比較的近期 eGFR。',
-      nextActions: ['查找或補做：可比較的近期 eGFR。'],
+      title: '最近可判讀 CKD 分期：G3b / A2｜待更新：可比較的近期 eGFR',
+      recommendation: '最近可判讀分期為 G3b / A2（極高風險）；需更新 可比較的近期 eGFR。',
+      nextActions: [
+        '補做或更新 可比較的近期 eGFR，更新 G/A 分期。',
+        '更新後若仍為 G3b / A2，約每 4 個月追蹤 eGFR 與定量 UACR。',
+        '若 eGFR 變化 >20% 或確認 ACR 倍增，應提早評估；開始影響腎血流的治療後 eGFR 降幅 >30% 亦應評估。',
+      ],
     })
     expect(classification?.title).not.toContain('待補：定量 UACR')
   })
@@ -359,7 +376,23 @@ describe('personalized CKD guidance', () => {
 
     expect(result.automatedChecks?.find(
       (item) => item.id === 'ckd-classification',
-    )?.displayOrder).toBe(0)
+    )).toMatchObject({
+      displayOrder: 0,
+      recommendation: {
+        status: 'no-action',
+        recommendation: '目前分期為 G3b / A2（極高風險）。',
+        nextActions: [
+          '約每 4 個月追蹤 eGFR 與定量 UACR。',
+          '若 eGFR 變化 >20% 或確認 ACR 倍增，應提早評估；開始影響腎血流的治療後 eGFR 降幅 >30% 亦應評估。',
+        ],
+        patientEvidence: expect.arrayContaining([
+          expect.objectContaining({
+            label: '目前分期',
+            value: 'G3b / A2（極高風險）',
+          }),
+        ]),
+      },
+    })
     expect(result.automatedChecks?.find(
       (item) => item.id === 'ckd-monitoring',
     )?.displayOrder).toBe(1)
@@ -561,6 +594,82 @@ describe('personalized CKD guidance', () => {
     })
   })
 
+  it('treats active prescriptions as present without asking whether the patient actually takes them', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-07-01', 34),
+        quantitativeUacr(80, '2026-07-01', 'uacr-latest'),
+        quantitativeUacr(70, '2026-01-01', 'uacr-old'),
+        lab('potassium', '2823-3', 4.5, 'mmol/L'),
+      ],
+      medications: [
+        activePrescription('valsartan', 'Valsartan 160 mg'),
+        activePrescription('dapagliflozin', 'Dapagliflozin 10 mg'),
+        activePrescription('finerenone', 'Finerenone 10 mg'),
+        activePrescription('atorvastatin', 'Atorvastatin 20 mg'),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const automatedById = Object.fromEntries((result.automatedChecks ?? []).map(
+      (item) => [item.id, item.recommendation],
+    ))
+
+    expect(automatedById['ckd-rasi-strategy']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['已有 ACEI／ARB 處方，目前無需另加提示。'],
+    })
+    expect(automatedById['ckd-sglt2-strategy']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['已有 SGLT2 抑制劑處方，目前無需另加提示。'],
+    })
+    expect(automatedById['ckd-finerenone-strategy']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['已有 finerenone 處方，目前無需另加提示。'],
+    })
+    expect(automatedById['ckd-cardiovascular-risk']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['已有 statin 處方，目前無需另加提示。'],
+    })
+    expect(profile.facts.sglt2Therapy.zh).toBe('已有處方：Dapagliflozin 10 mg')
+    expect(JSON.stringify(result)).not.toMatch(/尚未確認實際使用|確認目前是否使用|服藥依從性/)
+    expect(result.notEvaluated).toEqual(expect.arrayContaining([
+      expect.stringContaining('處方資料只代表曾開立或仍有有效處方'),
+    ]))
+  })
+
+  it('labels an old UACR as the latest interpretable category and asks for an update', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-07-01', 34),
+        quantitativeUacr(80, '2024-06-10'),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const classification = result.recommendations.find(
+      (item) => item.id === 'ckd-classification',
+    )
+
+    expect(classification).toMatchObject({
+      status: 'needs-data',
+      title: '最近可判讀 CKD 分期：G3b / A2｜待更新：近期定量 UACR（mg/g）',
+      nextActions: [
+        '補做或更新 近期定量 UACR（mg/g），更新 G/A 分期。',
+        '更新後若仍為 G3b / A2，約每 4 個月追蹤 eGFR 與定量 UACR。',
+        '若 eGFR 變化 >20% 或確認 ACR 倍增，應提早評估；開始影響腎血流的治療後 eGFR 降幅 >30% 亦應評估。',
+      ],
+      patientEvidence: expect.arrayContaining([
+        expect.objectContaining({
+          label: '最近可判讀分期',
+          value: 'G3b / A2（極高風險）',
+        }),
+      ]),
+    })
+  })
+
   it('uses standardized-BP caution, staged finerenone criteria, medication safety, and serial CKD-MBD inputs', () => {
     const ibuprofen: MedicationEntity = {
       id: 'ibuprofen-order',
@@ -614,7 +723,7 @@ describe('personalized CKD guidance', () => {
     expect(finerenone?.recommendation).toContain('4.8–5.0')
     expect(finerenone?.missingData).toEqual(expect.arrayContaining([
       '持續 UACR >30 mg/g 的重複定量紀錄',
-      '最大耐受 RASi 持續使用與耐受紀錄',
+      '最大耐受 RASi 處方或不耐受紀錄',
     ]))
     expect(medicationSafety).toMatchObject({
       status: 'review',

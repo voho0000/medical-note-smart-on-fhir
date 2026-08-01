@@ -57,7 +57,7 @@
     "@tanstack/react-query": "^5.90.16",
     "@tanstack/react-virtual": "^3.13.26",
     "@voho0000/personalization-sdk": "1.0.0",
-    "@voho0000/personalized-care": "1.0.2",
+    "@voho0000/personalized-care": "1.0.3",
     "@voho0000/personalized-education": "1.0.0",
     "ai": "^6.0.43",
     "class-variance-authority": "^0.7.1",

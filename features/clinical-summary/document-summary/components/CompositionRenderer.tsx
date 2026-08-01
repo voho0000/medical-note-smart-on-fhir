@@ -46,7 +46,7 @@ interface CompositionRendererProps {
 }
 
 const PREVENTIVE_NARRATIVE_CLASSNAME =
-  'prose prose-sm dark:prose-invert max-w-none break-words [&_col:first-child]:w-[36%] [&_ol]:my-1 [&_p]:my-1 [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_table]:my-1 [&_table]:w-full [&_table]:table-fixed [&_table]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:px-1 [&_th]:py-0.5 [&_th]:font-medium [&_th]:break-words [&_ul]:my-1'
+  'preventive-narrative prose prose-sm dark:prose-invert max-w-none break-words [&_ol]:my-1 [&_p]:my-1 [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_table]:my-1 [&_table]:w-full [&_table]:table-fixed [&_table]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:align-top [&_td]:break-words [&_th]:px-1 [&_th]:py-0.5 [&_th]:font-medium [&_th]:break-words [&_ul]:my-1'
 
 function formatDate(iso?: string): string {
   if (!iso) return ''

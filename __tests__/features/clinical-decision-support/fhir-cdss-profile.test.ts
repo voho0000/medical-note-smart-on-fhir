@@ -482,7 +482,9 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     expect(result.medicationClassContexts?.sulfonylurea?.state).toBe(
       'historical-record-current-status-unknown',
     )
-    expect(result.facts.hypoglycemiaRiskMedications.zh).toContain('近期是否持續未知')
+    expect(result.facts.hypoglycemiaRiskMedications.zh).toBe(
+      '歷史胰島素／磺醯脲處方：Gliclazide 30 mg',
+    )
   })
 
   it('marks the assessment uncertain only when an active antidiabetic ingredient is unmapped', () => {
@@ -573,7 +575,7 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
       lastPrescriptionDate: '2025-05-20',
     })
     expect(result.facts.statinTherapy.zh).toBe(
-      '有歷史 statin 處方，近期是否持續未知：Rosuvastatin 10 mg（3 筆處方 · 最近 2025-05-20）',
+      '歷史處方：Rosuvastatin 10 mg（3 筆處方 · 最近 2025-05-20）',
     )
     expect(result.facts.statinTherapy.sources).toHaveLength(3)
   })
@@ -721,8 +723,8 @@ describe('FHIR CDSS P1 freshness and preventive-care normalization', () => {
     expect(result.freshnessContexts).toMatchObject({
       HbA1c: { state: 'current', intervalDays: 180 },
       LDL: { state: 'due', intervalDays: 365 },
-      eGFR: { state: 'due', intervalDays: 180 },
-      quantitativeUacr: { state: 'due', intervalDays: 180 },
+      eGFR: { state: 'overdue', intervalDays: 122 },
+      quantitativeUacr: { state: 'overdue', intervalDays: 122 },
       bloodPressure: { state: 'missing', intervalDays: 180 },
     })
   })

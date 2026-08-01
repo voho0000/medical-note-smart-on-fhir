@@ -26,6 +26,8 @@ import {
 import { assessMedicationClassAllergies } from './allergy-classifier'
 import {
   assessAkiFromCreatinine,
+  classifyEgfr,
+  classifyUacr,
   deriveDcsiEvidence,
   type AkiCreatinineReading,
 } from '@voho0000/personalized-care'
@@ -109,6 +111,29 @@ const QUANTITATIVE_UACR_UNITS = new Set([
   'mcg/mg',
   'mcg/mgcreatinine',
 ])
+
+function ckdMonitoringIntervalDays(
+  eGfr: number | undefined,
+  quantitativeUacr: number | undefined,
+): number {
+  const gStage = classifyEgfr(eGfr)
+  const aStage = classifyUacr(quantitativeUacr)
+  if (!gStage || !aStage) {
+    return (
+      (eGfr !== undefined && eGfr < 60)
+      || (quantitativeUacr !== undefined && quantitativeUacr >= 30)
+    ) ? 180 : 365
+  }
+  const intervalByStage = {
+    G1: { A1: 365, A2: 365, A3: 122 },
+    G2: { A1: 365, A2: 365, A3: 122 },
+    G3a: { A1: 365, A2: 183, A3: 122 },
+    G3b: { A1: 183, A2: 122, A3: 122 },
+    G4: { A1: 122, A2: 122, A3: 91 },
+    G5: { A1: 91, A2: 91, A3: 91 },
+  } as const
+  return intervalByStage[gStage][aStage]
+}
 const BP_PANEL_LOINC = '85354-9'
 const SYSTOLIC_BP_LOINC = '8480-6'
 const DIASTOLIC_BP_LOINC = '8462-4'
@@ -2024,8 +2049,8 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       }
     : medicationClassState === 'active-order-unconfirmed'
       ? {
-          zh: `已有處方、尚未確認實際使用：${hypoglycemiaRiskSummaryZh}`,
-          en: `Active order; actual use unconfirmed: ${hypoglycemiaRiskSummaryEn}`,
+          zh: `已有處方：${hypoglycemiaRiskSummaryZh}`,
+          en: `Prescription present: ${hypoglycemiaRiskSummaryEn}`,
           sources: hypoglycemiaMedicationSources,
         }
       : medicationClassState === 'on-hold'
@@ -2036,8 +2061,8 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
           }
         : medicationClassState === 'historical-record-current-status-unknown'
           ? {
-              zh: `有歷史胰島素／磺醯脲處方，近期是否持續未知：${hypoglycemiaRiskSummaryZh}`,
-              en: `Historical insulin/sulfonylurea record; current use is unknown: ${hypoglycemiaRiskSummaryEn}`,
+              zh: `歷史胰島素／磺醯脲處方：${hypoglycemiaRiskSummaryZh}`,
+              en: `Historical insulin/sulfonylurea prescription: ${hypoglycemiaRiskSummaryEn}`,
               sources: hypoglycemiaMedicationSources,
             }
           : medicationClassState === 'uncertain'
@@ -2052,8 +2077,8 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
 
   const classFact = (
     assessment: ReturnType<typeof assessMedicationClass>,
-    classZh: string,
-    classEn: string,
+    _classZh: string,
+    _classEn: string,
   ): CdssFact => {
     const names = medicationClassNames(assessment)
     const suffixZh = names.length > 0 ? `：${medicationNameSummary(names, 'zh-TW')}` : ''
@@ -2070,28 +2095,28 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       : ''
     const labels = {
       'confirmed-current': {
-        zh: `已確認使用 ${classZh}${suffixZh}`,
-        en: `Confirmed current ${classEn} use${suffixEn}`,
+        zh: `已確認使用${suffixZh}`,
+        en: `Confirmed current use${suffixEn}`,
       },
       'active-order-unconfirmed': {
-        zh: `已有 ${classZh} 處方，尚未確認實際使用${suffixZh}`,
-        en: `Active ${classEn} order; actual use unconfirmed${suffixEn}`,
+        zh: `已有處方${suffixZh}`,
+        en: `Prescription present${suffixEn}`,
       },
       'on-hold': {
-        zh: `${classZh} 暫停中${suffixZh}`,
-        en: `${classEn} is on hold${suffixEn}`,
+        zh: `暫停中${suffixZh}`,
+        en: `On hold${suffixEn}`,
       },
       'historical-record-current-status-unknown': {
-        zh: `有歷史 ${classZh} 處方，近期是否持續未知${suffixZh}${timelineZh}`,
-        en: `Historical ${classEn} record; current use is unknown${suffixEn}${timelineEn}`,
+        zh: `歷史處方${suffixZh}${timelineZh}`,
+        en: `Historical prescription${suffixEn}${timelineEn}`,
       },
       uncertain: {
-        zh: `${classZh} 成分辨識不完整`,
-        en: `${classEn} ingredient mapping is incomplete`,
+        zh: '成分辨識不完整',
+        en: 'Ingredient mapping is incomplete',
       },
       'not-found': {
-        zh: `現有資料未見 ${classZh}`,
-        en: `No ${classEn} appears in the available medication data`,
+        zh: '現有資料未見處方',
+        en: 'No prescription appears in the available medication data',
       },
     } as const
     return {
@@ -2270,12 +2295,12 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
       sources: [source],
     }
     const useText = useState === 'confirmed_current'
-      ? { zh: '病歷記載目前使用中；本次仍需核對', en: 'Recorded as currently used; reconcile at this visit' }
+      ? { zh: '病歷記載目前使用中', en: 'Recorded as currently used' }
       : useState === 'active_order_unconfirmed'
-        ? { zh: '病歷有有效處方，尚未確認實際服用', en: 'An active prescription is recorded; actual use is not yet confirmed' }
+        ? { zh: '病歷有有效處方', en: 'An active prescription is recorded' }
         : useState === 'not_current'
-          ? { zh: '最新紀錄未顯示為現行用藥', en: 'The latest record is not marked as current use' }
-          : { zh: '病歷無法判定目前是否使用', en: 'The record does not establish current use' }
+          ? { zh: '最近一筆為歷史處方', en: 'The latest record is a historical prescription' }
+          : { zh: '處方狀態不明', en: 'Prescription status is unknown' }
     facts.forxigaUseStatus = { ...useText, date, sources: [source] }
     medicationContext = {
       forxiga: {
@@ -2445,10 +2470,10 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     ?? (uacrUseState === 'quantitative_comparable'
       ? facts.urineAlbuminRatio?.numericValue
       : undefined)
-  const kidneyIntervalDays = (
-    (eGfrValue !== undefined && eGfrValue < 60)
-    || (quantitativeUacrValue !== undefined && quantitativeUacrValue >= 30)
-  ) ? 180 : 365
+  const kidneyIntervalDays = ckdMonitoringIntervalDays(
+    eGfrValue,
+    quantitativeUacrValue,
+  )
   const hba1cIntervalDays = (
     facts.HbA1c?.numericValue !== undefined
     && facts.HbA1c.numericValue <= 7

@@ -205,14 +205,15 @@ describe('clinical decision summary', () => {
         }),
         recommendation('ckd-rasi-strategy', {
           status: 'review',
-          title: '有 ACEI／ARB 歷史處方，近期是否持續未知；最後處方 2026-04-25',
+          title: 'A2 白蛋白尿符合 ACEI／ARB 條件',
           overviewEvidenceFactKey: 'aceArbTherapy',
           patientEvidence: [{
             label: 'ACEI／ARB',
-            value: '有歷史 ACEI／ARB 處方，近期是否持續未知：得安穩膜衣錠160毫克（4 筆處方 · 最近 2026-04-25）',
+            value: '歷史處方：得安穩膜衣錠160毫克（4 筆處方 · 最近 2026-04-25）',
             factKeys: ['aceArbTherapy'],
           }],
-          missingData: ['目前實際使用、既往耐受性與停藥原因'],
+          missingData: ['續方適應症與既往停藥原因'],
+          nextActions: ['依最後處方日期與目前適應症評估是否續方。'],
         }),
       ],
       automatedChecks: [],
@@ -231,14 +232,15 @@ describe('clinical decision summary', () => {
     expect(within(kfreRow).getByTitle('KFRE｜G3b：缺少定量 UACR 或數值無法使用')).toBeInTheDocument()
     expect(bloodPressureRow).toHaveTextContent('缺少近期可判讀的血壓與體液狀態')
     expect(bloodPressureRow).not.toHaveTextContent('缺：標準化診間血壓與量測日期')
-    expect(rasModuleCell).not.toHaveTextContent('有 ACEI／ARB 歷史處方，近期是否持續未知')
-    expect(rasEvidencePreview).toHaveTextContent('有歷史 ACEI／ARB 處方，近期是否持續未知')
+    expect(rasModuleCell).toHaveTextContent('A2 白蛋白尿符合 ACEI／ARB 條件')
+    expect(rasModuleCell).not.toHaveTextContent('歷史處方')
+    expect(rasEvidencePreview).toHaveTextContent('歷史處方')
     expect(within(rasEvidencePreview).getByTitle(
-      'ACEI／ARB：有歷史 ACEI／ARB 處方，近期是否持續未知：得安穩膜衣錠160毫克（4 筆處方 · 最近 2026-04-25）',
+      'ACEI／ARB：歷史處方：得安穩膜衣錠160毫克（4 筆處方 · 最近 2026-04-25）',
     )).toBeInTheDocument()
-    expect(rasRow).toHaveTextContent('缺：目前實際使用、既往耐受性與停藥原因')
+    expect(rasRow).toHaveTextContent('缺：續方適應症與既往停藥原因')
     expect(within(screen.getByTestId('cdss-next-step-preview-ckd-rasi-strategy')).getByTitle(
-      '下一步 ckd-rasi-strategy',
+      '依最後處方日期與目前適應症評估是否續方。',
     )).toBeInTheDocument()
 
     fireEvent.click(kfreRow)
@@ -255,7 +257,7 @@ describe('clinical decision summary', () => {
           overviewEvidenceFactKey: 'statinTherapy',
           patientEvidence: [{
             label: '系統核對 statin',
-            value: '有歷史 statin 處方，近期是否持續未知：Rosuvastatin 10 mg（3 筆處方 · 最近 2025-05-20）',
+            value: '歷史處方：Rosuvastatin 10 mg（3 筆處方 · 最近 2025-05-20）',
             factKeys: ['statinTherapy'],
             sources: [
               {

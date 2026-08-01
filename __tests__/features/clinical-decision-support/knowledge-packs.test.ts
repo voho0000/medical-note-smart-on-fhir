@@ -518,8 +518,8 @@ describe('CDSS knowledge-pack registry', () => {
     )
     expect(kidneyMedication).toMatchObject({
       priority: 'high',
-      status: 'review',
-      title: 'CKD＋高血壓：目前 ACEI／ARB 用藥狀態尚未確認',
+      status: 'actionable',
+      title: 'CKD＋高血壓：現有資料未見 ACEI／ARB 處方',
     })
     expect(lipid).toMatchObject({
       priority: 'medium',
@@ -667,9 +667,11 @@ describe('CDSS knowledge-pack registry', () => {
 
     expect(kidneyMedication).toMatchObject({
       status: 'review',
-      title: 'CKD＋高血壓：有 ACEI／ARB 歷史處方，近期是否持續未知（最後處方 2026-04-12）',
+      title: 'CKD＋高血壓：ACEI／ARB 為歷史處方（最後處方 2026-04-12）',
     })
-    expect(kidneyMedication?.recommendation).toContain('不把資料缺口當作未使用')
+    expect(kidneyMedication?.nextActions).toEqual([
+      '依最後處方日期與目前適應症評估是否續方。',
+    ])
   })
 
   it('keeps cardiorenal SGLT2 benefit independent of HbA1c and uses the FDA perioperative hold', () => {
@@ -691,8 +693,8 @@ describe('CDSS knowledge-pack registry', () => {
           kidneyDiagnosis: { zh: '糖尿病腎臟病', en: 'Diabetic kidney disease' },
           forxiga: { zh: 'Forxiga 10 mg', en: 'Forxiga 10 mg' },
           forxigaUseStatus: {
-            zh: '病歷記載目前使用中；本次仍需核對',
-            en: 'Recorded as currently used; reconcile at this visit',
+            zh: '病歷記載目前使用中',
+            en: 'Recorded as currently used',
           },
         },
         medicationContexts: {
@@ -705,13 +707,16 @@ describe('CDSS knowledge-pack registry', () => {
       },
       locale: 'zh-TW',
     })
-    const sglt2 = result.recommendations.find(
+    const sglt2 = result.automatedChecks?.find(
       (item) => item.id === 'sglt2-concordance',
-    )
+    )?.recommendation
 
-    expect(sglt2?.recommendation).toContain('不因 HbA1c 偏低而單獨停藥')
+    expect(sglt2).toMatchObject({
+      status: 'no-action',
+      recommendation: '符合糖尿病 CKD 的 SGLT2 抑制劑條件，且已有處方。',
+    })
     expect(sglt2?.nextActions).toEqual([
-      '完成處方與實際用藥核對，包含服用方式、依從性與不良反應。',
+      '已有 SGLT2 抑制劑處方，目前無需另加提示。',
     ])
     expect(sglt2?.safetyBoundary).toContain('至少停 3 天')
     expect(sglt2?.safetyBoundary).toContain('不要把顯影劑檢查一律設為停藥條件')
