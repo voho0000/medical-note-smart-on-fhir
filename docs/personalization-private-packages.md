@@ -77,6 +77,28 @@ repo 提交的 `.npmrc` 不含憑證；開發者與 CI 由 `NODE_AUTH_TOKEN` 提
 
 公開主 repo 的 GitHub Actions 應設定 repository secret `PACKAGES_TOKEN`，其內容使用只具 `read:packages` 的 token。工作流程只在 `npm ci` 階段把它映射成 `NODE_AUTH_TOKEN`，不寫入檔案或 log。
 
+## 本機開發
+
+第一次安裝或 lockfile 更新時，先確認 GitHub CLI 已登入具有私有套件讀取權限的帳號：
+
+```bash
+gh auth login -h github.com
+```
+
+接著使用專案提供的安全安裝指令：
+
+```bash
+npm run packages:install
+```
+
+若要模擬 CI 的乾淨安裝：
+
+```bash
+npm run packages:ci
+```
+
+這兩個指令只在 npm 子行程執行期間，把目前的 GitHub CLI 登入憑證放入 `NODE_AUTH_TOKEN`；不會把 token 寫入 `.npmrc`、shell profile、repo 或 log。安裝完成後，`npm run dev`、`npm test`、`npm run build` 都不需要再次提供 token。
+
 ## 臨床發布要求
 
 每次發布至少保留：

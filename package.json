@@ -4,6 +4,8 @@
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
+    "packages:install": "node scripts/npm-with-github-packages.mjs install",
+    "packages:ci": "node scripts/npm-with-github-packages.mjs ci",
     "dev": "next dev --turbopack -p 3001",
     "dev:cloud": "NEXT_PUBLIC_DEPLOYMENT_PROFILE=cloud NEXT_PUBLIC_OFFLINE_MODE=0 next dev --turbopack -p 3001",
     "dev:onprem": "NEXT_PUBLIC_DEPLOYMENT_PROFILE=onprem NEXT_PUBLIC_OFFLINE_MODE=1 next dev --turbopack -p 3100",
