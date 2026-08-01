@@ -8,6 +8,7 @@ name: E2E
 on:
   push:
     branches: [master]
+  workflow_dispatch: {}
 
 jobs:
   e2e:
