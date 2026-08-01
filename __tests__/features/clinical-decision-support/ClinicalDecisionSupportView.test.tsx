@@ -285,7 +285,7 @@ describe('clinical decision summary', () => {
     fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-statin-history'))
 
     const detail = screen.getByTestId('cdss-recommendation-detail-statin-history')
-    expect(within(detail).getByText('用藥歷程 3 筆')).toBeInTheDocument()
+    expect(within(detail).getByText('查看全部資料來源')).toBeInTheDocument()
   })
 
   it('keeps the primary guideline card visible and places other sources and safety notes behind one toggle', () => {
@@ -342,6 +342,47 @@ describe('clinical decision summary', () => {
     expect(supporting).toHaveTextContent('等級 1A / 2B')
     expect(supporting).toHaveTextContent('eGFR ≥20 且 UACR ≥200 mg/g')
     expect(supporting).toHaveTextContent('邊界 sglt2-semantic')
+  })
+
+  it('hides non-applicable coverage cards for non-medication modules only', () => {
+    const nonApplicableCoverage = {
+      sourceId: 'taiwan-nhi-diabetes' as const,
+      sourceKind: 'coverage' as const,
+      sourceLabel: '健保給付',
+      version: '第 5 節 115.07.23／第 2 節 115.05.22',
+      effectiveFrom: '2026-07-23',
+      status: 'not-applicable' as const,
+      summary: '本項是臨床照護問題，不屬於藥品給付判定。',
+      references: [],
+    }
+    const coverageResult: CdssResult = {
+      ...result(),
+      recommendations: [
+        recommendation('non-medication-coverage', {
+          domain: 'monitoring',
+          sourceAssessments: [nonApplicableCoverage],
+        }),
+        recommendation('medication-coverage', {
+          domain: 'medication',
+          sourceAssessments: [nonApplicableCoverage],
+        }),
+      ],
+    }
+
+    render(<ClinicalDecisionSupportView result={coverageResult} locale="zh-TW" />)
+
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-non-medication-coverage'))
+    const nonMedicationSupporting = screen.getByTestId(
+      'cdss-supporting-context-non-medication-coverage',
+    )
+    expect(nonMedicationSupporting).not.toHaveTextContent('健保給付')
+    expect(screen.queryByTestId('cdss-source-comparison-non-medication-coverage')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-medication-coverage'))
+    const medicationSupporting = screen.getByTestId('cdss-supporting-context-medication-coverage')
+    expect(medicationSupporting).toHaveTextContent('健保給付')
+    expect(medicationSupporting).toHaveTextContent('不適用')
+    expect(medicationSupporting).toHaveTextContent('本項是臨床照護問題，不屬於藥品給付判定。')
   })
 
   it('uses type-specific headings inside CKD semantic cards', () => {
@@ -454,6 +495,117 @@ describe('clinical decision summary', () => {
     expect(screen.getByTestId('cdss-recommendation-ckd-monitoring')).toBeInTheDocument()
   })
 
+  it('renders CKD classification evidence and follow-up thresholds without duplicated trend cards', () => {
+    const egfrLatestSource = {
+      resourceType: 'Observation' as const,
+      resourceId: 'egfr-latest',
+      date: '2026-06-02',
+      value: 32,
+      unit: 'mL/min/1.73m²',
+    }
+    const uacrSource = {
+      resourceType: 'Observation' as const,
+      resourceId: 'uacr-old',
+      date: '2024-06-10',
+      value: 36.44,
+      unit: 'mg/g',
+    }
+    const classificationResult: CdssResult = {
+      ...result(),
+      recommendations: [recommendation('ckd-classification', {
+        domain: 'diagnosis',
+        status: 'needs-data',
+        title: '最近可判讀 CKD 分期：G3b / A2｜待更新：近期定量 UACR（mg/g）',
+        patientEvidence: [
+          {
+            label: '最近可判讀分期',
+            value: 'G3b / A2（極高風險）',
+            factKeys: ['eGFR'],
+            sources: [egfrLatestSource, uacrSource],
+          },
+          {
+            label: 'CKD 診斷',
+            value: '慢性腎臟病診斷：Chronic kidney disease, stage 3b（2026-07-21）',
+            factKeys: ['ckdDiagnosis'],
+            sources: [{
+              resourceType: 'Condition',
+              resourceId: 'ckd-diagnosis',
+              date: '2026-07-21',
+            }],
+          },
+          {
+            label: '慢性化證據',
+            value: '至少兩次 eGFR <60，間隔達 3 個月（2025-09-16 → 2026-06-02）',
+            factKeys: ['ckdChronicity'],
+            sources: [{
+              resourceType: 'Observation',
+              resourceId: 'egfr-earlier',
+              date: '2025-09-16',
+              value: 33,
+              unit: 'mL/min/1.73m²',
+            }, egfrLatestSource],
+          },
+          {
+            label: '最新 eGFR',
+            value: '32 mL/min/1.73m²（2026-06-02）',
+            factKeys: ['eGFR'],
+            sources: [egfrLatestSource],
+          },
+          {
+            label: '尿白蛋白',
+            value: '1+ (80) · 2026-01-14 ｜ 最近定量：36.44 mg/g · 2024-06-10',
+            factKeys: ['urineAlbuminOverview'],
+            sources: [uacrSource],
+          },
+        ],
+        missingData: ['近期定量 UACR（mg/g）'],
+        nextActions: [
+          '補做或更新近期定量 UACR（mg/g），更新 G/A 分期。',
+          '更新後若仍為 G3b / A2，約每 4 個月追蹤 eGFR 與定量 UACR。',
+          '若 eGFR 變化 >20% 或確認 ACR 倍增，應提早評估。',
+        ],
+      })],
+      automatedChecks: [],
+    }
+
+    render(<ClinicalDecisionSupportView result={classificationResult} locale="zh-TW" />)
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-ckd-classification'))
+
+    const evidence = screen.getByTestId('cdss-patient-evidence-ckd-classification')
+    expect(within(evidence).getByText('診斷')).toBeInTheDocument()
+    expect(within(evidence).getByText('腎功能')).toBeInTheDocument()
+    expect(within(evidence).getByText('慢性化')).toBeInTheDocument()
+    expect(within(evidence).getByText('白蛋白尿')).toBeInTheDocument()
+    expect(evidence).toHaveTextContent(
+      '已確認：33 → 32（2025-09-16 → 2026-06-02；間隔至少 3 個月）',
+    )
+    expect(within(evidence).queryByText('最近可判讀分期')).not.toBeInTheDocument()
+    expect(screen.queryByText('歷次變化')).not.toBeInTheDocument()
+    const evidenceHeading = screen.getByTestId('cdss-patient-evidence-heading-ckd-classification')
+    const sourceToggle = within(evidenceHeading).getByText('查看全部資料來源')
+    expect(sourceToggle).toBeInTheDocument()
+    const sourceDetails = sourceToggle.closest('details')
+    expect(sourceDetails).toHaveClass('relative')
+    fireEvent.click(sourceToggle)
+    expect(sourceDetails).toHaveAttribute('open')
+    const sourceList = sourceDetails?.querySelector('ul')
+    expect(sourceList).toHaveClass('absolute', 'right-0')
+    const sourceRows = Array.from(sourceList?.querySelectorAll('li') ?? [])
+    expect(sourceRows[0]).toHaveTextContent('2026-07-21')
+    expect(sourceRows[0]?.querySelector('div')).toHaveClass('min-h-8')
+
+    const actionPlan = screen.getByTestId('cdss-action-plan-ckd-classification')
+    expect(actionPlan).toHaveTextContent('補做或更新近期定量 UACR（mg/g），更新 G/A 分期。')
+    expect(actionPlan).not.toHaveTextContent('尚待確認')
+    const thresholds = screen.getByTestId('cdss-classification-thresholds-ckd-classification')
+    expect(thresholds).not.toHaveAttribute('open')
+    expect(within(thresholds).getByText('查看追蹤與警示門檻')).toBeInTheDocument()
+    fireEvent.click(within(thresholds).getByText('查看追蹤與警示門檻'))
+    expect(thresholds).toHaveAttribute('open')
+    expect(thresholds).toHaveTextContent('約每 4 個月追蹤 eGFR 與定量 UACR')
+    expect(thresholds).toHaveTextContent('eGFR 變化 >20%')
+  })
+
   it('renders evidence as one consistent list and groups confirmation items with next steps', () => {
     const evidenceLayout: CdssResult = {
       ...result(),
@@ -489,9 +641,14 @@ describe('clinical decision summary', () => {
 
     expect(within(evidence).getByText('ASCVD')).toBeInTheDocument()
     expect(within(evidence).getByText('Statin')).toBeInTheDocument()
-    expect(within(evidence).getByRole('button', {
+    const evidenceHeading = screen.getByTestId('cdss-patient-evidence-heading-evidence-layout')
+    expect(within(evidenceHeading).getByRole('button', {
       name: '在左側開啟來源紀錄',
-    })).toHaveTextContent('查看來源')
+    })).toHaveTextContent('查看資料來源')
+    const evidenceRows = screen.getByTestId('cdss-patient-evidence-rows-evidence-layout')
+    expect(evidenceRows.querySelectorAll('dl > div')).toHaveLength(2)
+    expect(evidenceRows.querySelector('dl > div')).toHaveClass('py-1.5')
+    expect(within(evidenceRows).queryByRole('button')).not.toBeInTheDocument()
     expect(within(actionPlan).getByText('尚待確認')).toBeInTheDocument()
     expect(within(actionPlan).getByText('LDL-C 與採檢日期')).toBeInTheDocument()
     expect(within(actionPlan).getByText('下一步 evidence-layout')).toBeInTheDocument()

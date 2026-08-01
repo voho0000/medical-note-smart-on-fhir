@@ -399,6 +399,8 @@ function EvidenceSources({
   evidenceValue,
   onNavigate,
   compact = false,
+  compactLabel,
+  popover = false,
 }: {
   sources: readonly CdssFactSource[]
   isEnglish: boolean
@@ -406,10 +408,14 @@ function EvidenceSources({
   evidenceValue: string
   onNavigate: (target: ResourceNavTarget) => void
   compact?: boolean
+  compactLabel?: string
+  popover?: boolean
 }) {
-  const navigableSources = dedupeFactSources(sources).filter((source) => Boolean(
-    source.resourceId && leftTabForResourceType(source.resourceType),
-  ))
+  const navigableSources = dedupeFactSources(sources)
+    .filter((source) => Boolean(
+      source.resourceId && leftTabForResourceType(source.resourceType),
+    ))
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
   if (navigableSources.length === 0) return null
 
   const facilities = new Set(navigableSources.map((source) => source.facility).filter(Boolean))
@@ -464,7 +470,7 @@ function EvidenceSources({
         aria-label={isEnglish ? 'Open source record in the left panel' : '在左側開啟來源紀錄'}
       >
         <PanelLeftOpen className="h-3.5 w-3.5" />
-        {isEnglish ? 'View source' : '查看來源'}
+        {compactLabel ?? (isEnglish ? 'View source' : '查看來源')}
       </button>
     )
   }
@@ -474,7 +480,10 @@ function EvidenceSources({
       className={cn(
         'group rounded-md',
         compact
-          ? 'w-fit max-w-full text-muted-foreground'
+          ? cn(
+              'w-fit max-w-full text-muted-foreground',
+              popover && 'relative',
+            )
           : 'mt-2 border border-border/70 bg-muted/15',
       )}
     >
@@ -487,7 +496,9 @@ function EvidenceSources({
         )}
       >
         <FileSearch className={cn('shrink-0', compact ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
-        <span className="min-w-0 break-words">{compact ? compactSummary : summary}</span>
+        <span className="min-w-0 break-words">
+          {compact ? (compactLabel ?? compactSummary) : summary}
+        </span>
         <ChevronDown className={cn(
           'ml-auto shrink-0 transition-transform group-open:rotate-180',
           compact ? 'h-3 w-3' : 'h-3.5 w-3.5',
@@ -497,7 +508,12 @@ function EvidenceSources({
         className={cn(
           'divide-y divide-border/60 px-2.5',
           compact
-            ? 'mt-1 min-w-[18rem] overflow-hidden rounded-md border border-border/70 bg-background shadow-sm'
+            ? cn(
+                'overflow-hidden rounded-md border border-border/70 bg-background',
+                popover
+                  ? 'absolute right-0 top-full z-30 mt-1 w-[36rem] max-w-[calc(100vw-2rem)] shadow-lg'
+                  : 'mt-1 min-w-[18rem] shadow-sm',
+              )
             : 'border-t border-border/70',
         )}
       >
@@ -509,25 +525,44 @@ function EvidenceSources({
           return (
           <li
             key={`${source.resourceType}-${source.resourceId}`}
-            className="py-1.5"
+            className={cn(compact ? 'py-0' : 'py-1.5')}
           >
-            <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md px-1.5 py-1">
-              <span className="min-w-0 select-text">
-                <span className="block break-words text-sm font-medium text-foreground">
+            <div className={cn(
+              'grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md',
+              compact ? 'min-h-8 px-1 py-0.5' : 'min-h-10 px-1.5 py-1',
+            )}>
+              <span className={cn(
+                'min-w-0 select-text',
+                compact && 'flex flex-wrap items-center gap-x-2 gap-y-0.5',
+              )}>
+                <span className={cn(
+                  'break-words font-medium text-foreground',
+                  compact ? 'text-xs leading-5' : 'block text-sm',
+                )}>
                   {compactSourceMetadata(source) || (isEnglish ? 'Clinical source record' : '臨床來源紀錄')}
                 </span>
                 {icdCodings.length > 0 ? (
-                  <span className="mt-1 block space-y-1">
+                  <span className={cn(
+                    compact
+                      ? 'flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5'
+                      : 'mt-1 block space-y-1',
+                  )}>
                     {icdCodings.map((coding) => (
                       <span
                         key={`${coding.code}-${coding.display ?? ''}`}
-                        className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5"
+                        className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5"
                       >
-                        <span className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-primary">
+                        <span className={cn(
+                          'rounded bg-primary/10 font-mono font-semibold text-primary',
+                          compact ? 'px-1 py-0 text-[11px]' : 'px-1.5 py-0.5 text-xs',
+                        )}>
                           {coding.code}
                         </span>
                         {coding.display ? (
-                          <span className="break-words text-xs text-muted-foreground">
+                          <span className={cn(
+                            'min-w-0 break-words text-muted-foreground',
+                            compact ? 'text-[11px]' : 'text-xs',
+                          )}>
                             {coding.display}
                           </span>
                         ) : null}
@@ -537,7 +572,10 @@ function EvidenceSources({
                 ) : null}
               </span>
               {sourceValue ? (
-                <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
+                <span className={cn(
+                  'whitespace-nowrap font-semibold tabular-nums text-foreground',
+                  compact ? 'text-xs' : 'text-sm',
+                )}>
                   {sourceValue}
                 </span>
               ) : null}
@@ -549,11 +587,17 @@ function EvidenceSources({
                   display: `${evidenceLabel} ${sourceValue ?? evidenceValue}`,
                   date: source.date,
                 })}
-                className="group inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn(
+                  'group inline-flex shrink-0 items-center justify-center rounded-md text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  compact ? 'h-7 w-7' : 'h-9 w-9',
+                )}
                 title={isEnglish ? 'Locate this record in the left panel' : '在左側資料中定位此筆紀錄'}
                 aria-label={isEnglish ? 'Open this record in the left panel' : '在左側開啟此筆紀錄'}
               >
-                <PanelLeftOpen className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+                <PanelLeftOpen className={cn(
+                  'transition-transform group-hover:-translate-x-0.5',
+                  compact ? 'h-3.5 w-3.5' : 'h-4 w-4',
+                )} />
               </button>
             </div>
           </li>
@@ -561,106 +605,6 @@ function EvidenceSources({
         })}
       </ul>
     </details>
-  )
-}
-
-function EvidenceValue({
-  value,
-  sources,
-  isEnglish,
-}: {
-  value: string
-  sources?: readonly CdssFactSource[]
-  isEnglish: boolean
-}) {
-  const trendPoints = dedupeFactSources(sources ?? []).filter((source): source is CdssFactSource & {
-    date: string
-    value: number
-  } => (
-    Boolean(source.date)
-    && typeof source.value === 'number'
-    && Number.isFinite(source.value)
-  ))
-  const isNumericTrend = trendPoints && trendPoints.length >= 2
-
-  if (!isNumericTrend) {
-    const datedValue = value.match(
-      /^(.*?)(?:（(\d{4}-\d{2}-\d{2})）|\s+\((\d{4}-\d{2}-\d{2})\))$/,
-    )
-    const primaryValue = datedValue?.[1]?.trim() || value
-    const date = datedValue?.[2] ?? datedValue?.[3]
-
-    return (
-      <span className="block min-w-0">
-        <span className="block break-words text-sm font-semibold leading-snug">
-          {primaryValue}
-        </span>
-        {date ? (
-          <span className="mt-0.5 block text-[11px] font-normal leading-none tabular-nums text-muted-foreground">
-            {date}
-          </span>
-        ) : null}
-      </span>
-    )
-  }
-
-  const unit = trendPoints.find((point) => point.unit)?.unit
-  return (
-    <div
-      className="rounded-lg border border-border bg-muted/10 p-2.5"
-      role="img"
-      aria-label={value}
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          {isEnglish ? 'Change over time' : '歷次變化'}
-        </span>
-        {unit ? (
-          <span className="text-xs text-muted-foreground">{unit}</span>
-        ) : null}
-      </div>
-      <div className="overflow-x-auto pb-1">
-        <div className="flex min-w-max items-stretch">
-          {trendPoints.map((point, index) => {
-          const isLatest = index === trendPoints.length - 1
-          return (
-            <div key={`${point.resourceType}-${point.resourceId}`} className="flex items-center">
-              {index > 0 ? (
-                <ArrowRight className="mx-1.5 h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
-              ) : null}
-              <div
-                className={cn(
-                  'min-w-[6.25rem] rounded-md border px-2 py-2 text-center',
-                  isLatest
-                    ? 'border-primary/30 bg-primary/10'
-                    : 'border-border/70 bg-background',
-                )}
-              >
-                <div className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                  {point.date}
-                </div>
-                <div
-                  className={cn(
-                    'mt-1 text-xl font-semibold leading-none tabular-nums tracking-tight',
-                    isLatest ? 'text-primary' : 'text-foreground',
-                  )}
-                >
-                  {point.value}
-                </div>
-                {isLatest ? (
-                  <div className="mt-1 text-xs font-medium text-primary">
-                    {isEnglish ? 'Latest' : '最新'}
-                  </div>
-                ) : (
-                  <div className="mt-1 text-xs text-transparent" aria-hidden="true">—</div>
-                )}
-              </div>
-            </div>
-          )
-          })}
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -675,6 +619,234 @@ function evidenceDisplayRank(
     || /^(?:系統核對|system check)/i.test(evidence.label)
   ) return 3
   return 2
+}
+
+type PatientEvidence = CdssRecommendation['patientEvidence'][number]
+
+function evidenceWithFactKey(
+  evidence: readonly PatientEvidence[],
+  factKey: string,
+): PatientEvidence | undefined {
+  return evidence.find((item) => (
+    item.factKeys.length === 1 && item.factKeys.includes(factKey)
+  )) ?? evidence.find((item) => item.factKeys.includes(factKey))
+}
+
+function inlineEvidenceValue(value: string): string {
+  return value
+    .replace(/（(\d{4}-\d{2}-\d{2})）$/, ' · $1')
+    .replace(/\s+\((\d{4}-\d{2}-\d{2})\)$/, ' · $1')
+}
+
+function compactChronicityValue(evidence: PatientEvidence, isEnglish: boolean): string {
+  const points = dedupeFactSources(evidence.sources ?? [])
+    .filter((source): source is CdssFactSource & { date: string; value: number } => (
+      Boolean(source.date)
+      && typeof source.value === 'number'
+      && Number.isFinite(source.value)
+    ))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  if (points.length < 2) return inlineEvidenceValue(evidence.value)
+
+  const earliest = points[0]
+  const latest = points.at(-1)!
+  return isEnglish
+    ? `Confirmed: ${earliest.value} → ${latest.value} (${earliest.date} → ${latest.date}; ≥3 months)`
+    : `已確認：${earliest.value} → ${latest.value}（${earliest.date} → ${latest.date}；間隔至少 3 個月）`
+}
+
+type CompactPatientEvidenceRow = {
+  label: string
+  value: string
+  evidence: PatientEvidence
+}
+
+function CompactPatientEvidenceSection({
+  recommendation,
+  rows,
+  sourceEvidence = rows.map((row) => row.evidence),
+  headingLabel,
+  isEnglish,
+  onNavigate,
+}: {
+  recommendation: CdssRecommendation
+  rows: readonly CompactPatientEvidenceRow[]
+  sourceEvidence?: readonly PatientEvidence[]
+  headingLabel: string
+  isEnglish: boolean
+  onNavigate: (target: ResourceNavTarget) => void
+}) {
+  const allSources = dedupeFactSources(sourceEvidence.flatMap((item) => item.sources ?? []))
+
+  if (rows.length === 0) return null
+
+  return (
+    <section
+      aria-labelledby={`patient-evidence-${recommendation.id}`}
+      data-testid={`cdss-patient-evidence-${recommendation.id}`}
+    >
+      <div
+        className="flex min-h-7 items-center justify-between gap-2"
+        data-testid={`cdss-patient-evidence-heading-${recommendation.id}`}
+      >
+        <h5
+          id={`patient-evidence-${recommendation.id}`}
+          className="text-xs font-semibold text-foreground"
+        >
+          {headingLabel}
+        </h5>
+        {allSources.length > 0 ? (
+          <EvidenceSources
+            sources={allSources}
+            isEnglish={isEnglish}
+            evidenceLabel={headingLabel}
+            evidenceValue={recommendation.title}
+            onNavigate={onNavigate}
+            compact
+            compactLabel={allSources.length > 1
+              ? (isEnglish ? 'View all sources' : '查看全部資料來源')
+              : (isEnglish ? 'View source' : '查看資料來源')}
+            popover
+          />
+        ) : null}
+      </div>
+      <div
+        className="mt-1 overflow-hidden rounded-md border border-border/70 bg-background"
+        data-testid={`cdss-patient-evidence-rows-${recommendation.id}`}
+      >
+        <dl className="divide-y divide-border/60">
+          {rows.map((row, index) => (
+            <div
+              key={`${recommendation.id}-${row.label}-${row.evidence.factKeys.join('-')}-${index}`}
+              className="grid min-w-0 gap-x-3 gap-y-0.5 px-2.5 py-1.5 text-xs leading-5 @min-[32rem]:grid-cols-[minmax(5rem,0.16fr)_minmax(0,1fr)] @min-[32rem]:items-baseline"
+            >
+              <dt className="font-medium text-muted-foreground">{row.label}</dt>
+              <dd className="min-w-0 font-medium text-foreground">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  )
+}
+
+function CkdClassificationEvidence({
+  recommendation,
+  isEnglish,
+  onNavigate,
+}: {
+  recommendation: CdssRecommendation
+  isEnglish: boolean
+  onNavigate: (target: ResourceNavTarget) => void
+}) {
+  const evidence = recommendation.patientEvidence
+  const diagnosis = evidenceWithFactKey(evidence, 'ckdDiagnosis')
+  const eGfr = evidenceWithFactKey(evidence, 'eGFR')
+  const chronicity = evidenceWithFactKey(evidence, 'ckdChronicity')
+  const urineAlbumin = evidenceWithFactKey(evidence, 'urineAlbuminOverview')
+  const usedEvidence = new Set([diagnosis, eGfr, chronicity, urineAlbumin].filter(Boolean))
+  const stageEvidence = evidence.find((item) => (
+    (
+      item.factKeys.includes('eGFR')
+      && item.factKeys.some((key) => key.toLowerCase().includes('urinealbumin'))
+    )
+    || (
+      /(?:分期|classification|category)/i.test(item.label)
+      && /G(?:[1-5][ab]?|\?)(?:\s*\/\s*A(?:[1-3]|\?))?/i.test(item.value)
+    )
+  ))
+  if (stageEvidence) usedEvidence.add(stageEvidence)
+
+  const rows: CompactPatientEvidenceRow[] = [
+    ...(diagnosis ? [{
+      label: isEnglish ? 'Diagnosis' : '診斷',
+      value: inlineEvidenceValue(diagnosis.value),
+      evidence: diagnosis,
+    }] : []),
+    ...(eGfr ? [{
+      label: isEnglish ? 'Kidney function' : '腎功能',
+      value: inlineEvidenceValue(eGfr.value),
+      evidence: eGfr,
+    }] : []),
+    ...(chronicity ? [{
+      label: isEnglish ? 'Chronicity' : '慢性化',
+      value: compactChronicityValue(chronicity, isEnglish),
+      evidence: chronicity,
+    }] : []),
+    ...(urineAlbumin ? [{
+      label: isEnglish ? 'Albuminuria' : '白蛋白尿',
+      value: inlineEvidenceValue(urineAlbumin.value),
+      evidence: urineAlbumin,
+    }] : []),
+    ...evidence
+      .filter((item) => !usedEvidence.has(item))
+      .map((item) => ({
+        label: item.label,
+        value: inlineEvidenceValue(item.value),
+        evidence: item,
+      })),
+  ]
+  return (
+    <CompactPatientEvidenceSection
+      recommendation={recommendation}
+      rows={rows}
+      sourceEvidence={evidence}
+      headingLabel={isEnglish ? 'Patient evidence' : '本病人依據'}
+      isEnglish={isEnglish}
+      onNavigate={onNavigate}
+    />
+  )
+}
+
+function CkdClassificationActionPlan({
+  recommendation,
+  isEnglish,
+  nextStepLabel,
+}: {
+  recommendation: CdssRecommendation
+  isEnglish: boolean
+  nextStepLabel: string
+}) {
+  const primaryAction = recommendation.nextActions[0] ?? recommendation.recommendation
+  const thresholds = recommendation.nextActions.slice(1)
+
+  return (
+    <section
+      className="overflow-hidden rounded-md border border-border/70 bg-muted/[0.08]"
+      aria-label={isEnglish ? 'Next step' : '建議下一步'}
+      data-testid={`cdss-action-plan-${recommendation.id}`}
+    >
+      <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(6rem,0.2fr)_minmax(0,1fr)]">
+        <h5 className="flex items-center gap-1.5 font-semibold text-primary">
+          <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+          {nextStepLabel}
+        </h5>
+        <p className="min-w-0 font-medium text-foreground">{primaryAction}</p>
+      </div>
+
+      {thresholds.length > 0 ? (
+        <details
+          className="group border-t border-border/60"
+          data-testid={`cdss-classification-thresholds-${recommendation.id}`}
+        >
+          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+            <CircleHelp className="h-3.5 w-3.5 shrink-0" />
+            {isEnglish ? 'View follow-up and alert thresholds' : '查看追蹤與警示門檻'}
+            <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+          </summary>
+          <ul className="space-y-1.5 border-t border-border/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            {thresholds.map((action) => (
+              <li key={action} className="flex gap-2">
+                <span aria-hidden="true">•</span>
+                <span>{action}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  )
 }
 
 function StatusIcon({ status }: { status: CdssStatus }) {
@@ -1011,6 +1183,11 @@ function RecommendationDetail({
       || a.originalIndex - b.originalIndex
     ))
     .map(({ evidence }) => evidence)
+  const compactPatientEvidenceRows: CompactPatientEvidenceRow[] = orderedPatientEvidence.map((evidence) => ({
+    label: evidence.label,
+    value: inlineEvidenceValue(evidence.value),
+    evidence,
+  }))
 
   if (recommendation.dcsi) {
     return (
@@ -1026,6 +1203,12 @@ function RecommendationDetail({
     recommendation,
     isEnglish ? 'en' : 'zh-TW',
   )
+  const visibleSourceAssessments = (recommendation.sourceAssessments ?? []).filter((source) => !(
+    recommendation.domain !== 'medication'
+    && source.sourceKind === 'coverage'
+    && source.status === 'not-applicable'
+  ))
+  const isCompactCkdClassification = recommendation.id === 'ckd-classification'
   const presentationCopy = ckdModulePresentationCopy(recommendation, isEnglish)
   const primaryGuidelineRule = semanticCard.guidelineRules.find(
     (rule) => rule.sourceKind === 'guideline',
@@ -1050,135 +1233,112 @@ function RecommendationDetail({
         aria-label={isEnglish ? 'Automatically generated physician semantic card' : '自動產生的醫師語意卡片'}
         data-testid={`cdss-semantic-card-${recommendation.id}`}
       >
-        <div className="flex flex-wrap items-center gap-1.5">
-          <BookOpenCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <h5 className="text-xs font-semibold text-foreground">
-            {presentationCopy.guidelineHeading}
-          </h5>
-          {primaryGuidelineRule ? (
-            <>
-              <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
-                {primaryGuidelineRule.sourceLabel} · {primaryGuidelineRule.sourceVersion}
-              </Badge>
-              {primaryGuidelineRule.reference.evidenceGrade ? (
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <BookOpenCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <h5 className="text-xs font-semibold text-foreground">
+              {presentationCopy.guidelineHeading}
+            </h5>
+            {primaryGuidelineRule ? (
+              <>
                 <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
-                  {primaryGuidelineRule.reference.evidenceGrade}
+                  {primaryGuidelineRule.sourceLabel} · {primaryGuidelineRule.sourceVersion}
                 </Badge>
-              ) : null}
-            </>
+                {primaryGuidelineRule.reference.evidenceGrade ? (
+                  <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
+                    {primaryGuidelineRule.reference.evidenceGrade}
+                  </Badge>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+          {primaryGuidelineRule ? (
+            <a
+              href={primaryGuidelineRule.reference.url}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary underline underline-offset-2"
+            >
+              {isEnglish ? 'Open guideline source' : '查看指引原文'}
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
           ) : null}
         </div>
         <p className="mt-1.5 text-sm font-medium leading-relaxed text-foreground">
           {primaryGuidelineSummary}
         </p>
-        {primaryGuidelineRule ? (
-          <a
-            href={primaryGuidelineRule.reference.url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary underline underline-offset-2"
-          >
-            {isEnglish ? 'Open guideline source' : '查看指引原文'}
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        ) : null}
 
       </section>
 
-      {orderedPatientEvidence.length > 0 ? (
-        <section aria-labelledby={`patient-evidence-${recommendation.id}`}>
-          <h5
-            id={`patient-evidence-${recommendation.id}`}
-            className="text-xs font-semibold text-foreground"
-          >
-            {label.evidence}
-          </h5>
-          <dl
-            className="mt-1.5 divide-y divide-border/60 overflow-hidden rounded-md border border-border/70 bg-background"
-            data-testid={`cdss-patient-evidence-${recommendation.id}`}
-          >
-            {orderedPatientEvidence.map((evidence) => {
-              return (
-                <div
-                  key={`${recommendation.id}-${evidence.label}`}
-                  className="grid min-w-0 gap-x-3 gap-y-1.5 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)_auto] @min-[32rem]:items-center"
-                >
-                  <dt className="min-w-0 font-medium text-muted-foreground">
-                    {evidence.label}
-                  </dt>
-                  <dd className="min-w-0 font-medium text-foreground">
-                    <EvidenceValue
-                      value={evidence.value}
-                      sources={evidence.sources}
-                      isEnglish={isEnglish}
-                    />
-                  </dd>
-                  {evidence.sources && evidence.sources.length > 0 ? (
-                    <dd className="min-w-0 @min-[32rem]:justify-self-end">
-                      <EvidenceSources
-                        sources={evidence.sources}
-                        isEnglish={isEnglish}
-                        evidenceLabel={evidence.label}
-                        evidenceValue={evidence.value}
-                        onNavigate={onNavigate}
-                        compact
-                      />
-                    </dd>
-                  ) : (
-                    <dd className="hidden @min-[32rem]:block" aria-hidden="true" />
-                  )}
-                </div>
-              )
-            })}
-          </dl>
-        </section>
+      {isCompactCkdClassification ? (
+        <CkdClassificationEvidence
+          recommendation={recommendation}
+          isEnglish={isEnglish}
+          onNavigate={onNavigate}
+        />
+      ) : orderedPatientEvidence.length > 0 ? (
+        <CompactPatientEvidenceSection
+          recommendation={recommendation}
+          rows={compactPatientEvidenceRows}
+          headingLabel={label.evidence}
+          isEnglish={isEnglish}
+          onNavigate={onNavigate}
+        />
       ) : null}
 
-      <section
-        className="overflow-hidden rounded-md border border-border/70 bg-muted/[0.08]"
-        aria-label={isEnglish ? 'Items to confirm and next steps' : '待確認與建議下一步'}
-        data-testid={`cdss-action-plan-${recommendation.id}`}
-      >
-        {recommendation.missingData && recommendation.missingData.length > 0 ? (
-          <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]">
-            <h5 className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              {isEnglish ? 'To confirm' : '尚待確認'}
-            </h5>
-            <ul className="space-y-1 text-foreground">
-              {recommendation.missingData.map((item) => (
-                <li key={item} className="flex gap-1.5">
-                  <span className="text-amber-700 dark:text-amber-300" aria-hidden="true">•</span>
-                  <span className="min-w-0">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <div
-          className={cn(
-            'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]',
-            recommendation.missingData && recommendation.missingData.length > 0
-              ? 'border-t border-border/60'
-              : '',
-          )}
+      {isCompactCkdClassification ? (
+        <CkdClassificationActionPlan
+          recommendation={recommendation}
+          isEnglish={isEnglish}
+          nextStepLabel={label.nextStep}
+        />
+      ) : (
+        <section
+          className="overflow-hidden rounded-md border border-border/70 bg-muted/[0.08]"
+          aria-label={isEnglish ? 'Items to confirm and next steps' : '待確認與建議下一步'}
+          data-testid={`cdss-action-plan-${recommendation.id}`}
         >
-          <h5 className="flex items-center gap-1.5 font-semibold text-primary">
-            <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-            {label.nextStep}
-          </h5>
-          <div className="min-w-0 text-foreground">
-            {recommendation.nextActions.length === 1 ? (
-              <span>{recommendation.nextActions[0]}</span>
-            ) : (
-              <ol className="list-decimal space-y-1 pl-4 marker:font-semibold">
-                {recommendation.nextActions.map((action) => <li key={action}>{action}</li>)}
-              </ol>
+          {recommendation.missingData && recommendation.missingData.length > 0 ? (
+            <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]">
+              <h5 className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {isEnglish ? 'To confirm' : '尚待確認'}
+              </h5>
+              <ul className="space-y-1 text-foreground">
+                {recommendation.missingData.map((item) => (
+                  <li key={item} className="flex gap-1.5">
+                    <span className="text-amber-700 dark:text-amber-300" aria-hidden="true">•</span>
+                    <span className="min-w-0">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div
+            className={cn(
+              'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]',
+              recommendation.missingData && recommendation.missingData.length > 0
+                ? 'border-t border-border/60'
+                : '',
             )}
+          >
+            <h5 className="flex items-center gap-1.5 font-semibold text-primary">
+              <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+              {label.nextStep}
+            </h5>
+            <div className="min-w-0 text-foreground">
+              {recommendation.nextActions.length === 1 ? (
+                <span>{recommendation.nextActions[0]}</span>
+              ) : (
+                <ol className="list-decimal space-y-1 pl-4 marker:font-semibold">
+                  {recommendation.nextActions.map((action) => <li key={action}>{action}</li>)}
+                </ol>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <details
         className="group rounded-md border border-border/70 bg-background"
@@ -1197,14 +1357,14 @@ function RecommendationDetail({
             <p className="mt-1 text-muted-foreground">{semanticCard.clinicalReasoning}</p>
           </section>
 
-          {recommendation.sourceAssessments && recommendation.sourceAssessments.length > 0 ? (
+          {visibleSourceAssessments.length > 0 ? (
             <section aria-label={label.sourceComparison}>
               <h5 className="font-semibold text-foreground">{label.sourceComparison}</h5>
               <div
                 className="mt-1.5 grid overflow-hidden rounded-md border border-border @min-[38rem]:grid-cols-3"
                 data-testid={`cdss-source-comparison-${recommendation.id}`}
               >
-                {recommendation.sourceAssessments.map((item, index) => (
+                {visibleSourceAssessments.map((item, index) => (
                   <div
                     key={`${recommendation.id}-${item.sourceId}`}
                     className={cn(
