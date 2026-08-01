@@ -24,15 +24,15 @@ import {
   medicationClassSources,
 } from './medication-classifier'
 import { assessMedicationClassAllergies } from './allergy-classifier'
-import { deriveDcsiEvidence } from '../risk-stratification/dcsi-codebook'
+import {
+  assessAkiFromCreatinine,
+  deriveDcsiEvidence,
+  type AkiCreatinineReading,
+} from '@voho0000/personalized-care'
 import {
   assessFactFreshness,
   derivePreventiveCareEvidence,
 } from './preventive-care-classifier'
-import {
-  assessAkiFromCreatinine,
-  type AkiCreatinineReading,
-} from '../risk-stratification/aki'
 
 const ICD10_CM_SYSTEM = 'http://hl7.org/fhir/sid/icd-10-cm'
 const LOINC_SYSTEM = 'http://loinc.org'
@@ -68,7 +68,18 @@ const TOTAL_BILIRUBIN_LOINC = new Set(['1975-2', '42719-5'])
 const INR_LOINC = '6301-6'
 const AFP_LOINC = '1834-1'
 const LIVER_STIFFNESS_LOINC = '77791-7'
-const BICARBONATE_LOINC = new Set(['1963-8', '2028-9'])
+/**
+ * CKD acid-base screening accepts directly reported serum/plasma bicarbonate
+ * and chemistry-panel total CO2. Blood-gas pCO2 codes are deliberately not
+ * included because a partial pressure cannot be used as bicarbonate.
+ */
+const BICARBONATE_OR_TOTAL_CO2_LOINC = new Set([
+  '1963-8', // Bicarbonate [Moles/volume] in serum or plasma
+  '2028-9', // Carbon dioxide, total [Moles/volume] in serum or plasma
+  '20565-8', // Carbon dioxide, total [Moles/volume] in blood
+  '77143-6', // Carbon dioxide, total [Moles/volume] in serum, plasma or blood
+  '57922-7', // Carbon dioxide, total [Moles/volume] in serum or plasma, calculated
+])
 const CALCIUM_LOINC = new Set(['17861-6', '2000-8'])
 const PHOSPHATE_LOINC = new Set(['2777-1'])
 const PARATHYROID_HORMONE_LOINC = new Set(['2731-8'])
@@ -1580,7 +1591,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
 
   const bicarbonate = findLatestValidatedObservationFromCodes(
     input.observations,
-    BICARBONATE_LOINC,
+    BICARBONATE_OR_TOTAL_CO2_LOINC,
     new Set(['mmol/l', 'meq/l']),
   )
   const bicarbonateFact = bicarbonate ? observationFact(bicarbonate, 'mmol/L') : undefined

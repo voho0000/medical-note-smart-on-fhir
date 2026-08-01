@@ -33,6 +33,7 @@ import type {
   CdssFactSource,
   CdssAutomatedCheck,
   CdssLocale,
+  CdssModuleGroupId,
   CdssRecommendation,
   CdssResult,
   CdssSourceAssessmentStatus,
@@ -68,6 +69,55 @@ const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
 
 const SUMMARY_FOCUS_LIMIT = 3
 const SUMMARY_MISSING_LIMIT = 4
+
+const MODULE_GROUPS: readonly {
+  id: CdssModuleGroupId
+  zh: string
+  en: string
+  toneClass: string
+  dividerClass: string
+}[] = [
+  {
+    id: 'assessment',
+    zh: '評估與分層',
+    en: 'Assessment & stratification',
+    toneClass: 'text-blue-700 dark:text-blue-300',
+    dividerClass: 'bg-blue-200/90 dark:bg-blue-800/70',
+  },
+  {
+    id: 'treatment',
+    zh: '治療決策',
+    en: 'Treatment decisions',
+    toneClass: 'text-violet-700 dark:text-violet-300',
+    dividerClass: 'bg-violet-200/90 dark:bg-violet-800/70',
+  },
+  {
+    id: 'monitoring',
+    zh: '監測與安全',
+    en: 'Monitoring & safety',
+    toneClass: 'text-teal-700 dark:text-teal-300',
+    dividerClass: 'bg-teal-200/90 dark:bg-teal-800/70',
+  },
+  {
+    id: 'care',
+    zh: '照護安排',
+    en: 'Care planning',
+    toneClass: 'text-orange-700 dark:text-orange-300',
+    dividerClass: 'bg-orange-200/90 dark:bg-orange-800/70',
+  },
+]
+
+type ModuleDisplayRow =
+  | {
+    kind: 'group'
+    group: (typeof MODULE_GROUPS)[number]
+    count: number
+    isCollapsed: boolean
+  }
+  | {
+    kind: 'recommendation'
+    recommendation: CdssRecommendation
+  }
 
 const missingAssessmentCue = /(缺少|仍缺|待補|補做|未取得|無法使用|missing|unusable|not available)/i
 const missingConcepts = [
@@ -129,6 +179,61 @@ function isAssessmentPreviewRedundant(title: string, evidenceValue?: string): bo
     if (evidenceBigrams.has(bigram)) sharedCount += 1
   })
   return sharedCount / smallerSize >= 0.7
+}
+
+type CkdModulePresentationKind = 'classification' | 'medication' | 'monitoring' | 'recommendation'
+
+const CKD_MODULE_PRESENTATION_KIND: Readonly<Record<string, CkdModulePresentationKind>> = {
+  'ckd-classification': 'classification',
+  'ckd-kidney-failure-risk': 'classification',
+  'ckd-rasi-strategy': 'medication',
+  'ckd-sglt2-strategy': 'medication',
+  'ckd-finerenone-strategy': 'medication',
+  'ckd-cardiovascular-risk': 'medication',
+  'ckd-medication-safety': 'monitoring',
+  'ckd-monitoring': 'monitoring',
+  'ckd-blood-pressure-volume': 'monitoring',
+  'ckd-anemia-monitoring': 'monitoring',
+  'ckd-potassium-acidosis': 'monitoring',
+  'ckd-mbd-monitoring': 'monitoring',
+  'ckd-nutrition': 'recommendation',
+  'immunization-review': 'recommendation',
+  'ckd-referral-care': 'recommendation',
+}
+
+function ckdModulePresentationCopy(
+  recommendation: CdssRecommendation,
+  isEnglish: boolean,
+): { guidelineHeading: string } {
+  const kind = CKD_MODULE_PRESENTATION_KIND[recommendation.id]
+    ?? (
+      recommendation.domain === 'diagnosis'
+        ? 'classification'
+        : recommendation.domain === 'medication' || recommendation.domain === 'safety'
+          ? 'medication'
+          : recommendation.domain === 'monitoring' || recommendation.domain === 'complication'
+            ? 'monitoring'
+            : 'recommendation'
+    )
+
+  switch (kind) {
+    case 'classification':
+      return {
+        guidelineHeading: isEnglish ? 'Classification / risk basis' : '分級／風險依據',
+      }
+    case 'medication':
+      return {
+        guidelineHeading: isEnglish ? 'Guideline treatment criteria' : '指引用藥條件',
+      }
+    case 'monitoring':
+      return {
+        guidelineHeading: isEnglish ? 'Monitoring basis / threshold' : '監測依據／門檻',
+      }
+    case 'recommendation':
+      return {
+        guidelineHeading: isEnglish ? 'Guideline recommendation' : '指引建議',
+      }
+  }
 }
 
 function restoreCompletedModules(result: CdssResult): {
@@ -921,6 +1026,12 @@ function RecommendationDetail({
     recommendation,
     isEnglish ? 'en' : 'zh-TW',
   )
+  const presentationCopy = ckdModulePresentationCopy(recommendation, isEnglish)
+  const primaryGuidelineRule = semanticCard.guidelineRules.find(
+    (rule) => rule.sourceKind === 'guideline',
+  ) ?? semanticCard.guidelineRules[0]
+  const primaryGuidelineSummary = primaryGuidelineRule?.reference.summary
+    ?? semanticCard.clinicalReasoning
 
   const sourceStatusLabel: Record<CdssSourceAssessmentStatus, string> = {
     recommended: isEnglish ? 'Recommended' : '建議',
@@ -940,19 +1051,38 @@ function RecommendationDetail({
         data-testid={`cdss-semantic-card-${recommendation.id}`}
       >
         <div className="flex flex-wrap items-center gap-1.5">
+          <BookOpenCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
           <h5 className="text-xs font-semibold text-foreground">
-            {isEnglish ? 'Assessment' : '判斷'}
+            {presentationCopy.guidelineHeading}
           </h5>
-          <Badge className={cn('h-5 px-1.5 text-[11px]', statusStyle[semanticCard.applicabilityStatus])}>
-            {semanticCard.applicabilityLabel}
-          </Badge>
+          {primaryGuidelineRule ? (
+            <>
+              <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
+                {primaryGuidelineRule.sourceLabel} · {primaryGuidelineRule.sourceVersion}
+              </Badge>
+              {primaryGuidelineRule.reference.evidenceGrade ? (
+                <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
+                  {primaryGuidelineRule.reference.evidenceGrade}
+                </Badge>
+              ) : null}
+            </>
+          ) : null}
         </div>
-        <p className="mt-1.5 text-xs font-semibold leading-relaxed text-muted-foreground">
-          {recommendation.title}
-        </p>
         <p className="mt-1.5 text-sm font-medium leading-relaxed text-foreground">
-          {semanticCard.patientConclusion}
+          {primaryGuidelineSummary}
         </p>
+        {primaryGuidelineRule ? (
+          <a
+            href={primaryGuidelineRule.reference.url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary underline underline-offset-2"
+          >
+            {isEnglish ? 'Open guideline source' : '查看指引原文'}
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        ) : null}
+
       </section>
 
       {orderedPatientEvidence.length > 0 ? (
@@ -1171,7 +1301,7 @@ export function ClinicalDecisionSupportView({
     actionable: isEnglish ? 'Actionable now' : '可立即處理',
     'needs-data': isEnglish ? 'Data needed' : '需先補資料',
     review: isEnglish ? 'Clinical review' : '需臨床確認',
-    'no-action': isEnglish ? 'Checked' : '已自動核對',
+    'no-action': isEnglish ? 'No action needed' : '目前無需處理',
     decision: isEnglish ? 'Module / current assessment' : '模組／本次判斷',
     statusAndEvidence: isEnglish ? 'Key evidence' : '關鍵依據',
     nextStep: isEnglish ? 'Next step' : '下一步',
@@ -1182,15 +1312,18 @@ export function ClinicalDecisionSupportView({
     guidelines: isEnglish ? 'Guideline summary and location' : '指引摘要與章節定位',
     safety: isEnglish ? 'Decision boundary' : '決策邊界',
     sourceComparison: isEnglish ? 'Source comparison' : '來源比較',
-    supporting: isEnglish ? 'Rationale, reminders, and sources' : '提醒與依據',
+    supporting: isEnglish ? 'Other sources and safety notes' : '其他來源與安全提醒',
     notEvaluated: isEnglish ? 'Not evaluated in this POC' : '本次未評估',
     limitations: isEnglish ? 'Scope and limitations' : '使用限制',
     showDetails: isEnglish ? 'Show decision details' : '展開決策詳情',
     hideDetails: isEnglish ? 'Hide decision details' : '收合決策詳情',
-    automatedChecks: isEnglish ? 'Automatically checked' : '已自動核對',
+    automatedChecks: isEnglish ? 'No action needed' : '目前無需處理',
   } as const
 
   const [requestedExpandedId, setRequestedExpandedId] = useState<string | null>(null)
+  const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<CdssModuleGroupId>>(
+    () => new Set(),
+  )
   const pointerGestureRef = useRef<{
     recommendationId: string
     startX: number
@@ -1216,6 +1349,34 @@ export function ClinicalDecisionSupportView({
   const restoredModules = restoreCompletedModules(result)
   const displayRecommendations = restoredModules.recommendations
   const standaloneAutomatedChecks = restoredModules.standaloneChecks
+  const hasCompleteModuleGrouping = displayRecommendations.length > 0
+    && displayRecommendations.every((item) => item.moduleGroup !== undefined)
+  const moduleDisplayRows: ModuleDisplayRow[] = hasCompleteModuleGrouping
+    ? MODULE_GROUPS.flatMap((group): ModuleDisplayRow[] => {
+      const groupRecommendations = displayRecommendations.filter(
+        (item) => item.moduleGroup === group.id,
+      )
+      if (groupRecommendations.length === 0) return []
+      const isCollapsed = collapsedModuleGroups.has(group.id)
+      return [
+        {
+          kind: 'group',
+          group,
+          count: groupRecommendations.length,
+          isCollapsed,
+        },
+        ...(isCollapsed
+          ? []
+          : groupRecommendations.map((recommendation): ModuleDisplayRow => ({
+            kind: 'recommendation',
+            recommendation,
+          }))),
+      ]
+    })
+    : displayRecommendations.map((recommendation): ModuleDisplayRow => ({
+      kind: 'recommendation',
+      recommendation,
+    }))
   const expandedId = requestedExpandedId === null
     ? null
     : displayRecommendations.some((item) => item.id === requestedExpandedId)
@@ -1246,8 +1407,8 @@ export function ClinicalDecisionSupportView({
           {clinicalSummary.automatedCheckCount > 0 ? (
             <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
               {isEnglish
-                ? `${clinicalSummary.automatedCheckCount} checks complete`
-                : `${clinicalSummary.automatedCheckCount} 項已核對`}
+                ? `${clinicalSummary.automatedCheckCount} need no action`
+                : `${clinicalSummary.automatedCheckCount} 項無需處理`}
             </Badge>
           ) : null}
         </div>
@@ -1395,7 +1556,58 @@ export function ClinicalDecisionSupportView({
           <span />
         </div>
 
-        {displayRecommendations.map((recommendation) => {
+        {moduleDisplayRows.map((row) => {
+          if (row.kind === 'group') {
+            const groupLabel = isEnglish ? row.group.en : row.group.zh
+            return (
+              <button
+                key={`module-group-${row.group.id}`}
+                type="button"
+                className="flex h-6 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                aria-expanded={!row.isCollapsed}
+                data-testid={`cdss-module-group-trigger-${row.group.id}`}
+                onClick={() => {
+                  setCollapsedModuleGroups((current) => {
+                    const next = new Set(current)
+                    if (next.has(row.group.id)) next.delete(row.group.id)
+                    else next.add(row.group.id)
+                    return next
+                  })
+                }}
+              >
+                <span
+                  className={cn('flex shrink-0 items-center gap-1.5', row.group.toneClass)}
+                  data-testid={`cdss-module-group-tone-${row.group.id}`}
+                >
+                  <span className="text-[11px] font-semibold leading-none">
+                    {groupLabel}
+                  </span>
+                  <span
+                    className="text-[10px] leading-none opacity-75"
+                    aria-label={isEnglish
+                      ? `${row.count} modules`
+                      : `${row.count} 個模組`}
+                  >
+                    · {row.count}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'h-3 w-3 opacity-75 transition-transform',
+                      !row.isCollapsed && 'rotate-180',
+                    )}
+                    aria-hidden="true"
+                  />
+                </span>
+                <span
+                  className={cn('h-px min-w-4 flex-1', row.group.dividerClass)}
+                  aria-hidden="true"
+                  data-testid={`cdss-module-group-divider-${row.group.id}`}
+                />
+              </button>
+            )
+          }
+
+          const recommendation = row.recommendation
           const isExpanded = expandedId === recommendation.id
           const isRiskStratification = recommendation.kind === 'risk-stratification'
           const moduleName = clinicalModuleLabel(
@@ -1410,7 +1622,9 @@ export function ClinicalDecisionSupportView({
               ? evidence.factKeys.includes(recommendation.overviewEvidenceFactKey)
               : false
           ))
-          const overviewMissing = recommendation.missingData?.[0]
+          const overviewMissing = recommendation.hideMissingDataPreview
+            ? undefined
+            : recommendation.missingData?.[0]
           const overviewMissingForPreview = overviewMissing
             && !isMissingPreviewRedundant(recommendation.title, overviewMissing)
             ? overviewMissing
@@ -1490,21 +1704,12 @@ export function ClinicalDecisionSupportView({
                     >
                       {moduleName}
                     </span>
-                    <Badge
-                      className={cn(
-                        'h-6 shrink-0 px-2 text-xs',
-                        isRiskStratification
-                          ? 'bg-violet-100 text-violet-900 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-200'
-                          : statusStyle[recommendation.status],
-                      )}
-                    >
-                      {isRiskStratification
-                        ? <Gauge className="mr-1 h-3.5 w-3.5" />
-                        : <StatusIcon status={recommendation.status} />}
-                      {isRiskStratification
-                        ? (isEnglish ? 'Risk stratification' : '風險分層')
-                        : label[recommendation.status]}
-                    </Badge>
+                    {isRiskStratification ? (
+                      <Badge className="h-5 shrink-0 bg-violet-100 px-1.5 text-[11px] text-violet-900 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-200">
+                        <Gauge className="mr-1 h-3.5 w-3.5" />
+                        {isEnglish ? 'Risk stratification' : '風險分層'}
+                      </Badge>
+                    ) : null}
                   </span>
                   {assessmentPreview ? (
                     <span
@@ -1548,6 +1753,17 @@ export function ClinicalDecisionSupportView({
                     className="line-clamp-2 break-words text-xs leading-relaxed text-foreground"
                     title={recommendation.nextActions[0]}
                   >
+                    {!isRiskStratification ? (
+                      <Badge
+                        className={cn(
+                          'mr-1 inline-flex h-5 px-1.5 align-middle text-[11px]',
+                          statusStyle[recommendation.status],
+                        )}
+                      >
+                        <StatusIcon status={recommendation.status} />
+                        {label[recommendation.status]}
+                      </Badge>
+                    ) : null}
                     {recommendation.nextActions[0]}
                   </span>
                 </span>

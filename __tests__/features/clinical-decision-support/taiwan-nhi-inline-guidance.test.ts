@@ -1,4 +1,4 @@
-import { TAIWAN_NHI_DIABETES_PACK } from '@/features/clinical-decision-support/knowledge-packs/taiwan-nhi-diabetes'
+import { TAIWAN_NHI_DIABETES_PACK } from '@voho0000/personalized-care'
 import type {
   CdssPatientProfile,
   CdssRecommendation,

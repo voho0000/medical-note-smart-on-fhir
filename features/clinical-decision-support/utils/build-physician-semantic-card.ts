@@ -43,7 +43,7 @@ function applicabilityLabel(locale: CdssLocale, status: CdssStatus): string {
     case 'review':
       return text(locale, '需臨床確認', 'Clinical review')
     case 'no-action':
-      return text(locale, '已自動核對', 'Checked')
+      return text(locale, '目前無需處理', 'No action needed')
   }
 }
 

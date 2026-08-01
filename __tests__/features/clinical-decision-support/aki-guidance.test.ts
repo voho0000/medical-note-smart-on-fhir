@@ -1,5 +1,5 @@
 import { createFhirCdssPatientProfile } from '@/features/clinical-decision-support/adapters/fhir-cdss-profile'
-import { AKI_GUIDELINE_PACK } from '@/features/clinical-decision-support/guideline-packs/aki-pack'
+import { AKI_GUIDELINE_PACK } from '@voho0000/personalized-care'
 import type { ObservationEntity } from '@/src/core/entities/clinical-data.entity'
 
 const LOINC_SYSTEM = 'http://loinc.org'

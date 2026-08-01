@@ -63,3 +63,6 @@ next-env.d.ts
 /.loop/
 /scripts/loop/goal.md
 scripts/experiments/*/results/
+*.tgz
+private-packages/
+packages/*/dist/

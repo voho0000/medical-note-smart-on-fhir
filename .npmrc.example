@@ -1,0 +1,2 @@
+@voho0000:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}

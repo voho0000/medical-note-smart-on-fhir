@@ -1,10 +1,39 @@
-import { DM_EDUCATION_PACK } from './dm'
+import {
+  createPackRegistry,
+  PersonalizationSdkError,
+  type PackRegistrationOptions,
+} from '@voho0000/personalization-sdk'
+import { BUNDLED_EDUCATION_PACKS } from './bundled'
 import type { DiseaseEducationPack } from '../types'
 
-const DISEASE_PACKS: DiseaseEducationPack[] = [
-  DM_EDUCATION_PACK,
-]
+const educationRegistry = createPackRegistry<DiseaseEducationPack>({
+  packKind: 'education',
+  validate(pack) {
+    if (
+      !pack.disease.trim()
+      || typeof pack.isEligible !== 'function'
+      || typeof pack.buildPlan !== 'function'
+    ) {
+      throw new PersonalizationSdkError(
+        'INVALID_PACK',
+        `Education pack "${pack.id}" does not satisfy the DiseaseEducationPack contract`,
+        { packId: pack.id },
+      )
+    }
+  },
+})
 
-export function getEnabledDiseasePacks(): DiseaseEducationPack[] {
-  return [...DISEASE_PACKS]
+export function registerEducationPacks(
+  packs: readonly DiseaseEducationPack[],
+  options: PackRegistrationOptions,
+): void {
+  educationRegistry.register(packs, options)
 }
+
+export function getEnabledDiseasePacks(): readonly DiseaseEducationPack[] {
+  return educationRegistry.getAll()
+}
+
+registerEducationPacks(BUNDLED_EDUCATION_PACKS, {
+  source: 'medical-note-smart-on-fhir/bundled-education-packs',
+})

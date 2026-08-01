@@ -2,7 +2,7 @@ import {
   DCSI_CODEBOOK_VERSION,
   DCSI_GLASHEEN_2017_SUPPLEMENT_URL,
   DCSI_ICD10_RULES,
-} from '@/features/clinical-decision-support/risk-stratification/dcsi-codebook'
+} from '@voho0000/personalized-care'
 import type {
   DcsiDomainId,
 } from '@/features/clinical-decision-support/types'

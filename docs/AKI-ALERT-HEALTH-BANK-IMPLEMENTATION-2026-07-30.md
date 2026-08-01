@@ -186,9 +186,9 @@ POC 使用 2012 KDIGO 已正式發布的 serum-creatinine 規則：
 
 ## 檔案位置
 
-- AKI 演算法：`features/clinical-decision-support/risk-stratification/aki.ts`
+- AKI 演算法：private package `@voho0000/personalized-care`
 - FHIR／健康存摺轉接：`features/clinical-decision-support/adapters/fhir-cdss-profile.ts`
-- AKI 警示與閉環內容：`features/clinical-decision-support/guideline-packs/aki-pack.ts`
+- AKI 警示與閉環內容：private package `@voho0000/personalized-care`
 - 會診交接 UI：`features/clinical-decision-support/renderers/ClinicalHandoffCard.tsx`
 - 邊界測試：`__tests__/features/clinical-decision-support/aki-risk.test.ts`
 - 整合測試：`__tests__/features/clinical-decision-support/aki-guidance.test.ts`

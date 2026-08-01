@@ -1,8 +1,8 @@
 import {
   attachKnowledgeAssessments,
   getEnabledKnowledgePacks,
-} from '@/features/clinical-decision-support/knowledge-packs/registry'
-import { getEnabledClinicalModules } from '@/features/clinical-decision-support/clinical-modules/registry'
+} from '@voho0000/personalized-care'
+import { getEnabledClinicalModules } from '@voho0000/personalized-care'
 import { getDefaultClinicalGuidelinePack } from '@/features/clinical-decision-support/guideline-packs/registry'
 import type {
   CdssPatientProfile,
@@ -710,8 +710,11 @@ describe('CDSS knowledge-pack registry', () => {
     )
 
     expect(sglt2?.recommendation).toContain('不因 HbA1c 偏低而單獨停藥')
-    expect(sglt2?.nextActions.join(' ')).toContain('至少停 3 天')
-    expect(sglt2?.nextActions.join(' ')).toContain('不要把顯影劑檢查一律設為停藥條件')
+    expect(sglt2?.nextActions).toEqual([
+      '完成處方與實際用藥核對，包含服用方式、依從性與不良反應。',
+    ])
+    expect(sglt2?.safetyBoundary).toContain('至少停 3 天')
+    expect(sglt2?.safetyBoundary).toContain('不要把顯影劑檢查一律設為停藥條件')
     expect(sglt2?.guidelineReferences.find(
       (item) => item.id === 'FDA-FARXIGA-2024-2.4',
     )).toMatchObject({

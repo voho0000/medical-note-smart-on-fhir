@@ -1,6 +1,6 @@
 import { createFhirCdssPatientProfile } from '@/features/clinical-decision-support/adapters/fhir-cdss-profile'
-import { ATRIAL_FIBRILLATION_GUIDELINE_PACK } from '@/features/clinical-decision-support/guideline-packs/atrial-fibrillation-pack'
-import { calculateDocumentedCha2ds2Vasc } from '@/features/clinical-decision-support/risk-stratification/atrial-fibrillation'
+import { ATRIAL_FIBRILLATION_GUIDELINE_PACK } from '@voho0000/personalized-care'
+import { calculateDocumentedCha2ds2Vasc } from '@voho0000/personalized-care'
 import type {
   ConditionEntity,
   MedicationEntity,

@@ -1,5 +1,5 @@
 import { createFhirCdssPatientProfile } from '@/features/clinical-decision-support/adapters/fhir-cdss-profile'
-import { CKD_GUIDELINE_PACK } from '@/features/clinical-decision-support/guideline-packs/ckd-pack'
+import { CKD_GUIDELINE_PACK } from '@voho0000/personalized-care'
 import {
   getClinicalGuidelinePack,
   getEnabledClinicalGuidelinePacks,
@@ -76,12 +76,16 @@ function semiquantitativeUacr(value = '1+ (80)'): ObservationEntity {
   }
 }
 
-function quantitativeUacr(value: number): ObservationEntity {
+function quantitativeUacr(
+  value: number,
+  date = '2026-05-01',
+  id = 'quantitative-uacr',
+): ObservationEntity {
   return {
-    id: 'quantitative-uacr',
+    id,
     resourceType: 'Observation',
     status: 'final',
-    effectiveDateTime: '2026-05-01',
+    effectiveDateTime: date,
     code: {
       text: 'Urine albumin/creatinine ratio',
       coding: [{ system: LOINC_SYSTEM, code: '14959-1' }],
@@ -92,6 +96,19 @@ function quantitativeUacr(value: number): ObservationEntity {
       system: UCUM_SYSTEM,
       code: 'mg/g',
     },
+  }
+}
+
+function currentMedication(
+  id: string,
+  name: string,
+): MedicationEntity {
+  return {
+    id,
+    _sourceResourceType: 'MedicationStatement',
+    status: 'active',
+    authoredOn: '2026-07-01',
+    medicationCodeableConcept: { text: name },
   }
 }
 
@@ -381,8 +398,40 @@ describe('personalized CKD guidance', () => {
       'immunization-review',
       'ckd-referral-care',
     ]))
+    const allModules = [
+      ...result.recommendations,
+      ...(result.automatedChecks ?? []).flatMap((check) => (
+        check.recommendation ? [check.recommendation] : []
+      )),
+    ]
+    expect(Object.fromEntries(allModules.map((item) => [item.id, item.moduleGroup]))).toEqual({
+      'ckd-classification': 'assessment',
+      'ckd-kidney-failure-risk': 'assessment',
+      'ckd-rasi-strategy': 'treatment',
+      'ckd-sglt2-strategy': 'treatment',
+      'ckd-finerenone-strategy': 'treatment',
+      'ckd-cardiovascular-risk': 'treatment',
+      'ckd-monitoring': 'monitoring',
+      'ckd-blood-pressure-volume': 'monitoring',
+      'ckd-medication-safety': 'monitoring',
+      'ckd-anemia-monitoring': 'monitoring',
+      'ckd-potassium-acidosis': 'monitoring',
+      'ckd-mbd-monitoring': 'monitoring',
+      'ckd-nutrition': 'care',
+      'immunization-review': 'care',
+      'ckd-referral-care': 'care',
+    })
     expect(result.recommendations.length).toBeGreaterThan(6)
     expect(result.automatedChecks?.map((item) => item.id)).toContain('ckd-monitoring')
+    const sglt2 = result.recommendations.find((item) => item.id === 'ckd-sglt2-strategy')
+    expect(sglt2?.nextActions.join(' ')).not.toContain('重大手術')
+    expect(sglt2?.nextActions).toEqual(['建議評估使用 SGLT2 抑制劑。'])
+    expect(sglt2).toMatchObject({
+      status: 'actionable',
+      hideMissingDataPreview: true,
+    })
+    expect(sglt2?.safetyBoundary).toContain('特定情境提醒')
+    expect(sglt2?.safetyBoundary).toContain('至少停 3 天')
     expect(result.recommendations.find(
       (item) => item.id === 'ckd-mbd-monitoring',
     )?.guidelineReferences[0]).toMatchObject({
@@ -402,6 +451,113 @@ describe('personalized CKD guidance', () => {
     )?.guidelineRules[0].reference).toMatchObject({
       recommendationId: '關鍵聲明 5、12、15–16',
       page: 3,
+    })
+  })
+
+  it('shows only eligibility, medication state, and the immediate action in medication rows', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-05-01', 34),
+        quantitativeUacr(80),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const medicationDecisions = Object.fromEntries(result.recommendations
+      .filter((item) => [
+        'ckd-rasi-strategy',
+        'ckd-sglt2-strategy',
+        'ckd-cardiovascular-risk',
+      ].includes(item.id))
+      .map((item) => [item.id, item]))
+
+    expect(medicationDecisions['ckd-rasi-strategy']).toMatchObject({
+      status: 'actionable',
+      title: 'A2 白蛋白尿符合 ACEI／ARB 條件',
+      nextActions: ['建議評估使用 ACEI 或 ARB。'],
+      hideMissingDataPreview: true,
+    })
+    expect(medicationDecisions['ckd-sglt2-strategy']).toMatchObject({
+      status: 'actionable',
+      title: 'eGFR 34 符合 SGLT2 抑制劑評估條件',
+      nextActions: ['建議評估使用 SGLT2 抑制劑。'],
+      hideMissingDataPreview: true,
+    })
+    expect(medicationDecisions['ckd-cardiovascular-risk']).toMatchObject({
+      status: 'actionable',
+      title: '糖尿病 CKD 符合 statin 條件',
+      nextActions: ['建議評估使用 statin。'],
+      hideMissingDataPreview: true,
+    })
+    expect(medicationDecisions['ckd-rasi-strategy'].nextActions.join(' ')).not.toContain('2–4 週')
+    expect(medicationDecisions['ckd-rasi-strategy'].safetyBoundary).toContain('2–4 週')
+  })
+
+  it('recommends finerenone only after its prerequisites are present', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-05-01', 34),
+        quantitativeUacr(80, '2026-05-01', 'uacr-latest'),
+        quantitativeUacr(70, '2026-01-01', 'uacr-old'),
+        lab('potassium', '2823-3', 4.5, 'mmol/L'),
+      ],
+      medications: [currentMedication('valsartan', 'Valsartan 160 mg')],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const finerenone = result.recommendations.find(
+      (item) => item.id === 'ckd-finerenone-strategy',
+    )
+
+    expect(finerenone).toMatchObject({
+      status: 'actionable',
+      title: 'T2D、持續 UACR >30、eGFR >25 且已用 RASi，符合 finerenone 條件',
+      nextActions: ['建議評估使用 finerenone。'],
+      hideMissingDataPreview: true,
+    })
+    expect(finerenone?.nextActions.join(' ')).not.toContain('4 週')
+    expect(finerenone?.safetyBoundary).toContain('4 週')
+  })
+
+  it('returns medication modules to green when current use is confirmed', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-05-01', 34),
+        quantitativeUacr(80, '2026-05-01', 'uacr-latest'),
+        quantitativeUacr(70, '2026-01-01', 'uacr-old'),
+        lab('potassium', '2823-3', 4.5, 'mmol/L'),
+      ],
+      medications: [
+        currentMedication('valsartan', 'Valsartan 160 mg'),
+        currentMedication('dapagliflozin', 'Dapagliflozin 10 mg'),
+        currentMedication('finerenone', 'Finerenone 10 mg'),
+        currentMedication('atorvastatin', 'Atorvastatin 20 mg'),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const automatedById = Object.fromEntries((result.automatedChecks ?? []).map(
+      (item) => [item.id, item.recommendation],
+    ))
+
+    expect(automatedById['ckd-rasi-strategy']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['持續 ACEI／ARB。'],
+    })
+    expect(automatedById['ckd-sglt2-strategy']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['持續 SGLT2 抑制劑。'],
+    })
+    expect(automatedById['ckd-finerenone-strategy']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['持續 finerenone。'],
+    })
+    expect(automatedById['ckd-cardiovascular-risk']).toMatchObject({
+      status: 'no-action',
+      nextActions: ['持續 statin。'],
     })
   })
 
@@ -474,11 +630,9 @@ describe('personalized CKD guidance', () => {
       overviewEvidenceFactKey: 'eGFR',
     })
     expect(nutrition?.recommendation).toContain('年齡本身不等於衰弱')
-    expect(nutrition?.missingData).toEqual(expect.arrayContaining([
-      '近期體重變化（需連續量測或訪談確認）',
-      '食慾、實際蛋白質／熱量／鈉攝取與飲食型態（需訪談）',
-      '肌少症、衰弱與營養風險的正式評估',
-    ]))
+    expect(nutrition?.missingData).toEqual([
+      '飲食攝取、近期體重變化與肌少症／衰弱風險（需問診或正式評估）',
+    ])
     expect(nutrition?.safetyBoundary).toContain(
       '血清白蛋白、年齡或單次體重都不能單獨診斷營養不良、肌少症或衰弱',
     )
@@ -571,6 +725,55 @@ describe('personalized CKD guidance', () => {
       status: 'review',
       title: 'Bicarbonate 17.9 mmol/L：評估具臨床重要性的代謝性酸中毒',
     })
+  })
+
+  it.each(['2028-9', '20565-8', '77143-6', '57922-7'])(
+    'accepts total CO2 %s as the acid-base input and labels it by the reported analyte',
+    (loinc) => {
+      const profile = buildProfile({
+        patient: { ...patient, gender: 'male' },
+        encounters: [encounterWithDiagnoses('N18.32')],
+        observations: [
+          egfr('egfr-latest', '2026-05-01', 34),
+          quantitativeUacr(36.44),
+          lab('potassium', '2823-3', 4.5, 'mmol/L'),
+          lab('total-co2', loinc, 17.9, 'mmol/L'),
+        ],
+      })
+      const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+      const complication = result.recommendations.find(
+        (item) => item.id === 'ckd-potassium-acidosis',
+      )
+
+      expect(complication).toMatchObject({
+        status: 'review',
+        title: '總 CO₂ 17.9 mmol/L：評估具臨床重要性的代謝性酸中毒',
+      })
+      expect(complication?.patientEvidence).toEqual(expect.arrayContaining([
+        expect.objectContaining({ label: '總 CO₂' }),
+      ]))
+      expect(complication?.safetyBoundary).toContain('pCO₂（mmHg）不可代入')
+    },
+  )
+
+  it('does not substitute blood-gas pCO2 for bicarbonate or total CO2', () => {
+    const profile = buildProfile({
+      patient: { ...patient, gender: 'male' },
+      encounters: [encounterWithDiagnoses('N18.32')],
+      observations: [
+        egfr('egfr-latest', '2026-05-01', 34),
+        quantitativeUacr(36.44),
+        lab('potassium', '2823-3', 4.5, 'mmol/L'),
+        lab('pco2', '2019-8', 17.9, 'mmHg'),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const complication = result.recommendations.find(
+      (item) => item.id === 'ckd-potassium-acidosis',
+    )
+
+    expect(complication).toMatchObject({ status: 'needs-data' })
+    expect(complication?.missingData).toContain('碳酸氫鹽／總二氧化碳')
   })
 
   it('calls the shared KFRE engine when governed demographics, eGFR, and quantitative UACR are complete', () => {

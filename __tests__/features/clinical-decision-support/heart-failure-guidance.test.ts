@@ -1,5 +1,5 @@
 import { createFhirCdssPatientProfile } from '@/features/clinical-decision-support/adapters/fhir-cdss-profile'
-import { HEART_FAILURE_GUIDELINE_PACK } from '@/features/clinical-decision-support/guideline-packs/heart-failure-pack'
+import { HEART_FAILURE_GUIDELINE_PACK } from '@voho0000/personalized-care'
 import {
   getClinicalGuidelinePack,
   getEnabledClinicalGuidelinePacks,

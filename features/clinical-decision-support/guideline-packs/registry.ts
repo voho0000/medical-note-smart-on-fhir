@@ -1,34 +1,63 @@
-import { DM_CKD_GUIDELINE_PACK } from './dm-ckd-pack'
-import { CKD_GUIDELINE_PACK } from './ckd-pack'
-import { HYPERTENSION_GUIDELINE_PACK } from './hypertension-pack'
-import { HYPERLIPIDEMIA_GUIDELINE_PACK } from './hyperlipidemia-pack'
-import { AKI_GUIDELINE_PACK } from './aki-pack'
-import { HEART_FAILURE_GUIDELINE_PACK } from './heart-failure-pack'
-import { CIRRHOSIS_GUIDELINE_PACK } from './cirrhosis-pack'
-import { RENAL_SAFETY_GUIDELINE_PACK } from './renal-safety-pack'
-import { ATRIAL_FIBRILLATION_GUIDELINE_PACK } from './atrial-fibrillation-pack'
-import { CKD_ANEMIA_GUIDELINE_PACK } from './ckd-anemia-pack'
+import {
+  createPackRegistry,
+  PersonalizationSdkError,
+  type PackRegistrationOptions,
+} from '@voho0000/personalization-sdk'
+import { BUNDLED_CARE_PACKS, DEFAULT_CARE_PACK_ID } from './bundled'
 import type { CdssPatientProfile, ClinicalGuidelinePack } from '../types'
 
-const guidelinePacks: readonly ClinicalGuidelinePack[] = [
-  DM_CKD_GUIDELINE_PACK,
-  CKD_GUIDELINE_PACK,
-  HYPERTENSION_GUIDELINE_PACK,
-  HYPERLIPIDEMIA_GUIDELINE_PACK,
-  HEART_FAILURE_GUIDELINE_PACK,
-  CIRRHOSIS_GUIDELINE_PACK,
-  AKI_GUIDELINE_PACK,
-  RENAL_SAFETY_GUIDELINE_PACK,
-  ATRIAL_FIBRILLATION_GUIDELINE_PACK,
-  CKD_ANEMIA_GUIDELINE_PACK,
-]
+const careRegistry = createPackRegistry<ClinicalGuidelinePack>({
+  packKind: 'care',
+  validate(pack) {
+    if (
+      !pack.diseaseCode.trim()
+      || typeof pack.enabled !== 'boolean'
+      || !pack.label?.zh?.trim()
+      || !pack.label?.en?.trim()
+      || typeof pack.applies !== 'function'
+      || typeof pack.build !== 'function'
+    ) {
+      throw new PersonalizationSdkError(
+        'INVALID_PACK',
+        `Care pack "${pack.id}" does not satisfy the ClinicalGuidelinePack contract`,
+        { packId: pack.id },
+      )
+    }
+  },
+})
+
+let defaultCarePackId: string | undefined
+
+export interface RegisterCarePacksOptions extends PackRegistrationOptions {
+  defaultPackId?: string
+}
+
+export function registerCarePacks(
+  packs: readonly ClinicalGuidelinePack[],
+  options: RegisterCarePacksOptions,
+): void {
+  careRegistry.register(packs, options)
+
+  if (options.defaultPackId) {
+    const defaultPack = careRegistry.get(options.defaultPackId)
+    if (!defaultPack) {
+      throw new PersonalizationSdkError(
+        'DEFAULT_PACK_NOT_FOUND',
+        `Default care pack "${options.defaultPackId}" was not registered`,
+        { defaultPackId: options.defaultPackId, source: options.source },
+      )
+    }
+    defaultCarePackId = options.defaultPackId
+  }
+}
 
 export function getEnabledClinicalGuidelinePacks(): readonly ClinicalGuidelinePack[] {
-  return guidelinePacks.filter((pack) => pack.enabled)
+  return careRegistry.getAll().filter((pack) => pack.enabled)
 }
 
 export function getClinicalGuidelinePack(id: string): ClinicalGuidelinePack | undefined {
-  return guidelinePacks.find((pack) => pack.id === id && pack.enabled)
+  const pack = careRegistry.get(id)
+  return pack?.enabled ? pack : undefined
 }
 
 export function getApplicableClinicalGuidelinePacks(
@@ -38,5 +67,18 @@ export function getApplicableClinicalGuidelinePacks(
 }
 
 export function getDefaultClinicalGuidelinePack(): ClinicalGuidelinePack {
-  return DM_CKD_GUIDELINE_PACK
+  const pack = defaultCarePackId ? getClinicalGuidelinePack(defaultCarePackId) : undefined
+  if (!pack) {
+    throw new PersonalizationSdkError(
+      'DEFAULT_PACK_NOT_FOUND',
+      'No enabled default care pack has been registered',
+      { defaultCarePackId },
+    )
+  }
+  return pack
 }
+
+registerCarePacks(BUNDLED_CARE_PACKS, {
+  source: 'medical-note-smart-on-fhir/bundled-care-packs',
+  defaultPackId: DEFAULT_CARE_PACK_ID,
+})

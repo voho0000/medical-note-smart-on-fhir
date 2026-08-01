@@ -112,7 +112,7 @@ describe('clinical decision summary', () => {
     expect(summary).not.toHaveTextContent('補資料 A')
     expect(summary).not.toHaveTextContent('補資料 B')
     expect(summary.textContent?.match(/定量 UACR/g)).toHaveLength(1)
-    expect(within(summary).getByText('2 項已核對')).toBeInTheDocument()
+    expect(within(summary).getByText('2 項無需處理')).toBeInTheDocument()
     expect(screen.queryByTestId('cdss-automated-checks')).not.toBeInTheDocument()
     expect(screen.getByTestId('cdss-automated-check-row-check-1')).toHaveTextContent('檢核一')
     expect(screen.getByTestId('cdss-automated-check-row-check-2')).toHaveTextContent('檢核二')
@@ -159,16 +159,20 @@ describe('clinical decision summary', () => {
     const nextStepPreview = screen.getByTestId('cdss-next-step-preview-ckd-monitoring')
     expect(completedRow).toHaveTextContent('腎功能趨勢')
     expect(completedRow).toHaveTextContent('最近兩次 eGFR 變化 -3.0%，未超過 20%')
-    expect(within(moduleCell).getByText('已自動核對')).toBeInTheDocument()
-    expect(within(evidencePreview).queryByText('已自動核對')).not.toBeInTheDocument()
+    expect(within(moduleCell).queryByText('目前無需處理')).not.toBeInTheDocument()
+    expect(within(nextStepPreview).getByText('目前無需處理')).toBeInTheDocument()
+    expect(within(evidencePreview).queryByText('目前無需處理')).not.toBeInTheDocument()
     expect(within(moduleCell).getByText('最近兩次 eGFR 變化 -3.0%，未超過 20%')).toHaveClass('line-clamp-1')
-    expect(nextStepPreview.firstElementChild).toHaveClass('line-clamp-2')
+    expect(within(nextStepPreview).getByTitle('下一步 ckd-monitoring')).toHaveClass('line-clamp-2')
     expect(completedRow).not.toHaveTextContent('例行盤點')
     expect(completedRow).not.toHaveTextContent('優先處理')
     expect(completedRow).not.toHaveTextContent('接續檢視')
 
     fireEvent.click(completedRow)
-    expect(screen.getByTestId('cdss-semantic-card-ckd-monitoring')).toHaveTextContent(
+    expect(screen.getByTestId('cdss-semantic-card-ckd-monitoring')).not.toHaveTextContent(
+      '目前資料已完成核對。',
+    )
+    expect(screen.getByTestId('cdss-semantic-card-ckd-monitoring')).not.toHaveTextContent(
       '最近兩次 eGFR 變化 -3.0%，未超過 20%',
     )
   })
@@ -233,10 +237,9 @@ describe('clinical decision summary', () => {
       'ACEI／ARB：有歷史 ACEI／ARB 處方，近期是否持續未知：得安穩膜衣錠160毫克（4 筆處方 · 最近 2026-04-25）',
     )).toBeInTheDocument()
     expect(rasRow).toHaveTextContent('缺：目前實際使用、既往耐受性與停藥原因')
-    expect(screen.getByTestId('cdss-next-step-preview-ckd-rasi-strategy').firstElementChild).toHaveAttribute(
-      'title',
+    expect(within(screen.getByTestId('cdss-next-step-preview-ckd-rasi-strategy')).getByTitle(
       '下一步 ckd-rasi-strategy',
-    )
+    )).toBeInTheDocument()
 
     fireEvent.click(kfreRow)
     expect(screen.getByTestId('cdss-action-plan-ckd-kidney-failure-risk')).toHaveTextContent(
@@ -283,11 +286,12 @@ describe('clinical decision summary', () => {
     expect(within(detail).getByText('用藥歷程 3 筆')).toBeInTheDocument()
   })
 
-  it('keeps the physician semantic card concise and places reminders and sources behind one toggle', () => {
+  it('keeps the primary guideline card visible and places other sources and safety notes behind one toggle', () => {
     const semanticResult: CdssResult = {
       ...result(),
       recommendations: [
         recommendation('sglt2-semantic', {
+          domain: 'medication',
           status: 'needs-data',
           recommendation: '目前缺少定量 UACR，尚不能完成 SGLT2 抑制劑適用性判斷。',
           rationale: '需將 eGFR、UACR 與心衰竭狀態一起判讀。',
@@ -318,21 +322,134 @@ describe('clinical decision summary', () => {
     fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-sglt2-semantic'))
 
     const semanticCard = screen.getByTestId('cdss-semantic-card-sglt2-semantic')
-    expect(within(semanticCard).getByText('判斷')).toBeInTheDocument()
-    expect(semanticCard).toHaveTextContent('資料不足')
-    expect(semanticCard).toHaveTextContent('目前缺少定量 UACR')
+    expect(within(semanticCard).getByText('指引用藥條件')).toBeInTheDocument()
+    expect(semanticCard).toHaveTextContent('KDIGO CKD 指引 · 2024')
+    expect(semanticCard).toHaveTextContent('1A / 2B')
+    expect(semanticCard).toHaveTextContent('eGFR ≥20 且 UACR ≥200 mg/g')
+    expect(semanticCard).not.toHaveTextContent('資料不足')
+    expect(semanticCard).not.toHaveTextContent('目前缺少定量 UACR')
     expect(semanticCard).not.toHaveTextContent('需將 eGFR、UACR 與心衰竭狀態一起判讀')
     expect(semanticCard).not.toHaveTextContent('Recommendations 3.7.2–3.7.3')
 
     const supporting = screen.getByTestId('cdss-supporting-context-sglt2-semantic')
     expect(supporting).not.toHaveAttribute('open')
-    fireEvent.click(within(supporting).getByText('提醒與依據'))
+    fireEvent.click(within(supporting).getByText('其他來源與安全提醒'))
     expect(supporting).toHaveAttribute('open')
     expect(supporting).toHaveTextContent('需將 eGFR、UACR 與心衰竭狀態一起判讀')
     expect(supporting).toHaveTextContent('Recommendations 3.7.2–3.7.3')
     expect(supporting).toHaveTextContent('等級 1A / 2B')
     expect(supporting).toHaveTextContent('eGFR ≥20 且 UACR ≥200 mg/g')
     expect(supporting).toHaveTextContent('邊界 sglt2-semantic')
+  })
+
+  it('uses type-specific headings inside CKD semantic cards', () => {
+    const groupedResult: CdssResult = {
+      ...result(),
+      recommendations: [
+        recommendation('ckd-classification', { domain: 'diagnosis' }),
+        recommendation('ckd-rasi-strategy', { domain: 'medication' }),
+        recommendation('ckd-monitoring', { domain: 'monitoring' }),
+        recommendation('ckd-medication-safety', { domain: 'safety' }),
+        recommendation('ckd-nutrition', { domain: 'target' }),
+      ],
+      automatedChecks: [],
+    }
+
+    render(<ClinicalDecisionSupportView result={groupedResult} locale="zh-TW" />)
+
+    const cases = [
+      ['ckd-classification', '分級／風險依據'],
+      ['ckd-rasi-strategy', '指引用藥條件'],
+      ['ckd-monitoring', '監測依據／門檻'],
+      ['ckd-medication-safety', '監測依據／門檻'],
+      ['ckd-nutrition', '指引建議'],
+    ] as const
+
+    cases.forEach(([id, guidelineHeading]) => {
+      fireEvent.click(screen.getByTestId(`cdss-recommendation-trigger-${id}`))
+      const card = screen.getByTestId(`cdss-semantic-card-${id}`)
+      expect(card).toHaveTextContent(guidelineHeading)
+      expect(card).not.toHaveTextContent('本次')
+    })
+  })
+
+  it('groups CKD modules in a fixed workflow order and toggles each group independently', () => {
+    const groupedResult: CdssResult = {
+      ...result(),
+      recommendations: [
+        recommendation('ckd-classification', { moduleGroup: 'assessment' }),
+        recommendation('ckd-monitoring', { moduleGroup: 'monitoring' }),
+        recommendation('ckd-kidney-failure-risk', { moduleGroup: 'assessment' }),
+        recommendation('ckd-blood-pressure-volume', { moduleGroup: 'monitoring' }),
+        recommendation('ckd-rasi-strategy', { moduleGroup: 'treatment' }),
+        recommendation('ckd-sglt2-strategy', { moduleGroup: 'treatment' }),
+        recommendation('ckd-finerenone-strategy', { moduleGroup: 'treatment' }),
+        recommendation('ckd-cardiovascular-risk', { moduleGroup: 'treatment' }),
+        recommendation('ckd-medication-safety', { moduleGroup: 'monitoring' }),
+        recommendation('ckd-anemia-monitoring', { moduleGroup: 'monitoring' }),
+        recommendation('ckd-potassium-acidosis', { moduleGroup: 'monitoring' }),
+        recommendation('ckd-mbd-monitoring', { moduleGroup: 'monitoring' }),
+        recommendation('ckd-nutrition', { moduleGroup: 'care' }),
+        recommendation('immunization-review', { moduleGroup: 'care' }),
+        recommendation('ckd-referral-care', { moduleGroup: 'care' }),
+      ],
+      automatedChecks: [],
+    }
+
+    render(<ClinicalDecisionSupportView result={groupedResult} locale="zh-TW" />)
+
+    const groupTriggers = screen.getAllByTestId(/^cdss-module-group-trigger-/)
+    expect(groupTriggers.map((trigger) => trigger.textContent?.replace(/\s/g, ''))).toEqual([
+      '評估與分層·2',
+      '治療決策·4',
+      '監測與安全·6',
+      '照護安排·3',
+    ])
+    expect(groupTriggers.every((trigger) => trigger.getAttribute('aria-expanded') === 'true')).toBe(true)
+    expect(groupTriggers.every((trigger) => trigger.classList.contains('h-6'))).toBe(true)
+    expect(groupTriggers.every((trigger) => !trigger.classList.contains('bg-muted/30'))).toBe(true)
+    const groupTones = [
+      ['assessment', 'text-blue-700', 'bg-blue-200/90'],
+      ['treatment', 'text-violet-700', 'bg-violet-200/90'],
+      ['monitoring', 'text-teal-700', 'bg-teal-200/90'],
+      ['care', 'text-orange-700', 'bg-orange-200/90'],
+    ] as const
+    groupTones.forEach(([id, toneClass, dividerClass]) => {
+      expect(screen.getByTestId(`cdss-module-group-tone-${id}`)).toHaveClass(toneClass)
+      expect(screen.getByTestId(`cdss-module-group-divider-${id}`)).toHaveClass(dividerClass)
+    })
+
+    const overview = screen.getByLabelText('個案決策總覽')
+    const moduleIds = Array.from(overview.querySelectorAll('article')).map(
+      (element) => element.getAttribute('data-testid'),
+    )
+    expect(moduleIds).toEqual([
+      'cdss-recommendation-ckd-classification',
+      'cdss-recommendation-ckd-kidney-failure-risk',
+      'cdss-recommendation-ckd-rasi-strategy',
+      'cdss-recommendation-ckd-sglt2-strategy',
+      'cdss-recommendation-ckd-finerenone-strategy',
+      'cdss-recommendation-ckd-cardiovascular-risk',
+      'cdss-recommendation-ckd-monitoring',
+      'cdss-recommendation-ckd-blood-pressure-volume',
+      'cdss-recommendation-ckd-medication-safety',
+      'cdss-recommendation-ckd-anemia-monitoring',
+      'cdss-recommendation-ckd-potassium-acidosis',
+      'cdss-recommendation-ckd-mbd-monitoring',
+      'cdss-recommendation-ckd-nutrition',
+      'cdss-recommendation-immunization-review',
+      'cdss-recommendation-ckd-referral-care',
+    ])
+
+    const monitoringTrigger = screen.getByTestId('cdss-module-group-trigger-monitoring')
+    fireEvent.click(monitoringTrigger)
+    expect(monitoringTrigger).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByTestId('cdss-recommendation-ckd-monitoring')).not.toBeInTheDocument()
+    expect(screen.getByTestId('cdss-recommendation-ckd-rasi-strategy')).toBeInTheDocument()
+
+    fireEvent.click(monitoringTrigger)
+    expect(monitoringTrigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('cdss-recommendation-ckd-monitoring')).toBeInTheDocument()
   })
 
   it('renders evidence as one consistent list and groups confirmation items with next steps', () => {

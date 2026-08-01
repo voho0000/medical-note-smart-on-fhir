@@ -1,5 +1,5 @@
 import { createFhirCdssPatientProfile } from '@/features/clinical-decision-support/adapters/fhir-cdss-profile'
-import { RENAL_SAFETY_GUIDELINE_PACK } from '@/features/clinical-decision-support/guideline-packs/renal-safety-pack'
+import { RENAL_SAFETY_GUIDELINE_PACK } from '@voho0000/personalized-care'
 import type {
   MedicationEntity,
   ObservationEntity,

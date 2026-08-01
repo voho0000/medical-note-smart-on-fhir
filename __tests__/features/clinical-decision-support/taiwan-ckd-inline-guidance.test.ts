@@ -1,4 +1,4 @@
-import { TAIWAN_CKD_2025_PACK } from '@/features/clinical-decision-support/knowledge-packs/taiwan-ckd-2025'
+import { TAIWAN_CKD_2025_PACK } from '@voho0000/personalized-care'
 import type { CdssRecommendation } from '@/features/clinical-decision-support/types'
 
 function recommendation(id: string): CdssRecommendation {

@@ -57,6 +57,8 @@ jobs:
       - name: Install deps
         if: ${{ env.SKIP != 'true' }}
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
       - name: Build static export for /app (basePath /app, same env as gh-pages)
         if: ${{ env.SKIP != 'true' }}

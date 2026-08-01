@@ -1,7 +1,7 @@
 import {
   pdfPageUrl,
   resolvePublicAssetUrl,
-} from '@/features/clinical-decision-support/knowledge-packs/shared'
+} from '@voho0000/personalized-care'
 
 describe('CDSS knowledge-pack public asset URLs', () => {
   it('keeps root-hosted assets unchanged when no base path is configured', () => {

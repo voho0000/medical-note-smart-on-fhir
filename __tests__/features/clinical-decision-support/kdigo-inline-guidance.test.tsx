@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { KDIGO_CKD_2024_PACK } from '@/features/clinical-decision-support/knowledge-packs/kdigo-ckd-2024'
+import { KDIGO_CKD_2024_PACK } from '@voho0000/personalized-care'
 import { ClinicalDecisionSupportView } from '@/features/clinical-decision-support/renderers/ClinicalDecisionSupportView'
 import type {
   CdssRecommendation,

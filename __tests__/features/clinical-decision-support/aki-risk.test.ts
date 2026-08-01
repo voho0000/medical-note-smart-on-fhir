@@ -1,4 +1,4 @@
-import { assessAkiFromCreatinine } from '@/features/clinical-decision-support/risk-stratification/aki'
+import { assessAkiFromCreatinine } from '@voho0000/personalized-care'
 
 function reading(observedAt: string, valueMgDl: number) {
   return {
