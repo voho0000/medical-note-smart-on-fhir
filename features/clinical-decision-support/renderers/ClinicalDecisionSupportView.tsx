@@ -16,12 +16,8 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   leftTabForResourceType,
@@ -181,40 +177,11 @@ function isAssessmentPreviewRedundant(title: string, evidenceValue?: string): bo
   return sharedCount / smallerSize >= 0.7
 }
 
-type CkdModulePresentationKind = 'classification' | 'medication' | 'monitoring' | 'recommendation'
-
-const CKD_MODULE_PRESENTATION_KIND: Readonly<Record<string, CkdModulePresentationKind>> = {
-  'ckd-classification': 'classification',
-  'ckd-kidney-failure-risk': 'classification',
-  'ckd-rasi-strategy': 'medication',
-  'ckd-sglt2-strategy': 'medication',
-  'ckd-finerenone-strategy': 'medication',
-  'ckd-cardiovascular-risk': 'medication',
-  'ckd-medication-safety': 'monitoring',
-  'ckd-monitoring': 'monitoring',
-  'ckd-blood-pressure-volume': 'monitoring',
-  'ckd-anemia-monitoring': 'monitoring',
-  'ckd-potassium-acidosis': 'monitoring',
-  'ckd-mbd-monitoring': 'monitoring',
-  'ckd-nutrition': 'recommendation',
-  'immunization-review': 'recommendation',
-  'ckd-referral-care': 'recommendation',
-}
-
-function ckdModulePresentationCopy(
+function modulePresentationCopy(
   recommendation: CdssRecommendation,
   isEnglish: boolean,
 ): { guidelineHeading: string } {
-  const kind = CKD_MODULE_PRESENTATION_KIND[recommendation.id]
-    ?? (
-      recommendation.domain === 'diagnosis'
-        ? 'classification'
-        : recommendation.domain === 'medication' || recommendation.domain === 'safety'
-          ? 'medication'
-          : recommendation.domain === 'monitoring' || recommendation.domain === 'complication'
-            ? 'monitoring'
-            : 'recommendation'
-    )
+  const kind = recommendationPresentationType(recommendation)
 
   switch (kind) {
     case 'classification':
@@ -234,6 +201,19 @@ function ckdModulePresentationCopy(
         guidelineHeading: isEnglish ? 'Guideline recommendation' : '指引建議',
       }
   }
+}
+
+function recommendationPresentationType(
+  recommendation: CdssRecommendation,
+) {
+  return recommendation.presentationType ?? getClinicalModuleDefinition(
+    recommendation.id,
+    {
+      zh: recommendation.title,
+      en: recommendation.title,
+      domain: recommendation.domain,
+    },
+  ).presentationType
 }
 
 function restoreCompletedModules(result: CdssResult): {
@@ -731,7 +711,7 @@ function CompactPatientEvidenceSection({
   )
 }
 
-function CkdClassificationEvidence({
+function ClassificationEvidence({
   recommendation,
   isEnglish,
   onNavigate,
@@ -799,7 +779,7 @@ function CkdClassificationEvidence({
   )
 }
 
-function CkdClassificationActionPlan({
+function ClassificationActionPlan({
   recommendation,
   isEnglish,
   nextStepLabel,
@@ -810,6 +790,9 @@ function CkdClassificationActionPlan({
 }) {
   const primaryAction = recommendation.nextActions[0] ?? recommendation.recommendation
   const thresholds = recommendation.nextActions.slice(1)
+  const visibleMissingData = (recommendation.missingData ?? []).filter(
+    (item) => !isAssessmentPreviewRedundant(primaryAction, item),
+  )
 
   return (
     <section
@@ -817,7 +800,29 @@ function CkdClassificationActionPlan({
       aria-label={isEnglish ? 'Next step' : '建議下一步'}
       data-testid={`cdss-action-plan-${recommendation.id}`}
     >
-      <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(6rem,0.2fr)_minmax(0,1fr)]">
+      {visibleMissingData.length > 0 ? (
+        <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(6rem,0.2fr)_minmax(0,1fr)]">
+          <h5 className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            {isEnglish ? 'To confirm' : '尚待確認'}
+          </h5>
+          <ul className="space-y-1 text-foreground">
+            {visibleMissingData.map((item) => (
+              <li key={item} className="flex gap-1.5">
+                <span aria-hidden="true">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className={cn(
+        'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(6rem,0.2fr)_minmax(0,1fr)]',
+        visibleMissingData.length > 0
+          ? 'border-t border-border/60'
+          : '',
+      )}>
         <h5 className="flex items-center gap-1.5 font-semibold text-primary">
           <ArrowRight className="h-3.5 w-3.5 shrink-0" />
           {nextStepLabel}
@@ -1208,13 +1213,16 @@ function RecommendationDetail({
     && source.sourceKind === 'coverage'
     && source.status === 'not-applicable'
   ))
-  const isCompactCkdClassification = recommendation.id === 'ckd-classification'
-  const presentationCopy = ckdModulePresentationCopy(recommendation, isEnglish)
+  const isCompactClassification = recommendationPresentationType(recommendation) === 'classification'
+  const presentationCopy = modulePresentationCopy(recommendation, isEnglish)
   const primaryGuidelineRule = semanticCard.guidelineRules.find(
     (rule) => rule.sourceKind === 'guideline',
   ) ?? semanticCard.guidelineRules[0]
-  const primaryGuidelineSummary = primaryGuidelineRule?.reference.summary
-    ?? semanticCard.clinicalReasoning
+  const primaryGuidelineSummary = semanticCard.guidelineRecommendation
+  const hasActionPlan = (
+    (recommendation.missingData?.length ?? 0) > 0
+    || recommendation.nextActions.length > 0
+  )
 
   const sourceStatusLabel: Record<CdssSourceAssessmentStatus, string> = {
     recommended: isEnglish ? 'Recommended' : '建議',
@@ -1270,8 +1278,8 @@ function RecommendationDetail({
 
       </section>
 
-      {isCompactCkdClassification ? (
-        <CkdClassificationEvidence
+      {isCompactClassification ? (
+        <ClassificationEvidence
           recommendation={recommendation}
           isEnglish={isEnglish}
           onNavigate={onNavigate}
@@ -1286,13 +1294,13 @@ function RecommendationDetail({
         />
       ) : null}
 
-      {isCompactCkdClassification ? (
-        <CkdClassificationActionPlan
+      {isCompactClassification ? (
+        <ClassificationActionPlan
           recommendation={recommendation}
           isEnglish={isEnglish}
           nextStepLabel={label.nextStep}
         />
-      ) : (
+      ) : hasActionPlan ? (
         <section
           className="overflow-hidden rounded-md border border-border/70 bg-muted/[0.08]"
           aria-label={isEnglish ? 'Items to confirm and next steps' : '待確認與建議下一步'}
@@ -1315,30 +1323,32 @@ function RecommendationDetail({
             </div>
           ) : null}
 
-          <div
-            className={cn(
-              'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]',
-              recommendation.missingData && recommendation.missingData.length > 0
-                ? 'border-t border-border/60'
-                : '',
-            )}
-          >
-            <h5 className="flex items-center gap-1.5 font-semibold text-primary">
-              <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-              {label.nextStep}
-            </h5>
-            <div className="min-w-0 text-foreground">
-              {recommendation.nextActions.length === 1 ? (
-                <span>{recommendation.nextActions[0]}</span>
-              ) : (
-                <ol className="list-decimal space-y-1 pl-4 marker:font-semibold">
-                  {recommendation.nextActions.map((action) => <li key={action}>{action}</li>)}
-                </ol>
+          {recommendation.nextActions.length > 0 ? (
+            <div
+              className={cn(
+                'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]',
+                recommendation.missingData && recommendation.missingData.length > 0
+                  ? 'border-t border-border/60'
+                  : '',
               )}
+            >
+              <h5 className="flex items-center gap-1.5 font-semibold text-primary">
+                <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                {label.nextStep}
+              </h5>
+              <div className="min-w-0 text-foreground">
+                {recommendation.nextActions.length === 1 ? (
+                  <span>{recommendation.nextActions[0]}</span>
+                ) : (
+                  <ol className="list-decimal space-y-1 pl-4 marker:font-semibold">
+                    {recommendation.nextActions.map((action) => <li key={action}>{action}</li>)}
+                  </ol>
+                )}
+              </div>
             </div>
-          </div>
+          ) : null}
         </section>
-      )}
+      ) : null}
 
       <details
         className="group rounded-md border border-border/70 bg-background"
@@ -1352,10 +1362,34 @@ function RecommendationDetail({
         <div className="space-y-3 border-t border-border/70 px-3 py-2.5 text-xs leading-relaxed">
           <section>
             <h5 className="font-semibold text-foreground">
-              {isEnglish ? 'Clinical rationale' : '判斷理由'}
+              {isEnglish ? 'Clinical conclusion' : '臨床結論'}
             </h5>
-            <p className="mt-1 text-muted-foreground">{semanticCard.clinicalReasoning}</p>
+            <p className="mt-1 text-muted-foreground">{semanticCard.clinicalConclusion}</p>
           </section>
+
+          <section>
+            <h5 className="font-semibold text-foreground">
+              {isEnglish ? 'Decision method' : '判斷方式'}
+            </h5>
+            <p className="mt-1 text-muted-foreground">{semanticCard.decisionLogic}</p>
+          </section>
+
+          {recommendation.clinicalReviewItems
+            && recommendation.clinicalReviewItems.length > 0 ? (
+              <section>
+                <h5 className="font-semibold text-foreground">
+                  {isEnglish ? 'Clinical review when relevant' : '視臨床情境確認'}
+                </h5>
+                <ul className="mt-1 space-y-1 text-muted-foreground">
+                  {recommendation.clinicalReviewItems.map((item) => (
+                    <li key={item} className="flex gap-1.5">
+                      <span aria-hidden="true">•</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
           {visibleSourceAssessments.length > 0 ? (
             <section aria-label={label.sourceComparison}>
@@ -1439,9 +1473,20 @@ function RecommendationDetail({
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
               {label.safety}
             </h5>
-            <p className="mt-1 select-text text-muted-foreground">
-              {recommendation.safetyBoundary}
-            </p>
+            {semanticCard.limitations.length === 1 ? (
+              <p className="mt-1 select-text text-muted-foreground">
+                {semanticCard.limitations[0]}
+              </p>
+            ) : (
+              <ul className="mt-1 space-y-1 text-muted-foreground">
+                {semanticCard.limitations.map((item) => (
+                  <li key={item} className="flex gap-1.5">
+                    <span aria-hidden="true">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       </details>
@@ -1472,7 +1517,7 @@ export function ClinicalDecisionSupportView({
     guidelines: isEnglish ? 'Guideline summary and location' : '指引摘要與章節定位',
     safety: isEnglish ? 'Decision boundary' : '決策邊界',
     sourceComparison: isEnglish ? 'Source comparison' : '來源比較',
-    supporting: isEnglish ? 'Other sources and safety notes' : '其他來源與安全提醒',
+    supporting: isEnglish ? 'Rule audit, sources, and safety' : '規則稽核、來源與安全提醒',
     notEvaluated: isEnglish ? 'Not evaluated in this POC' : '本次未評估',
     limitations: isEnglish ? 'Scope and limitations' : '使用限制',
     showDetails: isEnglish ? 'Show decision details' : '展開決策詳情',
@@ -1507,7 +1552,10 @@ export function ClinicalDecisionSupportView({
     }, NAV_CLAIM_TIMEOUT_MS)
   }, [isEnglish])
   const restoredModules = restoreCompletedModules(result)
-  const displayRecommendations = restoredModules.recommendations
+  const displayRecommendations = [...restoredModules.recommendations].sort((a, b) => (
+    (a.moduleOrder ?? Number.MAX_SAFE_INTEGER)
+    - (b.moduleOrder ?? Number.MAX_SAFE_INTEGER)
+  ))
   const standaloneAutomatedChecks = restoredModules.standaloneChecks
   const hasCompleteModuleGrouping = displayRecommendations.length > 0
     && displayRecommendations.every((item) => item.moduleGroup !== undefined)
@@ -1543,15 +1591,21 @@ export function ClinicalDecisionSupportView({
       ? requestedExpandedId
       : (displayRecommendations[0]?.id ?? null)
   const clinicalSummary = buildClinicalDecisionSummary(result, locale)
+  const showClinicalSummary = clinicalSummary.missingInputs.length > 0
+    || clinicalSummary.actionRecommendations.length > 0
 
   return (
     <div className="space-y-3" data-testid="clinical-decision-support-view">
-      <section
-        className="rounded-lg border border-primary/25 bg-primary/[0.035] px-3 py-3"
+      {showClinicalSummary ? (
+        <details
+        className="group overflow-hidden rounded-lg border border-primary/25 bg-primary/[0.035]"
         aria-labelledby="cdss-clinical-summary-title"
         data-testid="cdss-clinical-summary"
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <summary
+          className="flex min-h-10 cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          data-testid="cdss-clinical-summary-trigger"
+        >
           <ClipboardList className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <h3
             id="cdss-clinical-summary-title"
@@ -1559,26 +1613,16 @@ export function ClinicalDecisionSupportView({
           >
             {isEnglish ? 'Clinical summary' : '臨床摘要'}
           </h3>
-          <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
-            {isEnglish
-              ? `${displayRecommendations.length + standaloneAutomatedChecks.length} decision modules`
-              : `${displayRecommendations.length + standaloneAutomatedChecks.length} 個決策模組`}
-          </Badge>
-          {clinicalSummary.automatedCheckCount > 0 ? (
-            <Badge variant="outline" className="h-5 bg-background px-1.5 text-[11px]">
-              {isEnglish
-                ? `${clinicalSummary.automatedCheckCount} need no action`
-                : `${clinicalSummary.automatedCheckCount} 項無需處理`}
-            </Badge>
-          ) : null}
-        </div>
+          <ChevronDown
+            className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          />
+        </summary>
 
-        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          {result.summary}
-        </p>
+        <div className="border-t border-primary/15 px-3 pb-3 pt-2">
 
-        <div className="mt-3 grid gap-3 @min-[42rem]:grid-cols-[minmax(15rem,1fr)_minmax(0,1.35fr)]">
-          <div>
+          <div className="grid gap-3 @min-[42rem]:grid-cols-[minmax(15rem,1fr)_minmax(0,1.35fr)]">
+            <div className={cn(clinicalSummary.missingInputs.length === 0 && 'hidden')}>
             <h4 className="text-xs font-semibold text-foreground">
               {isEnglish ? 'Data to complete' : '需補資料'}
             </h4>
@@ -1602,13 +1646,7 @@ export function ClinicalDecisionSupportView({
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                {isEnglish
-                  ? 'No explicit missing input is listed in the current decision modules.'
-                  : '目前決策模組沒有列出明確缺少的輸入資料。'}
-              </p>
-            )}
+            ) : null}
             {clinicalSummary.missingInputCount > clinicalSummary.missingInputs.length ? (
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {isEnglish
@@ -1618,17 +1656,21 @@ export function ClinicalDecisionSupportView({
             ) : null}
           </div>
 
-          <div className="@min-[42rem]:border-l @min-[42rem]:border-border @min-[42rem]:pl-3">
+            <div className={cn(
+              '@min-[42rem]:border-l @min-[42rem]:border-border @min-[42rem]:pl-3',
+              clinicalSummary.actionRecommendations.length === 0 && 'hidden',
+            )}>
             <h4 className="text-xs font-semibold text-foreground">
               {isEnglish ? 'Recommended actions' : '建議處理'}
             </h4>
             {clinicalSummary.actionRecommendations.length > 0 ? (
               <ul className="mt-1.5 space-y-2">
                 {clinicalSummary.actionRecommendations.map((recommendation) => {
-                  const moduleName = clinicalModuleLabel(
+                  const moduleName = recommendation.moduleName ?? clinicalModuleLabel(
                     recommendation.id,
                     locale,
                     recommendation.title,
+                    recommendation.domain,
                   )
                   return (
                     <li key={recommendation.id} className="text-xs">
@@ -1653,53 +1695,11 @@ export function ClinicalDecisionSupportView({
                   )
                 })}
               </ul>
-            ) : (
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                {isEnglish
-                  ? 'Complete the data on the left before determining further action.'
-                  : '目前先補齊左側資料，完成後再判斷進一步處理。'}
-              </p>
-            )}
+            ) : null}
+            </div>
           </div>
         </div>
-      </section>
-
-      {result.knowledgePacks && result.knowledgePacks.length > 0 ? (
-        <section
-          className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-lg border border-border bg-muted/20 px-3 py-2"
-          aria-label={isEnglish ? 'Enabled knowledge packs' : '已啟用知識包'}
-          data-testid="cdss-enabled-knowledge-packs"
-        >
-          <span className="mr-1 shrink-0 whitespace-nowrap text-xs font-semibold text-muted-foreground">
-            {isEnglish ? 'Enabled sources' : '已啟用來源'}
-          </span>
-          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
-            {result.knowledgePacks.map((pack) => {
-              const labelIncludesVersion = pack.label
-                .toLocaleLowerCase()
-                .includes(pack.version.toLocaleLowerCase())
-              const fullLabel = labelIncludesVersion
-                ? pack.label
-                : `${pack.label} · ${pack.version}`
-              return (
-                <Tooltip key={pack.id}>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      variant="outline"
-                      className="h-6 min-w-0 flex-1 overflow-hidden bg-background px-2 text-xs"
-                      title={fullLabel}
-                    >
-                      <span className="truncate">{fullLabel}</span>
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-lg">
-                    {fullLabel}
-                  </TooltipContent>
-                </Tooltip>
-              )
-            })}
-          </div>
-        </section>
+        </details>
       ) : null}
 
       <section
@@ -1770,10 +1770,11 @@ export function ClinicalDecisionSupportView({
           const recommendation = row.recommendation
           const isExpanded = expandedId === recommendation.id
           const isRiskStratification = recommendation.kind === 'risk-stratification'
-          const moduleName = clinicalModuleLabel(
+          const moduleName = recommendation.moduleName ?? clinicalModuleLabel(
             recommendation.id,
             locale,
             recommendation.title,
+            recommendation.domain,
           )
           const triggerId = `cdss-trigger-${recommendation.id}`
           const detailId = `cdss-detail-${recommendation.id}`
@@ -1972,17 +1973,11 @@ export function ClinicalDecisionSupportView({
             >
               <div className="grid min-h-11 gap-2 px-3 py-2.5 text-left @min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3">
                 <span className="min-w-0">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span
-                      className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug text-foreground"
-                      title={moduleName}
-                    >
-                      {moduleName}
-                    </span>
-                    <Badge className={cn('h-6 shrink-0 px-2 text-xs', statusStyle['no-action'])}>
-                      <StatusIcon status="no-action" />
-                      {label['no-action']}
-                    </Badge>
+                  <span
+                    className="block min-w-0 truncate text-sm font-semibold leading-snug text-foreground"
+                    title={moduleName}
+                  >
+                    {moduleName}
                   </span>
                   {check.label !== moduleName ? (
                     <span
@@ -2011,7 +2006,12 @@ export function ClinicalDecisionSupportView({
                     />
                   ) : null}
                 </span>
-                <span aria-hidden="true" />
+                <span className="min-w-0">
+                  <Badge className={cn('h-5 shrink-0 px-1.5 text-[11px]', statusStyle['no-action'])}>
+                    <StatusIcon status="no-action" />
+                    {label['no-action']}
+                  </Badge>
+                </span>
                 <span aria-hidden="true" />
               </div>
             </article>

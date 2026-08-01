@@ -231,10 +231,13 @@ describe('heart-failure clinical guidance pack', () => {
     expect(gdmt).toMatchObject({
       status: 'review',
       title: expect.stringContaining('已確認 0/4 類'),
-      missingData: expect.arrayContaining([
+      clinicalReviewItems: expect.arrayContaining([
         '完整 medication reconciliation、實際服用方式、劑量與耐受性',
       ]),
     })
+    expect(gdmt?.missingData).not.toContain(
+      '完整 medication reconciliation、實際服用方式、劑量與耐受性',
+    )
     expect(gdmt?.title).toContain('4 類需核對')
   })
 

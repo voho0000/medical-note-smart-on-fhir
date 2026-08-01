@@ -395,7 +395,7 @@ describe('personalized CKD guidance', () => {
     })
     expect(result.automatedChecks?.find(
       (item) => item.id === 'ckd-monitoring',
-    )?.displayOrder).toBe(1)
+    )?.displayOrder).toBe(6)
   })
 
   it('expands CKD into independently actionable clinical modules while collapsing no-action checks', () => {
@@ -458,7 +458,7 @@ describe('personalized CKD guidance', () => {
     expect(result.automatedChecks?.map((item) => item.id)).toContain('ckd-monitoring')
     const sglt2 = result.recommendations.find((item) => item.id === 'ckd-sglt2-strategy')
     expect(sglt2?.nextActions.join(' ')).not.toContain('重大手術')
-    expect(sglt2?.nextActions).toEqual(['建議評估使用 SGLT2 抑制劑。'])
+    expect(sglt2?.nextActions).toEqual(['建議評估使用 SGLT2i。'])
     expect(sglt2).toMatchObject({
       status: 'actionable',
       hideMissingDataPreview: true,
@@ -513,8 +513,8 @@ describe('personalized CKD guidance', () => {
     })
     expect(medicationDecisions['ckd-sglt2-strategy']).toMatchObject({
       status: 'actionable',
-      title: 'eGFR 34 符合 SGLT2 抑制劑評估條件',
-      nextActions: ['建議評估使用 SGLT2 抑制劑。'],
+      title: 'eGFR 34 符合 SGLT2i 評估條件',
+      nextActions: ['建議評估使用 SGLT2i。'],
       hideMissingDataPreview: true,
     })
     expect(medicationDecisions['ckd-cardiovascular-risk']).toMatchObject({
@@ -554,6 +554,31 @@ describe('personalized CKD guidance', () => {
     expect(finerenone?.safetyBoundary).toContain('4 週')
   })
 
+  it('treats maximally tolerated RASi as clinical review rather than missing passbook data', () => {
+    const profile = buildProfile({
+      encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
+      observations: [
+        egfr('egfr-old', '2026-01-01', 35),
+        egfr('egfr-latest', '2026-05-01', 34),
+        quantitativeUacr(80, '2026-05-01', 'uacr-latest'),
+        quantitativeUacr(70, '2026-01-01', 'uacr-old'),
+        lab('potassium', '2823-3', 4.5, 'mmol/L'),
+      ],
+    })
+    const result = CKD_GUIDELINE_PACK.build({ profile, locale: 'zh-TW' })
+    const finerenone = result.recommendations.find(
+      (item) => item.id === 'ckd-finerenone-strategy',
+    )
+
+    expect(finerenone).toMatchObject({
+      status: 'review',
+      title: 'Finerenone 前先評估 RASi 治療',
+      missingData: [],
+      nextActions: ['先評估 RASi 治療，再評估 finerenone。'],
+    })
+    expect(JSON.stringify(finerenone)).not.toContain('最大耐受 RASi 處方或不耐受紀錄')
+  })
+
   it('returns medication modules to green when current use is confirmed', () => {
     const profile = buildProfile({
       encounters: [encounterWithDiagnoses('E11.9', 'N18.32')],
@@ -582,7 +607,7 @@ describe('personalized CKD guidance', () => {
     })
     expect(automatedById['ckd-sglt2-strategy']).toMatchObject({
       status: 'no-action',
-      nextActions: ['持續 SGLT2 抑制劑。'],
+      nextActions: ['持續 SGLT2i。'],
     })
     expect(automatedById['ckd-finerenone-strategy']).toMatchObject({
       status: 'no-action',
@@ -618,22 +643,24 @@ describe('personalized CKD guidance', () => {
 
     expect(automatedById['ckd-rasi-strategy']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 ACEI／ARB 處方，目前無需另加提示。'],
+      nextActions: ['已有 ACEI／ARB 處方。'],
     })
     expect(automatedById['ckd-sglt2-strategy']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 SGLT2 抑制劑處方，目前無需另加提示。'],
+      nextActions: ['已有 SGLT2i處方。'],
     })
     expect(automatedById['ckd-finerenone-strategy']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 finerenone 處方，目前無需另加提示。'],
+      nextActions: ['已有 finerenone 處方。'],
     })
     expect(automatedById['ckd-cardiovascular-risk']).toMatchObject({
       status: 'no-action',
-      nextActions: ['已有 statin 處方，目前無需另加提示。'],
+      nextActions: ['已有 statin 處方。'],
     })
     expect(profile.facts.sglt2Therapy.zh).toBe('已有處方：Dapagliflozin 10 mg')
-    expect(JSON.stringify(result)).not.toMatch(/尚未確認實際使用|確認目前是否使用|服藥依從性/)
+    expect(JSON.stringify(result)).not.toMatch(
+      /尚未確認實際使用|確認目前是否使用|服藥依從性|目前無需另加提示/,
+    )
     expect(result.notEvaluated).toEqual(expect.arrayContaining([
       expect.stringContaining('處方資料只代表曾開立或仍有有效處方'),
     ]))
@@ -721,10 +748,12 @@ describe('personalized CKD guidance', () => {
       title: 'Finerenone 前置條件尚未完整',
     })
     expect(finerenone?.recommendation).toContain('4.8–5.0')
-    expect(finerenone?.missingData).toEqual(expect.arrayContaining([
+    expect(finerenone?.missingData).toEqual([
       '持續 UACR >30 mg/g 的重複定量紀錄',
-      '最大耐受 RASi 處方或不耐受紀錄',
-    ]))
+    ])
+    expect(finerenone?.nextActions).toEqual([
+      '補齊：持續 UACR >30 mg/g 的重複定量紀錄。',
+    ])
     expect(medicationSafety).toMatchObject({
       status: 'review',
       priority: 'high',
@@ -739,9 +768,10 @@ describe('personalized CKD guidance', () => {
       overviewEvidenceFactKey: 'eGFR',
     })
     expect(nutrition?.recommendation).toContain('年齡本身不等於衰弱')
-    expect(nutrition?.missingData).toEqual([
+    expect(nutrition?.missingData).toEqual([])
+    expect(nutrition?.clinicalReviewItems).toContain(
       '飲食攝取、近期體重變化與肌少症／衰弱風險（需問診或正式評估）',
-    ])
+    )
     expect(nutrition?.safetyBoundary).toContain(
       '血清白蛋白、年齡或單次體重都不能單獨診斷營養不良、肌少症或衰弱',
     )

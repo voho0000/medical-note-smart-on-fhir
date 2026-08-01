@@ -21,6 +21,13 @@ export interface PhysicianSemanticCard {
   decisionQuestion: string
   applicabilityStatus: CdssStatus
   applicabilityLabel: string
+  guidelineRecommendation: string
+  eligibilityCriteria: readonly string[]
+  patientData: CdssRecommendation['patientEvidence']
+  decisionLogic: string
+  clinicalConclusion: string
+  limitations: readonly string[]
+  /** Compatibility aliases retained for current renderers and integrations. */
   patientConclusion: string
   clinicalReasoning: string
   guidelineRules: readonly PhysicianSemanticGuidelineRule[]
@@ -86,13 +93,33 @@ export function buildPhysicianSemanticCard(
     })
   })
 
+  const primaryGuidelineSummary = guidelineRules.find(
+    (rule) => rule.sourceKind === 'guideline',
+  )?.reference.summary ?? guidelineRules[0]?.reference.summary
+  const semanticRule = recommendation.semanticRule
+  const guidelineRecommendation = semanticRule?.guidelineRecommendation
+    ?? primaryGuidelineSummary
+    ?? recommendation.rationale
+  const eligibilityCriteria = semanticRule?.eligibilityCriteria
+    ?? [guidelineRecommendation]
+  const patientData = semanticRule?.patientData ?? recommendation.patientEvidence
+  const decisionLogic = semanticRule?.decisionLogic ?? recommendation.rationale
+  const clinicalConclusion = semanticRule?.clinicalConclusion ?? recommendation.recommendation
+  const limitations = semanticRule?.limitations ?? [recommendation.safetyBoundary]
+
   return {
     id: recommendation.id,
     decisionQuestion: recommendation.title,
     applicabilityStatus: recommendation.status,
     applicabilityLabel: applicabilityLabel(locale, recommendation.status),
-    patientConclusion: recommendation.recommendation,
-    clinicalReasoning: recommendation.rationale,
+    guidelineRecommendation,
+    eligibilityCriteria,
+    patientData,
+    decisionLogic,
+    clinicalConclusion,
+    limitations,
+    patientConclusion: clinicalConclusion,
+    clinicalReasoning: decisionLogic,
     guidelineRules,
     patientEvidence: recommendation.patientEvidence,
     missingData: recommendation.missingData ?? [],

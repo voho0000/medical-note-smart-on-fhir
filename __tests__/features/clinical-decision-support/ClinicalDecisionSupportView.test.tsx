@@ -101,6 +101,7 @@ describe('clinical decision summary', () => {
     const summary = screen.getByTestId('cdss-clinical-summary')
 
     expect(view.firstElementChild).toBe(summary)
+    expect(summary).not.toHaveAttribute('open')
     expect(summary).toHaveTextContent('臨床摘要')
     expect(summary).toHaveTextContent('需補資料')
     expect(summary).toHaveTextContent('建議處理')
@@ -112,11 +113,14 @@ describe('clinical decision summary', () => {
     expect(summary).not.toHaveTextContent('補資料 A')
     expect(summary).not.toHaveTextContent('補資料 B')
     expect(summary.textContent?.match(/定量 UACR/g)).toHaveLength(1)
-    expect(within(summary).getByText('2 項無需處理')).toBeInTheDocument()
+    expect(summary).not.toHaveTextContent('項無需處理')
     expect(screen.queryByTestId('cdss-automated-checks')).not.toBeInTheDocument()
     expect(screen.getByTestId('cdss-automated-check-row-check-1')).toHaveTextContent('檢核一')
     expect(screen.getByTestId('cdss-automated-check-row-check-2')).toHaveTextContent('檢核二')
     expect(screen.getByTestId('cdss-limitations')).not.toHaveAttribute('open')
+
+    fireEvent.click(screen.getByTestId('cdss-clinical-summary-trigger'))
+    expect(summary).toHaveAttribute('open')
   })
 
   it('restores completed modules to their original list positions with a green background', () => {
@@ -175,6 +179,30 @@ describe('clinical decision summary', () => {
     expect(screen.getByTestId('cdss-semantic-card-ckd-monitoring')).not.toHaveTextContent(
       '最近兩次 eGFR 變化 -3.0%，未超過 20%',
     )
+  })
+
+  it('omits a redundant next-step block when status and evidence already convey the result', () => {
+    const noAction = recommendation('prescription-recorded', {
+      status: 'no-action',
+      title: '已有 SGLT2i 處方',
+      recommendation: '系統已辨識處方。',
+      nextActions: [],
+    })
+    render(<ClinicalDecisionSupportView
+      result={{
+        ...result(),
+        recommendations: [noAction],
+        automatedChecks: [],
+      }}
+      locale="zh-TW"
+    />)
+
+    const row = screen.getByTestId('cdss-recommendation-trigger-prescription-recorded')
+    expect(row).toHaveTextContent('目前無需處理')
+    expect(row).not.toHaveTextContent('目前無需另加提示')
+
+    fireEvent.click(row)
+    expect(screen.queryByTestId('cdss-action-plan-prescription-recorded')).not.toBeInTheDocument()
   })
 
   it('does not repeat a missing concept in the collapsed row and preserves it in details', () => {
@@ -295,7 +323,7 @@ describe('clinical decision summary', () => {
         recommendation('sglt2-semantic', {
           domain: 'medication',
           status: 'needs-data',
-          recommendation: '目前缺少定量 UACR，尚不能完成 SGLT2 抑制劑適用性判斷。',
+          recommendation: '目前缺少定量 UACR，尚不能完成 SGLT2i 適用性判斷。',
           rationale: '需將 eGFR、UACR 與心衰竭狀態一起判讀。',
           sourceAssessments: [{
             sourceId: 'kdigo-ckd-2024',
@@ -313,7 +341,7 @@ describe('clinical decision summary', () => {
               url: 'https://kdigo.org/',
               recommendationId: 'Recommendations 3.7.2–3.7.3',
               evidenceGrade: '1A / 2B',
-              summary: 'eGFR ≥20 且 UACR ≥200 mg/g，或合併心衰竭時，建議使用 SGLT2 抑制劑。',
+              summary: 'eGFR ≥20 且 UACR ≥200 mg/g，或合併心衰竭時，建議使用 SGLT2i。',
             }],
           }],
         }),
@@ -335,7 +363,7 @@ describe('clinical decision summary', () => {
 
     const supporting = screen.getByTestId('cdss-supporting-context-sglt2-semantic')
     expect(supporting).not.toHaveAttribute('open')
-    fireEvent.click(within(supporting).getByText('其他來源與安全提醒'))
+    fireEvent.click(within(supporting).getByText('規則稽核、來源與安全提醒'))
     expect(supporting).toHaveAttribute('open')
     expect(supporting).toHaveTextContent('需將 eGFR、UACR 與心衰竭狀態一起判讀')
     expect(supporting).toHaveTextContent('Recommendations 3.7.2–3.7.3')

@@ -2144,7 +2144,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   }
   facts.sglt2Therapy = classFact(
     sglt2Assessment,
-    'SGLT2 抑制劑',
+    'SGLT2i',
     'SGLT2 inhibitor',
   )
   facts.arniTherapy = classFact(
@@ -2237,7 +2237,7 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     'finerenone',
     'finerenone',
   )
-  facts.sglt2Allergy = allergyFact('sglt2-inhibitor', 'SGLT2 抑制劑', 'SGLT2 inhibitor')
+  facts.sglt2Allergy = allergyFact('sglt2-inhibitor', 'SGLT2i', 'SGLT2 inhibitor')
   facts.insulinAllergy = allergyFact('insulin', '胰島素', 'insulin')
   facts.sulfonylureaAllergy = allergyFact('sulfonylurea', '磺醯脲', 'sulfonylurea')
   facts.statinAllergy = allergyFact('statin', 'statin', 'statin')

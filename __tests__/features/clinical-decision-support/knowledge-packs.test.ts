@@ -1,5 +1,7 @@
 import {
+  applyClinicalSemanticPolicy,
   attachKnowledgeAssessments,
+  buildClinicalSemanticRequirements,
   getEnabledKnowledgePacks,
 } from '@voho0000/personalized-care'
 import { getEnabledClinicalModules } from '@voho0000/personalized-care'
@@ -69,6 +71,74 @@ function recommendation(
     safetyBoundary: 'boundary',
   }
 }
+
+describe('clinical semantic output policy', () => {
+  it('separates retrievable record inputs from clinician-only judgment', () => {
+    expect(buildClinicalSemanticRequirements('zh-TW', [
+      {
+        needed: true,
+        kind: 'record-input',
+        zh: '近期定量 UACR',
+        en: 'Recent quantitative UACR',
+      },
+      {
+        needed: true,
+        kind: 'clinical-review',
+        zh: '最大耐受 RASi 與不耐受原因',
+        en: 'Maximally tolerated RAS inhibition and intolerance reason',
+      },
+    ])).toEqual({
+      requirements: [
+        { kind: 'record-input', label: '近期定量 UACR' },
+        { kind: 'clinical-review', label: '最大耐受 RASi 與不耐受原因' },
+      ],
+      missingData: ['近期定量 UACR'],
+      clinicalReviewItems: ['最大耐受 RASi 與不耐受原因'],
+    })
+  })
+
+  it('removes repeated no-information text and retains care-changing actions', () => {
+    const noAction = {
+      ...recommendation('SGLT2 抑制劑已有處方', 'medication'),
+      status: 'no-action' as const,
+      title: 'SGLT2 抑制劑已有處方',
+      nextActions: [
+        'SGLT2 抑制劑已有處方',
+        '已有 SGLT2 抑制劑處方，目前無需另加提示。',
+        '依腎功能與適應症持續追蹤。',
+      ],
+    }
+    const governed = applyClinicalSemanticPolicy({
+      title: 'test',
+      summary: 'test',
+      packId: 'test',
+      packVersion: 'test',
+      recommendations: [noAction],
+      automatedChecks: [{
+        id: noAction.id,
+        label: noAction.title,
+        value: noAction.title,
+        recommendation: noAction,
+      }],
+      notEvaluated: [],
+      disclaimer: 'test',
+    })
+
+    expect(governed.recommendations[0].nextActions).toEqual([
+      '已有 SGLT2i處方。',
+      '依腎功能與適應症持續追蹤。',
+    ])
+    expect(governed.recommendations[0].title).toBe('SGLT2i已有處方')
+    expect(governed.automatedChecks?.[0].recommendation?.nextActions).toEqual([
+      '已有 SGLT2i處方。',
+      '依腎功能與適應症持續追蹤。',
+    ])
+    expect(governed.automatedChecks?.[0]).toMatchObject({
+      label: 'SGLT2i已有處方',
+      value: 'SGLT2i已有處方',
+    })
+  })
+})
 
 describe('CDSS knowledge-pack registry', () => {
   it('places DCSI in the pluggable decision-module registry', () => {
@@ -354,9 +424,13 @@ describe('CDSS knowledge-pack registry', () => {
       (item) => item.id === 'glycemic-safety-older-adult',
     )
     expect(glycemic).toMatchObject({
-      status: 'needs-data',
+      status: 'review',
       priority: 'medium',
     })
+    expect(glycemic?.missingData).not.toContain('實際服用情形與近期低血糖事件')
+    expect(glycemic?.clinicalReviewItems).toContain(
+      '健康狀態分層：共病負擔、ADL／IADL、認知與衰弱',
+    )
     expect(glycemic?.title).toContain('ADL／IADL')
     expect(glycemic?.recommendation).toContain('尚未完成高齡糖尿病目標判讀')
   })
@@ -622,6 +696,7 @@ describe('CDSS knowledge-pack registry', () => {
       expect(kidneyMedication?.title).toContain(expectedTitle)
       expect(kidneyMedication?.recommendation).toContain(expectedRecommendation)
       expect(kidneyMedication?.missingData).toContain('UACR >30 mg/g 是否為持續性')
+      expect(kidneyMedication?.missingData).not.toContain('RASi 是否已達最大耐受劑量')
     },
   )
 
@@ -713,11 +788,9 @@ describe('CDSS knowledge-pack registry', () => {
 
     expect(sglt2).toMatchObject({
       status: 'no-action',
-      recommendation: '符合糖尿病 CKD 的 SGLT2 抑制劑條件，且已有處方。',
+      recommendation: '符合糖尿病 CKD 的 SGLT2i 條件，且已有處方。',
     })
-    expect(sglt2?.nextActions).toEqual([
-      '已有 SGLT2 抑制劑處方，目前無需另加提示。',
-    ])
+    expect(sglt2?.nextActions).toEqual(['已有 SGLT2i處方。'])
     expect(sglt2?.safetyBoundary).toContain('至少停 3 天')
     expect(sglt2?.safetyBoundary).toContain('不要把顯影劑檢查一律設為停藥條件')
     expect(sglt2?.guidelineReferences.find(
