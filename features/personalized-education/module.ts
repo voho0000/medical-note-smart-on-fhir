@@ -18,6 +18,12 @@ export const PERSONALIZED_EDUCATION_MODULE = {
     pinned: true,
     forceMount: true,
     audiences: ['patient'],
+    // Let the outer panel own scrolling, as the medical summary does. Inside
+    // the feature's own ScrollArea the viewport declares overflow-y: scroll but
+    // never scrolls — the panel outside it does — so it captures both sticky
+    // positioning and scrollIntoView. The section jump would silently do
+    // nothing and the control row would scroll away instead of pinning.
+    scrollMode: 'panel',
     contentClassName: 'flex-1 mt-1',
   },
   diseasePacks: getEnabledDiseasePacks,

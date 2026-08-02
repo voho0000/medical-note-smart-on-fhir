@@ -464,3 +464,41 @@ describe('pack selection', () => {
     expect(result.eligiblePackIds).toEqual([])
   })
 })
+
+describe('section jump', () => {
+  it('lists every rendered section, grouped, plus the summary', () => {
+    render(
+      <PersonalizedEducationFeature
+        plan={buildPersonalizedEducation(context).plan}
+        audience="patient"
+        age={94}
+      />,
+    )
+
+    const jump = screen.getByTestId('education-section-jump') as HTMLSelectElement
+    const values = Array.from(jump.options).map((option) => option.value).filter(Boolean)
+
+    // Summary view: only the modules the record supports.
+    expect(values).toEqual([
+      'education-care-summary',
+      'education-a1c',
+      'education-daily-rhythm',
+      'education-sglt2-inhibitor',
+      'education-kidney',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: '詳細解說版' }))
+
+    const detailedValues = Array.from(
+      (screen.getByTestId('education-section-jump') as HTMLSelectElement).options,
+    ).map((option) => option.value).filter(Boolean)
+
+    // Every option must resolve to a section that is actually on the page,
+    // otherwise choosing it would scroll nowhere.
+    expect(detailedValues).toHaveLength(25)
+    for (const value of detailedValues) {
+      expect(document.getElementById(value)).toBeInTheDocument()
+    }
+    expect(jump.querySelectorAll('optgroup').length).toBeGreaterThan(1)
+  })
+})

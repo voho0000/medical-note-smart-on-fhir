@@ -165,7 +165,8 @@ function CareSummary({ summary }: { summary: EducationCareSummary }) {
 
   return (
     <section
-      className="border-b border-border pb-7 print:hidden"
+      id="education-care-summary"
+      className="scroll-mt-16 border-b border-border pb-7 print:hidden"
       aria-labelledby="education-summary-title"
       data-testid="education-care-summary"
     >
@@ -205,6 +206,73 @@ function CareSummary({ summary }: { summary: EducationCareSummary }) {
         })}
       </div>
     </section>
+  )
+}
+
+/**
+ * Jump straight to a section instead of scrolling past everything before it.
+ *
+ * A native select rather than a row of chips: the detailed view lists 24
+ * sections across 8 groups, which no chip row fits in this panel, and optgroup
+ * keeps the grouping visible while collapsing to a single control. It also
+ * gets keyboard and touch behaviour for free, which matters more here than a
+ * bespoke menu would.
+ */
+function SectionJump({
+  groups,
+  modules,
+  hasSummary,
+}: {
+  groups: readonly EducationModuleGroupDefinition[]
+  modules: readonly ResolvedEducationModule[]
+  hasSummary: boolean
+}) {
+  const grouped = groups
+    .map((group) => ({
+      group,
+      modules: modules.filter(
+        (educationModule) => educationModule.definition.groupId === group.id,
+      ),
+    }))
+    .filter((entry) => entry.modules.length > 0)
+
+  if (grouped.length === 0) return null
+
+  return (
+    <div className="flex items-center">
+      <label className="sr-only" htmlFor="education-section-jump">
+        跳到章節
+      </label>
+      <select
+        id="education-section-jump"
+        value=""
+        data-testid="education-section-jump"
+        onChange={(event) => {
+          const target = document.getElementById(event.target.value)
+          // Reset so choosing the same section twice still scrolls to it.
+          event.target.value = ''
+          target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
+        className="min-h-11 max-w-[12rem] cursor-pointer truncate border-b-2 border-transparent bg-transparent px-0.5 text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <option value="">跳到章節…</option>
+        {hasSummary ? (
+          <option value="education-care-summary">這次的照護摘要</option>
+        ) : null}
+        {grouped.map(({ group, modules: groupModules }) => (
+          <optgroup key={group.id} label={group.label}>
+            {groupModules.map((educationModule) => (
+              <option
+                key={educationModule.definition.id}
+                value={`education-${educationModule.definition.id}`}
+              >
+                {educationModule.definition.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
   )
 }
 
@@ -590,7 +658,7 @@ function PersonalizedHandoutSection({
   return (
     <article
       id={`education-${definition.id}`}
-      className="scroll-mt-4 border-t border-border py-7 first:border-t-0 sm:py-9"
+      className="scroll-mt-16 border-t border-border py-7 first:border-t-0 sm:py-9"
       data-testid={`education-module-${definition.id}`}
       data-group-id={group.id}
       data-reading-mode={readingMode}
@@ -946,6 +1014,7 @@ export default function PersonalizedEducationFeature({
   ))
   const handoutModules = selectEducationHandoutModules(resolvedModules, { age })
   const displayedModules = readingMode === 'detailed' ? handoutModules : featuredModules
+  const sortedGroups = [...schema.groups].sort((left, right) => left.order - right.order)
   const sources = mergeEducationSources(plan, schema)
   const careSummary = buildEducationCareSummary(plan, resolvedModules)
   const safetyItems = featuredModules
@@ -1078,10 +1147,11 @@ export default function PersonalizedEducationFeature({
         the version it will produce, which is what those hints were for.
       */}
       <section
-        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border pb-2 print:hidden"
+        className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border bg-background pb-2 pt-2 print:hidden"
         aria-label="閱讀與列印設定"
         data-testid="education-reading-mode"
       >
+        <div className="flex min-w-0 items-center gap-5">
         <fieldset className="min-w-0">
           <legend className="sr-only">選擇閱讀方式</legend>
           <div className="flex gap-5">
@@ -1105,6 +1175,13 @@ export default function PersonalizedEducationFeature({
             ))}
           </div>
         </fieldset>
+
+        <SectionJump
+          groups={sortedGroups}
+          modules={displayedModules}
+          hasSummary={careSummary.currentState.length > 0}
+        />
+        </div>
 
         <div className="flex items-center gap-4">
           <button
