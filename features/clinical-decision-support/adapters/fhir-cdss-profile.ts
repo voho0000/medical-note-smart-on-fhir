@@ -17,6 +17,10 @@ import type {
   CdssUacrReading,
 } from '../types'
 import {
+  getAnalyteCanonicalKey,
+  LOINC_TO_CANONICAL,
+} from '@/src/shared/utils/lab-normalize'
+import {
   assessMedicationClass,
   classifyCurrentMedications,
   currentMedicationRecords,
@@ -42,7 +46,10 @@ const UCUM_SYSTEM = 'http://unitsofmeasure.org'
 const NHI_DRUG_CODE_SYSTEM = 'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
 
 const HBA1C_LOINC = '4548-4'
-const EGFR_LOINC = new Set(['69405-9', '77147-7'])
+// 33914-3 is what NHI-FHIR-Bridge below v1.3.2 sent for every eGFR and 62238-1
+// is the CKD-EPI formula. Both were missing, so records from those sources
+// produced no eGFR fact and the kidney modules reported missing data instead.
+const EGFR_LOINC = new Set(['69405-9', '77147-7', '33914-3', '62238-1'])
 const EGFR_UCUM_UNITS = new Set([
   'ml/min/1.73m2',
   'ml/min/1.73m^2',
@@ -541,18 +548,62 @@ function selectEligibilityDiagnosis(candidates: readonly DiagnosisCandidate[]): 
   ))[0]
 }
 
+/**
+ * Canonical analyte keys implied by a set of configured LOINCs.
+ *
+ * Derived rather than hand-listed so a constant can never mean more than the
+ * codes it already declares: {'77147-7'} yields {'EGFR(M)'}, which then also
+ * recognises 33914-3 and any record naming the test in text. Cached because
+ * the matchers run once per observation per analyte.
+ */
+const canonicalKeyCache = new Map<string, ReadonlySet<string>>()
+
+function canonicalKeysFor(codes: ReadonlySet<string>): ReadonlySet<string> {
+  const cacheKey = [...codes].sort().join('|')
+  const cached = canonicalKeyCache.get(cacheKey)
+  if (cached) return cached
+
+  const keys = new Set<string>()
+  for (const code of codes) {
+    const canonical = LOINC_TO_CANONICAL[code]
+    if (canonical) keys.add(canonical)
+  }
+  canonicalKeyCache.set(cacheKey, keys)
+  return keys
+}
+
+/**
+ * A single LOINC per analyte only finds results whose source happened to use
+ * that code. Prefer the identity the host already resolves from the full coding
+ * list and the record's own test name, and keep the LOINC comparison for
+ * analytes the canonical table does not cover.
+ */
+function matchesAnalyte(
+  observation: ObservationEntity,
+  codes: ReadonlySet<string>,
+): boolean {
+  const expectedKeys = canonicalKeysFor(codes)
+  if (expectedKeys.size > 0) {
+    const key = getAnalyteCanonicalKey(observation)
+    if (key) return expectedKeys.has(key)
+  }
+  return observation.code?.coding?.some((coding) => (
+    coding.system === LOINC_SYSTEM
+    && typeof coding.code === 'string'
+    && codes.has(coding.code)
+  )) === true
+}
+
 function findLatestValidatedObservation(
   observations: readonly ObservationEntity[],
   code: string,
   acceptedUnits: ReadonlySet<string>,
 ): ObservationEntity | undefined {
-  return observations
-    .filter((observation) => (
-      isGovernedObservation(observation)
-      && hasCoding(observation.code?.coding, LOINC_SYSTEM, code)
-      && hasExpectedUnit(observation.valueQuantity, acceptedUnits)
-    ))
-    .sort((a, b) => dateValue(b.effectiveDateTime) - dateValue(a.effectiveDateTime))[0]
+  return findLatestValidatedObservationFromCodes(
+    observations,
+    new Set([code]),
+    acceptedUnits,
+  )
 }
 
 function validatedObservations(
@@ -560,10 +611,11 @@ function validatedObservations(
   code: string,
   acceptedUnits: ReadonlySet<string>,
 ): ObservationEntity[] {
+  const codes = new Set([code])
   return observations
     .filter((observation) => (
       isGovernedObservation(observation)
-      && hasCoding(observation.code?.coding, LOINC_SYSTEM, code)
+      && matchesAnalyte(observation, codes)
       && hasExpectedUnit(observation.valueQuantity, acceptedUnits)
     ))
     .sort((a, b) => dateValue(a.effectiveDateTime) - dateValue(b.effectiveDateTime))
@@ -577,11 +629,7 @@ function findLatestValidatedObservationFromCodes(
   return observations
     .filter((observation) => (
       isGovernedObservation(observation)
-      && observation.code?.coding?.some((coding) => (
-        coding.system === LOINC_SYSTEM
-        && typeof coding.code === 'string'
-        && codes.has(coding.code)
-      )) === true
+      && matchesAnalyte(observation, codes)
       && hasExpectedUnit(observation.valueQuantity, acceptedUnits)
     ))
     .sort((a, b) => dateValue(b.effectiveDateTime) - dateValue(a.effectiveDateTime))[0]
@@ -632,11 +680,7 @@ function validatedEgfrObservations(observations: readonly ObservationEntity[]): 
   return observations
     .filter((observation) => (
       isGovernedObservation(observation)
-      && observation.code?.coding?.some((coding) => (
-        coding.system === LOINC_SYSTEM
-        && typeof coding.code === 'string'
-        && EGFR_LOINC.has(coding.code)
-      )) === true
+      && matchesAnalyte(observation, EGFR_LOINC)
       && hasExpectedUnit(observation.valueQuantity, EGFR_UCUM_UNITS)
     ))
     .sort((a, b) => dateValue(a.effectiveDateTime) - dateValue(b.effectiveDateTime))

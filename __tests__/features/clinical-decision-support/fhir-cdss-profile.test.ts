@@ -1136,3 +1136,58 @@ describe('FHIR DCSI automatic evidence extraction', () => {
     expect(result.dcsiDomainContexts).toBeUndefined()
   })
 })
+
+describe('analyte recognition across source coding styles', () => {
+  function egfrObservation(code: ObservationEntity['code']): ObservationEntity {
+    return observation('egfr', {
+      code,
+      valueQuantity: { value: 32, unit: 'mL/min/1.73m2', system: UCUM_SYSTEM },
+    })
+  }
+
+  // 33914-3 is what NHI-FHIR-Bridge below v1.3.2 sent for every eGFR and
+  // 62238-1 is CKD-EPI. Neither was recognised, so the kidney modules reported
+  // missing data for records the source had actually supplied.
+  it.each([
+    ['MDRD 77147-7', '77147-7'],
+    ['legacy bridge 33914-3', '33914-3'],
+    ['CKD-EPI 62238-1', '62238-1'],
+    ['69405-9', '69405-9'],
+  ])('reads eGFR from %s', (_label, loinc) => {
+    const result = profile([
+      egfrObservation({ coding: [{ system: LOINC_SYSTEM, code: loinc }] }),
+    ])
+
+    expect(result.facts.eGFR?.numericValue).toBe(32)
+  })
+
+  it('reads eGFR from a record that names the test without a LOINC', () => {
+    const result = profile([egfrObservation({ text: 'eGFR' })])
+
+    expect(result.facts.eGFR?.numericValue).toBe(32)
+  })
+
+  it('reads HbA1c from a method-specific LOINC', () => {
+    const result = profile([
+      observation('hba1c', {
+        code: { coding: [{ system: LOINC_SYSTEM, code: '17856-6' }] },
+        valueQuantity: { value: 8.1, unit: '%', system: UCUM_SYSTEM },
+      }),
+    ])
+
+    expect(result.facts.HbA1c?.numericValue).toBe(8.1)
+  })
+
+  it('still rejects a value whose unit does not match the analyte', () => {
+    const result = profile([
+      egfrObservation({ coding: [{ system: LOINC_SYSTEM, code: '33914-3' }] }),
+      observation('egfr-bad-unit', {
+        code: { coding: [{ system: LOINC_SYSTEM, code: '33914-3' }] },
+        effectiveDateTime: '2026-06-20',
+        valueQuantity: { value: 999, unit: 'mg/dL', system: UCUM_SYSTEM },
+      }),
+    ])
+
+    expect(result.facts.eGFR?.numericValue).toBe(32)
+  })
+})
