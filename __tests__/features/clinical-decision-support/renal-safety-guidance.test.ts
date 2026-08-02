@@ -100,7 +100,7 @@ describe('potassium and kidney-function medication safety pack', () => {
       priority: 'high',
       status: 'review',
       title: expect.stringContaining('歷史結果'),
-      recommendation: expect.stringContaining('後續血鉀'),
+      recommendation: expect.stringContaining('後續 K'),
     })
   })
 

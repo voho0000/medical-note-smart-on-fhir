@@ -166,23 +166,20 @@ describe('Live personalized-guidance disease switch', () => {
     })
   })
 
-  it('switches from diabetes guidance to CKD guidance and keeps sources separate', () => {
+  it('switches from CKD guidance to diabetes guidance and keeps sources separate', () => {
     render(<LiveClinicalDecisionSupportFeature />)
 
     const diabetesButton = screen.getByTestId('cdss-disease-switch-dm-ckd-cdss')
     const ckdButton = screen.getByTestId('cdss-disease-switch-ckd-cdss')
-    const lipidButton = screen.getByTestId('cdss-disease-switch-hyperlipidemia-cdss')
-    const cirrhosisButton = screen.getByTestId('cdss-disease-switch-cirrhosis-cdss')
+    // Only CKD and diabetes are surfaced while they are being refined; the
+    // other packs are built and tested but held back.
+    for (const held of ['hyperlipidemia', 'hypertension', 'cirrhosis', 'ckd-anemia']) {
+      expect(screen.queryByTestId(`cdss-disease-switch-${held}-cdss`)).not.toBeInTheDocument()
+    }
 
-    expect(screen.queryByTestId('cdss-disease-switch-hypertension-cdss')).not.toBeInTheDocument()
-    expect(diabetesButton).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent('糖尿病個人化照護指引')
-    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
-      'ada-2026,taiwan-t2dm-2022,taiwan-nhi-diabetes',
-    )
-
-    fireEvent.click(ckdButton)
-
+    // CKD sits first in the switcher, so it is the pathway the tab opens on.
+    expect(ckdButton.compareDocumentPosition(diabetesButton))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(ckdButton).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
       '慢性腎臟病個人化照護指引',
@@ -192,21 +189,112 @@ describe('Live personalized-guidance disease switch', () => {
     )
     expect(screen.getByTestId('mock-cdss-result')).not.toHaveTextContent('ada-2026')
 
-    fireEvent.click(lipidButton)
+    fireEvent.click(diabetesButton)
 
-    expect(lipidButton).toHaveAttribute('aria-pressed', 'true')
+    expect(diabetesButton).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent('糖尿病個人化照護指引')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
-      '高血脂個人化照護指引',
+      'ada-2026,taiwan-t2dm-2022,taiwan-nhi-diabetes',
     )
-    expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
-      'aha-acc-dyslipidemia-2026,taiwan-lipid-2022',
-    )
+  })
 
-    fireEvent.click(cirrhosisButton)
+  it('marks every pathway this record activates', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
 
-    expect(cirrhosisButton).toHaveAttribute('aria-pressed', 'true')
+    for (const packId of ['dm-ckd-cdss', 'ckd-cdss']) {
+      expect(screen.getByTestId(`cdss-disease-switch-${packId}`))
+        .toHaveAttribute('data-applicable', 'true')
+    }
+  })
+})
+
+describe('Live personalized-guidance default selection', () => {
+  beforeEach(() => {
+    mockUsePatient.mockReturnValue({
+      patient: { id: 'ckd-only-patient', resourceType: 'Patient', age: 74 },
+      loading: false,
+      error: null,
+    })
+    // CKD only: no governed diabetes diagnosis and no diagnostic-range HbA1c.
+    mockUseClinicalData.mockReturnValue({
+      conditions: [],
+      encounters: [{
+        id: 'encounter-ckd-only',
+        status: 'finished',
+        period: { start: '2026-06-25T00:00:00+08:00' },
+        reasonCode: [{
+          coding: [{
+            system: 'http://hl7.org/fhir/sid/icd-10-cm',
+            code: 'N18.32',
+            display: 'Chronic kidney disease, stage 3b',
+          }],
+        }],
+      }],
+      observations: [{
+        id: 'egfr-ckd-only',
+        resourceType: 'Observation',
+        status: 'final',
+        effectiveDateTime: '2026-05-01',
+        code: {
+          coding: [{
+            system: 'http://loinc.org',
+            code: '77147-7',
+            display: 'Glomerular filtration rate',
+          }],
+        },
+        valueQuantity: {
+          value: 34,
+          unit: 'mL/min/1.73m2',
+          system: 'http://unitsofmeasure.org',
+          code: 'mL/min/1.73m2',
+        },
+      }],
+      medications: [],
+      allergies: [],
+      carePlans: [{
+        id: 'pre-esrd',
+        status: 'active',
+        title: '末期腎臟病前期（Pre-ESRD）照護計畫',
+      }],
+      procedures: [],
+      immunizations: [],
+      isLoading: false,
+      isFetching: false,
+      error: null,
+      hasBlockingQueryIssues: false,
+    })
+  })
+
+  it('dims a pathway this record does not activate', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    // CKD-only record: the diabetes pathway stays reachable but is marked as
+    // not activated, so the clinician can see that at a glance.
+    expect(screen.getByTestId('cdss-disease-switch-dm-ckd-cdss'))
+      .toHaveAttribute('data-applicable', 'false')
+    expect(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
+      .toHaveAttribute('data-applicable', 'true')
+  })
+
+  it('opens on a pathway the record activates instead of the fixed default', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    // Previously this opened on the diabetes pack and showed "本次未啟動糖尿病
+    // 決策路徑", leaving the clinician to click through every disease.
+    expect(screen.getByTestId('cdss-disease-switch-ckd-cdss'))
+      .toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
-      '肝硬化個人化照護指引',
+      '慢性腎臟病個人化照護指引',
     )
+  })
+
+  it('shows the pack-owned explanation when a chosen pathway is not activated', () => {
+    render(<LiveClinicalDecisionSupportFeature />)
+
+    fireEvent.click(screen.getByTestId('cdss-disease-switch-dm-ckd-cdss'))
+
+    const state = screen.getByTestId('clinical-decision-support-state')
+    expect(state).toHaveTextContent('本次未啟動糖尿病決策路徑')
+    expect(state).toHaveTextContent('這不代表病人沒有糖尿病')
   })
 })

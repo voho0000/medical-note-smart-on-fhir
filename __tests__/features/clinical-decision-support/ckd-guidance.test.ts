@@ -214,16 +214,12 @@ function buildProfile(input?: {
 
 describe('personalized CKD guidance', () => {
   it('registers enabled disease packs as separate switchable modules', () => {
+    // Only the pathways currently being refined are surfaced; the rest are
+    // built and tested but held back with `enabled: false`.
+    // Switcher order: CKD first, then diabetes.
     expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).toEqual([
-      'dm-ckd-cdss',
       'ckd-cdss',
-      'hyperlipidemia-cdss',
-      'heart-failure-cdss',
-      'cirrhosis-cdss',
-      'aki-alert-cdss',
-      'renal-safety-cdss',
-      'atrial-fibrillation-cdss',
-      'ckd-anemia-cdss',
+      'dm-ckd-cdss',
     ])
     expect(getClinicalGuidelinePack('ckd-cdss')).toBe(CKD_GUIDELINE_PACK)
   })
@@ -740,7 +736,7 @@ describe('personalized CKD guidance', () => {
 
     expect(bloodPressureDecision).toMatchObject({
       status: 'review',
-      title: '血壓 132/72 mmHg：先確認量測方式與個人化目標',
+      title: '先確認量測方式與個人化目標',
     })
     expect(bloodPressureDecision?.safetyBoundary).toContain('非標準化血壓不可直接套用 <120')
     expect(finerenone).toMatchObject({
@@ -773,7 +769,7 @@ describe('personalized CKD guidance', () => {
       '飲食攝取、近期體重變化與肌少症／衰弱風險（需問診或正式評估）',
     )
     expect(nutrition?.safetyBoundary).toContain(
-      '血清白蛋白、年齡或單次體重都不能單獨診斷營養不良、肌少症或衰弱',
+      'Albumin、年齡或單次體重都不能單獨診斷營養不良、肌少症或衰弱',
     )
     expect(nutrition?.guidelineReferences).toHaveLength(0)
     expect(nutrition?.sourceAssessments?.find(
@@ -806,10 +802,10 @@ describe('personalized CKD guidance', () => {
     expect(complication).toMatchObject({
       priority: 'medium',
       status: 'review',
-      title: 'Hb 12.1 g/dL：男性貧血，先評估原因與趨勢',
+      title: '男性貧血，先評估原因與趨勢',
     })
     expect(complication?.missingData).toEqual(expect.arrayContaining([
-      'CBC 連續趨勢與網狀紅血球',
+      'CBC 連續趨勢與 Retic',
       'ferritin 與 TSAT',
     ]))
     expect(complication?.recommendation).toContain('單一輕度貧血不直接觸發 ESA')
@@ -862,7 +858,7 @@ describe('personalized CKD guidance', () => {
 
     expect(complication).toMatchObject({
       status: 'review',
-      title: 'Bicarbonate 17.9 mmol/L：評估具臨床重要性的代謝性酸中毒',
+      title: '評估具臨床重要性的代謝性酸中毒',
     })
   })
 
@@ -886,7 +882,7 @@ describe('personalized CKD guidance', () => {
 
       expect(complication).toMatchObject({
         status: 'review',
-        title: '總 CO₂ 17.9 mmol/L：評估具臨床重要性的代謝性酸中毒',
+        title: '評估具臨床重要性的代謝性酸中毒',
       })
       expect(complication?.patientEvidence).toEqual(expect.arrayContaining([
         expect.objectContaining({ label: '總 CO₂' }),
@@ -912,7 +908,7 @@ describe('personalized CKD guidance', () => {
     )
 
     expect(complication).toMatchObject({ status: 'needs-data' })
-    expect(complication?.missingData).toContain('碳酸氫鹽／總二氧化碳')
+    expect(complication?.missingData).toContain('HCO3／Total CO2')
   })
 
   it('calls the shared KFRE engine when governed demographics, eGFR, and quantitative UACR are complete', () => {

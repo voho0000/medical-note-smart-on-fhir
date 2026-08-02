@@ -2,8 +2,21 @@ import {
   calculateKfre,
   KFRE_FOUR_VARIABLE_MODEL,
 } from '@/src/core/clinical-calculators/kfre'
+import {
+  calculateKfre as governedCalculateKfre,
+  KFRE_FOUR_VARIABLE_MODEL as GOVERNED_KFRE_MODEL,
+} from '@voho0000/personalized-care'
 
 describe('four-variable KFRE domain calculator', () => {
+  it('is the same implementation the CKD guidance card uses', () => {
+    // The equation was previously duplicated in this repo and in the care
+    // package, so a coefficient fix in one place left the other reporting a
+    // different risk for the same patient. Identity, not equality: a re-fork
+    // must fail here.
+    expect(calculateKfre).toBe(governedCalculateKfre)
+    expect(KFRE_FOUR_VARIABLE_MODEL).toBe(GOVERNED_KFRE_MODEL)
+  })
+
   it('reproduces the published non-North-American equation for a worked case', () => {
     const result = calculateKfre({
       ageYears: 72,

@@ -83,7 +83,7 @@ describe('CKD anemia differential pathway', () => {
       (item) => item.id === 'ckd-anemia-initial-evaluation',
     )).toMatchObject({
       status: 'needs-data',
-      missingData: expect.arrayContaining(['網狀紅血球']),
+      missingData: expect.arrayContaining(['Retic']),
     })
     expect(result.recommendations.find(
       (item) => item.id === 'ckd-anemia-iron-pathway',

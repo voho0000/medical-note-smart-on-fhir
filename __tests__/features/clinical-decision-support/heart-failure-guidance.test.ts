@@ -117,11 +117,11 @@ describe('heart-failure clinical guidance pack', () => {
       code: 'I50.22',
     })
     expect(HEART_FAILURE_GUIDELINE_PACK.applies(lvefOnly)).toBe(false)
-    expect(HEART_FAILURE_GUIDELINE_PACK.enabled).toBe(true)
-    expect(getClinicalGuidelinePack('heart-failure-cdss')).toBe(
-      HEART_FAILURE_GUIDELINE_PACK,
-    )
-    expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).toContain(
+    // Held back from the switcher while DM/CKD/lipid are refined. The rules
+    // stay covered here so the pathway can be switched on without rework.
+    expect(HEART_FAILURE_GUIDELINE_PACK.enabled).toBe(false)
+    expect(getClinicalGuidelinePack('heart-failure-cdss')).toBeUndefined()
+    expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).not.toContain(
       'heart-failure-cdss',
     )
   })
@@ -281,7 +281,8 @@ describe('heart-failure clinical guidance pack', () => {
       (item) => item.id === 'heart-failure-hfimpEF-therapy',
     )
 
-    expect(phenotype?.title).toContain('LVEF 由 35% 改善至 52%')
+    // The measured LVEF values belong to the key-evidence column, not the heading.
+    expect(phenotype?.title).toContain('符合 HFimpEF 軌跡')
     expect(therapy).toMatchObject({
       priority: 'high',
       status: 'review',
@@ -339,7 +340,7 @@ describe('heart-failure clinical guidance pack', () => {
     expect(safety).toMatchObject({
       priority: 'high',
       status: 'review',
-      title: expect.stringContaining('血鉀 5.6 mmol/L'),
+      title: expect.stringContaining('MRA 紀錄合併嚴重高血鉀'),
     })
     expect(safety?.safetyBoundary).toContain('不會觸發自動停藥')
   })

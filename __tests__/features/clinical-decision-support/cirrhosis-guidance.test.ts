@@ -135,9 +135,10 @@ describe('cirrhosis clinical guidance pack', () => {
       resourceType: 'Condition',
       code: 'K74.60',
     })
-    expect(CIRRHOSIS_GUIDELINE_PACK.enabled).toBe(true)
-    expect(getClinicalGuidelinePack('cirrhosis-cdss')).toBe(CIRRHOSIS_GUIDELINE_PACK)
-    expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).toContain(
+    // Held back from the switcher while DM/CKD/lipid are refined.
+    expect(CIRRHOSIS_GUIDELINE_PACK.enabled).toBe(false)
+    expect(getClinicalGuidelinePack('cirrhosis-cdss')).toBeUndefined()
+    expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).not.toContain(
       'cirrhosis-cdss',
     )
   })

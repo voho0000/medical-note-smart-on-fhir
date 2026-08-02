@@ -382,7 +382,7 @@ describe('clinical decision summary', () => {
     expect(supporting).not.toHaveTextContent('通用 CKD 樣板摘要')
   })
 
-  it('moves monitoring lab values from the assessment into key evidence', () => {
+  it('shows the heading verbatim and the lab values in key evidence', () => {
     render(<ClinicalDecisionSupportView
       result={{
         ...result(),
@@ -391,8 +391,14 @@ describe('clinical decision summary', () => {
             status: 'no-action',
             moduleName: '血鉀與酸鹼',
             presentationType: 'monitoring',
-            title: '鉀與酸鹼數值已判讀；總 CO₂ 23.6 mmol/L未觸發重要酸中毒提示',
+            // Packs must not repeat a value the key-evidence column shows; the
+            // care package enforces that, so the host renders the heading as
+            // written instead of subtracting from it.
+            title: '鉀與酸鹼數值已判讀；未觸發重要酸中毒提示',
             overviewEvidenceFactKey: 'potassium',
+            // Mirrors what the CKD pack now declares. The host no longer keeps
+            // a module-id lookup table to pair these two analytes.
+            overviewEvidenceFactKeys: ['potassium', 'bicarbonate'],
             patientEvidence: [
               {
                 label: '血鉀',

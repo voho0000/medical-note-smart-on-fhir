@@ -169,22 +169,18 @@ function compactOverviewEvidenceValue(evidence: {
     .trim()
 }
 
-const overviewEvidenceKeyFallbacks: Readonly<Record<string, readonly string[]>> = {
-  'ckd-potassium-acidosis': ['potassium', 'bicarbonate'],
-}
-
 function overviewEvidenceItems(
   recommendation: CdssRecommendation,
 ): CdssRecommendation['patientEvidence'] {
-  const explicitKeys = (recommendation as CdssRecommendation & {
-    overviewEvidenceFactKeys?: readonly string[]
-  }).overviewEvidenceFactKeys
+  // Which facts head a card is a clinical decision owned by the care pack. The
+  // host previously kept a module-id lookup table here, which meant adding a
+  // multi-fact headline required editing this repo.
+  const explicitKeys = recommendation.overviewEvidenceFactKeys
   const keys = explicitKeys && explicitKeys.length > 0
     ? explicitKeys
-    : overviewEvidenceKeyFallbacks[recommendation.id]
-      ?? (recommendation.overviewEvidenceFactKey
-        ? [recommendation.overviewEvidenceFactKey]
-        : [])
+    : recommendation.overviewEvidenceFactKey
+      ? [recommendation.overviewEvidenceFactKey]
+      : []
   const seen = new Set<string>()
 
   return keys.flatMap((factKey) => {
@@ -197,40 +193,6 @@ function overviewEvidenceItems(
     seen.add(key)
     return [evidence]
   })
-}
-
-function regexLiteral(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function flexibleWhitespacePattern(value: string): string {
-  return value.trim().split(/\s+/u).map(regexLiteral).join('\\s*')
-}
-
-function conciseMonitoringAssessment(
-  recommendation: CdssRecommendation,
-  evidenceItems: CdssRecommendation['patientEvidence'],
-): string {
-  if (recommendationPresentationType(recommendation) !== 'monitoring') {
-    return recommendation.title
-  }
-
-  const withoutDisplayedValues = evidenceItems.reduce((title, evidence) => {
-    const valueWithoutDate = evidence.value
-      .replace(/\s*[（(]\d{4}-\d{2}-\d{2}[）)]\s*$/u, '')
-      .trim()
-    if (!valueWithoutDate) return title
-    const evidencePhrase = new RegExp(
-      `${flexibleWhitespacePattern(evidence.label)}\\s*${flexibleWhitespacePattern(valueWithoutDate)}`,
-      'giu',
-    )
-    return title.replace(evidencePhrase, '')
-  }, recommendation.title)
-
-  return withoutDisplayedValues
-    .replace(/^\s*[：:；;]\s*/u, '')
-    .replace(/[ \t]{2,}/gu, ' ')
-    .trim()
 }
 
 function directGuidelineSourceLabel(
@@ -2037,7 +1999,9 @@ export function ClinicalDecisionSupportView({
             && !isMissingPreviewRedundant(recommendation.title, overviewMissing)
             ? overviewMissing
             : undefined
-          const conciseAssessment = conciseMonitoringAssessment(recommendation, overviewEvidence)
+          // The pack owns the heading. It no longer repeats a measurement the
+          // key-evidence column already shows, so the host does not rewrite it.
+          const conciseAssessment = recommendation.title
           const assessmentPreview = conciseAssessment !== moduleName
             && !isAssessmentPreviewRedundant(
               conciseAssessment,

@@ -114,10 +114,11 @@ describe('hyperlipidemia clinical guidance pack', () => {
       resourceType: 'Condition',
       code: 'E78.5',
     })
-    expect(getClinicalGuidelinePack('hyperlipidemia-cdss')).toBe(
-      HYPERLIPIDEMIA_GUIDELINE_PACK,
-    )
-    expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).toContain(
+    // Held back from the switcher while DM and CKD are refined. The rules stay
+    // covered here so the pathway can be switched on without rework.
+    expect(HYPERLIPIDEMIA_GUIDELINE_PACK.enabled).toBe(false)
+    expect(getClinicalGuidelinePack('hyperlipidemia-cdss')).toBeUndefined()
+    expect(getEnabledClinicalGuidelinePacks().map((pack) => pack.id)).not.toContain(
       'hyperlipidemia-cdss',
     )
   })
@@ -145,7 +146,7 @@ describe('hyperlipidemia clinical guidance pack', () => {
     expect(severeLdl).toMatchObject({
       priority: 'high',
       status: 'actionable',
-      title: expect.stringContaining('LDL-C 214'),
+      title: expect.stringContaining('確認嚴重高膽固醇血症與家族性風險'),
     })
     expect(severeLdl?.safetyBoundary).toContain('不會自動標記家族性高膽固醇血症')
     expect(guidance.knowledgePacks?.map((pack) => pack.id)).toEqual([
