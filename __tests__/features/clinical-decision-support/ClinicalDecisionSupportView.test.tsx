@@ -219,6 +219,7 @@ describe('clinical decision summary', () => {
             factKeys: ['urineAlbuminOverview'],
           }],
           missingData: ['大於 0 的定量 UACR（mg/g）'],
+          nextActions: ['查找或補做必要輸入；資料完整且腎功能穩定後再計算。'],
         }),
         recommendation('ckd-blood-pressure-volume', {
           status: 'needs-data',
@@ -272,8 +273,10 @@ describe('clinical decision summary', () => {
     )).toBeInTheDocument()
 
     fireEvent.click(kfreRow)
-    expect(screen.getByTestId('cdss-action-plan-ckd-kidney-failure-risk')).toHaveTextContent(
-      '大於 0 的定量 UACR（mg/g）',
+    const kfreActionPlan = screen.getByTestId('cdss-action-plan-ckd-kidney-failure-risk')
+    expect(kfreActionPlan).not.toHaveTextContent('尚待確認')
+    expect(kfreActionPlan).toHaveTextContent(
+      '查找或補做大於 0 的定量 UACR（mg/g）；資料完整且腎功能穩定後再計算。',
     )
   })
 
@@ -292,16 +295,22 @@ describe('clinical decision summary', () => {
                 resourceType: 'MedicationRequest',
                 resourceId: 'statin-1',
                 date: '2025-03-20',
+                facility: '院所 A',
+                value: 'ROSUVASTATIN 10 MG',
               },
               {
                 resourceType: 'MedicationRequest',
                 resourceId: 'statin-2',
                 date: '2025-04-20',
+                facility: '院所 A',
+                value: 'ROSUVASTATIN 10 MG',
               },
               {
                 resourceType: 'MedicationRequest',
                 resourceId: 'statin-3',
                 date: '2025-05-20',
+                facility: '院所 B',
+                value: 'ROSUVASTATIN 10 MG',
               },
             ],
           }],
@@ -313,7 +322,12 @@ describe('clinical decision summary', () => {
     fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-statin-history'))
 
     const detail = screen.getByTestId('cdss-recommendation-detail-statin-history')
-    expect(within(detail).getByText('查看全部資料來源')).toBeInTheDocument()
+    const sourceToggle = within(detail).getByText('查看全部資料來源')
+    expect(sourceToggle).toBeInTheDocument()
+    fireEvent.click(sourceToggle)
+    expect(within(detail).getByText(
+      '2025-05-20 · 院所 B ｜ ROSUVASTATIN 10 MG',
+    )).toHaveAttribute('title', '2025-05-20 · 院所 B ｜ ROSUVASTATIN 10 MG')
   })
 
   it('keeps the primary guideline card visible and places other sources and safety notes behind one toggle', () => {
@@ -325,25 +339,49 @@ describe('clinical decision summary', () => {
           status: 'needs-data',
           recommendation: '目前缺少定量 UACR，尚不能完成 SGLT2i 適用性判斷。',
           rationale: '需將 eGFR、UACR 與心衰竭狀態一起判讀。',
-          sourceAssessments: [{
-            sourceId: 'kdigo-ckd-2024',
-            sourceKind: 'guideline',
-            sourceLabel: 'KDIGO CKD 指引',
-            version: '2024',
-            effectiveFrom: '2024-03-13',
-            status: 'needs-data',
-            summary: '依 KDIGO 評估。',
-            references: [{
-              id: 'KDIGO-CKD-2024-3.7',
-              title: 'KDIGO 2024 CKD Guideline',
-              publisher: 'KDIGO',
+          sourceAssessments: [
+            {
+              sourceId: 'kdigo-ckd-2024',
+              sourceKind: 'guideline',
+              sourceLabel: 'KDIGO CKD 指引',
               version: '2024',
-              url: 'https://kdigo.org/',
-              recommendationId: 'Recommendations 3.7.2–3.7.3',
-              evidenceGrade: '1A / 2B',
-              summary: 'eGFR ≥20 且 UACR ≥200 mg/g，或合併心衰竭時，建議使用 SGLT2i。',
-            }],
-          }],
+              effectiveFrom: '2024-03-13',
+              status: 'needs-data',
+              summary: '依 KDIGO 評估。',
+              verifiedData: ['eGFR 32 mL/min/1.73m²'],
+              missingData: ['近期定量 UACR（mg/g）'],
+              references: [{
+                id: 'KDIGO-CKD-2024-3.7',
+                title: 'KDIGO 2024 CKD Guideline',
+                publisher: 'KDIGO',
+                version: '2024',
+                url: 'https://kdigo.org/',
+                recommendationId: 'Recommendations 3.7.2–3.7.3',
+                evidenceGrade: '1A / 2B',
+                summary: 'eGFR ≥20 且 UACR ≥200 mg/g，或合併心衰竭時，建議使用 SGLT2i。',
+              }],
+            },
+            {
+              sourceId: 'taiwan-ckd-2025',
+              sourceKind: 'guideline',
+              sourceLabel: '台灣 CKD 指引',
+              version: '2025-12 update',
+              effectiveFrom: '2025-12-01',
+              status: 'needs-data',
+              summary: '依台灣 CKD 指引評估。',
+              missingData: ['近期定量 UACR（mg/g）'],
+              references: [{
+                id: 'TW-CKD-2025-A4-1-1',
+                title: '台灣慢性腎臟病臨床診療指引',
+                publisher: '台灣腎臟醫學會',
+                version: '2025-12 update',
+                url: 'https://www.tsn.org.tw/',
+                recommendationId: 'A4-1-1',
+                page: 49,
+                summary: '依 GFR 與白蛋白尿分級安排追蹤。',
+              }],
+            },
+          ],
         }),
       ],
     }
@@ -362,14 +400,29 @@ describe('clinical decision summary', () => {
     expect(semanticCard).not.toHaveTextContent('Recommendations 3.7.2–3.7.3')
 
     const supporting = screen.getByTestId('cdss-supporting-context-sglt2-semantic')
-    expect(supporting).not.toHaveAttribute('open')
-    fireEvent.click(within(supporting).getByText('規則稽核、來源與安全提醒'))
     expect(supporting).toHaveAttribute('open')
-    expect(supporting).toHaveTextContent('需將 eGFR、UACR 與心衰竭狀態一起判讀')
+    fireEvent.click(within(supporting).getByText('指引來源與限制'))
+    expect(supporting).not.toHaveAttribute('open')
+    fireEvent.click(within(supporting).getByText('指引來源與限制'))
+    expect(supporting).toHaveAttribute('open')
+    expect(supporting).toHaveTextContent('指引來源')
+    expect(supporting).toHaveTextContent('KDIGO CKD 指引')
+    expect(supporting).toHaveTextContent('台灣 CKD 指引')
+    expect(screen.getByTestId('cdss-source-comparison-sglt2-semantic')).toHaveClass(
+      '@min-[38rem]:grid-cols-2',
+    )
     expect(supporting).toHaveTextContent('Recommendations 3.7.2–3.7.3')
+    expect(supporting).toHaveTextContent('A4-1-1 · 第 49 頁')
     expect(supporting).toHaveTextContent('等級 1A / 2B')
     expect(supporting).toHaveTextContent('eGFR ≥20 且 UACR ≥200 mg/g')
     expect(supporting).toHaveTextContent('邊界 sglt2-semantic')
+    expect(supporting).not.toHaveTextContent('臨床結論')
+    expect(supporting).not.toHaveTextContent('判斷方式')
+    expect(supporting).not.toHaveTextContent('需將 eGFR、UACR 與心衰竭狀態一起判讀')
+    expect(supporting).not.toHaveTextContent('依 KDIGO 評估')
+    expect(supporting).not.toHaveTextContent('待補資料')
+    expect(supporting).not.toHaveTextContent('還需：')
+    expect(supporting).not.toHaveTextContent('已核對：')
   })
 
   it('hides non-applicable coverage cards for non-medication modules only', () => {
@@ -621,17 +674,105 @@ describe('clinical decision summary', () => {
     const sourceRows = Array.from(sourceList?.querySelectorAll('li') ?? [])
     expect(sourceRows[0]).toHaveTextContent('2026-07-21')
     expect(sourceRows[0]?.querySelector('div')).toHaveClass('min-h-8')
+    expect(sourceRows.every((row) => row.querySelector('div')?.children.length === 3)).toBe(true)
 
     const actionPlan = screen.getByTestId('cdss-action-plan-ckd-classification')
     expect(actionPlan).toHaveTextContent('補做或更新近期定量 UACR（mg/g），更新 G/A 分期。')
     expect(actionPlan).not.toHaveTextContent('尚待確認')
+    expect(actionPlan).toHaveClass('rounded-t-md')
+    const supporting = screen.getByTestId('cdss-supporting-context-ckd-classification')
+    expect(supporting).toHaveAttribute('open')
+    expect(supporting).toHaveClass('rounded-b-md', 'border-t-0')
+    expect(within(supporting).getByText('追蹤、來源與限制')).toBeInTheDocument()
+    fireEvent.click(within(supporting).getByText('追蹤、來源與限制'))
+    expect(supporting).not.toHaveAttribute('open')
+    fireEvent.click(within(supporting).getByText('追蹤、來源與限制'))
+    expect(supporting).toHaveAttribute('open')
     const thresholds = screen.getByTestId('cdss-classification-thresholds-ckd-classification')
-    expect(thresholds).not.toHaveAttribute('open')
-    expect(within(thresholds).getByText('查看追蹤與警示門檻')).toBeInTheDocument()
-    fireEvent.click(within(thresholds).getByText('查看追蹤與警示門檻'))
-    expect(thresholds).toHaveAttribute('open')
+    expect(within(thresholds).getByText('追蹤與警示門檻')).toBeInTheDocument()
     expect(thresholds).toHaveTextContent('約每 4 個月追蹤 eGFR 與定量 UACR')
     expect(thresholds).toHaveTextContent('eGFR 變化 >20%')
+  })
+
+  it('hides clinical-review rows that only restate the next step', () => {
+    render(
+      <ClinicalDecisionSupportView
+        locale="zh-TW"
+        result={{
+          ...result(),
+          recommendations: [
+            recommendation('finerenone-review-dedupe', {
+              domain: 'medication',
+              nextActions: ['先評估 RASi 治療，再評估 finerenone。'],
+              clinicalReviewItems: ['RASi 治療適切性與耐受性'],
+            }),
+          ],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-finerenone-review-dedupe'))
+
+    expect(screen.getByTestId('cdss-action-plan-finerenone-review-dedupe')).toHaveTextContent(
+      '先評估 RASi 治療，再評估 finerenone。',
+    )
+    const supporting = screen.getByTestId('cdss-supporting-context-finerenone-review-dedupe')
+    expect(supporting).toHaveAttribute('open')
+    expect(within(supporting).queryByText('視臨床情境確認')).not.toBeInTheDocument()
+    expect(within(supporting).queryByText('RASi 治療適切性與耐受性')).not.toBeInTheDocument()
+  })
+
+  it('keeps clinical-review rows that add a new decision condition', () => {
+    render(
+      <ClinicalDecisionSupportView
+        locale="zh-TW"
+        result={{
+          ...result(),
+          recommendations: [
+            recommendation('clinical-review-information-gain', {
+              domain: 'medication',
+              nextActions: ['評估是否開始治療。'],
+              clinicalReviewItems: ['近期低血壓或急性病況'],
+            }),
+          ],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-clinical-review-information-gain'))
+
+    const supporting = screen.getByTestId('cdss-supporting-context-clinical-review-information-gain')
+    expect(within(supporting).queryByText('視臨床情境確認')).not.toBeInTheDocument()
+    expect(screen.getByTestId('cdss-action-plan-clinical-review-information-gain')).toHaveTextContent(
+      '評估是否開始治療；並確認近期低血壓或急性病況。',
+    )
+  })
+
+  it('merges only new clinical context into the next step', () => {
+    render(
+      <ClinicalDecisionSupportView
+        locale="zh-TW"
+        result={{
+          ...result(),
+          recommendations: [
+            recommendation('blood-pressure-context-merge', {
+              missingData: ['標準化診間血壓與量測日期'],
+              nextActions: ['更新標準化診間血壓；有姿勢性症狀時加測坐／站立血壓。'],
+              clinicalReviewItems: ['姿勢性症狀、跌倒風險與體液狀態'],
+            }),
+          ],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('cdss-recommendation-trigger-blood-pressure-context-merge'))
+
+    const actionPlan = screen.getByTestId('cdss-action-plan-blood-pressure-context-merge')
+    expect(actionPlan).toHaveTextContent(
+      '補齊：標準化診間血壓與量測日期；更新標準化診間血壓；有姿勢性症狀時加測坐／站立血壓；並確認跌倒風險與體液狀態。',
+    )
+    expect(actionPlan.textContent?.match(/姿勢性症狀/g)).toHaveLength(1)
+    expect(screen.queryByText('視臨床情境確認')).not.toBeInTheDocument()
   })
 
   it('renders evidence as one consistent list and groups confirmation items with next steps', () => {
@@ -677,8 +818,9 @@ describe('clinical decision summary', () => {
     expect(evidenceRows.querySelectorAll('dl > div')).toHaveLength(2)
     expect(evidenceRows.querySelector('dl > div')).toHaveClass('py-1.5')
     expect(within(evidenceRows).queryByRole('button')).not.toBeInTheDocument()
-    expect(within(actionPlan).getByText('尚待確認')).toBeInTheDocument()
-    expect(within(actionPlan).getByText('LDL-C 與採檢日期')).toBeInTheDocument()
-    expect(within(actionPlan).getByText('下一步 evidence-layout')).toBeInTheDocument()
+    expect(within(actionPlan).queryByText('尚待確認')).not.toBeInTheDocument()
+    expect(actionPlan).toHaveTextContent(
+      '補齊：LDL-C 與採檢日期；下一步 evidence-layout',
+    )
   })
 })

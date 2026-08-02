@@ -107,12 +107,12 @@ describe('KDIGO kidney failure risk inline guidance', () => {
     ) as HTMLDetailsElement
     expect(toggle.open).toBe(false)
 
-    fireEvent.click(screen.getByText(/展開引用原文/))
+    fireEvent.click(toggle.querySelector('summary')!)
 
     expect(toggle.open).toBe(true)
     expect(toggle).toHaveTextContent('Recommendation 2.2.1')
     expect(toggle).toHaveTextContent('Practice Point 2.2.4')
-    expect(toggle).toHaveTextContent('僅顯示本卡引用的指引原文')
+    expect(toggle).not.toHaveTextContent('僅顯示本卡引用的指引原文')
     expect(screen.getByRole('link', { name: /開啟官方原文第 41 頁/ })).toHaveAttribute(
       'href',
       expect.stringContaining('#page=41'),

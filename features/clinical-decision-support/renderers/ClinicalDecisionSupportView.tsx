@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from 'react'
 import {
-  AlertTriangle,
   ArrowRight,
   BookOpenCheck,
   ChevronDown,
@@ -177,6 +176,129 @@ function isAssessmentPreviewRedundant(title: string, evidenceValue?: string): bo
   return sharedCount / smallerSize >= 0.7
 }
 
+const clinicalReviewBoilerplateZh = /(?:視臨床情境|適切性|適用性|耐受性|治療|用藥|使用|確認|核對|檢視|評估|是否|需要|建議|目前|狀態|原因|計畫|先|再|與|及|和|或)/gu
+const clinicalReviewBoilerplateEn = /\b(?:appropriateness|applicability|tolerability|treatment|therapy|medication|use|confirm|reconcile|review|assess(?:ing|ment)?|whether|need(?:ed|s)?|recommend(?:ed|ation)?|current|status|reason|plan|before|then|and|or|the)\b/gu
+
+function clinicalReviewInformationCore(value: string): string {
+  return normalizedDisplayText(
+    value
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .replace(clinicalReviewBoilerplateZh, '')
+      .replace(clinicalReviewBoilerplateEn, ''),
+  )
+}
+
+/**
+ * Clinical context belongs in the next step rather than a second task block.
+ * When only part of an item is new, keep the new concepts and omit the words
+ * already present in the action.
+ */
+function joinClinicalConcepts(concepts: readonly string[], isEnglish: boolean): string {
+  if (concepts.length < 2) return concepts[0] ?? ''
+  if (concepts.length === 2) return concepts.join(isEnglish ? ' and ' : '與')
+  return isEnglish
+    ? `${concepts.slice(0, -1).join(', ')}, and ${concepts.at(-1)}`
+    : `${concepts.slice(0, -1).join('、')}與${concepts.at(-1)}`
+}
+
+function clinicalReviewInformationGain(
+  item: string,
+  actionText: string,
+  isEnglish: boolean,
+): string | null {
+  const actionCore = clinicalReviewInformationCore(actionText)
+  const itemCore = clinicalReviewInformationCore(item)
+  if (itemCore.length >= 2 && actionCore.includes(itemCore)) return null
+
+  const concepts = item
+    .split(isEnglish ? /\s+(?:and|or)\s+|[,;]/i : /[、，,；;]|(?:與|及|和|或)/u)
+    .map((concept) => concept.trim())
+    .filter(Boolean)
+  if (concepts.length < 2) return item
+
+  const uncoveredConcepts = concepts.filter((concept) => {
+    const conceptCore = clinicalReviewInformationCore(concept)
+    return conceptCore.length < 2 || !actionCore.includes(conceptCore)
+  })
+  if (uncoveredConcepts.length === 0) return null
+  if (uncoveredConcepts.length === concepts.length) return item
+  return joinClinicalConcepts(uncoveredConcepts, isEnglish)
+}
+
+function integrateClinicalReviewIntoNextSteps(
+  items: readonly string[] | undefined,
+  nextActions: readonly string[],
+  isEnglish: boolean,
+): string[] {
+  if (!items || items.length === 0) return [...nextActions]
+
+  const actionText = nextActions.join(' ')
+  const contexts = items
+    .map((item) => clinicalReviewInformationGain(item, actionText, isEnglish))
+    .filter((item): item is string => Boolean(item))
+    .filter((item, index, allItems) => (
+      allItems.findIndex((candidate) => (
+        normalizedDisplayText(candidate) === normalizedDisplayText(item)
+      )) === index
+    ))
+  if (contexts.length === 0) return [...nextActions]
+
+  const contextLabel = contexts.join(isEnglish ? '; ' : '、')
+  if (nextActions.length === 0) {
+    return [isEnglish ? `Confirm: ${contextLabel}.` : `確認：${contextLabel}。`]
+  }
+
+  const actions = [...nextActions]
+  const lastIndex = actions.length - 1
+  const lastAction = actions[lastIndex].replace(/[。.!；;\s]+$/u, '')
+  actions[lastIndex] = isEnglish
+    ? `${lastAction}; also confirm ${contextLabel}.`
+    : `${lastAction}；並確認${contextLabel}。`
+  return actions
+}
+
+function integratedNextStepActions(
+  missingData: readonly string[] | undefined,
+  nextActions: readonly string[],
+  isEnglish: boolean,
+): string[] {
+  const missingItems = missingData ?? []
+  if (missingItems.length === 0) return [...nextActions]
+
+  const missingLabel = missingItems.join(isEnglish ? ', ' : '、')
+  let actions = [...nextActions]
+  let replacedGenericInput = false
+  const genericInputPattern = isEnglish
+    ? /\b(?:required|necessary) (?:inputs?|data)\b/i
+    : /必要(?:輸入|資料)/
+
+  actions = actions.map((action) => {
+    if (replacedGenericInput || !genericInputPattern.test(action)) return action
+    replacedGenericInput = true
+    return action.replace(genericInputPattern, missingLabel)
+  })
+
+  const combinedActionText = normalizedDisplayText(actions.join(' '))
+  const uncoveredItems = missingItems.filter((item) => (
+    !combinedActionText.includes(normalizedDisplayText(item))
+  ))
+  if (uncoveredItems.length === 0) return actions
+
+  const uncoveredLabel = uncoveredItems.join(isEnglish ? ', ' : '、')
+  if (actions.length === 0) {
+    return [isEnglish ? `Complete: ${uncoveredLabel}.` : `補齊：${uncoveredLabel}。`]
+  }
+
+  const [firstAction, ...remainingActions] = actions
+  return [
+    isEnglish
+      ? `Complete ${uncoveredLabel}; ${firstAction}`
+      : `補齊：${uncoveredLabel}；${firstAction}`,
+    ...remainingActions,
+  ]
+}
+
 function modulePresentationCopy(
   recommendation: CdssRecommendation,
   isEnglish: boolean,
@@ -341,11 +463,21 @@ export function buildClinicalDecisionSummary(
   }
 }
 
+function isMedicationFactSource(source: CdssFactSource): boolean {
+  return source.resourceType === 'MedicationRequest'
+    || source.resourceType === 'MedicationStatement'
+}
+
 function compactSourceMetadata(source: CdssFactSource): string {
-  return [
+  const metadata = [
     source.date,
     source.facility,
   ].filter(Boolean).join(' · ')
+  const medicationName = isMedicationFactSource(source) && typeof source.value === 'string'
+    ? source.value.trim()
+    : ''
+  if (!medicationName) return metadata
+  return metadata ? `${metadata} ｜ ${medicationName}` : medicationName
 }
 
 function isIcd10System(system?: string): boolean {
@@ -498,9 +630,12 @@ function EvidenceSources({
         )}
       >
         {navigableSources.map((source) => {
-          const sourceValue = source.value !== undefined
+          const isMedicationSource = isMedicationFactSource(source)
+          const sourceRecordValue = source.value !== undefined
             ? `${source.value}${source.unit ? ` ${source.unit}` : ''}`
             : undefined
+          const sourceValue = isMedicationSource ? undefined : sourceRecordValue
+          const sourceMetadata = compactSourceMetadata(source)
           const icdCodings = sourceIcdCodings(source)
           return (
           <li
@@ -516,10 +651,12 @@ function EvidenceSources({
                 compact && 'flex flex-wrap items-center gap-x-2 gap-y-0.5',
               )}>
                 <span className={cn(
-                  'break-words font-medium text-foreground',
-                  compact ? 'text-xs leading-5' : 'block text-sm',
-                )}>
-                  {compactSourceMetadata(source) || (isEnglish ? 'Clinical source record' : '臨床來源紀錄')}
+                  'font-medium text-foreground',
+                  compact ? 'truncate text-xs leading-5' : 'block break-words text-sm',
+                )}
+                title={compact ? sourceMetadata : undefined}
+                >
+                  {sourceMetadata || (isEnglish ? 'Clinical source record' : '臨床來源紀錄')}
                 </span>
                 {icdCodings.length > 0 ? (
                   <span className={cn(
@@ -558,13 +695,13 @@ function EvidenceSources({
                 )}>
                   {sourceValue}
                 </span>
-              ) : null}
+              ) : <span aria-hidden="true" />}
               <button
                 type="button"
                 onClick={() => onNavigate({
                   resourceType: source.resourceType,
                   resourceId: source.resourceId,
-                  display: `${evidenceLabel} ${sourceValue ?? evidenceValue}`,
+                  display: `${evidenceLabel} ${sourceRecordValue ?? evidenceValue}`,
                   date: source.date,
                 })}
                 className={cn(
@@ -783,73 +920,41 @@ function ClassificationActionPlan({
   recommendation,
   isEnglish,
   nextStepLabel,
+  mergeWithSupporting,
 }: {
   recommendation: CdssRecommendation
   isEnglish: boolean
   nextStepLabel: string
+  mergeWithSupporting: boolean
 }) {
-  const primaryAction = recommendation.nextActions[0] ?? recommendation.recommendation
-  const thresholds = recommendation.nextActions.slice(1)
-  const visibleMissingData = (recommendation.missingData ?? []).filter(
-    (item) => !isAssessmentPreviewRedundant(primaryAction, item),
+  const primaryAction = integratedNextStepActions(
+    recommendation.missingData,
+    [recommendation.nextActions[0] ?? recommendation.recommendation],
+    isEnglish,
   )
+  const integratedPrimaryAction = integrateClinicalReviewIntoNextSteps(
+    recommendation.clinicalReviewItems,
+    primaryAction,
+    isEnglish,
+  )[0]
 
   return (
     <section
-      className="overflow-hidden rounded-md border border-border/70 bg-muted/[0.08]"
+      className={cn(
+        'overflow-hidden border border-border/70 bg-muted/[0.08]',
+        mergeWithSupporting ? 'rounded-t-md' : 'rounded-md',
+      )}
       aria-label={isEnglish ? 'Next step' : '建議下一步'}
       data-testid={`cdss-action-plan-${recommendation.id}`}
     >
-      {visibleMissingData.length > 0 ? (
-        <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(6rem,0.2fr)_minmax(0,1fr)]">
-          <h5 className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            {isEnglish ? 'To confirm' : '尚待確認'}
-          </h5>
-          <ul className="space-y-1 text-foreground">
-            {visibleMissingData.map((item) => (
-              <li key={item} className="flex gap-1.5">
-                <span aria-hidden="true">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className={cn(
-        'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(6rem,0.2fr)_minmax(0,1fr)]',
-        visibleMissingData.length > 0
-          ? 'border-t border-border/60'
-          : '',
-      )}>
+      <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(6rem,0.2fr)_minmax(0,1fr)]">
         <h5 className="flex items-center gap-1.5 font-semibold text-primary">
           <ArrowRight className="h-3.5 w-3.5 shrink-0" />
           {nextStepLabel}
         </h5>
-        <p className="min-w-0 font-medium text-foreground">{primaryAction}</p>
+        <p className="min-w-0 font-medium text-foreground">{integratedPrimaryAction}</p>
       </div>
 
-      {thresholds.length > 0 ? (
-        <details
-          className="group border-t border-border/60"
-          data-testid={`cdss-classification-thresholds-${recommendation.id}`}
-        >
-          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
-            <CircleHelp className="h-3.5 w-3.5 shrink-0" />
-            {isEnglish ? 'View follow-up and alert thresholds' : '查看追蹤與警示門檻'}
-            <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-          </summary>
-          <ul className="space-y-1.5 border-t border-border/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-            {thresholds.map((action) => (
-              <li key={action} className="flex gap-2">
-                <span aria-hidden="true">•</span>
-                <span>{action}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
     </section>
   )
 }
@@ -1038,32 +1143,22 @@ function SourceGuidelineReference({
   if (citedStatements.length > 0) {
     return (
       <details
-        className="group overflow-hidden rounded-md border border-primary/30 bg-primary/5"
+        className="group/reference border-t border-border/60 first:border-t-0"
         data-testid={`guideline-statement-toggle-${reference.id}`}
       >
-        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2.5 py-2 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
-          <BookOpenCheck className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">
-            <span className="block font-semibold">
-              {reference.recommendationId ?? reference.title}
-            </span>
-            <span className="mt-0.5 block text-[11px] text-muted-foreground">
-              {isEnglish ? 'Show cited text' : '展開引用原文'}
-              {reference.page
-                ? isEnglish
-                  ? ` · official page ${reference.page}`
-                  : ` · 原文第 ${reference.page} 頁`
-                : ''}
-            </span>
+        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 py-1.5 text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+          <BookOpenCheck className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 font-medium">
+            {reference.recommendationId ?? reference.title}
+            {reference.page
+              ? isEnglish
+                ? ` · p. ${reference.page}`
+                : ` · 第 ${reference.page} 頁`
+              : ''}
           </span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open/reference:rotate-180" />
         </summary>
-        <div className="space-y-2.5 border-t border-primary/20 bg-background/80 px-2.5 py-2.5">
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {isEnglish
-              ? 'Original-language text for the statements cited by this card. Verify the official source before clinical use.'
-              : '以下僅顯示本卡引用的指引原文；臨床使用前請核對官方來源。'}
-          </p>
+        <div className="space-y-2 border-t border-border/60 py-2">
           <dl className="space-y-2">
             {citedStatements.map((statement) => (
               <div key={`${reference.id}-${statement.label}`}>
@@ -1094,27 +1189,16 @@ function SourceGuidelineReference({
         href={reference.url}
         target="_blank"
         rel="noreferrer"
-        className="flex min-h-11 items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-h-8 items-center gap-1.5 border-t border-border/60 py-1.5 font-medium text-primary transition-colors first:border-t-0 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <BookOpenCheck className="h-4 w-4 shrink-0" />
+        <BookOpenCheck className="h-3.5 w-3.5 shrink-0" />
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold">
-            {reference.recommendationId
-              ? `${reference.recommendationId} · `
-              : ''}
-            {reference.page
-              ? isEnglish
-                ? `Open original page ${reference.page}`
-                : `直接開啟原文第 ${reference.page} 頁`
-              : isEnglish
-                ? 'Open original recommendation'
-                : '直接開啟原文條文'}
-          </span>
-          {reference.locator ? (
-            <span className="mt-0.5 block break-words text-[11px] text-muted-foreground">
-              {reference.locator}
-            </span>
-          ) : null}
+          {reference.recommendationId ?? reference.title}
+          {reference.page
+            ? isEnglish
+              ? ` · p. ${reference.page}`
+              : ` · 第 ${reference.page} 頁`
+            : ''}
         </span>
         <ExternalLink className="h-3.5 w-3.5 shrink-0" />
       </a>
@@ -1122,14 +1206,13 @@ function SourceGuidelineReference({
   }
 
   return (
-    <details className="group rounded-md border border-border/70 bg-background">
-      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 px-2.5 py-1.5 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+    <details className="group/reference border-t border-border/60 first:border-t-0">
+      <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 py-1.5 font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
         <BookOpenCheck className="h-3.5 w-3.5" />
-        {isEnglish ? 'Exact evidence' : '查看精準依據'}
-        {reference.recommendationId ? ` · ${reference.recommendationId}` : ''}
-        <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+        {reference.recommendationId ?? reference.title}
+        <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open/reference:rotate-180" />
       </summary>
-      <div className="space-y-2 border-t border-border/70 px-2.5 py-2.5">
+      <div className="space-y-2 border-t border-border/60 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {reference.recommendationId ? (
             <Badge variant="outline" className="h-6 bg-muted/30 px-2 text-xs">
@@ -1181,6 +1264,7 @@ function RecommendationDetail({
     supporting: string
   }
 }) {
+  const [isSupportingOpen, setIsSupportingOpen] = useState(true)
   const orderedPatientEvidence = recommendation.patientEvidence
     .map((evidence, originalIndex) => ({ evidence, originalIndex }))
     .sort((a, b) => (
@@ -1213,16 +1297,43 @@ function RecommendationDetail({
     && source.sourceKind === 'coverage'
     && source.status === 'not-applicable'
   ))
+  const sourceStatusesByKind = new Map<string, Set<CdssSourceAssessmentStatus>>()
+  visibleSourceAssessments.forEach((source) => {
+    const statuses = sourceStatusesByKind.get(source.sourceKind) ?? new Set<CdssSourceAssessmentStatus>()
+    statuses.add(source.status)
+    sourceStatusesByKind.set(source.sourceKind, statuses)
+  })
   const isCompactClassification = recommendationPresentationType(recommendation) === 'classification'
   const presentationCopy = modulePresentationCopy(recommendation, isEnglish)
   const primaryGuidelineRule = semanticCard.guidelineRules.find(
     (rule) => rule.sourceKind === 'guideline',
   ) ?? semanticCard.guidelineRules[0]
   const primaryGuidelineSummary = semanticCard.guidelineRecommendation
-  const hasActionPlan = (
-    (recommendation.missingData?.length ?? 0) > 0
-    || recommendation.nextActions.length > 0
+  const displayNextActions = integrateClinicalReviewIntoNextSteps(
+    recommendation.clinicalReviewItems,
+    integratedNextStepActions(
+      recommendation.missingData,
+      recommendation.nextActions,
+      isEnglish,
+    ),
+    isEnglish,
   )
+  const hasActionPlan = displayNextActions.length > 0
+  const classificationThresholds = isCompactClassification
+    ? recommendation.nextActions.slice(1)
+    : []
+  const hasGuidelineSource = visibleSourceAssessments.some(
+    (source) => source.sourceKind === 'guideline' && source.references.length > 0,
+  ) || semanticCard.guidelineRules.some((rule) => rule.sourceKind === 'guideline')
+  const showDecisionMethod = !hasGuidelineSource
+    && semanticCard.decisionLogic.trim().length > 0
+    && semanticCard.decisionLogic.trim() !== semanticCard.clinicalConclusion.trim()
+  const sourceSectionLabel = visibleSourceAssessments.some(
+    (source) => source.sourceKind === 'coverage',
+  )
+    ? isEnglish ? 'Guideline and coverage sources' : '指引與給付來源'
+    : label.sourceComparison
+  const sourceColumnCount = Math.min(Math.max(visibleSourceAssessments.length, 1), 3)
 
   const sourceStatusLabel: Record<CdssSourceAssessmentStatus, string> = {
     recommended: isEnglish ? 'Recommended' : '建議',
@@ -1299,6 +1410,7 @@ function RecommendationDetail({
           recommendation={recommendation}
           isEnglish={isEnglish}
           nextStepLabel={label.nextStep}
+          mergeWithSupporting
         />
       ) : hasActionPlan ? (
         <section
@@ -1306,42 +1418,18 @@ function RecommendationDetail({
           aria-label={isEnglish ? 'Items to confirm and next steps' : '待確認與建議下一步'}
           data-testid={`cdss-action-plan-${recommendation.id}`}
         >
-          {recommendation.missingData && recommendation.missingData.length > 0 ? (
+          {displayNextActions.length > 0 ? (
             <div className="grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]">
-              <h5 className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                {isEnglish ? 'To confirm' : '尚待確認'}
-              </h5>
-              <ul className="space-y-1 text-foreground">
-                {recommendation.missingData.map((item) => (
-                  <li key={item} className="flex gap-1.5">
-                    <span className="text-amber-700 dark:text-amber-300" aria-hidden="true">•</span>
-                    <span className="min-w-0">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          {recommendation.nextActions.length > 0 ? (
-            <div
-              className={cn(
-                'grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-xs leading-relaxed @min-[32rem]:grid-cols-[minmax(7rem,0.28fr)_minmax(0,1fr)]',
-                recommendation.missingData && recommendation.missingData.length > 0
-                  ? 'border-t border-border/60'
-                  : '',
-              )}
-            >
               <h5 className="flex items-center gap-1.5 font-semibold text-primary">
                 <ArrowRight className="h-3.5 w-3.5 shrink-0" />
                 {label.nextStep}
               </h5>
               <div className="min-w-0 text-foreground">
-                {recommendation.nextActions.length === 1 ? (
-                  <span>{recommendation.nextActions[0]}</span>
+                {displayNextActions.length === 1 ? (
+                  <span>{displayNextActions[0]}</span>
                 ) : (
                   <ol className="list-decimal space-y-1 pl-4 marker:font-semibold">
-                    {recommendation.nextActions.map((action) => <li key={action}>{action}</li>)}
+                    {displayNextActions.map((action) => <li key={action}>{action}</li>)}
                   </ol>
                 )}
               </div>
@@ -1351,96 +1439,123 @@ function RecommendationDetail({
       ) : null}
 
       <details
-        className="group rounded-md border border-border/70 bg-background"
+        open={isSupportingOpen}
+        className={cn(
+          'group border border-border/70 bg-background',
+          isCompactClassification
+            ? '-mt-2 rounded-b-md border-t-0'
+            : 'rounded-md',
+        )}
         data-testid={`cdss-supporting-context-${recommendation.id}`}
       >
-        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+        <summary
+          className={cn(
+            'flex min-h-8 cursor-pointer list-none items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+            isCompactClassification && 'border-t border-border/60',
+          )}
+          onClick={(event) => {
+            event.preventDefault()
+            setIsSupportingOpen((open) => !open)
+          }}
+        >
           <CircleHelp className="h-3.5 w-3.5 shrink-0" />
-          {label.supporting}
+          {isCompactClassification && classificationThresholds.length > 0
+            ? isEnglish ? 'Follow-up, sources, and limits' : '追蹤、來源與限制'
+            : label.supporting}
           <ChevronDown className="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="space-y-3 border-t border-border/70 px-3 py-2.5 text-xs leading-relaxed">
-          <section>
-            <h5 className="font-semibold text-foreground">
-              {isEnglish ? 'Clinical conclusion' : '臨床結論'}
-            </h5>
-            <p className="mt-1 text-muted-foreground">{semanticCard.clinicalConclusion}</p>
-          </section>
-
-          <section>
-            <h5 className="font-semibold text-foreground">
-              {isEnglish ? 'Decision method' : '判斷方式'}
-            </h5>
-            <p className="mt-1 text-muted-foreground">{semanticCard.decisionLogic}</p>
-          </section>
-
-          {recommendation.clinicalReviewItems
-            && recommendation.clinicalReviewItems.length > 0 ? (
-              <section>
-                <h5 className="font-semibold text-foreground">
-                  {isEnglish ? 'Clinical review when relevant' : '視臨床情境確認'}
-                </h5>
-                <ul className="mt-1 space-y-1 text-muted-foreground">
-                  {recommendation.clinicalReviewItems.map((item) => (
-                    <li key={item} className="flex gap-1.5">
-                      <span aria-hidden="true">•</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+        <div className="divide-y divide-border/60 border-t border-border/70 px-3 text-xs leading-relaxed">
+          {classificationThresholds.length > 0 ? (
+            <section
+              className="py-2.5"
+              data-testid={`cdss-classification-thresholds-${recommendation.id}`}
+            >
+              <h5 className="font-semibold text-foreground">
+                {isEnglish ? 'Follow-up and alert thresholds' : '追蹤與警示門檻'}
+              </h5>
+              <ul className="mt-1.5 space-y-1.5 text-muted-foreground">
+                {classificationThresholds.map((action) => (
+                  <li key={action} className="flex gap-2">
+                    <span aria-hidden="true">•</span>
+                    <span>{action}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {showDecisionMethod ? (
+            <section className="py-2.5">
+              <h5 className="font-semibold text-foreground">
+                {isEnglish ? 'Additional decision context' : '判斷補充'}
+              </h5>
+              <p className="mt-1 text-muted-foreground">{semanticCard.decisionLogic}</p>
+            </section>
+          ) : null}
 
           {visibleSourceAssessments.length > 0 ? (
-            <section aria-label={label.sourceComparison}>
-              <h5 className="font-semibold text-foreground">{label.sourceComparison}</h5>
+            <section className="py-2.5" aria-label={sourceSectionLabel}>
+              <h5 className="font-semibold text-foreground">{sourceSectionLabel}</h5>
               <div
-                className="mt-1.5 grid overflow-hidden rounded-md border border-border @min-[38rem]:grid-cols-3"
+                className={cn(
+                  'mt-1.5 grid',
+                  sourceColumnCount === 2 && '@min-[38rem]:grid-cols-2',
+                  sourceColumnCount === 3 && '@min-[38rem]:grid-cols-3',
+                )}
                 data-testid={`cdss-source-comparison-${recommendation.id}`}
               >
-                {visibleSourceAssessments.map((item, index) => (
-                  <div
-                    key={`${recommendation.id}-${item.sourceId}`}
-                    className={cn(
-                      'min-w-0 space-y-2 p-3',
-                      index > 0 && 'border-t border-border @min-[38rem]:border-l @min-[38rem]:border-t-0',
-                    )}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-1.5">
-                      <div>
-                        <div className="font-semibold text-foreground">{item.sourceLabel}</div>
-                        <div className="text-muted-foreground">{item.version}</div>
+                {visibleSourceAssessments.map((item, index) => {
+                  const showSourceStatus = item.sourceKind === 'coverage'
+                    || (sourceStatusesByKind.get(item.sourceKind)?.size ?? 0) > 1
+                  const showSourceSummary = item.references.length === 0
+                    && item.summary.trim().length > 0
+
+                  return (
+                    <div
+                      key={`${recommendation.id}-${item.sourceId}`}
+                      className={cn(
+                        'min-w-0 py-1',
+                        index > 0 && 'border-t border-border pt-2.5',
+                        index > 0
+                          && index < sourceColumnCount
+                          && '@min-[38rem]:border-t-0 @min-[38rem]:pt-1',
+                        index % sourceColumnCount !== 0
+                          && '@min-[38rem]:border-l @min-[38rem]:border-border @min-[38rem]:pl-3',
+                        index % sourceColumnCount !== sourceColumnCount - 1
+                          && '@min-[38rem]:pr-3',
+                      )}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-1.5">
+                        <div>
+                          <div className="font-semibold text-foreground">{item.sourceLabel}</div>
+                          <div className="text-muted-foreground">{item.version}</div>
+                        </div>
+                        {showSourceStatus ? (
+                          <Badge className={cn('h-5 px-1.5 text-[11px]', sourceStatusStyle[item.status])}>
+                            {sourceStatusLabel[item.status]}
+                          </Badge>
+                        ) : null}
                       </div>
-                      <Badge className={cn('h-6 px-2 text-xs', sourceStatusStyle[item.status])}>
-                        {sourceStatusLabel[item.status]}
-                      </Badge>
+                      {showSourceSummary ? (
+                        <p className="mt-1.5 text-foreground">{item.summary}</p>
+                      ) : null}
+                      {item.references.length > 0 ? (
+                        <div className="mt-1.5">
+                          {item.references.map((reference) => (
+                            <SourceGuidelineReference
+                              key={reference.id}
+                              reference={reference}
+                              isEnglish={isEnglish}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
-                    <p className="text-foreground">{item.summary}</p>
-                    {item.verifiedData && item.verifiedData.length > 0 ? (
-                      <div className="rounded bg-emerald-50 px-2 py-1.5 text-emerald-950 dark:bg-emerald-950/20 dark:text-emerald-100">
-                        <span className="font-semibold">{isEnglish ? 'Verified: ' : '已核對：'}</span>
-                        {item.verifiedData.join(isEnglish ? '; ' : '、')}
-                      </div>
-                    ) : null}
-                    {item.missingData && item.missingData.length > 0 ? (
-                      <div className="rounded bg-amber-50 px-2 py-1.5 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-                        <span className="font-semibold">{isEnglish ? 'Needed: ' : '還需：'}</span>
-                        {item.missingData.join(isEnglish ? '; ' : '、')}
-                      </div>
-                    ) : null}
-                    {item.references.map((reference) => (
-                      <SourceGuidelineReference
-                        key={reference.id}
-                        reference={reference}
-                        isEnglish={isEnglish}
-                      />
-                    ))}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </section>
           ) : semanticCard.guidelineRules.length > 0 ? (
-            <section>
+            <section className="py-2.5">
               <h5 className="font-semibold text-foreground">{label.guidelines}</h5>
               <div className="mt-1.5 space-y-2">
                 {semanticCard.guidelineRules.map((rule) => (
@@ -1468,7 +1583,7 @@ function RecommendationDetail({
             </section>
           ) : null}
 
-          <section>
+          <section className="py-2.5">
             <h5 className="flex items-center gap-1.5 font-semibold text-foreground">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
               {label.safety}
@@ -1516,8 +1631,8 @@ export function ClinicalDecisionSupportView({
     next: isEnglish ? 'Suggested next actions' : '建議下一步',
     guidelines: isEnglish ? 'Guideline summary and location' : '指引摘要與章節定位',
     safety: isEnglish ? 'Decision boundary' : '決策邊界',
-    sourceComparison: isEnglish ? 'Source comparison' : '來源比較',
-    supporting: isEnglish ? 'Rule audit, sources, and safety' : '規則稽核、來源與安全提醒',
+    sourceComparison: isEnglish ? 'Guideline sources' : '指引來源',
+    supporting: isEnglish ? 'Guideline sources and limits' : '指引來源與限制',
     notEvaluated: isEnglish ? 'Not evaluated in this POC' : '本次未評估',
     limitations: isEnglish ? 'Scope and limitations' : '使用限制',
     showDetails: isEnglish ? 'Show decision details' : '展開決策詳情',
