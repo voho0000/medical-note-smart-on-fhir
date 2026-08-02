@@ -19,6 +19,7 @@ import { getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
+import { GROUP_TONES } from '@/src/shared/constants/group-tones'
 import {
   leftTabForResourceType,
   NAV_CLAIM_TIMEOUT_MS,
@@ -72,36 +73,12 @@ const MODULE_GROUPS: readonly {
   en: string
   toneClass: string
   dividerClass: string
-}[] = [
-  {
-    id: 'assessment',
-    zh: '評估與分層',
-    en: 'Assessment & stratification',
-    toneClass: 'text-blue-700 dark:text-blue-300',
-    dividerClass: 'bg-blue-200/90 dark:bg-blue-800/70',
-  },
-  {
-    id: 'treatment',
-    zh: '治療決策',
-    en: 'Treatment decisions',
-    toneClass: 'text-violet-700 dark:text-violet-300',
-    dividerClass: 'bg-violet-200/90 dark:bg-violet-800/70',
-  },
-  {
-    id: 'monitoring',
-    zh: '監測與安全',
-    en: 'Monitoring & safety',
-    toneClass: 'text-teal-700 dark:text-teal-300',
-    dividerClass: 'bg-teal-200/90 dark:bg-teal-800/70',
-  },
-  {
-    id: 'care',
-    zh: '照護安排',
-    en: 'Care planning',
-    toneClass: 'text-orange-700 dark:text-orange-300',
-    dividerClass: 'bg-orange-200/90 dark:bg-orange-800/70',
-  },
-]
+}[] = ([
+  { id: 'assessment', zh: '評估與分層', en: 'Assessment & stratification', tone: 'blue' },
+  { id: 'treatment', zh: '治療決策', en: 'Treatment decisions', tone: 'violet' },
+  { id: 'monitoring', zh: '監測與安全', en: 'Monitoring & safety', tone: 'teal' },
+  { id: 'care', zh: '照護安排', en: 'Care planning', tone: 'orange' },
+] as const).map((group) => ({ ...group, ...GROUP_TONES[group.tone] }))
 
 type ModuleDisplayRow =
   | {

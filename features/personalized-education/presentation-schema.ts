@@ -1,4 +1,9 @@
 import { getEducationContentSchema } from '@voho0000/personalized-education'
+import {
+  GROUP_TONES,
+  type GroupTone,
+  type GroupToneName,
+} from '@/src/shared/constants/group-tones'
 import type {
   EducationContentSchema,
   EducationFact,
@@ -28,54 +33,25 @@ export { getEducationContentSchema }
  * the package means a visual tweak never costs a content release.
  */
 
-export interface EducationGroupStyle {
-  toneClass: string
-  dividerClass: string
-}
-
 /**
- * Every governed group needs a style. `Record` (not `Partial`) makes a new
- * group in the package a compile error here rather than an unstyled heading.
+ * Every governed group needs a tone. `Record` (not `Partial`) makes a new group
+ * in the package a compile error here rather than an unstyled heading.
  */
-export const EDUCATION_GROUP_STYLES: Record<EducationModuleGroupId, EducationGroupStyle> = {
-  understanding: {
-    toneClass: 'text-teal-700 dark:text-teal-300',
-    dividerClass: 'bg-teal-200/90 dark:bg-teal-800/70',
-  },
-  'daily-life': {
-    toneClass: 'text-orange-700 dark:text-orange-300',
-    dividerClass: 'bg-orange-200/90 dark:bg-orange-800/70',
-  },
-  monitoring: {
-    toneClass: 'text-cyan-700 dark:text-cyan-300',
-    dividerClass: 'bg-cyan-200/90 dark:bg-cyan-800/70',
-  },
-  medication: {
-    toneClass: 'text-violet-700 dark:text-violet-300',
-    dividerClass: 'bg-violet-200/90 dark:bg-violet-800/70',
-  },
-  'urgent-care': {
-    toneClass: 'text-rose-700 dark:text-rose-300',
-    dividerClass: 'bg-rose-200/90 dark:bg-rose-800/70',
-  },
-  prevention: {
-    toneClass: 'text-blue-700 dark:text-blue-300',
-    dividerClass: 'bg-blue-200/90 dark:bg-blue-800/70',
-  },
-  wellbeing: {
-    toneClass: 'text-pink-700 dark:text-pink-300',
-    dividerClass: 'bg-pink-200/90 dark:bg-pink-800/70',
-  },
-  'life-stages': {
-    toneClass: 'text-indigo-700 dark:text-indigo-300',
-    dividerClass: 'bg-indigo-200/90 dark:bg-indigo-800/70',
-  },
+export const EDUCATION_GROUP_TONES: Record<EducationModuleGroupId, GroupToneName> = {
+  understanding: 'teal',
+  'daily-life': 'orange',
+  monitoring: 'cyan',
+  medication: 'violet',
+  'urgent-care': 'rose',
+  prevention: 'blue',
+  wellbeing: 'pink',
+  'life-stages': 'indigo',
 }
 
 export function getEducationGroupStyle(
   groupId: EducationModuleGroupId,
-): EducationGroupStyle {
-  return EDUCATION_GROUP_STYLES[groupId]
+): GroupTone {
+  return GROUP_TONES[EDUCATION_GROUP_TONES[groupId]]
 }
 
 export interface ResolvedEducationModule {

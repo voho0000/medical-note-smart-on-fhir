@@ -1,4 +1,5 @@
 import { calculateAge, type PatientEntity } from '@/src/core/entities/patient.entity'
+import { getAnalyteCanonicalKey } from '@/src/shared/utils/lab-normalize'
 import type {
   ConditionEntity,
   EncounterEntity,
@@ -30,6 +31,11 @@ function toObservation(observation: ObservationEntity): EducationObservation {
   return {
     id: observation.id,
     codings: observation.code?.coding ?? [],
+    // Resolve analyte identity here rather than leaving packs to guess from a
+    // single LOINC. The same analyte reaches us under several LOINCs depending
+    // on the bridge version, and NHI records often carry only a local code or a
+    // Chinese name — all of which this resolver already understands.
+    canonicalKey: getAnalyteCanonicalKey(observation),
     value: observation.valueQuantity?.value,
     unit: observation.valueQuantity?.unit,
     date: observation.effectiveDateTime,

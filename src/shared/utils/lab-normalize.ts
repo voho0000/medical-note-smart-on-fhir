@@ -334,6 +334,16 @@ export const LOINC_TO_CANONICAL: Record<string, string> = {
   '1558-6': 'GLUCOSE-AC',     // NHI 09005C — Fasting glucose Mass/vol S/P
   '2345-7': 'GLUCOSE',        // NHI 09140C — Glucose Mass/vol S/P
   '4548-4': 'HBA1C',          // NHI 09006C — Hemoglobin A1c / Hgb.total Blood
+  // Method-specific siblings of 4548-4. All four share the same component and
+  // property (HbA1c/Hgb.total, ratio reported as %), so they belong in one
+  // column; only the measurement method differs.
+  '17856-6': 'HBA1C',         // …by HPLC
+  '4549-2': 'HBA1C',          // …by Electrophoresis
+  '17855-8': 'HBA1C',         // …by calculation
+  // Deliberately NOT mapped here:
+  //   59261-8 — IFCC-standardised, reported in mmol/mol, so pooling it with the
+  //             NGSP percentages would put two scales in one column.
+  //   41995-2 — Hemoglobin A1c [Mass/volume], a different property (g/dL).
 
   // ── Coag ──────────────────────────────────────────────────
   '6301-6':  'INR',           // NHI 08026C — PT/INR Platelet poor plasma

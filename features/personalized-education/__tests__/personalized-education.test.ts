@@ -285,3 +285,105 @@ describe('personalized education engine', () => {
     expect(lessons.get('eyes')).toEqual(['niddkEyes'])
   })
 })
+
+describe('analyte recognition across real record shapes', () => {
+  function withObservations(
+    observations: PatientEducationContextInput['observations'],
+  ): PatientEducationContextInput {
+    return { ...buildInput(), observations }
+  }
+
+  function hba1cObservation(code: {
+    coding?: Array<{ system?: string; code?: string; display?: string }>
+    text?: string
+  }) {
+    return {
+      id: 'hba1c',
+      status: 'final',
+      code,
+      valueQuantity: { value: 6.6, unit: '%' },
+      effectiveDateTime: '2026-06-02T00:00:00+08:00',
+    }
+  }
+
+  // The pack used to require LOINC 4548-4 exactly. Every other shape below
+  // occurs in real 健康存摺 extracts and silently produced no glucose card.
+  it.each([
+    ['LOINC 4548-4', { coding: [{ system: 'http://loinc.org', code: '4548-4' }] }],
+    ['LOINC 17856-6', { coding: [{ system: 'http://loinc.org', code: '17856-6' }] }],
+    ['LOINC 4549-2', { coding: [{ system: 'http://loinc.org', code: '4549-2' }] }],
+    ['Chinese name only', { text: '糖化血色素' }],
+    ['English display only', { coding: [{ display: 'HbA1c' }] }],
+    [
+      'local code plus LOINC',
+      {
+        coding: [
+          { system: 'https://twcore.mohw.gov.tw/CodeSystem/nhi-lab-code', code: '09006C' },
+          { system: 'http://loinc.org', code: '4548-4' },
+        ],
+      },
+    ],
+  ])('builds the glucose section from %s', (_label, code) => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(withObservations([hba1cObservation(code)])),
+    ).plan!
+
+    expect(plan.sections.map((section) => section.id)).toContain('a1c')
+    expect(plan.facts.find((fact) => fact.id === 'hba1c')?.value).toContain('6.6%')
+  })
+
+  // Bridge < v1.3.2 sent 33914-3 for every eGFR; CKD-EPI arrives as 62238-1.
+  it.each([
+    ['MDRD 77147-7', '77147-7'],
+    ['legacy 33914-3', '33914-3'],
+    ['CKD-EPI 62238-1', '62238-1'],
+  ])('builds the kidney section from %s', (_label, loinc) => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(withObservations(
+        [36.3, 35, 33, 32].map((value, index) => ({
+          id: `egfr-${index}`,
+          status: 'final',
+          code: { coding: [{ system: 'http://loinc.org', code: loinc }] },
+          valueQuantity: { value, unit: 'mL/min/1.73m2' },
+          effectiveDateTime: `2026-0${index + 1}-02T00:00:00+08:00`,
+        })),
+      )),
+    ).plan!
+
+    expect(plan.sections.map((section) => section.id)).toContain('kidney')
+    expect(plan.facts.find((fact) => fact.id === 'egfr')?.detail)
+      .toContain('36.3 → 35 → 33 → 32')
+  })
+
+  it('never mixes MDRD and CKD-EPI results into one trend', () => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(withObservations([
+        {
+          id: 'egfr-mdrd',
+          status: 'final',
+          code: { coding: [{ system: 'http://loinc.org', code: '77147-7' }] },
+          valueQuantity: { value: 48, unit: 'mL/min/1.73m2' },
+          effectiveDateTime: '2026-01-02T00:00:00+08:00',
+        },
+        {
+          id: 'egfr-epi-old',
+          status: 'final',
+          code: { coding: [{ system: 'http://loinc.org', code: '62238-1' }] },
+          valueQuantity: { value: 35, unit: 'mL/min/1.73m2' },
+          effectiveDateTime: '2026-05-02T00:00:00+08:00',
+        },
+        {
+          id: 'egfr-epi-new',
+          status: 'final',
+          code: { coding: [{ system: 'http://loinc.org', code: '62238-1' }] },
+          valueQuantity: { value: 32, unit: 'mL/min/1.73m2' },
+          effectiveDateTime: '2026-06-02T00:00:00+08:00',
+        },
+      ])),
+    ).plan!
+
+    const detail = plan.facts.find((fact) => fact.id === 'egfr')?.detail
+    expect(detail).toContain('35 → 32')
+    expect(detail).not.toContain('48')
+  })
+})
