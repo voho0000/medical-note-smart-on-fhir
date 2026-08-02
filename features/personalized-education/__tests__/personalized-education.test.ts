@@ -2,6 +2,7 @@ import { buildPersonalizedEducation } from '../engine'
 import { createPatientEducationContext } from '../patient-context'
 import { getEnabledDiseasePacks } from '../disease-packs/registry'
 import {
+  buildEducationCareSummary,
   getEducationContentSchema,
   resolveEducationModules,
   selectEducationHandoutModules,
@@ -385,5 +386,71 @@ describe('analyte recognition across real record shapes', () => {
     const detail = plan.facts.find((fact) => fact.id === 'egfr')?.detail
     expect(detail).toContain('35 → 32')
     expect(detail).not.toContain('48')
+  })
+})
+
+describe('a record exported by NHI-FHIR-Bridge below v1.3.2', () => {
+  // That bridge sent 33914-3 for every eGFR and carried the lab name in
+  // code.text rather than a LOINC for many chemistry panels. Before analyte
+  // resolution moved to the canonical key, such an export produced a plan with
+  // no glucose and no kidney content at all.
+  function legacyBridgeInput(): PatientEducationContextInput {
+    const base = buildInput()
+    return {
+      ...base,
+      observations: [
+        {
+          id: 'legacy-hba1c',
+          status: 'final',
+          code: { text: '糖化血色素' },
+          valueQuantity: { value: 7.8, unit: '%' },
+          effectiveDateTime: '2026-06-20T00:00:00+08:00',
+        },
+        ...[41, 38, 36, 34].map((value, index) => ({
+          id: `legacy-egfr-${index}`,
+          status: 'final',
+          code: {
+            coding: [{ system: 'http://loinc.org', code: '33914-3' }],
+            text: 'eGFR',
+          },
+          valueQuantity: { value, unit: 'mL/min/1.73m2' },
+          effectiveDateTime: `2026-0${index + 1}-15T00:00:00+08:00`,
+        })),
+      ],
+    }
+  }
+
+  it('produces the same personalized sections as a current export', () => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(legacyBridgeInput()),
+    ).plan!
+
+    expect(plan.sections.map((section) => section.id)).toEqual([
+      'a1c',
+      'kidney',
+      'dapagliflozin',
+    ])
+    expect(plan.facts.find((fact) => fact.id === 'hba1c')?.value).toContain('7.8%')
+    expect(plan.facts.find((fact) => fact.id === 'egfr')?.detail)
+      .toContain('41 → 38 → 36 → 34')
+  })
+
+  it('dates the summary from structured fact dates, including the eGFR trend', () => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(legacyBridgeInput()),
+    ).plan!
+    const schema = getEducationContentSchema('dm')
+    const summary = buildEducationCareSummary(
+      plan,
+      resolveEducationModules(plan, schema),
+    )
+
+    // The newest record of any kind, which here is the 2026-06-25 prescription.
+    // The point of the assertion is the eGFR below: its date now participates
+    // at all. While the date was scraped from prose, a trend-shaped eGFR fact
+    // rendered no date and so could never be the answer, however recent it was.
+    expect(summary.updatedThrough).toBe('2026/06/25')
+    expect(plan.facts.find((fact) => fact.id === 'egfr')?.recordedOn)
+      .toBe('2026-04-15')
   })
 })

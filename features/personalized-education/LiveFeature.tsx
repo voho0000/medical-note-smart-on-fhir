@@ -59,7 +59,10 @@ export default function LivePersonalizedEducationFeature() {
     patient,
   ])
 
-  if (patientLoading || clinicalData.isLoading || clinicalData.isFetching) {
+  // Only the first load shows the skeleton. `isFetching` also covers background
+  // refetches, which would throw the reader back to a placeholder mid-sentence
+  // while the content they were reading is still valid.
+  if (patientLoading || clinicalData.isLoading) {
     return <LoadingState />
   }
 

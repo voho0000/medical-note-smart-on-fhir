@@ -120,11 +120,21 @@ export function selectEducationHandoutModules(
   ))
 }
 
+/**
+ * Reads the structured date each fact carries rather than scraping its prose.
+ *
+ * The previous regex only saw dates a fact happened to render, which excluded
+ * the eGFR fact entirely once it showed a trend instead of a single date — so
+ * "updated through" reported the prescription date and understated how current
+ * the record was.
+ */
 function latestRecordedDate(facts: readonly EducationFact[]): string | null {
-  const dates = facts.flatMap((fact) => (
-    fact.detail.match(/20\d{2}\/\d{2}\/\d{2}/g) ?? []
-  ))
-  return dates.sort().at(-1) ?? null
+  const latest = facts
+    .map((fact) => fact.recordedOn)
+    .filter((date): date is string => Boolean(date))
+    .sort()
+    .at(-1)
+  return latest ? latest.replaceAll('-', '/') : null
 }
 
 export function buildEducationCareSummary(
