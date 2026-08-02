@@ -99,13 +99,13 @@ describe('personalized education engine', () => {
     expect(plan.sections.map((section) => section.id)).toEqual([
       'a1c',
       'kidney',
-      'dapagliflozin',
+      'sglt2-inhibitor',
     ])
     expect(plan.facts.map((fact) => fact.id)).toEqual([
       'diagnosis',
       'hba1c',
       'egfr',
-      'dapagliflozin',
+      'sglt2-inhibitor',
     ])
 
     const copy = JSON.stringify({ facts: plan.facts, sections: plan.sections })
@@ -207,7 +207,7 @@ describe('personalized education engine', () => {
       'a1c',
       'meal-pattern',
       'home-glucose',
-      'dapagliflozin',
+      'sglt2-inhibitor',
       'hypoglycemia',
       'kidney',
       'diabetes-distress',
@@ -253,7 +253,7 @@ describe('personalized education engine', () => {
       'screening-calendar',
       'medication-routine',
       'a1c',
-      'dapagliflozin',
+      'sglt2-inhibitor',
       'kidney',
       'heart-vessels',
       'eye-care',
@@ -428,7 +428,7 @@ describe('a record exported by NHI-FHIR-Bridge below v1.3.2', () => {
     expect(plan.sections.map((section) => section.id)).toEqual([
       'a1c',
       'kidney',
-      'dapagliflozin',
+      'sglt2-inhibitor',
     ])
     expect(plan.facts.find((fact) => fact.id === 'hba1c')?.value).toContain('7.8%')
     expect(plan.facts.find((fact) => fact.id === 'egfr')?.detail)
@@ -452,5 +452,89 @@ describe('a record exported by NHI-FHIR-Bridge below v1.3.2', () => {
     expect(summary.updatedThrough).toBe('2026/06/25')
     expect(plan.facts.find((fact) => fact.id === 'egfr')?.recordedOn)
       .toBe('2026-04-15')
+  })
+})
+
+describe('SGLT2 inhibitors are recognised as a class', () => {
+  function withMedication(
+    medications: PatientEducationContextInput['medications'],
+  ): PatientEducationContextInput {
+    return { ...buildInput(), medications }
+  }
+
+  function sglt2(coding: Array<{ system?: string; code?: string; display?: string }>) {
+    return [{
+      id: 'sglt2',
+      resourceType: 'MedicationRequest' as const,
+      status: 'active',
+      authoredOn: '2026-06-25',
+      medicationCodeableConcept: { coding },
+    }]
+  }
+
+  const ATC = 'http://www.whocc.no/atc'
+
+  // The hold-when-unwell and stop-before-fasting guidance is a class property,
+  // so restricting it to dapagliflozin left every other agent without it.
+  it.each([
+    ['empagliflozin A10BK03', 'A10BK03'],
+    ['canagliflozin A10BK02', 'A10BK02'],
+    ['ertugliflozin A10BK04', 'A10BK04'],
+  ])('builds the medication section for %s', (_label, atcCode) => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(withMedication(
+        sglt2([{ system: ATC, code: atcCode, display: 'Empagliflozin 10 MG' }]),
+      )),
+    ).plan!
+
+    expect(plan.sections.map((section) => section.id)).toContain('sglt2-inhibitor')
+  })
+
+  it('names the actual product rather than dapagliflozin', () => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(withMedication(
+        sglt2([{ system: ATC, code: 'A10BK03', display: 'Empagliflozin 10 MG' }]),
+      )),
+    ).plan!
+    // The source dictionary is a lookup table, not reader-facing copy, so the
+    // assertion covers what a patient on empagliflozin actually reads.
+    const readerFacing = JSON.stringify({
+      facts: plan.facts,
+      sections: plan.sections,
+      actionChoices: plan.actionChoices,
+      lessonGroups: plan.lessonGroups,
+    })
+
+    expect(plan.facts.find((fact) => fact.id === 'sglt2-inhibitor')?.value)
+      .toBe('Empagliflozin 10 MG')
+    expect(readerFacing).not.toContain('達格列淨')
+    expect(readerFacing).not.toContain('福適佳')
+  })
+
+  it('cites the dapagliflozin label only when that is the drug on record', () => {
+    const other = buildPersonalizedEducation(
+      createPatientEducationContext(withMedication(
+        sglt2([{ system: ATC, code: 'A10BK03', display: 'Empagliflozin 10 MG' }]),
+      )),
+    ).plan!
+    const dapa = buildPersonalizedEducation(
+      createPatientEducationContext(buildInput()),
+    ).plan!
+
+    const sourcesOf = (plan: typeof other) => plan.sections
+      .find((section) => section.id === 'sglt2-inhibitor')?.sourceIds ?? []
+
+    expect(sourcesOf(other)).not.toContain('dailyMedDapagliflozin')
+    expect(sourcesOf(dapa)).toContain('dailyMedDapagliflozin')
+  })
+
+  it('ignores fixed-dose combinations, which are not classified under A10BK', () => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(withMedication(
+        sglt2([{ system: ATC, code: 'A10BD15', display: 'Dapagliflozin and metformin' }]),
+      )),
+    ).plan!
+
+    expect(plan.sections.map((section) => section.id)).not.toContain('sglt2-inhibitor')
   })
 })

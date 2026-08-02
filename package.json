@@ -58,7 +58,7 @@
     "@tanstack/react-virtual": "^3.13.26",
     "@voho0000/personalization-sdk": "1.0.0",
     "@voho0000/personalized-care": "1.0.4",
-    "@voho0000/personalized-education": "1.3.0",
+    "@voho0000/personalized-education": "1.4.0",
     "ai": "^6.0.43",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

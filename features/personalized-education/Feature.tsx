@@ -892,18 +892,41 @@ function LearningLibrary({
   )
 }
 
+/**
+ * Says which topics exist and what would make them apply.
+ *
+ * "No content for you" reads as a fault in the reader or in the app. The
+ * honest position is narrower: this is a research demonstration that currently
+ * carries one disease pack, so a record without that diagnosis has nothing to
+ * personalise — which is a statement about coverage, not about the patient.
+ */
 function NoEligiblePack() {
   return (
-    <div className="mx-auto w-full max-w-3xl px-3 py-8 sm:px-5">
-      <div className="rounded-2xl border border-amber-300/70 bg-amber-50/60 px-5 py-5 dark:border-amber-800/70 dark:bg-amber-950/20">
-        <h1 className="text-xl font-semibold text-foreground">
-          目前沒有適合你的衛教內容
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          目前的資料尚未符合已提供的衛教主題，因此這次不顯示個人化內容。
-        </p>
-      </div>
-    </div>
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6" data-testid="education-no-pack">
+      <h1 className="text-2xl font-bold text-foreground">
+        這份紀錄沒有可以個人化的衛教主題
+      </h1>
+      <p className="mt-3 text-base leading-7 text-muted-foreground">
+        目前的展示版本只收錄第二型糖尿病一個主題。你的健康存摺裡沒有這個診斷，所以這次沒有可以依你的資料整理的內容——這代表主題還沒收錄，不代表你的資料有問題。
+      </p>
+
+      <section className="mt-6 border-t border-border pt-5">
+        <h2 className="text-sm font-semibold text-foreground">目前收錄的主題</h2>
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground">
+          <li className="flex gap-2">
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-current opacity-60" aria-hidden="true" />
+            <span>
+              <span className="font-medium text-foreground">第二型糖尿病</span>
+              ：病歷中有第二型糖尿病診斷時才會出現；有糖化血色素、腎功能或排糖藥紀錄時，內容會再依這些資料調整。
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <p className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted-foreground">
+        若你確實有上述診斷卻看到這一頁，可能是健康存摺尚未包含該筆診斷紀錄；其他分頁的檢查與用藥資料仍可正常查看。
+      </p>
+    </main>
   )
 }
 

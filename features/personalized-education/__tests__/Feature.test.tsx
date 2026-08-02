@@ -306,7 +306,7 @@ describe('PersonalizedEducationFeature', () => {
     expect(moduleIds).toEqual([
       'education-module-a1c',
       'education-module-daily-rhythm',
-      'education-module-dapagliflozin',
+      'education-module-sglt2-inhibitor',
       'education-module-kidney',
     ])
     expect(screen.getByTestId('education-module-a1c')).toHaveTextContent(
@@ -325,8 +325,8 @@ describe('PersonalizedEducationFeature', () => {
 
     expect(screen.getByTestId('education-module-a1c')).toHaveAttribute('data-group-id', 'understanding')
     expect(screen.getByTestId('education-module-a1c')).toHaveTextContent('了解我的糖尿病')
-    expect(screen.getByTestId('education-module-dapagliflozin')).toHaveAttribute('data-group-id', 'medication')
-    expect(screen.getByTestId('education-module-dapagliflozin')).toHaveTextContent('藥物與設備')
+    expect(screen.getByTestId('education-module-sglt2-inhibitor')).toHaveAttribute('data-group-id', 'medication')
+    expect(screen.getByTestId('education-module-sglt2-inhibitor')).toHaveTextContent('藥物與設備')
     expect(screen.getByTestId('education-module-kidney')).toHaveAttribute('data-group-id', 'prevention')
     expect(screen.getByTestId('education-module-kidney')).toHaveTextContent('預防長期併發症')
   })
@@ -408,7 +408,7 @@ describe('PersonalizedEducationFeature', () => {
       />,
     )
 
-    const medicationModule = screen.getByTestId('education-module-dapagliflozin')
+    const medicationModule = screen.getByTestId('education-module-sglt2-inhibitor')
     expect(medicationModule).toHaveTextContent('有處方紀錄')
     expect(screen.queryByText(/無法確認實際服用|不代表已確認服用|是否真的在使用/)).not.toBeInTheDocument()
 
@@ -427,5 +427,35 @@ describe('PersonalizedEducationFeature', () => {
 
     expect(screen.getByText('民眾閱讀版預覽')).toBeInTheDocument()
     expect(screen.queryByText(/CDSS|個人化指引/)).not.toBeInTheDocument()
+  })
+})
+
+describe('when no disease pack covers the record', () => {
+  it('names the covered topics instead of stopping at "nothing for you"', () => {
+    render(<PersonalizedEducationFeature plan={null} audience="patient" />)
+
+    const screen_ = screen.getByTestId('education-no-pack')
+    expect(screen_).toHaveTextContent('這份紀錄沒有可以個人化的衛教主題')
+    // Says what is covered and what would make it apply, so the reader can tell
+    // this is a gap in the demonstration rather than a problem with their data.
+    expect(screen_).toHaveTextContent('第二型糖尿病')
+    expect(screen_).toHaveTextContent('不代表你的資料有問題')
+    expect(screen_).not.toHaveTextContent('目前沒有適合你的衛教內容')
+  })
+})
+
+describe('pack selection', () => {
+  it('reports every eligible pack, not only the one it rendered', () => {
+    const result = buildPersonalizedEducation(context)
+
+    expect(result.reason).toBe('eligible-pack')
+    expect(result.eligiblePackIds).toEqual(['dm'])
+  })
+
+  it('reports no eligible packs when the diagnosis is absent', () => {
+    const result = buildPersonalizedEducation({ ...context, diagnosisCodings: [] })
+
+    expect(result.reason).toBe('no-eligible-pack')
+    expect(result.eligiblePackIds).toEqual([])
   })
 })
