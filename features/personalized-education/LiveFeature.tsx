@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useAudience } from '@/src/application/providers/audience.provider'
+import { calculateAge } from '@/src/core/entities/patient.entity'
 import { buildPersonalizedEducation } from './engine'
 import PersonalizedEducationFeature from './Feature'
 import { createPatientEducationContext } from './patient-context'
@@ -89,6 +90,7 @@ export default function LivePersonalizedEducationFeature() {
       key={patient.id}
       plan={result?.plan ?? null}
       audience={audience}
+      age={patient.age ?? calculateAge(patient.birthDate)}
     />
   )
 }

@@ -1,5 +1,15 @@
 import { buildPersonalizedEducation } from '../engine'
 import { createPatientEducationContext } from '../patient-context'
+import { getEnabledDiseasePacks } from '../disease-packs/registry'
+import {
+  getEducationContentSchema,
+  resolveEducationModules,
+  selectEducationHandoutModules,
+} from '../presentation-schema'
+import type {
+  EducationModuleDefinition,
+  EducationModuleGroupDefinition,
+} from '../presentation-schema'
 import type { PatientEducationContextInput } from '../patient-context'
 
 function buildInput(): PatientEducationContextInput {
@@ -65,6 +75,12 @@ function buildInput(): PatientEducationContextInput {
 }
 
 describe('personalized education engine', () => {
+  it('requires every enabled disease pack to register a fixed presentation schema', () => {
+    for (const pack of getEnabledDiseasePacks()) {
+      expect(() => getEducationContentSchema(pack.id)).not.toThrow()
+    }
+  })
+
   it('requires a governed diagnosis instead of inferring from lab or medicine', () => {
     const input = buildInput()
     input.encounters = []
@@ -95,8 +111,29 @@ describe('personalized education engine', () => {
     expect(copy.match(/6\.6/g)).toHaveLength(1)
     expect(copy).toContain('低於常見的 7% 參考值')
     expect(copy).toContain('血糖長期偏高會傷害腎臟的小血管')
-    expect(copy).toContain('不把它說成你正在服用')
-    expect(copy).toContain('立即撥打 119')
+    expect(copy).toContain('這項衛教依照病歷中')
+    expect(copy).toContain('這筆紀錄整理')
+    expect(copy).not.toContain('不把它說成你正在服用')
+    expect(copy).not.toContain('不代表已確認服用')
+    // Emergency guidance belongs to the module's safety slot, not the section
+    // action, so it renders in a fixed red block instead of beside daily tips.
+    expect(copy).not.toContain('立即撥打 119')
+    expect(
+      getEducationContentSchema('dm').modules
+        .find((module: EducationModuleDefinition) => module.id === 'a1c')
+        ?.library.safety,
+    ).toContain('立即撥打 119')
+    expect(plan.actionChoices.find((choice) => choice.id === 'medication')).toEqual({
+      id: 'medication',
+      label: '查看福適佳的用藥安全提醒',
+      detail: '依病歷中的處方或用藥紀錄，先了解需要留意的警訊與特殊情境。',
+    })
+    expect(plan.actionChoices.find((choice) => choice.id === 'kidney')).toEqual({
+      id: 'kidney',
+      label: '查看腎功能的抽血與驗尿',
+      detail: '先比較健康存摺已有的腎功能紀錄；若已有尿蛋白結果，再一起查看變化。',
+    })
+    expect(JSON.stringify(plan.actionChoices)).not.toContain('缺少的檢查列入下次追蹤')
   })
 
   it('ignores refuted diagnoses and incompatible eGFR trend units', () => {
@@ -145,6 +182,89 @@ describe('personalized education engine', () => {
       'medication',
     )
     expect(JSON.stringify(plan)).not.toContain('核對福適佳')
+  })
+
+  it('resolves the same fixed module architecture even when source sections are absent', () => {
+    const fullPlan = buildPersonalizedEducation(
+      createPatientEducationContext(buildInput()),
+    ).plan!
+    const sparseInput = buildInput()
+    sparseInput.observations = []
+    sparseInput.medications = []
+    const sparsePlan = buildPersonalizedEducation(
+      createPatientEducationContext(sparseInput),
+    ).plan!
+    const schema = getEducationContentSchema('dm')
+
+    const moduleIds = (plan: typeof fullPlan) => resolveEducationModules(plan, schema)
+      .map((educationModule) => educationModule.definition.id)
+
+    const fullModuleIds = moduleIds(fullPlan)
+    expect(moduleIds(sparsePlan)).toEqual(fullModuleIds)
+    expect(fullModuleIds).toEqual(expect.arrayContaining([
+      'diabetes-basics',
+      'a1c',
+      'meal-pattern',
+      'home-glucose',
+      'dapagliflozin',
+      'hypoglycemia',
+      'kidney',
+      'diabetes-distress',
+      'pregnancy',
+      'hospital-transition',
+    ]))
+
+    expect(schema.groups.map((group: EducationModuleGroupDefinition) => group.id)).toEqual([
+      'understanding',
+      'daily-life',
+      'monitoring',
+      'medication',
+      'urgent-care',
+      'prevention',
+      'wellbeing',
+      'life-stages',
+    ])
+    for (const group of schema.groups) {
+      expect(schema.modules.some((module: EducationModuleDefinition) => module.groupId === group.id)).toBe(true)
+    }
+  })
+
+  it('builds the printable handout from all core modules plus record-supported modules', () => {
+    const plan = buildPersonalizedEducation(
+      createPatientEducationContext(buildInput()),
+    ).plan!
+    const schema = getEducationContentSchema('dm')
+    const resolved = resolveEducationModules(plan, schema)
+    const handoutIds = selectEducationHandoutModules(resolved)
+      .map((educationModule) => educationModule.definition.id)
+    const olderAdultHandoutIds = selectEducationHandoutModules(resolved, { age: 94 })
+      .map((educationModule) => educationModule.definition.id)
+
+    expect(schema.modules).toHaveLength(48)
+    expect(handoutIds).toHaveLength(23)
+    expect(olderAdultHandoutIds).toHaveLength(24)
+    expect(olderAdultHandoutIds).toContain('older-adults')
+    expect(handoutIds).toEqual(expect.arrayContaining([
+      'diabetes-basics',
+      'personal-goals',
+      'meal-pattern',
+      'physical-activity',
+      'screening-calendar',
+      'medication-routine',
+      'a1c',
+      'dapagliflozin',
+      'kidney',
+      'heart-vessels',
+      'eye-care',
+      'neuropathy-foot',
+      'oral-care',
+    ]))
+    expect(handoutIds).not.toEqual(expect.arrayContaining([
+      'cgm',
+      'insulin-injection',
+      'pregnancy',
+      'dialysis-transplant',
+    ]))
   })
 
   it('maps focused lessons to directly supporting sources', () => {
