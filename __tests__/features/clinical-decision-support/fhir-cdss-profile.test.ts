@@ -580,6 +580,43 @@ describe('FHIR CDSS hypoglycemia-risk medication classification', () => {
     expect(result.facts.statinTherapy.sources).toHaveLength(3)
   })
 
+  it('uses the governed English ingredient name in physician medication evidence', () => {
+    const historicalValsartan: MedicationEntity = {
+      ...medication('historical-valsartan', '得安穩膜衣錠160毫克', 'completed', 'CARDIOVASCULAR'),
+      authoredOn: '2026-04-25',
+      medicationCodeableConcept: {
+        text: '得安穩膜衣錠160毫克',
+        coding: [{
+          system: 'https://www.whocc.no/atc',
+          code: 'C09CA03',
+          display: '得安穩膜衣錠160毫克',
+        }],
+      },
+      drugTerminology: {
+        source: 'nhi-official-drug-master',
+        snapshotId: 'test-snapshot',
+        officialNameZh: '得安穩膜衣錠160毫克',
+        officialNameEn: 'DIOVAN FILM-COATED TABLETS 160MG',
+        ingredientText: 'VALSARTAN 160 MG',
+      },
+    }
+
+    const result = profile([], [historicalValsartan])
+
+    expect(result.medicationClassContexts?.['ace-inhibitor-or-arb']).toMatchObject({
+      medicationNames: ['VALSARTAN 160 MG'],
+    })
+    expect(result.facts.aceArbTherapy.zh).toBe(
+      '歷史處方：VALSARTAN 160 MG（1 筆處方 · 最近 2026-04-25）',
+    )
+    expect(result.facts.aceArbTherapy.zh).not.toContain('得安穩')
+    expect(result.facts.aceArbTherapy.sources).toHaveLength(1)
+    expect(result.facts.aceArbTherapy.sources?.[0]).toMatchObject({
+      resourceType: 'MedicationRequest',
+      value: 'VALSARTAN 160 MG',
+    })
+  })
+
   it('prefers a current class record without mixing historical names into current use', () => {
     const result = profile([], [
       {

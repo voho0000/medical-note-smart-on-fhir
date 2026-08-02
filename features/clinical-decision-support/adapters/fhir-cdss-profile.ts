@@ -303,6 +303,7 @@ function medicationSource(medication: MedicationEntity): CdssFactSource {
     resourceId: medication.id,
     date: dateOnly(medication.authoredOn),
     status: medication.status,
+    value: medicationDisplayName(medication),
     coding: medication.medicationCodeableConcept?.coding,
     facility: resourceType === 'MedicationStatement'
       ? medication.informationSource?.display

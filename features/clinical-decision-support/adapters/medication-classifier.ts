@@ -200,10 +200,12 @@ function medicationRecordState(
 }
 
 export function medicationDisplayName(medication: MedicationEntity): string {
-  return medication.medicationCodeableConcept?.text
-    ?? medication.medicationCodeableConcept?.coding?.find((coding) => coding.display)?.display
-    ?? medication.medicationReference?.display
-    ?? '未命名藥物'
+  return medication.drugTerminology?.ingredientText?.trim()
+    || medication.drugTerminology?.officialNameEn?.trim()
+    || medication.medicationCodeableConcept?.text
+    || medication.medicationCodeableConcept?.coding?.find((coding) => coding.display)?.display
+    || medication.medicationReference?.display
+    || '未命名藥物'
 }
 
 export function currentMedicationRecords(
@@ -295,6 +297,7 @@ export function medicationClassSources(
     resourceId: medication.id,
     date: medication.authoredOn?.slice(0, 10),
     status: medication.status,
+    value: medicationDisplayName(medication),
     coding: medication.medicationCodeableConcept?.coding,
     facility: medication._sourceResourceType === 'MedicationStatement'
       ? medication.informationSource?.display
