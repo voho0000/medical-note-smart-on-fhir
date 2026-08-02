@@ -166,8 +166,15 @@ describe('clinical decision summary', () => {
     expect(within(moduleCell).queryByText('目前無需處理')).not.toBeInTheDocument()
     expect(within(nextStepPreview).getByText('目前無需處理')).toBeInTheDocument()
     expect(within(evidencePreview).queryByText('目前無需處理')).not.toBeInTheDocument()
-    expect(within(moduleCell).getByText('最近兩次 eGFR 變化 -3.0%，未超過 20%')).toHaveClass('line-clamp-1')
-    expect(within(nextStepPreview).getByTitle('下一步 ckd-monitoring')).toHaveClass('line-clamp-2')
+    expect(within(moduleCell).getByText('最近兩次 eGFR 變化 -3.0%，未超過 20%')).toHaveClass(
+      'truncate',
+      'whitespace-nowrap',
+    )
+    const nextStepTooltipTrigger = within(nextStepPreview).getByTestId(
+      'cdss-next-step-tooltip-trigger-ckd-monitoring',
+    )
+    expect(nextStepTooltipTrigger).toHaveClass('line-clamp-2', 'cursor-help')
+    expect(nextStepTooltipTrigger).not.toHaveAttribute('title')
     expect(completedRow).not.toHaveTextContent('例行盤點')
     expect(completedRow).not.toHaveTextContent('優先處理')
     expect(completedRow).not.toHaveTextContent('接續檢視')
@@ -258,19 +265,27 @@ describe('clinical decision summary', () => {
 
     expect(kfreRow).toHaveTextContent('缺少定量 UACR')
     expect(kfreRow).not.toHaveTextContent('缺：大於 0 的定量 UACR')
-    expect(within(kfreRow).getByTitle('KFRE｜G3b：缺少定量 UACR 或數值無法使用')).toBeInTheDocument()
+    const kfreAssessmentTooltip = within(kfreRow).getByTestId(
+      'cdss-assessment-tooltip-trigger-ckd-kidney-failure-risk',
+    )
+    expect(kfreAssessmentTooltip).toHaveTextContent('KFRE｜G3b：缺少定量 UACR 或數值無法使用')
+    expect(kfreAssessmentTooltip).not.toHaveAttribute('title')
     expect(bloodPressureRow).toHaveTextContent('缺少近期可判讀的血壓與體液狀態')
     expect(bloodPressureRow).not.toHaveTextContent('缺：標準化診間血壓與量測日期')
     expect(rasModuleCell).toHaveTextContent('A2 白蛋白尿符合 ACEI／ARB 條件')
     expect(rasModuleCell).not.toHaveTextContent('歷史處方')
     expect(rasEvidencePreview).toHaveTextContent('歷史處方')
-    expect(within(rasEvidencePreview).getByTitle(
+    const rasEvidenceTooltip = within(rasEvidencePreview).getByTestId(
+      'cdss-evidence-tooltip-trigger-ckd-rasi-strategy',
+    )
+    expect(rasEvidenceTooltip).toHaveTextContent(
       'ACEI／ARB：歷史處方：得安穩膜衣錠160毫克（4 筆處方 · 最近 2026-04-25）',
-    )).toBeInTheDocument()
+    )
+    expect(rasEvidenceTooltip).not.toHaveAttribute('title')
     expect(rasRow).toHaveTextContent('缺：續方適應症與既往停藥原因')
-    expect(within(screen.getByTestId('cdss-next-step-preview-ckd-rasi-strategy')).getByTitle(
-      '依最後處方日期與目前適應症評估是否續方。',
-    )).toBeInTheDocument()
+    expect(within(screen.getByTestId('cdss-next-step-preview-ckd-rasi-strategy')).getByTestId(
+      'cdss-next-step-tooltip-trigger-ckd-rasi-strategy',
+    )).toHaveTextContent('依最後處方日期與目前適應症評估是否續方。')
 
     fireEvent.click(kfreRow)
     const kfreActionPlan = screen.getByTestId('cdss-action-plan-ckd-kidney-failure-risk')
@@ -278,6 +293,136 @@ describe('clinical decision summary', () => {
     expect(kfreActionPlan).toHaveTextContent(
       '查找或補做大於 0 的定量 UACR（mg/g）；資料完整且腎功能穩定後再計算。',
     )
+  })
+
+  it('provides nearby tooltips for truncated CKD-MBD evidence and missing items', () => {
+    render(<ClinicalDecisionSupportView
+      result={{
+        ...result(),
+        recommendations: [
+          recommendation('ckd-mbd-monitoring', {
+            status: 'needs-data',
+            moduleName: 'CKD-MBD 監測',
+            title: 'G3b CKD-MBD 評估尚缺 1 項',
+            overviewEvidenceFactKey: 'eGFR',
+            patientEvidence: [{
+              label: '最新 eGFR',
+              value: '32 mL/min/1.73m²（2026-06-02）',
+              factKeys: ['eGFR'],
+            }],
+            missingData: ['PTH'],
+            nextActions: ['先查既有結果；依分期補齊缺項並以連續趨勢判讀。'],
+            guidelineReferences: [{
+              id: 'KDIGO-CKD-MBD-2017-4.1.1',
+              title: 'KDIGO 2017 Clinical Practice Guideline Update for CKD-MBD',
+              publisher: 'Kidney Disease: Improving Global Outcomes',
+              version: '2017',
+              url: 'https://kdigo.org/ckd-mbd/',
+              recommendationId: 'Recommendation 4.1.1',
+              locator: '第 4.1 節 → CKD-MBD 生化異常',
+              summary: 'CKD G3a–G5D 的處置應依連續的血磷、血鈣與 PTH 整體判讀。',
+            }],
+            sourceAssessments: [
+              {
+                sourceId: 'kdigo-ckd-2024',
+                sourceKind: 'guideline',
+                sourceLabel: 'KDIGO CKD 指引',
+                version: '2024',
+                effectiveFrom: '2024-03-13',
+                status: 'needs-data',
+                summary: '通用 CKD 樣板摘要。',
+                references: [],
+              },
+              {
+                sourceId: 'taiwan-ckd-2025',
+                sourceKind: 'guideline',
+                sourceLabel: '台灣 CKD 指引',
+                version: '2025-12 update',
+                effectiveFrom: '2025-12-01',
+                status: 'needs-data',
+                summary: '通用台灣 CKD 樣板摘要。',
+                references: [],
+              },
+            ],
+          }),
+        ],
+        automatedChecks: [],
+      }}
+      locale="zh-TW"
+    />)
+
+    const row = screen.getByTestId('cdss-recommendation-trigger-ckd-mbd-monitoring')
+    const moduleTooltip = within(row).getByTestId('cdss-module-tooltip-trigger-ckd-mbd-monitoring')
+    const assessmentTooltip = within(row).getByTestId('cdss-assessment-tooltip-trigger-ckd-mbd-monitoring')
+    const evidenceTooltip = within(row).getByTestId('cdss-evidence-tooltip-trigger-ckd-mbd-monitoring')
+    const missingTooltip = within(row).getByTestId('cdss-missing-tooltip-trigger-ckd-mbd-monitoring')
+    const nextStepTooltip = within(row).getByTestId('cdss-next-step-tooltip-trigger-ckd-mbd-monitoring')
+
+    expect(moduleTooltip).toHaveTextContent('CKD-MBD 監測')
+    expect(assessmentTooltip).toHaveTextContent('G3b CKD-MBD 評估尚缺 1 項')
+    expect(evidenceTooltip).toHaveTextContent('最新 eGFR：32（2026-06-02）')
+    expect(evidenceTooltip).not.toHaveTextContent('mL/min/1.73m²')
+    expect(missingTooltip).toHaveTextContent('缺：PTH')
+    expect(nextStepTooltip).toHaveTextContent('先查既有結果；依分期補齊缺項並以連續趨勢判讀。')
+    expect(assessmentTooltip).toHaveClass('truncate', 'whitespace-nowrap')
+    expect(evidenceTooltip).toHaveClass('truncate', 'whitespace-nowrap')
+    expect(missingTooltip).toHaveClass('truncate', 'whitespace-nowrap')
+    expect(evidenceTooltip).not.toHaveClass('line-clamp-1')
+    ;[moduleTooltip, assessmentTooltip, evidenceTooltip, missingTooltip, nextStepTooltip]
+      .forEach((trigger) => expect(trigger).not.toHaveAttribute('title'))
+
+    fireEvent.click(row)
+    const supporting = screen.getByTestId('cdss-supporting-context-ckd-mbd-monitoring')
+    expect(supporting).toHaveTextContent('KDIGO CKD-MBD 指引')
+    expect(supporting).toHaveTextContent('2017')
+    expect(supporting).toHaveTextContent('Recommendation 4.1.1')
+    expect(supporting).toHaveTextContent('第 4.1 節 → CKD-MBD 生化異常')
+    expect(supporting).not.toHaveTextContent('KDIGO CKD 指引')
+    expect(supporting).not.toHaveTextContent('台灣 CKD 指引')
+    expect(supporting).not.toHaveTextContent('通用 CKD 樣板摘要')
+  })
+
+  it('moves monitoring lab values from the assessment into key evidence', () => {
+    render(<ClinicalDecisionSupportView
+      result={{
+        ...result(),
+        recommendations: [
+          recommendation('ckd-potassium-acidosis', {
+            status: 'no-action',
+            moduleName: '血鉀與酸鹼',
+            presentationType: 'monitoring',
+            title: '鉀與酸鹼數值已判讀；總 CO₂ 23.6 mmol/L未觸發重要酸中毒提示',
+            overviewEvidenceFactKey: 'potassium',
+            patientEvidence: [
+              {
+                label: '血鉀',
+                value: '3.7 mmol/L（2026-06-02）',
+                factKeys: ['potassium'],
+              },
+              {
+                label: '總 CO₂',
+                value: '23.6 mmol/L（2026-06-02）',
+                factKeys: ['bicarbonate'],
+              },
+            ],
+            nextActions: ['依既有計畫追蹤。'],
+          }),
+        ],
+        automatedChecks: [],
+      }}
+      locale="zh-TW"
+    />)
+
+    const moduleCell = screen.getByTestId('cdss-module-cell-ckd-potassium-acidosis')
+    const evidencePreview = screen.getByTestId('cdss-evidence-preview-ckd-potassium-acidosis')
+
+    expect(moduleCell).toHaveTextContent('鉀與酸鹼數值已判讀；未觸發重要酸中毒提示')
+    expect(moduleCell).not.toHaveTextContent('23.6 mmol/L')
+    expect(evidencePreview).toHaveTextContent('血鉀：3.7 mmol/L（2026-06-02）')
+    expect(evidencePreview).toHaveTextContent('總 CO₂：23.6 mmol/L（2026-06-02）')
+    expect(within(evidencePreview).getByTestId(
+      'cdss-evidence-tooltip-trigger-ckd-potassium-acidosis-bicarbonate',
+    )).toHaveClass('truncate', 'whitespace-nowrap')
   })
 
   it('keeps medication records behind a compact history control', () => {

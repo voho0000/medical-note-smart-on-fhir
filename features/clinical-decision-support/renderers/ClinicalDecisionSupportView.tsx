@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useRef, useState } from 'react'
 import {
   ArrowRight,
   BookOpenCheck,
@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner'
 import { getClinicalModuleDefinition } from '@voho0000/personalized-care'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/src/shared/utils/cn.utils'
 import {
   leftTabForResourceType,
@@ -174,6 +175,95 @@ function isAssessmentPreviewRedundant(title: string, evidenceValue?: string): bo
     if (evidenceBigrams.has(bigram)) sharedCount += 1
   })
   return sharedCount / smallerSize >= 0.7
+}
+
+function compactOverviewEvidenceValue(evidence: {
+  label: string
+  value: string
+  factKeys: readonly string[]
+}): string {
+  const isEgfr = evidence.factKeys.some((factKey) => /^egfr$/i.test(factKey))
+    || /\begfr\b|腎絲球過濾率/i.test(evidence.label)
+  if (!isEgfr) return evidence.value
+
+  return evidence.value
+    .replace(/\s*mL\s*\/\s*min\s*\/\s*1\.73\s*m(?:²|\^?2)/gi, '')
+    .replace(/\s+(?=[（(])/gu, '')
+    .trim()
+}
+
+const overviewEvidenceKeyFallbacks: Readonly<Record<string, readonly string[]>> = {
+  'ckd-potassium-acidosis': ['potassium', 'bicarbonate'],
+}
+
+function overviewEvidenceItems(
+  recommendation: CdssRecommendation,
+): CdssRecommendation['patientEvidence'] {
+  const explicitKeys = (recommendation as CdssRecommendation & {
+    overviewEvidenceFactKeys?: readonly string[]
+  }).overviewEvidenceFactKeys
+  const keys = explicitKeys && explicitKeys.length > 0
+    ? explicitKeys
+    : overviewEvidenceKeyFallbacks[recommendation.id]
+      ?? (recommendation.overviewEvidenceFactKey
+        ? [recommendation.overviewEvidenceFactKey]
+        : [])
+  const seen = new Set<string>()
+
+  return keys.flatMap((factKey) => {
+    const evidence = recommendation.patientEvidence.find((item) => (
+      item.factKeys.includes(factKey)
+    ))
+    if (!evidence) return []
+    const key = `${evidence.label}\u0000${evidence.value}`
+    if (seen.has(key)) return []
+    seen.add(key)
+    return [evidence]
+  })
+}
+
+function regexLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function flexibleWhitespacePattern(value: string): string {
+  return value.trim().split(/\s+/u).map(regexLiteral).join('\\s*')
+}
+
+function conciseMonitoringAssessment(
+  recommendation: CdssRecommendation,
+  evidenceItems: CdssRecommendation['patientEvidence'],
+): string {
+  if (recommendationPresentationType(recommendation) !== 'monitoring') {
+    return recommendation.title
+  }
+
+  const withoutDisplayedValues = evidenceItems.reduce((title, evidence) => {
+    const valueWithoutDate = evidence.value
+      .replace(/\s*[（(]\d{4}-\d{2}-\d{2}[）)]\s*$/u, '')
+      .trim()
+    if (!valueWithoutDate) return title
+    const evidencePhrase = new RegExp(
+      `${flexibleWhitespacePattern(evidence.label)}\\s*${flexibleWhitespacePattern(valueWithoutDate)}`,
+      'giu',
+    )
+    return title.replace(evidencePhrase, '')
+  }, recommendation.title)
+
+  return withoutDisplayedValues
+    .replace(/^\s*[：:；;]\s*/u, '')
+    .replace(/[ \t]{2,}/gu, ' ')
+    .trim()
+}
+
+function directGuidelineSourceLabel(
+  reference: GuidelineReference,
+  isEnglish: boolean,
+): string {
+  if (/\bKDIGO\b/i.test(reference.title) && /CKD-MBD/i.test(reference.title)) {
+    return isEnglish ? 'KDIGO CKD-MBD guideline' : 'KDIGO CKD-MBD 指引'
+  }
+  return reference.title.trim() || reference.publisher
 }
 
 const clinicalReviewBoilerplateZh = /(?:視臨床情境|適切性|適用性|耐受性|治療|用藥|使用|確認|核對|檢視|評估|是否|需要|建議|目前|狀態|原因|計畫|先|再|與|及|和|或)/gu
@@ -966,6 +1056,46 @@ function StatusIcon({ status }: { status: CdssStatus }) {
   return <CircleHelp className="mr-1 h-3.5 w-3.5" />
 }
 
+function PreviewTextTooltip({
+  text,
+  children,
+  className,
+  triggerTestId,
+  contentTestId,
+}: {
+  text: string
+  children: ReactNode
+  className?: string
+  triggerTestId?: string
+  contentTestId?: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'cursor-help rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+            className,
+          )}
+          data-testid={triggerTestId}
+          tabIndex={0}
+        >
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="start"
+        sideOffset={6}
+        className="max-w-[min(90vw,30rem)] whitespace-normal text-left text-xs leading-relaxed"
+        data-testid={contentTestId}
+      >
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function DcsiModuleDetail({
   dcsi,
   isEnglish,
@@ -1292,11 +1422,40 @@ function RecommendationDetail({
     recommendation,
     isEnglish ? 'en' : 'zh-TW',
   )
-  const visibleSourceAssessments = (recommendation.sourceAssessments ?? []).filter((source) => !(
-    recommendation.domain !== 'medication'
-    && source.sourceKind === 'coverage'
-    && source.status === 'not-applicable'
+  const sourceAssessmentsWithContent = (recommendation.sourceAssessments ?? []).filter((source) => (
+    !(
+      recommendation.domain !== 'medication'
+      && source.sourceKind === 'coverage'
+      && source.status === 'not-applicable'
+    )
+    && (source.sourceKind === 'coverage' || source.references.length > 0)
   ))
+  const assessedReferenceIds = new Set(
+    sourceAssessmentsWithContent.flatMap((source) => (
+      source.references.map((reference) => reference.id)
+    )),
+  )
+  const directGuidelineStatus: CdssSourceAssessmentStatus = recommendation.status === 'needs-data'
+    ? 'needs-data'
+    : recommendation.status === 'actionable'
+      ? 'recommended'
+      : 'consider'
+  const directGuidelineSources = recommendation.guidelineReferences
+    .filter((reference) => !assessedReferenceIds.has(reference.id))
+    .map((reference) => ({
+      sourceId: `guideline-reference:${reference.id}`,
+      sourceKind: 'guideline' as const,
+      sourceLabel: directGuidelineSourceLabel(reference, isEnglish),
+      version: reference.version,
+      effectiveFrom: reference.version,
+      status: directGuidelineStatus,
+      summary: reference.summary,
+      references: [reference],
+    }))
+  const visibleSourceAssessments = [
+    ...sourceAssessmentsWithContent,
+    ...directGuidelineSources,
+  ]
   const sourceStatusesByKind = new Map<string, Set<CdssSourceAssessmentStatus>>()
   visibleSourceAssessments.forEach((source) => {
     const statuses = sourceStatusesByKind.get(source.sourceKind) ?? new Set<CdssSourceAssessmentStatus>()
@@ -1893,11 +2052,7 @@ export function ClinicalDecisionSupportView({
           )
           const triggerId = `cdss-trigger-${recommendation.id}`
           const detailId = `cdss-detail-${recommendation.id}`
-          const overviewEvidence = recommendation.patientEvidence.find((evidence) => (
-            recommendation.overviewEvidenceFactKey
-              ? evidence.factKeys.includes(recommendation.overviewEvidenceFactKey)
-              : false
-          ))
+          const overviewEvidence = overviewEvidenceItems(recommendation)
           const overviewMissing = recommendation.hideMissingDataPreview
             ? undefined
             : recommendation.missingData?.[0]
@@ -1905,10 +2060,15 @@ export function ClinicalDecisionSupportView({
             && !isMissingPreviewRedundant(recommendation.title, overviewMissing)
             ? overviewMissing
             : undefined
-          const assessmentPreview = recommendation.title !== moduleName
-            && !isAssessmentPreviewRedundant(recommendation.title, overviewEvidence?.value)
-            ? recommendation.title
+          const conciseAssessment = conciseMonitoringAssessment(recommendation, overviewEvidence)
+          const assessmentPreview = conciseAssessment !== moduleName
+            && !isAssessmentPreviewRedundant(
+              conciseAssessment,
+              overviewEvidence.map((evidence) => evidence.value).join(' '),
+            )
+            ? conciseAssessment
             : undefined
+          const nextStepPreviewText = recommendation.nextActions[0]
 
           return (
             <article
@@ -1974,12 +2134,13 @@ export function ClinicalDecisionSupportView({
                   data-testid={`cdss-module-cell-${recommendation.id}`}
                 >
                   <span className="flex min-w-0 items-center gap-2">
-                    <span
+                    <PreviewTextTooltip
+                      text={moduleName}
                       className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug text-foreground"
-                      title={moduleName}
+                      triggerTestId={`cdss-module-tooltip-trigger-${recommendation.id}`}
                     >
                       {moduleName}
-                    </span>
+                    </PreviewTextTooltip>
                     {isRiskStratification ? (
                       <Badge className="h-5 shrink-0 bg-violet-100 px-1.5 text-[11px] text-violet-900 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-200">
                         <Gauge className="mr-1 h-3.5 w-3.5" />
@@ -1988,12 +2149,13 @@ export function ClinicalDecisionSupportView({
                     ) : null}
                   </span>
                   {assessmentPreview ? (
-                    <span
-                      className="mt-1 line-clamp-1 break-words text-xs leading-relaxed text-muted-foreground"
-                      title={assessmentPreview}
+                    <PreviewTextTooltip
+                      text={assessmentPreview}
+                      className="mt-1 block min-w-0 max-w-full truncate whitespace-nowrap text-xs leading-relaxed text-muted-foreground"
+                      triggerTestId={`cdss-assessment-tooltip-trigger-${recommendation.id}`}
                     >
                       {assessmentPreview}
-                    </span>
+                    </PreviewTextTooltip>
                   ) : null}
                 </span>
 
@@ -2001,23 +2163,37 @@ export function ClinicalDecisionSupportView({
                   className="min-w-0 cursor-text"
                   data-testid={`cdss-evidence-preview-${recommendation.id}`}
                 >
-                  {overviewEvidence ? (
-                    <span className={cn(
-                      'block break-words text-xs leading-relaxed text-muted-foreground',
-                      overviewMissingForPreview ? 'line-clamp-1' : 'line-clamp-2',
-                    )} title={`${overviewEvidence.label}：${overviewEvidence.value}`}>
-                      <strong className="font-medium text-foreground">{overviewEvidence.label}：</strong>
-                      {overviewEvidence.value}
-                    </span>
-                  ) : null}
+                  {overviewEvidence.map((evidence, index) => {
+                    const factKey = evidence.factKeys[0] ?? String(index)
+                    return (
+                      <PreviewTextTooltip
+                        key={`${factKey}-${evidence.label}-${evidence.value}`}
+                        text={`${evidence.label}：${evidence.value}`}
+                        className={cn(
+                          'block min-w-0 max-w-full text-xs leading-relaxed text-muted-foreground',
+                          overviewMissingForPreview || overviewEvidence.length > 1
+                            ? 'truncate whitespace-nowrap'
+                            : 'line-clamp-2 break-words',
+                          index > 0 && 'mt-0.5',
+                        )}
+                        triggerTestId={index === 0
+                          ? `cdss-evidence-tooltip-trigger-${recommendation.id}`
+                          : `cdss-evidence-tooltip-trigger-${recommendation.id}-${factKey}`}
+                      >
+                        <strong className="font-medium text-foreground">{evidence.label}：</strong>
+                        {compactOverviewEvidenceValue(evidence)}
+                      </PreviewTextTooltip>
+                    )
+                  })}
                   {overviewMissingForPreview ? (
-                    <span
-                      className="mt-0.5 line-clamp-1 break-words text-xs leading-relaxed text-muted-foreground"
-                      title={`${label.missingShort}：${overviewMissingForPreview}`}
+                    <PreviewTextTooltip
+                      text={`${label.missingShort}：${overviewMissingForPreview}`}
+                      className="mt-0.5 block min-w-0 max-w-full truncate whitespace-nowrap text-xs leading-relaxed text-muted-foreground"
+                      triggerTestId={`cdss-missing-tooltip-trigger-${recommendation.id}`}
                     >
                       <strong className="font-medium text-foreground">{label.missingShort}：</strong>
                       {overviewMissingForPreview}
-                    </span>
+                    </PreviewTextTooltip>
                   ) : null}
                 </span>
 
@@ -2025,23 +2201,41 @@ export function ClinicalDecisionSupportView({
                   className="min-w-0 cursor-text"
                   data-testid={`cdss-next-step-preview-${recommendation.id}`}
                 >
-                  <span
-                    className="line-clamp-2 break-words text-xs leading-relaxed text-foreground"
-                    title={recommendation.nextActions[0]}
-                  >
-                    {!isRiskStratification ? (
-                      <Badge
-                        className={cn(
-                          'mr-1 inline-flex h-5 px-1.5 align-middle text-[11px]',
-                          statusStyle[recommendation.status],
-                        )}
-                      >
-                        <StatusIcon status={recommendation.status} />
-                        {label[recommendation.status]}
-                      </Badge>
-                    ) : null}
-                    {recommendation.nextActions[0]}
-                  </span>
+                  {nextStepPreviewText ? (
+                    <PreviewTextTooltip
+                      text={nextStepPreviewText}
+                      className="block line-clamp-2 break-words text-xs leading-relaxed text-foreground"
+                      triggerTestId={`cdss-next-step-tooltip-trigger-${recommendation.id}`}
+                      contentTestId={`cdss-next-step-tooltip-${recommendation.id}`}
+                    >
+                      {!isRiskStratification ? (
+                        <Badge
+                          className={cn(
+                            'mr-1 inline-flex h-5 px-1.5 align-middle text-[11px]',
+                            statusStyle[recommendation.status],
+                          )}
+                        >
+                          <StatusIcon status={recommendation.status} />
+                          {label[recommendation.status]}
+                        </Badge>
+                      ) : null}
+                      {nextStepPreviewText}
+                    </PreviewTextTooltip>
+                  ) : (
+                    <span className="line-clamp-2 break-words text-xs leading-relaxed text-foreground">
+                      {!isRiskStratification ? (
+                        <Badge
+                          className={cn(
+                            'mr-1 inline-flex h-5 px-1.5 align-middle text-[11px]',
+                            statusStyle[recommendation.status],
+                          )}
+                        >
+                          <StatusIcon status={recommendation.status} />
+                          {label[recommendation.status]}
+                        </Badge>
+                      ) : null}
+                    </span>
+                  )}
                 </span>
 
                 <span
@@ -2088,28 +2282,31 @@ export function ClinicalDecisionSupportView({
             >
               <div className="grid min-h-11 gap-2 px-3 py-2.5 text-left @min-[40rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_2.75rem] @min-[40rem]:items-start @min-[40rem]:gap-3">
                 <span className="min-w-0">
-                  <span
+                  <PreviewTextTooltip
+                    text={moduleName}
                     className="block min-w-0 truncate text-sm font-semibold leading-snug text-foreground"
-                    title={moduleName}
+                    triggerTestId={`cdss-check-module-tooltip-trigger-${check.id}`}
                   >
                     {moduleName}
-                  </span>
+                  </PreviewTextTooltip>
                   {check.label !== moduleName ? (
-                    <span
-                      className="mt-1 line-clamp-1 break-words text-xs leading-relaxed text-muted-foreground"
-                      title={check.label}
+                    <PreviewTextTooltip
+                      text={check.label}
+                      className="mt-1 block min-w-0 max-w-full truncate whitespace-nowrap text-xs leading-relaxed text-muted-foreground"
+                      triggerTestId={`cdss-check-label-tooltip-trigger-${check.id}`}
                     >
                       {check.label}
-                    </span>
+                    </PreviewTextTooltip>
                   ) : null}
                 </span>
                 <span className="min-w-0">
-                  <span
-                    className="line-clamp-2 break-words text-xs leading-relaxed text-muted-foreground"
-                    title={check.value}
+                  <PreviewTextTooltip
+                    text={check.value}
+                    className="block line-clamp-2 break-words text-xs leading-relaxed text-muted-foreground"
+                    triggerTestId={`cdss-check-value-tooltip-trigger-${check.id}`}
                   >
                     {check.value}
-                  </span>
+                  </PreviewTextTooltip>
                   {check.sources && check.sources.length > 0 ? (
                     <EvidenceSources
                       sources={check.sources}
