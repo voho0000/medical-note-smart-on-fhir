@@ -958,7 +958,7 @@ export default function PersonalizedEducationFeature({
 
   return (
     <main
-      className="@container mx-auto w-full max-w-[72rem] space-y-8 px-4 pb-12 sm:px-6 print:max-w-none print:px-0"
+      className="@container mx-auto w-full max-w-[72rem] space-y-6 px-4 pb-12 pt-2 sm:px-6 print:max-w-none print:px-0"
       data-education-print-root
     >
       <style jsx global>{`
@@ -1033,64 +1033,24 @@ export default function PersonalizedEducationFeature({
           display: none;
         }
       `}</style>
-      <header className="relative overflow-hidden border-b border-border pb-7 print:hidden">
-        <Sparkles className="absolute -right-4 -top-5 size-28 text-primary/[0.07]" aria-hidden="true" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-              <span className="rounded-full bg-primary px-3 py-1.5 text-primary-foreground">
-                {schema.diseaseLabel}
-              </span>
-              {audience === 'medical' ? (
-                <span className="rounded-full border bg-background/80 px-3 py-1.5 text-muted-foreground">
-                  民眾閱讀版預覽
-                </span>
-              ) : null}
-            </div>
-            <h1 className="mt-5 max-w-3xl text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              {schema.pageTitle}
-            </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
-              {schema.intro}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-end justify-end gap-3 print:hidden">
-            <fieldset>
-              <legend className="mb-1 text-xs font-medium text-muted-foreground">列印字體</legend>
-              <div className="inline-flex border-b border-border">
-                {([
-                  { value: 'standard', label: '標準字' },
-                  { value: 'large', label: '大字版' },
-                ] as const).map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={printFontSize === option.value}
-                    onClick={() => setPrintFontSize(option.value)}
-                    className={`min-h-9 border-b-2 px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                      printFontSize === option.value
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <button
-              type="button"
-              onClick={printEducationHandout}
-              className="inline-flex min-h-11 items-center gap-2 border-b-2 border-foreground px-2 py-2 text-sm font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Printer className="size-4" aria-hidden="true" />
-              列印{readingMode === 'detailed' ? '詳細解說版' : '重點版'}
-            </button>
-            <p className="basis-full text-right text-xs leading-5 text-muted-foreground">
-              若預覽出現網址與日期，請在列印設定取消「頁首及頁尾」。
-            </p>
-          </div>
+      <header className="relative overflow-hidden pb-1 print:hidden">
+        <Sparkles className="absolute -right-4 -top-6 size-24 text-primary/[0.07]" aria-hidden="true" />
+        <div className="relative flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {schema.pageTitle}
+          </h1>
+          <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground">
+            {schema.diseaseLabel}
+          </span>
+          {audience === 'medical' ? (
+            <span className="rounded-full border bg-background/80 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              民眾閱讀版預覽
+            </span>
+          ) : null}
         </div>
+        <p className="relative mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          {schema.intro}
+        </p>
       </header>
 
       {readingMode === 'detailed' ? (
@@ -1110,53 +1070,68 @@ export default function PersonalizedEducationFeature({
         />
       )}
 
+      {/*
+        One row for every control on the page. The reading modes previously sat
+        in cards whose descriptions repeated the section heading below them, and
+        the print settings carried their own legend and two hint lines, so the
+        chrome ran longer than the content it introduced. The print button names
+        the version it will produce, which is what those hints were for.
+      */}
       <section
-        className="border-b border-border pb-4 print:hidden"
-        aria-labelledby="education-reading-mode-title"
+        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border pb-2 print:hidden"
+        aria-label="閱讀與列印設定"
         data-testid="education-reading-mode"
       >
-        <fieldset>
-          <legend id="education-reading-mode-title" className="pb-2 text-sm font-semibold text-foreground">
-            選擇閱讀方式
-          </legend>
-          <div className="flex gap-6 border-b border-border">
+        <fieldset className="min-w-0">
+          <legend className="sr-only">選擇閱讀方式</legend>
+          <div className="flex gap-5">
             {([
-              {
-                value: 'summary',
-                label: '重點版',
-                description: '先看這次和你最相關的狀況與下一步。',
-              },
-              {
-                value: 'detailed',
-                label: '詳細解說版',
-                description: '依主題了解原因、做法、警訊，並確認自己是否看懂。',
-              },
+              { value: 'summary', label: '重點版' },
+              { value: 'detailed', label: '詳細解說版' },
             ] as const).map((option) => (
               <button
                 key={option.value}
                 type="button"
                 aria-pressed={readingMode === option.value}
                 onClick={() => setReadingMode(option.value)}
-                className={`max-w-sm border-b-2 px-1 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                className={`min-h-11 border-b-2 px-0.5 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   readingMode === option.value
                     ? 'border-primary text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="flex items-center justify-between gap-3">
-                  <span className="font-semibold">{option.label}</span>
-                  {readingMode === option.value ? (
-                    <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                  ) : null}
-                </span>
-                <span className="mt-1 block text-sm leading-6">{option.description}</span>
+                {option.label}
               </button>
             ))}
           </div>
         </fieldset>
-        <p className="pt-2 text-xs leading-5 text-muted-foreground">
-          列印會使用目前選擇的版本；重點版維持兩頁，詳細解說版依適用主題自然分頁。
-        </p>
+
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            aria-pressed={printFontSize === 'large'}
+            onClick={() => setPrintFontSize(
+              printFontSize === 'large' ? 'standard' : 'large',
+            )}
+            title="列印時使用較大的字級"
+            className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              printFontSize === 'large'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            大字版
+          </button>
+          <button
+            type="button"
+            onClick={printEducationHandout}
+            title="若預覽出現網址與日期，請在列印設定取消「頁首及頁尾」"
+            className="inline-flex min-h-11 items-center gap-2 border-b-2 border-foreground px-0.5 text-sm font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Printer className="size-4" aria-hidden="true" />
+            列印{readingMode === 'detailed' ? '詳細解說版' : '重點版'}
+          </button>
+        </div>
       </section>
 
       <CareSummary summary={careSummary} />

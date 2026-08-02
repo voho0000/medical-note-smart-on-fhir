@@ -61,7 +61,6 @@ describe('PersonalizedEducationFeature', () => {
       }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '列印重點版' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '標準字' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '大字版' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.queryByText(/使用 \d+ 筆病歷依據/)).not.toBeInTheDocument()
     expect(screen.queryByText(/不使用姓名、病歷號/)).not.toBeInTheDocument()
@@ -78,10 +77,10 @@ describe('PersonalizedEducationFeature', () => {
     )
 
     const summaryButton = screen.getByRole('button', {
-      name: '重點版 先看這次和你最相關的狀況與下一步。',
+      name: '重點版',
     })
     const detailedButton = screen.getByRole('button', {
-      name: '詳細解說版 依主題了解原因、做法、警訊，並確認自己是否看懂。',
+      name: '詳細解說版',
     })
     const modules = screen.getByTestId('education-modules')
 
@@ -240,11 +239,17 @@ describe('PersonalizedEducationFeature', () => {
     const printHandout = screen.getByTestId('education-compact-print')
     expect(printHandout).toHaveAttribute('data-education-print-font-size', 'standard')
 
+    // A single pressed-state toggle rather than a standard/large pair: the
+    // control row has to fit on one line, and "off" already means standard.
     fireEvent.click(screen.getByRole('button', { name: '大字版' }))
 
     expect(screen.getByRole('button', { name: '大字版' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: '標準字' })).toHaveAttribute('aria-pressed', 'false')
     expect(printHandout).toHaveAttribute('data-education-print-font-size', 'large')
+
+    fireEvent.click(screen.getByRole('button', { name: '大字版' }))
+
+    expect(screen.getByRole('button', { name: '大字版' })).toHaveAttribute('aria-pressed', 'false')
+    expect(printHandout).toHaveAttribute('data-education-print-font-size', 'standard')
   })
 
   it('supports occasional health-record review instead of a daily check-in flow', () => {
