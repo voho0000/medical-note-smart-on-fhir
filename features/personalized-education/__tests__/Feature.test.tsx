@@ -55,64 +55,19 @@ describe('PersonalizedEducationFeature', () => {
       />,
     )
 
+    // The page heading is for assistive technology only; on screen the panel
+    // tab and the summary heading already name the feature and the disease.
     expect(
-      screen.getByRole('heading', {
-        name: '你的糖尿病衛教單',
-      }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '列印重點版' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '大字版' })).toHaveAttribute('aria-pressed', 'false')
+      screen.getByRole('heading', { name: '你的糖尿病衛教單（第二型糖尿病）', level: 1 }),
+    ).toHaveClass('sr-only')
+    expect(screen.getByTestId('education-print-menu')).toBeInTheDocument()
+    // Print settings are not loose controls on the page any more.
+    expect(screen.queryByRole('button', { name: '大字版' })).not.toBeInTheDocument()
     expect(screen.queryByText(/使用 \d+ 筆病歷依據/)).not.toBeInTheDocument()
     expect(screen.queryByText(/不使用姓名、病歷號/)).not.toBeInTheDocument()
     expect(screen.queryByText(/選擇模型|Gemini|產生內容/)).not.toBeInTheDocument()
   })
 
-  it('offers a concise mode and a teaching-focused detailed mode', () => {
-    render(
-      <PersonalizedEducationFeature
-        plan={buildPersonalizedEducation(context).plan}
-        audience="patient"
-        age={94}
-      />,
-    )
-
-    const summaryButton = screen.getByRole('button', {
-      name: '重點版',
-    })
-    const detailedButton = screen.getByRole('button', {
-      name: '詳細解說版',
-    })
-    const modules = screen.getByTestId('education-modules')
-
-    expect(summaryButton).toHaveAttribute('aria-pressed', 'true')
-    expect(detailedButton).toHaveAttribute('aria-pressed', 'false')
-    expect(modules).toHaveAttribute('data-reading-mode', 'summary')
-    expect(
-      modules.querySelectorAll('article[data-testid^="education-module-"]'),
-    ).toHaveLength(4)
-
-    fireEvent.click(detailedButton)
-
-    expect(summaryButton).toHaveAttribute('aria-pressed', 'false')
-    expect(detailedButton).toHaveAttribute('aria-pressed', 'true')
-    expect(modules).toHaveAttribute('data-reading-mode', 'detailed')
-    expect(screen.getByRole('heading', { name: '完整理解這些照護主題' })).toBeInTheDocument()
-    expect(
-      modules.querySelectorAll('article[data-testid^="education-module-"]'),
-    ).toHaveLength(24)
-
-    const a1cModule = screen.getByTestId('education-module-a1c')
-    expect(a1cModule).toHaveTextContent('先理解這件事')
-    expect(a1cModule).toHaveTextContent('為什麼重要')
-    expect(a1cModule).toHaveTextContent('和你目前資料的關係')
-    expect(a1cModule).toHaveTextContent('實際可以怎麼做')
-    expect(a1cModule).toHaveTextContent('看完確認一下')
-    expect(a1cModule).toHaveTextContent(
-      'HbA1c 和今天早上量的血糖差在哪裡？為什麼數字漂亮還是要講低血糖的經驗？',
-    )
-    expect(screen.getByTestId('education-module-diabetes-basics')).toBeInTheDocument()
-    expect(screen.getByTestId('education-module-older-adults')).toBeInTheDocument()
-  })
 
   it('limits browser printing to the education handout root', () => {
     const printSpy = jest.spyOn(window, 'print').mockImplementation(() => {
@@ -178,7 +133,8 @@ describe('PersonalizedEducationFeature', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '列印重點版' }))
+    fireEvent.click(screen.getByTestId('education-print-menu'))
+    fireEvent.click(screen.getByTestId('education-print-confirm'))
 
     expect(printSpy).toHaveBeenCalledTimes(1)
     expect(document.body).toHaveClass('printing-education-handout')
@@ -219,8 +175,11 @@ describe('PersonalizedEducationFeature', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /詳細解說版/ }))
-    fireEvent.click(screen.getByRole('button', { name: '列印詳細解說版' }))
+    // The printed version is chosen in the print menu, independently of which
+    // topics the reader is browsing.
+    fireEvent.click(screen.getByTestId('education-print-menu'))
+    fireEvent.click(screen.getByRole('button', { name: /完整版/ }))
+    fireEvent.click(screen.getByTestId('education-print-confirm'))
 
     expect(printSpy).toHaveBeenCalledTimes(1)
     window.dispatchEvent(new Event('afterprint'))
@@ -239,143 +198,21 @@ describe('PersonalizedEducationFeature', () => {
     const printHandout = screen.getByTestId('education-compact-print')
     expect(printHandout).toHaveAttribute('data-education-print-font-size', 'standard')
 
-    // A single pressed-state toggle rather than a standard/large pair: the
-    // control row has to fit on one line, and "off" already means standard.
-    fireEvent.click(screen.getByRole('button', { name: '大字版' }))
+    fireEvent.click(screen.getByTestId('education-print-menu'))
+    fireEvent.click(screen.getByRole('button', { name: '大字' }))
 
-    expect(screen.getByRole('button', { name: '大字版' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '大字' })).toHaveAttribute('aria-pressed', 'true')
     expect(printHandout).toHaveAttribute('data-education-print-font-size', 'large')
 
-    fireEvent.click(screen.getByRole('button', { name: '大字版' }))
+    fireEvent.click(screen.getByRole('button', { name: '標準' }))
 
-    expect(screen.getByRole('button', { name: '大字版' })).toHaveAttribute('aria-pressed', 'false')
     expect(printHandout).toHaveAttribute('data-education-print-font-size', 'standard')
   })
 
-  it('supports occasional health-record review instead of a daily check-in flow', () => {
-    render(
-      <PersonalizedEducationFeature
-        plan={buildPersonalizedEducation(context).plan}
-        audience="patient"
-      />,
-    )
 
-    const modules = screen.getByTestId('education-modules')
-    const library = screen.getByTestId('education-library')
 
-    expect(
-      modules.compareDocumentPosition(library) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-    expect(screen.queryByText(/今天先|今天只選|每天回來/)).not.toBeInTheDocument()
-    expect(screen.queryByText('接下來，你想先從哪件事開始？')).not.toBeInTheDocument()
-    expect(screen.queryByText('你選的是：')).not.toBeInTheDocument()
-  })
 
-  it('puts a fixed patient-readable care summary above the personalized modules', () => {
-    render(
-      <PersonalizedEducationFeature
-        plan={buildPersonalizedEducation(context).plan}
-        audience="patient"
-      />,
-    )
 
-    const summary = screen.getByTestId('education-care-summary')
-    const modules = screen.getByTestId('education-modules')
-
-    expect(summary).toHaveTextContent('這次的糖尿病照護摘要')
-    expect(summary).toHaveTextContent('目前的健康狀況')
-    expect(summary).toHaveTextContent('這次優先了解')
-    expect(summary).toHaveTextContent('接下來可以做')
-    expect(summary).toHaveTextContent('資料更新至 2026/06/25')
-    expect(summary).toHaveTextContent('腎臟過濾能力不只一次偏低，需要持續追蹤')
-    expect(summary).not.toHaveTextContent('先選一個做得到的小改變')
-    expect(
-      summary.compareDocumentPosition(modules) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-  })
-
-  it('assembles matched modules into one continuous patient handout', () => {
-    render(
-      <PersonalizedEducationFeature
-        plan={buildPersonalizedEducation(context).plan}
-        audience="patient"
-      />,
-    )
-
-    const modules = screen.getByTestId('education-modules')
-    const moduleIds = Array.from(
-      modules.querySelectorAll('article[data-testid^="education-module-"]'),
-    ).map((element) => element.getAttribute('data-testid'))
-
-    expect(screen.getByRole('heading', { name: '這次為你整理的衛教' })).toBeInTheDocument()
-    expect(moduleIds).toEqual([
-      'education-module-a1c',
-      'education-module-daily-rhythm',
-      'education-module-sglt2-inhibitor',
-      'education-module-kidney',
-    ])
-    expect(screen.getByTestId('education-module-a1c')).toHaveTextContent(
-      '這代表最近三個月的平均血糖控制得不錯',
-    )
-    expect(screen.queryByTestId('education-module-trigger-a1c')).not.toBeInTheDocument()
-  })
-
-  it('keeps related modules visible in citizen-readable groups', () => {
-    render(
-      <PersonalizedEducationFeature
-        plan={buildPersonalizedEducation(context).plan}
-        audience="patient"
-      />,
-    )
-
-    expect(screen.getByTestId('education-module-a1c')).toHaveAttribute('data-group-id', 'understanding')
-    expect(screen.getByTestId('education-module-a1c')).toHaveTextContent('了解我的糖尿病')
-    expect(screen.getByTestId('education-module-sglt2-inhibitor')).toHaveAttribute('data-group-id', 'medication')
-    expect(screen.getByTestId('education-module-sglt2-inhibitor')).toHaveTextContent('藥物與設備')
-    expect(screen.getByTestId('education-module-kidney')).toHaveAttribute('data-group-id', 'prevention')
-    expect(screen.getByTestId('education-module-kidney')).toHaveTextContent('預防長期併發症')
-  })
-
-  it('keeps the complete eight-group library fixed when patient data changes', () => {
-    const diagnosisOnlyContext: PatientEducationContext = {
-      ...context,
-      observations: [],
-      medications: [],
-    }
-    const { container } = render(
-      <PersonalizedEducationFeature
-        plan={buildPersonalizedEducation(diagnosisOnlyContext).plan}
-        audience="patient"
-      />,
-    )
-
-    const libraryGroupIds = Array.from(
-      container.querySelectorAll('details[data-testid^="education-library-group-"]'),
-    ).map((element) => element.getAttribute('data-testid'))
-
-    expect(libraryGroupIds).toEqual([
-      'education-library-group-understanding',
-      'education-library-group-daily-life',
-      'education-library-group-monitoring',
-      'education-library-group-medication',
-      'education-library-group-urgent-care',
-      'education-library-group-prevention',
-      'education-library-group-wellbeing',
-      'education-library-group-life-stages',
-    ])
-    expect(screen.getByTestId('education-library-module-a1c')).toHaveTextContent(
-      '糖化血色素與血糖目標',
-    )
-    expect(screen.getByTestId('education-library-module-kidney')).toHaveTextContent('腎臟追蹤')
-    expect(screen.getByTestId('education-library-module-hypoglycemia')).toHaveTextContent(
-      '低血糖辨識與處理',
-    )
-    expect(screen.getByTestId('education-module-daily-rhythm')).toHaveTextContent(
-      '先選一個做得到的改變',
-    )
-    expect(screen.queryByTestId('education-module-a1c')).not.toBeInTheDocument()
-    expect(screen.queryByText('目前沒有相關紀錄')).not.toBeInTheDocument()
-  })
 
   it('keeps evidence, rule logic, limitations, and sources inside the module toggle', () => {
     render(
@@ -385,9 +222,12 @@ describe('PersonalizedEducationFeature', () => {
       />,
     )
 
+    fireEvent.click(screen.getByTestId('education-group-prevention'))
+    fireEvent.click(screen.getByTestId('education-topic-kidney-narrow'))
+
     const kidneyModule = screen.getByTestId('education-module-kidney')
     const auditDetails = screen.getByTestId('education-module-detail-kidney')
-    const auditToggle = within(kidneyModule).getByText('查看這項內容使用的資料、判斷與來源')
+    const auditToggle = within(kidneyModule).getByText('資料、判斷與來源')
 
     expect(auditDetails).not.toHaveAttribute('open')
     expect(screen.queryByText('本次衛教摘要')).not.toBeInTheDocument()
@@ -413,12 +253,16 @@ describe('PersonalizedEducationFeature', () => {
       />,
     )
 
+    fireEvent.click(screen.getByTestId('education-group-medication'))
+    fireEvent.click(screen.getByTestId('education-topic-sglt2-inhibitor-narrow'))
+
     const medicationModule = screen.getByTestId('education-module-sglt2-inhibitor')
     expect(medicationModule).toHaveTextContent('有處方紀錄')
     expect(screen.queryByText(/無法確認實際服用|不代表已確認服用|是否真的在使用/)).not.toBeInTheDocument()
 
     expect(screen.getByText(/這項衛教依照病歷中「.+」這筆紀錄整理/)).toBeInTheDocument()
     expect(screen.queryByText(/無法確認實際服用|不代表已確認服用|是否真的在使用/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('education-topic-summary-narrow'))
     expect(screen.getByTestId('education-safety-summary')).toHaveTextContent('需要盡快處理的情況')
   })
 
@@ -465,40 +309,171 @@ describe('pack selection', () => {
   })
 })
 
-describe('section jump', () => {
-  it('lists every rendered section, grouped, plus the summary', () => {
-    render(
+
+describe('topic browsing', () => {
+  function renderFeature() {
+    return render(
       <PersonalizedEducationFeature
         plan={buildPersonalizedEducation(context).plan}
         audience="patient"
         age={94}
       />,
     )
+  }
 
-    const jump = screen.getByTestId('education-section-jump') as HTMLSelectElement
-    const values = Array.from(jump.options).map((option) => option.value).filter(Boolean)
+  it('opens on the summary and shows one topic at a time', () => {
+    renderFeature()
 
-    // Summary view: only the modules the record supports.
-    expect(values).toEqual([
-      'education-care-summary',
-      'education-a1c',
-      'education-daily-rhythm',
-      'education-sglt2-inhibitor',
-      'education-kidney',
-    ])
+    expect(screen.getByTestId('education-care-summary')).toBeInTheDocument()
+    expect(screen.queryByTestId('education-module-kidney')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '詳細解說版' }))
+    fireEvent.click(screen.getByTestId('education-group-prevention'))
+    fireEvent.click(screen.getByTestId('education-topic-kidney-narrow'))
 
-    const detailedValues = Array.from(
-      (screen.getByTestId('education-section-jump') as HTMLSelectElement).options,
-    ).map((option) => option.value).filter(Boolean)
+    expect(screen.getByTestId('education-module-kidney')).toBeInTheDocument()
+    expect(screen.queryByTestId('education-module-a1c')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('education-care-summary')).not.toBeInTheDocument()
+  })
 
-    // Every option must resolve to a section that is actually on the page,
-    // otherwise choosing it would scroll nowhere.
-    expect(detailedValues).toHaveLength(25)
-    for (const value of detailedValues) {
-      expect(document.getElementById(value)).toBeInTheDocument()
+  it('reaches a topic in one tap, with no menu to open first', () => {
+    renderFeature()
+
+    // Every topic in the current filter is a button that is already on screen.
+    // Every group is on screen; opening one reveals its topics in place.
+    for (const [topic, group] of [
+      ['a1c', 'understanding'],
+      ['daily-rhythm', 'daily-life'],
+      ['sglt2-inhibitor', 'medication'],
+      ['kidney', 'prevention'],
+    ]) {
+      fireEvent.click(screen.getByTestId(`education-group-${group}`))
+      expect(screen.getByTestId(`education-topic-${topic}-narrow`)).toBeInTheDocument()
     }
-    expect(jump.querySelectorAll('optgroup').length).toBeGreaterThan(1)
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
+
+  it('names the next topic rather than just saying next', () => {
+    renderFeature()
+    fireEvent.click(screen.getByTestId('education-group-understanding'))
+    fireEvent.click(screen.getByTestId('education-topic-a1c-narrow'))
+
+    const next = screen.getByTestId('education-topic-next')
+    // A label the reader can want is what makes the tap worth making.
+    expect(next).toHaveTextContent('接著看：')
+    expect(next.textContent).not.toBe('接著看：')
+    expect(screen.getByTestId('education-topic-position')).toHaveTextContent('1 / 4')
+
+    fireEvent.click(next)
+
+    expect(screen.getByTestId('education-topic-position')).toHaveTextContent('2 / 4')
+  })
+
+  it('walks the whole filter with the next control and then says so', () => {
+    renderFeature()
+    fireEvent.click(screen.getByTestId('education-group-understanding'))
+    fireEvent.click(screen.getByTestId('education-topic-a1c-narrow'))
+
+    for (let step = 0; step < 3; step += 1) {
+      fireEvent.click(screen.getByTestId('education-topic-next'))
+    }
+
+    expect(screen.getByTestId('education-topic-position')).toHaveTextContent('4 / 4')
+    expect(screen.getByTestId('education-topic-complete')).toBeInTheDocument()
+    expect(screen.queryByTestId('education-topic-next')).not.toBeInTheDocument()
+  })
+
+  it('marks topics already read so progress is visible', () => {
+    renderFeature()
+    fireEvent.click(screen.getByTestId('education-group-understanding'))
+    fireEvent.click(screen.getByTestId('education-topic-a1c-narrow'))
+    fireEvent.click(screen.getByTestId('education-group-prevention'))
+    fireEvent.click(screen.getByTestId('education-topic-kidney-narrow'))
+
+    fireEvent.click(screen.getByTestId('education-group-understanding'))
+
+    expect(within(screen.getByTestId('education-topic-a1c-narrow')).getByLabelText('已看過'))
+      .toBeInTheDocument()
+  })
+
+  it('widens to the whole catalogue, including situation topics the handout omits', () => {
+    renderFeature()
+
+    expect(screen.queryByTestId('education-topic-pregnancy-narrow')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('education-topic-filter-narrow'))
+    fireEvent.click(screen.getByTestId('education-group-life-stages'))
+
+    expect(screen.getByTestId('education-topic-pregnancy-narrow')).toBeInTheDocument()
+    expect(screen.getByTestId('education-topic-dialysis-transplant-narrow')).toBeInTheDocument()
+  })
+
+  it('falls back to the summary when a filter change drops the open topic', () => {
+    renderFeature()
+    fireEvent.click(screen.getByTestId('education-topic-filter-narrow'))
+    fireEvent.click(screen.getByTestId('education-group-life-stages'))
+    fireEvent.click(screen.getByTestId('education-topic-pregnancy-narrow'))
+    expect(screen.getByTestId('education-module-pregnancy')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('education-topic-filter-narrow'))
+
+    expect(screen.queryByTestId('education-module-pregnancy')).not.toBeInTheDocument()
+    expect(screen.getByTestId('education-care-summary')).toBeInTheDocument()
+  })
+
+  it('does not repeat the catalogue explanation inside the personalised reading', () => {
+    renderFeature()
+    fireEvent.click(screen.getByTestId('education-group-prevention'))
+    fireEvent.click(screen.getByTestId('education-topic-kidney-narrow'))
+
+    const topic = screen.getByTestId('education-module-kidney')
+    // Both sources render together now, so each must keep its own job:
+    // 你的狀況 reports this record, 為什麼重要 explains the measure itself.
+    expect(topic).toHaveTextContent('你的狀況')
+    expect(topic).toHaveTextContent('為什麼重要')
+    expect(topic.textContent?.match(/eGFR 估的是腎臟每分鐘的過濾量/g) ?? []).toHaveLength(0)
+  })
+})
+
+
+describe('narrow navigation stays flat', () => {
+  function renderFeature() {
+    return render(
+      <PersonalizedEducationFeature
+        plan={buildPersonalizedEducation(context).plan}
+        audience="patient"
+        age={94}
+      />,
+    )
+  }
+
+  it('lists every topic in one row, with no level to step back out of', () => {
+    renderFeature()
+
+    const row = screen.getByTestId('education-topic-row')
+    // Groups are all visible without swiping; a topic list opens beneath one.
+    for (const group of ['understanding', 'daily-life', 'medication', 'prevention']) {
+      expect(within(row).getByTestId(`education-group-${group}`)).toBeInTheDocument()
+    }
+    expect(row.querySelector('[class*="overflow-x-auto"]')).toBeNull()
+    // A back control would be a tax paid on every topic change.
+    expect(screen.queryByTestId('education-topic-groups-back')).not.toBeInTheDocument()
+  })
+
+  it('keeps the whole catalogue reachable from the row, not behind a level', () => {
+    renderFeature()
+
+    // The filter sits outside the scrolling row, so it cannot scroll away
+    // however deep into the topics the reader has swiped.
+    const filter = screen.getByTestId('education-topic-filter-narrow')
+    expect(screen.getByTestId('education-topic-row')).not.toContainElement(filter)
+
+    fireEvent.click(screen.getByTestId('education-group-prevention'))
+    fireEvent.click(screen.getByTestId('education-topic-kidney-narrow'))
+    expect(screen.getByTestId('education-topic-filter-narrow')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('education-topic-filter-narrow'))
+    fireEvent.click(screen.getByTestId('education-group-life-stages'))
+
+    expect(screen.getByTestId('education-topic-pregnancy-narrow')).toBeInTheDocument()
   })
 })

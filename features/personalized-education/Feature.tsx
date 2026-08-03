@@ -1,27 +1,22 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { Fragment, useCallback, useMemo, useState } from 'react'
 import {
-  Activity,
-  BookOpen,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   ExternalLink,
-  GraduationCap,
-  HeartHandshake,
   HeartPulse,
-  Pill,
   Printer,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
   TriangleAlert,
 } from 'lucide-react'
 import type {
   EducationPlan,
   EducationSource,
 } from './types'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   buildEducationCareSummary,
   getEducationContentSchema,
@@ -31,6 +26,7 @@ import {
   selectEducationHandoutModules,
   type EducationCareSummary,
   type EducationModuleGroupDefinition,
+  type EducationModuleGroupId,
   type EducationContentSchema,
   type ResolvedEducationModule,
 } from './presentation-schema'
@@ -42,7 +38,16 @@ export interface PersonalizedEducationFeatureProps {
 }
 
 type EducationPrintFontSize = 'standard' | 'large'
-type EducationReadingMode = 'summary' | 'detailed'
+type EducationTopicFilter = 'personal' | 'all'
+
+// Touch targets are sized in pixels, not rem. This app sets a 12px root, so
+// Tailwind's min-h-11 (2.75rem) renders 33px — under any thumb-sized minimum.
+//
+// Navigation and print chrome therefore separate hit area from visual size: a
+// mouse gets a compact control, and a coarse pointer keeps the thumb-sized one.
+// Anything a finger has to hit uses this, so shrinking the chrome never costs
+// a phone reader accuracy.
+const COMPACT_TARGET = 'min-h-8 [@media(pointer:coarse)]:min-h-[44px]'
 
 function printEducationHandout(): void {
   const printClass = 'printing-education-handout'
@@ -91,7 +96,7 @@ function SourceLinks({
 
   return (
     <details className="group mt-4 text-xs text-muted-foreground">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 px-1 py-2 font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 px-1 py-2 font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ChevronDown
           className="size-3.5 transition-transform group-open:rotate-180"
           aria-hidden="true"
@@ -102,7 +107,7 @@ function SourceLinks({
         {resolved.map((source) => (
           <li key={source.id}>
             <a
-              className="inline-flex min-h-11 items-center gap-1.5 py-2 text-primary underline-offset-4 hover:underline"
+              className="inline-flex min-h-[44px] items-center gap-1.5 py-2 text-primary underline-offset-4 hover:underline"
               href={source.url}
               target="_blank"
               rel="noreferrer"
@@ -115,27 +120,6 @@ function SourceLinks({
       </ul>
     </details>
   )
-}
-
-function getGroupIcon(groupId: EducationModuleGroupDefinition['id']) {
-  switch (groupId) {
-    case 'understanding':
-      return BookOpen
-    case 'daily-life':
-      return Activity
-    case 'monitoring':
-      return HeartPulse
-    case 'medication':
-      return Pill
-    case 'urgent-care':
-      return TriangleAlert
-    case 'prevention':
-      return ShieldCheck
-    case 'wellbeing':
-      return HeartHandshake
-    case 'life-stages':
-      return RefreshCw
-  }
 }
 
 function CareSummary({ summary }: { summary: EducationCareSummary }) {
@@ -218,60 +202,322 @@ function CareSummary({ summary }: { summary: EducationCareSummary }) {
  * gets keyboard and touch behaviour for free, which matters more here than a
  * bespoke menu would.
  */
-function SectionJump({
-  groups,
-  modules,
-  hasSummary,
-}: {
-  groups: readonly EducationModuleGroupDefinition[]
-  modules: readonly ResolvedEducationModule[]
-  hasSummary: boolean
-}) {
-  const grouped = groups
+const SUMMARY_TOPIC_ID = 'summary'
+
+interface EducationTopic {
+  id: string
+  label: string
+  groupId: EducationModuleGroupId
+  /** True when the record supports a personalised reading of this topic. */
+  personalised: boolean
+  educationModule: ResolvedEducationModule | null
+}
+
+function buildTopics(
+  modules: readonly ResolvedEducationModule[],
+): EducationTopic[] {
+  return modules.map((educationModule) => ({
+    id: educationModule.definition.id,
+    label: educationModule.definition.label,
+    groupId: educationModule.definition.groupId,
+    personalised: educationModule.available,
+    educationModule,
+  }))
+}
+
+function groupTopics(
+  groups: readonly EducationModuleGroupDefinition[],
+  topics: readonly EducationTopic[],
+) {
+  return groups
     .map((group) => ({
       group,
-      modules: modules.filter(
-        (educationModule) => educationModule.definition.groupId === group.id,
-      ),
+      topics: topics.filter((topic) => topic.groupId === group.id),
     }))
-    .filter((entry) => entry.modules.length > 0)
+    .filter((entry) => entry.topics.length > 0)
+}
 
-  if (grouped.length === 0) return null
+/** Marks a topic the record speaks to, so the relevant ones stand out at a glance. */
+function PersonalDot() {
+  return (
+    <span
+      className="size-1.5 shrink-0 rounded-full bg-primary"
+      title="和你的資料有關"
+      aria-label="和你的資料有關"
+    />
+  )
+}
+
+/**
+ * Topic navigation, always visible, one tap to switch.
+ *
+ * Two shapes rather than one: a 595px panel cannot spare 200px for a rail
+ * without breaking Chinese lines into fragments, and a phone has less. Wide
+ * layouts get a full list with every topic visible; narrow layouts get a group
+ * row plus that group's topics, which keeps switching inside a group to a
+ * single tap. Both are rendered and toggled by container query, because the
+ * container width — not the viewport — is what constrains this panel.
+ */
+/** Rendered by the caller so it stays out of the scrolling row. */
+function TopicFilterChip({
+  topicFilter,
+  onToggleFilter,
+  variant,
+}: {
+  topicFilter: EducationTopicFilter
+  onToggleFilter: () => void
+  variant: 'narrow' | 'wide'
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggleFilter}
+      className={`${COMPACT_TARGET} flex shrink-0 items-center gap-1 whitespace-nowrap px-1 text-xs text-muted-foreground underline decoration-dotted underline-offset-4 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      data-testid={`education-topic-filter-${variant}`}
+    >
+      {topicFilter === 'personal' ? '全部主題' : '和我的資料有關'}
+    </button>
+  )
+}
+
+function TopicNav({
+  groups,
+  topics,
+  activeId,
+  visited,
+  onSelect,
+  topicFilter,
+  onToggleFilter,
+  variant,
+  openGroupId,
+  onOpenGroup,
+}: {
+  groups: readonly EducationModuleGroupDefinition[]
+  topics: readonly EducationTopic[]
+  activeId: string
+  visited: ReadonlySet<string>
+  onSelect: (id: string) => void
+  topicFilter: EducationTopicFilter
+  onToggleFilter: () => void
+  variant: 'narrow' | 'wide'
+  openGroupId: EducationModuleGroupId | null
+  onOpenGroup: (groupId: EducationModuleGroupId) => void
+}) {
+  const grouped = groupTopics(groups, topics)
+  const activeGroupId = topics.find((topic) => topic.id === activeId)?.groupId ?? null
+  const openGroup = grouped.find(
+    (entry) => entry.group.id === (openGroupId ?? activeGroupId),
+  ) ?? null
+
+  const itemClass = (id: string) => (
+    `${COMPACT_TARGET} flex w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      activeId === id
+        ? 'bg-primary/10 font-semibold text-foreground'
+        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+    }`
+  )
+
+  const summaryButton = (
+    <button
+      type="button"
+      onClick={() => onSelect(SUMMARY_TOPIC_ID)}
+      aria-current={activeId === SUMMARY_TOPIC_ID ? 'true' : undefined}
+      className={itemClass(SUMMARY_TOPIC_ID)}
+      data-testid={`education-topic-summary-${variant}`}
+    >
+      <ClipboardList className="size-4 shrink-0" aria-hidden="true" />
+      先看摘要
+    </button>
+  )
 
   return (
-    <div className="flex items-center">
-      <label className="sr-only" htmlFor="education-section-jump">
-        跳到章節
-      </label>
-      <select
-        id="education-section-jump"
-        value=""
-        data-testid="education-section-jump"
-        onChange={(event) => {
-          const target = document.getElementById(event.target.value)
-          // Reset so choosing the same section twice still scrolls to it.
-          event.target.value = ''
-          target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }}
-        className="min-h-11 max-w-[12rem] cursor-pointer truncate border-b-2 border-transparent bg-transparent px-0.5 text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <option value="">跳到章節…</option>
-        {hasSummary ? (
-          <option value="education-care-summary">這次的照護摘要</option>
-        ) : null}
-        {grouped.map(({ group, modules: groupModules }) => (
-          <optgroup key={group.id} label={group.label}>
-            {groupModules.map((educationModule) => (
-              <option
-                key={educationModule.definition.id}
-                value={`education-${educationModule.definition.id}`}
+    <nav aria-label="衛教主題" data-testid="education-topic-nav">
+      {variant === 'wide' ? (
+      <div className="hidden @min-[60rem]:block @min-[60rem]:w-52 @min-[60rem]:shrink-0">
+        <div className="max-h-[calc(100svh-14rem)] overflow-y-auto pr-1">
+          <div className="mb-2">
+            <TopicFilterChip
+              topicFilter={topicFilter}
+              onToggleFilter={onToggleFilter}
+              variant="wide"
+            />
+          </div>
+          {summaryButton}
+          {grouped.map(({ group, topics: groupTopicList }) => (
+            <div key={group.id} className="mt-4">
+              <p className={`px-3 text-xs font-semibold ${getEducationGroupStyle(group.id).toneClass}`}>
+                {group.label}
+              </p>
+              <ul className="mt-1">
+                {groupTopicList.map((topic) => (
+                  <li key={topic.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(topic.id)}
+                      aria-current={activeId === topic.id ? 'true' : undefined}
+                      className={itemClass(topic.id)}
+                      data-testid={`education-topic-${topic.id}-${variant}`}
+                    >
+                      {topic.personalised ? <PersonalDot /> : null}
+                      <span className="min-w-0 flex-1 truncate">{topic.label}</span>
+                      {visited.has(topic.id) && activeId !== topic.id ? (
+                        <Check className="size-3.5 shrink-0 text-primary/60" aria-label="已看過" />
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+      ) : (
+
+      /*
+        Narrow: groups wrap onto lines, and the open group lists its topics
+        below. Nothing is reached by swiping sideways — a topic that needs a
+        horizontal scroll to be seen is a topic the reader does not know exists
+        — and because the groups stay on screen there is no level to back out
+        of. Group labels are long in Chinese, so wrapping, not scrolling, is
+        what keeps them all visible.
+      */
+      <div className="py-1" data-testid="education-topic-row">
+        <div className="flex flex-wrap gap-x-1 gap-y-0.5">
+          <button
+            type="button"
+            onClick={() => onSelect(SUMMARY_TOPIC_ID)}
+            aria-current={activeId === SUMMARY_TOPIC_ID ? 'true' : undefined}
+            className={`${COMPACT_TARGET} whitespace-nowrap rounded-full px-2.5 text-sm transition-colors ${
+              activeId === SUMMARY_TOPIC_ID
+                ? 'bg-primary font-semibold text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            data-testid={`education-topic-summary-${variant}`}
+          >
+            摘要
+          </button>
+          {grouped.map(({ group, topics: groupTopicList }) => {
+            const isOpen = openGroupId === group.id
+            return (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => onOpenGroup(group.id)}
+                aria-expanded={isOpen}
+                className={`${COMPACT_TARGET} flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-sm transition-colors ${
+                  isOpen
+                    ? 'bg-primary font-semibold text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                data-testid={`education-group-${group.id}`}
               >
-                {educationModule.definition.label}
-              </option>
+                {group.label}
+                <span className="text-xs opacity-70">{groupTopicList.length}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {openGroup ? (
+          <div
+            className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-border pt-0.5"
+            data-testid="education-group-topics"
+          >
+            {openGroup.topics.map((topic) => (
+              <button
+                key={topic.id}
+                type="button"
+                onClick={() => onSelect(topic.id)}
+                aria-current={activeId === topic.id ? 'true' : undefined}
+                className={`${COMPACT_TARGET} flex items-center gap-1.5 whitespace-nowrap border-b-2 px-1 text-sm transition-colors ${
+                  activeId === topic.id
+                    ? 'border-primary font-semibold text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+                data-testid={`education-topic-${topic.id}-${variant}`}
+              >
+                {topic.personalised ? <PersonalDot /> : null}
+                {topic.label}
+                {visited.has(topic.id) && activeId !== topic.id ? (
+                  <Check className="size-3.5 text-primary/60" aria-label="已看過" />
+                ) : null}
+              </button>
             ))}
-          </optgroup>
-        ))}
-      </select>
+          </div>
+        ) : null}
+      </div>
+      )}
+    </nav>
+  )
+}
+
+/**
+ * Moves the reader on without sending them back to the navigation.
+ *
+ * The next control names the topic it leads to rather than saying "next":
+ * a label the reader can want is what makes the tap worth making, and the
+ * count tells them how much is left so finishing feels reachable.
+ */
+function TopicFooter({
+  previous,
+  next,
+  position,
+  total,
+  understandingCheck,
+  onSelect,
+}: {
+  previous: EducationTopic | null
+  next: EducationTopic | null
+  position: number
+  total: number
+  understandingCheck: string | null
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div className="mt-6 border-t border-border pt-4" data-testid="education-topic-footer">
+      {understandingCheck ? (
+        <p className="mb-4 text-sm leading-6 text-muted-foreground">
+          <span className="font-semibold text-foreground">看完想一下：</span>
+          {understandingCheck}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {previous ? (
+          <button
+            type="button"
+            onClick={() => onSelect(previous.id)}
+            className="inline-flex min-h-[44px] max-w-[45%] items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-testid="education-topic-previous"
+          >
+            <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">{previous.label}</span>
+          </button>
+        ) : <span />}
+
+        <span className="text-xs tabular-nums text-muted-foreground" data-testid="education-topic-position">
+          {position} / {total}
+        </span>
+
+        {next ? (
+          <button
+            type="button"
+            onClick={() => onSelect(next.id)}
+            className="inline-flex min-h-[44px] max-w-[55%] items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/5 px-3 text-sm font-semibold text-foreground hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-testid="education-topic-next"
+          >
+            <span className="min-w-0 truncate">
+              <span className="text-muted-foreground">接著看：</span>
+              {next.label}
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          </button>
+        ) : (
+          <span className="text-sm font-semibold text-primary" data-testid="education-topic-complete">
+            這些主題你都看過了
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -595,24 +841,30 @@ function DetailedPrintHandout({
   )
 }
 
-function PersonalizedHandoutSection({
+/**
+ * One topic, shown in full.
+ *
+ * There is no longer a short and a long variant of a topic. Two depths existed
+ * because reading everything meant scrolling 15,000px; now that topics are
+ * reached by tapping, length is no longer the cost it was, and a reader should
+ * not have to guess which variant holds the part they need.
+ *
+ * The two content sources keep distinct jobs so the merge does not repeat
+ * itself: the disease pack's section says what THIS record shows, the
+ * catalogue says why the topic matters to anyone and what to do about it.
+ */
+function TopicView({
   educationModule,
   group,
-  index,
   sources,
-  readingMode,
 }: {
   educationModule: ResolvedEducationModule
   group: EducationModuleGroupDefinition
-  index: number
   sources: Record<string, EducationSource>
-  readingMode: EducationReadingMode
 }) {
   const { definition, section, facts } = educationModule
-  const isDetailed = readingMode === 'detailed'
   const whyItMatters = getModuleWhyItMatters(educationModule)
   const howToDoIt = getModuleHowToDoIt(educationModule)
-  const understandingCheck = getModuleUnderstandingCheck(educationModule)
   const moduleSourceIds = Array.from(new Set([
     ...definition.library.sourceIds,
     ...(section?.sourceIds ?? []),
@@ -620,17 +872,14 @@ function PersonalizedHandoutSection({
   const medicationFact = facts.find((fact) => (
     fact.detail.includes('處方紀錄') || fact.detail.includes('用藥陳述')
   ))
-  // The reader's own numbers are the reason this page is personal, so the
-  // summary view leads with them instead of burying them in the audit details.
   const patientFacts = facts.filter((fact) => fact.id !== 'diagnosis')
   const moduleTone = section?.tone === 'attention'
     ? {
         label: '這次先留意',
         badge: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
         accent: 'border-amber-400 dark:border-amber-700',
-        action: 'border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20',
       }
-    : definition.groupId === 'medication'
+    : definition.groupId === 'medication' && section
       ? {
           label: medicationFact?.detail.includes('處方紀錄')
             ? '有處方紀錄'
@@ -639,173 +888,136 @@ function PersonalizedHandoutSection({
               : '用藥提醒',
           badge: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200',
           accent: 'border-sky-400 dark:border-sky-700',
-          action: 'border-sky-200 bg-sky-50/70 dark:border-sky-900 dark:bg-sky-950/20',
         }
-      : definition.groupId === 'daily-life'
+      : section
         ? {
-            label: '可以考慮',
-            badge: 'border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200',
-            accent: 'border-orange-400 dark:border-orange-700',
-            action: 'border-orange-200 bg-orange-50/70 dark:border-orange-900 dark:bg-orange-950/20',
+            label: '和你的資料有關',
+            badge: 'border-primary/25 bg-primary/5 text-primary',
+            accent: 'border-primary/50',
           }
-      : {
-          label: '值得了解',
-          badge: 'border-primary/25 bg-primary/5 text-primary',
-          accent: 'border-primary/50',
-          action: 'border-primary/20 bg-primary/[0.045]',
-        }
+        : {
+            label: '值得了解',
+            badge: 'border-border bg-muted/50 text-muted-foreground',
+            accent: 'border-border',
+          }
 
   return (
     <article
       id={`education-${definition.id}`}
-      className="scroll-mt-16 border-t border-border py-7 first:border-t-0 sm:py-9"
       data-testid={`education-module-${definition.id}`}
       data-group-id={group.id}
-      data-reading-mode={readingMode}
     >
-      <div className={`border-l-2 pl-4 sm:pl-5 ${moduleTone.accent}`}>
-        <div className="flex items-start gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background" aria-hidden="true">
-            {index + 1}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className={`text-xs font-semibold ${getEducationGroupStyle(group.id).toneClass}`}>{group.label}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-bold leading-snug text-foreground sm:text-2xl">
-                {definition.label}
-              </h3>
-              <span className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${moduleTone.badge}`}>
-                {moduleTone.label}
-              </span>
+      <header className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h2 className="text-lg font-bold leading-snug text-foreground sm:text-xl">
+          {definition.label}
+        </h2>
+        <span className={`text-xs font-medium ${getEducationGroupStyle(group.id).toneClass}`}>
+          {group.label}
+        </span>
+        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${moduleTone.badge}`}>
+          {moduleTone.label}
+        </span>
+      </header>
+
+      <div className="mt-3 max-w-3xl text-sm leading-7 sm:text-base">
+        {patientFacts.length > 0 ? (
+          <dl
+            className="flex flex-wrap gap-x-6 gap-y-1 border-b border-border pb-3 text-sm"
+            data-testid={`education-module-figures-${definition.id}`}
+          >
+            {patientFacts.map((fact) => (
+              <div key={fact.id} className="flex flex-wrap items-baseline gap-x-2">
+                <dt className="text-xs text-muted-foreground">{fact.label}</dt>
+                <dd className="font-bold text-foreground">{fact.value}</dd>
+                <dd className="text-xs text-muted-foreground">{fact.detail}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+
+        {section ? (
+          <section className="mt-4">
+            <h3 className="text-sm font-semibold text-primary">你的狀況</h3>
+            <p className="mt-1 text-lg font-semibold leading-8 text-foreground">
+              {section.title}
+            </p>
+            <p className="mt-2 font-medium text-foreground">{section.summary}</p>
+            <div className="mt-2 space-y-2 text-muted-foreground">
+              {section.explanation.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
             </div>
+          </section>
+        ) : (
+          <section>
+            <h3 className="text-sm font-semibold text-primary">先理解這件事</h3>
+            <p className="mt-1 text-lg font-semibold leading-8 text-foreground">
+              {definition.library.takeaway}
+            </p>
+          </section>
+        )}
+
+        <section className="mt-5">
+          <h3 className="text-sm font-semibold text-foreground">為什麼重要</h3>
+          <div className="mt-2 space-y-2 text-muted-foreground">
+            {whyItMatters.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
           </div>
-        </div>
+        </section>
 
-        <div className="mt-5 max-w-3xl text-sm leading-7 sm:text-base">
-          {isDetailed ? (
-            <div data-testid={`education-learning-content-${definition.id}`}>
+        <section className={`mt-5 border-l-2 pl-4 ${moduleTone.accent}`}>
+          <h3 className="text-sm font-semibold text-foreground">實際可以怎麼做</h3>
+          <ul className="mt-2 space-y-2 text-foreground">
+            {section ? (
+              <li className="flex gap-2">
+                <Check className="mt-1.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  <span className="font-semibold">依你的資料：</span>
+                  {educationModule.recommendation}
+                </span>
+              </li>
+            ) : null}
+            {howToDoIt.map((step) => (
+              <li key={step} className="flex gap-2">
+                <Check className="mt-1.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                <span>{step}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {definition.library.safety ? (
+          <section className="mt-4 border-l-2 border-rose-500 pl-4 text-rose-950 dark:text-rose-100">
+            <h3 className="text-sm font-semibold">什麼情況要盡快處理</h3>
+            <p className="mt-1">{definition.library.safety}</p>
+          </section>
+        ) : null}
+
+        <details
+          className="group text-sm print:hidden"
+          data-testid={`education-module-detail-${definition.id}`}
+        >
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+            資料、判斷與來源
+          </summary>
+          <div className="space-y-5 border-l pl-4 text-muted-foreground">
+            {facts.length > 0 ? (
               <section>
-                <h4 className="text-sm font-semibold text-primary">先理解這件事</h4>
-                <p className="mt-1 text-lg font-semibold leading-8 text-foreground">
-                  {definition.library.takeaway}
-                </p>
-              </section>
-
-              <section className="mt-5">
-                <h4 className="text-sm font-semibold text-foreground">為什麼重要</h4>
-                <div className="mt-2 space-y-2 text-muted-foreground">
-                  {whyItMatters.map((paragraph) => (
-                    <p key={paragraph}>{paragraph}</p>
-                  ))}
-                </div>
-              </section>
-
-              {section ? (
-                <section className="mt-5 border-l-2 border-teal-500 pl-4">
-                  <h4 className="text-sm font-semibold text-teal-900 dark:text-teal-200">和你目前資料的關係</h4>
-                  <p className="mt-1 text-base font-semibold text-foreground">{section.title}</p>
-                  <p className="mt-2 font-medium text-foreground">{section.summary}</p>
-                  <div className="mt-2 space-y-2 text-muted-foreground">
-                    {section.explanation.map((paragraph) => (
-                      <p key={paragraph}>{paragraph}</p>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              <section className={`mt-5 border-l-2 pl-4 ${moduleTone.accent}`}>
-                <h4 className="text-sm font-semibold text-foreground">實際可以怎麼做</h4>
-                <ul className="mt-2 space-y-2 text-foreground">
-                  {howToDoIt.map((step) => (
-                    <li key={step} className="flex gap-2">
-                      <Check className="mt-1.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                      <span>{step}</span>
+                <h4 className="font-semibold text-foreground">這次使用的資料</h4>
+                <ul className="mt-2 space-y-2">
+                  {facts.map((fact) => (
+                    <li key={fact.id}>
+                      <span className="font-medium text-foreground">{fact.label}：</span>
+                      {fact.value}（{fact.detail}）
                     </li>
                   ))}
                 </ul>
               </section>
-
-              {definition.library.safety ? (
-                <section className="mt-4 border-l-2 border-rose-500 pl-4 text-rose-950 dark:text-rose-100">
-                  <h4 className="text-sm font-semibold">什麼情況要盡快處理</h4>
-                  <p className="mt-1">{definition.library.safety}</p>
-                </section>
-              ) : null}
-
-              <section className="mt-5 border-t border-dashed border-primary/35 pt-4">
-                <h4 className="text-sm font-semibold text-foreground">看完確認一下</h4>
-                <p className="mt-1 text-foreground">{understandingCheck}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  可以先用自己的話回答；若說不清楚，再回頭看「先理解」與「實際可以怎麼做」。
-                </p>
-              </section>
-            </div>
-          ) : (
-            <>
-              {patientFacts.length > 0 ? (
-                <dl
-                  className="mb-5 flex flex-wrap gap-x-8 gap-y-3 border-b border-border pb-4"
-                  data-testid={`education-module-figures-${definition.id}`}
-                >
-                  {patientFacts.map((fact) => (
-                    <div key={fact.id}>
-                      <dt className="text-xs font-medium text-muted-foreground">{fact.label}</dt>
-                      <dd className="mt-0.5 text-xl font-bold leading-tight text-foreground">
-                        {fact.value}
-                      </dd>
-                      <dd className="mt-0.5 text-xs text-muted-foreground">{fact.detail}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-              <p className="text-xs font-semibold tracking-wide text-muted-foreground">你的狀況</p>
-              <p className="mt-1 text-lg font-semibold leading-7 text-foreground">
-                {section?.title}
-              </p>
-              {section ? (
-                <>
-                  <p className="mt-4 font-medium text-foreground">{section.summary}</p>
-                  <div className="mt-2 space-y-2 text-muted-foreground">
-                    {section.explanation.map((paragraph) => (
-                      <p key={paragraph}>{paragraph}</p>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-
-              <section className={`mt-5 border-l-2 pl-4 ${moduleTone.accent}`}>
-                <h4 className="text-sm font-semibold text-foreground">你可以怎麼做</h4>
-                <p className="mt-1 text-sm leading-6 text-foreground">
-                  {educationModule.recommendation}
-                </p>
-              </section>
-            </>
-          )}
-
-          <details
-            className="group mt-5 border-t pt-3 text-sm print:hidden"
-            data-testid={`education-module-detail-${definition.id}`}
-          >
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden="true" />
-              查看這項內容使用的資料、判斷與來源
-            </summary>
-            <div className="space-y-5 border-l pl-4 text-muted-foreground">
-              {facts.length > 0 ? (
-                <section>
-                  <h4 className="font-semibold text-foreground">這次使用的資料</h4>
-                  <ul className="mt-2 space-y-2">
-                    {facts.map((fact) => (
-                      <li key={fact.id}>
-                        <span className="font-medium text-foreground">{fact.label}：</span>
-                        {fact.value}（{fact.detail}）
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-              <section className="space-y-3">
-                <h4 className="font-semibold text-foreground">判斷方式與限制</h4>
+            ) : null}
+            <section className="space-y-3">
+              <h4 className="font-semibold text-foreground">判斷方式與限制</h4>
               <p>
                 <span className="font-medium text-foreground">什麼情況適用：</span>
                 {definition.rule.applicability}
@@ -818,156 +1030,15 @@ function PersonalizedHandoutSection({
                 <span className="font-medium text-foreground">這項提醒的限制：</span>
                 {definition.rule.limitation}
               </p>
-              </section>
-              <SourceLinks sourceIds={moduleSourceIds} sources={sources} />
-            </div>
-          </details>
-        </div>
+            </section>
+            <SourceLinks sourceIds={moduleSourceIds} sources={sources} />
+          </div>
+        </details>
       </div>
     </article>
   )
 }
 
-function LearningLibrary({
-  schema,
-  sources,
-}: {
-  schema: EducationContentSchema
-  sources: Record<string, EducationSource>
-}) {
-  const groups = useMemo(
-    () => [...schema.groups]
-      .sort((left, right) => left.order - right.order)
-      .map((group) => ({
-        ...group,
-        modules: schema.modules
-          .filter((module) => module.groupId === group.id)
-          .sort((left, right) => left.order - right.order),
-      })),
-    [schema],
-  )
-
-  return (
-    <details
-      className="group border-y border-border bg-background"
-      data-testid="education-library"
-    >
-      <summary className="flex min-h-16 cursor-pointer list-none items-start gap-3 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
-        <GraduationCap
-          className="mt-0.5 size-6 shrink-0 text-primary"
-          aria-hidden="true"
-        />
-        <div>
-          <h2
-            id="education-library-title"
-            className="text-lg font-semibold text-foreground"
-          >
-            全部糖尿病衛教
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            八個主題的位置固定，不用一次看完；依目前需要選擇即可。
-          </p>
-        </div>
-        <ChevronDown
-          className="ml-auto mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-          aria-hidden="true"
-        />
-      </summary>
-
-      <div className="mb-5 divide-y divide-border">
-        {groups.map((group) => {
-          const GroupIcon = getGroupIcon(group.id)
-          return (
-          <details
-            key={group.id}
-            className="group/library-group"
-            data-testid={`education-library-group-${group.id}`}
-          >
-            <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <span className="flex items-start gap-3">
-                <span className={`mt-0.5 flex size-9 shrink-0 items-center justify-center ${getEducationGroupStyle(group.id).toneClass}`}>
-                  <GroupIcon className="size-4.5" aria-hidden="true" />
-                </span>
-                <span>
-                  <span className="block text-base font-semibold text-foreground">
-                    {group.label}
-                  </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                    {group.description}
-                  </span>
-                </span>
-              </span>
-              <ChevronDown
-                className="size-4 shrink-0 text-muted-foreground transition-transform group-open/library-group:rotate-180"
-                aria-hidden="true"
-              />
-            </summary>
-
-            <div className="mb-4 ml-12 border-l border-border pl-4">
-              {group.modules.map((module) => {
-                const availabilityLabel = module.availability === 'core'
-                  ? '基礎主題'
-                  : module.availability === 'record-driven'
-                    ? '有相關資料時提供個人化說明'
-                    : '特定情境適用'
-                return (
-                <details
-                  key={module.id}
-                  className="group/library-module border-b border-border last:border-b-0"
-                  data-testid={`education-library-module-${module.id}`}
-                >
-                  <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <span>
-                      <span className="block text-sm font-semibold text-foreground">
-                        {module.label}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {availabilityLabel}
-                      </span>
-                    </span>
-                    <ChevronDown
-                      className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/library-module:rotate-180"
-                      aria-hidden="true"
-                    />
-                  </summary>
-                  <div className="border-t px-4 py-4 text-sm leading-6">
-                    <p className="font-medium text-foreground">
-                      {module.library.takeaway}
-                    </p>
-                    <p className="mt-2 text-muted-foreground">{module.library.detail}</p>
-                    <p className="mt-3 border-l-2 border-primary/50 pl-3 text-foreground">
-                      <span className="font-semibold">可以這樣做：</span>
-                      {module.library.action}
-                    </p>
-                    {module.library.safety ? (
-                      <p className="mt-3 border-l-2 border-rose-500 pl-3 text-rose-900 dark:text-rose-200">
-                        <span className="font-semibold">需要盡快處理：</span>
-                        {module.library.safety}
-                      </p>
-                    ) : null}
-                    <SourceLinks
-                      sourceIds={module.library.sourceIds}
-                      sources={sources}
-                    />
-                  </div>
-                </details>
-              )})}
-            </div>
-          </details>
-        )})}
-      </div>
-    </details>
-  )
-}
-
-/**
- * Says which topics exist and what would make them apply.
- *
- * "No content for you" reads as a fault in the reader or in the app. The
- * honest position is narrower: this is a research demonstration that currently
- * carries one disease pack, so a record without that diagnosis has nothing to
- * personalise — which is a statement about coverage, not about the patient.
- */
 function NoEligiblePack() {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6" data-testid="education-no-pack">
@@ -1004,16 +1075,57 @@ export default function PersonalizedEducationFeature({
   age,
 }: PersonalizedEducationFeatureProps) {
   const [printFontSize, setPrintFontSize] = useState<EducationPrintFontSize>('standard')
-  const [readingMode, setReadingMode] = useState<EducationReadingMode>('summary')
-  if (!plan) return <NoEligiblePack />
+  const [topicFilter, setTopicFilter] = useState<EducationTopicFilter>('personal')
+  const [printScope, setPrintScope] = useState<'summary' | 'all'>('summary')
+  const [activeTopicId, setActiveTopicId] = useState<string>(SUMMARY_TOPIC_ID)
+  const [visited, setVisited] = useState<ReadonlySet<string>>(() => new Set())
+  const [openGroupId, setOpenGroupId] = useState<EducationModuleGroupId | null>(null)
 
-  const schema = getEducationContentSchema(plan.packId)
-  const resolvedModules = resolveEducationModules(plan, schema)
-  const featuredModules = resolvedModules.filter((educationModule) => (
-    educationModule.definition.showOnMainWhenAvailable && educationModule.available
-  ))
-  const handoutModules = selectEducationHandoutModules(resolvedModules, { age })
-  const displayedModules = readingMode === 'detailed' ? handoutModules : featuredModules
+  const schema = plan ? getEducationContentSchema(plan.packId) : null
+  const resolvedModules = useMemo(
+    () => (plan && schema ? resolveEducationModules(plan, schema) : []),
+    [plan, schema],
+  )
+  const featuredModules = useMemo(
+    () => resolvedModules.filter((educationModule) => (
+      educationModule.definition.showOnMainWhenAvailable && educationModule.available
+    )),
+    [resolvedModules],
+  )
+  const handoutModules = useMemo(
+    () => selectEducationHandoutModules(resolvedModules, { age }),
+    [resolvedModules, age],
+  )
+  // 'all' lists the whole catalogue, including situation topics such as
+  // pregnancy or dialysis that the printed handout leaves out. The accordion
+  // that used to hold them is gone: reaching a topic is a tap now, so a second
+  // browsing surface would only split the same content in two.
+  const displayedModules = topicFilter === 'all' ? resolvedModules : featuredModules
+  const topics = useMemo(() => buildTopics(displayedModules), [displayedModules])
+
+  const selectTopic = useCallback((id: string, groupId?: EducationModuleGroupId) => {
+    setActiveTopicId(id)
+    if (groupId) setOpenGroupId(groupId)
+    if (id !== SUMMARY_TOPIC_ID) {
+      setVisited((current) => {
+        if (current.has(id)) return current
+        const next = new Set(current)
+        next.add(id)
+        return next
+      })
+    }
+    // The pane is the reading surface: land at its top rather than wherever the
+    // previous, possibly longer, topic left the scroll position. Guarded because
+    // scrollIntoView is absent in jsdom, and an exception here would take the
+    // topic switch down with it.
+    const pane = document.querySelector('[data-education-topic-pane]')
+    if (pane && typeof pane.scrollIntoView === 'function') {
+      pane.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
+
+  if (!plan || !schema) return <NoEligiblePack />
+
   const sortedGroups = [...schema.groups].sort((left, right) => left.order - right.order)
   const sources = mergeEducationSources(plan, schema)
   const careSummary = buildEducationCareSummary(plan, resolvedModules)
@@ -1025,9 +1137,23 @@ export default function PersonalizedEducationFeature({
     }))
     .filter((item): item is typeof item & { safety: string } => Boolean(item.safety))
 
+  // A filter change can drop the open topic; fall back to the summary rather
+  // than showing an empty pane.
+  const activeTopic = topics.find((topic) => topic.id === activeTopicId) ?? null
+  const showingSummary = activeTopicId === SUMMARY_TOPIC_ID || !activeTopic
+  const activeIndex = activeTopic
+    ? topics.findIndex((topic) => topic.id === activeTopic.id)
+    : -1
+  const previousTopic = showingSummary
+    ? null
+    : (activeIndex > 0 ? topics[activeIndex - 1] : null)
+  const nextTopic = showingSummary
+    ? topics[0] ?? null
+    : (activeIndex >= 0 && activeIndex < topics.length - 1 ? topics[activeIndex + 1] : null)
+
   return (
     <main
-      className="@container mx-auto w-full max-w-[72rem] space-y-6 px-4 pb-12 pt-2 sm:px-6 print:max-w-none print:px-0"
+      className="@container mx-auto w-full max-w-[72rem] px-4 pb-12 sm:px-6 print:max-w-none print:px-0"
       data-education-print-root
     >
       <style jsx global>{`
@@ -1068,7 +1194,7 @@ export default function PersonalizedEducationFeature({
             color: black !important;
           }
 
-          body.printing-education-handout [data-education-compact-print] [data-education-print-section] {
+          body.printing-education-handout [data-education-print-section] {
             break-inside: avoid;
             page-break-inside: avoid;
           }
@@ -1102,27 +1228,20 @@ export default function PersonalizedEducationFeature({
           display: none;
         }
       `}</style>
-      <header className="relative overflow-hidden pb-1 print:hidden">
-        <Sparkles className="absolute -right-4 -top-6 size-24 text-primary/[0.07]" aria-hidden="true" />
-        <div className="relative flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {schema.pageTitle}
-          </h1>
-          <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground">
-            {schema.diseaseLabel}
-          </span>
-          {audience === 'medical' ? (
-            <span className="rounded-full border bg-background/80 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              民眾閱讀版預覽
-            </span>
-          ) : null}
-        </div>
-        <p className="relative mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          {schema.intro}
-        </p>
-      </header>
 
-      {readingMode === 'detailed' ? (
+      {/*
+        No visible page title. The panel tab already names this feature and the
+        summary heading names the disease, so a heading and a disease chip here
+        said the same thing a third time — and on a 647px pane every row of
+        chrome is a row of content the reader loses. The heading stays for
+        assistive technology, and print renders its own from the same source.
+      */}
+      <h1 className="sr-only">
+        {schema.pageTitle}（{schema.diseaseLabel}）
+      </h1>
+
+      {/* Print output is unchanged: it stays a single scrolling handout. */}
+      {printScope === 'all' ? (
         <DetailedPrintHandout
           schema={schema}
           summary={careSummary}
@@ -1140,148 +1259,205 @@ export default function PersonalizedEducationFeature({
       )}
 
       {/*
-        One row for every control on the page. The reading modes previously sat
-        in cards whose descriptions repeated the section heading below them, and
-        the print settings carried their own legend and two hint lines, so the
-        chrome ran longer than the content it introduced. The print button names
-        the version it will produce, which is what those hints were for.
+        One row: topic navigation on narrow, print on both. The reading filter
+        used to own a row of its own with two mode buttons; it is one switch,
+        so it is now a single chip inside the navigation it filters. On wide
+        layouts the navigation moves to the sidebar and this row keeps only
+        print, which is why it right-aligns.
+      */}
+      {/*
+        Settings, then navigation — two rows with two jobs.
+
+        Scope, print and the topic list had been sharing a row, so a control
+        that changes what you read sat beside one that produces paper. They are
+        separated here, and the navigation below owns the whole width it needs.
       */}
       <section
-        className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border bg-background pb-2 pt-2 print:hidden"
-        aria-label="閱讀與列印設定"
+        className="flex items-center justify-between gap-3 border-b border-border py-1 print:hidden"
+        aria-label="閱讀範圍與列印"
         data-testid="education-reading-mode"
       >
-        <div className="flex min-w-0 items-center gap-5">
-        <fieldset className="min-w-0">
-          <legend className="sr-only">選擇閱讀方式</legend>
-          <div className="flex gap-5">
-            {([
-              { value: 'summary', label: '重點版' },
-              { value: 'detailed', label: '詳細解說版' },
-            ] as const).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={readingMode === option.value}
-                onClick={() => setReadingMode(option.value)}
-                className={`min-h-11 border-b-2 px-0.5 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  readingMode === option.value
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <SectionJump
-          groups={sortedGroups}
-          modules={displayedModules}
-          hasSummary={careSummary.currentState.length > 0}
+        <TopicFilterChip
+          topicFilter={topicFilter}
+          onToggleFilter={() => setTopicFilter(
+            topicFilter === 'personal' ? 'all' : 'personal',
+          )}
+          variant="narrow"
         />
-        </div>
-
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            aria-pressed={printFontSize === 'large'}
-            onClick={() => setPrintFontSize(
-              printFontSize === 'large' ? 'standard' : 'large',
-            )}
-            title="列印時使用較大的字級"
-            className={`min-h-11 border-b-2 px-0.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              printFontSize === 'large'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            大字版
-          </button>
-          <button
-            type="button"
-            onClick={printEducationHandout}
-            title="若預覽出現網址與日期，請在列印設定取消「頁首及頁尾」"
-            className="inline-flex min-h-11 items-center gap-2 border-b-2 border-foreground px-0.5 text-sm font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Printer className="size-4" aria-hidden="true" />
-            列印{readingMode === 'detailed' ? '詳細解說版' : '重點版'}
-          </button>
-        </div>
-      </section>
-
-      <CareSummary summary={careSummary} />
-
-      <section
-        className="print:hidden"
-        aria-labelledby="education-modules-title"
-        data-testid="education-modules"
-        data-reading-mode={readingMode}
-      >
-        <header className="border-b border-border py-6">
-          <p className="text-sm font-semibold text-primary">
-            {readingMode === 'detailed' ? '依固定主題順序完整說明' : '依你的資料組成'}
-          </p>
-          <h2 id="education-modules-title" className="mt-1 text-2xl font-bold text-foreground sm:text-3xl">
-            {readingMode === 'detailed' ? '完整理解這些照護主題' : '這次為你整理的衛教'}
-          </h2>
-          <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">
-            {readingMode === 'detailed'
-              ? `共 ${displayedModules.length} 個適合目前情況的主題；每一節都會說明原因、做法與需要留意的警訊。`
-              : '以下章節只使用目前資料能支持的內容，依固定順序組成這份衛教單。'}
-          </p>
-        </header>
-
-        <div>
-          {displayedModules.map((educationModule, index) => {
-            const group = schema.groups.find(
-              (candidate) => candidate.id === educationModule.definition.groupId,
-            )
-            if (!group) return null
-            return (
-              <PersonalizedHandoutSection
-                key={educationModule.definition.id}
-                educationModule={educationModule}
-                group={group}
-                index={index}
-                sources={sources}
-                readingMode={readingMode}
-              />
-            )
-          })}
-        </div>
-      </section>
-
-      {safetyItems.length > 0 ? (
-        <section
-          className="border-y border-rose-300 py-5 dark:border-rose-800 sm:py-7 print:hidden"
-          aria-labelledby="education-safety-title"
-          data-testid="education-safety-summary"
-        >
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center text-rose-700 dark:text-rose-200">
-              <TriangleAlert className="size-5" aria-hidden="true" />
+        <div className="flex shrink-0 items-center gap-2">
+          {audience === 'medical' ? (
+            <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              民眾閱讀版預覽
             </span>
-            <div>
-              <h2 id="education-safety-title" className="text-xl font-bold text-rose-950 dark:text-rose-100">
-                需要盡快處理的情況
-              </h2>
-              <ul className="mt-3 space-y-3 text-sm leading-6 text-rose-950 dark:text-rose-100">
-                {safetyItems.map((item) => (
-                  <li key={item.id}>
-                    <span className="font-semibold">{item.label}：</span>
-                    {item.safety}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-      ) : null}
+          ) : null}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label="列印"
+                title="列印"
+                className={`${COMPACT_TARGET} inline-flex min-w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-w-[44px]`}
+                data-testid="education-print-menu"
+              >
+                <Printer className="size-4" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-4">
+              <fieldset>
+                <legend className="text-xs font-medium text-muted-foreground">列印內容</legend>
+                <div className="mt-1 flex gap-4">
+                  {([
+                    { value: 'summary', label: '重點版', hint: '兩頁' },
+                    { value: 'all', label: '完整版', hint: '依主題分頁' },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={printScope === option.value}
+                      onClick={() => setPrintScope(option.value)}
+                      className={`min-h-[44px] border-b-2 px-0.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        printScope === option.value
+                          ? 'border-primary text-foreground'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {option.label}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        {option.hint}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
 
-      <div className="print:hidden">
-        <LearningLibrary schema={schema} sources={sources} />
+              <fieldset>
+                <legend className="text-xs font-medium text-muted-foreground">列印字級</legend>
+                <div className="mt-1 flex gap-4">
+                  {([
+                    { value: 'standard', label: '標準' },
+                    { value: 'large', label: '大字' },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={printFontSize === option.value}
+                      onClick={() => setPrintFontSize(option.value)}
+                      className={`min-h-[44px] border-b-2 px-0.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        printFontSize === option.value
+                          ? 'border-primary text-foreground'
+                          : 'border-transparent text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <button
+                type="button"
+                onClick={printEducationHandout}
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="education-print-confirm"
+              >
+                <Printer className="size-4" aria-hidden="true" />
+                列印{printScope === 'all' ? '完整版' : '重點版'}
+              </button>
+              <p className="text-xs leading-5 text-muted-foreground">
+                若預覽出現網址與日期，請在列印設定取消「頁首及頁尾」。
+              </p>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </section>
+
+      <div className="border-b border-border print:hidden @min-[60rem]:hidden">
+        <TopicNav
+          variant="narrow"
+          groups={sortedGroups}
+          topics={topics}
+          activeId={showingSummary ? SUMMARY_TOPIC_ID : activeTopicId}
+          visited={visited}
+          onSelect={selectTopic}
+          topicFilter={topicFilter}
+          onToggleFilter={() => setTopicFilter(
+            topicFilter === 'personal' ? 'all' : 'personal',
+          )}
+          openGroupId={openGroupId}
+          onOpenGroup={setOpenGroupId}
+        />
+      </div>
+
+      <div className="mt-2 gap-6 print:hidden @min-[60rem]:flex" data-education-topic-pane>
+        <TopicNav
+          variant="wide"
+          groups={sortedGroups}
+          topics={topics}
+          activeId={showingSummary ? SUMMARY_TOPIC_ID : activeTopicId}
+          visited={visited}
+          onSelect={selectTopic}
+          topicFilter={topicFilter}
+          onToggleFilter={() => setTopicFilter(
+            topicFilter === 'personal' ? 'all' : 'personal',
+          )}
+          openGroupId={openGroupId}
+          onOpenGroup={setOpenGroupId}
+        />
+
+        <div className="min-w-0 flex-1 pt-4 @min-[60rem]:border-l @min-[60rem]:border-border @min-[60rem]:pl-6 @min-[60rem]:pt-0">
+          {showingSummary ? (
+            <>
+              <CareSummary summary={careSummary} />
+              {safetyItems.length > 0 ? (
+                <section
+                  className="mt-6 border-t border-rose-300 pt-5 dark:border-rose-800"
+                  aria-labelledby="education-safety-title"
+                  data-testid="education-safety-summary"
+                >
+                  <div className="flex items-start gap-3">
+                    <TriangleAlert className="mt-0.5 size-5 shrink-0 text-rose-700 dark:text-rose-200" aria-hidden="true" />
+                    <div>
+                      <h2 id="education-safety-title" className="text-lg font-bold text-rose-950 dark:text-rose-100">
+                        需要盡快處理的情況
+                      </h2>
+                      <ul className="mt-3 space-y-3 text-sm leading-6 text-rose-950 dark:text-rose-100">
+                        {safetyItems.map((item) => (
+                          <li key={item.id}>
+                            <span className="font-semibold">{item.label}：</span>
+                            {item.safety}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+            </>
+          ) : (
+            <TopicView
+              key={activeTopic!.id}
+              educationModule={activeTopic!.educationModule!}
+              group={
+                sortedGroups.find((group) => group.id === activeTopic!.groupId)
+                ?? sortedGroups[0]
+              }
+              sources={sources}
+            />
+          )}
+
+          <TopicFooter
+            previous={previousTopic}
+            next={nextTopic}
+            position={showingSummary ? 0 : activeIndex + 1}
+            total={topics.length}
+            understandingCheck={
+              showingSummary || !activeTopic?.educationModule
+                ? null
+                : getModuleUnderstandingCheck(activeTopic.educationModule)
+            }
+            onSelect={selectTopic}
+          />
+        </div>
       </div>
 
       <footer className="mt-8 border-t pt-4 text-xs leading-5 text-muted-foreground print:hidden">
