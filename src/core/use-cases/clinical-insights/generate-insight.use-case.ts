@@ -16,6 +16,8 @@ const SYSTEM_INSTRUCTION =
 export interface GenerateInsightInput {
   prompt: string
   clinicalContext: string
+  /** Patient-specific values to mask in both the prompt and context. */
+  piiLiterals?: string[]
   modelId: string
 }
 
@@ -46,9 +48,12 @@ export class GenerateInsightUseCase {
       { role: "system" as const, content: SYSTEM_INSTRUCTION },
       {
         role: "user" as const,
-        // Outbound PII mask (身分證 / labeled 病歷號/姓名) — idempotent over
-        // what getFullClinicalContext already scrubbed upstream.
-        content: `${input.prompt}\n\n---\nPatient Clinical Context:\n${scrubFreeText(input.clinicalContext)}`,
+        // The prompt is user-editable, so scrub the entire outbound message,
+        // not only the already-masked clinical context.
+        content: scrubFreeText(
+          `${input.prompt}\n\n---\nPatient Clinical Context:\n${input.clinicalContext}`,
+          input.piiLiterals,
+        ),
       },
     ]
   }

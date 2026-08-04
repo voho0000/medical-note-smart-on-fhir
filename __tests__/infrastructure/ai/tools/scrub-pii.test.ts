@@ -8,6 +8,24 @@ describe('scrubPii', () => {
     expect(out.age).toBe(50)
   })
 
+  it('strips a nested Patient resource including contact fields', () => {
+    const out: any = scrubPii({
+      data: {
+        resourceType: 'Patient',
+        id: 'patient-001',
+        identifier: [{ value: 'A123456789' }],
+        name: [{ text: '王小明' }],
+        birthDate: '1962-04-15',
+        telecom: [{ value: '0912345678' }],
+        address: [{ text: '台北市健康路99號' }],
+        contact: [{ name: { text: '王大明' } }],
+        photo: [{ data: 'base64-private-photo' }],
+        gender: 'male',
+      },
+    })
+    expect(out.data).toEqual({ resourceType: 'Patient', gender: 'male' })
+  })
+
   it('strips birthDate at any depth', () => {
     const out: any = scrubPii({ data: { patient: { birthDate: '1950-01-01', age: 75 } } })
     expect(out.data.patient.birthDate).toBeUndefined()

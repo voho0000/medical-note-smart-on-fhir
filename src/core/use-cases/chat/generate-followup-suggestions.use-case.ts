@@ -5,6 +5,7 @@
 import type { AiMessage } from '@/src/core/entities/ai.entity'
 import { tryExtractJsonValue } from '@/src/core/utils/llm-json.utils'
 import { MODEL_ROLE_IDS } from '@/src/shared/constants/ai-models.constants'
+import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 
 export interface FollowupSuggestion {
   /** Short button text, in the UI language (≤ ~12 words). */
@@ -30,6 +31,8 @@ export interface GenerateFollowupInput {
   /** The reader's own recent questions this session — mirror their interests/phrasing
    *  (implicit personalisation). The current question is filtered out automatically. */
   recentUserMessages?: string[]
+  /** Patient-specific values to mask in the transcript-derived helper call. */
+  piiLiterals?: string[]
 }
 
 export class GenerateFollowupSuggestionsUseCase {
@@ -80,10 +83,12 @@ export class GenerateFollowupSuggestionsUseCase {
         recent.map((m) => `- ${m.slice(0, 200)}`).join('\n')
       : ''
 
-    const user =
+    const user = scrubFreeText(
       `Latest user message:\n${currentQ.slice(0, 1500)}\n\n` +
       `Assistant answer:\n${(input.lastAssistant || '').slice(0, 3000)}` +
-      recentBlock
+      recentBlock,
+      input.piiLiterals,
+    )
     return [
       { role: 'system', content: system },
       { role: 'user', content: user },

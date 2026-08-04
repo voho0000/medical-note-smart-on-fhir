@@ -72,6 +72,8 @@ import {
 export interface AiSlotRunContext {
   /** Exact model-fitted text sent by this run. */
   clinicalContext: string
+  /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
+  piiLiterals: string[]
   clinicalData: ClinicalAiDataInput | null
   catalog: SummarySourceCatalogEntry[]
   locale: Locale
@@ -257,6 +259,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   )
   const {
     patientId,
+    piiLiterals = [],
     dataReady,
     clinicalContext,
     inputSignature,
@@ -465,6 +468,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       produce: () =>
         run({
           clinicalContext,
+          piiLiterals,
           clinicalData: scopedClinicalData,
           catalog,
           locale,
@@ -489,7 +493,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, inputSignature])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, inputSignature])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its

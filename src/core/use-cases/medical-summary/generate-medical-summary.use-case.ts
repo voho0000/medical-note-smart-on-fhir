@@ -1045,6 +1045,8 @@ const SYSTEM_PATIENT =
 
 export interface GenerateMedicalSummaryInput {
   clinicalContext: string
+  /** Patient-specific values to mask again at the final outbound boundary. */
+  piiLiterals?: string[]
   catalog: SummarySourceCatalogEntry[]
   locale: 'en' | 'zh-TW'
   audience?: 'medical' | 'patient'
@@ -1232,11 +1234,13 @@ export class GenerateMedicalSummaryUseCase {
         // idempotent over what getFullClinicalContext already scrubbed, and
         // covers the longitudinal-investigation block appended after it
         // (imaging conclusions can carry patient identifiers).
-        content:
+        content: scrubFreeText(
           `${languageContract}\n\n` +
-          `Patient clinical data:\n${scrubFreeText(input.clinicalContext)}\n\n` +
+          `Patient clinical data:\n${input.clinicalContext}\n\n` +
           `SOURCE LIST (cite these keys in "sources" / "timeline.ref"):\n${catalogBlock}\n\n` +
           `FINAL OUTPUT CHECK: ${languageContract}`,
+          input.piiLiterals,
+        ),
       },
     ]
   }

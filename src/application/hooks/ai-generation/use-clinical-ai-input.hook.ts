@@ -27,6 +27,7 @@ import type { SummarySourceCatalogEntry } from '@/src/core/entities/medical-summ
 import { contentSignature } from '@/src/infrastructure/cache/encrypted-session-cache'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { estimateTokens } from '@/src/shared/utils/token-estimator'
+import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
 
 export type ClinicalAiDataInput = SummaryCatalogInput & {
   isLoading?: boolean
@@ -96,6 +97,7 @@ interface FitState {
  */
 export function useClinicalAiInput(contextLimit?: number) {
   const { patient } = usePatient()
+  const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   const { locale } = useLanguage()
   const clinicalData = useClinicalData() as unknown as ClinicalAiDataInput | null
   const dataSelection = useDataSelection()
@@ -299,6 +301,7 @@ export function useClinicalAiInput(contextLimit?: number) {
 
   return {
     patientId: patient?.id ?? '',
+    piiLiterals,
     dataReady,
     clinicalContext,
     formattedClinicalContext,

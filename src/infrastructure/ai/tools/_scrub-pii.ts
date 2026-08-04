@@ -4,8 +4,8 @@
 // so new tools inherit the protection automatically.
 //
 // Strips:
-//   - Patient `id`, `identifier`
-//   - `birthDate` (`age` is kept — calculated upstream)
+//   - Patient `id`, `identifier`, `name`, `birthDate`, contact/address/photo
+//     fields (`age` is kept — calculated upstream)
 //   - Any `display` field on performer / participant / serviceProvider /
 //     subject / actor (physician + provider names)
 //
@@ -17,6 +17,16 @@
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 
 const STRIP_TOP_LEVEL_KEYS = new Set(['birthDate', 'identifier'])
+const STRIP_PATIENT_KEYS = new Set([
+  'id',
+  'identifier',
+  'name',
+  'birthDate',
+  'telecom',
+  'address',
+  'contact',
+  'photo',
+])
 
 // Field path patterns where a `display` is a person/provider name we want to
 // strip. We only strip `display` under these specific parent keys to avoid
@@ -38,6 +48,13 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+function isPatientLike(value: Record<string, unknown>): boolean {
+  return value.resourceType === 'Patient' || (
+    'gender' in value &&
+    ['id', 'identifier', 'name', 'birthDate', 'telecom', 'address'].some((key) => key in value)
+  )
+}
+
 function walk(value: unknown, parentKey: string | null, literals: string[]): unknown {
   if (Array.isArray(value)) {
     return value.map((v) => walk(v, parentKey, literals))
@@ -50,13 +67,12 @@ function walk(value: unknown, parentKey: string | null, literals: string[]): unk
   if (!isObject(value)) return value
 
   const out: Record<string, unknown> = {}
+  const patientLike = isPatientLike(value)
   for (const [key, raw] of Object.entries(value)) {
     // Skip Patient ID at the top-level data object (key === 'id' on a
     // PatientInfo-shaped response). Don't strip 'id' globally — encounter ids
     // etc. are used internally by getEncounterDetails.
-    if (parentKey === null && key === 'id' && 'gender' in value) {
-      continue
-    }
+    if (patientLike && STRIP_PATIENT_KEYS.has(key)) continue
     if (STRIP_TOP_LEVEL_KEYS.has(key) && parentKey === null) continue
     if (key === 'birthDate') continue // also strip nested birthDate just in case
 

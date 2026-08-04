@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -9,6 +9,8 @@ import {
   FOLLOWUP_MODEL_ID,
   type FollowupSuggestion,
 } from "@/src/core/use-cases/chat/generate-followup-suggestions.use-case"
+import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
+import { buildPatientTextLiterals } from "@/src/shared/utils/pii-text-scrub"
 
 /**
  * Generates "next step" suggestion chips after a chat answer completes.
@@ -22,6 +24,8 @@ export function useFollowupSuggestions(modelId?: string) {
   const { locale } = useLanguage()
   const { audience } = useAudience()
   const ai = useUnifiedAi()
+  const { patient } = usePatient()
+  const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   // Keep the (identity-unstable) stream fn behind a ref so `generate` stays
   // stable and the trigger effect in MedicalChat doesn't churn.
   const streamRef = useRef(ai.stream)
@@ -46,6 +50,7 @@ export function useFollowupSuggestions(modelId?: string) {
         audience,
         isDeepMode: opts?.isDeepMode,
         recentUserMessages: opts?.recentUserMessages,
+        piiLiterals,
       })
       const full = await streamRef.current(messages, {
         // Hospital/private mode keeps this auxiliary generation on the same
@@ -59,7 +64,7 @@ export function useFollowupSuggestions(modelId?: string) {
       // Fail closed — suggestions are a nice-to-have, never surface an error.
       if (reqId === reqRef.current) setSuggestions([])
     }
-  }, [locale, audience, modelId])
+  }, [locale, audience, modelId, piiLiterals])
 
   const clear = useCallback(() => {
     reqRef.current++ // invalidate any in-flight request

@@ -76,5 +76,16 @@ describe('GenerateInsightUseCase', () => {
       expect(messages[1].content).toContain('What is the patient\'s "condition"?')
       expect(messages[1].content).toContain('Test & context')
     })
+
+    it('scrubs patient literals from user-editable prompts and context', () => {
+      const messages = useCase.buildMessages({
+        prompt: '分析王小明的風險',
+        clinicalContext: '王小明 eGFR 32',
+        piiLiterals: ['王小明'],
+        modelId: 'gpt-4',
+      })
+      expect(messages[1].content).not.toContain('王小明')
+      expect(messages[1].content.match(/\[已遮蔽\]/g)?.length).toBe(2)
+    })
   })
 })

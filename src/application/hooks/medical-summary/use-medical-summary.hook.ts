@@ -189,6 +189,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const targetModuleIds = retryRequest?.moduleIds ?? [...MEDICAL_SUMMARY_MODULE_IDS]
     const promptInput = {
       clinicalContext,
+      piiLiterals: ctx.piiLiterals,
       catalog: ctx.catalog,
       locale: outputLocale,
       audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,

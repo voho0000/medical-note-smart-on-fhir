@@ -29,6 +29,16 @@ jest.mock('@/src/application/hooks/chat/use-fhir-context.hook', () => ({
   }),
 }))
 
+jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
+  usePatient: () => ({
+    patient: {
+      id: 'patient-1',
+      name: [{ text: '王小明' }],
+      identifier: [{ value: 'A123456789' }],
+    },
+  }),
+}))
+
 jest.mock('@/src/application/stores/chat.store', () => ({
   useChatStore: (selector: (state: { messages: typeof mockMessages }) => unknown) => (
     selector({ messages: mockMessages })
@@ -121,5 +131,25 @@ describe('useSmartTitleGeneration privacy gate', () => {
     expect(mockUpdateTitle).not.toHaveBeenCalled()
     expect(mockUpdateSession).not.toHaveBeenCalled()
     expect(mockSetIsTitleGenerating).toHaveBeenCalledWith(false)
+  })
+
+  it('sends a scrubbed transcript copy to the title model', async () => {
+    mockExecute.mockResolvedValueOnce('Generated title')
+    const { rerender } = renderHook(
+      ({ enabled }) => useSmartTitleGeneration({ enabled }),
+      { initialProps: { enabled: true } },
+    )
+
+    mockMessages = [
+      { role: 'user', content: '請整理王小明 A123456789 的病歷' },
+      { role: 'assistant', content: '王小明目前狀況穩定' },
+    ]
+    rerender({ enabled: true })
+
+    await waitFor(() => expect(mockExecute).toHaveBeenCalledTimes(1))
+    const outbound = mockExecute.mock.calls[0][0]
+    expect(outbound.userMessage).not.toContain('王小明')
+    expect(outbound.userMessage).not.toContain('A123456789')
+    expect(outbound.assistantMessage).not.toContain('王小明')
   })
 })

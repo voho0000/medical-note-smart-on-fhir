@@ -163,6 +163,7 @@ export function ClinicalInsightsRuntimeProvider({ children }: { children: ReactN
     panels,
     prompts,
     context,
+    piiLiterals: fittedClinicalInput.piiLiterals,
     model,
     contextLimit,
     contextAdaptation: fittedClinicalInput.contextAdaptation,

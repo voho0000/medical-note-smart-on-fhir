@@ -24,6 +24,7 @@ interface UseInsightGenerationProps {
   panels: Panel[]
   prompts: Record<string, string>
   context: string
+  piiLiterals: string[]
   model: string
   contextLimit: number
   contextAdaptation: ClinicalContextAdaptation | null
@@ -44,6 +45,7 @@ export function useInsightGeneration({
   panels,
   prompts,
   context,
+  piiLiterals,
   model,
   contextLimit,
   contextAdaptation,
@@ -79,6 +81,7 @@ export function useInsightGeneration({
         const input = {
           prompt: prompts[panelId] ?? panel.prompt,
           clinicalContext: context,
+          piiLiterals,
           modelId: model,
         }
         const validation = generateInsight.validate(input)
@@ -161,7 +164,7 @@ export function useInsightGeneration({
       if (runIdRef.current !== runId || ownerChanged()) return
       completeBatch(activePanelIds, entries, errors)
     },
-    [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, panels, prompts, setPanelStatus],
+    [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, panels, piiLiterals, prompts, setPanelStatus],
   )
 
   const runPanel = useCallback(
