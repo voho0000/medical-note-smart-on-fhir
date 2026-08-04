@@ -1914,6 +1914,17 @@ export function ClinicalDecisionSupportView({
           >
             {isEnglish ? 'Clinical summary' : '臨床摘要'}
           </h3>
+          {/* The stage the guidance was written against, on the row a reader
+              sees before opening anything. Supplied by the pack; absent when the
+              record cannot establish it. */}
+          {result.patientContext ? (
+            <span
+              className="min-w-0 truncate font-mono text-[11px] text-muted-foreground"
+              data-testid="cdss-patient-context"
+            >
+              {result.patientContext}
+            </span>
+          ) : null}
           <ChevronDown
             className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
             aria-hidden="true"

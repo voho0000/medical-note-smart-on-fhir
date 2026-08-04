@@ -34,6 +34,7 @@ const result: CdssResult = {
   notEvaluated: [],
   disclaimer: '測試',
   automatedChecks: [],
+  patientContext: 'G3b / A2 · eGFR 38（2026-06-02）',
   recommendations: [
     recommendation('act', { status: 'actionable', title: '可立即處理' }),
     recommendation('gaps', {
@@ -68,6 +69,12 @@ describe('clinical summary missing-input groups', () => {
     expect(summary).toHaveTextContent('可開單檢驗')
     expect(summary).toHaveTextContent('診間量測')
     expect(summary).toHaveTextContent('需問診或查紀錄')
+  })
+
+  it('shows the stage the guidance was written against without opening anything', () => {
+    expect(screen.getByTestId('cdss-patient-context')).toHaveTextContent(
+      'G3b / A2 · eGFR 38（2026-06-02）',
+    )
   })
 
   it('puts the recommended actions before the gaps', () => {
