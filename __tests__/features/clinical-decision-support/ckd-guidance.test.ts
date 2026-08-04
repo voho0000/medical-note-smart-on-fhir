@@ -814,7 +814,7 @@ describe('personalized CKD guidance', () => {
     })
     expect(complication?.missingData).toEqual(expect.arrayContaining([
       'MCV',
-      'Retic',
+      'Reticulocyte（網狀紅血球，貧血鑑別用）',
       'Ferritin',
       'TSAT',
     ]))
