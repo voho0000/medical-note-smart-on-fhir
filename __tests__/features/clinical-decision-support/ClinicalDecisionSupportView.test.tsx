@@ -81,6 +81,8 @@ describe('clinical decision summary', () => {
       label: '定量 UACR（mg/g；需為有效正值）',
       relatedRecommendationCount: 2,
     })
+    // Every input, not a top four: the card exists so a clinician does not have
+    // to walk the modules to find what is missing.
     expect(summary.missingInputs).toEqual([
       {
         label: '定量 UACR（mg/g；需為有效正值）',
@@ -89,8 +91,10 @@ describe('clinical decision summary', () => {
       { label: '近期血壓', relatedRecommendationCount: 1 },
       { label: '近期血鉀', relatedRecommendationCount: 1 },
       { label: '目前用藥', relatedRecommendationCount: 1 },
+      { label: '照護目標', relatedRecommendationCount: 1 },
     ])
     expect(summary.missingInputCount).toBe(5)
+    expect(summary.missingInputs).toHaveLength(summary.missingInputCount)
     expect(summary.automatedCheckCount).toBe(2)
   })
 
@@ -109,7 +113,8 @@ describe('clinical decision summary', () => {
     expect(summary).toHaveTextContent('下一步 high')
     expect(summary).toHaveTextContent('定量 UACR（mg/g；需為有效正值）')
     expect(summary).toHaveTextContent('同時影響 2 個決策模組')
-    expect(summary).toHaveTextContent('另有 1 項，請見下方模組')
+    expect(summary).toHaveTextContent('照護目標')
+    expect(summary).not.toHaveTextContent('請見下方模組')
     expect(summary).not.toHaveTextContent('補資料 A')
     expect(summary).not.toHaveTextContent('補資料 B')
     expect(summary.textContent?.match(/定量 UACR/g)).toHaveLength(1)

@@ -64,7 +64,6 @@ const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
   'not-applicable': 'bg-muted text-muted-foreground',
 }
 
-const SUMMARY_MISSING_LIMIT = 4
 
 const MODULE_GROUPS: readonly {
   id: CdssModuleGroupId
@@ -521,7 +520,11 @@ export function buildClinicalDecisionSummary(
 
   return {
     actionRecommendations,
-    missingInputs: allMissingInputs.slice(0, SUMMARY_MISSING_LIMIT),
+    // Every one of them. Capping the list at four turned the rest into "另有 6
+    // 項，請見下方模組" — a number with no way to act on it, in the one place
+    // meant to spare the reader a walk through a dozen modules. The whole
+    // point of consolidating is that nothing has to be hunted for.
+    missingInputs: allMissingInputs,
     missingInputCount: allMissingInputs.length,
     automatedCheckCount: result.automatedChecks?.length ?? 0,
   }
@@ -1907,13 +1910,6 @@ export function ClinicalDecisionSupportView({
                   </li>
                 ))}
               </ul>
-            ) : null}
-            {clinicalSummary.missingInputCount > clinicalSummary.missingInputs.length ? (
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {isEnglish
-                  ? `Plus ${clinicalSummary.missingInputCount - clinicalSummary.missingInputs.length} additional inputs in the modules below.`
-                  : `另有 ${clinicalSummary.missingInputCount - clinicalSummary.missingInputs.length} 項，請見下方模組。`}
-              </p>
             ) : null}
           </div>
 
