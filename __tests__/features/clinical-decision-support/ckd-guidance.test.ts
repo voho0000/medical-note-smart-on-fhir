@@ -304,9 +304,12 @@ describe('personalized CKD guidance', () => {
     expect(result.recommendations.find(
       (item) => item.id === 'ckd-kidney-failure-risk',
     )?.title).toContain('缺少定量 UACR')
+    // Enrollment in both care programmes is an administrative overlap, so it
+    // no longer produces a card of its own; this G3b patient meets no KDIGO
+    // referral circumstance, which is what the card reports.
     expect(result.recommendations.find(
       (item) => item.id === 'ckd-referral-care',
-    )?.title).toContain('同時存在初期 CKD 與 Pre-ESRD')
+    )).toBeUndefined()
     expect(result.recommendations.every((item) => (
       item.sourceAssessments?.every((source) => (
         source.sourceId === 'kdigo-ckd-2024'
