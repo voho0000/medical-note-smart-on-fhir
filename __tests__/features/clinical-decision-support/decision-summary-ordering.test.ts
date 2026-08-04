@@ -46,21 +46,24 @@ describe('clinical decision summary ordering', () => {
   const result = CKD_PACK.build({ profile, locale: 'zh-TW' })
   const summary = buildClinicalDecisionSummary(result, 'zh-TW')
 
-  it('gives the focus slots to actionable cards before review cards', () => {
-    const shown = summary.actionRecommendations.map((item) => item.status)
-    expect(shown).toEqual(['actionable', 'actionable', 'actionable'])
+  it('lists every actionable card before any review card', () => {
+    const statuses = summary.actionRecommendations.map((item) => item.status)
+    const lastActionable = statuses.lastIndexOf('actionable')
+    const firstReview = statuses.indexOf('review')
+
+    expect(statuses).toContain('actionable')
+    expect(statuses).toContain('review')
+    expect(firstReview).toBeGreaterThan(lastActionable)
   })
 
-  it('drops no actionable card while a review card holds a slot', () => {
-    const actionable = result.recommendations.filter((item) => item.status === 'actionable')
+  it('drops nothing — the card consolidates the whole run, it does not rank a top three', () => {
+    const eligible = result.recommendations.filter(
+      (item) => item.status === 'actionable' || item.status === 'review',
+    )
     const shownIds = new Set(summary.actionRecommendations.map((item) => item.id))
-    const droppedActionable = actionable.filter((item) => !shownIds.has(item.id))
-    const shownReview = summary.actionRecommendations.filter((item) => item.status === 'review')
 
-    // This patient has exactly three, which is the summary limit; a fourth
-    // would legitimately not fit, but never behind a review card.
-    expect(actionable.length).toBe(3)
-    expect(droppedActionable.length === 0 || shownReview.length === 0).toBe(true)
+    expect(eligible.length).toBeGreaterThan(3)
+    expect(eligible.every((item) => shownIds.has(item.id))).toBe(true)
   })
 
   it('still ranks a high-priority card above the rest of its own status', () => {

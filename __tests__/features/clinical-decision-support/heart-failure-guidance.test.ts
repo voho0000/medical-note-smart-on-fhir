@@ -135,8 +135,11 @@ describe('heart-failure clinical guidance pack', () => {
       (item) => item.id === 'heart-failure-phenotype',
     )
 
+    // `medium`, not `high`: priority is time-to-harm, and an absent LVEF is a
+    // data gap rather than a finding with a clock on it. The policy layer
+    // enforces that agreement between priority and status.
     expect(phenotype).toMatchObject({
-      priority: 'high',
+      priority: 'medium',
       status: 'needs-data',
       missingData: expect.arrayContaining(['最近一次正式 LVEF 與檢查日期']),
     })

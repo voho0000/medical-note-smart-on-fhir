@@ -64,7 +64,6 @@ const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
   'not-applicable': 'bg-muted text-muted-foreground',
 }
 
-const SUMMARY_FOCUS_LIMIT = 3
 const SUMMARY_MISSING_LIMIT = 4
 
 const MODULE_GROUPS: readonly {
@@ -462,6 +461,10 @@ export function buildClinicalDecisionSummary(
   // build first. That is how a risk score with nothing to do displaced a statin
   // the same run had marked actionable.
   const statusOrder: Readonly<Record<string, number>> = { actionable: 0, review: 1 }
+  // Everything the pack asked a clinician to act on or check, in one place.
+  // This is a consolidation of a dozen module states, not a top-N: cutting it
+  // to three meant an actionable card could sit below the fold with nothing
+  // saying so, which is worse than a longer list.
   const actionRecommendations = result.recommendations.filter(
     (recommendation) => (
       recommendation.status === 'actionable'
@@ -471,29 +474,50 @@ export function buildClinicalDecisionSummary(
     (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2)
     || priorityOrder[a.priority] - priorityOrder[b.priority]
   ))
-    .slice(0, SUMMARY_FOCUS_LIMIT)
+  // What is missing matters less than what it blocks. An absent UACR that
+  // holds up a RASi decision belongs above one that only defers a monitoring
+  // interval, so each input inherits the most decision-bearing module that
+  // asked for it.
+  const domainUrgency: Readonly<Record<CdssRecommendation['domain'], number>> = {
+    medication: 0,
+    target: 1,
+    safety: 2,
+    diagnosis: 3,
+    complication: 4,
+    monitoring: 5,
+    'care-gap': 6,
+  }
   const missingInputByKey = new Map<string, {
     label: string
     recommendationIds: Set<string>
+    urgency: number
   }>()
   result.recommendations.forEach((recommendation) => {
+    const urgency = domainUrgency[recommendation.domain] ?? 7
     recommendation.missingData?.forEach((input) => {
       const summarized = summarizeMissingInput(input, locale)
       const existing = missingInputByKey.get(summarized.key)
       if (existing) {
         existing.recommendationIds.add(recommendation.id)
+        existing.urgency = Math.min(existing.urgency, urgency)
         return
       }
       missingInputByKey.set(summarized.key, {
         label: summarized.label,
         recommendationIds: new Set([recommendation.id]),
+        urgency,
       })
     })
   })
-  const allMissingInputs = Array.from(missingInputByKey.values()).map((item) => ({
-    label: item.label,
-    relatedRecommendationCount: item.recommendationIds.size,
-  }))
+  const allMissingInputs = Array.from(missingInputByKey.values())
+    .sort((a, b) => (
+      a.urgency - b.urgency
+      || b.recommendationIds.size - a.recommendationIds.size
+    ))
+    .map((item) => ({
+      label: item.label,
+      relatedRecommendationCount: item.recommendationIds.size,
+    }))
 
   return {
     actionRecommendations,
@@ -1750,8 +1774,21 @@ export function ClinicalDecisionSupportView({
   } as const
 
   const [requestedExpandedId, setRequestedExpandedId] = useState<string | null>(null)
+  // 照護安排 holds the standing reminders — nutrition targets, immunisation —
+  // whose wording is the same at every visit for every patient of this age and
+  // stage. Left open they are read once and skipped thereafter, and they teach
+  // the eye to skip the section, which matters because specialist referral
+  // lives there too. So the section starts folded, and unfolds itself the moment
+  // it holds something to do.
   const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<CdssModuleGroupId>>(
-    () => new Set(),
+    () => new Set(
+      result.recommendations.some((item) => (
+        item.moduleGroup === 'care'
+        && (item.status === 'actionable' || item.priority === 'high')
+      ))
+        ? []
+        : ['care' as CdssModuleGroupId],
+    ),
   )
   const pointerGestureRef = useRef<{
     recommendationId: string

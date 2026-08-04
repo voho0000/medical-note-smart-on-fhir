@@ -680,7 +680,12 @@ describe('clinical decision summary', () => {
       '監測與安全·6',
       '照護安排·3',
     ])
-    expect(groupTriggers.every((trigger) => trigger.getAttribute('aria-expanded') === 'true')).toBe(true)
+    // 照護安排 holds the standing reminders — nutrition, immunisation — whose
+    // wording does not change between visits, so it opens folded unless it
+    // carries something to do. Nothing in this fixture is actionable or high.
+    expect(groupTriggers.map((trigger) => trigger.getAttribute('aria-expanded'))).toEqual([
+      'true', 'true', 'true', 'false',
+    ])
     expect(groupTriggers.every((trigger) => trigger.classList.contains('h-6'))).toBe(true)
     expect(groupTriggers.every((trigger) => !trigger.classList.contains('bg-muted/30'))).toBe(true)
     const groupTones = [
@@ -711,6 +716,15 @@ describe('clinical decision summary', () => {
       'cdss-recommendation-ckd-anemia-monitoring',
       'cdss-recommendation-ckd-potassium-acidosis',
       'cdss-recommendation-ckd-mbd-monitoring',
+      // 照護安排 is folded, so its three modules are not rendered yet.
+    ])
+
+    const careTrigger = screen.getByTestId('cdss-module-group-trigger-care')
+    fireEvent.click(careTrigger)
+    expect(careTrigger).toHaveAttribute('aria-expanded', 'true')
+    expect(Array.from(
+      screen.getByLabelText('個案決策總覽').querySelectorAll('article'),
+    ).map((element) => element.getAttribute('data-testid')).slice(-3)).toEqual([
       'cdss-recommendation-ckd-nutrition',
       'cdss-recommendation-immunization-review',
       'cdss-recommendation-ckd-referral-care',
