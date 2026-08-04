@@ -1233,6 +1233,43 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     )
   }
 
+  // Two of the KDIGO Figure 48 referral circumstances are codeable. Hereditary
+  // kidney disease covers the cystic kidney chapter and Alport syndrome;
+  // "recurrent extensive" nephrolithiasis needs more than one episode, so a
+  // single stone code does not qualify and a documented history does.
+  const hereditaryKidney = collectDiagnoses(
+    input.conditions,
+    input.encounters,
+    (code) => /^Q61(?:\.|$)/.test(code) || code.toUpperCase() === 'Q87.81',
+  )
+  if (hereditaryKidney[0]) {
+    facts.hereditaryKidneyDisease = diagnosisFact(
+      hereditaryKidney[0],
+      '遺傳性腎臟疾病診斷',
+      'Hereditary kidney disease diagnosis',
+    )
+  }
+
+  const stoneDiagnoses = collectDiagnoses(
+    input.conditions,
+    input.encounters,
+    (code) => /^N20(?:\.|$)/.test(code) || code.toUpperCase() === 'Z87.442',
+  )
+  const stoneEpisodeDates = new Set(
+    stoneDiagnoses.map((candidate) => dateOnly(candidate.date)).filter(Boolean),
+  )
+  const recurrentStones = (
+    stoneDiagnoses.some((candidate) => candidate.coding.code?.toUpperCase() === 'Z87.442')
+    || stoneEpisodeDates.size >= 2
+  )
+  if (recurrentStones && stoneDiagnoses[0]) {
+    facts.recurrentKidneyStones = diagnosisFact(
+      stoneDiagnoses[0],
+      '反覆腎結石',
+      'Recurrent kidney stones',
+    )
+  }
+
   const ckdCarePrograms = activeCkdCarePrograms(input.carePlans)
   if (ckdCarePrograms.length > 0) {
     const labels = ckdCarePrograms.map((carePlan) => (
