@@ -290,6 +290,7 @@ describe('personalized CKD guidance', () => {
 
     expect(result.knowledgePacks?.map((source) => source.id)).toEqual([
       'kdigo-ckd-2024',
+      'kdigo-anemia-2026',
       'taiwan-ckd-2025',
       'taiwan-nhi-diabetes',
     ])
@@ -309,6 +310,7 @@ describe('personalized CKD guidance', () => {
     expect(result.recommendations.every((item) => (
       item.sourceAssessments?.every((source) => (
         source.sourceId === 'kdigo-ckd-2024'
+        || source.sourceId === 'kdigo-anemia-2026'
         || source.sourceId === 'taiwan-ckd-2025'
         || source.sourceId === 'taiwan-nhi-diabetes'
       )) !== false
@@ -509,7 +511,7 @@ describe('personalized CKD guidance', () => {
     })
     expect(medicationDecisions['ckd-sglt2-strategy']).toMatchObject({
       status: 'actionable',
-      title: 'eGFR 34 符合 SGLT2i 評估條件',
+      title: 'eGFR 20–45 適應症符合 SGLT2i 評估條件',
       nextActions: ['建議評估使用 SGLT2i。'],
       hideMissingDataPreview: true,
     })
@@ -757,7 +759,10 @@ describe('personalized CKD guidance', () => {
     })
     expect(profile.facts.parathyroidHormone.numericValue).toBe(76)
     expect(profile.facts.alkalinePhosphatase.numericValue).toBe(88)
-    expect(mbd?.label).toBe('CKD-MBD 核心檢驗已有可用紀錄')
+    // The card no longer stops at "the results exist": with none of the three
+    // flagged by the laboratory, KDIGO's progressive-or-persistent trigger is
+    // simply not met.
+    expect(mbd?.label).toBe('本次 P、Ca 與 PTH 未觸發 CKD-MBD 提示')
     expect(nutrition).toMatchObject({
       status: 'review',
       title: 'G3b 高齡情境：先評估肌少症與衰弱再設定營養目標',
@@ -801,18 +806,25 @@ describe('personalized CKD guidance', () => {
 
     expect(complication).toMatchObject({
       priority: 'medium',
-      status: 'review',
-      title: '男性貧血，先評估原因與趨勢',
+      status: 'needs-data',
+      title: '符合貧血定義，初始四項檢查尚缺 4 項',
     })
     expect(complication?.missingData).toEqual(expect.arrayContaining([
-      'CBC 連續趨勢與 Retic',
-      'ferritin 與 TSAT',
+      'MCV',
+      'Retic',
+      'Ferritin',
+      'TSAT',
     ]))
-    expect(complication?.recommendation).toContain('單一輕度貧血不直接觸發 ESA')
     expect(complication?.recommendation).not.toContain('bicarbonate 23.6 mmol/L')
-    expect(complication?.sourceAssessments?.map((source) => source.sourceId)).not.toContain(
-      'kdigo-anemia-2026',
+
+    // A hemoglobin on its own must never reach the treatment card: without
+    // ferritin and TSAT there is no iron threshold to apply, and ESA guidance
+    // only follows once correctable causes have been addressed.
+    const treatment = result.recommendations.find(
+      (item) => item.id === 'ckd-anemia-iron-esa',
     )
+    expect(treatment).toMatchObject({ status: 'needs-data' })
+    expect(treatment?.recommendation).toContain('不以 Hb 單獨推定缺鐵')
   })
 
   it('does not trigger acidosis treatment for bicarbonate 23.6 mmol/L', () => {

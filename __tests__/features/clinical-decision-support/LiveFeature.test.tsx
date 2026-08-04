@@ -185,7 +185,7 @@ describe('Live personalized-guidance disease switch', () => {
       '慢性腎臟病個人化照護指引',
     )
     expect(screen.getByTestId('mock-cdss-result')).toHaveTextContent(
-      'kdigo-ckd-2024,taiwan-ckd-2025,taiwan-nhi-diabetes',
+      'kdigo-ckd-2024,kdigo-anemia-2026,taiwan-ckd-2025,taiwan-nhi-diabetes',
     )
     expect(screen.getByTestId('mock-cdss-result')).not.toHaveTextContent('ada-2026')
 

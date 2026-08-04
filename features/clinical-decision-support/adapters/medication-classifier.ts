@@ -32,6 +32,17 @@ const CLASS_PATTERNS: Readonly<Record<CdssMedicationClassId, RegExp>> = {
   lactulose: /\b(?:lactulose|enulose|generlac|constulose)\b|乳果糖/i,
   rifaximin: /\b(?:rifaximin|xifaxan)\b|利福昔明|利福西明/i,
   finerenone: /\b(?:finerenone|kerendia)\b|可申達/i,
+  // Calcium carbonate has no phosphate-binder ATC of its own (it also codes as
+  // an antacid and as a calcium supplement), so the class relies on the name and
+  // the card states the binder reading conditionally rather than asserting it.
+  'calcium-based-phosphate-binder': /\b(?:calcium acetate|calcium carbonate|phoslo|phoslyra|renacet|calcichew|osvaren)\b|醋酸鈣|碳酸鈣/i,
+  'non-calcium-phosphate-binder': /\b(?:sevelamer|lanthanum carbonate|sucroferric oxyhydroxide|colestilan|ferric citrate|renagel|renvela|fosrenol|velphoro|nephoxil)\b|思維拉莫|碳酸鑭|拿百磷/i,
+  // Ferric citrate (Nephoxil) is deliberately absent: it is dispensed as a
+  // phosphate binder, and counting it as iron therapy would make an untreated
+  // iron deficiency read as already treated.
+  'iron-therapy': /\b(?:ferrous (?:sulfate|sulphate|fumarate|gluconate|succinate|ascorbate)|iron (?:sucrose|dextran|isomaltoside|polysaccharide|protein succinylate)|ferric (?:carboxymaltose|derisomaltose|gluconate|pyrophosphate)|sodium ferrous citrate|ferumoxytol|saccharated ferric oxide|venofer|ferinject|injectafer|monofer|feraheme|ferrlecit|infed|ferromia|legofer)\b|硫酸亞鐵|葡萄糖酸亞鐵|富馬酸亞鐵|蔗糖鐵|羧基麥芽糖鐵|鐵劑|口服鐵|靜脈鐵/i,
+  'erythropoiesis-stimulating-agent': /\b(?:erythropoietin|epoetin(?:\s*(?:alfa|alpha|beta|theta|zeta))?|darbepoetin|methoxy polyethylene glycol[-\s]*epoetin beta|eprex|recormon|neorecormon|aranesp|mircera|epogen|procrit|retacrit|binocrit|silapo)\b|紅血球生成素|促紅血球生成素/i,
+  'hif-phi': /\b(?:roxadustat|daprodustat|vadadustat|enarodustat|molidustat|desidustat|evrenzo|vafseo|jesduvroq|duvroq)\b|低氧誘導因子|缺氧誘導因子/i,
 }
 const RECOGNIZED_OTHER_ANTIDIABETIC = /\b(?:metformin|semaglutide|liraglutide|dulaglutide|exenatide|lixisenatide|tirzepatide|ozempic|rybelsus|victoza|trulicity|bydureon|mounjaro|sitagliptin|linagliptin|saxagliptin|alogliptin|vildagliptin|jan(?:u)?via|trajenta|onglyza|galvus|pioglitazone|rosiglitazone|acarbose|miglitol|voglibose|repaglinide|nateglinide)\b|二甲雙胍|胰妥讚|瑞倍適|胰妥善|易週糖|猛健樂/i
 
@@ -139,6 +150,23 @@ function matchesStandardCode(
       return code === 'A07AA11'
     case 'finerenone':
       return code === 'C03DA05'
+    case 'calcium-based-phosphate-binder':
+      // V03AE07 calcium acetate, V03AE04 with magnesium carbonate.
+      return code === 'V03AE07' || code === 'V03AE04'
+    case 'non-calcium-phosphate-binder':
+      // Listed rather than prefixed: V03AE also holds the potassium binders
+      // (V03AE01 polystyrene sulfonate, V03AE09, V03AE10), which bind no
+      // phosphate and must not be read as phosphate-lowering treatment.
+      return ['V03AE02', 'V03AE03', 'V03AE05', 'V03AE06', 'V03AE08'].includes(code)
+    case 'iron-therapy':
+      // B03A covers oral (B03AA/AB/AD/AE) and parenteral (B03AC) iron.
+      return code.startsWith('B03A')
+    case 'erythropoiesis-stimulating-agent':
+      // B03XA holds ESAs and HIF-PHIs together, so a prefix would conflate
+      // the two agent classes the guideline asks to be told apart.
+      return code === 'B03XA01' || code === 'B03XA02' || code === 'B03XA03'
+    case 'hif-phi':
+      return code === 'B03XA05' || code === 'B03XA07' || code === 'B03XA08'
   }
 }
 
@@ -176,6 +204,14 @@ function searchableMedicationText(medication: MedicationEntity): string {
   return [
     medication.medicationCodeableConcept?.text,
     medication.medicationReference?.display,
+    // Resolved from the governed NHI drug master. The prescription text is
+    // often a trade name only, so the official name and ingredient are what
+    // actually make an ingredient-level pattern match.
+    medication.drugTerminology?.officialNameZh,
+    medication.drugTerminology?.officialNameEn,
+    medication.drugTerminology?.ingredientText,
+    medication.drugTerminology?.atcNameZh,
+    medication.drugTerminology?.atcNameEn,
     ...(medication.medicationCodeableConcept?.coding ?? []).flatMap((coding) => [
       coding.code,
       coding.display,
@@ -197,6 +233,21 @@ function medicationRecordState(
   return medication._sourceResourceType === 'MedicationStatement'
     ? 'confirmed-current'
     : 'active-order-unconfirmed'
+}
+
+/**
+ * Codings a class match may rely on. The drug master resolves an ATC code that
+ * carries no `system` of its own, so it is presented as an ATC coding here —
+ * otherwise the structural path is limited to bundles that already ship ATC.
+ */
+function medicationCodings(medication: MedicationEntity): CodingLike[] {
+  const atcCode = medication.drugTerminology?.atcCode?.trim()
+  return [
+    ...(medication.medicationCodeableConcept?.coding ?? []),
+    ...(atcCode
+      ? [{ system: 'http://www.whocc.no/atc', code: atcCode, display: medication.drugTerminology?.atcNameEn }]
+      : []),
+  ]
 }
 
 export function medicationDisplayName(medication: MedicationEntity): string {
@@ -237,7 +288,7 @@ export function classifyCurrentMedications(
     const searchable = searchableMedicationText(medication)
     const matchedClasses = medicationClassesFromEvidence({
       texts: [searchable],
-      codings: medication.medicationCodeableConcept?.coding,
+      codings: medicationCodings(medication),
     })
 
     for (const classId of matchedClasses) {

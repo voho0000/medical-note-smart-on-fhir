@@ -105,5 +105,12 @@ export function assessMedicationClassAllergies(
     lactulose: assessmentFor('lactulose'),
     rifaximin: assessmentFor('rifaximin'),
     finerenone: assessmentFor('finerenone'),
+    'calcium-based-phosphate-binder': assessmentFor('calcium-based-phosphate-binder'),
+    'non-calcium-phosphate-binder': assessmentFor('non-calcium-phosphate-binder'),
+    // Hypersensitivity matters most for intravenous iron, which the guideline
+    // says to give only where an acute reaction can be managed.
+    'iron-therapy': assessmentFor('iron-therapy'),
+    'erythropoiesis-stimulating-agent': assessmentFor('erythropoiesis-stimulating-agent'),
+    'hif-phi': assessmentFor('hif-phi'),
   }
 }

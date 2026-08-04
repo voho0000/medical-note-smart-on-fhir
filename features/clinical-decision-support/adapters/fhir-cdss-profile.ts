@@ -20,6 +20,7 @@ import {
   getAnalyteCanonicalKey,
   LOINC_TO_CANONICAL,
 } from '@/src/shared/utils/lab-normalize'
+import { getAuditedReferenceRangeBounds } from '@/src/shared/utils/interpretation-helpers'
 import {
   assessMedicationClass,
   classifyCurrentMedications,
@@ -635,6 +636,47 @@ function findLatestValidatedObservationFromCodes(
     .sort((a, b) => dateValue(b.effectiveDateTime) - dateValue(a.effectiveDateTime))[0]
 }
 
+/**
+ * Which side of its own range the laboratory placed a value on.
+ *
+ * The App has no opinion of its own here: a reported `interpretation` wins, and
+ * the assay's structured `referenceRange` is consulted only when none was
+ * reported. `referenceRange.text` is never parsed and no range is hard-coded,
+ * so an analyte the laboratory did not flag returns undefined rather than
+ * "normal".
+ */
+function observationAbnormality(
+  observation: ObservationEntity,
+): CdssFact['abnormality'] {
+  const concepts = Array.isArray(observation.interpretation)
+    ? observation.interpretation
+    : observation.interpretation ? [observation.interpretation] : []
+  const codes = concepts
+    .flatMap((concept) => concept?.coding ?? [])
+    .map((coding) => (coding.code ?? '').toUpperCase())
+  if (codes.some((code) => code === 'H' || code === 'HH' || code === 'HU')) {
+    return { direction: 'high', basis: 'reported-interpretation' }
+  }
+  if (codes.some((code) => code === 'L' || code === 'LL' || code === 'LU')) {
+    return { direction: 'low', basis: 'reported-interpretation' }
+  }
+  if (codes.some((code) => code === 'N')) {
+    return { direction: 'normal', basis: 'reported-interpretation' }
+  }
+  if (codes.length > 0) return undefined
+
+  const value = observation.valueQuantity?.value
+  const bounds = getAuditedReferenceRangeBounds(observation.referenceRange)
+  if (value === undefined || !bounds) return undefined
+  if (bounds.high !== undefined && value > bounds.high) {
+    return { direction: 'high', basis: 'structured-reference-range' }
+  }
+  if (bounds.low !== undefined && value < bounds.low) {
+    return { direction: 'low', basis: 'structured-reference-range' }
+  }
+  return { direction: 'normal', basis: 'structured-reference-range' }
+}
+
 function observationFact(
   observation: ObservationEntity,
   displayUnit: string,
@@ -642,12 +684,14 @@ function observationFact(
   const value = observation.valueQuantity?.value
   if (value === undefined) return undefined
   const date = dateOnly(observation.effectiveDateTime)
+  const abnormality = observationAbnormality(observation)
   return {
     zh: `${value} ${displayUnit}${date ? `（${date}）` : ''}`,
     en: `${value} ${displayUnit}${date ? ` (${date})` : ''}`,
     numericValue: value,
     unit: displayUnit,
     date,
+    ...(abnormality ? { abnormality } : {}),
     sources: [observationSource(observation, value, displayUnit)],
   }
 }
@@ -1693,6 +1737,48 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     : undefined
   if (parathyroidHormoneFact) facts.parathyroidHormone = parathyroidHormoneFact
 
+  // Several cards need "progressively or persistently" abnormal rather than a
+  // single crossing — KDIGO 2017 Rec 4.1.1 for CKD-MBD, and the Taiwan A9-1-1
+  // referral criterion for persistent potassium abnormality — so these
+  // analytes carry a short series alongside their latest value.
+  const mbdSeries = [
+    { key: 'potassium', codes: new Set([POTASSIUM_LOINC]), units: new Set(['mmol/l', 'meq/l']), unit: 'mmol/L' },
+    { key: 'calcium', codes: CALCIUM_LOINC, units: new Set(['mg/dl']), unit: 'mg/dL' },
+    { key: 'phosphate', codes: PHOSPHATE_LOINC, units: new Set(['mg/dl']), unit: 'mg/dL' },
+    {
+      key: 'parathyroidHormone',
+      codes: PARATHYROID_HORMONE_LOINC,
+      units: new Set(['pg/ml', 'ng/l']),
+      unit: 'pg/mL',
+    },
+  ] as const
+  for (const analyte of mbdSeries) {
+    const series = input.observations
+      .filter((observation) => (
+        isGovernedObservation(observation)
+        && matchesAnalyte(observation, analyte.codes)
+        && hasExpectedUnit(observation.valueQuantity, analyte.units)
+        && observation.valueQuantity?.value !== undefined
+      ))
+      .sort((a, b) => dateValue(a.effectiveDateTime) - dateValue(b.effectiveDateTime))
+      .slice(-4)
+    if (series.length < 2) continue
+    const sources = series.map((observation) => observationSource(
+      observation,
+      observation.valueQuantity!.value!,
+      analyte.unit,
+    ))
+    const rendered = sources.map((source) => `${source.date} ${source.value}`).join(' → ')
+    facts[`${analyte.key}Trend`] = {
+      zh: `${rendered} ${analyte.unit}`,
+      en: `${rendered} ${analyte.unit}`,
+      numericValue: series.at(-1)!.valueQuantity!.value,
+      unit: analyte.unit,
+      date: dateOnly(series.at(-1)!.effectiveDateTime),
+      sources,
+    }
+  }
+
   const alkalinePhosphatase = findLatestValidatedObservationFromCodes(
     input.observations,
     ALKALINE_PHOSPHATASE_LOINC,
@@ -1984,6 +2070,20 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   const lactuloseAssessment = assessMedicationClass(classifiedMedications, 'lactulose')
   const rifaximinAssessment = assessMedicationClass(classifiedMedications, 'rifaximin')
   const finerenoneAssessment = assessMedicationClass(classifiedMedications, 'finerenone')
+  const calciumBinderAssessment = assessMedicationClass(
+    classifiedMedications,
+    'calcium-based-phosphate-binder',
+  )
+  const nonCalciumBinderAssessment = assessMedicationClass(
+    classifiedMedications,
+    'non-calcium-phosphate-binder',
+  )
+  const ironTherapyAssessment = assessMedicationClass(classifiedMedications, 'iron-therapy')
+  const esaAssessment = assessMedicationClass(
+    classifiedMedications,
+    'erythropoiesis-stimulating-agent',
+  )
+  const hifPhiAssessment = assessMedicationClass(classifiedMedications, 'hif-phi')
   const medicationDataDates = input.medications
     .map((medication) => dateOnly(medication.authoredOn))
     .filter((date): date is string => Boolean(date))
@@ -2059,6 +2159,11 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
   const lactuloseTimeline = medicationClassTimeline(lactuloseAssessment)
   const rifaximinTimeline = medicationClassTimeline(rifaximinAssessment)
   const finerenoneTimeline = medicationClassTimeline(finerenoneAssessment)
+  const calciumBinderTimeline = medicationClassTimeline(calciumBinderAssessment)
+  const nonCalciumBinderTimeline = medicationClassTimeline(nonCalciumBinderAssessment)
+  const ironTherapyTimeline = medicationClassTimeline(ironTherapyAssessment)
+  const esaTimeline = medicationClassTimeline(esaAssessment)
+  const hifPhiTimeline = medicationClassTimeline(hifPhiAssessment)
   const hypoglycemiaAssessments = [insulinAssessment, sulfonylureaAssessment]
   const medicationClassState = (
     [
@@ -2282,10 +2387,37 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     'finerenone',
     'finerenone',
   )
+  facts.calciumPhosphateBinderTherapy = classFact(
+    calciumBinderAssessment,
+    '含鈣磷結合劑',
+    'calcium-based phosphate binder',
+  )
+  facts.nonCalciumPhosphateBinderTherapy = classFact(
+    nonCalciumBinderAssessment,
+    '非含鈣磷結合劑',
+    'non-calcium phosphate binder',
+  )
+  facts.ironTherapy = classFact(
+    ironTherapyAssessment,
+    '鐵劑',
+    'iron therapy',
+  )
+  facts.esaTherapy = classFact(
+    esaAssessment,
+    'ESA',
+    'ESA',
+  )
+  facts.hifPhiTherapy = classFact(
+    hifPhiAssessment,
+    'HIF-PHI',
+    'HIF-PHI',
+  )
   facts.sglt2Allergy = allergyFact('sglt2-inhibitor', 'SGLT2i', 'SGLT2 inhibitor')
   facts.insulinAllergy = allergyFact('insulin', '胰島素', 'insulin')
   facts.sulfonylureaAllergy = allergyFact('sulfonylurea', '磺醯脲', 'sulfonylurea')
   facts.statinAllergy = allergyFact('statin', 'statin', 'statin')
+  facts.ironTherapyAllergy = allergyFact('iron-therapy', '鐵劑', 'iron therapy')
+  facts.esaAllergy = allergyFact('erythropoiesis-stimulating-agent', 'ESA', 'ESA')
   facts.ezetimibeAllergy = allergyFact('ezetimibe', 'ezetimibe', 'ezetimibe')
   facts.pcsk9Allergy = allergyFact('pcsk9-inhibitor', 'PCSK9 抑制劑', 'PCSK9 inhibitor')
   facts.bempedoicAcidAllergy = allergyFact(
@@ -2850,6 +2982,42 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
         allergyState: allergyAssessments.finerenone.state,
         allergyNames: allergyAssessments.finerenone.allergyNames,
         allergyFactKey: 'finerenoneAllergy',
+      },
+      'calcium-based-phosphate-binder': {
+        state: calciumBinderAssessment.state,
+        medicationNames: medicationClassNames(calciumBinderAssessment),
+        factKey: 'calciumPhosphateBinderTherapy',
+        ...calciumBinderTimeline,
+      },
+      'non-calcium-phosphate-binder': {
+        state: nonCalciumBinderAssessment.state,
+        medicationNames: medicationClassNames(nonCalciumBinderAssessment),
+        factKey: 'nonCalciumPhosphateBinderTherapy',
+        ...nonCalciumBinderTimeline,
+      },
+      'iron-therapy': {
+        state: ironTherapyAssessment.state,
+        medicationNames: medicationClassNames(ironTherapyAssessment),
+        factKey: 'ironTherapy',
+        ...ironTherapyTimeline,
+        allergyState: allergyAssessments['iron-therapy'].state,
+        allergyNames: allergyAssessments['iron-therapy'].allergyNames,
+        allergyFactKey: 'ironTherapyAllergy',
+      },
+      'erythropoiesis-stimulating-agent': {
+        state: esaAssessment.state,
+        medicationNames: medicationClassNames(esaAssessment),
+        factKey: 'esaTherapy',
+        ...esaTimeline,
+        allergyState: allergyAssessments['erythropoiesis-stimulating-agent'].state,
+        allergyNames: allergyAssessments['erythropoiesis-stimulating-agent'].allergyNames,
+        allergyFactKey: 'esaAllergy',
+      },
+      'hif-phi': {
+        state: hifPhiAssessment.state,
+        medicationNames: medicationClassNames(hifPhiAssessment),
+        factKey: 'hifPhiTherapy',
+        ...hifPhiTimeline,
       },
     },
     ...(medicationContext ? { medicationContexts: medicationContext } : {}),
