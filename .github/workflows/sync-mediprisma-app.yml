@@ -45,7 +45,7 @@ jobs:
 
       - name: Checkout app
         if: ${{ env.SKIP != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
         if: ${{ env.SKIP != 'true' }}
@@ -86,7 +86,7 @@ jobs:
 
       - name: Checkout docs site (mediprisma-site)
         if: ${{ env.SKIP != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: voho0000/mediprisma-site
           token: ${{ secrets.DOCS_REPO_TOKEN }}
