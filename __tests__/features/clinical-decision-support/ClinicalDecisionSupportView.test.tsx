@@ -80,18 +80,22 @@ describe('clinical decision summary', () => {
     expect(summary.missingInputs[0]).toEqual({
       label: '定量 UACR（mg/g；需為有效正值）',
       relatedRecommendationCount: 2,
+      group: 'lab',
     })
     // Every input, not a top four: the card exists so a clinician does not have
     // to walk the modules to find what is missing.
+    // Grouped by the work that closes the gap: an order, a measurement, or a
+    // question. Anything unrecognised falls to `ask`.
     expect(summary.missingInputs).toEqual([
       {
         label: '定量 UACR（mg/g；需為有效正值）',
         relatedRecommendationCount: 2,
+        group: 'lab',
       },
-      { label: '近期血壓', relatedRecommendationCount: 1 },
-      { label: '近期血鉀', relatedRecommendationCount: 1 },
-      { label: '目前用藥', relatedRecommendationCount: 1 },
-      { label: '照護目標', relatedRecommendationCount: 1 },
+      { label: '近期血壓', relatedRecommendationCount: 1, group: 'measure' },
+      { label: '近期血鉀', relatedRecommendationCount: 1, group: 'lab' },
+      { label: '目前用藥', relatedRecommendationCount: 1, group: 'ask' },
+      { label: '照護目標', relatedRecommendationCount: 1, group: 'ask' },
     ])
     expect(summary.missingInputCount).toBe(5)
     expect(summary.missingInputs).toHaveLength(summary.missingInputCount)

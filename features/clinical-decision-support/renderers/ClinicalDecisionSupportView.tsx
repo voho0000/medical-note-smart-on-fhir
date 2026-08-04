@@ -65,6 +65,18 @@ const sourceStatusStyle: Record<CdssSourceAssessmentStatus, string> = {
 }
 
 
+// Ordered the way a visit runs: what can be ordered now, what is measured in
+// the room, and what has to be asked or looked up.
+const MISSING_INPUT_GROUPS: readonly {
+  id: MissingInputGroup
+  zh: string
+  en: string
+}[] = [
+  { id: 'lab', zh: '可開單檢驗', en: 'Laboratory orders' },
+  { id: 'measure', zh: '診間量測', en: 'Measured in clinic' },
+  { id: 'ask', zh: '需問診或查紀錄', en: 'Ask or look up' },
+]
+
 const MODULE_GROUPS: readonly {
   id: CdssModuleGroupId
   zh: string
@@ -443,6 +455,30 @@ function summarizeMissingInput(input: string, locale: CdssLocale) {
   }
 }
 
+/**
+ * Which kind of work closes the gap.
+ *
+ * Ten outstanding inputs in one list read as ten identical chores, when in
+ * practice they are three: a laboratory order, something measured in the room,
+ * and something you have to go and ask or look up. Splitting them lets a
+ * clinician do all of one kind at once.
+ *
+ * Anything unrecognised falls to `ask`, which is the honest default: if the
+ * text does not name a test or a vital sign, assume it takes a conversation.
+ */
+export type MissingInputGroup = 'lab' | 'measure' | 'ask'
+
+const LAB_INPUT_PATTERN = /uacr|acr\b|egfr|creatinine|肌酸酐|白蛋白尿|尿白蛋白|尿沉渣|ferritin|tsat|pth|reticulocyte|網狀紅血球|mcv|cbc|血鉀|potassium|bicarbonate|碳酸氫|血紅素|hemoglobin|hb\b|calcium|phosphate|鈣|磷|albumin|白蛋白|hba1c|ldl|hdl|triglyceride|膽固醇|lipid|血脂|tsh|b12|folate|葉酸|vitamin ?d|維生素 ?d|檢驗|lab(?:oratory)? (?:test|value|result)/i
+const MEASURE_INPUT_PATTERN = /血壓|blood pressure|\bbp\b|體重|body weight|身高|height|bmi|心率|heart rate|腰圍|waist|量測|measurement/i
+
+function missingInputGroup(label: string): MissingInputGroup {
+  // Blood pressure names a measurement even though the sentence around it may
+  // mention a date or a standardization method, so it is tested first.
+  if (MEASURE_INPUT_PATTERN.test(label)) return 'measure'
+  if (LAB_INPUT_PATTERN.test(label)) return 'lab'
+  return 'ask'
+}
+
 export function buildClinicalDecisionSummary(
   result: CdssResult,
   locale: CdssLocale,
@@ -516,6 +552,7 @@ export function buildClinicalDecisionSummary(
     .map((item) => ({
       label: item.label,
       relatedRecommendationCount: item.recommendationIds.size,
+      group: missingInputGroup(item.label),
     }))
 
   return {
@@ -1885,38 +1922,8 @@ export function ClinicalDecisionSupportView({
 
         <div className="border-t border-primary/15 px-3 pb-3 pt-2">
 
-          <div className="grid gap-3 @min-[42rem]:grid-cols-[minmax(15rem,1fr)_minmax(0,1.35fr)]">
-            <div className={cn(clinicalSummary.missingInputs.length === 0 && 'hidden')}>
-            <h4 className="text-xs font-semibold text-foreground">
-              {isEnglish ? 'Data to complete' : '需補資料'}
-            </h4>
-            {clinicalSummary.missingInputs.length > 0 ? (
-              <ul className="mt-1.5 space-y-2 text-xs">
-                {clinicalSummary.missingInputs.map((item) => (
-                  <li key={item.label} className="flex gap-1.5">
-                    <span className="text-amber-700 dark:text-amber-300" aria-hidden="true">•</span>
-                    <span className="min-w-0">
-                      <span className="font-medium leading-relaxed text-foreground">
-                        {item.label}
-                      </span>
-                      {item.relatedRecommendationCount > 1 ? (
-                        <span className="mt-0.5 block leading-relaxed text-muted-foreground">
-                          {isEnglish
-                            ? `Affects ${item.relatedRecommendationCount} decision modules`
-                            : `同時影響 ${item.relatedRecommendationCount} 個決策模組`}
-                        </span>
-                      ) : null}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-
-            <div className={cn(
-              '@min-[42rem]:border-l @min-[42rem]:border-border @min-[42rem]:pl-3',
-              clinicalSummary.actionRecommendations.length === 0 && 'hidden',
-            )}>
+          <div className="grid gap-3 @min-[42rem]:grid-cols-[minmax(0,1.35fr)_minmax(15rem,1fr)]">
+            <div className={cn(clinicalSummary.actionRecommendations.length === 0 && 'hidden')}>
             <h4 className="text-xs font-semibold text-foreground">
               {isEnglish ? 'Recommended actions' : '建議處理'}
             </h4>
@@ -1954,6 +1961,50 @@ export function ClinicalDecisionSupportView({
               </ul>
             ) : null}
             </div>
+          </div>
+
+            <div className={cn(
+              '@min-[42rem]:border-l @min-[42rem]:border-border @min-[42rem]:pl-3',
+              clinicalSummary.missingInputs.length === 0 && 'hidden',
+            )}>
+            <h4 className="text-xs font-semibold text-foreground">
+              {isEnglish ? 'Data to complete' : '需補資料'}
+            </h4>
+            {MISSING_INPUT_GROUPS.map((group) => {
+              const items = clinicalSummary.missingInputs.filter(
+                (item) => item.group === group.id,
+              )
+              if (items.length === 0) return null
+              return (
+                <div key={group.id} className="mt-1.5">
+                  <p
+                    className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                    data-testid={`cdss-missing-group-${group.id}`}
+                  >
+                    {isEnglish ? group.en : group.zh}
+                  </p>
+                  <ul className="mt-1 space-y-2 text-xs">
+                    {items.map((item) => (
+                      <li key={item.label} className="flex gap-1.5">
+                        <span className="text-amber-700 dark:text-amber-300" aria-hidden="true">•</span>
+                        <span className="min-w-0">
+                          <span className="font-medium leading-relaxed text-foreground">
+                            {item.label}
+                          </span>
+                          {item.relatedRecommendationCount > 1 ? (
+                            <span className="mt-0.5 block leading-relaxed text-muted-foreground">
+                              {isEnglish
+                                ? `Affects ${item.relatedRecommendationCount} decision modules`
+                                : `同時影響 ${item.relatedRecommendationCount} 個決策模組`}
+                            </span>
+                          ) : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
           </div>
         </div>
         </details>
