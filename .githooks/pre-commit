@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stops a lockfile that npm pruned for this platform from reaching a commit.
+# See scripts/check-lockfile.mjs for what npm drops and why Linux CI needs it.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+if git diff --cached --name-only | grep -qx 'package-lock.json'; then
+  node scripts/check-lockfile.mjs --quiet || exit 1
+fi

@@ -44,4 +44,15 @@ if (result.error) {
   process.exit(1)
 }
 
+// Any npm command that resolves the tree rewrites package-lock.json from what
+// it laid down on this machine, which on macOS drops the optional entries and
+// platform fields only Linux can use. Repair it here, while the command the
+// developer ran is still the thing on screen, rather than leaving it to be
+// discovered by a red CI run. `npm ci` is exempt: it installs the lockfile
+// rather than rewriting it.
+const REWRITES_LOCKFILE = new Set(['install', 'i', 'add', 'update', 'up', 'uninstall', 'remove', 'rm', 'dedupe', 'ddp'])
+if (result.status === 0 && REWRITES_LOCKFILE.has(npmArgs[0])) {
+  spawnSync(process.execPath, ['scripts/check-lockfile.mjs', '--fix', '--quiet'], { stdio: 'inherit' })
+}
+
 process.exit(result.status ?? 1)
