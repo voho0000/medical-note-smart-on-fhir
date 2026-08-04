@@ -22,6 +22,8 @@ import { medicationHistoryCategoryChipClass } from './medication-chip-styles'
 import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
 
 export interface MedicationHistoryGroup {
+  /** Stable grouping identity; distinct products may share the same display name. */
+  key: string
   name: string
   count: number
   /** Newest-first (sorted upstream in useGroupedMedications). */
@@ -99,7 +101,7 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
     <div className="max-h-[28rem] space-y-2 overflow-y-auto scrollbar-thin-persistent pr-1">
       <ul className="space-y-0">
         {regular.map((group) => (
-          <HistoryRow key={group.name} group={group} mt={mt} />
+          <HistoryRow key={group.key} group={group} mt={mt} />
         ))}
       </ul>
 
@@ -125,7 +127,7 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
           {showInjectables && (
             <ul className="space-y-0 px-1.5 pb-1.5">
               {injectable.map((group) => (
-                <HistoryRow key={group.name} group={group} mt={mt} />
+                <HistoryRow key={group.key} group={group} mt={mt} />
               ))}
             </ul>
           )}

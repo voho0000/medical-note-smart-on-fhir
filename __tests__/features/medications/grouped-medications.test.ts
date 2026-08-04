@@ -120,4 +120,29 @@ describe('groupMedications — active-list merge', () => {
     expect(g.inactiveMedicationGroups).toHaveLength(1)
     expect(g.inactiveMedicationGroups[0].count).toBe(2) // both fills preserved
   })
+
+  it('gives same-named inactive product groups distinct stable keys', () => {
+    const first = row({
+      drugKey: 'NHI-BRIMONIDINE-A',
+      title: 'BRIMONIDINE TARTRATE 1.5 MG/ML',
+      isInactive: true,
+    })
+    const second = row({
+      drugKey: 'NHI-BRIMONIDINE-B',
+      title: 'BRIMONIDINE TARTRATE 1.5 MG/ML',
+      isInactive: true,
+    })
+
+    const { inactiveMedicationGroups } = groupMedications([first, second])
+
+    expect(inactiveMedicationGroups).toHaveLength(2)
+    expect(inactiveMedicationGroups.map((group) => group.name)).toEqual([
+      'BRIMONIDINE TARTRATE 1.5 MG/ML',
+      'BRIMONIDINE TARTRATE 1.5 MG/ML',
+    ])
+    expect(inactiveMedicationGroups.map((group) => group.key)).toEqual([
+      'NHI-BRIMONIDINE-A',
+      'NHI-BRIMONIDINE-B',
+    ])
+  })
 })

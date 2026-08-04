@@ -109,7 +109,8 @@ export function groupMedications(medications: MedicationRow[]) {
 
   return {
     activeMedications: active,
-    inactiveMedicationGroups: Array.from(inactiveByKey.values()).map(({ name, medications }) => ({
+    inactiveMedicationGroups: Array.from(inactiveByKey.entries()).map(([key, { name, medications }]) => ({
+      key,
       name,
       count: medications.length,
       medications,
