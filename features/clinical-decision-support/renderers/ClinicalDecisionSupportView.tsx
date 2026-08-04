@@ -454,12 +454,23 @@ export function buildClinicalDecisionSummary(
     medium: 1,
     routine: 2,
   }
+  // Status leads the sort, priority breaks the tie. Priority alone could not
+  // order this list: a pack that applies the time-to-harm rule honestly leaves
+  // almost everything at `medium` — a CKD G3b patient produces twelve mediums
+  // out of thirteen cards — so the comparator returned 0 for nearly every pair
+  // and the three summary slots went to whichever cards the pack happened to
+  // build first. That is how a risk score with nothing to do displaced a statin
+  // the same run had marked actionable.
+  const statusOrder: Readonly<Record<string, number>> = { actionable: 0, review: 1 }
   const actionRecommendations = result.recommendations.filter(
     (recommendation) => (
       recommendation.status === 'actionable'
       || recommendation.status === 'review'
     ),
-  ).sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+  ).sort((a, b) => (
+    (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2)
+    || priorityOrder[a.priority] - priorityOrder[b.priority]
+  ))
     .slice(0, SUMMARY_FOCUS_LIMIT)
   const missingInputByKey = new Map<string, {
     label: string
