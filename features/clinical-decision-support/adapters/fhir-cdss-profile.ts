@@ -416,11 +416,20 @@ function currentMedicationOverviewFact(
   const current = currentMedicationRecords(medications)
   if (current.length === 0) return undefined
   const names = current.map(medicationDisplayName)
-  const display = names.slice(0, 5).join('、')
-  const suffix = names.length > 5 ? `等 ${names.length} 筆` : `${names.length} 筆`
+  const shown = names.slice(0, 5)
+  // Say that the names are the head of the list, not a selection. This fact is
+  // the overview line on the nephrotoxicity card whenever nothing was flagged,
+  // and "28 筆：<five drug names>" reads as though those five were the finding —
+  // a reader saw four eye drops there and asked which of them was nephrotoxic.
+  // The answer is none: they are simply the first five of twenty-eight.
+  const truncated = names.length > shown.length
   return {
-    zh: `資料切片內目前用藥 ${suffix}：${display}`,
-    en: `${names.length} current medication record(s) in the available data slice: ${names.slice(0, 5).join(', ')}`,
+    zh: truncated
+      ? `資料切片內目前用藥 ${names.length} 筆，以下為前 ${shown.length} 筆（非篩選結果）：${shown.join('、')}`
+      : `資料切片內目前用藥 ${names.length} 筆：${shown.join('、')}`,
+    en: truncated
+      ? `${names.length} current medication record(s) in the available data slice; the first ${shown.length} listed here are not a selection: ${shown.join(', ')}`
+      : `${names.length} current medication record(s) in the available data slice: ${shown.join(', ')}`,
     sources: current.map(medicationSource),
   }
 }
