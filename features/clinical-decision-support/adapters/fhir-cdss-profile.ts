@@ -65,6 +65,9 @@ const HEMOGLOBIN_LOINC = '718-7'
 const MCV_LOINC = '787-2'
 const RETICULOCYTE_PERCENT_LOINC = '4679-7'
 const RETICULOCYTE_ABSOLUTE_LOINC = '14196-0'
+// Urine sediment erythrocytes. Laboratories report the same finding either per
+// volume or per area at high power field, so both codes are accepted.
+const URINE_RBC_LOINC = new Set(['5808-1', '13945-1'])
 const FERRITIN_LOINC = '2276-4'
 const TSAT_LOINC = '2502-3'
 const VITAMIN_B12_LOINC = '2132-9'
@@ -1702,6 +1705,16 @@ export function createFhirCdssPatientProfile(input: FhirCdssProfileInput): CdssP
     const fact = observation ? observationFact(observation, displayUnit) : undefined
     if (fact) facts[key] = fact
   })
+
+  // Hematuria is one of the KDIGO Figure 48 referral circumstances, and the
+  // count per high power field is what the criterion is written against.
+  const urineRbc = findLatestValidatedObservationFromCodes(
+    input.observations,
+    URINE_RBC_LOINC,
+    new Set(['/hpf', '{#}/[HPF]', '/[hpf]', '#/hpf', '/hpf.', '{rbc}/[hpf]']),
+  )
+  const urineRbcFact = urineRbc ? observationFact(urineRbc, '/HPF') : undefined
+  if (urineRbcFact) facts.urineRedBloodCells = urineRbcFact
 
   const bicarbonate = findLatestValidatedObservationFromCodes(
     input.observations,
