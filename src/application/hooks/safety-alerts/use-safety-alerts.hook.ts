@@ -130,6 +130,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<SafetyScanResult | null> => {
     const messages = generateSafetyAlertsUseCase.buildMessages({
       clinicalContext: ctx.clinicalContext,
+      piiLiterals: ctx.piiLiterals,
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       catalog: ctx.catalog,

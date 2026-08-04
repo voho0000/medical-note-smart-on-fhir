@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '@/src/application/providers/auth.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useChatStore } from '@/src/application/stores/chat.store'
@@ -10,6 +10,8 @@ import {
   captureAiRuntimeConfig,
   createSmartTitleUseCase,
 } from '@/src/application/composition.ai'
+import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { buildPatientTextLiterals, scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
 
 const repository = getChatSessionRepository()
 
@@ -18,6 +20,8 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
   const { user } = useAuth()
   const { locale } = useLanguage()
   const { patientId, fhirServerUrl } = useFhirContext()
+  const { patient } = usePatient()
+  const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   const messages = useChatStore(state => state.messages)
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const setIsTitleGenerating = useChatHistoryStore(state => state.setIsTitleGenerating)
@@ -84,8 +88,11 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
 
       const useCase = createSmartTitleUseCase(captureAiRuntimeConfig())
       const smartTitle = await useCase.execute({
-        userMessage,
-        assistantMessage,
+        // UI/history intentionally retain the original transcript. The helper
+        // model receives a scrubbed copy so title generation cannot bypass the
+        // main chat's outbound privacy boundary or persist echoed PHI as title.
+        userMessage: scrubFreeText(userMessage, piiLiterals),
+        assistantMessage: scrubFreeText(assistantMessage, piiLiterals),
         locale,
       })
       if (!isGenerationActive()) return
@@ -123,7 +130,7 @@ export function useSmartTitleGeneration(options: { enabled?: boolean } = {}) {
         setIsTitleGenerating(false)
       }
     }
-  }, [fhirServerUrl, patientId, setIsTitleGenerating, updateSession])
+  }, [fhirServerUrl, patientId, piiLiterals, setIsTitleGenerating, updateSession])
 
   useEffect(() => {
     // `enabled` is a privacy boundary, not merely a scheduling hint. Custom

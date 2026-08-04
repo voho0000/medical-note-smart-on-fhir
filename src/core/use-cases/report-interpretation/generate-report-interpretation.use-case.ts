@@ -150,6 +150,8 @@ export interface GenerateReportInterpretationInput {
   /** Long documents use digest mode instead of pretending to translate every
    *  line of a large discharge summary. Defaults to standard report mode. */
   mode?: ReportInterpretationMode
+  /** Patient-specific values to mask in unlabeled report prose. */
+  piiLiterals?: string[]
 }
 
 /** Clamp the report text to the input cap. Returned separately so the caller can
@@ -162,12 +164,13 @@ export function clampReportText(text: string): { text: string; truncated: boolea
 export function prepareReportText(
   text: string,
   mode: ReportInterpretationMode = 'standard',
+  piiLiterals: string[] = [],
 ): PreparedReportText {
   // Outbound PII scrub BEFORE clamping: discharge summaries / report bodies
   // often carry the patient's name, chart number, and 身分證字號 in the free
   // text — mask those before the text reaches any cloud LLM. Display paths
   // never go through here, so the UI keeps showing the source verbatim.
-  const clean = scrubFreeText((text ?? '').trim())
+  const clean = scrubFreeText((text ?? '').trim(), piiLiterals)
   if (mode !== 'long-document') {
     if (clean.length <= REPORT_INPUT_CHAR_CAP) {
       return { text: clean, truncated: false, coverage: 'full', mode }
@@ -210,11 +213,17 @@ export class GenerateReportInterpretationUseCase {
       input.locale === 'zh-TW'
         ? '\n\nTarget language: write "translation" AND every interpretation field in Traditional Chinese (繁體中文).'
         : '\n\nTarget language: write "translation" AND every interpretation field in English.'
-    const { text } = prepareReportText(input.reportText, mode)
+    const { text } = prepareReportText(input.reportText, mode, input.piiLiterals)
     const titleLine = input.reportTitle ? `Report title: ${input.reportTitle}\n\n` : ''
     return [
       { role: 'system', content: system + lang },
-      { role: 'user', content: `${titleLine}Report text:\n${text}` },
+      {
+        role: 'user',
+        content: scrubFreeText(
+          `${titleLine}Report text:\n${text}`,
+          input.piiLiterals,
+        ),
+      },
     ]
   }
 

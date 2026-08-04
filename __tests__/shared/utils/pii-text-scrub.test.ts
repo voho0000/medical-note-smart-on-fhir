@@ -11,6 +11,38 @@ describe('scrubFreeText', () => {
     expect(scrubFreeText('id: A912345678')).toBe('id: [已遮蔽]')
   })
 
+  it('masks lowercase TW IDs and other explicitly labeled personal IDs', () => {
+    expect(scrubFreeText('id: a123456789')).toBe('id: [已遮蔽]')
+    expect(scrubFreeText('護照號碼：AB-778899')).toBe('護照號碼：[已遮蔽]')
+    expect(scrubFreeText('健保卡號 000012345678')).toBe('健保卡號 [已遮蔽]')
+  })
+
+  it('masks email addresses without requiring a label', () => {
+    expect(scrubFreeText('請寄至 Amy.Chen+care@example.com 追蹤')).toBe('請寄至 [已遮蔽] 追蹤')
+  })
+
+  it('masks labeled Gregorian and ROC birth dates but keeps clinical dates', () => {
+    expect(scrubFreeText('出生日期：1962-04-15')).toBe('出生日期：[已遮蔽]')
+    expect(scrubFreeText('生日 民國51年4月15日')).toBe('生日 [已遮蔽]')
+    expect(scrubFreeText('2025-11-20 採檢')).toBe('2025-11-20 採檢')
+  })
+
+  it('masks labeled phone numbers and addresses', () => {
+    expect(scrubFreeText('電話：(02) 2345-6789 分機 123')).toBe('電話：[已遮蔽]')
+    expect(scrubFreeText('地址：台北市中正區健康路99號\n診斷：肺炎'))
+      .toBe('地址：[已遮蔽]\n診斷：肺炎')
+  })
+
+  it('masks adjacent identity fields in a flattened one-line report', () => {
+    const input =
+      '姓名：王小明 身分證：F223456789 出生日期：1962-04-15' +
+      '病歷號碼：MRN-7788電話：0912-345-678' +
+      '地址：台北市中正區健康路99號病理診斷：高血壓'
+    const output = scrubFreeText(input)
+    expect(output).not.toMatch(/王小明|F223456789|1962-04-15|MRN-7788|0912-345-678|健康路99號/)
+    expect(output).toContain('病理診斷：高血壓')
+  })
+
   it('does NOT mask lab values, dates, or plain numbers', () => {
     const text = 'WBC 4180 /uL, Cr 1.2 mg/dL, 2025-11-20 採檢, HbA1c 7.2%'
     expect(scrubFreeText(text)).toBe(text)
@@ -32,9 +64,20 @@ describe('scrubFreeText', () => {
     expect(scrubFreeText('Patient Name: Wang 65y')).toBe('Patient Name: [已遮蔽] 65y')
   })
 
+  it('keeps adjacent clinical fields when masking names in flattened text', () => {
+    expect(scrubFreeText('姓名：王小明診斷：肺炎')).toBe('姓名：[已遮蔽]診斷：肺炎')
+    expect(scrubFreeText('Patient Name: Amy Chen Diagnosis: pneumonia'))
+      .toBe('Patient Name: [已遮蔽] Diagnosis: pneumonia')
+  })
+
   it('masks caller-provided patient literals wherever they appear', () => {
     const out = scrubFreeText('王小明先生因胸痛入院，王小明主訴…', ['王小明'])
     expect(out).toBe('[已遮蔽]先生因胸痛入院，[已遮蔽]主訴…')
+  })
+
+  it('matches caller-provided Latin literals case-insensitively', () => {
+    expect(scrubFreeText('AMY CHEN returns today', ['Amy Chen']))
+      .toBe('[已遮蔽] returns today')
   })
 
   it('leaves clinical narrative untouched', () => {
@@ -59,6 +102,21 @@ describe('buildPatientTextLiterals', () => {
     expect(literals).toContain('王小明')
     expect(literals).toContain('A123456789')
     expect(literals).toContain('patient-1')
+  })
+
+  it('collects exact birth date, telecom, and full-address literals', () => {
+    const literals = buildPatientTextLiterals({
+      birthDate: '1962-04-15',
+      telecom: [{ value: '0912-345-678' }, { value: 'amy@example.com' }],
+      address: [{ text: '台北市中正區健康路99號', line: ['健康路99號'] }],
+    })
+    expect(literals).toEqual(expect.arrayContaining([
+      '1962-04-15',
+      '0912-345-678',
+      'amy@example.com',
+      '台北市中正區健康路99號',
+      '健康路99號',
+    ]))
   })
 
   it('drops too-short literals that would mass-mask clinical text', () => {

@@ -583,6 +583,21 @@ describe('modular summary generation contract', () => {
     expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
+  it('scrubs patient literals from appended context and source labels at the final boundary', () => {
+    const messages = useCase.buildBatchModuleMessages({
+      ...input,
+      clinicalContext: 'Imaging: 王小明右肺結節',
+      piiLiterals: ['王小明'],
+      catalog: [{
+        ...input.catalog[0],
+        display: '王小明門診紀錄',
+      }],
+    })
+    expect(messages[1].content).not.toContain('王小明')
+    expect(messages[1].content).toContain('Imaging: [已遮蔽]右肺結節')
+    expect(messages[1].content).toContain('[已遮蔽]門診紀錄')
+  })
+
   it('validates each module independently so one malformed card does not discard another', () => {
     const priorities = useCase.parseModuleResult('priorities', '{"headline":"broken"}')
     const problems = useCase.parseModuleResult('problems', JSON.stringify({
