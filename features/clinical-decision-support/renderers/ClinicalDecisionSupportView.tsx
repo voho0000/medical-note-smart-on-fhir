@@ -1933,7 +1933,11 @@ export function ClinicalDecisionSupportView({
 
         <div className="border-t border-primary/15 px-3 pb-3 pt-2">
 
-          <div className="grid gap-3 @min-[42rem]:grid-cols-[minmax(0,1.35fr)_minmax(15rem,1fr)]">
+          {/* Two columns as soon as they fit, three when the gaps have room to
+              split. The old single 42rem step sat almost exactly where this
+              panel usually sits, so the card kept collapsing to one column at
+              the width it was designed for. */}
+          <div className="grid gap-3 @min-[32rem]:grid-cols-[minmax(0,1.3fr)_minmax(11rem,1fr)] @min-[60rem]:grid-cols-[minmax(0,1.2fr)_minmax(11rem,0.9fr)_minmax(11rem,0.9fr)]">
             <div className={cn(clinicalSummary.actionRecommendations.length === 0 && 'hidden')}>
             <h4 className="text-xs font-semibold text-foreground">
               {isEnglish ? 'Recommended actions' : '建議處理'}
@@ -1975,12 +1979,14 @@ export function ClinicalDecisionSupportView({
           </div>
 
             <div className={cn(
-              '@min-[42rem]:border-l @min-[42rem]:border-border @min-[42rem]:pl-3',
+              '@min-[32rem]:border-l @min-[32rem]:border-border @min-[32rem]:pl-3',
+              '@min-[60rem]:col-span-2',
               clinicalSummary.missingInputs.length === 0 && 'hidden',
             )}>
             <h4 className="text-xs font-semibold text-foreground">
               {isEnglish ? 'Data to complete' : '需補資料'}
             </h4>
+            <div className="@min-[60rem]:grid @min-[60rem]:grid-cols-2 @min-[60rem]:gap-x-4 @min-[60rem]:items-start">
             {MISSING_INPUT_GROUPS.map((group) => {
               const items = clinicalSummary.missingInputs.filter(
                 (item) => item.group === group.id,
@@ -2016,6 +2022,7 @@ export function ClinicalDecisionSupportView({
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
         </details>
