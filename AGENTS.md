@@ -11,7 +11,8 @@ red on a two-line version bump.
 - To move a first-party package forward, do not install: `npm run bump:dep -- <package> <version>` edits `package.json` and the one lockfile entry from the registry's own tarball and integrity values. Follow with `npm ci` if `node_modules` needs to match.
 - When an install is genuinely needed (adding or removing a package, a changed dependency graph), run it through `npm run packages:install`, which repairs the lockfile straight afterwards.
 - `npm run check:lockfile` reports what a rewrite dropped; `npm run fix:lockfile` puts it back. The pre-commit hook runs the check whenever the lockfile is staged, and CI runs it against the previous commit.
-- Enable the hook once per clone: `git config core.hooksPath .githooks`.
+- The hook needs `git config core.hooksPath .githooks` once per clone; the `prepare` script does it on `npm install`.
+- No npm flag avoids the pruning: `--include=optional`, `--package-lock-only`, and `--install-strategy=nested` each drop the same five entries. Do not go looking for one.
 
 ## GitHub authentication checks
 
