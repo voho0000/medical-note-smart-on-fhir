@@ -63,7 +63,7 @@
     "@voho0000/personalization-sdk": "1.0.0",
     "@voho0000/personalized-care": "1.4.2",
     "@voho0000/personalized-education": "1.4.1",
-    "ai": "^6.0.43",
+    "ai": "^7.0.48",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.1",
