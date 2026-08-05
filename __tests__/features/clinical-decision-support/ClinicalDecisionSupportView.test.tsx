@@ -77,9 +77,12 @@ describe('clinical decision summary', () => {
       'high',
       'review',
     ])
+    // The count's obvious follow-up question is "which ones", so the names
+    // travel with it and the UI shows them on hover.
     expect(summary.missingInputs[0]).toEqual({
       label: '定量 UACR（mg/g；需為有效正值）',
       relatedRecommendationCount: 2,
+      relatedModuleNames: ['補資料 A', '補資料 B'],
       group: 'lab',
     })
     // Every input, not a top four: the card exists so a clinician does not have
@@ -90,12 +93,13 @@ describe('clinical decision summary', () => {
       {
         label: '定量 UACR（mg/g；需為有效正值）',
         relatedRecommendationCount: 2,
+        relatedModuleNames: ['補資料 A', '補資料 B'],
         group: 'lab',
       },
-      { label: '近期血壓', relatedRecommendationCount: 1, group: 'measure' },
-      { label: '近期血鉀', relatedRecommendationCount: 1, group: 'lab' },
-      { label: '目前用藥', relatedRecommendationCount: 1, group: 'ask' },
-      { label: '照護目標', relatedRecommendationCount: 1, group: 'ask' },
+      { label: '近期血壓', relatedRecommendationCount: 1, relatedModuleNames: ['補資料 A'], group: 'measure' },
+      { label: '近期血鉀', relatedRecommendationCount: 1, relatedModuleNames: ['補資料 A'], group: 'lab' },
+      { label: '目前用藥', relatedRecommendationCount: 1, relatedModuleNames: ['補資料 B'], group: 'ask' },
+      { label: '照護目標', relatedRecommendationCount: 1, relatedModuleNames: ['補資料 B'], group: 'ask' },
     ])
     expect(summary.missingInputCount).toBe(5)
     expect(summary.missingInputs).toHaveLength(summary.missingInputCount)

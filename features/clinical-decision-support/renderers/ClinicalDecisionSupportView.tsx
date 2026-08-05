@@ -525,21 +525,35 @@ export function buildClinicalDecisionSummary(
   const missingInputByKey = new Map<string, {
     label: string
     recommendationIds: Set<string>
+    // Names, not ids: the count answers "how much does this hold up", and the
+    // obvious next question is "which ones" — a reader should not have to open
+    // every module to find out.
+    moduleNames: string[]
     urgency: number
   }>()
   result.recommendations.forEach((recommendation) => {
     const urgency = domainUrgency[recommendation.domain] ?? 7
+    const moduleName = recommendation.moduleName ?? clinicalModuleLabel(
+      recommendation.id,
+      locale,
+      recommendation.title,
+      recommendation.domain,
+    )
     recommendation.missingData?.forEach((input) => {
       const summarized = summarizeMissingInput(input, locale)
       const existing = missingInputByKey.get(summarized.key)
       if (existing) {
-        existing.recommendationIds.add(recommendation.id)
+        if (!existing.recommendationIds.has(recommendation.id)) {
+          existing.recommendationIds.add(recommendation.id)
+          existing.moduleNames.push(moduleName)
+        }
         existing.urgency = Math.min(existing.urgency, urgency)
         return
       }
       missingInputByKey.set(summarized.key, {
         label: summarized.label,
         recommendationIds: new Set([recommendation.id]),
+        moduleNames: [moduleName],
         urgency,
       })
     })
@@ -552,6 +566,7 @@ export function buildClinicalDecisionSummary(
     .map((item) => ({
       label: item.label,
       relatedRecommendationCount: item.recommendationIds.size,
+      relatedModuleNames: item.moduleNames,
       group: missingInputGroup(item.label),
     }))
 
@@ -2008,11 +2023,15 @@ export function ClinicalDecisionSupportView({
                             {item.label}
                           </span>
                           {item.relatedRecommendationCount > 1 ? (
-                            <span className="mt-0.5 block leading-relaxed text-muted-foreground">
+                            <PreviewTextTooltip
+                              text={item.relatedModuleNames.join(isEnglish ? ', ' : '、')}
+                              className="mt-0.5 block leading-relaxed text-muted-foreground underline decoration-dotted underline-offset-2"
+                              triggerTestId={`cdss-missing-affects-${item.group}-${item.relatedRecommendationCount}`}
+                            >
                               {isEnglish
                                 ? `Affects ${item.relatedRecommendationCount} decision modules`
                                 : `同時影響 ${item.relatedRecommendationCount} 個決策模組`}
-                            </span>
+                            </PreviewTextTooltip>
                           ) : null}
                         </span>
                       </li>

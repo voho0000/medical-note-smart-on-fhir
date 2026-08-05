@@ -37,6 +37,11 @@ const result: CdssResult = {
   patientContext: 'G3b / A2 · eGFR 38（2026-06-02）',
   recommendations: [
     recommendation('act', { status: 'actionable', title: '可立即處理' }),
+    recommendation('gaps-2', {
+      status: 'needs-data',
+      title: '腎衰竭風險',
+      missingData: ['定量 UACR（mg/g；需為有效正值）'],
+    }),
     recommendation('gaps', {
       status: 'needs-data',
       missingData: [
@@ -75,6 +80,14 @@ describe('clinical summary missing-input groups', () => {
     expect(screen.getByTestId('cdss-patient-context')).toHaveTextContent(
       'G3b / A2 · eGFR 38（2026-06-02）',
     )
+  })
+
+  it('names the modules a shared gap holds up, on hover', () => {
+    const trigger = screen.getByTestId('cdss-missing-affects-lab-2')
+
+    expect(trigger).toHaveTextContent('同時影響 2 個決策模組')
+    expect(trigger).toHaveClass('cursor-help')
+    expect(trigger).toHaveAttribute('tabindex', '0')
   })
 
   it('puts the recommended actions before the gaps', () => {
