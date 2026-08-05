@@ -1976,7 +1976,6 @@ export function ClinicalDecisionSupportView({
               </ul>
             ) : null}
             </div>
-          </div>
 
             <div className={cn(
               '@min-[32rem]:border-l @min-[32rem]:border-border @min-[32rem]:pl-3',
@@ -2023,6 +2022,7 @@ export function ClinicalDecisionSupportView({
               )
             })}
             </div>
+          </div>
           </div>
         </div>
         </details>
