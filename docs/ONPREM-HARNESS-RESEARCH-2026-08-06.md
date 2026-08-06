@@ -37,7 +37,28 @@ allow-list. After correcting the rubric, the observed functional result is
 
 ## Remaining limitation
 
-The two supplied local patient files have not yet completed Chrome UI E2E runs.
-Chrome was unavailable to the browser controller during this test session. The
-UI pass remains required to validate import, patient switching, browser-bound
-FHIR tools, and retry behaviour with those two records.
+## Authorized real-patient headless integration (10 runs per patient)
+
+Both supplied local files were converted with the app's SDK converter, parsed
+with `LocalBundleService`, exposed through the production FHIR tools, and sent
+through the same local-model router, prompt, and deep-mode agent. Full answers
+and identifiers were not retained.
+
+| Patient sequence | Complete runs | Avg latency | Total tokens | Avg tokens/run |
+|---|---:|---:|---:|---:|
+| 1 | 10/10 | 21,434 ms | 244,662 | 24,466 |
+| 2 | 10/10 | 34,117 ms | 377,055 | 37,706 |
+
+Every run called tools covering conditions, current medication, and laboratory
+results; produced a non-empty answer with the doctor-discussion reminder; and
+did not ask the user to re-import data. Patient 2 required about 54% more tokens
+and 59% more latency, so context/result compaction is the next efficiency target.
+
+## Remaining limitation
+
+Chrome UI E2E remains incomplete because the Chrome native control connection
+and detected Chrome profile were absent during this session. The headless pass
+validates real import conversion, patient-scoped tools, and model orchestration,
+but does not validate file-chooser UI, browser persistence, or visual patient
+switching. The browser pass should be rerun after the Browser plugin is
+reinstalled or repaired through the Codex plugin UI.

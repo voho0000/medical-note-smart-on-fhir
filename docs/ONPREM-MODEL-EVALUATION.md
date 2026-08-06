@@ -41,5 +41,20 @@ strategies compare one full batch, one full batch followed by retries for only
 missing modules, and a fixed 3+2 split. The report records request count,
 latency, parsing/grounding scores, and provider-reported tokens.
 
+For explicitly authorized local patient files, use the headless import-to-agent
+integration runner. It uses the same SDK conversion, `LocalBundleService`, FHIR
+tools, router, prompt, and deep-mode agent as the app, but does not validate the
+browser UI:
+
+```powershell
+$env:ONPREM_PATIENT_FILES = 'C:\path\patient-1.json;C:\path\patient-2.json'
+$env:ONPREM_LLM_MODEL = 'tvghbrain3.5'
+npm.cmd run eval:onprem-patients -- --repeat 10
+```
+
+Its JSONL records contain only patient sequence number, resource counts, tool
+names, checks, token usage, latency, and an answer hash. Complete answers and
+patient identifiers are not retained.
+
 Reports and JSONL run records are written under
 `scripts/experiments/onprem-model-eval/results/`, which is gitignored.

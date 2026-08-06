@@ -37,6 +37,7 @@
     "loop:dashboard": "node scripts/loop/dashboard.mjs",
     "loop:log": "node scripts/loop/log.mjs",
     "eval:onprem-models": "node scripts/run-onprem-model-eval.mjs",
+    "eval:onprem-patients": "node scripts/run-onprem-patient-eval.mjs",
     "version": "node scripts/write-version.mjs && git add public/version.json",
     "lint": "eslint ."
   },
