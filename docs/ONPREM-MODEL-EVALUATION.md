@@ -1,0 +1,38 @@
+# On-prem model evaluation
+
+This opt-in experiment measures the hospital OpenAI-compatible models through
+the same Medical Summary prompts and Chat Agent/tool loop used by the app. It
+runs directly on Node's Web Fetch implementation so streamed SSE responses use
+the same Web Stream contract as the browser. Normal tests never contact the
+endpoint.
+
+## Scope
+
+- Medical Summary: six documented text models × five synthetic clinical cases.
+- Chat Agent: four documented tool-calling models × twelve gold questions.
+- Metrics: parse/completeness, grounding, scenario semantics, tool selection,
+  arguments, retrieval, final-answer correctness, latency, and reported tokens.
+
+The default result does not retain the clinical prompt or complete model output.
+It stores only scores, safe failure categories, tool names, usage, and an output
+hash. `--include-output` is intended only for synthetic-fixture debugging.
+
+## Run
+
+Set these variables in the current shell without committing them:
+
+```powershell
+$env:ONPREM_LLM_ENDPOINT = 'https://hospital.example/v1/chat/completions'
+$env:ONPREM_LLM_API_KEY = '<secret>'
+npm.cmd run eval:onprem-models
+```
+
+Useful filters:
+
+```powershell
+npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5
+npm.cmd run eval:onprem-models -- --phase chat --models gemma4:31b --chat-cases hba1c-trend,penicillin-allergy
+```
+
+Reports and JSONL run records are written under
+`scripts/experiments/onprem-model-eval/results/`, which is gitignored.

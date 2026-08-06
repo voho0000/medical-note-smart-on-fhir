@@ -68,6 +68,10 @@ import {
   getAnalyteLabel,
 } from '@/src/shared/utils/lab-normalize'
 import { expandObservationValues } from '@/src/core/utils/observation-value.utils'
+import {
+  getAuditedReferenceRangeBounds,
+  getInterpretationTag,
+} from '@/src/shared/utils/interpretation-helpers'
 
 export interface AgentDataSource {
   patient: PatientEntity | null
@@ -227,6 +231,16 @@ function attachmentDetails(report: any) {
 }
 
 function observationResult(observation: any) {
+  const interpretation = getInterpretationTag(observation?.interpretation)
+  // The source interpretation is authoritative. Only expose a reference range
+  // when no interpretation exists, matching the app's audited abnormality
+  // policy and preventing the model from presenting contradictory verdicts.
+  const referenceRange = interpretation
+    ? null
+    : getAuditedReferenceRangeBounds(observation?.referenceRange)
+  const hasNormalityAssessment = Boolean(interpretation || referenceRange)
+  const abnormal = isAbnormalObservation(observation)
+
   return {
     name: pickName(observation?.code) || 'Unknown',
     value: observation?.valueQuantity?.value
@@ -234,7 +248,17 @@ function observationResult(observation: any) {
       ?? observation?.valueCodeableConcept?.text,
     unit: observation?.valueQuantity?.unit || '',
     date: observationDate(observation),
-    abnormal: isAbnormalObservation(observation),
+    abnormal: hasNormalityAssessment ? abnormal : null,
+    normalityStatus: interpretation?.label
+      ?? (referenceRange
+        ? abnormal ? 'Outside audited reference range' : 'Within audited reference range'
+        : 'Not provided'),
+    assessmentBasis: interpretation
+      ? 'source-interpretation'
+      : referenceRange
+        ? 'audited-reference-range'
+        : 'not-provided',
+    ...(referenceRange ? { referenceRange } : {}),
   }
 }
 
@@ -1101,6 +1125,12 @@ export function createFhirTools(getData: () => AgentDataSource) {
           canConcludeAbsence: true,
           dateRange: { from: dateFrom, to: dateTo },
           availableAnalytes: groups.map(group => group.analyte),
+          groundingRules: {
+            normalityStatusIsAuthoritative: true,
+            referenceRangeMayOnlyBeRepeatedWhenPresent: true,
+            missingNormalityText: '資料未提供正常／異常判定',
+            instruction: 'Do not add customary ranges, diagnose a condition, or infer the cause of an abnormal result.',
+          },
           data: capped,
         })
       },
@@ -1415,6 +1445,11 @@ export function createFhirTools(getData: () => AgentDataSource) {
           success: true,
           summary: `Found ${filtered.length} MedicationRequest record(s)`,
           count: filtered.length,
+          groundingRules: {
+            providedFieldsOnly: true,
+            ingredientPurposeDrugClassProvided: false,
+            instruction: 'Copy medication and dosage fields verbatim. Do not infer ingredient, purpose, drug class, formulation, or treatment target.',
+          },
           data: capped.map((m: any) => ({
             medication: pickAiMedicationName(
               m.medicationCodeableConcept,
@@ -1454,6 +1489,11 @@ export function createFhirTools(getData: () => AgentDataSource) {
           success: true,
           summary: `${deduped.length} active medication(s)`,
           count: deduped.length,
+          groundingRules: {
+            providedFieldsOnly: true,
+            ingredientPurposeDrugClassProvided: false,
+            instruction: 'Copy medication and dosage fields verbatim. Do not infer ingredient, purpose, drug class, formulation, or treatment target.',
+          },
           data: deduped.map((m: any) => ({
             medication: pickAiMedicationName(
               m.medicationCodeableConcept,

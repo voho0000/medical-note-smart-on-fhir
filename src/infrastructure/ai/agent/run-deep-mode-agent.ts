@@ -92,6 +92,8 @@ export interface RunDeepModeAgentParams {
   idleMs: number
   /** caller owns the controller so it can wire a stop button / overall timeout */
   abortController: AbortController
+  /** Force only step zero when routing found one unambiguous record tool. */
+  initialToolName?: string
   onEvent?: (event: AgentRunEvent) => void
 }
 
@@ -118,7 +120,7 @@ export interface RunDeepModeAgentResult {
 export async function runDeepModeAgent(
   params: RunDeepModeAgentParams,
 ): Promise<RunDeepModeAgentResult> {
-  const { model, messages, tools, translations: t, idleMs, abortController, onEvent } = params
+  const { model, messages, tools, translations: t, idleMs, abortController, initialToolName, onEvent } = params
 
   const emit = (event: AgentRunEvent) => onEvent?.(event)
   const onStreamIdle = () => abortController.abort()
@@ -151,6 +153,11 @@ export async function runDeepModeAgent(
     messages: messages as ModelMessage[],
     tools,
     stopWhen: stepCountIs(10),
+    prepareStep: initialToolName
+      ? ({ stepNumber }) => stepNumber === 0
+        ? { toolChoice: { type: 'tool', toolName: initialToolName } }
+        : { toolChoice: 'auto' }
+      : undefined,
     abortSignal: abortController.signal,
     onStepFinish: ({ toolCalls }) => {
       if (toolCalls && toolCalls.length > 0) {

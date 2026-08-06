@@ -23,6 +23,10 @@ import {
 import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-agent-system-prompt.use-case"
 import { buildStandardChatSystemPrompt } from "@/src/core/use-cases/chat/build-standard-chat-system-prompt.use-case"
 import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
+import {
+  forcedInitialAgentToolName,
+  selectAgentToolsForQuestion,
+} from '@/src/infrastructure/ai/tools/agent-tool-router'
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "@/src/infrastructure/ai/services/openai-compatible.service"
 import {
@@ -375,6 +379,22 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           openAiCompatible,
         })
 
+        const latestUserQuestion = [...newMessages]
+          .reverse()
+          .find((message) => message.role === 'user')
+        const routingQuestion = latestUserQuestion
+          ? formatChatMessageContentForAi(latestUserQuestion)
+          : ''
+        // Tool routing is currently limited to custom hospital/local models:
+        // their smaller parameter budgets benefit most, while unknown queries
+        // deliberately retain the complete tool set.
+        const toolsForTurn = isCustomEndpoint
+          ? selectAgentToolsForQuestion(agentTools, routingQuestion)
+          : agentTools
+        const initialToolName = isCustomEndpoint
+          ? forcedInitialAgentToolName(routingQuestion, Object.keys(toolsForTurn ?? {}))
+          : undefined
+
         // Build the agent prompt without preloading a formatted patient record;
         // the agent queries the bound FHIR tools only when the question needs it.
         // Literature search is available if user has Perplexity API key OR is authenticated (can use proxy)
@@ -385,6 +405,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           hasPatient: !!patient?.id,
           mode: isLocalMode ? 'local' : 'live',
           hasPerplexityKey: hasLiteratureSearch,
+          availableToolNames: isCustomEndpoint ? Object.keys(toolsForTurn ?? {}) : undefined,
           translations: t.agent.systemPrompt,
         })
 
@@ -467,7 +488,8 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         await runDeepModeAgent({
           model,
           messages: apiMessages,
-          tools: agentTools,
+          tools: toolsForTurn,
+          initialToolName,
           idleMs,
           abortController,
           onEvent,

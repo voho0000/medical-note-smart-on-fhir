@@ -6,7 +6,7 @@ import type {
 } from '@/src/core/entities/ai.entity'
 import {
   CUSTOM_MODELS,
-  CUSTOM_OPENAI_MODEL_ID,
+  isCustomOpenAiModelId,
 } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import { OpenAiCompatibleService } from '@/src/infrastructure/ai/services/openai-compatible.service'
@@ -40,7 +40,7 @@ export class AiService implements IAiService {
   }
 
   async query(request: AiQueryRequest): Promise<AiQueryResponse> {
-    if (request.modelId !== CUSTOM_OPENAI_MODEL_ID) {
+    if (!isCustomOpenAiModelId(request.modelId)) {
       throw new Error(`Model ${request.modelId} is disabled by the onprem deployment profile`)
     }
     return this.localService.query(request)

@@ -36,6 +36,7 @@
     "loop:gate": "node scripts/loop/gate.mjs",
     "loop:dashboard": "node scripts/loop/dashboard.mjs",
     "loop:log": "node scripts/loop/log.mjs",
+    "eval:onprem-models": "node scripts/run-onprem-model-eval.mjs",
     "version": "node scripts/write-version.mjs && git add public/version.json",
     "lint": "eslint ."
   },

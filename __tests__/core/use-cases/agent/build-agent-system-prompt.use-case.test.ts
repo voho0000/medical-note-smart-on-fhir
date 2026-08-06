@@ -146,6 +146,25 @@ describe('BuildAgentSystemPromptUseCase', () => {
       expect(result).toContain('Query allergies')
     })
 
+    it('should list only schemas exposed for the current routed turn', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPerplexityKey: false,
+        availableToolNames: ['queryAllergies'],
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('Query allergies')
+      expect(result).not.toContain('Query medications')
+      expect(result).not.toContain('Query reports')
+      expect(result).toContain('use the fewest relevant tools')
+      expect(result.startsWith('# NON-NEGOTIABLE CLINICAL OUTPUT CONTRACT')).toBe(true)
+      expect(result).toContain('Taiwanese Traditional Chinese')
+      expect(result).toContain('Never infer a medication')
+      expect(result).toContain('use only tool-provided normalityStatus')
+    })
+
     it('should handle empty clinical context', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',

@@ -391,6 +391,7 @@ describe('createFhirTools (unified)', () => {
       expect(result.data.map((group: any) => group.analyte)).not.toContain('Creatinine')
       expect(result.data.find((group: any) => group.analyte === 'CA-125').results).toHaveLength(1)
       expect(result.data.find((group: any) => group.analyte === 'CA-125').results[0].value).toBe(12)
+      expect(result.groundingRules.normalityStatusIsAuthoritative).toBe(true)
     })
 
     it('returns a date-sorted series per analyte when withTrend is true', async () => {
@@ -402,6 +403,44 @@ describe('createFhirTools (unified)', () => {
 
       expect(ca125.observationCount).toBe(2)
       expect(ca125.results.map((item: any) => item.value)).toEqual([12, 10])
+    })
+
+    it('keeps source interpretation authoritative and omits a conflicting range', async () => {
+      const observation = markerObservation('cea', 'CEA', 3.8, '2025-04-01', '2039-6')
+      observation.interpretation = [{ coding: [{ code: 'N' }] }]
+      observation.referenceRange = [{ low: { value: 4 }, high: { value: 5 } }]
+      const tools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: { ...sampleCollection, observations: [observation], vitalSigns: [] },
+      }))
+
+      const result = await (tools.queryLabResultsByCategory as any).execute({ category: 'tumor' })
+      const item = result.data[0].results[0]
+
+      expect(item).toMatchObject({
+        abnormal: false,
+        normalityStatus: 'Normal',
+        assessmentBasis: 'source-interpretation',
+      })
+      expect(item.referenceRange).toBeUndefined()
+    })
+
+    it('exposes only an audited range when source interpretation is absent', async () => {
+      const observation = markerObservation('cea', 'CEA', 6, '2025-04-01', '2039-6')
+      observation.referenceRange = [{ low: { value: 0 }, high: { value: 5 } }]
+      const tools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: { ...sampleCollection, observations: [observation], vitalSigns: [] },
+      }))
+
+      const result = await (tools.queryLabResultsByCategory as any).execute({ category: 'tumor' })
+
+      expect(result.data[0].results[0]).toMatchObject({
+        abnormal: true,
+        normalityStatus: 'Outside audited reference range',
+        assessmentBasis: 'audited-reference-range',
+        referenceRange: { low: 0, high: 5 },
+      })
     })
 
     it('does not treat an unavailable Observation query as an empty category', async () => {

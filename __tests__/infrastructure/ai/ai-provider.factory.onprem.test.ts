@@ -16,7 +16,11 @@ jest.mock('@/src/shared/config/deployment-profile.config', () => ({
 }))
 
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
-import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { AiProviderFactory as OnPremAiProviderFactory } from '@/src/infrastructure/onprem/ai/ai-provider.factory'
+import {
+  CUSTOM_OPENAI_MODEL_ID,
+  customOpenAiModelIdForProfile,
+} from '@/src/shared/constants/ai-models.constants'
 
 describe('AiProviderFactory onprem boundary', () => {
   beforeEach(() => {
@@ -39,6 +43,23 @@ describe('AiProviderFactory onprem boundary', () => {
     const factory = new AiProviderFactory()
     const result = factory.create({
       modelId: CUSTOM_OPENAI_MODEL_ID,
+      useProxy: false,
+      openAiCompatible: {
+        enabled: true,
+        baseUrl: '/ai/v1',
+        modelId: 'hospital-model',
+        apiKey: null,
+      },
+    })
+
+    expect(mockChat).toHaveBeenCalledWith('hospital-model')
+    expect(result.model).toEqual({ kind: 'chat-model', modelId: 'hospital-model' })
+  })
+
+  it('allows a configured dynamic OpenAI-compatible profile in the onprem factory', () => {
+    const factory = new OnPremAiProviderFactory()
+    const result = factory.create({
+      modelId: customOpenAiModelIdForProfile('hospital-profile'),
       useProxy: false,
       openAiCompatible: {
         enabled: true,
