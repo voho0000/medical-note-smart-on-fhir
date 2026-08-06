@@ -998,11 +998,32 @@ const MODULE_SCHEMA_HINTS: Record<MedicalSummaryModuleId, string> = {
     '{"medicationEducation": [{"name": "<medicine or group>", "benefit": "<benefit>", "attention": "<one practical reminder>", "sources": ["<catalog key>"]}], "medicationReview": {"overview": "<clinician synthesis>", "regimen": [{"group": "<treatment area>", "name": "<medicine or group>", "sig": "<recorded sig only>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify>", "sources": ["<catalog key>"]}]}}',
 }
 
-const MODULE_OUTPUT_INSTRUCTION = (moduleId: MedicalSummaryModuleId) =>
+const MEDICAL_MEDICATIONS_SCHEMA_HINT =
+  '{"medicationEducation": [], "medicationReview": {"overview": "<clinician synthesis>", "regimen": [{"group": "<treatment area>", "name": "<medicine or group>", "sig": "<recorded sig only>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify>", "sources": ["<catalog key>"]}]}}'
+
+const moduleSchemaHint = (
+  moduleId: MedicalSummaryModuleId,
+  audience: GenerateMedicalSummaryInput['audience'],
+) => moduleId === 'medications' && audience === 'medical'
+  ? MEDICAL_MEDICATIONS_SCHEMA_HINT
+  : MODULE_SCHEMA_HINTS[moduleId]
+
+const medicationAudienceOverride = (
+  moduleId: MedicalSummaryModuleId,
+  audience: GenerateMedicalSummaryInput['audience'],
+) => moduleId === 'medications' && audience === 'medical'
+  ? 'For the medical audience, "medicationEducation" MUST be the literal empty array []; do not generate name, benefit, or attention fields. '
+  : ''
+
+const MODULE_OUTPUT_INSTRUCTION = (
+  moduleId: MedicalSummaryModuleId,
+  audience: GenerateMedicalSummaryInput['audience'],
+) =>
   `\n\nMODULAR OUTPUT CONTRACT: Generate ONLY the "${moduleId}" module. ` +
   'Do not return fields belonging to another module. ' +
+  medicationAudienceOverride(moduleId, audience) +
   'Output ONLY a JSON object matching this schema, with NO markdown fences and NO other text:\n' +
-  MODULE_SCHEMA_HINTS[moduleId]
+  moduleSchemaHint(moduleId, audience)
 
 const moduleBlockStart = (moduleId: MedicalSummaryModuleId) =>
   `<<<MEDIPRISMA_MODULE:${moduleId}>>>`
@@ -1010,14 +1031,29 @@ const moduleBlockStart = (moduleId: MedicalSummaryModuleId) =>
 const moduleBlockEnd = (moduleId: MedicalSummaryModuleId) =>
   `<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`
 
-const BATCH_OUTPUT_INSTRUCTION =
+// Put the medication card first. Smaller on-prem models commonly exhaust or
+// drift from the multi-block contract near the end of a long completion; the
+// medication-reconciliation card is the largest block and was therefore the
+// one most often omitted. Parsing remains marker-based, so presentation order
+// and merge order do not depend on this prompt order.
+const BATCH_MODULE_OUTPUT_ORDER: readonly MedicalSummaryModuleId[] = [
+  'medications',
+  'priorities',
+  'problems',
+  'timeline',
+  'investigations',
+]
+
+const BATCH_OUTPUT_INSTRUCTION = (audience: GenerateMedicalSummaryInput['audience']) =>
   '\n\nBATCH MODULAR OUTPUT CONTRACT: Generate all five modules in the exact order shown below. ' +
   'Each module is an independent JSON object enclosed by its exact start and end markers. ' +
+  'The medications block is FIRST and MANDATORY: finish its complete JSON object and exact end marker before starting any other block. ' +
+  'Even when no medication is supported, emit the medications block with the required empty arrays; never skip it. ' +
   'The markers are the only permitted non-JSON text. Do NOT wrap the five modules in one outer JSON object or array, ' +
   'do NOT use markdown fences, and do NOT omit later modules if an earlier module is uncertain. ' +
   'Use empty arrays or optional omissions allowed by that module schema instead of explanatory prose.\n\n' +
-  MEDICAL_SUMMARY_MODULE_IDS.map((moduleId) =>
-    `${moduleBlockStart(moduleId)}\n${MODULE_SCHEMA_HINTS[moduleId]}\n${moduleBlockEnd(moduleId)}`,
+  BATCH_MODULE_OUTPUT_ORDER.map((moduleId) =>
+    `${moduleBlockStart(moduleId)}\n${medicationAudienceOverride(moduleId, audience)}${moduleSchemaHint(moduleId, audience)}\n${moduleBlockEnd(moduleId)}`,
   ).join('\n\n')
 
 const SYSTEM_MEDICAL =
@@ -1203,6 +1239,21 @@ const MODULE_RESULT_SCHEMAS = {
   medications: MedicalSummaryMedicationsModuleSchema,
 } as const
 
+const MODULE_REQUIRED_OUTPUT_FIELDS: Record<MedicalSummaryModuleId, readonly string[]> = {
+  priorities: ['headline', 'summary'],
+  problems: ['problems'],
+  timeline: ['timeline'],
+  investigations: ['investigations'],
+  medications: ['medicationEducation', 'medicationReview'],
+}
+
+function hasRequiredModuleFields(moduleId: MedicalSummaryModuleId, raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+  return MODULE_REQUIRED_OUTPUT_FIELDS[moduleId].every((field) =>
+    Object.prototype.hasOwnProperty.call(raw, field),
+  )
+}
+
 export class GenerateMedicalSummaryUseCase {
   readonly moduleIds = MEDICAL_SUMMARY_MODULE_IDS
 
@@ -1256,14 +1307,14 @@ export class GenerateMedicalSummaryUseCase {
     input: GenerateMedicalSummaryInput,
     moduleId: MedicalSummaryModuleId,
   ): AiMessage[] {
-    return this.buildMessagesForOutput(input, MODULE_OUTPUT_INSTRUCTION(moduleId))
+    return this.buildMessagesForOutput(input, MODULE_OUTPUT_INSTRUCTION(moduleId, input.audience))
   }
 
   /** Initial live generation sends the clinical context once and asks for
    * independently delimited card payloads. Failed cards can then reuse the
    * single-module contract above without regenerating successful cards. */
   buildBatchModuleMessages(input: GenerateMedicalSummaryInput): AiMessage[] {
-    return this.buildMessagesForOutput(input, BATCH_OUTPUT_INSTRUCTION)
+    return this.buildMessagesForOutput(input, BATCH_OUTPUT_INSTRUCTION(input.audience))
   }
 
   /**
@@ -1317,6 +1368,12 @@ export class GenerateMedicalSummaryUseCase {
     }
     const raw = tryExtractJsonValue(text)
     if (raw === null) return fail('no parseable JSON found')
+    // Several module schemas intentionally default arrays for cache/backward
+    // compatibility. At the model boundary, however, `{}` or an unrelated
+    // module must not become a false-success empty card.
+    if (!hasRequiredModuleFields(moduleId, raw)) {
+      return fail(`missing required module fields: ${MODULE_REQUIRED_OUTPUT_FIELDS[moduleId].join(', ')}`)
+    }
     const parsed = MODULE_RESULT_SCHEMAS[moduleId].safeParse(raw)
     if (parsed.success) return parsed.data as MedicalSummaryModuleResultMap[T]
     const issues = parsed.error.issues

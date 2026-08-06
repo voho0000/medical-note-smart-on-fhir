@@ -229,6 +229,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         modelId: ctx.modelId,
         operationKey: ctx.operationKey,
         throwOnAbort: true,
+        // Structured JSON is more reliable on OpenAI-compatible local models
+        // when sampling is deterministic. Providers that require/omit a fixed
+        // temperature normalize this option in their adapter.
+        temperature: 0,
       })
       const parsed = generateMedicalSummaryUseCase.parseModuleResult(moduleId, full)
       if (!parsed) {
@@ -247,6 +251,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           modelId: ctx.modelId,
           operationKey: ctx.operationKey,
           throwOnAbort: true,
+          temperature: 0,
         })
         targetModuleIds.forEach((moduleId) => {
           const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, full)
@@ -276,6 +281,37 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       }
     } else {
       settled.push(...await Promise.allSettled(retryRequests.map(runModule)))
+    }
+
+    // Local Chat Completions endpoints are stateless, so permanently splitting
+    // every summary into multiple calls would resend the entire patient context
+    // and nearly double input tokens. Prefer one batch, then automatically retry
+    // only the medication card when that specific JSON block was malformed,
+    // omitted, or the oversized batch request failed. The narrower completion
+    // is materially cheaper than a fixed two-batch strategy and can still
+    // succeed when the local model struggles with the full multi-card output.
+    if (initialBatchMessages && isCustomOpenAiModelId(ctx.modelId)) {
+      const medicationIndex = targetModuleIds.indexOf('medications')
+      const medicationOutcome = settled[medicationIndex]
+      if (
+        medicationIndex >= 0 &&
+        medicationOutcome &&
+        (medicationOutcome.status === 'rejected' || 'error' in medicationOutcome.value)
+      ) {
+        const medicationRequest = {
+          moduleId: 'medications' as const,
+          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, 'medications'),
+        }
+        try {
+          settled[medicationIndex] = {
+            status: 'fulfilled',
+            value: await runModule(medicationRequest),
+          }
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') throw error
+          settled[medicationIndex] = { status: 'rejected', reason: error }
+        }
+      }
     }
 
     const aborted = settled.find((outcome) =>

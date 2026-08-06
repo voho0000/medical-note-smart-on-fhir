@@ -571,6 +571,19 @@ describe('modular summary generation contract', () => {
     expect(messages[0].content).toContain('Do not return fields belonging to another module')
   })
 
+  it('forces medical medication education to an empty literal instead of inviting unused fields', () => {
+    const messages = useCase.buildModuleMessages(input, 'medications')
+    expect(messages[0].content).toContain('"medicationEducation" MUST be the literal empty array []')
+    expect(messages[0].content).toContain('{"medicationEducation": [], "medicationReview"')
+
+    const patientMessages = useCase.buildModuleMessages(
+      { ...input, audience: 'patient' as const },
+      'medications',
+    )
+    expect(patientMessages[0].content).toContain('"benefit": "<benefit>"')
+    expect(patientMessages[0].content).not.toContain('MUST be the literal empty array')
+  })
+
   it('builds one batch prompt with five independently delimited JSON blocks', () => {
     const messages = useCase.buildBatchModuleMessages(input)
     const prompt = messages[0].content
@@ -580,6 +593,9 @@ describe('modular summary generation contract', () => {
       expect(prompt).toContain(`<<<MEDIPRISMA_MODULE:${moduleId}>>>`)
       expect(prompt).toContain(`<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`)
     }
+    expect(prompt.indexOf('<<<MEDIPRISMA_MODULE:medications>>>'))
+      .toBeLessThan(prompt.indexOf('<<<MEDIPRISMA_MODULE:priorities>>>'))
+    expect(prompt).toContain('The medications block is FIRST and MANDATORY')
     expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
@@ -596,6 +612,12 @@ describe('modular summary generation contract', () => {
     expect(messages[1].content).not.toContain('王小明')
     expect(messages[1].content).toContain('Imaging: [已遮蔽]右肺結節')
     expect(messages[1].content).toContain('[已遮蔽]門診紀錄')
+  })
+
+  it('does not accept an unrelated/defaulted object as a successful medications module', () => {
+    const unrelatedReply = JSON.stringify({ timeline: [] })
+    expect(useCase.parseModuleResult('medications', unrelatedReply)).toBeNull()
+    expect(useCase.parseBatchModuleResult('medications', unrelatedReply)).toBeNull()
   })
 
   it('validates each module independently so one malformed card does not discard another', () => {
