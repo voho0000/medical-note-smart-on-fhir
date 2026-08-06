@@ -91,6 +91,7 @@ export function agentToolNamesForDataScope(
   availableToolNames: readonly string[],
   dataScope: ChatDataScope,
 ): string[] {
+  if (dataScope === 'auto') return [...availableToolNames]
   if (dataScope === 'general') {
     return availableToolNames.filter((name) => name === 'searchMedicalLiterature')
   }
@@ -120,6 +121,7 @@ export function selectAgentToolNames(
   dataScope: ChatDataScope,
 ): string[] {
   const scopeAllowedNames = agentToolNamesForDataScope(availableToolNames, dataScope)
+  if (dataScope === 'auto') return scopeAllowedNames
   const generalKnowledge = isGeneralMedicalKnowledgeQuestion(question)
   const literatureOnly = () => scopeAllowedNames.filter((name) => name === 'searchMedicalLiterature')
   if (matchesAny(question, NO_RECORD_QUERY)) {
@@ -184,6 +186,7 @@ export function forcedInitialAgentToolName(
   dataScope: ChatDataScope,
 ): string | undefined {
   if (selectedToolNames.length === 0) return undefined
+  if (dataScope === 'auto') return undefined
   const generalKnowledge = isGeneralMedicalKnowledgeQuestion(question)
   if (matchesAny(question, NO_RECORD_QUERY)) {
     return generalKnowledge && selectedToolNames.includes('searchMedicalLiterature')

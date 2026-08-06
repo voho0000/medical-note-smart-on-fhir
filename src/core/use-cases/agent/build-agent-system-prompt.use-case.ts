@@ -82,7 +82,11 @@ export class BuildAgentSystemPromptUseCase {
     // Build patient context section. In local-bundle mode the patient ID is
     // implicit (single patient per bundle), so the warning about needing one
     // is misleading — swap it for a local-mode notice.
-    const scopeContract = input.turnDataScope === 'general'
+    const scopeContract = input.turnDataScope === 'auto'
+      ? `**Turn Data Scope: Automatic**
+- Decide from the user's question whether patient-record tools, current-literature search, both, or neither are needed.
+- Use the fewest relevant tools. Do not query patient data merely because it is available.`
+      : input.turnDataScope === 'general'
       ? `**Turn Data Scope: General medical knowledge**
 - The user explicitly selected a patient-free turn.
 - Do not use, request, mention, or infer any loaded patient's FHIR data.`

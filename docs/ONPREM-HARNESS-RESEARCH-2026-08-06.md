@@ -91,11 +91,17 @@ each generated statement.
 ## Explicit chat data scope
 
 Patient-data authorization is no longer inferred from an open-ended intent
-regex. The composer exposes three explicit scopes: general medical knowledge,
-current patient record, and patient record plus current literature. General
-scope removes every FHIR schema and omits the selected clinical snapshot even
-in tool-less standard chat. Patient scope removes literature; combined scope is
-available only when the selected runtime has a literature tool.
+regex for local/custom models. Their composer exposes explicit scopes: general
+medical knowledge, current patient record, and patient record plus current
+literature when available. General scope removes every FHIR schema and omits
+the selected clinical snapshot even in tool-less standard chat.
+
+Frontier models instead default to Automatic. They receive every available
+FHIR and literature tool and decide from the question whether to call either,
+both, or neither. No keyword schema reduction or forced initial tool is applied.
+The only manual frontier override is Do not use patient data, which removes all
+FHIR tools while retaining literature search when available. With no loaded
+patient, Automatic also exposes no FHIR tools.
 
 Each message records its scope. Conversation history is filtered at the model
 request boundary, so a general turn cannot inherit patient-derived text and a

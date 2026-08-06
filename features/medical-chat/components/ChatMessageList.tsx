@@ -360,7 +360,9 @@ export function ChatMessageList({
           <div className="flex flex-col items-center justify-center h-full py-12 text-center">
             <div className="text-4xl mb-3 opacity-20">💬</div>
             <div className="max-w-2xl text-sm font-medium leading-relaxed text-foreground">
-              {dataScope === 'general'
+              {dataScope === 'auto'
+                ? t.chat.autoEmptyStateTitle
+                : dataScope === 'general'
                 ? t.chat.generalEmptyStateTitle
                 : dataScope === 'patient-literature'
                   ? t.chat.patientLiteratureEmptyStateTitle
@@ -369,7 +371,9 @@ export function ChatMessageList({
                     : t.chat.emptyStateTitle}
             </div>
             <div className="mt-1.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-              {dataScope === 'general'
+              {dataScope === 'auto'
+                ? t.chat.autoEmptyState
+                : dataScope === 'general'
                 ? t.chat.generalEmptyState
                 : dataScope === 'patient-literature'
                   ? t.chat.patientLiteratureEmptyState

@@ -228,7 +228,9 @@ export default function MedicalChat() {
   const setChatDataScope = useSetChatDataScope()
   const setCurrentSessionId = useSetCurrentSessionId()
 
-  const defaultChatDataScope: ChatDataScope = patientId ? 'patient' : 'general'
+  const defaultChatDataScope: ChatDataScope = isCustomEndpoint
+    ? (patientId ? 'patient' : 'general')
+    : 'auto'
   const literatureAvailable = !isCustomEndpoint && !isStandardChat && (
     !!perplexityKey || !!user || isAnonymous
   )
@@ -365,9 +367,9 @@ export default function MedicalChat() {
     return () => window.removeEventListener('mediprisma:local-bundle-changed', onBundleChange)
   }, [])
 
-  // A new patient context starts in patient mode; clearing the patient fails
-  // closed to general mode. Later manual scope changes remain sticky until the
-  // patient/context changes or a new conversation is started.
+  // A changed patient context restores the runtime's default: frontier models
+  // return to automatic routing; local models use patient mode when available
+  // and otherwise fail closed to general mode.
   const previousPatientIdRef = useRef<string | null | undefined>(undefined)
   useEffect(() => {
     if (previousPatientIdRef.current !== patientId) {
@@ -377,22 +379,31 @@ export default function MedicalChat() {
     }
   }, [patientId, defaultChatDataScope, setChatDataScope])
 
-  // A saved combined-scope conversation may be opened under a model that has
-  // no literature tool. Keep the patient authorization, but do not present an
-  // unavailable combined mode as active.
+  // Scope controls differ by runtime: frontier models use automatic routing
+  // with an optional no-patient override; custom/local models use explicit
+  // patient boundaries. Normalize old/saved scopes after a model switch.
   useEffect(() => {
-    if (chatDataScope === 'patient-literature' && !literatureAvailable) {
+    const invalidForFrontier = !isCustomEndpoint &&
+      chatDataScope !== 'auto' && chatDataScope !== 'general'
+    const invalidForLocal = isCustomEndpoint && (
+      chatDataScope === 'auto' ||
+      (chatDataScope !== 'general' && !patientId) ||
+      (chatDataScope === 'patient-literature' && !literatureAvailable)
+    )
+    if (invalidForFrontier || invalidForLocal) {
       setChatDataScope(defaultChatDataScope)
     }
-  }, [chatDataScope, literatureAvailable, defaultChatDataScope, setChatDataScope])
+  }, [chatDataScope, isCustomEndpoint, patientId, literatureAvailable, defaultChatDataScope, setChatDataScope])
 
   const handleChatDataScopeChange = useCallback((nextScope: ChatDataScope) => {
-    if (nextScope !== 'general' && !patientId) return
+    if (!isCustomEndpoint && nextScope !== 'auto' && nextScope !== 'general') return
+    if (isCustomEndpoint && nextScope === 'auto') return
+    if ((nextScope === 'patient' || nextScope === 'patient-literature') && !patientId) return
     if (nextScope === 'patient-literature' && !literatureAvailable) return
     setChatDataScope(nextScope)
     setReplyDraft(null)
     clearFollowups()
-  }, [patientId, literatureAvailable, setChatDataScope, clearFollowups])
+  }, [isCustomEndpoint, patientId, literatureAvailable, setChatDataScope, clearFollowups])
 
   const template = useTemplateSelector()
 
@@ -562,12 +573,14 @@ export default function MedicalChat() {
     const userMessages = chatMessages
       .filter((message) => {
         if (message.role !== 'user') return false
+        if (answerScope === 'auto') return true
         if (answerScope === 'general') return message.dataScope === 'general'
         if (answerScope === 'patient') {
           return message.dataScope === 'patient' || !message.dataScope
         }
         return message.dataScope === 'patient' ||
           message.dataScope === 'patient-literature' ||
+          message.dataScope === 'auto' ||
           !message.dataScope
       })
       .map((message) => message.content)
@@ -753,6 +766,7 @@ export default function MedicalChat() {
             onChange={handleChatDataScopeChange}
             hasPatient={!!patientId}
             literatureAvailable={literatureAvailable}
+            frontierModel={!isCustomEndpoint}
             disabled={chat.isLoading}
           />
           <ChatToolbar

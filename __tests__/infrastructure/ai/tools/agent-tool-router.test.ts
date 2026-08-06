@@ -152,4 +152,11 @@ describe('agent tool router', () => {
       .toBe('queryImagingRecords')
     expect(generalTools).toEqual([])
   })
+
+  it('leaves the full tool decision to a frontier model in automatic scope', () => {
+    const question = 'X光有什麼問題嗎'
+
+    expect(selectAgentToolNames(question, names, 'auto')).toEqual(names)
+    expect(forcedInitialAgentToolName(question, names, 'auto')).toBeUndefined()
+  })
 })

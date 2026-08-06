@@ -224,5 +224,20 @@ describe('BuildAgentSystemPromptUseCase', () => {
       expect(result).toContain('cannot verify the current version')
       expect(result).toContain('official guideline')
     })
+
+    it('lets a frontier model choose relevant data sources in automatic scope', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPatient: true,
+        hasPerplexityKey: true,
+        turnDataScope: 'auto',
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('Turn Data Scope: Automatic')
+      expect(result).toContain('patient-record tools, current-literature search, both, or neither')
+      expect(result).toContain('Do not query patient data merely because it is available')
+    })
   })
 })

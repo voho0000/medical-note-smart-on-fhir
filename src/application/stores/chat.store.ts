@@ -32,7 +32,7 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>()((set) => ({
   messages: [],
-  chatDataScope: 'general',
+  chatDataScope: 'auto',
   isTemporaryMode: false,
 
   setMessages: (messages) => {

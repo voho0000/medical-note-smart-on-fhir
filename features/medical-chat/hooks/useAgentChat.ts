@@ -81,6 +81,7 @@ function messageCanEnterScope(
   dataScope: ChatDataScope,
   hasPatient: boolean,
 ): boolean {
+  if (dataScope === 'auto') return true
   if (dataScope === 'general') {
     // An untagged legacy transcript may contain patient data. It is safe to
     // retain only when no patient is loaded in this conversation partition.
@@ -90,7 +91,8 @@ function messageCanEnterScope(
     // Do not carry literature-derived answers back into patient-only mode.
     return message.dataScope === 'patient' || (!message.dataScope && hasPatient)
   }
-  // Combined mode authorizes both patient-only and combined prior turns.
+  // Combined mode authorizes automatic, patient-only, and combined prior turns.
+  if (message.dataScope === 'auto') return true
   return message.dataScope === 'patient' ||
     message.dataScope === 'patient-literature' ||
     (!message.dataScope && hasPatient)
@@ -234,9 +236,14 @@ export function useAgentChat(
       // patient is loaded, fail closed to the patient-free boundary even if a
       // stale UI/session value says otherwise.
       const hasPatient = !!patient?.id
-      const turnDataScope: ChatDataScope = dataScope !== 'general' && !hasPatient
-        ? 'general'
+      const endpointScope: ChatDataScope = isCustomEndpoint && dataScope === 'auto'
+        ? (hasPatient ? 'patient' : 'general')
         : dataScope
+      const turnDataScope: ChatDataScope = endpointScope !== 'general' &&
+        endpointScope !== 'auto' &&
+        !hasPatient
+        ? 'general'
+        : endpointScope
 
       // Create user message with images
       const replySource = replyTo
@@ -450,9 +457,12 @@ export function useAgentChat(
         // The explicit scope filters data sources for every model. Smaller
         // custom models receive an additional relevance pass to reduce schema
         // tokens; frontier models keep all schemas inside the chosen boundary.
+        const toolDataScope: ChatDataScope = turnDataScope === 'auto' && !hasPatient
+          ? 'general'
+          : turnDataScope
         const toolsForTurn = isCustomEndpoint
           ? selectAgentToolsForQuestion(agentTools, routingQuestion, turnDataScope)
-          : filterAgentToolsForDataScope(agentTools, turnDataScope)
+          : filterAgentToolsForDataScope(agentTools, toolDataScope)
         const initialToolName = isCustomEndpoint
           ? forcedInitialAgentToolName(
               routingQuestion,

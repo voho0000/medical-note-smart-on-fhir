@@ -3,7 +3,7 @@ import type { ChatMessage } from '@/src/application/stores/chat.store'
 
 describe('chat.store', () => {
   beforeEach(() => {
-    useChatStore.setState({ messages: [], chatDataScope: 'general' })
+    useChatStore.setState({ messages: [], chatDataScope: 'auto' })
   })
 
   describe('chat data scope', () => {

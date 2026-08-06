@@ -30,10 +30,10 @@ export interface ChatReplyReference {
  * rather than inferred from wording: routing heuristics may reduce schemas,
  * but they must never grant access to patient records or literature.
  */
-export type ChatDataScope = 'general' | 'patient' | 'patient-literature'
+export type ChatDataScope = 'auto' | 'general' | 'patient' | 'patient-literature'
 
 export function isChatDataScope(value: unknown): value is ChatDataScope {
-  return value === 'general' || value === 'patient' || value === 'patient-literature'
+  return value === 'auto' || value === 'general' || value === 'patient' || value === 'patient-literature'
 }
 
 export interface ChatMessage {

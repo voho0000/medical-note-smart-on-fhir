@@ -1,6 +1,6 @@
 "use client"
 
-import { BookOpenCheck, Database, ShieldCheck } from "lucide-react"
+import { BookOpenCheck, Database, ShieldCheck, Sparkles } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -16,6 +16,7 @@ interface ChatDataScopeSelectorProps {
   onChange: (value: ChatDataScope) => void
   hasPatient: boolean
   literatureAvailable: boolean
+  frontierModel: boolean
   disabled?: boolean
 }
 
@@ -24,12 +25,16 @@ export function ChatDataScopeSelector({
   onChange,
   hasPatient,
   literatureAvailable,
+  frontierModel,
   disabled = false,
 }: ChatDataScopeSelectorProps) {
   const { t } = useLanguage()
   const chat = t.chat as typeof t.chat & {
     dataScopeLabel: string
+    dataScopeAuto: string
+    dataScopeAutoDescription: string
     dataScopeGeneral: string
+    dataScopeNoPatientOption: string
     dataScopePatient: string
     dataScopePatientLiterature: string
     dataScopeGeneralDescription: string
@@ -39,6 +44,7 @@ export function ChatDataScopeSelector({
     dataScopeLiteratureUnavailable: string
   }
   const descriptions: Record<ChatDataScope, string> = {
+    auto: chat.dataScopeAutoDescription,
     general: chat.dataScopeGeneralDescription,
     patient: hasPatient
       ? chat.dataScopePatientDescription
@@ -71,21 +77,31 @@ export function ChatDataScopeSelector({
           <SelectValue />
         </SelectTrigger>
         <SelectContent align="start" className="min-w-[17rem]">
+          {frontierModel && (
+            <SelectItem value="auto">
+              <Sparkles className="h-4 w-4" />
+              {chat.dataScopeAuto}
+            </SelectItem>
+          )}
           <SelectItem value="general">
             <ShieldCheck className="h-4 w-4" />
-            {chat.dataScopeGeneral}
+            {frontierModel ? chat.dataScopeNoPatientOption : chat.dataScopeGeneral}
           </SelectItem>
-          <SelectItem value="patient" disabled={!hasPatient}>
-            <Database className="h-4 w-4" />
-            {chat.dataScopePatient}
-          </SelectItem>
-          <SelectItem
-            value="patient-literature"
-            disabled={!hasPatient || !literatureAvailable}
-          >
-            <BookOpenCheck className="h-4 w-4" />
-            {chat.dataScopePatientLiterature}
-          </SelectItem>
+          {!frontierModel && (
+            <>
+              <SelectItem value="patient" disabled={!hasPatient}>
+                <Database className="h-4 w-4" />
+                {chat.dataScopePatient}
+              </SelectItem>
+              <SelectItem
+                value="patient-literature"
+                disabled={!hasPatient || !literatureAvailable}
+              >
+                <BookOpenCheck className="h-4 w-4" />
+                {chat.dataScopePatientLiterature}
+              </SelectItem>
+            </>
+          )}
         </SelectContent>
       </Select>
       <span className="hidden min-w-0 flex-1 truncate text-[0.68rem] text-muted-foreground lg:block">
