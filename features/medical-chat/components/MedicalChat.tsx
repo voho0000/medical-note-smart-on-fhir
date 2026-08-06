@@ -13,6 +13,9 @@ import {
   useIsTemporaryMode,
   useSetIsTemporaryMode,
   useSetChatMessages,
+  useChatDataScope,
+  useSetChatDataScope,
+  type ChatDataScope,
 } from "@/src/application/stores/chat.store"
 import { useSetCurrentSessionId } from "@/src/application/stores/chat-history.store"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -32,6 +35,7 @@ import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
 import { ChatTemplatesManagerDrawer } from "./ChatTemplatesManagerDrawer"
 import { ChatInputArea } from "./ChatInputArea"
+import { ChatDataScopeSelector } from "./ChatDataScopeSelector"
 import { SuggestionChips } from "./SuggestionChips"
 import { ExpandedOverlay } from '@/src/shared/components/ExpandedOverlay'
 import { useAgentChat } from "../hooks/useAgentChat"
@@ -128,6 +132,7 @@ export default function MedicalChat() {
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const claudeKey = useAiConfigStore((state) => state.claudeKey)
+  const perplexityKey = useAiConfigStore((state) => state.perplexityKey)
   const openAiCompatibleProfiles = useAiConfigStore(
     (state) => state.openAiCompatibleProfiles,
   )
@@ -219,7 +224,14 @@ export default function MedicalChat() {
   const isTemporaryMode = useIsTemporaryMode()
   const setIsTemporaryMode = useSetIsTemporaryMode()
   const setMessagesGlobal = useSetChatMessages()
+  const chatDataScope = useChatDataScope()
+  const setChatDataScope = useSetChatDataScope()
   const setCurrentSessionId = useSetCurrentSessionId()
+
+  const defaultChatDataScope: ChatDataScope = patientId ? 'patient' : 'general'
+  const literatureAvailable = !isCustomEndpoint && !isStandardChat && (
+    !!perplexityKey || !!user || isAnonymous
+  )
 
   const handleToggleTemporaryMode = useCallback(async () => {
     if (!isTemporaryMode) {
@@ -232,15 +244,17 @@ export default function MedicalChat() {
       setMessagesGlobal([])
       setCurrentSessionId(null)
       setReplyDraft(null)
+      setChatDataScope(defaultChatDataScope)
       setIsTemporaryMode(true)
     } else {
       // Exiting: discard the in-memory temporary conversation.
       setMessagesGlobal([])
       setCurrentSessionId(null)
       setReplyDraft(null)
+      setChatDataScope(defaultChatDataScope)
       setIsTemporaryMode(false)
     }
-  }, [isTemporaryMode, forceSave, setMessagesGlobal, setCurrentSessionId, setIsTemporaryMode])
+  }, [isTemporaryMode, forceSave, setMessagesGlobal, setCurrentSessionId, setChatDataScope, defaultChatDataScope, setIsTemporaryMode])
 
   // Clear input and reset textarea height
   const clearInputAndResetHeight = useCallback(() => {
@@ -253,7 +267,13 @@ export default function MedicalChat() {
   // Mode follows the selected model. Cloud/tool-capable models use the deep
   // agent path; a hospital/local endpoint automatically takes the tool-less
   // standard path over the user-selected clinical snapshot.
-  const chat = useAgentChat(systemPrompt, model, clearInputAndResetHeight, forceSave)
+  const chat = useAgentChat(
+    systemPrompt,
+    model,
+    clearInputAndResetHeight,
+    forceSave,
+    chatDataScope,
+  )
 
   // "Next step" suggestion chips, generated after each answer completes.
   const {
@@ -274,7 +294,8 @@ export default function MedicalChat() {
     setReplyDraft(null)
     clearFollowups()
     setLocalModeNoticeDismissed(false)
-  }, [resetActiveChat, clearFollowups])
+    setChatDataScope(defaultChatDataScope)
+  }, [resetActiveChat, clearFollowups, setChatDataScope, defaultChatDataScope])
 
   const resolveSelectedModel = useCallback((requestedModelId: string) => {
     const requestedProfile = resolveOpenAiCompatibleProfile(
@@ -344,6 +365,35 @@ export default function MedicalChat() {
     return () => window.removeEventListener('mediprisma:local-bundle-changed', onBundleChange)
   }, [])
 
+  // A new patient context starts in patient mode; clearing the patient fails
+  // closed to general mode. Later manual scope changes remain sticky until the
+  // patient/context changes or a new conversation is started.
+  const previousPatientIdRef = useRef<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (previousPatientIdRef.current !== patientId) {
+      previousPatientIdRef.current = patientId
+      setChatDataScope(defaultChatDataScope)
+      setReplyDraft(null)
+    }
+  }, [patientId, defaultChatDataScope, setChatDataScope])
+
+  // A saved combined-scope conversation may be opened under a model that has
+  // no literature tool. Keep the patient authorization, but do not present an
+  // unavailable combined mode as active.
+  useEffect(() => {
+    if (chatDataScope === 'patient-literature' && !literatureAvailable) {
+      setChatDataScope(defaultChatDataScope)
+    }
+  }, [chatDataScope, literatureAvailable, defaultChatDataScope, setChatDataScope])
+
+  const handleChatDataScopeChange = useCallback((nextScope: ChatDataScope) => {
+    if (nextScope !== 'general' && !patientId) return
+    if (nextScope === 'patient-literature' && !literatureAvailable) return
+    setChatDataScope(nextScope)
+    setReplyDraft(null)
+    clearFollowups()
+  }, [patientId, literatureAvailable, setChatDataScope, clearFollowups])
+
   const template = useTemplateSelector()
 
   // Start a new conversation. Logged-in (non-temp) chats are already auto-saved
@@ -353,6 +403,7 @@ export default function MedicalChat() {
     if (chatMessages.length === 0) {
       setReplyDraft(null)
       chat.handleReset()
+      setChatDataScope(defaultChatDataScope)
       return
     }
     if (cloudChatHistoryEnabled && !isTemporaryMode) {
@@ -363,17 +414,19 @@ export default function MedicalChat() {
       }
       setReplyDraft(null)
       chat.handleReset()
+      setChatDataScope(defaultChatDataScope)
       toast.success(t.chat.newChatSavedToast)
       return
     }
     setShowNewChatConfirm(true)
-  }, [chatMessages.length, cloudChatHistoryEnabled, isTemporaryMode, forceSave, chat, t])
+  }, [chatMessages.length, cloudChatHistoryEnabled, isTemporaryMode, forceSave, chat, setChatDataScope, defaultChatDataScope, t])
 
   const confirmNewConversation = useCallback(() => {
     setShowNewChatConfirm(false)
     setReplyDraft(null)
     chat.handleReset()
-  }, [chat])
+    setChatDataScope(defaultChatDataScope)
+  }, [chat, setChatDataScope, defaultChatDataScope])
   
   // Voice recording with callback to insert transcript into input
   const handleTranscriptReady = useCallback((text: string) => {
@@ -419,7 +472,9 @@ export default function MedicalChat() {
   // otherwise make an empty interim collection look like a clinical absence.
   const clinicalDataPending = !!patientId
     && (clinicalDataLoading || clinicalDataFetching)
-  const canUseChat = hasChatRuntime && !clinicalDataPending
+  const canUseChat = hasChatRuntime && (
+    chatDataScope === 'general' || !clinicalDataPending
+  )
   const showApiKeyWarning = !authLoading && !hasChatRuntime
 
   // Clear images after sending message
@@ -503,7 +558,19 @@ export default function MedicalChat() {
     if (lastSuggestedIdRef.current === last.id) return
     // The reader's own questions this session feed implicit personalisation; the
     // last one is the current question (buildMessages filters it out of "recent").
-    const userMessages = chatMessages.filter((m) => m.role === "user").map((m) => m.content)
+    const answerScope = last.dataScope ?? chatDataScope
+    const userMessages = chatMessages
+      .filter((message) => {
+        if (message.role !== 'user') return false
+        if (answerScope === 'general') return message.dataScope === 'general'
+        if (answerScope === 'patient') {
+          return message.dataScope === 'patient' || !message.dataScope
+        }
+        return message.dataScope === 'patient' ||
+          message.dataScope === 'patient-literature' ||
+          !message.dataScope
+      })
+      .map((message) => message.content)
     const lastUser = userMessages[userMessages.length - 1]
     if (!lastUser) return
     lastSuggestedIdRef.current = last.id
@@ -511,7 +578,7 @@ export default function MedicalChat() {
       recentUserMessages: userMessages,
       isDeepMode: !isStandardChat,
     })
-  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups, isStandardChat])
+  }, [chat.isLoading, chatMessages, generateFollowups, clearFollowups, isStandardChat, chatDataScope])
   
   // Auto-resize textarea
   useTextareaAutoResize(textareaRef, input.input)
@@ -665,6 +732,7 @@ export default function MedicalChat() {
           messages={chatMessages}
           isLoading={chat.isLoading}
           isStandardChatMode={isStandardChat}
+          dataScope={chatDataScope}
           customModelDisplayNames={customModelDisplayNames}
           scrollSignal={followupSuggestions.length}
           onReplyToSelection={handleReplyToSelection}
@@ -680,6 +748,13 @@ export default function MedicalChat() {
 
       <CardFooter className="flex flex-col gap-2 border-t px-3 sm:px-6 !pt-2 pb-2 shrink-0">
         <div data-tour="medical-chat-composer" className="flex w-full flex-col gap-1">
+          <ChatDataScopeSelector
+            value={chatDataScope}
+            onChange={handleChatDataScopeChange}
+            hasPatient={!!patientId}
+            literatureAvailable={literatureAvailable}
+            disabled={chat.isLoading}
+          />
           <ChatToolbar
             onInsertTemplate={handleInsertTemplate}
             templates={template.templates}
@@ -729,7 +804,9 @@ export default function MedicalChat() {
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{t.medicalChat.localStandardModeTitle}</div>
                 <div className="mt-0.5 leading-relaxed text-sky-800/90 dark:text-sky-200/85">
-                  {t.medicalChat.localStandardModeDescription}
+                  {chatDataScope === 'general'
+                    ? t.medicalChat.localStandardGeneralModeDescription
+                    : t.medicalChat.localStandardModeDescription}
                 </div>
                 <div className="mt-1 font-medium text-sky-700 dark:text-sky-300">
                   {t.medicalChat.localStandardModeSwitchHint}

@@ -18,6 +18,7 @@ const mockResetChat = jest.fn(() => {
   mockMessages = []
 })
 const mockClearFollowups = jest.fn(() => mockEvents.push('clear-followups'))
+const mockSetChatDataScope = jest.fn()
 const mockGenerateFollowups = jest.fn()
 const mockForceSave = jest.fn()
 const mockAutoSaveEnabled: boolean[] = []
@@ -71,6 +72,8 @@ jest.mock('@/src/application/stores/chat.store', () => ({
   useIsTemporaryMode: () => false,
   useSetIsTemporaryMode: () => jest.fn(),
   useSetChatMessages: () => jest.fn(),
+  useChatDataScope: () => 'patient',
+  useSetChatDataScope: () => mockSetChatDataScope,
 }))
 
 jest.mock('@/src/application/stores/chat-history.store', () => ({
@@ -218,6 +221,7 @@ jest.mock('@/src/application/providers/chat-templates.provider', () => ({
 jest.mock('@/features/medical-chat/components/ChatMessageList', () => ({ ChatMessageList: () => null }))
 jest.mock('@/features/medical-chat/components/ChatHeader', () => ({ ChatHeader: () => null }))
 jest.mock('@/features/medical-chat/components/ChatInputArea', () => ({ ChatInputArea: () => null }))
+jest.mock('@/features/medical-chat/components/ChatDataScopeSelector', () => ({ ChatDataScopeSelector: () => null }))
 jest.mock('@/features/medical-chat/components/SuggestionChips', () => ({ SuggestionChips: () => null }))
 jest.mock('@/features/medical-chat/components/ChatTemplatesManagerDrawer', () => ({
   ChatTemplatesManagerDrawer: () => null,

@@ -201,11 +201,11 @@ describe('BuildAgentSystemPromptUseCase', () => {
         hasPatient: true,
         hasPerplexityKey: false,
         availableToolNames: [],
-        turnDataScope: 'general-no-patient',
+        turnDataScope: 'general',
         translations: mockTranslations,
       })
 
-      expect(result).toContain('general medical-knowledge question')
+      expect(result).toContain('General medical knowledge')
       expect(result).toContain("Do not use, request, mention, or infer any loaded patient's FHIR data")
       expect(result).not.toContain('Has Permission')
       expect(result).not.toContain('Query patient info')

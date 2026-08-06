@@ -88,18 +88,25 @@ These checks validate retrieval, response structure, and required safety
 language. They do not replace clinician review of the medical correctness of
 each generated statement.
 
-## General medical-question data isolation
+## Explicit chat data scope
 
-Custom/local-model routing now requires an explicit or unambiguous
-patient-record intent before exposing any FHIR schema. General questions such
-as guideline updates, drug side effects, or basic test explanations receive no
-FHIR tools. They also receive only the current user message, so patient-derived
-text from earlier turns in the same chat is not carried into the general turn.
+Patient-data authorization is no longer inferred from an open-ended intent
+regex. The composer exposes three explicit scopes: general medical knowledge,
+current patient record, and patient record plus current literature. General
+scope removes every FHIR schema and omits the selected clinical snapshot even
+in tool-less standard chat. Patient scope removes literature; combined scope is
+available only when the selected runtime has a literature tool.
 
-An explicitly personalized evidence question may receive the compact patient
-snapshot. When the local endpoint has no literature-search tool and the user
-asks for current/latest evidence, the prompt requires the model to say that it
-cannot verify the current version and to recommend an official guideline or a
+Each message records its scope. Conversation history is filtered at the model
+request boundary, so a general turn cannot inherit patient-derived text and a
+patient-only turn cannot inherit a literature-enabled answer. Routing regexes
+remain only as a token optimization for small custom models inside the
+already-authorized scope. Ambiguous wording such as `X光有什麼問題嗎` therefore
+routes to imaging in patient scope and to zero FHIR tools in general scope.
+
+When the endpoint has no literature-search tool and the user asks for
+current/latest evidence, the prompt requires the model to say that it cannot
+verify the current version and to recommend an official guideline or a
 literature-enabled model.
 
 A live `tvghbrain3.5` check of `current-guideline-no-patient-data` passed: zero

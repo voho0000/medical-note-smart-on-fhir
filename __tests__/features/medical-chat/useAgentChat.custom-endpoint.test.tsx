@@ -11,11 +11,13 @@ const mockFhirTools = jest.fn()
 const mockSetChatMessages = jest.fn()
 const mockGetFullClinicalContext = jest.fn(() => 'selected clinical context')
 const mockBuildAgentSystemPrompt = jest.fn((..._args: unknown[]) => 'agent system prompt')
+const mockBuildStandardChatSystemPrompt = jest.fn((..._args: unknown[]) => 'local system prompt')
 let mockChatMessages: Array<{
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: number
+  dataScope?: 'general' | 'patient' | 'patient-literature'
 }> = []
 
 jest.mock('@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter', () => ({
@@ -28,7 +30,7 @@ jest.mock('@/src/application/stores/chat.store', () => ({
   useSetChatMessages: () => mockSetChatMessages,
 }))
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
-  usePatient: () => ({ patient: null }),
+  usePatient: () => ({ patient: { id: 'patient-1' } }),
 }))
 jest.mock('@/src/application/hooks/ai-generation/use-clinical-ai-input.hook', () => ({
   useClinicalAiInput: () => ({
@@ -66,7 +68,7 @@ jest.mock('@/src/application/providers/auth.provider', () => ({
   useAuth: () => ({ user: null, isAnonymous: false }),
 }))
 jest.mock('@/src/core/use-cases/chat/build-standard-chat-system-prompt.use-case', () => ({
-  buildStandardChatSystemPrompt: () => 'local system prompt',
+  buildStandardChatSystemPrompt: (...args: unknown[]) => mockBuildStandardChatSystemPrompt(...args),
 }))
 jest.mock('@/src/core/use-cases/agent/build-agent-system-prompt.use-case', () => ({
   buildAgentSystemPromptUseCase: {
@@ -190,6 +192,37 @@ describe('useAgentChat custom endpoint lifecycle', () => {
     expect(mockStandardChatStream).toHaveBeenCalledTimes(1)
   })
 
+  it('omits the selected patient snapshot and patient history in general standard chat', async () => {
+    mockChatMessages = [{
+      id: 'patient-answer',
+      role: 'assistant',
+      content: 'PRIOR_PATIENT_CONTENT',
+      timestamp: 1,
+      dataScope: 'patient',
+    }]
+    mockStandardChatStream.mockResolvedValueOnce(undefined)
+    const { result } = renderHook(() => useAgentChat(
+      'system',
+      CUSTOM_OPENAI_MODEL_ID,
+      undefined,
+      undefined,
+      'general',
+    ))
+
+    await act(async () => result.current.handleSend('糖尿病是什麼？'))
+
+    expect(mockBuildStandardChatSystemPrompt).toHaveBeenCalledWith(
+      'system',
+      '',
+      'general',
+    )
+    const streamInput = mockStandardChatStream.mock.calls[0][0] as {
+      messages: Array<{ content: string }>
+    }
+    expect(streamInput.messages.map((message) => message.content).join('\n'))
+      .not.toContain('PRIOR_PATIENT_CONTENT')
+  })
+
   it('runs the deep Agent for an auto-mode custom profile with verified tools', async () => {
     const fhirTool = { description: 'FHIR test tool' }
     mockFhirTools.mockReturnValue({ getPatientData: fhirTool })
@@ -245,12 +278,14 @@ describe('useAgentChat custom endpoint lifecycle', () => {
         role: 'user',
         content: '請整理我的病歷',
         timestamp: 1,
+        dataScope: 'patient',
       },
       {
         id: 'prior-assistant',
         role: 'assistant',
         content: 'PRIOR_PATIENT_SUMMARY_SHOULD_NOT_BE_SENT',
         timestamp: 2,
+        dataScope: 'patient',
       },
     ]
     setProfiles([{
@@ -259,7 +294,13 @@ describe('useAgentChat custom endpoint lifecycle', () => {
       agentCapability: 'verified',
       agentCapabilityTestedAt: 1_721_234_567_890,
     }])
-    const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
+    const { result } = renderHook(() => useAgentChat(
+      'system',
+      CUSTOM_OPENAI_MODEL_ID,
+      undefined,
+      undefined,
+      'general',
+    ))
 
     await act(async () => result.current.handleSend(
       '目前糖尿病用藥 guideline 有什麼更新？',
@@ -279,7 +320,7 @@ describe('useAgentChat custom endpoint lifecycle', () => {
     expect(runInput.messages[1].content).toContain('糖尿病用藥 guideline')
     expect(mockBuildAgentSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
       availableToolNames: [],
-      turnDataScope: 'general-no-patient',
+      turnDataScope: 'general',
       currentEvidenceUnavailable: true,
     }))
   })
@@ -305,7 +346,7 @@ describe('useAgentChat custom endpoint lifecycle', () => {
       preExecuteInitialTool: true,
     }))
     expect(mockBuildAgentSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
-      turnDataScope: undefined,
+      turnDataScope: 'patient',
       currentEvidenceUnavailable: true,
     }))
   })

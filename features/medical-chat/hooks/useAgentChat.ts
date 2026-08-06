@@ -3,7 +3,13 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { toast } from "sonner"
-import { useChatMessages, useSetChatMessages, type ChatMessage, type ChatImage } from "@/src/application/stores/chat.store"
+import {
+  useChatMessages,
+  useSetChatMessages,
+  type ChatDataScope,
+  type ChatMessage,
+  type ChatImage,
+} from "@/src/application/stores/chat.store"
 import { useAiConfigStore, useAllApiKeys } from "@/src/application/stores/ai-config.store"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
@@ -25,9 +31,8 @@ import { buildStandardChatSystemPrompt } from "@/src/core/use-cases/chat/build-s
 import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
 import {
   asksForCurrentMedicalEvidence,
-  explicitlyReferencesPatient,
+  filterAgentToolsForDataScope,
   forcedInitialAgentToolName,
-  isGeneralMedicalKnowledgeQuestion,
   selectAgentToolsForQuestion,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
@@ -71,7 +76,33 @@ function usesStandardChat(
     : modelUsesStandardChat(modelId)
 }
 
-export function useAgentChat(systemPrompt: string, modelId: string, onInputClear?: () => void, onStreamComplete?: () => void) {
+function messageCanEnterScope(
+  message: ChatMessage,
+  dataScope: ChatDataScope,
+  hasPatient: boolean,
+): boolean {
+  if (dataScope === 'general') {
+    // An untagged legacy transcript may contain patient data. It is safe to
+    // retain only when no patient is loaded in this conversation partition.
+    return message.dataScope === 'general' || (!message.dataScope && !hasPatient)
+  }
+  if (dataScope === 'patient') {
+    // Do not carry literature-derived answers back into patient-only mode.
+    return message.dataScope === 'patient' || (!message.dataScope && hasPatient)
+  }
+  // Combined mode authorizes both patient-only and combined prior turns.
+  return message.dataScope === 'patient' ||
+    message.dataScope === 'patient-literature' ||
+    (!message.dataScope && hasPatient)
+}
+
+export function useAgentChat(
+  systemPrompt: string,
+  modelId: string,
+  onInputClear?: () => void,
+  onStreamComplete?: () => void,
+  dataScope: ChatDataScope = 'patient',
+) {
   const chatMessages = useChatMessages()
   const setChatMessages = useSetChatMessages()
   const {
@@ -199,9 +230,34 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
       // custom endpoint's existing no-auxiliary-cloud privacy boundary.
       const agentTools = isCustomEndpoint ? fhirTools : cloudAgentTools
 
+      // Scope is selected by the user, not inferred from the question. If no
+      // patient is loaded, fail closed to the patient-free boundary even if a
+      // stale UI/session value says otherwise.
+      const hasPatient = !!patient?.id
+      const turnDataScope: ChatDataScope = dataScope !== 'general' && !hasPatient
+        ? 'general'
+        : dataScope
+
       // Create user message with images
-      const userMessage = createUserMessage(trimmed, images, replyTo)
+      const replySource = replyTo
+        ? chatMessages.find((message) => message.id === replyTo.messageId)
+        : undefined
+      const scopedReply = replySource && messageCanEnterScope(replySource, turnDataScope, hasPatient)
+        ? replyTo
+        : null
+      const userMessage: ChatMessage = {
+        ...createUserMessage(trimmed, images, scopedReply),
+        dataScope: turnDataScope,
+      }
       const newMessages = [...chatMessages, userMessage]
+      const scopedConversation = [
+        ...chatMessages.filter((message) => messageCanEnterScope(
+          message,
+          turnDataScope,
+          hasPatient,
+        )),
+        userMessage,
+      ]
       setChatMessages(newMessages)
 
       // Create assistant message with thinking state
@@ -214,6 +270,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         content: thinkingMessage,
         timestamp: Date.now(),
         modelId: effectiveModelId,
+        dataScope: turnDataScope,
         agentStates: isStandardChat ? undefined : [initialState],
       }])
 
@@ -295,10 +352,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
 
         if (isStandardChat) {
-          if (!fittedClinicalInput.dataReady) {
+          const includesPatientContext = turnDataScope !== 'general'
+          if (includesPatientContext && !fittedClinicalInput.dataReady) {
             throw new Error(t.medicalChat.localStandardContextTooLarge)
           }
-          if (fittedClinicalInput.contextAdaptation) {
+          if (includesPatientContext && fittedClinicalInput.contextAdaptation) {
             toast.info(
               formatClinicalContextAdaptationNotice(
                 fittedClinicalInput.contextAdaptation,
@@ -314,9 +372,10 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           // query the complete FHIR record or current literature on demand.
           const localSystemPrompt = buildStandardChatSystemPrompt(
             systemPrompt,
-            selectedClinicalContext,
+            includesPatientContext ? selectedClinicalContext : '',
+            turnDataScope,
           )
-          const localHistory = newMessages.map((message) => ({
+          const localHistory = scopedConversation.map((message) => ({
             role: message.role as 'user' | 'assistant',
             content: message.role === 'user'
               ? scrubFreeText(formatChatMessageContentForAi(message), patientTextLiterals)
@@ -388,49 +447,40 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const routingQuestion = latestUserQuestion
           ? formatChatMessageContentForAi(latestUserQuestion)
           : ''
-        // Tool routing is currently limited to custom hospital/local models:
-        // their smaller parameter budgets benefit most, while unknown queries
-        // deliberately retain the complete tool set.
+        // The explicit scope filters data sources for every model. Smaller
+        // custom models receive an additional relevance pass to reduce schema
+        // tokens; frontier models keep all schemas inside the chosen boundary.
         const toolsForTurn = isCustomEndpoint
-          ? selectAgentToolsForQuestion(agentTools, routingQuestion)
-          : agentTools
+          ? selectAgentToolsForQuestion(agentTools, routingQuestion, turnDataScope)
+          : filterAgentToolsForDataScope(agentTools, turnDataScope)
         const initialToolName = isCustomEndpoint
-          ? forcedInitialAgentToolName(routingQuestion, Object.keys(toolsForTurn ?? {}))
+          ? forcedInitialAgentToolName(
+              routingQuestion,
+              Object.keys(toolsForTurn ?? {}),
+              turnDataScope,
+            )
           : undefined
-        const generalMedicalQuestion = isGeneralMedicalKnowledgeQuestion(routingQuestion)
-        const explicitPatientReference = explicitlyReferencesPatient(routingQuestion)
-        const generalNoPatientTurn = isCustomEndpoint &&
-          generalMedicalQuestion &&
-          !explicitPatientReference
 
         // Build the agent prompt without preloading a formatted patient record;
         // the agent queries the bound FHIR tools only when the question needs it.
         // Literature search is available if user has Perplexity API key OR is authenticated (can use proxy)
-        const hasLiteratureSearch = !isCustomEndpoint && (!!perplexityKey || hasProxyAccess)
+        const hasLiteratureSearch = 'searchMedicalLiterature' in (toolsForTurn ?? {})
         const enhancedSystemPrompt = buildAgentSystemPromptUseCase.execute({
           baseSystemPrompt: systemPrompt,
           clinicalContext: '',
           hasPatient: !!patient?.id,
           mode: isLocalMode ? 'local' : 'live',
           hasPerplexityKey: hasLiteratureSearch,
-          availableToolNames: isCustomEndpoint ? Object.keys(toolsForTurn ?? {}) : undefined,
-          turnDataScope: generalNoPatientTurn
-            ? 'general-no-patient'
-            : undefined,
-          currentEvidenceUnavailable: isCustomEndpoint &&
-            asksForCurrentMedicalEvidence(routingQuestion) &&
+          availableToolNames: Object.keys(toolsForTurn ?? {}),
+          turnDataScope,
+          currentEvidenceUnavailable: asksForCurrentMedicalEvidence(routingQuestion) &&
             !hasLiteratureSearch,
           translations: t.agent.systemPrompt,
         })
 
-        // A general medical turn must not inherit patient-derived text from an
-        // earlier turn in the same chat. Send only the current question.
-        const agentConversation = generalNoPatientTurn && latestUserQuestion
-          ? [latestUserQuestion]
-          : newMessages
         const apiMessages = [
           { role: "system" as const, content: enhancedSystemPrompt },
-          ...agentConversation.map((m) => ({
+          ...scopedConversation.map((m) => ({
             role: m.role as "user" | "assistant",
             // Keep the original message in the UI/history, but mask identifying
             // text in user-authored content before it leaves the browser.
@@ -556,7 +606,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         }
       }
     },
-    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, fittedClinicalInput.dataReady, fittedClinicalInput.contextAdaptation, fittedClinicalInput.inputSignature, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, perplexityKey, t, locale, isLocalMode]
+    [chatMessages, modelId, patient, patientTextLiterals, selectedClinicalContext, fittedClinicalInput.dataReady, fittedClinicalInput.contextAdaptation, fittedClinicalInput.inputSignature, setChatMessages, systemPrompt, onInputClear, onStreamComplete, cloudAgentTools, fhirTools, hasProxyAccess, t, locale, isLocalMode, dataScope]
   )
 
   const handleReset = useCallback(() => {

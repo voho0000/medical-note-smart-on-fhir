@@ -5,7 +5,6 @@ import { useLanguage } from '@/src/application/providers/language.provider'
 import { useChatHistory } from '@/src/application/hooks/chat/use-chat-history.hook'
 import { useChatSession } from '@/src/application/hooks/chat/use-chat-session.hook'
 import { useAutoSaveChat } from '@/src/application/hooks/chat/use-auto-save-chat.hook'
-import { useChatHistoryStore } from '@/src/application/stores/chat-history.store'
 import { useChatStore } from '@/src/application/stores/chat.store'
 
 interface UseChatHistoryDrawerOptions {
@@ -36,7 +35,6 @@ export function useChatHistoryDrawer(
     fhirServerUrl,
     enabled: persistenceEnabled,
   })
-  const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const messages = useChatStore(state => state.messages)
 
   // Check if there's an active streaming (last message is from assistant and might be incomplete)
@@ -134,12 +132,12 @@ export function useChatHistoryDrawer(
         await forceSave()
       }
       
-      startNewSession()
+      startNewSession(patientId ? 'patient' : 'general')
       setOpen(false)
     } catch (error) {
       console.error('Failed to save before new chat:', error)
       // Still allow new chat even if save fails
-      startNewSession()
+      startNewSession(patientId ? 'patient' : 'general')
       setOpen(false)
     }
   }

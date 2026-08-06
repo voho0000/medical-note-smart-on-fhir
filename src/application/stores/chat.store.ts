@@ -6,14 +6,15 @@
  */
 
 import { create } from 'zustand'
-import type { ChatMessage } from '@/src/core/entities/chat-message.entity'
+import type { ChatDataScope, ChatMessage } from '@/src/core/entities/chat-message.entity'
 
 // Domain types live in core (audit C3); re-exported here so existing
 // consumers importing from the store keep working.
-export type { ChatMessage, ChatImage, AgentState, ChatReplyReference } from '@/src/core/entities/chat-message.entity'
+export type { ChatMessage, ChatImage, AgentState, ChatReplyReference, ChatDataScope } from '@/src/core/entities/chat-message.entity'
 
 interface ChatState {
   messages: ChatMessage[]
+  chatDataScope: ChatDataScope
   /**
    * Temporary / "incognito" chat mode (ChatGPT-style). When true, the
    * conversation is never persisted to Firestore — toggling it on starts a
@@ -26,10 +27,12 @@ interface ChatState {
   addMessage: (message: ChatMessage) => void
   clearMessages: () => void
   setIsTemporaryMode: (value: boolean) => void
+  setChatDataScope: (value: ChatDataScope) => void
 }
 
 export const useChatStore = create<ChatState>()((set) => ({
   messages: [],
+  chatDataScope: 'general',
   isTemporaryMode: false,
 
   setMessages: (messages) => {
@@ -51,6 +54,10 @@ export const useChatStore = create<ChatState>()((set) => ({
   setIsTemporaryMode: (value) => {
     set({ isTemporaryMode: value })
   },
+
+  setChatDataScope: (value) => {
+    set({ chatDataScope: value })
+  },
 }))
 
 // Selectors with stable references for SSR
@@ -60,6 +67,8 @@ const selectAddMessage = (state: ChatState) => state.addMessage
 const selectClearMessages = (state: ChatState) => state.clearMessages
 const selectIsTemporaryMode = (state: ChatState) => state.isTemporaryMode
 const selectSetIsTemporaryMode = (state: ChatState) => state.setIsTemporaryMode
+const selectChatDataScope = (state: ChatState) => state.chatDataScope
+const selectSetChatDataScope = (state: ChatState) => state.setChatDataScope
 
 export const useChatMessages = () => useChatStore(selectMessages)
 export const useSetChatMessages = () => useChatStore(selectSetMessages)
@@ -67,3 +76,5 @@ export const useAddChatMessage = () => useChatStore(selectAddMessage)
 export const useClearChatMessages = () => useChatStore(selectClearMessages)
 export const useIsTemporaryMode = () => useChatStore(selectIsTemporaryMode)
 export const useSetIsTemporaryMode = () => useChatStore(selectSetIsTemporaryMode)
+export const useChatDataScope = () => useChatStore(selectChatDataScope)
+export const useSetChatDataScope = () => useChatStore(selectSetChatDataScope)

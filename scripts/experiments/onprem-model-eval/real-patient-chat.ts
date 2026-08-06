@@ -113,9 +113,10 @@ async function runOne(
     const tools = selectAgentToolsForQuestion(
       createFhirTools(() => data),
       QUESTION,
+      'patient',
     )
     const selectedToolNames = Object.keys(tools ?? {})
-    const initialToolName = forcedInitialAgentToolName(QUESTION, selectedToolNames)
+    const initialToolName = forcedInitialAgentToolName(QUESTION, selectedToolNames, 'patient')
     const system = buildAgentSystemPromptUseCase.execute({
       baseSystemPrompt: zhTW.chat.systemPrompt.medical,
       clinicalContext: '',
@@ -123,6 +124,7 @@ async function runOne(
       mode: 'local',
       hasPerplexityKey: false,
       availableToolNames: selectedToolNames,
+      turnDataScope: 'patient',
       translations: zhTW.agent.systemPrompt,
     })
     const controller = new AbortController()

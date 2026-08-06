@@ -5,10 +5,26 @@
  * Patient facts are supplied as a bounded, user-selected snapshot. The model
  * must never imply it queried the full FHIR record or current literature.
  */
+import type { ChatDataScope } from '@/src/core/entities/chat-message.entity'
+
 export function buildStandardChatSystemPrompt(
   baseSystemPrompt: string,
   selectedClinicalContext: string,
+  dataScope: ChatDataScope = 'patient',
 ): string {
+  if (dataScope === 'general') {
+    return [
+      baseSystemPrompt.trim(),
+      '',
+      'STANDARD CHAT MODE — GENERAL MEDICAL KNOWLEDGE (NO TOOLS):',
+      '- The user explicitly selected a patient-free turn.',
+      '- No loaded patient record is included or authorized. Do not mention, infer, or ask to inspect it.',
+      '- Answer from general medical knowledge only.',
+      '- You cannot search the web or current literature. Do not claim that an answer is the latest/current guideline unless the user supplied a dated source.',
+      '- Clearly recommend verification against the relevant current official guideline when freshness matters.',
+    ].join('\n')
+  }
+
   const context = selectedClinicalContext.trim() || 'No clinical data selected.'
   return [
     baseSystemPrompt.trim(),

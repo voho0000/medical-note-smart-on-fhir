@@ -25,6 +25,17 @@ export interface ChatReplyReference {
   timestamp: number
 }
 
+/**
+ * Explicit data boundary for a chat turn. This is intentionally user-selected
+ * rather than inferred from wording: routing heuristics may reduce schemas,
+ * but they must never grant access to patient records or literature.
+ */
+export type ChatDataScope = 'general' | 'patient' | 'patient-literature'
+
+export function isChatDataScope(value: unknown): value is ChatDataScope {
+  return value === 'general' || value === 'patient' || value === 'patient-literature'
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant" | "system"
@@ -35,4 +46,6 @@ export interface ChatMessage {
   images?: ChatImage[]  // Support multiple images
   toolCalls?: string[]  // List of tool names that were called
   replyTo?: ChatReplyReference
+  /** Scope active when this message was sent/generated. */
+  dataScope?: ChatDataScope
 }

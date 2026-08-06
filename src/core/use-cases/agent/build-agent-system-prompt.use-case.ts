@@ -3,6 +3,8 @@
  * Constructs enhanced system prompt for agent mode with clinical context and tool descriptions
  */
 
+import type { ChatDataScope } from '@/src/core/entities/chat-message.entity'
+
 export interface BuildAgentSystemPromptInput {
   baseSystemPrompt: string
   clinicalContext: string
@@ -18,8 +20,8 @@ export interface BuildAgentSystemPromptInput {
   hasPerplexityKey: boolean
   /** Exact schemas exposed on this turn. Omit for the legacy/full tool list. */
   availableToolNames?: readonly string[]
-  /** Prevent a general medical question from inheriting loaded-patient context. */
-  turnDataScope?: 'general-no-patient'
+  /** Explicit user-selected boundary for this turn. */
+  turnDataScope?: ChatDataScope
   /** The user asks for current evidence but this turn has no literature tool. */
   currentEvidenceUnavailable?: boolean
   translations: {
@@ -80,10 +82,20 @@ export class BuildAgentSystemPromptUseCase {
     // Build patient context section. In local-bundle mode the patient ID is
     // implicit (single patient per bundle), so the warning about needing one
     // is misleading — swap it for a local-mode notice.
-    const patientSection = input.turnDataScope === 'general-no-patient'
-      ? `**Turn Data Scope**
-- This is a general medical-knowledge question, not a patient-record question.
+    const scopeContract = input.turnDataScope === 'general'
+      ? `**Turn Data Scope: General medical knowledge**
+- The user explicitly selected a patient-free turn.
 - Do not use, request, mention, or infer any loaded patient's FHIR data.`
+      : input.turnDataScope === 'patient-literature'
+        ? `**Turn Data Scope: Current patient + current literature**
+- You may use the exposed patient-record and literature tools.
+- Keep patient-record claims grounded in this turn's tool results and literature claims grounded in returned sources.`
+        : `**Turn Data Scope: Current patient record**
+- You may use the exposed patient-record tools.
+- No current literature source is authorized for this turn; do not imply that one was searched.`
+
+    const patientSection = input.turnDataScope === 'general'
+      ? ''
       : hasPatient
       ? `**${t.currentPatient}**
 - ${t.hasPermission}`
@@ -165,6 +177,8 @@ ${currentEvidenceContract}
 ${baseSystemPrompt}
 
 ${t.deepModeIntro}
+
+${scopeContract}
 
 ${patientSection}
 

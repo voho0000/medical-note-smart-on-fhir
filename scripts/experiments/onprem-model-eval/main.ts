@@ -723,10 +723,23 @@ async function runChatCase(
         agentCapabilityTestedAt: Date.now(),
       },
     })
-    const tools = selectAgentToolsForQuestion(createFhirTools(sampleDataSource), fixture.question)
-    const initialToolName = forcedInitialAgentToolName(fixture.question, Object.keys(tools ?? {}))
     const generalMedicalQuestion = isGeneralMedicalKnowledgeQuestion(fixture.question)
     const explicitPatientReference = explicitlyReferencesPatient(fixture.question)
+    // Eval fixtures predate the UI selector, so annotate their intended scope
+    // here. Production never derives this authorization from wording.
+    const fixtureDataScope = generalMedicalQuestion && !explicitPatientReference
+      ? 'general' as const
+      : 'patient' as const
+    const tools = selectAgentToolsForQuestion(
+      createFhirTools(sampleDataSource),
+      fixture.question,
+      fixtureDataScope,
+    )
+    const initialToolName = forcedInitialAgentToolName(
+      fixture.question,
+      Object.keys(tools ?? {}),
+      fixtureDataScope,
+    )
     const system = buildAgentSystemPromptUseCase.execute({
       baseSystemPrompt: zhTW.chat.systemPrompt.medical,
       clinicalContext: '',
@@ -734,9 +747,7 @@ async function runChatCase(
       mode: 'local',
       hasPerplexityKey: false,
       availableToolNames: Object.keys(tools ?? {}),
-      turnDataScope: generalMedicalQuestion && !explicitPatientReference
-        ? 'general-no-patient'
-        : undefined,
+      turnDataScope: fixtureDataScope,
       currentEvidenceUnavailable: asksForCurrentMedicalEvidence(fixture.question),
       translations: zhTW.agent.systemPrompt,
     })

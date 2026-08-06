@@ -1,7 +1,10 @@
 // Deterministic first-pass routing for tool-capable local models. Sending all
 // production schemas on every turn costs thousands of input tokens and makes
-// smaller models more likely to call unrelated tools. Patient tools require a
-// patient-record intent; unrelated general questions fail closed to no FHIR.
+// smaller models more likely to call unrelated tools. The explicit chat data
+// scope is the authorization boundary; wording heuristics only reduce the
+// already-authorized schemas and never grant a new data source.
+
+import type { ChatDataScope } from '@/src/core/entities/chat-message.entity'
 
 const TOOL_GROUPS = {
   patient: ['queryPatientInfo'],
@@ -84,6 +87,19 @@ export function implicitlyRequestsPatientRecord(question: string): boolean {
   return matchesAny(question, IMPLICIT_PATIENT_RECORD_QUERY)
 }
 
+export function agentToolNamesForDataScope(
+  availableToolNames: readonly string[],
+  dataScope: ChatDataScope,
+): string[] {
+  if (dataScope === 'general') {
+    return availableToolNames.filter((name) => name === 'searchMedicalLiterature')
+  }
+  if (dataScope === 'patient') {
+    return availableToolNames.filter((name) => name !== 'searchMedicalLiterature')
+  }
+  return [...availableToolNames]
+}
+
 const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
   patient: [/(年齡|歲|性別|gender|age|demographic)/i],
   overview: [/(資料概況|資料總覽|有哪些類型|data overview|what data|available data)/i],
@@ -101,20 +117,17 @@ const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
 export function selectAgentToolNames(
   question: string,
   availableToolNames: readonly string[],
+  dataScope: ChatDataScope,
 ): string[] {
+  const scopeAllowedNames = agentToolNamesForDataScope(availableToolNames, dataScope)
   const generalKnowledge = isGeneralMedicalKnowledgeQuestion(question)
-  const explicitPatientReference = explicitlyReferencesPatient(question)
-  const literatureOnly = () => availableToolNames.filter((name) => name === 'searchMedicalLiterature')
+  const literatureOnly = () => scopeAllowedNames.filter((name) => name === 'searchMedicalLiterature')
   if (matchesAny(question, NO_RECORD_QUERY)) {
     return generalKnowledge ? literatureOnly() : []
   }
-  // A guideline/evidence question without an explicit patient reference is
-  // general medical knowledge. Never expose FHIR schemas merely because it
-  // also contains ambiguous words such as "目前" or "用藥".
-  if (generalKnowledge && !explicitPatientReference) return literatureOnly()
-  if (!explicitPatientReference && !implicitlyRequestsPatientRecord(question)) return []
   if (
-    availableToolNames.includes('getHealthSummarySnapshot') &&
+    dataScope !== 'general' &&
+    scopeAllowedNames.includes('getHealthSummarySnapshot') &&
     BROAD_HEALTH_SUMMARY_QUERY.some((pattern) => pattern.test(question))
   ) {
     return ['getHealthSummarySnapshot']
@@ -124,8 +137,8 @@ export function selectAgentToolNames(
   // snapshot in addition to literature (when literature is available).
   if (
     isMedicalEvidenceQuestion(question) &&
-    explicitPatientReference &&
-    availableToolNames.includes('getHealthSummarySnapshot')
+    dataScope !== 'general' &&
+    scopeAllowedNames.includes('getHealthSummarySnapshot')
   ) {
     selected.add('getHealthSummarySnapshot')
   }
@@ -134,49 +147,58 @@ export function selectAgentToolNames(
       TOOL_GROUPS[group].forEach((name) => selected.add(name))
     }
   })
-  if (selected.size === 0) return [...availableToolNames]
-  return availableToolNames.filter((name) => selected.has(name))
+  if (selected.size === 0) return scopeAllowedNames
+  return scopeAllowedNames.filter((name) => selected.has(name))
 }
 
-export function selectAgentToolsForQuestion<T>(
+export function filterAgentToolsForDataScope<T>(
   tools: Record<string, T> | undefined,
-  question: string,
+  dataScope: ChatDataScope,
 ): Record<string, T> | undefined {
   if (!tools) return tools
-  const names = selectAgentToolNames(question, Object.keys(tools))
+  const names = agentToolNamesForDataScope(Object.keys(tools), dataScope)
   return Object.fromEntries(
     names.flatMap((name) => name in tools ? [[name, tools[name]]] : []),
   )
 }
 
-/** Force step zero for an explicit patient-record question. This prevents
- * smaller models from answering from pretrained/sample memory without ever
- * reading the bound chart. Later steps return to auto so multi-domain prompts
- * (conditions + medications + labs) can continue querying as needed. */
+export function selectAgentToolsForQuestion<T>(
+  tools: Record<string, T> | undefined,
+  question: string,
+  dataScope: ChatDataScope,
+): Record<string, T> | undefined {
+  if (!tools) return tools
+  const names = selectAgentToolNames(question, Object.keys(tools), dataScope)
+  return Object.fromEntries(
+    names.flatMap((name) => name in tools ? [[name, tools[name]]] : []),
+  )
+}
+
+/** Force step zero when the user-selected scope authorizes a clear lookup.
+ * This prevents smaller models from answering from pretrained/sample memory
+ * without reading the bound source. Later steps return to auto so multi-domain
+ * prompts (conditions + medications + labs) can continue querying as needed. */
 export function forcedInitialAgentToolName(
   question: string,
   selectedToolNames: readonly string[],
+  dataScope: ChatDataScope,
 ): string | undefined {
   if (selectedToolNames.length === 0) return undefined
   const generalKnowledge = isGeneralMedicalKnowledgeQuestion(question)
-  const explicitPatientReference = explicitlyReferencesPatient(question)
   if (matchesAny(question, NO_RECORD_QUERY)) {
     return generalKnowledge && selectedToolNames.includes('searchMedicalLiterature')
       ? 'searchMedicalLiterature'
       : undefined
   }
-  if (generalKnowledge && !explicitPatientReference) {
-    return selectedToolNames.includes('searchMedicalLiterature')
+  if (dataScope === 'general') {
+    return isMedicalEvidenceQuestion(question) && selectedToolNames.includes('searchMedicalLiterature')
       ? 'searchMedicalLiterature'
       : undefined
   }
-  const explicitlyRequestsPatientData =
-    explicitPatientReference || implicitlyRequestsPatientRecord(question)
-  if (!explicitlyRequestsPatientData) return undefined
   if (selectedToolNames.length === 1) return selectedToolNames[0]
 
   const priority: string[] = []
-  if (isMedicalEvidenceQuestion(question) && explicitPatientReference) {
+  if (isMedicalEvidenceQuestion(question)) {
     priority.push('getHealthSummarySnapshot')
   }
   if (BROAD_HEALTH_SUMMARY_QUERY.some((pattern) => pattern.test(question))) {
@@ -196,6 +218,9 @@ export function forcedInitialAgentToolName(
   }
   if (/(?:就診|住院|急診|visit|encounter|admission)/i.test(question)) {
     priority.push('getRecentVisits', 'queryEncounters')
+  }
+  if (isMedicalEvidenceQuestion(question)) {
+    priority.push('searchMedicalLiterature')
   }
   priority.push('queryPatientInfo', 'getDataOverview', ...selectedToolNames)
   return priority.find((name) => selectedToolNames.includes(name))
