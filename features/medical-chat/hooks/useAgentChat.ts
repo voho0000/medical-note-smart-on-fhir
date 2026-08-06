@@ -416,6 +416,9 @@ export function useAgentChat(
             ...(isCustomEndpoint
               ? { idleTimeoutMs: OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS }
               : {}),
+            ...(isCustomEndpoint && /^gpt-oss(?::|-)/i.test(openAiCompatible?.modelId.trim() ?? '')
+              ? { reasoningEffort: 'low' as const }
+              : {}),
             onChunk: (content) => {
               if (!hasReceivedChunkRef.current && onInputClear) {
                 hasReceivedChunkRef.current = true
@@ -571,6 +574,9 @@ export function useAgentChat(
           tools: toolsForTurn,
           initialToolName,
           preExecuteInitialTool: isCustomEndpoint && shouldPreExecuteLocalAgentTool(initialToolName),
+          ...(isCustomEndpoint && /^gpt-oss(?::|-)/i.test(openAiCompatible?.modelId.trim() ?? '')
+            ? { reasoningEffort: 'low' as const }
+            : {}),
           idleMs,
           abortController,
           onEvent,

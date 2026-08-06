@@ -595,6 +595,9 @@ export async function testOpenAiCompatibleAgentCapability(
       tools,
       stopWhen: stepCountIs(2),
       maxOutputTokens: AGENT_CAPABILITY_PROBE_MAX_OUTPUT_TOKENS,
+      ...(/^gpt-oss(?::|-)/i.test(config.modelId.trim())
+        ? { providerOptions: { openai: { reasoningEffort: 'low' as const } } }
+        : {}),
       maxRetries: 0,
       abortSignal: controller.signal,
       onError: () => undefined,

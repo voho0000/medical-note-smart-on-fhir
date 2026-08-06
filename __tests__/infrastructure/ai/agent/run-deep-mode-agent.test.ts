@@ -63,6 +63,7 @@ describe('runDeepModeAgent compact snapshot prefetch', () => {
       tools: { getHealthSummarySnapshot: { execute } } as never,
       initialToolName: 'getHealthSummarySnapshot',
       preExecuteInitialTool: true,
+      reasoningEffort: 'low',
       translations,
       idleMs: 1_000,
       abortController: new AbortController(),
@@ -71,7 +72,10 @@ describe('runDeepModeAgent compact snapshot prefetch', () => {
     expect(execute).toHaveBeenCalledTimes(1)
     expect(execute).toHaveBeenCalledWith({})
     expect(mockStreamText).toHaveBeenCalledTimes(1)
-    expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({ tools: undefined }))
+    expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({
+      tools: undefined,
+      providerOptions: { openai: { reasoningEffort: 'low' } },
+    }))
     expect(result.answer).toBe('Complete answer')
     expect(result.toolCalls).toEqual(['getHealthSummarySnapshot'])
     expect(result.usage.totalTokens).toBe(120)

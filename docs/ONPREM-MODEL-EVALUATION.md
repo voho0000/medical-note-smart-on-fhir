@@ -11,7 +11,8 @@ endpoint.
 - Medical Summary: six documented text models × five synthetic clinical cases.
 - Custom Summary: six documented text models × four hallucination-focused
   prompts, with legacy-vs-grounded prompt comparison.
-- Chat Agent: four documented tool-calling models × seventeen gold questions.
+- Chat: five documented candidates × seventeen gold questions, including
+  native tool calls, deterministic local prefetch, and tool-less questions.
 - Metrics: parse/completeness, grounding, scenario semantics, tool selection,
   arguments, retrieval, final-answer correctness, Taiwan Traditional Chinese,
   leaked tool-protocol markers, latency, and reported tokens.
@@ -36,6 +37,7 @@ Useful filters:
 npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5
 npm.cmd run eval:onprem-models -- --phase custom-summary --models tvghbrain3.5,gpt-oss:20b --custom-summary-strategies legacy,grounded
 npm.cmd run eval:onprem-models -- --phase chat --models gemma4:31b --chat-cases hba1c-trend,penicillin-allergy
+npm.cmd run eval:onprem-models -- --phase chat --models gpt-oss:120b
 npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5 --summary-cases cross-hospital-current-medications --summary-strategies single,single-retry-missing,split-3-2 --repeat 10
 npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases broad-health-summary --repeat 10
 npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases current-guideline-no-patient-data --repeat 10
@@ -55,6 +57,11 @@ medical questions run in general scope. It does not infer this authorization
 from question keywords. This mirrors the product architecture: frontier
 models retain autonomous `auto` tool routing, while custom/on-prem models use
 the explicit scope and a small deterministic prefetch allowlist.
+
+`gpt-oss:120b` is intentionally included in the Chat matrix even when a
+particular deployment does not expose native tool calls. This lets the report
+separate questions completed through safe deterministic prefetch from questions
+that require the upstream server to return OpenAI-compatible `tool_calls`.
 
 For explicitly authorized local patient files, use the headless import-to-agent
 integration runner. It uses the same SDK conversion, `LocalBundleService`, FHIR

@@ -243,6 +243,23 @@ describe('useAgentChat custom endpoint lifecycle', () => {
     }))
   })
 
+  it('uses low reasoning effort for a verified gpt-oss Agent profile', async () => {
+    setProfiles([{
+      ...profile,
+      modelId: 'gpt-oss:120b',
+      agentMode: 'auto',
+      agentCapability: 'verified',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    }])
+    const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
+
+    await act(async () => result.current.handleSend('一般醫療問題'))
+
+    expect(mockRunDeepModeAgent).toHaveBeenCalledWith(expect.objectContaining({
+      reasoningEffort: 'low',
+    }))
+  })
+
   it('prefetches the compact health snapshot for a broad local summary', async () => {
     const snapshotTool = { description: 'Compact health summary tool' }
     mockFhirTools.mockReturnValue({ getHealthSummarySnapshot: snapshotTool })
@@ -364,6 +381,25 @@ describe('useAgentChat custom endpoint lifecycle', () => {
     await act(async () => result.current.handleSend('clinical question'))
 
     expect(mockStandardChatStream).toHaveBeenCalledTimes(1)
+    expect(mockRunDeepModeAgent).not.toHaveBeenCalled()
+  })
+
+  it('uses low reasoning effort for an unverified gpt-oss Standard Chat profile', async () => {
+    setProfiles([{
+      ...profile,
+      modelId: 'gpt-oss:120b',
+      agentMode: 'auto',
+      agentCapability: 'unsupported',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    }])
+    mockStandardChatStream.mockResolvedValueOnce(undefined)
+    const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
+
+    await act(async () => result.current.handleSend('clinical question'))
+
+    expect(mockStandardChatStream).toHaveBeenCalledWith(expect.objectContaining({
+      reasoningEffort: 'low',
+    }))
     expect(mockRunDeepModeAgent).not.toHaveBeenCalled()
   })
 

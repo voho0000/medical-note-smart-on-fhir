@@ -40,8 +40,9 @@ const SUMMARY_MODELS = [
   'gemma4:26b',
   'nemotron-3-nano:30b',
 ] as const
-const TOOL_MODELS = [
+const CHAT_MODELS = [
   'tvghbrain3.5',
+  'gpt-oss:120b',
   'gemma4:31b',
   'gemma4:26b',
   'nemotron-3-nano:30b',
@@ -1040,6 +1041,9 @@ async function runChatCase(
       tools,
       initialToolName,
       preExecuteInitialTool: shouldPreExecuteLocalAgentTool(initialToolName),
+      ...(/^gpt-oss(?::|-)/i.test(modelName)
+        ? { reasoningEffort: 'low' as const }
+        : {}),
       translations: {
         organizingResults: zhTW.agent.organizingResults,
         queriedFhirData: zhTW.agent.queriedFhirData,
@@ -1222,13 +1226,13 @@ export async function main(): Promise<void> {
   const requestedModels = options.models
   const summaryModels = (requestedModels ?? [...SUMMARY_MODELS]).filter((model) => SUMMARY_MODELS.includes(model as typeof SUMMARY_MODELS[number]))
   const customSummaryModels = (requestedModels ?? [...CUSTOM_SUMMARY_MODELS]).filter((model) => CUSTOM_SUMMARY_MODELS.includes(model as typeof CUSTOM_SUMMARY_MODELS[number]))
-  const chatModels = (requestedModels ?? [...TOOL_MODELS]).filter((model) => TOOL_MODELS.includes(model as typeof TOOL_MODELS[number]))
+  const chatModels = (requestedModels ?? [...CHAT_MODELS]).filter((model) => CHAT_MODELS.includes(model as typeof CHAT_MODELS[number]))
   const selectedSummaryCases = summaryFixtures.filter((fixture) => !options.summaryCases || options.summaryCases.includes(fixture.id))
   const selectedCustomSummaryCases = customSummaryFixtures.filter((fixture) => !options.customSummaryCases || options.customSummaryCases.includes(fixture.id))
   const selectedChatCases = chatFixtures.filter((fixture) => !options.chatCases || options.chatCases.includes(fixture.id))
   if ((options.phase === 'all' || options.phase === 'summary') && summaryModels.length === 0) throw new Error('No summary models selected')
   if ((options.phase === 'all' || options.phase === 'custom-summary') && customSummaryModels.length === 0) throw new Error('No custom-summary models selected')
-  if ((options.phase === 'all' || options.phase === 'chat') && chatModels.length === 0) throw new Error('No tool-calling models selected')
+  if ((options.phase === 'all' || options.phase === 'chat') && chatModels.length === 0) throw new Error('No chat models selected')
   if ((options.phase === 'all' || options.phase === 'summary') && selectedSummaryCases.length === 0) throw new Error('No summary cases selected')
   if ((options.phase === 'all' || options.phase === 'custom-summary') && selectedCustomSummaryCases.length === 0) throw new Error('No custom-summary cases selected')
   if ((options.phase === 'all' || options.phase === 'chat') && selectedChatCases.length === 0) throw new Error('No chat cases selected')

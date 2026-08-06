@@ -140,6 +140,9 @@ async function runOne(
       tools,
       initialToolName,
       preExecuteInitialTool: shouldPreExecuteLocalAgentTool(initialToolName),
+      ...(/^gpt-oss(?::|-)/i.test(modelName)
+        ? { reasoningEffort: 'low' as const }
+        : {}),
         translations: {
           organizingResults: zhTW.agent.organizingResults,
           queriedFhirData: zhTW.agent.queriedFhirData,

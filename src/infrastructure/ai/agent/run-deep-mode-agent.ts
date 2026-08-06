@@ -96,6 +96,9 @@ export interface RunDeepModeAgentParams {
   initialToolName?: string
   /** Execute an unambiguous no-argument tool locally before the first model call. */
   preExecuteInitialTool?: boolean
+  /** Optional provider reasoning control. Callers must only opt in for a
+   * compatible endpoint model (currently gpt-oss). */
+  reasoningEffort?: 'low' | 'medium' | 'high'
   onEvent?: (event: AgentRunEvent) => void
 }
 
@@ -131,8 +134,13 @@ export async function runDeepModeAgent(
     abortController,
     initialToolName,
     preExecuteInitialTool,
+    reasoningEffort,
     onEvent,
   } = params
+
+  const reasoningOptions = reasoningEffort === undefined
+    ? {}
+    : { providerOptions: { openai: { reasoningEffort } } }
 
   const emit = (event: AgentRunEvent) => onEvent?.(event)
   const onStreamIdle = () => abortController.abort()
@@ -191,6 +199,7 @@ export async function runDeepModeAgent(
       messages: messages as ModelMessage[],
       tools,
       stopWhen: stepCountIs(10),
+      ...reasoningOptions,
       prepareStep: initialToolName
         ? ({ stepNumber }) => stepNumber === 0
           ? { toolChoice: { type: 'tool', toolName: initialToolName } }
@@ -290,6 +299,7 @@ export async function runDeepModeAgent(
           // A locally prefetched, unambiguous snapshot is complete for this turn;
           // withholding tools prevents the small model from requesting it again.
           tools: shouldPreExecute ? undefined : tools,
+          ...reasoningOptions,
           abortSignal: requestController.signal,
         })
 
@@ -356,6 +366,7 @@ export async function runDeepModeAgent(
       const finalResult = await streamText({
         model,
         messages: finalMessages as ModelMessage[],
+        ...reasoningOptions,
         abortSignal: abortController.signal,
       })
 
