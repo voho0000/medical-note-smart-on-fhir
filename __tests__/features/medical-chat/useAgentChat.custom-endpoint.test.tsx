@@ -200,6 +200,28 @@ describe('useAgentChat custom endpoint lifecycle', () => {
     }))
   })
 
+  it('prefetches the compact health snapshot for a broad local summary', async () => {
+    const snapshotTool = { description: 'Compact health summary tool' }
+    mockFhirTools.mockReturnValue({ getHealthSummarySnapshot: snapshotTool })
+    setProfiles([{
+      ...profile,
+      agentMode: 'auto',
+      agentCapability: 'verified',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    }])
+    const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
+
+    await act(async () => result.current.handleSend(
+      '請用我匯入的健康資料整理身體狀況、慢性疾病、目前用藥與檢驗正常範圍。',
+    ))
+
+    expect(mockRunDeepModeAgent).toHaveBeenCalledWith(expect.objectContaining({
+      tools: { getHealthSummarySnapshot: snapshotTool },
+      initialToolName: 'getHealthSummarySnapshot',
+      preExecuteInitialTool: true,
+    }))
+  })
+
   it('keeps auto-mode custom profiles on standard chat when the probe is not verified', async () => {
     setProfiles([{
       ...profile,

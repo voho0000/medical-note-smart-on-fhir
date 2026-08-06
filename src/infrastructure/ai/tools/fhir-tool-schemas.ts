@@ -108,6 +108,7 @@ export const immunizationsSchema = z.object({
 })
 
 export const patientInfoSchema = z.object({})
+export const healthSummarySnapshotSchema = z.object({})
 
 // ----------------------------------------------------------------------------
 // Phase 3 — cross-resource tools

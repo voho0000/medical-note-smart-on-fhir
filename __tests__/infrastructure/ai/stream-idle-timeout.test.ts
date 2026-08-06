@@ -56,6 +56,27 @@ describe('withIdleTimeout', () => {
     await expect(run).rejects.toBe(boom)
   })
 
+  it('stops waiting immediately when the external signal is aborted', async () => {
+    const stalled: AsyncIterable<string> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next: () => new Promise<IteratorResult<string>>(() => {}),
+          return: () => Promise.resolve({ value: undefined, done: true }),
+        }
+      },
+    }
+    const controller = new AbortController()
+    const run = (async () => {
+      for await (const _ of withIdleTimeout(stalled, 30_000, () => {}, controller.signal)) {
+        // No values are expected from the deliberately stalled source.
+      }
+    })()
+
+    controller.abort()
+
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('timeout message is mappable to a friendly "timed out" error', () => {
     expect(new StreamIdleTimeoutError().message).toMatch(/timed out/i)
   })

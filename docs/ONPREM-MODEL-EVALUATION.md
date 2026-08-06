@@ -53,8 +53,11 @@ npm.cmd run eval:onprem-patients -- --repeat 10
 ```
 
 Its JSONL records contain only patient sequence number, resource counts, tool
-names, checks, token usage, latency, and an answer hash. Complete answers and
-patient identifiers are not retained.
+names, tool-call count, tool-result character count, snapshot count/truncation
+metadata, answer checks, token usage, latency, and an answer hash. Complete
+answers and patient identifiers are not retained. Broad health-summary cases
+must use the compact snapshot tool (or, for a legacy run without that tool, all
+three required condition/medication/laboratory tool groups).
 
 Reports and JSONL run records are written under
 `scripts/experiments/onprem-model-eval/results/`, which is gitignored.

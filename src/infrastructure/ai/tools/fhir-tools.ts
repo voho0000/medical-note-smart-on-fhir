@@ -26,6 +26,7 @@ import {
   imagingRecordsSchema,
   immunizationsSchema,
   patientInfoSchema,
+  healthSummarySnapshotSchema,
   encounterDetailsSchema,
   activeMedicationsSchema,
   observationSearchSchema,
@@ -632,6 +633,130 @@ export function createFhirTools(getData: () => AgentDataSource) {
     }),
 
     // ── Visits ─────────────────────────────────────────────────────────────
+
+    getHealthSummarySnapshot: tool({
+      description: 'PRIMARY compact tool for a broad patient health summary. In one call returns deduplicated conditions, current medications, latest abnormal labs, and recent vital signs. Prefer this over several separate tools when the user asks for an overall summary of their imported record.',
+      inputSchema: healthSummarySnapshotSchema,
+      execute: async () => {
+        const collection = getData().collection
+        const unavailable = unavailableQueryResult(
+          collection,
+          ['Condition', 'MedicationRequest', 'MedicationStatement', 'Observation'],
+          '健康摘要資料',
+        )
+        if (unavailable) return scrub(unavailable)
+
+        const queryIssues = queryIssuesFor(collection!, [
+          'Condition',
+          'MedicationRequest',
+          'MedicationStatement',
+          'Observation',
+        ])
+        const conditionByName = new Map<string, any>()
+        for (const condition of collection!.conditions) {
+          const name = pickName(condition.code) || 'Unknown'
+          const key = name.normalize('NFKC').trim().toLowerCase()
+          const existing = conditionByName.get(key)
+          if (!existing || (condition.recordedDate || '') > (existing.recordedDate || '')) {
+            conditionByName.set(key, condition)
+          }
+        }
+        const allConditions = [...conditionByName.values()]
+          .sort((left, right) => (right.recordedDate || '').localeCompare(left.recordedDate || ''))
+        const conditions = allConditions.slice(0, 40).map((condition) => ({
+          name: pickName(condition.code) || 'Unknown',
+          status: typeof condition.clinicalStatus === 'string'
+            ? condition.clinicalStatus
+            : condition.clinicalStatus?.coding?.[0]?.code,
+          date: condition.recordedDate,
+        }))
+
+        const authoredTimes = collection!.medications
+          .map((medication: any) => Date.parse(medication.authoredOn || ''))
+          .filter(Number.isFinite)
+        const latestMedicationTime = authoredTimes.length > 0
+          ? Math.max(...authoredTimes)
+          : Date.now()
+        const recentMedicationCutoff = latestMedicationTime - 180 * 86_400_000
+        const activeMedicationRecords = collection!.medications.filter((medication: any) => {
+          const status = String(medication.status || '').toLowerCase()
+          if (['stopped', 'cancelled'].includes(status)) return false
+          if (status === 'active') return true
+          const authoredTime = Date.parse(medication.authoredOn || '')
+          return Number.isFinite(authoredTime) && authoredTime >= recentMedicationCutoff
+        })
+        const allMedications = dedupMedsByName(activeMedicationRecords)
+          .sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
+        const medications = allMedications.slice(0, 40).map((medication: any) => ({
+          name: pickAiMedicationName(
+            medication.medicationCodeableConcept,
+            medication.medicationReference?.display,
+          ),
+          dosage: medication.dosageInstruction?.[0]?.text,
+          date: medication.authoredOn,
+          chronic: isChronicByCourseOfTherapy(medication.courseOfTherapyType),
+        }))
+
+        const abnormalByAnalyte = new Map<string, any>()
+        for (const observation of collection!.observations.flatMap(item =>
+          expandObservationValues(item)
+        )) {
+          if (String(observation?.status ?? '').toLowerCase() === 'entered-in-error') continue
+          if (!categorizeObservation(observation) || !isAbnormalObservation(observation)) continue
+          const key = labAnalyteKey(observation)
+          const existing = abnormalByAnalyte.get(key)
+          if (!existing || (observationDate(observation) || '') > (observationDate(existing) || '')) {
+            abnormalByAnalyte.set(key, observation)
+          }
+        }
+        const allAbnormalLabs = [...abnormalByAnalyte.values()]
+          .sort((left, right) => (observationDate(right) || '').localeCompare(observationDate(left) || ''))
+        const abnormalLabs = allAbnormalLabs.slice(0, 60).map(observationResult)
+
+        const vitalByAnalyte = new Map<string, any>()
+        for (const vital of collection!.vitalSigns) {
+          const key = labAnalyteKey(vital)
+          const existing = vitalByAnalyte.get(key)
+          if (!existing || (observationDate(vital) || '') > (observationDate(existing) || '')) {
+            vitalByAnalyte.set(key, vital)
+          }
+        }
+        const allVitals = [...vitalByAnalyte.values()]
+          .sort((left, right) => (observationDate(right) || '').localeCompare(observationDate(left) || ''))
+        const recentVitals = allVitals.slice(0, 10).map(observationResult)
+
+        return scrub({
+          success: true,
+          summary: 'Compact cross-domain health summary snapshot',
+          incomplete: queryIssues.length > 0,
+          canConcludeAbsence: queryIssues.length === 0,
+          queryIssues,
+          counts: {
+            conditions: allConditions.length,
+            activeMedications: allMedications.length,
+            abnormalLabs: allAbnormalLabs.length,
+            recentVitals: allVitals.length,
+          },
+          truncated: {
+            conditions: allConditions.length > conditions.length,
+            activeMedications: allMedications.length > medications.length,
+            abnormalLabs: allAbnormalLabs.length > abnormalLabs.length,
+            recentVitals: allVitals.length > recentVitals.length,
+          },
+          groundingRules: {
+            medicationFieldsOnly: true,
+            normalityStatusIsAuthoritative: true,
+            instruction: 'Use only these records. The snapshot is already loaded: never ask the user to import or re-import data. Do not infer medication ingredients/purposes or add customary lab ranges. If a section is empty and canConcludeAbsence is false, say the data may be incomplete. Answer in Taiwan Traditional Chinese with sections for recent condition/chronic disease, current medications, and abnormal tests. End by reminding the user to discuss concerns with their physician.',
+          },
+          data: {
+            conditions,
+            medications,
+            abnormalLabs,
+            recentVitals,
+          },
+        })
+      },
+    }),
 
     queryEncounters: tool({
       description: 'Query patient encounters (visits, admissions). Supports filtering by class, department text, institution, and date range.',

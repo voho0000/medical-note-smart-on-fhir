@@ -31,6 +31,11 @@ const NO_RECORD_QUERY = [
   /do not (?:query|search|look up).*(?:record|chart|patient data)/i,
 ]
 
+const BROAD_HEALTH_SUMMARY_QUERY = [
+  /(?:健康摘要|白話版.*健康|身體狀況.*(?:慢性疾病|用藥).*(?:檢驗|正常範圍))/i,
+  /(?:overall|plain-language).*(?:health|patient).*(?:summary|record)/i,
+]
+
 const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
   patient: [/(年齡|歲|性別|gender|age|demographic)/i],
   overview: [/(資料概況|資料總覽|有哪些類型|data overview|what data|available data)/i],
@@ -50,6 +55,12 @@ export function selectAgentToolNames(
   availableToolNames: readonly string[],
 ): string[] {
   if (NO_RECORD_QUERY.some((pattern) => pattern.test(question))) return []
+  if (
+    availableToolNames.includes('getHealthSummarySnapshot') &&
+    BROAD_HEALTH_SUMMARY_QUERY.some((pattern) => pattern.test(question))
+  ) {
+    return ['getHealthSummarySnapshot']
+  }
   const selected = new Set<string>()
   ;(Object.keys(GROUP_TRIGGERS) as ToolGroup[]).forEach((group) => {
     if (GROUP_TRIGGERS[group].some((pattern) => pattern.test(question))) {
@@ -87,6 +98,9 @@ export function forcedInitialAgentToolName(
   if (selectedToolNames.length === 1) return selectedToolNames[0]
 
   const priority: string[] = []
+  if (BROAD_HEALTH_SUMMARY_QUERY.some((pattern) => pattern.test(question))) {
+    priority.push('getHealthSummarySnapshot')
+  }
   if (/(?:摘要|整理|健康狀況|summary|overview)/i.test(question)) {
     priority.push('queryConditions', 'getDataOverview')
   }

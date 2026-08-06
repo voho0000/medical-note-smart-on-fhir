@@ -194,6 +194,30 @@ describe('ProcessAgentStreamUseCase', () => {
       expect(result.summary).toContain('No data found: No allergies')
     })
 
+    it('preserves every domain in a compact health snapshot', () => {
+      const result = useCase.buildToolResultsSummary([{
+        toolName: 'getHealthSummarySnapshot',
+        result: {
+          success: true,
+          counts: { conditions: 1, activeMedications: 1, abnormalLabs: 1, recentVitals: 1 },
+          truncated: { conditions: false, activeMedications: false, abnormalLabs: false, recentVitals: false },
+          groundingRules: { instruction: 'Use only these records.' },
+          data: {
+            conditions: [{ name: 'Hypertension' }],
+            medications: [{ name: 'Sotalol' }],
+            abnormalLabs: [{ name: 'HbA1c', value: 8.2 }],
+            recentVitals: [{ name: 'Body Height', value: 168 }],
+          },
+        },
+      }], mockTranslations)
+
+      expect(result.summary).toContain('getHealthSummarySnapshot Query Result')
+      expect(result.summary).toContain('Hypertension')
+      expect(result.summary).toContain('Sotalol')
+      expect(result.summary).toContain('HbA1c')
+      expect(result.summary).not.toContain('No data found')
+    })
+
     it('warns that an incomplete FHIR query cannot establish absence', () => {
       const result = useCase.buildToolResultsSummary([{
         toolName: 'queryImagingRecords',

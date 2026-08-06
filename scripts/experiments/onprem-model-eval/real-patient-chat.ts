@@ -31,8 +31,16 @@ interface RunRecord {
   latencyMs: number
   resourceCounts: Record<string, number>
   tools: string[]
+  toolCallCount: number
+  toolResultChars: number
+  compactSnapshotUsed: boolean
+  snapshotCounts?: Record<string, number>
+  snapshotTruncated?: Record<string, boolean>
   requiredToolsOk: boolean
   answerOk: boolean
+  answerCoverageOk: boolean
+  physicianReminderOk: boolean
+  noReimportPromptOk: boolean
   usage: { inputTokens: number; outputTokens: number; totalTokens: number }
   answerSha256: string
   error?: string
@@ -128,6 +136,7 @@ async function runOne(
         ],
         tools,
         initialToolName,
+        preExecuteInitialTool: initialToolName === 'getHealthSummarySnapshot',
         translations: {
           organizingResults: zhTW.agent.organizingResults,
           queriedFhirData: zhTW.agent.queriedFhirData,
@@ -150,12 +159,28 @@ async function runOne(
           .filter((step) => step.kind === 'tool-call' && step.toolName)
           .map((step) => step.toolName as string),
       )]
-      const requiredToolsOk = REQUIRED_TOOL_GROUPS.every((group) =>
+      const toolCallCount = result.trajectory.filter((step) => step.kind === 'tool-call').length
+      const toolResultChars = result.trajectory
+        .filter((step) => step.kind === 'tool-result')
+        .reduce((sum, step) => sum + JSON.stringify(step.result ?? null).length, 0)
+      const compactSnapshotUsed = actualTools.includes('getHealthSummarySnapshot')
+      const compactResult = result.trajectory.find(
+        (step) => step.kind === 'tool-result' && step.toolName === 'getHealthSummarySnapshot',
+      )?.result as Record<string, unknown> | undefined
+      const snapshotCounts = compactResult?.counts as Record<string, number> | undefined
+      const snapshotTruncated = compactResult?.truncated as Record<string, boolean> | undefined
+      const requiredToolsOk = compactSnapshotUsed || REQUIRED_TOOL_GROUPS.every((group) =>
         group.some((tool) => actualTools.includes(tool)),
       )
-      const answerOk = answer.length > 0 &&
-        /醫師/.test(answer) &&
-        !/(重新匯入|請.*匯入.*資料)/i.test(answer)
+      const answerCoverageOk = [
+        /(?:身體狀況|疾病|診斷|health|condition|diagnosis)/i,
+        /(?:用藥|藥物|medication|medicine)/i,
+        /(?:檢驗|數值|正常範圍|異常|lab|test result|abnormal)/i,
+      ].every((pattern) => pattern.test(answer))
+      const physicianReminderOk = /醫師/.test(answer)
+      const noReimportPromptOk = !/(?:重新匯入|需要(?:先)?匯入|請[^。！？\n]{0,20}(?:先)?匯入|(?:點擊|點選|選擇|按下)[\s\S]{0,60}(?:匯入|健康存摺))/i.test(answer)
+      const answerOk = answer.length > 0 && answerCoverageOk &&
+        physicianReminderOk && noReimportPromptOk
       return {
         patientIndex,
         repetition,
@@ -163,8 +188,16 @@ async function runOne(
         latencyMs: Date.now() - startedAt,
         resourceCounts: counts(data.collection as unknown as Record<string, unknown>),
         tools: actualTools,
+        toolCallCount,
+        toolResultChars,
+        compactSnapshotUsed,
+        snapshotCounts,
+        snapshotTruncated,
         requiredToolsOk,
         answerOk,
+        answerCoverageOk,
+        physicianReminderOk,
+        noReimportPromptOk,
         usage: result.usage,
         answerSha256: sha256(answer),
       }
@@ -179,8 +212,14 @@ async function runOne(
       latencyMs: Date.now() - startedAt,
       resourceCounts: counts(data.collection as unknown as Record<string, unknown>),
       tools: [],
+      toolCallCount: 0,
+      toolResultChars: 0,
+      compactSnapshotUsed: false,
       requiredToolsOk: false,
       answerOk: false,
+      answerCoverageOk: false,
+      physicianReminderOk: false,
+      noReimportPromptOk: false,
       usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       answerSha256: sha256(answer),
       error: safeError(error, apiKey),
@@ -225,8 +264,16 @@ export async function main(): Promise<void> {
         ok: record.ok,
         latencyMs: record.latencyMs,
         tools: record.tools,
+        toolCallCount: record.toolCallCount,
+        toolResultChars: record.toolResultChars,
+        compactSnapshotUsed: record.compactSnapshotUsed,
+        snapshotCounts: record.snapshotCounts,
+        snapshotTruncated: record.snapshotTruncated,
         requiredToolsOk: record.requiredToolsOk,
         answerOk: record.answerOk,
+        answerCoverageOk: record.answerCoverageOk,
+        physicianReminderOk: record.physicianReminderOk,
+        noReimportPromptOk: record.noReimportPromptOk,
         totalTokens: record.usage.totalTokens,
         ...(record.error ? { error: record.error } : {}),
       }))

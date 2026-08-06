@@ -89,6 +89,31 @@ export class ProcessAgentStreamUseCase {
           }
         }
 
+        // The compact health snapshot is intentionally an object containing
+        // several clinical domains rather than a count-based list. Preserve it
+        // whole for the single synthesis request; treating it like a generic
+        // FHIR list would incorrectly collapse it to "no data".
+        if (tr.toolName === 'getHealthSummarySnapshot') {
+          if (r?.success && r?.data) {
+            const truncatedDomains = Object.entries(r?.truncated ?? {})
+              .filter(([, truncated]) => truncated === true)
+              .map(([domain]) => domain)
+            const truncationWarning = truncatedDomains.length > 0
+              ? `\nIMPORTANT: these snapshot domains were truncated: ${truncatedDomains.join(', ')}. Report only the returned records and state that additional records exist.`
+              : ''
+            const completenessWarning = r?.incomplete || r?.canConcludeAbsence === false
+              ? '\nIMPORTANT: one or more related resource queries were incomplete. Report positive findings but do not infer absence.'
+              : ''
+            return `${tr.toolName} ${translations.queryResult}:${truncationWarning}${completenessWarning}\n${JSON.stringify({
+              counts: r.counts,
+              truncated: r.truncated,
+              groundingRules: r.groundingRules,
+              data: r.data,
+            }, null, 2)}`
+          }
+          return `${tr.toolName} ${translations.queryFailed}: ${r?.summary || translations.noData}`
+        }
+
         // Handle FHIR tool results (with count field)
         const hasPositiveRecords = Number(r?.count ?? 0) > 0
         const queryCoverage = Array.isArray(r?.requestedQueryTerms)

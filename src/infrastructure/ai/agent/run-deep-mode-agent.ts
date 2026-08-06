@@ -94,6 +94,8 @@ export interface RunDeepModeAgentParams {
   abortController: AbortController
   /** Force only step zero when routing found one unambiguous record tool. */
   initialToolName?: string
+  /** Execute an unambiguous no-argument tool locally before the first model call. */
+  preExecuteInitialTool?: boolean
   onEvent?: (event: AgentRunEvent) => void
 }
 
@@ -120,7 +122,17 @@ export interface RunDeepModeAgentResult {
 export async function runDeepModeAgent(
   params: RunDeepModeAgentParams,
 ): Promise<RunDeepModeAgentResult> {
-  const { model, messages, tools, translations: t, idleMs, abortController, initialToolName, onEvent } = params
+  const {
+    model,
+    messages,
+    tools,
+    translations: t,
+    idleMs,
+    abortController,
+    initialToolName,
+    preExecuteInitialTool,
+    onEvent,
+  } = params
 
   const emit = (event: AgentRunEvent) => onEvent?.(event)
   const onStreamIdle = () => abortController.abort()
@@ -145,67 +157,90 @@ export async function runDeepModeAgent(
     foundRecords: t.foundRecords,
   }
 
-  // Stream with tools. stopWhen enables the AI SDK's NATIVE multi-step loop:
-  // after a tool call the SDK feeds the result back to the model automatically
-  // and continues, up to N steps.
-  const result = await streamText({
-    model,
-    messages: messages as ModelMessage[],
-    tools,
-    stopWhen: stepCountIs(10),
-    prepareStep: initialToolName
-      ? ({ stepNumber }) => stepNumber === 0
-        ? { toolChoice: { type: 'tool', toolName: initialToolName } }
-        : { toolChoice: 'auto' }
-      : undefined,
-    abortSignal: abortController.signal,
-    onStepFinish: ({ toolCalls }) => {
-      if (toolCalls && toolCalls.length > 0) {
-        const toolNames = toolCalls
-          .map((tc) => getToolDisplayName(tc?.toolName || "", t.toolNames))
-          .join("、")
-        emit({ type: "status", state: `🔍 ${toolNames}...` })
-      }
-    },
-  })
-
   let accumulatedContent = ""
   const toolResults: Array<{ toolName: string; result: unknown }> = []
   const usedToolNames: string[] = []
 
-  // Round 1 — main stream (idle-watchdog guarded)
-  for await (const chunk of withIdleTimeout(result.fullStream, idleMs, onStreamIdle)) {
-    if (chunk.type === "text-delta") {
-      accumulatedContent += chunk.text
-      emit({ type: "content", content: accumulatedContent })
-    } else if (chunk.type === "tool-call") {
-      const displayName = getToolDisplayName(chunk.toolName, t.toolNames)
-      if (!usedToolNames.includes(chunk.toolName)) usedToolNames.push(chunk.toolName)
-      trajectory.push({
-        round: 1,
-        kind: "tool-call",
-        toolName: chunk.toolName,
-        input: (chunk as { input?: unknown }).input,
-      })
-      emit({
-        type: "tool-call",
-        toolName: chunk.toolName,
-        state: `🔍 ${displayName}...`,
-        toolCalls: [...usedToolNames],
-      })
-    } else if (chunk.type === "tool-result") {
-      const chunkAny = chunk as any
-      const toolResult = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
-      toolResults.push({ toolName: chunk.toolName, result: toolResult })
-      trajectory.push({ round: 1, kind: "tool-result", toolName: chunk.toolName, result: toolResult })
-      emit({ type: "tool-result", toolName: chunk.toolName, result: toolResult })
-    } else if (chunk.type === "error") {
-      // A failed request (proxy 401 / no guest token / network) arrives as an
-      // error chunk, NOT a throw. Propagate so the caller's catch surfaces it.
-      throw (chunk as { error?: unknown }).error ?? new Error("AI stream error")
+  const initialTool = initialToolName ? tools?.[initialToolName] : undefined
+  const executableInitialTool = initialTool as {
+    execute?: (input: Record<string, never>) => unknown | Promise<unknown>
+  } | undefined
+  const shouldPreExecute = Boolean(preExecuteInitialTool && initialToolName && executableInitialTool?.execute)
+
+  if (shouldPreExecute && initialToolName && executableInitialTool?.execute) {
+    if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError')
+    const displayName = getToolDisplayName(initialToolName, t.toolNames)
+    usedToolNames.push(initialToolName)
+    trajectory.push({ round: 1, kind: 'tool-call', toolName: initialToolName, input: {} })
+    emit({
+      type: 'tool-call',
+      toolName: initialToolName,
+      state: `🔍 ${displayName}...`,
+      toolCalls: [...usedToolNames],
+    })
+    const toolResult = await executableInitialTool.execute({})
+    toolResults.push({ toolName: initialToolName, result: toolResult })
+    trajectory.push({ round: 1, kind: 'tool-result', toolName: initialToolName, result: toolResult })
+    emit({ type: 'tool-result', toolName: initialToolName, result: toolResult })
+  } else {
+    // Stream with tools. stopWhen enables the AI SDK's NATIVE multi-step loop:
+    // after a tool call the SDK feeds the result back to the model automatically
+    // and continues, up to N steps.
+    const result = await streamText({
+      model,
+      messages: messages as ModelMessage[],
+      tools,
+      stopWhen: stepCountIs(10),
+      prepareStep: initialToolName
+        ? ({ stepNumber }) => stepNumber === 0
+          ? { toolChoice: { type: 'tool', toolName: initialToolName } }
+          : { toolChoice: 'auto' }
+        : undefined,
+      abortSignal: abortController.signal,
+      onStepFinish: ({ toolCalls }) => {
+        if (toolCalls && toolCalls.length > 0) {
+          const toolNames = toolCalls
+            .map((tc) => getToolDisplayName(tc?.toolName || "", t.toolNames))
+            .join("、")
+          emit({ type: "status", state: `🔍 ${toolNames}...` })
+        }
+      },
+    })
+
+    // Round 1 — main stream (idle-watchdog guarded)
+    for await (const chunk of withIdleTimeout(result.fullStream, idleMs, onStreamIdle)) {
+      if (chunk.type === "text-delta") {
+        accumulatedContent += chunk.text
+        emit({ type: "content", content: accumulatedContent })
+      } else if (chunk.type === "tool-call") {
+        const displayName = getToolDisplayName(chunk.toolName, t.toolNames)
+        if (!usedToolNames.includes(chunk.toolName)) usedToolNames.push(chunk.toolName)
+        trajectory.push({
+          round: 1,
+          kind: "tool-call",
+          toolName: chunk.toolName,
+          input: (chunk as { input?: unknown }).input,
+        })
+        emit({
+          type: "tool-call",
+          toolName: chunk.toolName,
+          state: `🔍 ${displayName}...`,
+          toolCalls: [...usedToolNames],
+        })
+      } else if (chunk.type === "tool-result") {
+        const chunkAny = chunk as any
+        const toolResult = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
+        toolResults.push({ toolName: chunk.toolName, result: toolResult })
+        trajectory.push({ round: 1, kind: "tool-result", toolName: chunk.toolName, result: toolResult })
+        emit({ type: "tool-result", toolName: chunk.toolName, result: toolResult })
+      } else if (chunk.type === "error") {
+        // A failed request (proxy 401 / no guest token / network) arrives as an
+        // error chunk, NOT a throw. Propagate so the caller's catch surfaces it.
+        throw (chunk as { error?: unknown }).error ?? new Error("AI stream error")
+      }
     }
+    addUsage(await result.usage)
   }
-  addUsage(await result.usage)
 
   if (accumulatedContent.length > 0) {
     trajectory.push({ round: 1, kind: "text", text: accumulatedContent })
@@ -238,46 +273,73 @@ export async function runDeepModeAgent(
       { queriedFhirData: t.queriedFhirData, answerQuestion: answerQuestionText },
     )
 
-    const followUpResult = await streamText({
-      model,
-      messages: followUpMessages as ModelMessage[],
-      tools, // allow more tools in follow-up (e.g. searchMedicalLiterature after FHIR query)
-      abortSignal: abortController.signal,
-    })
-
     let followUpContent = ""
     const followUpToolResults: Array<{ toolName: string; result: unknown }> = []
+    const maxFollowUpAttempts = shouldPreExecute ? 2 : 1
+    for (let attempt = 0; attempt < maxFollowUpAttempts; attempt += 1) {
+      const requestController = shouldPreExecute ? new AbortController() : abortController
+      const forwardAbort = () => requestController.abort()
+      if (shouldPreExecute) {
+        if (abortController.signal.aborted) requestController.abort()
+        abortController.signal.addEventListener('abort', forwardAbort, { once: true })
+      }
+      try {
+        const followUpResult = await streamText({
+          model,
+          messages: followUpMessages as ModelMessage[],
+          // A locally prefetched, unambiguous snapshot is complete for this turn;
+          // withholding tools prevents the small model from requesting it again.
+          tools: shouldPreExecute ? undefined : tools,
+          abortSignal: requestController.signal,
+        })
 
-    for await (const chunk of withIdleTimeout(followUpResult.fullStream, idleMs, onStreamIdle)) {
-      if (chunk.type === "text-delta") {
-        followUpContent += chunk.text
-        emit({ type: "content", content: followUpContent })
-      } else if (chunk.type === "tool-call") {
-        const displayName = getToolDisplayName(chunk.toolName, t.toolNames)
-        if (!usedToolNames.includes(chunk.toolName)) usedToolNames.push(chunk.toolName)
-        trajectory.push({
-          round: 2,
-          kind: "tool-call",
-          toolName: chunk.toolName,
-          input: (chunk as { input?: unknown }).input,
-        })
-        emit({
-          type: "tool-call",
-          toolName: chunk.toolName,
-          state: `🔍 ${displayName}...`,
-          toolCalls: [...usedToolNames],
-        })
-      } else if (chunk.type === "tool-result") {
-        const chunkAny = chunk as any
-        const toolResult = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
-        followUpToolResults.push({ toolName: chunk.toolName, result: toolResult })
-        trajectory.push({ round: 2, kind: "tool-result", toolName: chunk.toolName, result: toolResult })
-        emit({ type: "tool-result", toolName: chunk.toolName, result: toolResult })
-      } else if (chunk.type === "error") {
-        throw (chunk as { error?: unknown }).error ?? new Error("AI stream error")
+        for await (const chunk of withIdleTimeout(
+          followUpResult.fullStream,
+          idleMs,
+          () => requestController.abort(),
+          abortController.signal,
+        )) {
+          if (chunk.type === "text-delta") {
+            followUpContent += chunk.text
+            emit({ type: "content", content: followUpContent })
+          } else if (chunk.type === "tool-call") {
+            const displayName = getToolDisplayName(chunk.toolName, t.toolNames)
+            if (!usedToolNames.includes(chunk.toolName)) usedToolNames.push(chunk.toolName)
+            trajectory.push({
+              round: 2,
+              kind: "tool-call",
+              toolName: chunk.toolName,
+              input: (chunk as { input?: unknown }).input,
+            })
+            emit({
+              type: "tool-call",
+              toolName: chunk.toolName,
+              state: `🔍 ${displayName}...`,
+              toolCalls: [...usedToolNames],
+            })
+          } else if (chunk.type === "tool-result") {
+            const chunkAny = chunk as any
+            const toolResult = chunkAny.result ?? chunkAny.output ?? chunkAny.toolResult ?? chunkAny
+            followUpToolResults.push({ toolName: chunk.toolName, result: toolResult })
+            trajectory.push({ round: 2, kind: "tool-result", toolName: chunk.toolName, result: toolResult })
+            emit({ type: "tool-result", toolName: chunk.toolName, result: toolResult })
+          } else if (chunk.type === "error") {
+            throw (chunk as { error?: unknown }).error ?? new Error("AI stream error")
+          }
+        }
+        addUsage(await followUpResult.usage)
+        break
+      } catch (error) {
+        const mayRetry = shouldPreExecute && attempt + 1 < maxFollowUpAttempts &&
+          followUpContent.length === 0 && !abortController.signal.aborted
+        if (!mayRetry) throw error
+        emit({ type: 'status', state: `📝 ${t.organizingResults}` })
+      } finally {
+        if (shouldPreExecute) {
+          abortController.signal.removeEventListener('abort', forwardAbort)
+        }
       }
     }
-    addUsage(await followUpResult.usage)
 
     // Round 3 — synthesis: follow-up itself called tools but still emitted no text.
     if (followUpToolResults.length > 0 && followUpContent.length === 0) {

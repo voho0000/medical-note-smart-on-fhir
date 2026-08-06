@@ -776,6 +776,45 @@ describe('createFhirTools (unified)', () => {
     })
   })
 
+  describe('getHealthSummarySnapshot', () => {
+    it('returns a compact, deduplicated cross-domain summary', async () => {
+      const r = await call('getHealthSummarySnapshot')
+
+      expect(r).toMatchObject({
+        success: true,
+        incomplete: false,
+        canConcludeAbsence: true,
+        counts: {
+          conditions: 1,
+          activeMedications: 1,
+          abnormalLabs: 1,
+          recentVitals: 1,
+        },
+      })
+      expect(r.data.conditions).toHaveLength(1)
+      expect(r.data.medications).toHaveLength(1)
+      expect(r.data.medications[0].name).toBe('Sotalol')
+      expect(r.data.abnormalLabs).toEqual([
+        expect.objectContaining({ name: 'HbA1c', value: 8.2, abnormal: true }),
+      ])
+      expect(r.data.recentVitals).toEqual([
+        expect.objectContaining({ name: 'Body Height', value: 168 }),
+      ])
+      expect(r.groundingRules).toMatchObject({
+        medicationFieldsOnly: true,
+        normalityStatusIsAuthoritative: true,
+      })
+    })
+
+    it('does not expose patient identifiers in the snapshot', async () => {
+      const r = await call('getHealthSummarySnapshot')
+      const serialized = JSON.stringify(r)
+
+      expect(serialized).not.toContain(samplePatient.id)
+      expect(serialized).not.toContain('Dr. Wang')
+    })
+  })
+
   describe('searchObservationByName', () => {
     it('finds by substring (English)', async () => {
       const r = await call('searchObservationByName', { query: 'HbA1c' })

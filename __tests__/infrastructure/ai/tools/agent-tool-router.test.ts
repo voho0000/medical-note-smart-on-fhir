@@ -7,6 +7,7 @@ import {
 const names = [
   'queryPatientInfo',
   'getDataOverview',
+  'getHealthSummarySnapshot',
   'queryEncounters',
   'getRecentVisits',
   'getEncounterDetails',
@@ -68,5 +69,12 @@ describe('agent tool router', () => {
       '請用我匯入的健康資料整理慢性疾病、目前用藥與檢驗摘要',
       ['queryConditions', 'queryLabResultsByCategory', 'getActiveMedicationList'],
     )).toBe('queryConditions')
+  })
+
+  it('routes a broad imported-record summary to the compact snapshot when available', () => {
+    const question = '請用我匯入的健康資料，整理最近身體狀況、慢性疾病、目前用藥，以及超出正常範圍的檢驗數值。'
+    expect(selectAgentToolNames(question, names)).toEqual(['getHealthSummarySnapshot'])
+    expect(forcedInitialAgentToolName(question, ['getHealthSummarySnapshot']))
+      .toBe('getHealthSummarySnapshot')
   })
 })

@@ -490,6 +490,7 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           messages: apiMessages,
           tools: toolsForTurn,
           initialToolName,
+          preExecuteInitialTool: isCustomEndpoint && initialToolName === 'getHealthSummarySnapshot',
           idleMs,
           abortController,
           onEvent,

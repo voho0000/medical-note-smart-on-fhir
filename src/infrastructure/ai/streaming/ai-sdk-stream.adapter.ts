@@ -113,6 +113,7 @@ export class AiSdkStreamAdapter {
         result.textStream,
         idleTimeoutMs,
         () => controller.abort(),
+        config.signal,
       )) {
         fullText += delta
         config.onChunk(fullText)
