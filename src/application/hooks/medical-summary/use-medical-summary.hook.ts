@@ -285,31 +285,37 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
 
     // Local Chat Completions endpoints are stateless, so permanently splitting
     // every summary into multiple calls would resend the entire patient context
-    // and nearly double input tokens. Prefer one batch, then automatically retry
-    // only the medication card when that specific JSON block was malformed,
-    // omitted, or the oversized batch request failed. The narrower completion
-    // is materially cheaper than a fixed two-batch strategy and can still
-    // succeed when the local model struggles with the full multi-card output.
+    // and nearly double input tokens. Prefer one batch, then retry only cards
+    // whose independently delimited JSON failed to parse. Cap automatic retries
+    // at two so a badly failed batch cannot fan out into five full-context calls.
+    // If the whole request failed, preserve the previous medication-only fallback
+    // instead of resending every card.
     if (initialBatchMessages && isCustomOpenAiModelId(ctx.modelId)) {
-      const medicationIndex = targetModuleIds.indexOf('medications')
-      const medicationOutcome = settled[medicationIndex]
-      if (
-        medicationIndex >= 0 &&
-        medicationOutcome &&
-        (medicationOutcome.status === 'rejected' || 'error' in medicationOutcome.value)
-      ) {
-        const medicationRequest = {
-          moduleId: 'medications' as const,
-          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, 'medications'),
+      const allRejected = settled.length > 0 && settled.every((outcome) => outcome.status === 'rejected')
+      const parseFailedModuleIds = targetModuleIds.filter((moduleId, index) => {
+        const outcome = settled[index]
+        return outcome?.status === 'fulfilled' && 'error' in outcome.value
+      })
+      const retryModuleIds = allRejected && targetModuleIds.includes('medications')
+        ? ['medications' as const]
+        : [...parseFailedModuleIds]
+            .sort((left, right) => Number(right === 'medications') - Number(left === 'medications'))
+            .slice(0, 2)
+
+      for (const moduleId of retryModuleIds) {
+        const moduleIndex = targetModuleIds.indexOf(moduleId)
+        const moduleRequest = {
+          moduleId,
+          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
         }
         try {
-          settled[medicationIndex] = {
+          settled[moduleIndex] = {
             status: 'fulfilled',
-            value: await runModule(medicationRequest),
+            value: await runModule(moduleRequest),
           }
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') throw error
-          settled[medicationIndex] = { status: 'rejected', reason: error }
+          settled[moduleIndex] = { status: 'rejected', reason: error }
         }
       }
     }

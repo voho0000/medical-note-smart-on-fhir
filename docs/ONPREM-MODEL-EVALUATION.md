@@ -32,7 +32,14 @@ Useful filters:
 ```powershell
 npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5
 npm.cmd run eval:onprem-models -- --phase chat --models gemma4:31b --chat-cases hba1c-trend,penicillin-allergy
+npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5 --summary-cases cross-hospital-current-medications --summary-strategies single,single-retry-missing,split-3-2 --repeat 10
+npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases broad-health-summary --repeat 10
 ```
+
+`--repeat` repeats each selected case without retaining full outputs. Summary
+strategies compare one full batch, one full batch followed by retries for only
+missing modules, and a fixed 3+2 split. The report records request count,
+latency, parsing/grounding scores, and provider-reported tokens.
 
 Reports and JSONL run records are written under
 `scripts/experiments/onprem-model-eval/results/`, which is gitignored.

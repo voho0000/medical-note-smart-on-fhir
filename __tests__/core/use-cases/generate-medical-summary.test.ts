@@ -599,6 +599,23 @@ describe('modular summary generation contract', () => {
     expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
+  it('can build a smaller requested-module batch for local-model A/B evaluation', () => {
+    const messages = useCase.buildBatchModuleMessages(input, [
+      'medications',
+      'priorities',
+      'problems',
+    ])
+    const prompt = messages[0].content
+
+    expect(prompt).toContain('Generate only the 3 requested modules')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:medications>>>')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:priorities>>>')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:problems>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:timeline>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:investigations>>>')
+    expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
+  })
+
   it('scrubs patient literals from appended context and source labels at the final boundary', () => {
     const messages = useCase.buildBatchModuleMessages({
       ...input,

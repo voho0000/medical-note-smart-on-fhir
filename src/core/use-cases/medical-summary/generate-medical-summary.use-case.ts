@@ -1044,17 +1044,34 @@ const BATCH_MODULE_OUTPUT_ORDER: readonly MedicalSummaryModuleId[] = [
   'investigations',
 ]
 
-const BATCH_OUTPUT_INSTRUCTION = (audience: GenerateMedicalSummaryInput['audience']) =>
-  '\n\nBATCH MODULAR OUTPUT CONTRACT: Generate all five modules in the exact order shown below. ' +
+const BATCH_OUTPUT_INSTRUCTION = (
+  audience: GenerateMedicalSummaryInput['audience'],
+  moduleIds: readonly MedicalSummaryModuleId[] = BATCH_MODULE_OUTPUT_ORDER,
+) => {
+  const orderedModuleIds = BATCH_MODULE_OUTPUT_ORDER.filter((moduleId) =>
+    moduleIds.includes(moduleId),
+  )
+  const isCompleteBatch = orderedModuleIds.length === BATCH_MODULE_OUTPUT_ORDER.length
+  const scopeInstruction = isCompleteBatch
+    ? 'Generate all five modules in the exact order shown below. '
+    : `Generate only the ${orderedModuleIds.length} requested modules in the exact order shown below. `
+  const omissionInstruction = isCompleteBatch
+    ? 'do NOT use markdown fences, and do NOT omit later modules if an earlier module is uncertain. '
+    : 'do NOT use markdown fences, and do NOT omit a requested module if an earlier module is uncertain. '
+
+  return '\n\nBATCH MODULAR OUTPUT CONTRACT: ' + scopeInstruction +
   'Each module is an independent JSON object enclosed by its exact start and end markers. ' +
-  'The medications block is FIRST and MANDATORY: finish its complete JSON object and exact end marker before starting any other block. ' +
-  'Even when no medication is supported, emit the medications block with the required empty arrays; never skip it. ' +
-  'The markers are the only permitted non-JSON text. Do NOT wrap the five modules in one outer JSON object or array, ' +
-  'do NOT use markdown fences, and do NOT omit later modules if an earlier module is uncertain. ' +
+  (orderedModuleIds.includes('medications')
+    ? 'The medications block is FIRST and MANDATORY: finish its complete JSON object and exact end marker before starting any other block. ' +
+      'Even when no medication is supported, emit the medications block with the required empty arrays; never skip it. '
+    : '') +
+  'The markers are the only permitted non-JSON text. Do NOT wrap the requested modules in one outer JSON object or array, ' +
+  omissionInstruction +
   'Use empty arrays or optional omissions allowed by that module schema instead of explanatory prose.\n\n' +
-  BATCH_MODULE_OUTPUT_ORDER.map((moduleId) =>
+  orderedModuleIds.map((moduleId) =>
     `${moduleBlockStart(moduleId)}\n${medicationAudienceOverride(moduleId, audience)}${moduleSchemaHint(moduleId, audience)}\n${moduleBlockEnd(moduleId)}`,
   ).join('\n\n')
+}
 
 const SYSTEM_MEDICAL =
   'You are preparing a structured cross-hospital patient summary for a physician who is seeing this patient ' +
@@ -1313,8 +1330,17 @@ export class GenerateMedicalSummaryUseCase {
   /** Initial live generation sends the clinical context once and asks for
    * independently delimited card payloads. Failed cards can then reuse the
    * single-module contract above without regenerating successful cards. */
-  buildBatchModuleMessages(input: GenerateMedicalSummaryInput): AiMessage[] {
-    return this.buildMessagesForOutput(input, BATCH_OUTPUT_INSTRUCTION(input.audience))
+  buildBatchModuleMessages(
+    input: GenerateMedicalSummaryInput,
+    moduleIds: readonly MedicalSummaryModuleId[] = BATCH_MODULE_OUTPUT_ORDER,
+  ): AiMessage[] {
+    if (moduleIds.length === 0) {
+      throw new Error('At least one medical summary module is required')
+    }
+    return this.buildMessagesForOutput(
+      input,
+      BATCH_OUTPUT_INSTRUCTION(input.audience, moduleIds),
+    )
   }
 
   /**

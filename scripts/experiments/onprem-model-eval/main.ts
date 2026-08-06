@@ -54,12 +54,15 @@ const syntheticAge = now.getFullYear() - syntheticBirthDate.getFullYear() - (
 
 type Phase = 'all' | 'summary' | 'chat'
 type Audience = 'medical' | 'patient'
+type SummaryStrategy = 'single' | 'single-retry-missing' | 'split-3-2'
 
 interface CliOptions {
   phase: Phase
   models: string[] | null
   summaryCases: string[] | null
   chatCases: string[] | null
+  summaryStrategies: SummaryStrategy[]
+  repeat: number
   includeOutput: boolean
   requestTimeoutMs: number
 }
@@ -76,6 +79,7 @@ interface ChatFixture {
   id: string
   question: string
   acceptedTools: string[]
+  requiredToolGroups?: string[][]
   requiredArgumentTerms?: string[]
   requiredToolResultTerms?: string[]
   requiredAnswerGroups: RegExp[]
@@ -93,6 +97,9 @@ interface SummaryRunRecord {
   model: string
   caseId: string
   audience: Audience
+  strategy: SummaryStrategy
+  repetition: number
+  requestCount: number
   ok: boolean
   latencyMs: number
   parsedModules: number
@@ -111,6 +118,7 @@ interface ChatRunRecord {
   phase: 'chat'
   model: string
   caseId: string
+  repetition: number
   ok: boolean
   latencyMs: number
   actualTools: string[]
@@ -154,11 +162,21 @@ function parseArgs(argv: string[]): CliOptions {
   if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 10_000 || requestTimeoutMs > 600_000) {
     throw new Error('--timeout-ms must be an integer from 10000 to 600000')
   }
+  const repeat = Number.parseInt(read('--repeat') ?? '1', 10)
+  if (!Number.isInteger(repeat) || repeat < 1 || repeat > 100) {
+    throw new Error('--repeat must be an integer from 1 to 100')
+  }
+  const summaryStrategies = (parseCsv(read('--summary-strategies')) ?? ['single']) as SummaryStrategy[]
+  if (summaryStrategies.some((strategy) => !['single', 'single-retry-missing', 'split-3-2'].includes(strategy))) {
+    throw new Error('--summary-strategies must contain single, single-retry-missing, and/or split-3-2')
+  }
   return {
     phase,
     models: parseCsv(read('--models')),
     summaryCases: parseCsv(read('--summary-cases')),
     chatCases: parseCsv(read('--chat-cases')),
+    summaryStrategies,
+    repeat,
     includeOutput: argv.includes('--include-output'),
     requestTimeoutMs,
   }
@@ -445,6 +463,34 @@ const chatFixtures: ChatFixture[] = [
     ],
   },
   {
+    id: 'broad-health-summary',
+    question: '請用我匯入的健康資料，整理最近身體狀況、慢性疾病、目前用藥，以及超出正常範圍的檢驗數值；最後提醒我若有疑慮應與醫師討論。',
+    acceptedTools: [
+      'queryConditions',
+      'getActiveMedicationList',
+      'queryMedications',
+      'queryLabResultsByCategory',
+      'queryObservations',
+      'queryDiagnosticReports',
+      'searchObservationByName',
+      'listAvailableObservationCodes',
+    ],
+    requiredToolGroups: [
+      ['queryConditions'],
+      ['getActiveMedicationList', 'queryMedications'],
+      ['queryLabResultsByCategory', 'queryObservations', 'queryDiagnosticReports'],
+    ],
+    requiredToolResultTerms: ['HbA1c', '8.2'],
+    requiredAnswerGroups: [
+      /(高血壓|hypertension)/i,
+      /(Sotalol|索他洛爾)/i,
+      /HbA1c/i,
+      /8\.2/,
+      /醫師/,
+    ],
+    forbiddenAnswer: /(重新匯入|請.*匯入.*資料)/i,
+  },
+  {
     id: 'general-no-tool',
     question: '不要查詢病歷。請用一句話解釋 HbA1c 是什麼。',
     acceptedTools: [],
@@ -492,44 +538,82 @@ function mergeParsedModules(
   return draft
 }
 
+const SUMMARY_STRATEGY_GROUPS: Record<SummaryStrategy, readonly (readonly MedicalSummaryModuleId[])[]> = {
+  single: [MEDICAL_SUMMARY_MODULE_IDS],
+  'single-retry-missing': [MEDICAL_SUMMARY_MODULE_IDS],
+  'split-3-2': [
+    ['medications', 'priorities', 'problems'],
+    ['timeline', 'investigations'],
+  ],
+}
+
+function addUsage(left: UsageRecord, right: UsageRecord): UsageRecord {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    totalTokens: left.totalTokens + right.totalTokens,
+  }
+}
+
 async function runSummaryCase(
   endpoint: string,
   apiKey: string,
   model: string,
   fixture: SummaryFixture,
+  strategy: SummaryStrategy,
+  repetition: number,
   options: CliOptions,
 ): Promise<SummaryRunRecord> {
   const startedAt = Date.now()
-  let output = ''
+  const outputs: string[] = []
+  let usage = emptyUsage()
+  let requestCount = 0
   try {
-    const messages = generateMedicalSummaryUseCase.buildBatchModuleMessages({
+    const promptInput = {
       clinicalContext: fixture.clinicalContext,
       catalog: fixture.catalog,
-      locale: 'zh-TW',
+      locale: 'zh-TW' as const,
       audience: fixture.audience,
-    })
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        connection: 'close',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ model, messages, stream: false, temperature: 0 }),
-      signal: AbortSignal.timeout(options.requestTimeoutMs),
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const body = await response.json() as {
-      message?: string
-      choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
-      usage?: unknown
     }
-    output = body.choices?.[0]?.message?.content ?? body.message ?? ''
     const modules: Partial<{ [K in MedicalSummaryModuleId]: MedicalSummaryModuleResultMap[K] }> = {}
-    MEDICAL_SUMMARY_MODULE_IDS.forEach((moduleId) => {
-      const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, output)
-      if (parsed) (modules as Record<string, unknown>)[moduleId] = parsed
-    })
+    const finishReasons: string[] = []
+    const requestModuleGroup = async (moduleIds: readonly MedicalSummaryModuleId[]) => {
+      const messages = generateMedicalSummaryUseCase.buildBatchModuleMessages(promptInput, moduleIds)
+      requestCount += 1
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          connection: 'close',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ model, messages, stream: false, temperature: 0 }),
+        signal: AbortSignal.timeout(options.requestTimeoutMs),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const body = await response.json() as {
+        message?: string
+        choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
+        usage?: unknown
+      }
+      const output = body.choices?.[0]?.message?.content ?? body.message ?? ''
+      outputs.push(output)
+      usage = addUsage(usage, normalizeUsage(body.usage))
+      if (body.choices?.[0]?.finish_reason) finishReasons.push(body.choices[0].finish_reason)
+      moduleIds.forEach((moduleId) => {
+        const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, output)
+        if (parsed) (modules as Record<string, unknown>)[moduleId] = parsed
+      })
+    }
+    for (const moduleIds of SUMMARY_STRATEGY_GROUPS[strategy]) {
+      await requestModuleGroup(moduleIds)
+    }
+    if (strategy === 'single-retry-missing') {
+      const missingModuleIds = MEDICAL_SUMMARY_MODULE_IDS.filter((moduleId) => !modules[moduleId])
+      for (const moduleId of missingModuleIds) {
+        await requestModuleGroup([moduleId])
+      }
+    }
     const draft = mergeParsedModules(modules)
     const sourceKeys = collectSourceKeys(modules)
     const validKeys = new Set(fixture.catalog.map((entry) => entry.key))
@@ -543,6 +627,9 @@ async function runSummaryCase(
       model,
       caseId: fixture.id,
       audience: fixture.audience,
+      strategy,
+      repetition,
+      requestCount,
       ok,
       latencyMs: Date.now() - startedAt,
       parsedModules,
@@ -550,10 +637,10 @@ async function runSummaryCase(
       citationCount: sourceKeys.length,
       invalidSourceKeys,
       semanticFailures,
-      finishReason: body.choices?.[0]?.finish_reason,
-      usage: normalizeUsage(body.usage),
-      outputSha256: sha256(output),
-      ...(options.includeOutput ? { output } : {}),
+      finishReason: finishReasons.join(','),
+      usage,
+      outputSha256: sha256(outputs.join('\n\n')),
+      ...(options.includeOutput ? { output: outputs.join('\n\n') } : {}),
     }
   } catch (error) {
     return {
@@ -561,6 +648,9 @@ async function runSummaryCase(
       model,
       caseId: fixture.id,
       audience: fixture.audience,
+      strategy,
+      repetition,
+      requestCount,
       ok: false,
       latencyMs: Date.now() - startedAt,
       parsedModules: 0,
@@ -568,9 +658,9 @@ async function runSummaryCase(
       citationCount: 0,
       invalidSourceKeys: [],
       semanticFailures: [],
-      usage: emptyUsage(),
-      outputSha256: sha256(output),
-      ...(options.includeOutput && output ? { output } : {}),
+      usage,
+      outputSha256: sha256(outputs.join('\n\n')),
+      ...(options.includeOutput && outputs.length > 0 ? { output: outputs.join('\n\n') } : {}),
       error: safeError(error, apiKey),
     }
   }
@@ -596,6 +686,7 @@ async function runChatCase(
   apiKey: string,
   modelName: string,
   fixture: ChatFixture,
+  repetition: number,
   options: CliOptions,
 ): Promise<ChatRunRecord> {
   const startedAt = Date.now()
@@ -658,9 +749,13 @@ async function runChatCase(
     answer = result.answer.trim()
     const actualTools = uniqueToolNames(result.trajectory)
     const unexpectedTools = actualTools.filter((tool) => !fixture.acceptedTools.includes(tool))
-    const toolSelectionOk = fixture.acceptedTools.length === 0
+    const baseToolSelectionOk = fixture.acceptedTools.length === 0
       ? actualTools.length === 0
       : actualTools.some((tool) => fixture.acceptedTools.includes(tool)) && unexpectedTools.length === 0
+    const requiredToolGroupsOk = (fixture.requiredToolGroups ?? []).every((group) =>
+      group.some((tool) => actualTools.includes(tool)),
+    )
+    const toolSelectionOk = baseToolSelectionOk && requiredToolGroupsOk
     const callText = trajectoryText(result.trajectory, 'tool-call')
     const argumentsOk = (fixture.requiredArgumentTerms ?? []).every((term) =>
       callText.toLocaleLowerCase().includes(term.toLocaleLowerCase()),
@@ -676,6 +771,7 @@ async function runChatCase(
       phase: 'chat',
       model: modelName,
       caseId: fixture.id,
+      repetition,
       ok: toolSelectionOk && argumentsOk && retrievalOk && answerOk,
       latencyMs: Date.now() - startedAt,
       actualTools,
@@ -693,6 +789,7 @@ async function runChatCase(
       phase: 'chat',
       model: modelName,
       caseId: fixture.id,
+      repetition,
       ok: false,
       latencyMs: Date.now() - startedAt,
       actualTools: [],
@@ -729,17 +826,20 @@ function createReport(records: RunRecord[], timestamp: string): string {
     '',
     '## Medical Summary',
     '',
-    '| Model | End-to-end | Module parse | Avg latency | Total tokens |',
-    '|---|---:|---:|---:|---:|',
+    '| Model | Strategy | End-to-end | Module parse | Avg requests | Avg latency | Total tokens |',
+    '|---|---|---:|---:|---:|---:|---:|',
   ]
   const summaryRecords = records.filter((record): record is SummaryRunRecord => record.phase === 'summary')
-  for (const model of [...new Set(summaryRecords.map((record) => record.model))]) {
-    const rows = summaryRecords.filter((record) => record.model === model)
+  const summaryGroups = [...new Set(summaryRecords.map((record) => `${record.model}\t${record.strategy}`))]
+  for (const group of summaryGroups) {
+    const [model, strategy] = group.split('\t') as [string, SummaryStrategy]
+    const rows = summaryRecords.filter((record) => record.model === model && record.strategy === strategy)
     const passed = rows.filter((record) => record.ok).length
     const parsed = rows.reduce((sum, record) => sum + record.parsedModules, 0)
     const modules = rows.reduce((sum, record) => sum + record.totalModules, 0)
     const tokens = rows.reduce((sum, record) => sum + record.usage.totalTokens, 0)
-    lines.push(`| ${model} | ${passed}/${rows.length} (${percent(passed, rows.length)}) | ${parsed}/${modules} (${percent(parsed, modules)}) | ${average(rows.map((row) => row.latencyMs))} ms | ${tokens} |`)
+    const requests = rows.reduce((sum, record) => sum + record.requestCount, 0) / rows.length
+    lines.push(`| ${model} | ${strategy} | ${passed}/${rows.length} (${percent(passed, rows.length)}) | ${parsed}/${modules} (${percent(parsed, modules)}) | ${requests.toFixed(1)} | ${average(rows.map((row) => row.latencyMs))} ms | ${tokens} |`)
   }
   lines.push('', '## Chat / tool calling', '', '| Model | End-to-end | Tool selection | Arguments | Retrieval | Final answer | Avg latency | Total tokens |', '|---|---:|---:|---:|---:|---:|---:|---:|')
   const chatRecords = records.filter((record): record is ChatRunRecord => record.phase === 'chat')
@@ -760,7 +860,7 @@ function createReport(records: RunRecord[], timestamp: string): string {
         record.invalidSourceKeys.length > 0 ? `invalid sources: ${record.invalidSourceKeys.join(',')}` : '',
         ...record.semanticFailures,
       ].filter(Boolean).join('; ')
-      lines.push(`- summary / ${record.model} / ${record.caseId}: ${reasons || 'failed'}`)
+      lines.push(`- summary / ${record.model} / ${record.strategy} / ${record.caseId} / run ${record.repetition}: ${reasons || 'failed'}`)
     } else {
       const reasons = [
         record.error,
@@ -769,7 +869,7 @@ function createReport(records: RunRecord[], timestamp: string): string {
         !record.retrievalOk ? 'retrieval' : '',
         !record.answerOk ? 'final answer' : '',
       ].filter(Boolean).join('; ')
-      lines.push(`- chat / ${record.model} / ${record.caseId}: ${reasons || 'failed'}`)
+      lines.push(`- chat / ${record.model} / ${record.caseId} / run ${record.repetition}: ${reasons || 'failed'}`)
     }
   })
   return `${lines.join('\n')}\n`
@@ -802,10 +902,16 @@ export async function main(): Promise<void> {
       phase: result.phase,
       model: result.model,
       caseId: result.caseId,
+      repetition: result.repetition,
       ok: result.ok,
       latencyMs: result.latencyMs,
       ...(result.phase === 'summary'
-        ? { parsedModules: `${result.parsedModules}/${result.totalModules}`, semanticFailures: result.semanticFailures }
+        ? {
+            strategy: result.strategy,
+            requestCount: result.requestCount,
+            parsedModules: `${result.parsedModules}/${result.totalModules}`,
+            semanticFailures: result.semanticFailures,
+          }
         : {
             tools: result.actualTools,
             toolSelectionOk: result.toolSelectionOk,
@@ -820,14 +926,28 @@ export async function main(): Promise<void> {
   if (options.phase === 'all' || options.phase === 'summary') {
     for (const model of summaryModels) {
       for (const fixture of selectedSummaryCases) {
-        record(await runSummaryCase(endpoint, apiKey, model, fixture, options))
+        for (const strategy of options.summaryStrategies) {
+          for (let repetition = 1; repetition <= options.repeat; repetition += 1) {
+            record(await runSummaryCase(
+              endpoint,
+              apiKey,
+              model,
+              fixture,
+              strategy,
+              repetition,
+              options,
+            ))
+          }
+        }
       }
     }
   }
   if (options.phase === 'all' || options.phase === 'chat') {
     for (const model of chatModels) {
       for (const fixture of selectedChatCases) {
-        record(await runChatCase(endpoint, apiKey, model, fixture, options))
+        for (let repetition = 1; repetition <= options.repeat; repetition += 1) {
+          record(await runChatCase(endpoint, apiKey, model, fixture, repetition, options))
+        }
       }
     }
   }
