@@ -8,6 +8,7 @@ import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import {
   forcedInitialAgentToolName,
   selectAgentToolsForQuestion,
+  shouldPreExecuteLocalAgentTool,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 import { buildAgentSystemPromptUseCase } from '@/src/core/use-cases/agent/build-agent-system-prompt.use-case'
 import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
@@ -136,9 +137,9 @@ async function runOne(
           { role: 'system', content: system },
           { role: 'user', content: QUESTION },
         ],
-        tools,
-        initialToolName,
-        preExecuteInitialTool: initialToolName === 'getHealthSummarySnapshot',
+      tools,
+      initialToolName,
+      preExecuteInitialTool: shouldPreExecuteLocalAgentTool(initialToolName),
         translations: {
           organizingResults: zhTW.agent.organizingResults,
           queriedFhirData: zhTW.agent.queriedFhirData,

@@ -417,6 +417,38 @@ function imagingStudyModalitySearchText(study: any): string {
   ].filter(Boolean).join(' ')
 }
 
+/**
+ * FHIR bundles often store an English report label while users and local
+ * models search in Chinese (or the reverse). Keep this deliberately small and
+ * anatomy/modality based: it bridges equivalent labels without attempting to
+ * infer a finding or diagnosis.
+ */
+function matchesImagingQuery(searchText: string, query?: string): boolean {
+  if (!query) return true
+  if (matchSubstring(searchText, query)) return true
+
+  const normalized = query.normalize('NFKC').toLowerCase()
+  const hasChest = /(胸部|胸腔|chest)/i.test(normalized)
+  const hasXray = /(x\s*[-–—]?\s*ray|x\s*光|x\s*線|放射線攝影)/i.test(normalized)
+  const hasCt = /(電腦斷層|斷層掃描|computed tomography|\bct\b)/i.test(normalized)
+  const hasMri = /(核磁共振|磁振造影|magnetic resonance|\bmri?\b)/i.test(normalized)
+  const hasUltrasound = /(超音波|超聲|ultrasound|sonograph)/i.test(normalized)
+
+  const aliases = [
+    hasXray && hasChest ? 'chest x-ray' : undefined,
+    hasXray ? 'x-ray' : undefined,
+    hasChest ? 'chest' : undefined,
+    hasCt ? 'ct' : undefined,
+    hasMri ? 'mri' : undefined,
+    hasUltrasound ? 'ultrasound' : undefined,
+  ].filter((alias): alias is string => !!alias)
+
+  // If both anatomy and modality were supplied, require their combined alias
+  // first so a chest-X-ray request does not match an unrelated chest CT.
+  if (hasChest && hasXray) return matchSubstring(searchText, 'chest x-ray')
+  return aliases.some(alias => matchSubstring(searchText, alias))
+}
+
 function calculateAge(birthDate?: string): number | null {
   if (!birthDate) return null
   const birth = new Date(birthDate)
@@ -486,13 +518,36 @@ function dedupMedsByName(meds: any[]): Array<any & { refillCount: number }> {
     if (!existing) {
       byName.set(name, { ...m, refillCount: 1 })
     } else {
-      existing.refillCount += 1
+      const refillCount = existing.refillCount + 1
       if (m.authoredOn && (!existing.authoredOn || m.authoredOn > existing.authoredOn)) {
-        existing.authoredOn = m.authoredOn
+        // Keep every displayed field (status, SIG, original name) from the
+        // same newest refill instead of updating the date alone.
+        byName.set(name, { ...m, refillCount })
+      } else {
+        existing.refillCount = refillCount
       }
     }
   }
   return Array.from(byName.values())
+}
+
+function medicationNameFields(medication: any): {
+  medication: string
+  recordedName?: string
+} {
+  const medicationName = pickAiMedicationName(
+    medication?.medicationCodeableConcept,
+    medication?.medicationReference?.display,
+  ) || 'Unknown'
+  const recordedName = [
+    medication?.medicationCodeableConcept?.text,
+    medication?.medicationReference?.display,
+  ].find((value) => typeof value === 'string' && value.trim().length > 0)?.trim()
+
+  return {
+    medication: medicationName,
+    ...(recordedName && recordedName !== medicationName ? { recordedName } : {}),
+  }
 }
 
 // ── factory ────────────────────────────────────────────────────────────────
@@ -687,15 +742,16 @@ export function createFhirTools(getData: () => AgentDataSource) {
         })
         const allMedications = dedupMedsByName(activeMedicationRecords)
           .sort((left, right) => (right.authoredOn || '').localeCompare(left.authoredOn || ''))
-        const medications = allMedications.slice(0, 40).map((medication: any) => ({
-          name: pickAiMedicationName(
-            medication.medicationCodeableConcept,
-            medication.medicationReference?.display,
-          ),
-          dosage: medication.dosageInstruction?.[0]?.text,
-          date: medication.authoredOn,
-          chronic: isChronicByCourseOfTherapy(medication.courseOfTherapyType),
-        }))
+        const medications = allMedications.slice(0, 40).map((medication: any) => {
+          const names = medicationNameFields(medication)
+          return {
+            name: names.medication,
+            ...(names.recordedName ? { recordedName: names.recordedName } : {}),
+            dosage: medication.dosageInstruction?.[0]?.text,
+            date: medication.authoredOn,
+            chronic: isChronicByCourseOfTherapy(medication.courseOfTherapyType),
+          }
+        })
 
         const abnormalByAnalyte = new Map<string, any>()
         for (const observation of collection!.observations.flatMap(item =>
@@ -746,7 +802,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: {
             medicationFieldsOnly: true,
             normalityStatusIsAuthoritative: true,
-            instruction: 'Use only these records. The snapshot is already loaded: never ask the user to import or re-import data. Do not infer medication ingredients/purposes or add customary lab ranges. If a section is empty and canConcludeAbsence is false, say the data may be incomplete. Answer in Taiwan Traditional Chinese with sections for recent condition/chronic disease, current medications, and abnormal tests. End by reminding the user to discuss concerns with their physician.',
+            instruction: 'Use only these records. The snapshot is already loaded: never ask the user to import or re-import data. For medications, name is the canonical coded label and recordedName is the literal source label when different; repeat both exactly and do not infer a translation, ingredient, purpose, or drug class. Do not add customary lab ranges. If a section is empty and canConcludeAbsence is false, say the data may be incomplete. Answer in Taiwan Traditional Chinese with sections for recent condition/chronic disease, current medications, and abnormal tests. End by reminding the user to discuss concerns with their physician.',
           },
           data: {
             conditions,
@@ -1313,7 +1369,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           ].filter(Boolean).join(' ')
           const date = diagnosticReportDate(report)
 
-          if (!matchSubstring(reportSearchText, query)) continue
+          if (!matchesImagingQuery(reportSearchText, query)) continue
           if (!matchSubstring(modalityText, modality)) continue
           if (!matchSubstring(bodySiteText, bodySite)) continue
           if (
@@ -1342,7 +1398,7 @@ export function createFhirTools(getData: () => AgentDataSource) {
           const modalitySearchText = imagingStudyModalitySearchText(study)
           const modalityText = imagingStudyModalityText(study)
           const bodySiteText = imagingStudyBodySiteText(study)
-          if (!matchSubstring(searchText, query)) continue
+          if (!matchesImagingQuery(searchText, query)) continue
           if (!matchSubstring(modalitySearchText, modality)) continue
           if (!matchSubstring(bodySiteText, bodySite)) continue
           if (!matchStatus(study.status, status)) continue
@@ -1573,13 +1629,10 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: {
             providedFieldsOnly: true,
             ingredientPurposeDrugClassProvided: false,
-            instruction: 'Copy medication and dosage fields verbatim. Do not infer ingredient, purpose, drug class, formulation, or treatment target.',
+            instruction: 'Copy medication, recordedName, and dosage fields verbatim. medication is the canonical coded label; recordedName is the literal source label when different. Do not infer a translation, ingredient, purpose, drug class, formulation, or treatment target.',
           },
           data: capped.map((m: any) => ({
-            medication: pickAiMedicationName(
-              m.medicationCodeableConcept,
-              m.medicationReference?.display,
-            ),
+            ...medicationNameFields(m),
             status: m.status,
             authoredOn: m.authoredOn,
             dosageInstruction: m.dosageInstruction?.[0]?.text,
@@ -1617,13 +1670,11 @@ export function createFhirTools(getData: () => AgentDataSource) {
           groundingRules: {
             providedFieldsOnly: true,
             ingredientPurposeDrugClassProvided: false,
-            instruction: 'Copy medication and dosage fields verbatim. Do not infer ingredient, purpose, drug class, formulation, or treatment target.',
+            instruction: 'Copy medication, recordedName, and dosage fields verbatim. medication is the canonical coded label; recordedName is the literal source label when different. Do not infer a translation, ingredient, purpose, drug class, formulation, or treatment target.',
           },
           data: deduped.map((m: any) => ({
-            medication: pickAiMedicationName(
-              m.medicationCodeableConcept,
-              m.medicationReference?.display,
-            ),
+            ...medicationNameFields(m),
+            status: m.status,
             dosage: m.dosageInstruction?.[0]?.text,
             authoredOn: m.authoredOn,
             chronic: isChronicByCourseOfTherapy(m.courseOfTherapyType),

@@ -78,6 +78,52 @@ describe('AiSdkStreamAdapter manifest request policy', () => {
     }))
   })
 
+  it('forwards reasoning effort only for a configured custom gpt-oss model', async () => {
+    const create = jest.fn(() => ({ model: { kind: 'chat' }, isGemini: false }))
+    const adapter = new AiSdkStreamAdapter({ create } as any)
+
+    await adapter.stream({
+      model: 'openai-compatible-custom:test-profile',
+      messages: [{ role: 'user', content: 'hello' }],
+      apiKey: null,
+      openAiCompatible: {
+        enabled: true,
+        baseUrl: 'https://hospital.example/v1',
+        modelId: 'gpt-oss:20b',
+        apiKey: null,
+      },
+      signal: new AbortController().signal,
+      reasoningEffort: 'low',
+      onChunk: jest.fn(),
+    })
+
+    expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({
+      providerOptions: { openai: { reasoningEffort: 'low' } },
+    }))
+  })
+
+  it('omits reasoning effort for non-gpt-oss custom models', async () => {
+    const create = jest.fn(() => ({ model: { kind: 'chat' }, isGemini: false }))
+    const adapter = new AiSdkStreamAdapter({ create } as any)
+
+    await adapter.stream({
+      model: 'openai-compatible-custom:test-profile',
+      messages: [{ role: 'user', content: 'hello' }],
+      apiKey: null,
+      openAiCompatible: {
+        enabled: true,
+        baseUrl: 'https://hospital.example/v1',
+        modelId: 'gemma4:31b',
+        apiKey: null,
+      },
+      signal: new AbortController().signal,
+      reasoningEffort: 'low',
+      onChunk: jest.fn(),
+    })
+
+    expect(mockStreamText.mock.calls[0][0]).not.toHaveProperty('providerOptions')
+  })
+
   it('applies fixed-one sampling without inspecting a model prefix', async () => {
     const create = jest.fn(() => ({ model: { kind: 'chat' }, isGemini: false }))
     const adapter = new AiSdkStreamAdapter({ create } as any)

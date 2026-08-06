@@ -49,6 +49,39 @@ describe('OpenAiCompatibleService', () => {
     })
   })
 
+  it('sends reasoning effort only to configured gpt-oss models', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      choices: [{ message: { content: 'answer' } }],
+    }))
+    const service = new OpenAiCompatibleService({ ...config, modelId: 'gpt-oss:20b' })
+
+    await service.query({
+      modelId: 'openai-compatible-custom',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoningEffort: 'low',
+    })
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      model: 'gpt-oss:20b',
+      reasoning_effort: 'low',
+    })
+  })
+
+  it('omits gpt-oss reasoning controls for other endpoint models', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      choices: [{ message: { content: 'answer' } }],
+    }))
+    const service = new OpenAiCompatibleService(config)
+
+    await service.query({
+      modelId: 'openai-compatible-custom',
+      messages: [{ role: 'user', content: 'hello' }],
+      reasoningEffort: 'low',
+    })
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).not.toHaveProperty('reasoning_effort')
+  })
+
   it('never falls back when the custom profile is unavailable', async () => {
     const fetchMock = jest.spyOn(global, 'fetch')
     const service = new OpenAiCompatibleService({ ...config, enabled: false })

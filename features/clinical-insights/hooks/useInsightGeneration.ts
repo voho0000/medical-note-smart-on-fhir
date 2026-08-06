@@ -13,6 +13,7 @@ import {
   formatClinicalContextAdaptationNotice,
   type ClinicalContextAdaptation,
 } from '@/src/core/utils/adaptive-clinical-context.utils'
+import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 
 interface Panel {
   id: string
@@ -83,6 +84,7 @@ export function useInsightGeneration({
           clinicalContext: context,
           piiLiterals,
           modelId: model,
+          locale: locale === 'zh-TW' ? 'zh-TW' as const : 'en' as const,
         }
         const validation = generateInsight.validate(input)
         if (!validation.valid) {
@@ -146,7 +148,16 @@ export function useInsightGeneration({
             { selectedContext: context, contextLimit },
           )
           if (overflow) throw new Error(overflow)
-          const fullText = await ai.query(messages, { modelId: model })
+          const fullText = await ai.query(messages, {
+            modelId: model,
+            // Deterministic decoding improves factual repeatability on local
+            // OpenAI-compatible models. A bounded completion also prevents
+            // reasoning models from spending thousands of hidden tokens on a
+            // single concise card. Keep frontier-provider defaults intact.
+            ...(isCustomOpenAiModelId(model)
+              ? { temperature: 0, maxTokens: 4096, reasoningEffort: 'low' as const }
+              : {}),
+          })
           if (runIdRef.current !== runId || ownerChanged()) return
           entries[panel.id] = {
             text: fullText,

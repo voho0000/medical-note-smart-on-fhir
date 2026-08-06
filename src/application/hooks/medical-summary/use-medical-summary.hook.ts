@@ -233,10 +233,22 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         // when sampling is deterministic. Providers that require/omit a fixed
         // temperature normalize this option in their adapter.
         temperature: 0,
+        ...(isCustomOpenAiModelId(ctx.modelId) ? { reasoningEffort: 'low' as const } : {}),
       })
       const parsed = generateMedicalSummaryUseCase.parseModuleResult(moduleId, full)
       if (!parsed) {
         return { moduleId, error: 'PARSE_FAILED' as const }
+      }
+      const unknownSourceKeys = generateMedicalSummaryUseCase.findUnknownSourceKeys(
+        parsed,
+        ctx.catalog,
+      )
+      if (unknownSourceKeys.length > 0) {
+        console.warn(
+          `[medical-summary:${moduleId}] grounding validation failed; unknown source keys:`,
+          unknownSourceKeys,
+        )
+        return { moduleId, error: 'GROUNDING_FAILED' as const }
       }
       return { moduleId, result: parsed }
     }
@@ -252,14 +264,27 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           operationKey: ctx.operationKey,
           throwOnAbort: true,
           temperature: 0,
+          ...(isCustomOpenAiModelId(ctx.modelId) ? { reasoningEffort: 'low' as const } : {}),
         })
         targetModuleIds.forEach((moduleId) => {
           const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, full)
+          const unknownSourceKeys = parsed
+            ? generateMedicalSummaryUseCase.findUnknownSourceKeys(parsed, ctx.catalog)
+            : []
+          if (unknownSourceKeys.length > 0) {
+            console.warn(
+              `[medical-summary:${moduleId}] grounding validation failed; unknown source keys:`,
+              unknownSourceKeys,
+            )
+          }
           settled.push({
             status: 'fulfilled',
-            value: parsed
+            value: parsed && unknownSourceKeys.length === 0
               ? { moduleId, result: parsed }
-              : { moduleId, error: 'PARSE_FAILED' as const },
+              : {
+                  moduleId,
+                  error: parsed ? 'GROUNDING_FAILED' as const : 'PARSE_FAILED' as const,
+                },
           })
         })
       } catch (error) {
@@ -286,7 +311,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // Local Chat Completions endpoints are stateless, so permanently splitting
     // every summary into multiple calls would resend the entire patient context
     // and nearly double input tokens. Prefer one batch, then retry only cards
-    // whose independently delimited JSON failed to parse. Cap automatic retries
+    // whose independently delimited JSON failed to parse or cited a nonexistent
+    // catalog key. Cap automatic retries
     // at two so a badly failed batch cannot fan out into five full-context calls.
     // If the whole request failed, preserve the previous medication-only fallback
     // instead of resending every card.

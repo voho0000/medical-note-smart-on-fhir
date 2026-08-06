@@ -34,6 +34,7 @@ interface QueryOptions {
   modelId?: string
   temperature?: number
   maxTokens?: number
+  reasoningEffort?: 'low' | 'medium' | 'high'
   responseFormat?: 'json'
   /** Optional owner identity for cancelling one structured generation slot
    * without aborting background work from another patient/input scope. */
@@ -138,6 +139,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           modelId,
           temperature: queryOptions?.temperature,
           maxTokens: queryOptions?.maxTokens,
+          reasoningEffort: queryOptions?.reasoningEffort,
           responseFormat: queryOptions?.responseFormat,
           signal: abortController.signal,
         })
@@ -207,6 +209,7 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           signal: abortController.signal,
           temperature: streamOptions?.temperature,
           maxTokens: streamOptions?.maxTokens,
+          reasoningEffort: streamOptions?.reasoningEffort,
           responseFormat: streamOptions?.responseFormat,
           onChunk: (chunk: string) => {
             fullText = chunk

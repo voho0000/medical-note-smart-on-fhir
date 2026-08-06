@@ -9,9 +9,12 @@ endpoint.
 ## Scope
 
 - Medical Summary: six documented text models × five synthetic clinical cases.
-- Chat Agent: four documented tool-calling models × twelve gold questions.
+- Custom Summary: six documented text models × four hallucination-focused
+  prompts, with legacy-vs-grounded prompt comparison.
+- Chat Agent: four documented tool-calling models × seventeen gold questions.
 - Metrics: parse/completeness, grounding, scenario semantics, tool selection,
-  arguments, retrieval, final-answer correctness, latency, and reported tokens.
+  arguments, retrieval, final-answer correctness, Taiwan Traditional Chinese,
+  leaked tool-protocol markers, latency, and reported tokens.
 
 The default result does not retain the clinical prompt or complete model output.
 It stores only scores, safe failure categories, tool names, usage, and an output
@@ -31,6 +34,7 @@ Useful filters:
 
 ```powershell
 npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5
+npm.cmd run eval:onprem-models -- --phase custom-summary --models tvghbrain3.5,gpt-oss:20b --custom-summary-strategies legacy,grounded
 npm.cmd run eval:onprem-models -- --phase chat --models gemma4:31b --chat-cases hba1c-trend,penicillin-allergy
 npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5 --summary-cases cross-hospital-current-medications --summary-strategies single,single-retry-missing,split-3-2 --repeat 10
 npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases broad-health-summary --repeat 10
@@ -38,9 +42,19 @@ npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-case
 ```
 
 `--repeat` repeats each selected case without retaining full outputs. Summary
-strategies compare one full batch, one full batch followed by retries for only
-missing modules, and a fixed 3+2 split. The report records request count,
-latency, parsing/grounding scores, and provider-reported tokens.
+strategies compare one full batch, one full batch followed by at most two
+retries for missing or ungrounded modules (matching production), and a fixed
+3+2 split. A parsed card that cites a source key absent from the supplied
+catalog is rejected before scoring and enters the same limited retry path. The
+report records request count, latency, parsing/grounding scores, language and
+safety failures, and provider-reported tokens.
+
+The evaluator treats the data-scope selector as an authorization boundary:
+fixtures that require FHIR tools run in patient scope, while tool-less general
+medical questions run in general scope. It does not infer this authorization
+from question keywords. This mirrors the product architecture: frontier
+models retain autonomous `auto` tool routing, while custom/on-prem models use
+the explicit scope and a small deterministic prefetch allowlist.
 
 For explicitly authorized local patient files, use the headless import-to-agent
 integration runner. It uses the same SDK conversion, `LocalBundleService`, FHIR

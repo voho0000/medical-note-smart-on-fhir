@@ -1,0 +1,245 @@
+MediPrisma 地端 AI 三功能穩定性與幻覺測試紀錄
+日期：2026-08-07
+範圍：結構化醫療摘要、自定義摘要、Chat / FHIR tool calling
+
+
+一、結論先行
+
+1. tvghbrain3.5 的跨院藥物摘要目前已達 10/10。
+   - 10 次皆產生 5/5 可解析且通過語意／來源驗證的卡片。
+   - 平均 1.1 次 API；9 次單次完成，1 次只補送 1 張失敗卡。
+   - 平均 6.6 秒，10 次共 81,765 tokens。
+   - 這是合成跨院病歷的自動化結果，不等同醫師逐句人工審查。
+
+2. 自定義摘要在六個模型的 4 個幻覺案例均為 4/4，合計 24/24。
+   - 包含：缺少參考區間、藥名不可翻譯、claim ICD 不可當確診、資料未提供時不可補值。
+   - 未偵測到測試字集中的簡體字或禁用醫療推論。
+
+3. Chat 完整 17 題測試：
+   - gemma4:31b：17/17。
+   - gemma4:26b：17/17。
+   - tvghbrain3.5：完整跑首次 16/17，唯一失敗為資料總覽單次 90 秒 timeout；加入本地 deterministic prefetch 後，該題再測 10/10。
+   - nemotron-3-nano:30b：9/17；仍有漏取資料、簡體字、工具協定標記外洩與一般問題回答品質不佳，不建議作為 Chat 預設。
+
+4. 兩份已授權真實健康存摺，以 tvghbrain3.5 各跑一次 broad Chat：2/2。
+   - 病人資料 1：1 次 snapshot、5,415 tokens、11.4 秒。
+   - 病人資料 2：1 次 snapshot、13,520 tokens、21.1 秒。
+   - 回答均涵蓋健康狀況、用藥、異常檢驗與就醫提醒，未要求重新匯入。
+   - 結果檔未保存完整回答、病人識別資料或完整工具內容。
+
+因此不能說「每個模型、每個功能都完全順暢」。目前可安全採用的結論是：
+
+- tvghbrain3.5：摘要與自定義摘要穩定；Chat 經精簡 prefetch 後可用，但仍應監控端點 timeout。
+- gpt-oss:120b：摘要與自定義摘要穩定；本次模型清單未將它列為 tool-calling Chat 模型。
+- gpt-oss:20b：內容正確，但結構化摘要太慢，不建議作互動式預設。
+- gemma4:31b：摘要、自定義摘要與 Chat 都適合作候選預設。
+- gemma4:26b：加入保守 partial parser 後表現良好；部分卡片仍會需要有限重試。
+- nemotron-3-nano:30b：自定義摘要可過，但結構化摘要與 Chat 不建議上線為預設。
+
+
+二、測試方法與判定範圍
+
+測試 harness 走和產品相同的核心路徑：
+
+- 同一套摘要 prompt、Zod schema、分卡 parser、來源 catalog 與 finalizer。
+- 同一套 FHIR tools、資料範圍、地端 router、deep-mode agent loop。
+- temperature=0；gpt-oss 才會送 reasoning_effort=low。
+- 預設不保留完整 prompt 或完整回答，只記分數、錯誤類別、hash、token 與延遲。
+- 只有使用 --include-output 的合成資料除錯 run 會留完整輸出；results 目錄已 gitignore。
+
+自動檢查項目：
+
+- JSON / 卡片是否可解析、必要欄位是否齊全。
+- sources 與 timeline.ref 是否真的存在於 app 建立的來源 catalog。
+- 藥名是否被翻譯、替換或憑空新增。
+- 沒有藥物資料時是否虛構用藥。
+- 未提供參考區間時是否自行補一般正常值。
+- claim ICD 是否被錯當成確認診斷。
+- X 光只有標題與日期時是否虛構肺炎、浸潤、胸水等判讀。
+- Chat 工具選擇、參數、擷取結果與最後答案是否一致。
+- 臺灣繁體中文、明確簡體字與 <tool_call> 等協定標記是否外洩。
+
+限制：
+
+- 這是工程穩定度與 grounding 自動測試，不是醫師對每一句臨床內容的人工 gold-standard review。
+- 簡體檢查只使用不會與繁體共字混淆的明確字元，因此是保守下限，不是完整語言稽核。
+- 多數模型矩陣是每案例 1 次；高風險案例另做 3 次或 10 次重複。
+- 「目前 guideline」若模型沒有外部文獻搜尋工具，只能誠實說無法驗證最新版本，不能把訓練知識宣稱為最新。
+
+
+三、主要失敗模式與實驗發現
+
+1. 只加長 prompt 不夠
+
+舊 prompt 常見問題：
+
+- HbA1c 沒有 reference range，模型自行補 4.0–5.6、<5.7、>6.5 等一般數字。
+- claim ICD E11.9 被當成已確診糖尿病。
+- Exemestane (Aromasin) 被翻譯成錯誤藥名，曾出現「阿romasin」或完全不同藥物。
+- 沒有 Medication source 時仍虛構 Captopril M1。
+
+改善後 prompt 會把 clinical context 視為唯一病人事實來源，禁止翻譯／推測藥名、補正常值、把 claim 當確診，並明確要求臺灣繁體中文。
+
+2. gpt-oss:20b 的 hidden reasoning
+
+沒有 reasoning control 時，複雜自定義摘要曾耗時約 53 秒、輸出 token 7,508，但可見回答只有約 367 字；另一次逾時 120 秒。單純降低 max_tokens 或在 system 寫「Reasoning: low」仍可能回空答案。
+
+對院內 OpenAI-compatible endpoint 實測後，request body 的 reasoning_effort="low" 才有效：相同案例約 4.6 秒、981 total tokens，並回傳完整答案。
+
+此參數不能無差別送給所有模型：
+
+- Gemma 可能回空 final。
+- Nemotron 可能把英文 reasoning 暴露在使用者內容。
+
+因此程式以實際 endpoint model id 判斷，只對 /^gpt-oss(?::|-)/i 送 reasoning_effort。
+
+參考：
+https://developers.openai.com/api/docs/models/gpt-oss-20b
+https://openai.com/index/introducing-gpt-oss/
+
+3. 小模型會在 tool arguments 自行加錯範圍
+
+Nemotron 曾把「胸部 X 光」改成自行猜測的日期範圍，導致查不到實際 2025-05-18 的 Chest X-ray，之後錯誤回答沒有資料。
+
+修正方式不是繼續擴大意圖詞彙表，而是：
+
+- 使用者先明確選資料範圍。
+- 地端模型在範圍內只拿到相關的精簡工具。
+- 對可安全用空參數執行的 compact tools，由瀏覽器先執行，再讓模型只整理結果。
+- 現在的 prefetch allowlist：getDataOverview、getHealthSummarySnapshot、getActiveMedicationList、getRecentVisits、queryImagingRecords。
+
+這套 prefetch 只用於 custom / on-prem endpoint。Frontier 的 auto 模式不使用 router 縮減或強制工具，保留自主 tool selection。
+
+4. 中英文 FHIR 名稱不一致
+
+使用者問「胸部 X 光」，FHIR code.text 可能是 Chest X-ray。工具新增小而保守的 modality / anatomy alias，只做等價字面對應，不推論影像結果。
+
+藥物工具原先只回 canonical English Sotalol，遺失來源 text「通舒錠」。現在同時回：
+
+- medication：canonical coded label，例如 Sotalol。
+- recordedName：來源中的原始名稱，例如 通舒錠。
+- status：來源狀態。
+
+模型被要求逐字重複兩欄，不得自行翻譯兩者關係、成分、用途或藥理分類。
+
+5. Parsed JSON 不代表 grounded
+
+小模型可能輸出合法 JSON，但 sources 寫了 catalog 不存在的 M1。正式版現在會在接受卡片前掃描所有 sources / ref：
+
+- 任一不存在的來源鍵，該卡標為 GROUNDING_FAILED。
+- 只重送失敗卡，不重送已成功卡。
+- 初始批次最多自動重試 2 張卡，避免每次重傳完整病人 context。
+- 若重試仍失敗，顯示卡片失敗，不把虛構內容渲染成真的病歷。
+
+Finalizer 還會二次保護藥物卡：沒有有效 Medication source 的 regimen / change / reconciliation 會被丟棄；若所有引用列都被丟棄，無來源的 overview 也不保留。
+
+6. 保守 partial parser 比再次重送更省 token
+
+gemma4:26b 在腎功能案例會固定把 priorities JSON 的最後 segment 截壞，但前面的 headline 與 4 個 segment 完整且有合法來源。
+
+新增 parser 只保留可獨立 JSON.parse、通過 SummarySegment schema 且後續通過來源鍵驗證的完整 segment；不修字、不猜遺失內容，少於 2 個完整 segment 就拒絕。修正前該案例 0/3；修正後 3/3，且每次只用 1 次 API。
+
+
+四、各功能結果
+
+A. 結構化醫療摘要
+
+六模型 × 五案例的主要 run：
+
+- tvghbrain3.5：5/5，平均 4.7 秒。
+- gpt-oss:120b：5/5，平均 4.8 秒。
+- gpt-oss:20b：5/5，平均 27.5 秒；最複雜案例 78.8 秒。
+- gemma4:31b：5/5，平均 6.2 秒。
+- gemma4:26b：新 parser 後完整五案例 5/5；其中兩例各補送 1 張卡。
+- nemotron-3-nano:30b：3/5；一例遺漏停藥變更，一例來源鍵錯誤被攔截後仍有 1 張卡失敗。
+
+tvghbrain3.5 跨院藥物高重複 run：10/10；平均 1.1 requests，沒有固定拆成 3+2，也沒有每次重送完整病人資料。
+
+B. 自定義摘要
+
+grounded prompt，六模型 × 四案例：24/24。
+
+- tvghbrain3.5：平均 0.70 秒。
+- gpt-oss:120b：平均 0.67 秒。
+- gpt-oss:20b：平均 4.29 秒。
+- gemma4:31b：平均 0.56 秒。
+- gemma4:26b：平均 0.54 秒。
+- nemotron-3-nano:30b：平均 0.92 秒。
+
+這裡的 24/24 只代表四類已定義 hallucination / language contract；不是所有任意自定義 prompt 的普遍 100%。
+
+C. Chat / tool calling
+
+完整 17 題：
+
+- gemma4:31b：17/17，平均 0.82 秒。
+- gemma4:26b：17/17，平均 0.77 秒。
+- tvghbrain3.5：16/17，失敗為單次端點 timeout；該工具改為 prefetch 後同題 10/10，約 1.3–3.2 秒。
+- nemotron-3-nano:30b：9/17；不建議。
+
+額外 8 題高風險回歸中，tvghbrain3.5 為 8/8，包含：
+
+- HbA1c 趨勢。
+- 最近一次住院。
+- 住院檢驗。
+- 缺少 Creatinine。
+- 最近三次就醫。
+- X 光只有名稱與日期、沒有判讀。
+- HbA1c 沒有 reference range。
+- 通舒錠／Sotalol 藥名 fidelity。
+
+
+五、建議的產品配置
+
+1. 結構化摘要預設
+
+優先候選：tvghbrain3.5、gpt-oss:120b、gemma4:31b。
+
+- 若最重視目前院內既有部署與已完成 10/10 跨院回歸：tvghbrain3.5。
+- 若要比較較大模型的內容品質：gpt-oss:120b。
+- gpt-oss:20b 雖正確，但延遲不適合互動式預設。
+- gemma4:26b 可作備援，但保留有限卡片 retry 與 partial parser。
+- Nemotron 不建議開放此功能。
+
+2. 自定義摘要
+
+六模型目前都可用 grounded prompt。tvghbrain3.5、Gemma 31B／26B 延遲最低；gpt-oss:20b 必須保留 reasoning_effort=low 的 model-specific 設定。
+
+3. Chat
+
+優先候選：gemma4:31b、gemma4:26b；tvghbrain3.5 可用並保留 compact prefetch 與 timeout 監控。Nemotron 不建議。
+
+4. Frontier 模型
+
+不套用地端小模型的精簡 router / forced prefetch。Frontier 預設 auto，模型自己判斷是否用 FHIR、文獻或不用工具；只有使用者選「不使用病人資料」時移除 FHIR。這可避免把 Frontier 的正常自主能力降級成規則系統。
+
+
+六、token 與 retry 原則
+
+- 結構化摘要先用 1 個 API 產生所有分隔卡片。
+- 每張卡獨立 parse 與 grounding validation。
+- 只補送失敗卡，最多 2 張；成功卡不重做。
+- 對可安全本地執行的 Chat compact tool 先執行，模型只做一次文字整理。
+- 不建議固定把六張卡拆成兩次 3+3／3+2，因為 stateless endpoint 會重傳病人 context。
+- partial parser 只保留完整可驗證片段，比再次發送 context 更省 token。
+
+
+七、尚待產品決策（不阻塞本次程式碼）
+
+1. 是否在 UI 中直接隱藏／標註 Nemotron 不支援結構化摘要與 Chat，或仍允許開發模式手動選擇。
+2. 正式稽核要記錄哪些欄位與保存多久：模型、功能、簡體命中、grounding fail、retry 次數、token、latency、timeout、使用者是否重試；需先決定院內 log 與 PHI 政策。
+3. 是否把「每模型每功能的最低通過率／P95 latency」做成部署 gate，例如摘要 >=95%、Chat >=95%、grounding failure 不能被渲染。
+4. 自定義摘要需要再增加哪些科別 gold cases；目前四題偏重藥名、lab range 與 claim diagnosis。
+
+
+八、可重現的結果檔（本機 results，已 gitignore）
+
+- 自定義摘要六模型 24/24：report-2026-08-06T17-53-22-427Z.md
+- 結構化摘要六模型基準：report-2026-08-06T18-27-42-987Z.md
+- Gemma26 parser 後完整 5/5：report-2026-08-06T18-42-55-703Z.md
+- tvgh 跨院藥物 10/10：report-2026-08-06T18-36-05-955Z.md
+- Chat 四模型完整 17 題：report-2026-08-06T18-37-40-014Z.md
+- tvgh 資料總覽 prefetch 後 10/10：report-2026-08-06T18-40-57-145Z.md
+- 真實病人 Chat 最新 2/2：real-patient-chat-2026-08-06T18-41-38-921Z.jsonl
+
+注意：results 不進 Git；本文件只保留去識別化統計與工程結論，不含 API key、endpoint credential 或病人識別資料。

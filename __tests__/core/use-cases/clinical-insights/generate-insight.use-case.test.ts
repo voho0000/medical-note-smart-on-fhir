@@ -21,6 +21,7 @@ describe('GenerateInsightUseCase', () => {
       expect(messages).toHaveLength(2)
       expect(messages[0].role).toBe('system')
       expect(messages[0].content).toContain('clinical assistant')
+      expect(messages[0].content).toContain('PATIENT-RECORD GROUNDING CONTRACT')
     })
 
     it('should include prompt and clinical context in user message', () => {
@@ -35,7 +36,22 @@ describe('GenerateInsightUseCase', () => {
       expect(messages[1].role).toBe('user')
       expect(messages[1].content).toContain('Analyze patient vitals')
       expect(messages[1].content).toContain('BP: 140/90, HR: 85')
-      expect(messages[1].content).toContain('Patient Clinical Context')
+      expect(messages[1].content).toContain('PATIENT CLINICAL CONTEXT')
+    })
+
+    it('bookends Taiwanese Traditional Chinese and grounding rules for local models', () => {
+      const messages = useCase.buildMessages({
+        prompt: '請整理用藥',
+        clinicalContext: 'Aromasin 25 mg',
+        modelId: 'openai-compatible-custom:test-profile',
+        locale: 'zh-TW',
+      })
+
+      expect(messages[0].content.match(/Taiwanese Traditional Chinese/g)?.length).toBe(1)
+      expect(messages[0].content).toContain('You summarize the supplied patient record')
+      expect(messages[0].content).toContain('Copy medication names, dose, status, dates, and values exactly')
+      expect(messages[1].content).toContain('BEGIN UNTRUSTED PATIENT CLINICAL CONTEXT')
+      expect(messages[1].content).toContain('END UNTRUSTED PATIENT CLINICAL CONTEXT')
     })
 
     it('should handle empty clinical context', () => {

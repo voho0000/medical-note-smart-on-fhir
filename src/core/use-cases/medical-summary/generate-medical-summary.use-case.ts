@@ -35,6 +35,7 @@ import {
   MedicalSummaryPrioritiesModuleSchema,
   MedicalSummaryProblemsModuleSchema,
   MedicalSummaryTimelineModuleSchema,
+  SummarySegmentSchema,
   normaliseTimelineCategory,
   normaliseProblemKind,
   normaliseInvestigationKind,
@@ -881,6 +882,8 @@ const SHARED_RULES =
   'Cite sources ONLY with reference keys that appear in the SOURCE LIST (e.g. "E1", "M3"); never invent keys. ' +
   'Every key in a claim\'s "sources" must DIRECTLY support that specific claim — do not attach loosely-related keys. ' +
   'Do NOT fabricate values — use only values present in the data. ' +
+  'Medication identity (CRITICAL): copy every medication name exactly from its cited M source. Never translate, transliterate, expand, substitute, or guess a medicine name, ingredient, class, or indication. If the source says "Exemestane (Aromasin)", keep exactly "Exemestane (Aromasin)"; never turn it into a Chinese-sounding or different medicine. If the SOURCE LIST has no M keys, medicationEducation and every medicationReview array MUST be empty, and no headline, narrative, problem, investigation, or overview may claim that a medicine exists. ' +
+  'Every problem, investigation, medication-education item, regimen row, change, and reconciliation item must cite at least one direct SOURCE LIST key; never emit an item with an empty sources array. A document title alone does not reveal findings: never invent a measurement, imaging conclusion, heart function, pathology result, or treatment detail that is absent from the document text supplied in the clinical data. ' +
   'Diagnosis-code caution (CRITICAL): the ICD / diagnosis codes on claims and on a visit\'s reason-for-encounter are BILLING codes, ' +
   'NOT confirmed diagnoses — they are routinely provisional, "rule-out", suspected, or carried forward across visits for reimbursement. ' +
   'Do NOT assert a coded condition as an established diagnosis on a claim code alone, and NEVER recommend workup, referral, or staging for it on that basis ' +
@@ -1001,11 +1004,16 @@ const MODULE_SCHEMA_HINTS: Record<MedicalSummaryModuleId, string> = {
 const MEDICAL_MEDICATIONS_SCHEMA_HINT =
   '{"medicationEducation": [], "medicationReview": {"overview": "<clinician synthesis>", "regimen": [{"group": "<treatment area>", "name": "<medicine or group>", "sig": "<recorded sig only>", "sources": ["<M key>"]}], "changes": [{"type": "new|stopped|resumed|changed|cross-facility|uncertain", "medication": "<medicine>", "summary": "<record-supported change>", "sources": ["<M key>"]}], "reconciliation": [{"reason": "status-conflict|missing-sig|multi-facility|uncertain-current|possible-same-drug|no-documented-indication|condition-without-therapy|supply-gap|adherence-pattern|other", "text": "<specific item to verify>", "sources": ["<catalog key>"]}]}}'
 
+const PATIENT_MEDICATIONS_SCHEMA_HINT =
+  '{"medicationEducation": [{"name": "<medicine or group>", "benefit": "<benefit>", "attention": "<one practical reminder>", "sources": ["<M key>"]}], "medicationReview": {"regimen": [], "changes": [], "reconciliation": []}}'
+
 const moduleSchemaHint = (
   moduleId: MedicalSummaryModuleId,
   audience: GenerateMedicalSummaryInput['audience'],
 ) => moduleId === 'medications' && audience === 'medical'
   ? MEDICAL_MEDICATIONS_SCHEMA_HINT
+  : moduleId === 'medications' && audience === 'patient'
+    ? PATIENT_MEDICATIONS_SCHEMA_HINT
   : MODULE_SCHEMA_HINTS[moduleId]
 
 const medicationAudienceOverride = (
@@ -1013,6 +1021,8 @@ const medicationAudienceOverride = (
   audience: GenerateMedicalSummaryInput['audience'],
 ) => moduleId === 'medications' && audience === 'medical'
   ? 'For the medical audience, "medicationEducation" MUST be the literal empty array []; do not generate name, benefit, or attention fields. '
+  : moduleId === 'medications' && audience === 'patient'
+    ? 'For the patient audience, "medicationReview" MUST contain the literal empty arrays "regimen": [], "changes": [], and "reconciliation": []; do not generate overview or clinician review items. '
   : ''
 
 const MODULE_OUTPUT_INSTRUCTION = (
@@ -1271,6 +1281,108 @@ function hasRequiredModuleFields(moduleId: MedicalSummaryModuleId, raw: unknown)
   )
 }
 
+function collectClaimedSourceKeys(value: unknown): string[] {
+  const sourceKeys: string[] = []
+  const visit = (current: unknown, parentKey?: string) => {
+    if (Array.isArray(current)) {
+      if (parentKey === 'sources') {
+        current.forEach((item) => {
+          if (typeof item === 'string') sourceKeys.push(item.trim())
+        })
+      } else {
+        current.forEach((item) => visit(item))
+      }
+      return
+    }
+    if (!current || typeof current !== 'object') return
+    Object.entries(current as Record<string, unknown>).forEach(([key, item]) => {
+      if (key === 'ref' && typeof item === 'string') sourceKeys.push(item.trim())
+      else visit(item, key)
+    })
+  }
+  visit(value)
+  return sourceKeys.filter(Boolean)
+}
+
+function completeJsonObjectsInSummaryArray(text: string): unknown[] {
+  const summaryKey = text.search(/"summary"\s*:/)
+  if (summaryKey < 0) return []
+  const arrayStart = text.indexOf('[', summaryKey)
+  if (arrayStart < 0) return []
+
+  const objects: unknown[] = []
+  let objectStart = -1
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = arrayStart + 1; index < text.length; index += 1) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') {
+      if (depth === 0) objectStart = index
+      depth += 1
+      continue
+    }
+    if (char === '}' && depth > 0) {
+      depth -= 1
+      if (depth === 0 && objectStart >= 0) {
+        try {
+          objects.push(JSON.parse(text.slice(objectStart, index + 1)))
+        } catch {
+          // A complete-looking but invalid object is not safe to reconstruct.
+        }
+        objectStart = -1
+      }
+      continue
+    }
+    if (char === ']' && depth === 0) break
+  }
+  return objects
+}
+
+function salvagePrioritiesModule(
+  raw: unknown,
+  text: string,
+): MedicalSummaryModuleResultMap['priorities'] | null {
+  const rawObject = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : null
+  let headline = typeof rawObject?.headline === 'string' ? rawObject.headline : ''
+  if (!headline) {
+    const match = text.match(/"headline"\s*:\s*("(?:\\.|[^"\\])*")/)
+    if (match) {
+      try {
+        headline = JSON.parse(match[1])
+      } catch {
+        headline = ''
+      }
+    }
+  }
+  if (!headline.trim()) return null
+
+  const candidates = Array.isArray(rawObject?.summary)
+    ? rawObject.summary
+    : completeJsonObjectsInSummaryArray(text)
+  const summary = candidates.flatMap((candidate) => {
+    const parsed = SummarySegmentSchema.safeParse(candidate)
+    return parsed.success ? [parsed.data] : []
+  })
+  // One isolated fragment is too little context to safely present as a
+  // narrative. Two or more independently valid segments retain useful meaning.
+  if (summary.length < 2) return null
+  const parsed = MedicalSummaryPrioritiesModuleSchema.safeParse({ headline, summary })
+  return parsed.success ? parsed.data : null
+}
+
 export class GenerateMedicalSummaryUseCase {
   readonly moduleIds = MEDICAL_SUMMARY_MODULE_IDS
 
@@ -1393,7 +1505,16 @@ export class GenerateMedicalSummaryUseCase {
       return null
     }
     const raw = tryExtractJsonValue(text)
-    if (raw === null) return fail('no parseable JSON found')
+    if (raw === null) {
+      const salvaged = moduleId === 'priorities'
+        ? salvagePrioritiesModule(null, text)
+        : null
+      if (salvaged) {
+        console.warn('[medical-summary:priorities] salvaged complete segments from a malformed tail')
+        return salvaged as MedicalSummaryModuleResultMap[T]
+      }
+      return fail('no parseable JSON found')
+    }
     // Several module schemas intentionally default arrays for cache/backward
     // compatibility. At the model boundary, however, `{}` or an unrelated
     // module must not become a false-success empty card.
@@ -1402,11 +1523,33 @@ export class GenerateMedicalSummaryUseCase {
     }
     const parsed = MODULE_RESULT_SCHEMAS[moduleId].safeParse(raw)
     if (parsed.success) return parsed.data as MedicalSummaryModuleResultMap[T]
+    const salvaged = moduleId === 'priorities'
+      ? salvagePrioritiesModule(raw, text)
+      : null
+    if (salvaged) {
+      console.warn('[medical-summary:priorities] dropped malformed trailing segments')
+      return salvaged as MedicalSummaryModuleResultMap[T]
+    }
     const issues = parsed.error.issues
       .slice(0, 8)
       .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
       .join('; ')
     return fail(`schema mismatch — ${issues}`)
+  }
+
+  /**
+   * Validate the model's citation keys before a card is accepted. Parsed JSON
+   * is not automatically grounded: smaller models sometimes invent plausible
+   * keys such as M1 even when the supplied catalog contains no medications.
+   * Returning the unknown keys lets the local retry path regenerate only that
+   * card instead of rendering an unsupported clinical claim.
+   */
+  findUnknownSourceKeys(
+    value: unknown,
+    catalog: readonly SummarySourceCatalogEntry[],
+  ): string[] {
+    const known = new Set(catalog.map((entry) => entry.key))
+    return [...new Set(collectClaimedSourceKeys(value).filter((key) => !known.has(key)))]
   }
 
   /** Extract and validate one independently delimited card from the shared
@@ -1704,14 +1847,7 @@ export class GenerateMedicalSummaryUseCase {
       return trimmed
     }
 
-    const medicationReview = {
-      // The overview is a clinician-audience synthesis line; the patient card
-      // never renders it, so drop it at the same gate as regimen completion.
-      overview:
-        options.audience !== 'patient'
-          ? rawMedicationReview.overview?.trim() || undefined
-          : undefined,
-      regimen: completeRegimen.flatMap((item) => {
+    const groundedRegimen = completeRegimen.flatMap((item) => {
         const rawSources = item.sources ?? []
         if (!hasVerifiedMedicationSource(rawSources)) return []
         return [{
@@ -1720,8 +1856,8 @@ export class GenerateMedicalSummaryUseCase {
           sig: groundedSig(rawSources, item.sig),
           sourceKeys: rawSources.map(registerKey),
         }]
-      }),
-      changes: rawMedicationReview.changes.flatMap((item) => {
+      })
+    const groundedChanges = rawMedicationReview.changes.flatMap((item) => {
         const rawSources = item.sources ?? []
         if (!hasVerifiedMedicationSource(rawSources)) return []
         return [{
@@ -1730,8 +1866,8 @@ export class GenerateMedicalSummaryUseCase {
           summary: item.summary,
           sourceKeys: rawSources.map(registerKey),
         }]
-      }),
-      reconciliation: rawMedicationReview.reconciliation.flatMap((item) => {
+      })
+    const groundedReconciliation = rawMedicationReview.reconciliation.flatMap((item) => {
         const rawSources = item.sources ?? []
         const reason = normaliseMedicationReconciliationReason(item.reason)
         // condition-without-therapy flags an ABSENT medicine, so there is no
@@ -1751,7 +1887,22 @@ export class GenerateMedicalSummaryUseCase {
           text: item.text,
           sourceKeys: rawSources.map(registerKey),
         }]
-      }),
+      })
+    const hasGroundedMedicationReview =
+      groundedRegimen.length > 0 ||
+      groundedChanges.length > 0 ||
+      groundedReconciliation.length > 0
+    const medicationReview = {
+      // Overview has no source field of its own. Keep it only when at least one
+      // cited review item survived verification; otherwise a hallucinated
+      // overview could remain after every invented item was safely removed.
+      overview:
+        options.audience !== 'patient' && hasGroundedMedicationReview
+          ? rawMedicationReview.overview?.trim() || undefined
+          : undefined,
+      regimen: groundedRegimen,
+      changes: groundedChanges,
+      reconciliation: groundedReconciliation,
     }
 
     // Problems register BEFORE decisions: registerKey numbers sources by first

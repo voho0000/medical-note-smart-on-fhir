@@ -34,6 +34,7 @@ import {
   filterAgentToolsForDataScope,
   forcedInitialAgentToolName,
   selectAgentToolsForQuestion,
+  shouldPreExecuteLocalAgentTool,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
 import { OPENAI_COMPATIBLE_QUERY_TIMEOUT_MS } from "@/src/infrastructure/ai/services/openai-compatible.service"
@@ -569,7 +570,7 @@ export function useAgentChat(
           messages: apiMessages,
           tools: toolsForTurn,
           initialToolName,
-          preExecuteInitialTool: isCustomEndpoint && initialToolName === 'getHealthSummarySnapshot',
+          preExecuteInitialTool: isCustomEndpoint && shouldPreExecuteLocalAgentTool(initialToolName),
           idleMs,
           abortController,
           onEvent,

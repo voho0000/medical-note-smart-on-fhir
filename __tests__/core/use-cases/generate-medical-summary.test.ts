@@ -484,7 +484,7 @@ describe('parseResult', () => {
         emphasis: false,
         sources: i === 0 ? ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'] : [],
       })),
-      problems: [{ label: '慢性腎臟病', basis: 'b'.repeat(100), kind: 'careplan', sources: [] }],
+      problems: [{ label: '慢性腎臟病', basis: 'b'.repeat(100), kind: 'careplan', sources: ['E1'] }],
       decisions: [],
       timeline: [],
     })
@@ -652,6 +652,32 @@ describe('modular summary generation contract', () => {
     expect(problems?.problems).toHaveLength(1)
   })
 
+  it('salvages only complete validated priority segments before a malformed tail', () => {
+    const malformed = '{"headline":"腎功能需追蹤","summary":[' +
+      '{"text":"紀錄顯示","emphasis":false,"sources":[]},' +
+      '{"text":"eGFR 持續下降","emphasis":true,"sources":["O1","O2"]},' +
+      '{"text]":"不應猜回的尾段","sources":["M99"]}'
+
+    const parsed = useCase.parseModuleResult('priorities', malformed)
+
+    expect(parsed).toEqual({
+      headline: '腎功能需追蹤',
+      summary: [
+        { text: '紀錄顯示', emphasis: false, sources: [] },
+        { text: 'eGFR 持續下降', emphasis: true, sources: ['O1', 'O2'] },
+      ],
+    })
+    expect(JSON.stringify(parsed)).not.toContain('M99')
+  })
+
+  it('does not salvage a single isolated priority fragment', () => {
+    const malformed = '{"headline":"不完整","summary":[' +
+      '{"text":"只有一段","emphasis":false,"sources":["E1"]},' +
+      '{"text]":"broken"}'
+
+    expect(useCase.parseModuleResult('priorities', malformed)).toBeNull()
+  })
+
   it('salvages valid batch blocks around a malformed neighbouring block', () => {
     const batchReply = [
       '<<<MEDIPRISMA_MODULE:priorities>>>',
@@ -697,6 +723,24 @@ describe('modular summary generation contract', () => {
 
     expect(useCase.parseBatchModuleResult('medications', reply)?.medicationReview.changes)
       .toEqual([])
+  })
+
+  it('rejects citation keys that were not present in the supplied catalog', () => {
+    const problems = useCase.parseModuleResult('problems', JSON.stringify({
+      problems: [{
+        label: 'Invented medication problem',
+        kind: 'medication',
+        sources: ['M1', 'E1'],
+      }],
+    }))
+
+    expect(problems).not.toBeNull()
+    expect(useCase.findUnknownSourceKeys(problems, [{
+      key: 'E1',
+      resourceType: 'Encounter',
+      resourceId: 'enc-1',
+      display: 'Clinic visit',
+    }])).toEqual(['M1'])
   })
 
   it('merges a retried module into an existing draft without replacing successful cards', () => {
@@ -1263,6 +1307,31 @@ describe('finalizeResult', () => {
     }
     const result = useCase.finalizeResult(ai, catalog, { audience: 'patient' })
     expect(result.medicationReview.overview).toBeUndefined()
+  })
+
+  it('removes an unsupported medication overview when every cited row is invalid', () => {
+    const ai = {
+      headline: 'h',
+      summary: [{ text: 't', emphasis: false, sources: [] }],
+      medicationReview: {
+        overview: '病人目前使用 Captopril。',
+        regimen: [{ group: '心血管', name: 'Captopril', sources: ['M99'] }],
+        changes: [],
+        reconciliation: [],
+      },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+
+    const result = useCase.finalizeResult(ai, catalog, { audience: 'medical' })
+
+    expect(result.medicationReview).toEqual({
+      overview: undefined,
+      regimen: [],
+      changes: [],
+      reconciliation: [],
+    })
   })
 
   it('deterministically lists every chronic drug and merges its cross-facility records', () => {

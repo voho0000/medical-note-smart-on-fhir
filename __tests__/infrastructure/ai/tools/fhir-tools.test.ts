@@ -565,6 +565,30 @@ describe('createFhirTools (unified)', () => {
       expect(r.data[0].attachments[1]).not.toHaveProperty('data')
     })
 
+    it('bridges a Taiwan Chinese chest X-ray query to an English FHIR report name', async () => {
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-chest-xray',
+            status: 'final',
+            code: { text: 'Chest X-ray' },
+            category: [{ coding: [{ code: 'RAD' }] }],
+            effectiveDateTime: '2025-05-18',
+          } as any],
+          imagingStudies: [],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: '胸部 X 光',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].reportName).toBe('Chest X-ray')
+    })
+
     it('does not assert absence when either imaging resource query is incomplete', async () => {
       const failedTools = createFhirTools(() => ({
         patient: samplePatient,
@@ -602,6 +626,10 @@ describe('createFhirTools (unified)', () => {
       // Both refill cycles of Sotalol / 通舒錠 are chronic
       expect(r.count).toBe(2)
       expect(r.data.every((m: any) => m.chronic === true)).toBe(true)
+      expect(r.data[0]).toMatchObject({
+        medication: 'Sotalol',
+        recordedName: '通舒錠',
+      })
     })
 
     it('chronic=false returns non-chronic', async () => {
@@ -773,6 +801,27 @@ describe('createFhirTools (unified)', () => {
       const r = await call('getActiveMedicationList')
       const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
       expect(sotalol?.refillCount).toBe(2)
+      expect(sotalol?.recordedName).toBe('通舒錠')
+      expect(sotalol?.status).toBe('active')
+    })
+
+    it('keeps status and fields from the newest refill regardless of input order', async () => {
+      const reversedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          medications: [...sampleCollection.medications].reverse(),
+        },
+      }))
+
+      const r = await (reversedTools.getActiveMedicationList as any).execute({})
+      const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
+
+      expect(sotalol).toMatchObject({
+        status: 'active',
+        authoredOn: '2026-04-27T00:00:00+08:00',
+        refillCount: 2,
+      })
     })
   })
 
@@ -794,6 +843,7 @@ describe('createFhirTools (unified)', () => {
       expect(r.data.conditions).toHaveLength(1)
       expect(r.data.medications).toHaveLength(1)
       expect(r.data.medications[0].name).toBe('Sotalol')
+      expect(r.data.medications[0].recordedName).toBe('通舒錠')
       expect(r.data.abnormalLabs).toEqual([
         expect.objectContaining({ name: 'HbA1c', value: 8.2, abnormal: true }),
       ])

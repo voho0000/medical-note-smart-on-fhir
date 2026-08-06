@@ -94,6 +94,8 @@ const clampedText = (max: number) =>
   z.string().min(1).transform((s) => (s.length > max ? s.slice(0, max) : s))
 const clampedKeys = (max: number) =>
   z.array(z.string()).optional().default([]).transform((a) => a.slice(0, max))
+const clampedRequiredKeys = (max: number) =>
+  z.array(z.string().min(1)).min(1).transform((a) => a.slice(0, max))
 
 // One narrative segment. `emphasis` segments render as highlights; `sources`
 // hold catalog keys (e.g. "E1") — never free-text citations.
@@ -130,7 +132,7 @@ export const SummaryProblemSchema = z.object({
   basis: z.string().transform((s) => (s.length > 80 ? s.slice(0, 80) : s)).optional(),
   /** What kind of evidence — drives the badge (off-list → 'other'). */
   kind: z.string().optional(),
-  sources: clampedKeys(6),
+  sources: clampedRequiredKeys(6),
 })
 
 // A compact, disease-relevant lab / imaging analysis. The model writes the
@@ -144,7 +146,7 @@ export const SummaryInvestigationSchema = z.object({
   trend: clampedText(240),
   /** One short, patient-specific interpretation of why the result matters. */
   interpretation: clampedText(400),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 // Patient-facing medication education. This intentionally describes how a
@@ -155,27 +157,27 @@ export const SummaryMedicationEducationSchema = z.object({
   name: clampedText(120),
   benefit: clampedText(400),
   attention: clampedText(400),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 const SummaryMedicationRegimenSchema = z.object({
   group: clampedText(80),
   name: clampedText(160),
   sig: z.string().transform((s) => (s.length > 240 ? s.slice(0, 240) : s)).optional(),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 const SummaryMedicationChangeSchema = z.object({
   type: z.string().optional(),
   medication: clampedText(160),
   summary: clampedText(320),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 const SummaryMedicationReconciliationItemSchema = z.object({
   reason: z.string().optional(),
   text: clampedText(320),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 export const SummaryMedicationReviewSchema = z.object({

@@ -25,6 +25,9 @@ export interface AiQueryRequest {
   modelId: string
   temperature?: number
   maxTokens?: number
+  /** OpenAI-compatible reasoning control (supported by gpt-oss and some
+   * compatible reasoning servers). Omitted unless a caller opts in. */
+  reasoningEffort?: 'low' | 'medium' | 'high'
   /** Optional caller cancellation for non-streaming requests. */
   signal?: AbortSignal
   /**

@@ -107,7 +107,7 @@ const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
   encounters: [/(就醫|門診|急診|住院|出院|看診|科別|visit|encounter|admission|hospitali[sz])/i],
   conditions: [/(診斷|疾病|病況|問題清單|condition|diagnos)/i],
   labs: [/(檢驗|檢查值|數值|趨勢|血糖|血球|腎功能|肝功能|肌酸酐|觀察值|lab|test result|trend|HbA1c|WBC|creatinine|eGFR|marker)/i],
-  imaging: [/(影像|放射|超音波|電腦斷層|核磁|X光|攝影|imaging|radiology|ultrasound|CT|MRI|X-ray)/i],
+  imaging: [/(影像|放射|超音波|電腦斷層|核磁|X\s*光|攝影|imaging|radiology|ultrasound|CT|MRI|X\s*[-–—]?\s*ray)/i],
   procedures: [/(手術|處置|治療程序|procedure|surgery|operation)/i],
   medications: [/(藥|用藥|處方|服用|停藥|medication|medicine|prescription|drug)/i],
   allergies: [/(過敏|allerg)/i],
@@ -219,6 +219,9 @@ export function forcedInitialAgentToolName(
   if (/(?:檢驗|檢查值|數值|lab|test result|marker)/i.test(question)) {
     priority.push('queryLabResultsByCategory', 'queryObservations')
   }
+  if (/(?:影像|放射|超音波|電腦斷層|核磁|X\s*光|攝影|imaging|radiology|ultrasound|CT|MRI|X\s*[-–—]?\s*ray)/i.test(question)) {
+    priority.push('queryImagingRecords')
+  }
   if (/(?:就診|住院|急診|visit|encounter|admission)/i.test(question)) {
     priority.push('getRecentVisits', 'queryEncounters')
   }
@@ -227,4 +230,25 @@ export function forcedInitialAgentToolName(
   }
   priority.push('queryPatientInfo', 'getDataOverview', ...selectedToolNames)
   return priority.find((name) => selectedToolNames.includes(name))
+}
+
+/**
+ * A small local model is more reliable when compact, argument-free tools are
+ * executed deterministically after routing. Keep the list intentionally short:
+ * these tools are complete enough with `{}` and avoid letting a model invent a
+ * date range or translate a source label while constructing arguments.
+ * Frontier models never use this path because their data scope remains `auto`.
+ */
+const LOCAL_AGENT_PREFETCH_TOOLS = new Set([
+  'getDataOverview',
+  'getHealthSummarySnapshot',
+  'getActiveMedicationList',
+  'getRecentVisits',
+  'queryImagingRecords',
+])
+
+export function shouldPreExecuteLocalAgentTool(
+  initialToolName: string | undefined,
+): boolean {
+  return !!initialToolName && LOCAL_AGENT_PREFETCH_TOOLS.has(initialToolName)
 }

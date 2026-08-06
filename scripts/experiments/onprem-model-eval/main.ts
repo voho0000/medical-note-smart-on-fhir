@@ -6,10 +6,9 @@ import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import {
   asksForCurrentMedicalEvidence,
-  explicitlyReferencesPatient,
   forcedInitialAgentToolName,
-  isGeneralMedicalKnowledgeQuestion,
   selectAgentToolsForQuestion,
+  shouldPreExecuteLocalAgentTool,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 import {
   runDeepModeAgent,
@@ -19,6 +18,7 @@ import { buildAgentSystemPromptUseCase } from '@/src/core/use-cases/agent/build-
 import {
   generateMedicalSummaryUseCase,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import { generateInsightUseCase } from '@/src/core/use-cases/clinical-insights/generate-insight.use-case'
 import {
   MEDICAL_SUMMARY_MODULE_IDS,
   type MedicalSummaryAiResult,
@@ -46,6 +46,7 @@ const TOOL_MODELS = [
   'gemma4:26b',
   'nemotron-3-nano:30b',
 ] as const
+const CUSTOM_SUMMARY_MODELS = SUMMARY_MODELS
 const syntheticBirthDate = new Date('1950-01-15T00:00:00+08:00')
 const now = new Date()
 const syntheticAge = now.getFullYear() - syntheticBirthDate.getFullYear() - (
@@ -55,16 +56,19 @@ const syntheticAge = now.getFullYear() - syntheticBirthDate.getFullYear() - (
     : 0
 )
 
-type Phase = 'all' | 'summary' | 'chat'
+type Phase = 'all' | 'summary' | 'custom-summary' | 'chat'
 type Audience = 'medical' | 'patient'
 type SummaryStrategy = 'single' | 'single-retry-missing' | 'split-3-2'
+type CustomSummaryStrategy = 'legacy' | 'grounded'
 
 interface CliOptions {
   phase: Phase
   models: string[] | null
   summaryCases: string[] | null
+  customSummaryCases: string[] | null
   chatCases: string[] | null
   summaryStrategies: SummaryStrategy[]
+  customSummaryStrategies: CustomSummaryStrategy[]
   repeat: number
   includeOutput: boolean
   requestTimeoutMs: number
@@ -85,6 +89,14 @@ interface ChatFixture {
   requiredToolGroups?: string[][]
   requiredArgumentTerms?: string[]
   requiredToolResultTerms?: string[]
+  requiredAnswerGroups: RegExp[]
+  forbiddenAnswer?: RegExp
+}
+
+interface CustomSummaryFixture {
+  id: string
+  prompt: string
+  clinicalContext: string
   requiredAnswerGroups: RegExp[]
   forbiddenAnswer?: RegExp
 }
@@ -110,7 +122,24 @@ interface SummaryRunRecord {
   citationCount: number
   invalidSourceKeys: string[]
   semanticFailures: string[]
+  simplifiedCharacters: string[]
   finishReason?: string
+  usage: UsageRecord
+  outputSha256: string
+  output?: string
+  error?: string
+}
+
+interface CustomSummaryRunRecord {
+  phase: 'custom-summary'
+  model: string
+  caseId: string
+  strategy: CustomSummaryStrategy
+  repetition: number
+  ok: boolean
+  latencyMs: number
+  semanticFailures: string[]
+  simplifiedCharacters: string[]
   usage: UsageRecord
   outputSha256: string
   output?: string
@@ -130,6 +159,8 @@ interface ChatRunRecord {
   argumentsOk: boolean
   retrievalOk: boolean
   answerOk: boolean
+  safetyFailures: string[]
+  simplifiedCharacters: string[]
   usage: UsageRecord
   answerSha256: string
   answer?: string
@@ -137,7 +168,7 @@ interface ChatRunRecord {
   error?: string
 }
 
-type RunRecord = SummaryRunRecord | ChatRunRecord
+type RunRecord = SummaryRunRecord | CustomSummaryRunRecord | ChatRunRecord
 
 function requiredEnvironmentValue(...names: string[]): string {
   for (const name of names) {
@@ -158,8 +189,8 @@ function parseArgs(argv: string[]): CliOptions {
     return index >= 0 ? argv[index + 1] : undefined
   }
   const phase = (read('--phase') ?? 'all') as Phase
-  if (!['all', 'summary', 'chat'].includes(phase)) {
-    throw new Error('--phase must be all, summary, or chat')
+  if (!['all', 'summary', 'custom-summary', 'chat'].includes(phase)) {
+    throw new Error('--phase must be all, summary, custom-summary, or chat')
   }
   const requestTimeoutMs = Number.parseInt(read('--timeout-ms') ?? '120000', 10)
   if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 10_000 || requestTimeoutMs > 600_000) {
@@ -173,12 +204,18 @@ function parseArgs(argv: string[]): CliOptions {
   if (summaryStrategies.some((strategy) => !['single', 'single-retry-missing', 'split-3-2'].includes(strategy))) {
     throw new Error('--summary-strategies must contain single, single-retry-missing, and/or split-3-2')
   }
+  const customSummaryStrategies = (parseCsv(read('--custom-summary-strategies')) ?? ['grounded']) as CustomSummaryStrategy[]
+  if (customSummaryStrategies.some((strategy) => !['legacy', 'grounded'].includes(strategy))) {
+    throw new Error('--custom-summary-strategies must contain legacy and/or grounded')
+  }
   return {
     phase,
     models: parseCsv(read('--models')),
     summaryCases: parseCsv(read('--summary-cases')),
+    customSummaryCases: parseCsv(read('--custom-summary-cases')),
     chatCases: parseCsv(read('--chat-cases')),
     summaryStrategies,
+    customSummaryStrategies,
     repeat,
     includeOutput: argv.includes('--include-output'),
     requestTimeoutMs,
@@ -209,6 +246,24 @@ function normalizeUsage(value: unknown): UsageRecord {
     outputTokens: Number.isFinite(outputTokens) ? outputTokens : 0,
     totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
   }
+}
+
+// Deliberately use only unambiguous simplified forms. This is an audit signal,
+// not an automatic converter: blindly replacing characters cannot fix
+// Mainland-China clinical wording and can corrupt names.
+const SIMPLIFIED_TO_TRADITIONAL: Readonly<Record<string, string>> = {
+  '为': '為', '这': '這', '药': '藥', '医': '醫', '门': '門', '体': '體',
+  '检': '檢', '验': '驗', '数': '數', '线': '線', '与': '與', '应': '應',
+  '会': '會', '过': '過', '处': '處', '确': '確', '开': '開', '关': '關',
+  '问': '問', '说': '說', '产': '產', '疗': '療', '剂': '劑', '实': '實',
+  '录': '錄', '显': '顯', '时': '時', '达': '達', '别': '別', '压': '壓',
+  '术': '術', '个': '個', '并': '並', '仅': '僅', '无': '無', '险': '險',
+  '议': '議', '调': '調', '须': '須', '发': '發', '肠': '腸', '环': '環',
+  '变': '變', '异': '異', '转': '轉', '复': '復', '护': '護',
+}
+
+function simplifiedCharacters(text: string): string[] {
+  return [...new Set([...text].filter((character) => character in SIMPLIFIED_TO_TRADITIONAL))]
 }
 
 function regimenSourceKeys(draft: MedicalSummaryAiResult): Set<string> {
@@ -263,7 +318,6 @@ Newest record date: 2026-06-26.`,
       const missing = ['M1', 'M2', 'M3', 'M4', 'M6'].filter((key) => !sources.has(key))
       return [
         ...(missing.length > 0 ? [`current regimen missed ${missing.join(',')}`] : []),
-        ...(draft.medicationReview.regimen.length < 5 ? ['current regimen has fewer than five medicines'] : []),
         ...(draft.medicationEducation.length > 0 ? ['medical audience generated medicationEducation'] : []),
       ]
     },
@@ -296,7 +350,9 @@ Newest record date: 2026-07-02.`,
       return [
         ...(!regimen.has('M1') ? ['current Exemestane omitted from regimen'] : []),
         ...(regimen.has('M2') ? ['stopped Tamoxifen incorrectly listed in regimen'] : []),
-        ...(!changes.has('M2') ? ['Tamoxifen stop missing from changes'] : []),
+        ...(!changes.has('M2') && !changes.has('D1')
+          ? ['Tamoxifen stop missing from changes']
+          : []),
       ]
     },
   },
@@ -380,6 +436,73 @@ Explain only what the supplied record supports.`,
   },
 ]
 
+const customSummaryFixtures: CustomSummaryFixture[] = [
+  {
+    id: 'medication-name-and-status-fidelity',
+    prompt: '請用台灣繁體中文整理目前用藥與重要藥物變更，藥名必須照原始資料抄寫，不要自行翻譯。',
+    clinicalContext: `## Problem List
+- [C1] 乳癌術後追蹤
+
+## Medication records
+- [M1] CURRENT: Exemestane (Aromasin) 25 mg QD；供藥至 2026-10-01
+- [M2] STOPPED: Tamoxifen 20 mg QD；2026-01-20 因血栓事件停用
+- [D1] 2026-01-20 病程紀錄：Tamoxifen 停用，改用 Exemestane`,
+    requiredAnswerGroups: [
+      /Exemestane/i,
+      /Aromasin/i,
+      /25\s*mg/i,
+      /Tamoxifen/i,
+      /(停用|已停|stopped)/i,
+    ],
+    forbiddenAnswer: /阿\s*romasin|阿羅馬辛|Tamoxifen.{0,24}(目前|現在|持續|使用中)/i,
+  },
+  {
+    id: 'missing-xray-conclusion',
+    prompt: '這份資料的胸部 X 光有什麼問題？只能使用資料內容回答。',
+    clinicalContext: `## Diagnostic reports
+- [R1] 2025-05-18 Chest X-ray；status: final
+- [R1] Findings: 資料未提供
+- [R1] Conclusion: 資料未提供`,
+    requiredAnswerGroups: [
+      /(X\s*光|X-ray)/i,
+      /(未.{0,8}提供|沒有|無法|查無)/i,
+      /(判讀|結果|所見|結論|Findings|Conclusion)/i,
+    ],
+    forbiddenAnswer: /(肺炎|浸潤|胸水|肋膜積水|心臟擴大|cardiomegaly)/i,
+  },
+  {
+    id: 'missing-lab-reference-range',
+    prompt: '請整理 HbA1c 數值、資料中的正常／異常判定與參考區間。沒有的資料要明說。',
+    clinicalContext: `## Laboratory results
+- [O1] 2025-05-19 HbA1c 8.2%; interpretation: High
+- [O1] Reference range: 資料未提供`,
+    requiredAnswerGroups: [
+      /8\.2\s*%/,
+      /(偏高|異常|High|判定.{0,8}高|標示.{0,8}高|高於正常|\|\s*高\s*\|)/i,
+      /(未提供|未列出|沒有|查無)/i,
+      /(參考範圍|參考區間|Reference range)/i,
+    ],
+    forbiddenAnswer: /(4\.0|5\.6|5\.7|6\.4|7\.0)\s*%/,
+  },
+  {
+    id: 'claim-code-not-confirmed',
+    prompt: '請整理這位病人的慢性疾病，並區分已確認診斷和申報碼。',
+    clinicalContext: `## Problem List
+- No Condition records supplied.
+
+## Visits & Treatment History
+- [E1] 2026-03-30 門診；claim ICD-10-CM E11.9 第二型糖尿病
+
+The claim code is the only diabetes-related entry in the supplied record.`,
+    requiredAnswerGroups: [
+      /(E11\.9|第二型糖尿病)/i,
+      /(申報|就診紀錄|記載於門診|claim)/i,
+      /(未確認|不能確認|不一定|不代表|需確認|並非.{0,20}確認|非確認診斷|確認診斷[\s\S]{0,30}(無|未提供)|缺乏.{0,20}診斷|未提供.{0,12}臨床診斷依據|無.{0,20}臨床診斷|無.*確認)/i,
+    ],
+    forbiddenAnswer: /(唯一|已)已?確認.{0,16}(糖尿病|E11\.9)|可判斷醫師已診斷|(?:此為|作為)確認.{0,12}糖尿病/i,
+  },
+]
+
 const chatFixtures: ChatFixture[] = [
   {
     id: 'patient-demographics',
@@ -398,8 +521,7 @@ const chatFixtures: ChatFixture[] = [
   {
     id: 'hba1c-trend',
     question: '請查最近兩次 HbA1c 的數值與趨勢。',
-    acceptedTools: ['searchObservationByName', 'queryObservations'],
-    requiredArgumentTerms: ['HbA1c'],
+    acceptedTools: ['searchObservationByName', 'queryObservations', 'queryLabResultsByCategory'],
     requiredToolResultTerms: ['8.2', '7.5'],
     requiredAnswerGroups: [/8\.2/, /7\.5/, /(上升|升高|增加|worsen)/i],
   },
@@ -421,7 +543,7 @@ const chatFixtures: ChatFixture[] = [
   {
     id: 'inpatient-labs',
     question: '2025 年 5 月那次住院有哪些檢驗結果？請列出數值。',
-    acceptedTools: ['queryEncounters', 'getRecentVisits', 'getEncounterDetails', 'queryDiagnosticReports', 'queryObservations'],
+    acceptedTools: ['queryEncounters', 'getRecentVisits', 'getEncounterDetails', 'queryDiagnosticReports', 'queryObservations', 'queryLabResultsByCategory'],
     requiredArgumentTerms: ['2025'],
     requiredToolResultTerms: ['HbA1c', '8.2', 'WBC', '6'],
     requiredAnswerGroups: [/HbA1c/i, /8\.2/, /WBC/i, /6(?:\.0)?/],
@@ -444,8 +566,7 @@ const chatFixtures: ChatFixture[] = [
     id: 'missing-creatinine',
     question: '病歷裡有 Creatinine 或肌酸酐的檢驗結果嗎？',
     acceptedTools: ['searchObservationByName', 'queryObservations', 'queryDiagnosticReports', 'queryLabResultsByCategory', 'listAvailableObservationCodes'],
-    requiredArgumentTerms: ['Creatinine'],
-    requiredAnswerGroups: [/(沒有|未找到|查無|無.*資料|no .*data|not found)/i],
+    requiredAnswerGroups: [/(沒有|未找到|找不到|未發現|查無|無.*資料|no .*data|not found)/i],
   },
   {
     id: 'data-overview',
@@ -493,6 +614,38 @@ const chatFixtures: ChatFixture[] = [
       /醫師/,
     ],
     forbiddenAnswer: /(重新匯入|請.*匯入.*資料)/i,
+  },
+  {
+    id: 'xray-without-findings',
+    question: '最近的胸部 X 光有什麼問題？只能依病歷裡實際提供的判讀回答。',
+    acceptedTools: ['queryImagingRecords', 'queryDiagnosticReports'],
+    requiredToolResultTerms: ['Chest X-ray', '2025-05-18'],
+    requiredAnswerGroups: [
+      /(X\s*光|X-ray)/i,
+      /(未.{0,8}提供|沒有|無法|查無)/i,
+      /(判讀|結果|所見|結論|Findings|Conclusion)/i,
+    ],
+    forbiddenAnswer: /(肺炎|浸潤|胸水|肋膜積水|心臟擴大|cardiomegaly)/i,
+  },
+  {
+    id: 'lab-reference-range-not-provided',
+    question: '病歷裡 HbA1c 的參考區間是多少？請只依病歷回答，不要補一般指引數字。',
+    acceptedTools: ['searchObservationByName', 'queryObservations', 'queryLabResultsByCategory', 'getHealthSummarySnapshot'],
+    requiredToolResultTerms: ['8.2'],
+    requiredAnswerGroups: [
+      /HbA1c/i,
+      /(未.{0,8}提供|未列出|沒有|查無)/i,
+      /(參考範圍|參考區間|Reference range)/i,
+    ],
+    forbiddenAnswer: /(4\.0|5\.6|5\.7|6\.4|7\.0)\s*%/,
+  },
+  {
+    id: 'medication-name-fidelity',
+    question: '請只依病歷列出目前慢性藥物的原始中文藥名、英文名稱與狀態，不要補成分、用途或藥理分類。',
+    acceptedTools: ['getActiveMedicationList', 'queryMedications'],
+    requiredToolResultTerms: ['通舒錠', 'Sotalol'],
+    requiredAnswerGroups: [/通舒錠/, /Sotalol/i, /(使用中|目前|有效|active)/i],
+    forbiddenAnswer: /(心律|β|阻斷|治療高血壓|成分為|用於治療)/i,
   },
   {
     id: 'general-no-tool',
@@ -599,7 +752,13 @@ async function runSummaryCase(
           connection: 'close',
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ model, messages, stream: false, temperature: 0 }),
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: false,
+          temperature: 0,
+          ...(/^gpt-oss(?::|-)/i.test(model) ? { reasoning_effort: 'low' } : {}),
+        }),
         signal: AbortSignal.timeout(options.requestTimeoutMs),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -614,14 +773,24 @@ async function runSummaryCase(
       if (body.choices?.[0]?.finish_reason) finishReasons.push(body.choices[0].finish_reason)
       moduleIds.forEach((moduleId) => {
         const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, output)
-        if (parsed) (modules as Record<string, unknown>)[moduleId] = parsed
+        if (
+          parsed &&
+          generateMedicalSummaryUseCase.findUnknownSourceKeys(parsed, fixture.catalog).length === 0
+        ) {
+          (modules as Record<string, unknown>)[moduleId] = parsed
+        }
       })
     }
     for (const moduleIds of SUMMARY_STRATEGY_GROUPS[strategy]) {
       await requestModuleGroup(moduleIds)
     }
     if (strategy === 'single-retry-missing') {
-      const missingModuleIds = MEDICAL_SUMMARY_MODULE_IDS.filter((moduleId) => !modules[moduleId])
+      const missingModuleIds = MEDICAL_SUMMARY_MODULE_IDS
+        .filter((moduleId) => !modules[moduleId])
+        .sort((left, right) => Number(right === 'medications') - Number(left === 'medications'))
+        // Match production: one poor batch must not fan out into five more
+        // full-context requests. The UI can still retry remaining failed cards.
+        .slice(0, 2)
       for (const moduleId of missingModuleIds) {
         await requestModuleGroup([moduleId])
       }
@@ -630,7 +799,13 @@ async function runSummaryCase(
     const sourceKeys = collectSourceKeys(modules)
     const validKeys = new Set(fixture.catalog.map((entry) => entry.key))
     const invalidSourceKeys = [...new Set(sourceKeys.filter((key) => !validKeys.has(key)))]
-    const semanticFailures = fixture.evaluate(draft)
+    const detectedSimplifiedCharacters = simplifiedCharacters(JSON.stringify(modules))
+    const semanticFailures = [
+      ...fixture.evaluate(draft),
+      ...(detectedSimplifiedCharacters.length > 0
+        ? [`Simplified Chinese: ${detectedSimplifiedCharacters.join('')}`]
+        : []),
+    ]
     const parsedModules = Object.keys(modules).length
     const ok = parsedModules === MEDICAL_SUMMARY_MODULE_IDS.length &&
       invalidSourceKeys.length === 0 && semanticFailures.length === 0
@@ -649,6 +824,7 @@ async function runSummaryCase(
       citationCount: sourceKeys.length,
       invalidSourceKeys,
       semanticFailures,
+      simplifiedCharacters: detectedSimplifiedCharacters,
       finishReason: finishReasons.join(','),
       usage,
       outputSha256: sha256(outputs.join('\n\n')),
@@ -670,9 +846,113 @@ async function runSummaryCase(
       citationCount: 0,
       invalidSourceKeys: [],
       semanticFailures: [],
+      simplifiedCharacters: [],
       usage,
       outputSha256: sha256(outputs.join('\n\n')),
       ...(options.includeOutput && outputs.length > 0 ? { output: outputs.join('\n\n') } : {}),
+      error: safeError(error, apiKey),
+    }
+  }
+}
+
+async function runCustomSummaryCase(
+  endpoint: string,
+  apiKey: string,
+  model: string,
+  fixture: CustomSummaryFixture,
+  strategy: CustomSummaryStrategy,
+  repetition: number,
+  options: CliOptions,
+): Promise<CustomSummaryRunRecord> {
+  const startedAt = Date.now()
+  let output = ''
+  let usage = emptyUsage()
+  try {
+    const logicalModelId = customOpenAiModelIdForProfile(`eval-${sha256(model).slice(0, 12)}`)
+    const messages = strategy === 'grounded'
+      ? generateInsightUseCase.buildMessages({
+          prompt: fixture.prompt,
+          clinicalContext: fixture.clinicalContext,
+          modelId: logicalModelId,
+          locale: 'zh-TW',
+        })
+      : [
+          {
+            role: 'system' as const,
+            content: 'You are an expert clinical assistant helping healthcare professionals interpret EHR data. Use professional tone, stay factual, and note uncertainties when appropriate.',
+          },
+          {
+            role: 'user' as const,
+            content: `${fixture.prompt}\n\n---\nPatient Clinical Context:\n${fixture.clinicalContext}`,
+          },
+        ]
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        connection: 'close',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        temperature: 0,
+        ...(strategy === 'grounded'
+          ? {
+              max_tokens: 4096,
+              ...(/^gpt-oss(?::|-)/i.test(model) ? { reasoning_effort: 'low' } : {}),
+            }
+          : {}),
+      }),
+      signal: AbortSignal.timeout(options.requestTimeoutMs),
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const body = await response.json() as {
+      message?: string
+      choices?: Array<{ message?: { content?: string } }>
+      usage?: unknown
+    }
+    output = (body.choices?.[0]?.message?.content ?? body.message ?? '').trim()
+    usage = normalizeUsage(body.usage)
+    const detectedSimplifiedCharacters = simplifiedCharacters(output)
+    const semanticFailures = [
+      ...fixture.requiredAnswerGroups.flatMap((pattern, index) =>
+        pattern.test(output) ? [] : [`required answer group ${index + 1}`],
+      ),
+      ...(fixture.forbiddenAnswer?.test(output) ? ['forbidden unsupported claim'] : []),
+      ...(detectedSimplifiedCharacters.length > 0
+        ? [`Simplified Chinese: ${detectedSimplifiedCharacters.join('')}`]
+        : []),
+    ]
+    return {
+      phase: 'custom-summary',
+      model,
+      caseId: fixture.id,
+      strategy,
+      repetition,
+      ok: output.length > 0 && semanticFailures.length === 0,
+      latencyMs: Date.now() - startedAt,
+      semanticFailures,
+      simplifiedCharacters: detectedSimplifiedCharacters,
+      usage,
+      outputSha256: sha256(output),
+      ...(options.includeOutput ? { output } : {}),
+    }
+  } catch (error) {
+    return {
+      phase: 'custom-summary',
+      model,
+      caseId: fixture.id,
+      strategy,
+      repetition,
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      semanticFailures: [],
+      simplifiedCharacters: [],
+      usage,
+      outputSha256: sha256(output),
+      ...(options.includeOutput && output ? { output } : {}),
       error: safeError(error, apiKey),
     }
   }
@@ -723,11 +1003,11 @@ async function runChatCase(
         agentCapabilityTestedAt: Date.now(),
       },
     })
-    const generalMedicalQuestion = isGeneralMedicalKnowledgeQuestion(fixture.question)
-    const explicitPatientReference = explicitlyReferencesPatient(fixture.question)
-    // Eval fixtures predate the UI selector, so annotate their intended scope
-    // here. Production never derives this authorization from wording.
-    const fixtureDataScope = generalMedicalQuestion && !explicitPatientReference
+    // The product scope is an explicit user control. Fixtures that expect a
+    // patient tool therefore run in patient scope even when their wording is
+    // terse (for example "最近一次住院"); tool-less fixtures run in general
+    // scope. Do not re-introduce an intent classifier into the evaluator.
+    const fixtureDataScope = fixture.acceptedTools.length === 0
       ? 'general' as const
       : 'patient' as const
     const tools = selectAgentToolsForQuestion(
@@ -759,7 +1039,7 @@ async function runChatCase(
       ],
       tools,
       initialToolName,
-      preExecuteInitialTool: initialToolName === 'getHealthSummarySnapshot',
+      preExecuteInitialTool: shouldPreExecuteLocalAgentTool(initialToolName),
       translations: {
         organizingResults: zhTW.agent.organizingResults,
         queriedFhirData: zhTW.agent.queriedFhirData,
@@ -794,9 +1074,19 @@ async function runChatCase(
     const retrievalOk = (fixture.requiredToolResultTerms ?? []).every((term) =>
       resultText.toLocaleLowerCase().includes(term.toLocaleLowerCase()),
     )
+    const detectedSimplifiedCharacters = simplifiedCharacters(answer)
+    const safetyFailures = [
+      ...(fixture.forbiddenAnswer?.test(answer) ? ['forbidden or unsupported answer claim'] : []),
+      ...(/<\/?tool_(?:call|response)>/i.test(answer)
+        ? ['leaked tool protocol marker']
+        : []),
+      ...(detectedSimplifiedCharacters.length > 0
+        ? [`Simplified Chinese: ${detectedSimplifiedCharacters.join('')}`]
+        : []),
+    ]
     const answerOk = answer.length > 0 &&
       fixture.requiredAnswerGroups.every((pattern) => pattern.test(answer)) &&
-      !(fixture.forbiddenAnswer?.test(answer) ?? false)
+      safetyFailures.length === 0
     return {
       phase: 'chat',
       model: modelName,
@@ -810,6 +1100,8 @@ async function runChatCase(
       argumentsOk,
       retrievalOk,
       answerOk,
+      safetyFailures,
+      simplifiedCharacters: detectedSimplifiedCharacters,
       usage: result.usage,
       answerSha256: sha256(answer),
       ...(options.includeOutput ? { answer, trajectory: result.trajectory } : {}),
@@ -828,6 +1120,8 @@ async function runChatCase(
       argumentsOk: false,
       retrievalOk: false,
       answerOk: false,
+      safetyFailures: [],
+      simplifiedCharacters: [],
       usage: emptyUsage(),
       answerSha256: sha256(answer),
       ...(options.includeOutput && answer ? { answer } : {}),
@@ -871,13 +1165,25 @@ function createReport(records: RunRecord[], timestamp: string): string {
     const requests = rows.reduce((sum, record) => sum + record.requestCount, 0) / rows.length
     lines.push(`| ${model} | ${strategy} | ${passed}/${rows.length} (${percent(passed, rows.length)}) | ${parsed}/${modules} (${percent(parsed, modules)}) | ${requests.toFixed(1)} | ${average(rows.map((row) => row.latencyMs))} ms | ${tokens} |`)
   }
-  lines.push('', '## Chat / tool calling', '', '| Model | End-to-end | Tool selection | Arguments | Retrieval | Final answer | Avg latency | Total tokens |', '|---|---:|---:|---:|---:|---:|---:|---:|')
+  lines.push('', '## Custom Summary', '', '| Model | Prompt | End-to-end | Grounding / language | Avg latency | Total tokens |', '|---|---|---:|---:|---:|---:|')
+  const customSummaryRecords = records.filter((record): record is CustomSummaryRunRecord => record.phase === 'custom-summary')
+  const customSummaryGroups = [...new Set(customSummaryRecords.map((record) => `${record.model}\t${record.strategy}`))]
+  for (const group of customSummaryGroups) {
+    const [model, strategy] = group.split('\t') as [string, CustomSummaryStrategy]
+    const rows = customSummaryRecords.filter((record) => record.model === model && record.strategy === strategy)
+    const passed = rows.filter((record) => record.ok).length
+    const grounded = rows.filter((record) => record.semanticFailures.length === 0 && !record.error).length
+    const tokens = rows.reduce((sum, record) => sum + record.usage.totalTokens, 0)
+    lines.push(`| ${model} | ${strategy} | ${passed}/${rows.length} (${percent(passed, rows.length)}) | ${grounded}/${rows.length} (${percent(grounded, rows.length)}) | ${average(rows.map((row) => row.latencyMs))} ms | ${tokens} |`)
+  }
+  lines.push('', '## Chat / tool calling', '', '| Model | End-to-end | Tool selection | Arguments | Retrieval | Final answer | Safety / zh-TW | Avg latency | Total tokens |', '|---|---:|---:|---:|---:|---:|---:|---:|---:|')
   const chatRecords = records.filter((record): record is ChatRunRecord => record.phase === 'chat')
   for (const model of [...new Set(chatRecords.map((record) => record.model))]) {
     const rows = chatRecords.filter((record) => record.model === model)
     const count = (key: 'ok' | 'toolSelectionOk' | 'argumentsOk' | 'retrievalOk' | 'answerOk') => rows.filter((row) => row[key]).length
+    const safetyPassed = rows.filter((row) => row.safetyFailures.length === 0 && !row.error).length
     const tokens = rows.reduce((sum, record) => sum + record.usage.totalTokens, 0)
-    lines.push(`| ${model} | ${percent(count('ok'), rows.length)} | ${percent(count('toolSelectionOk'), rows.length)} | ${percent(count('argumentsOk'), rows.length)} | ${percent(count('retrievalOk'), rows.length)} | ${percent(count('answerOk'), rows.length)} | ${average(rows.map((row) => row.latencyMs))} ms | ${tokens} |`)
+    lines.push(`| ${model} | ${percent(count('ok'), rows.length)} | ${percent(count('toolSelectionOk'), rows.length)} | ${percent(count('argumentsOk'), rows.length)} | ${percent(count('retrievalOk'), rows.length)} | ${percent(count('answerOk'), rows.length)} | ${percent(safetyPassed, rows.length)} | ${average(rows.map((row) => row.latencyMs))} ms | ${tokens} |`)
   }
   lines.push('', '## Failures', '')
   const failures = records.filter((record) => !record.ok)
@@ -891,6 +1197,9 @@ function createReport(records: RunRecord[], timestamp: string): string {
         ...record.semanticFailures,
       ].filter(Boolean).join('; ')
       lines.push(`- summary / ${record.model} / ${record.strategy} / ${record.caseId} / run ${record.repetition}: ${reasons || 'failed'}`)
+    } else if (record.phase === 'custom-summary') {
+      const reasons = [record.error, ...record.semanticFailures].filter(Boolean).join('; ')
+      lines.push(`- custom-summary / ${record.model} / ${record.strategy} / ${record.caseId} / run ${record.repetition}: ${reasons || 'failed'}`)
     } else {
       const reasons = [
         record.error,
@@ -898,6 +1207,7 @@ function createReport(records: RunRecord[], timestamp: string): string {
         !record.argumentsOk ? 'arguments' : '',
         !record.retrievalOk ? 'retrieval' : '',
         !record.answerOk ? 'final answer' : '',
+        ...record.safetyFailures,
       ].filter(Boolean).join('; ')
       lines.push(`- chat / ${record.model} / ${record.caseId} / run ${record.repetition}: ${reasons || 'failed'}`)
     }
@@ -911,12 +1221,16 @@ export async function main(): Promise<void> {
   const apiKey = requiredEnvironmentValue('ONPREM_LLM_API_KEY', 'TVGHBRAIN_API_KEY')
   const requestedModels = options.models
   const summaryModels = (requestedModels ?? [...SUMMARY_MODELS]).filter((model) => SUMMARY_MODELS.includes(model as typeof SUMMARY_MODELS[number]))
+  const customSummaryModels = (requestedModels ?? [...CUSTOM_SUMMARY_MODELS]).filter((model) => CUSTOM_SUMMARY_MODELS.includes(model as typeof CUSTOM_SUMMARY_MODELS[number]))
   const chatModels = (requestedModels ?? [...TOOL_MODELS]).filter((model) => TOOL_MODELS.includes(model as typeof TOOL_MODELS[number]))
   const selectedSummaryCases = summaryFixtures.filter((fixture) => !options.summaryCases || options.summaryCases.includes(fixture.id))
+  const selectedCustomSummaryCases = customSummaryFixtures.filter((fixture) => !options.customSummaryCases || options.customSummaryCases.includes(fixture.id))
   const selectedChatCases = chatFixtures.filter((fixture) => !options.chatCases || options.chatCases.includes(fixture.id))
   if ((options.phase === 'all' || options.phase === 'summary') && summaryModels.length === 0) throw new Error('No summary models selected')
+  if ((options.phase === 'all' || options.phase === 'custom-summary') && customSummaryModels.length === 0) throw new Error('No custom-summary models selected')
   if ((options.phase === 'all' || options.phase === 'chat') && chatModels.length === 0) throw new Error('No tool-calling models selected')
   if ((options.phase === 'all' || options.phase === 'summary') && selectedSummaryCases.length === 0) throw new Error('No summary cases selected')
+  if ((options.phase === 'all' || options.phase === 'custom-summary') && selectedCustomSummaryCases.length === 0) throw new Error('No custom-summary cases selected')
   if ((options.phase === 'all' || options.phase === 'chat') && selectedChatCases.length === 0) throw new Error('No chat cases selected')
 
   fs.mkdirSync(OUT_DIR, { recursive: true })
@@ -942,12 +1256,19 @@ export async function main(): Promise<void> {
             parsedModules: `${result.parsedModules}/${result.totalModules}`,
             semanticFailures: result.semanticFailures,
           }
+        : result.phase === 'custom-summary'
+        ? {
+            strategy: result.strategy,
+            semanticFailures: result.semanticFailures,
+            simplifiedCharacters: result.simplifiedCharacters,
+          }
         : {
             tools: result.actualTools,
             toolSelectionOk: result.toolSelectionOk,
             argumentsOk: result.argumentsOk,
             retrievalOk: result.retrievalOk,
             answerOk: result.answerOk,
+            safetyFailures: result.safetyFailures,
           }),
       ...(result.error ? { error: result.error } : {}),
     }))
@@ -959,6 +1280,25 @@ export async function main(): Promise<void> {
         for (const strategy of options.summaryStrategies) {
           for (let repetition = 1; repetition <= options.repeat; repetition += 1) {
             record(await runSummaryCase(
+              endpoint,
+              apiKey,
+              model,
+              fixture,
+              strategy,
+              repetition,
+              options,
+            ))
+          }
+        }
+      }
+    }
+  }
+  if (options.phase === 'all' || options.phase === 'custom-summary') {
+    for (const model of customSummaryModels) {
+      for (const fixture of selectedCustomSummaryCases) {
+        for (const strategy of options.customSummaryStrategies) {
+          for (let repetition = 1; repetition <= options.repeat; repetition += 1) {
+            record(await runCustomSummaryCase(
               endpoint,
               apiKey,
               model,

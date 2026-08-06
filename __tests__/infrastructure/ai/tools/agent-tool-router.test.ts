@@ -6,6 +6,7 @@ import {
   isGeneralMedicalKnowledgeQuestion,
   selectAgentToolNames,
   selectAgentToolsForQuestion,
+  shouldPreExecuteLocalAgentTool,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 
 const names = [
@@ -143,7 +144,7 @@ describe('agent tool router', () => {
   })
 
   it('treats the explicit scope as the boundary for an ambiguous imaging question', () => {
-    const question = 'X光有什麼問題嗎'
+    const question = '胸部 X 光有什麼問題嗎'
     const patientTools = selectAgentToolNames(question, names, 'patient')
     const generalTools = selectAgentToolNames(question, names, 'general')
 
@@ -158,5 +159,15 @@ describe('agent tool router', () => {
 
     expect(selectAgentToolNames(question, names, 'auto')).toEqual(names)
     expect(forcedInitialAgentToolName(question, names, 'auto')).toBeUndefined()
+  })
+
+  it('prefetches only compact argument-free local tools', () => {
+    expect(shouldPreExecuteLocalAgentTool('getDataOverview')).toBe(true)
+    expect(shouldPreExecuteLocalAgentTool('getHealthSummarySnapshot')).toBe(true)
+    expect(shouldPreExecuteLocalAgentTool('getActiveMedicationList')).toBe(true)
+    expect(shouldPreExecuteLocalAgentTool('getRecentVisits')).toBe(true)
+    expect(shouldPreExecuteLocalAgentTool('queryImagingRecords')).toBe(true)
+    expect(shouldPreExecuteLocalAgentTool('searchObservationByName')).toBe(false)
+    expect(shouldPreExecuteLocalAgentTool(undefined)).toBe(false)
   })
 })
