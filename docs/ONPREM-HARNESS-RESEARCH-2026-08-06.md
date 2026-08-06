@@ -88,6 +88,24 @@ These checks validate retrieval, response structure, and required safety
 language. They do not replace clinician review of the medical correctness of
 each generated statement.
 
+## General medical-question data isolation
+
+Custom/local-model routing now requires an explicit or unambiguous
+patient-record intent before exposing any FHIR schema. General questions such
+as guideline updates, drug side effects, or basic test explanations receive no
+FHIR tools. They also receive only the current user message, so patient-derived
+text from earlier turns in the same chat is not carried into the general turn.
+
+An explicitly personalized evidence question may receive the compact patient
+snapshot. When the local endpoint has no literature-search tool and the user
+asks for current/latest evidence, the prompt requires the model to say that it
+cannot verify the current version and to recommend an official guideline or a
+literature-enabled model.
+
+A live `tvghbrain3.5` check of `current-guideline-no-patient-data` passed: zero
+tool calls, no FHIR retrieval, required freshness limitation present, and
+4,857 ms latency. The permanent fixture supports repeated regression runs.
+
 ## Remaining limitation
 
 Chrome UI E2E remains incomplete because the Chrome native control connection

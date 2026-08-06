@@ -1,7 +1,7 @@
 // Deterministic first-pass routing for tool-capable local models. Sending all
 // production schemas on every turn costs thousands of input tokens and makes
-// smaller models more likely to call unrelated tools. Unknown/broad questions
-// fail open to the full tool set so routing cannot hide a needed capability.
+// smaller models more likely to call unrelated tools. Patient tools require a
+// patient-record intent; unrelated general questions fail closed to no FHIR.
 
 const TOOL_GROUPS = {
   patient: ['queryPatientInfo'],
@@ -36,6 +36,54 @@ const BROAD_HEALTH_SUMMARY_QUERY = [
   /(?:overall|plain-language).*(?:health|patient).*(?:summary|record)/i,
 ]
 
+const MEDICAL_EVIDENCE_QUERY = [
+  /(?:指引|指南|共識|文獻|研究|證據|治療原則|臨床建議|guideline|consensus|literature|evidence|study|recommendation)/i,
+]
+
+const GENERAL_MEDICAL_KNOWLEDGE_QUERY = [
+  ...MEDICAL_EVIDENCE_QUERY,
+  /(?:是什麼|什麼是|如何治療|怎麼治療|有哪些(?:藥|藥物|治療)|副作用|交互作用|禁忌|適應症|衛教|what is|how (?:is|to)|side effects?|interaction|contraindication|treatment options?)/i,
+]
+
+const CURRENT_MEDICAL_EVIDENCE_QUERY = [
+  /(?:最新|更新|新版本|現在|目前|近期|recent|latest|updated?|current|new version)/i,
+]
+
+const EXPLICIT_PATIENT_REFERENCE = [
+  /(?:我的|我在|我有|我目前|我最近|我適合|我能否|我可以|我應該|對我|這位(?:病人|患者|個案)|病人|患者|個案|病歷|健康資料|健康存摺|匯入(?:的)?資料|根據.{0,20}(?:紀錄|資料))/i,
+  /(?:\bmy\b|this patient|patient record|medical record|health record|imported data)/i,
+]
+
+const IMPLICIT_PATIENT_RECORD_QUERY = [
+  /(?:請查|查詢|幫我查|替我查|紀錄中|資料中|是否有|有沒有|最近(?:一次|兩次|幾次|的)?|目前(?:的)?|住院期間|就醫期間|這次(?:就醫|住院)|分析目前狀況)/i,
+  /(?:look up|check (?:my|the)|show me|do i have|latest|most recent|current (?:medication|diagnos|lab|result))/i,
+]
+
+function matchesAny(question: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(question))
+}
+
+export function isGeneralMedicalKnowledgeQuestion(question: string): boolean {
+  return matchesAny(question, GENERAL_MEDICAL_KNOWLEDGE_QUERY)
+}
+
+export function isMedicalEvidenceQuestion(question: string): boolean {
+  return matchesAny(question, MEDICAL_EVIDENCE_QUERY)
+}
+
+export function asksForCurrentMedicalEvidence(question: string): boolean {
+  return isMedicalEvidenceQuestion(question) &&
+    matchesAny(question, CURRENT_MEDICAL_EVIDENCE_QUERY)
+}
+
+export function explicitlyReferencesPatient(question: string): boolean {
+  return matchesAny(question, EXPLICIT_PATIENT_REFERENCE)
+}
+
+export function implicitlyRequestsPatientRecord(question: string): boolean {
+  return matchesAny(question, IMPLICIT_PATIENT_RECORD_QUERY)
+}
+
 const GROUP_TRIGGERS: Record<ToolGroup, RegExp[]> = {
   patient: [/(年齡|歲|性別|gender|age|demographic)/i],
   overview: [/(資料概況|資料總覽|有哪些類型|data overview|what data|available data)/i],
@@ -54,7 +102,17 @@ export function selectAgentToolNames(
   question: string,
   availableToolNames: readonly string[],
 ): string[] {
-  if (NO_RECORD_QUERY.some((pattern) => pattern.test(question))) return []
+  const generalKnowledge = isGeneralMedicalKnowledgeQuestion(question)
+  const explicitPatientReference = explicitlyReferencesPatient(question)
+  const literatureOnly = () => availableToolNames.filter((name) => name === 'searchMedicalLiterature')
+  if (matchesAny(question, NO_RECORD_QUERY)) {
+    return generalKnowledge ? literatureOnly() : []
+  }
+  // A guideline/evidence question without an explicit patient reference is
+  // general medical knowledge. Never expose FHIR schemas merely because it
+  // also contains ambiguous words such as "目前" or "用藥".
+  if (generalKnowledge && !explicitPatientReference) return literatureOnly()
+  if (!explicitPatientReference && !implicitlyRequestsPatientRecord(question)) return []
   if (
     availableToolNames.includes('getHealthSummarySnapshot') &&
     BROAD_HEALTH_SUMMARY_QUERY.some((pattern) => pattern.test(question))
@@ -62,6 +120,15 @@ export function selectAgentToolNames(
     return ['getHealthSummarySnapshot']
   }
   const selected = new Set<string>()
+  // A genuinely personalized evidence question needs a compact patient
+  // snapshot in addition to literature (when literature is available).
+  if (
+    isMedicalEvidenceQuestion(question) &&
+    explicitPatientReference &&
+    availableToolNames.includes('getHealthSummarySnapshot')
+  ) {
+    selected.add('getHealthSummarySnapshot')
+  }
   ;(Object.keys(GROUP_TRIGGERS) as ToolGroup[]).forEach((group) => {
     if (GROUP_TRIGGERS[group].some((pattern) => pattern.test(question))) {
       TOOL_GROUPS[group].forEach((name) => selected.add(name))
@@ -91,13 +158,27 @@ export function forcedInitialAgentToolName(
   selectedToolNames: readonly string[],
 ): string | undefined {
   if (selectedToolNames.length === 0) return undefined
-  if (NO_RECORD_QUERY.some((pattern) => pattern.test(question))) return undefined
+  const generalKnowledge = isGeneralMedicalKnowledgeQuestion(question)
+  const explicitPatientReference = explicitlyReferencesPatient(question)
+  if (matchesAny(question, NO_RECORD_QUERY)) {
+    return generalKnowledge && selectedToolNames.includes('searchMedicalLiterature')
+      ? 'searchMedicalLiterature'
+      : undefined
+  }
+  if (generalKnowledge && !explicitPatientReference) {
+    return selectedToolNames.includes('searchMedicalLiterature')
+      ? 'searchMedicalLiterature'
+      : undefined
+  }
   const explicitlyRequestsPatientData =
-    /(?:病人|病歷|健康資料|健康存摺|匯入|目前|最近|我的|這位|patient|record|current|recent|history)/i.test(question)
+    explicitPatientReference || implicitlyRequestsPatientRecord(question)
   if (!explicitlyRequestsPatientData) return undefined
   if (selectedToolNames.length === 1) return selectedToolNames[0]
 
   const priority: string[] = []
+  if (isMedicalEvidenceQuestion(question) && explicitPatientReference) {
+    priority.push('getHealthSummarySnapshot')
+  }
   if (BROAD_HEALTH_SUMMARY_QUERY.some((pattern) => pattern.test(question))) {
     priority.push('getHealthSummarySnapshot')
   }

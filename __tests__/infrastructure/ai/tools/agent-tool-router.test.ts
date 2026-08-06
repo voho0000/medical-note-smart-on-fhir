@@ -1,5 +1,9 @@
 import {
+  asksForCurrentMedicalEvidence,
+  explicitlyReferencesPatient,
   forcedInitialAgentToolName,
+  implicitlyRequestsPatientRecord,
+  isGeneralMedicalKnowledgeQuestion,
   selectAgentToolNames,
   selectAgentToolsForQuestion,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
@@ -21,6 +25,7 @@ const names = [
   'getActiveMedicationList',
   'queryAllergies',
   'queryImmunizations',
+  'searchMedicalLiterature',
 ]
 
 describe('agent tool router', () => {
@@ -76,5 +81,61 @@ describe('agent tool router', () => {
     expect(selectAgentToolNames(question, names)).toEqual(['getHealthSummarySnapshot'])
     expect(forcedInitialAgentToolName(question, ['getHealthSummarySnapshot']))
       .toBe('getHealthSummarySnapshot')
+  })
+
+  it('never exposes FHIR tools for a general guideline update question', () => {
+    const question = '目前糖尿病用藥 guideline 有什麼更新？'
+    const fhirOnlyNames = names.filter((name) => name !== 'searchMedicalLiterature')
+
+    expect(isGeneralMedicalKnowledgeQuestion(question)).toBe(true)
+    expect(asksForCurrentMedicalEvidence(question)).toBe(true)
+    expect(explicitlyReferencesPatient(question)).toBe(false)
+    expect(selectAgentToolNames(question, fhirOnlyNames)).toEqual([])
+    expect(forcedInitialAgentToolName(question, [])).toBeUndefined()
+  })
+
+  it('routes a general guideline question only to literature when available', () => {
+    const question = '現在糖尿病 guideline 有什麼更新？'
+
+    expect(selectAgentToolNames(question, names)).toEqual(['searchMedicalLiterature'])
+    expect(forcedInitialAgentToolName(question, ['searchMedicalLiterature']))
+      .toBe('searchMedicalLiterature')
+  })
+
+  it('allows a compact patient snapshot only when evidence advice is explicitly personalized', () => {
+    const question = '請根據我的病歷，說明最新糖尿病 guideline 對我有什麼影響。'
+    const selected = selectAgentToolNames(question, names)
+
+    expect(explicitlyReferencesPatient(question)).toBe(true)
+    expect(selected).toEqual(['getHealthSummarySnapshot', 'searchMedicalLiterature'])
+    expect(forcedInitialAgentToolName(question, selected)).toBe('getHealthSummarySnapshot')
+  })
+
+  it.each([
+    'HbA1c 是什麼？',
+    'Sotalol 有什麼副作用？',
+    '糖尿病有哪些藥物治療？',
+  ])('fails closed to no FHIR for general medical knowledge: %s', (question) => {
+    const fhirOnlyNames = names.filter((name) => name !== 'searchMedicalLiterature')
+
+    expect(explicitlyReferencesPatient(question)).toBe(false)
+    expect(implicitlyRequestsPatientRecord(question)).toBe(false)
+    expect(selectAgentToolNames(question, fhirOnlyNames)).toEqual([])
+  })
+
+  it('still routes an implicit but unambiguous record lookup', () => {
+    const question = '請查最近兩次 HbA1c 的數值與趨勢'
+
+    expect(implicitlyRequestsPatientRecord(question)).toBe(true)
+    expect(selectAgentToolNames(question, names)).toContain('searchObservationByName')
+  })
+
+  it('recognizes an English personal pronoun without over-fetching a full snapshot', () => {
+    const question = 'What is my latest HbA1c?'
+    const selected = selectAgentToolNames(question, names)
+
+    expect(explicitlyReferencesPatient(question)).toBe(true)
+    expect(selected).toContain('searchObservationByName')
+    expect(selected).not.toContain('getHealthSummarySnapshot')
   })
 })

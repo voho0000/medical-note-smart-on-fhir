@@ -24,7 +24,10 @@ import { buildAgentSystemPromptUseCase } from "@/src/core/use-cases/agent/build-
 import { buildStandardChatSystemPrompt } from "@/src/core/use-cases/chat/build-standard-chat-system-prompt.use-case"
 import { runDeepModeAgent, type AgentRunEvent } from "@/src/infrastructure/ai/agent/run-deep-mode-agent"
 import {
+  asksForCurrentMedicalEvidence,
+  explicitlyReferencesPatient,
   forcedInitialAgentToolName,
+  isGeneralMedicalKnowledgeQuestion,
   selectAgentToolsForQuestion,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 import { resolveStreamIdleTimeoutMs } from "@/src/infrastructure/ai/streaming/stream-idle-timeout"
@@ -394,6 +397,11 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
         const initialToolName = isCustomEndpoint
           ? forcedInitialAgentToolName(routingQuestion, Object.keys(toolsForTurn ?? {}))
           : undefined
+        const generalMedicalQuestion = isGeneralMedicalKnowledgeQuestion(routingQuestion)
+        const explicitPatientReference = explicitlyReferencesPatient(routingQuestion)
+        const generalNoPatientTurn = isCustomEndpoint &&
+          generalMedicalQuestion &&
+          !explicitPatientReference
 
         // Build the agent prompt without preloading a formatted patient record;
         // the agent queries the bound FHIR tools only when the question needs it.
@@ -406,12 +414,23 @@ export function useAgentChat(systemPrompt: string, modelId: string, onInputClear
           mode: isLocalMode ? 'local' : 'live',
           hasPerplexityKey: hasLiteratureSearch,
           availableToolNames: isCustomEndpoint ? Object.keys(toolsForTurn ?? {}) : undefined,
+          turnDataScope: generalNoPatientTurn
+            ? 'general-no-patient'
+            : undefined,
+          currentEvidenceUnavailable: isCustomEndpoint &&
+            asksForCurrentMedicalEvidence(routingQuestion) &&
+            !hasLiteratureSearch,
           translations: t.agent.systemPrompt,
         })
 
+        // A general medical turn must not inherit patient-derived text from an
+        // earlier turn in the same chat. Send only the current question.
+        const agentConversation = generalNoPatientTurn && latestUserQuestion
+          ? [latestUserQuestion]
+          : newMessages
         const apiMessages = [
           { role: "system" as const, content: enhancedSystemPrompt },
-          ...newMessages.map((m) => ({
+          ...agentConversation.map((m) => ({
             role: m.role as "user" | "assistant",
             // Keep the original message in the UI/history, but mask identifying
             // text in user-authored content before it leaves the browser.

@@ -5,7 +5,10 @@ import path from 'node:path'
 import { AiProviderFactory } from '@/src/infrastructure/ai/factories/ai-provider.factory'
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import {
+  asksForCurrentMedicalEvidence,
+  explicitlyReferencesPatient,
   forcedInitialAgentToolName,
+  isGeneralMedicalKnowledgeQuestion,
   selectAgentToolsForQuestion,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
 import {
@@ -466,6 +469,7 @@ const chatFixtures: ChatFixture[] = [
     id: 'broad-health-summary',
     question: '請用我匯入的健康資料，整理最近身體狀況、慢性疾病、目前用藥，以及超出正常範圍的檢驗數值；最後提醒我若有疑慮應與醫師討論。',
     acceptedTools: [
+      'getHealthSummarySnapshot',
       'queryConditions',
       'getActiveMedicationList',
       'queryMedications',
@@ -476,9 +480,9 @@ const chatFixtures: ChatFixture[] = [
       'listAvailableObservationCodes',
     ],
     requiredToolGroups: [
-      ['queryConditions'],
-      ['getActiveMedicationList', 'queryMedications'],
-      ['queryLabResultsByCategory', 'queryObservations', 'queryDiagnosticReports'],
+      ['getHealthSummarySnapshot', 'queryConditions'],
+      ['getHealthSummarySnapshot', 'getActiveMedicationList', 'queryMedications'],
+      ['getHealthSummarySnapshot', 'queryLabResultsByCategory', 'queryObservations', 'queryDiagnosticReports'],
     ],
     requiredToolResultTerms: ['HbA1c', '8.2'],
     requiredAnswerGroups: [
@@ -495,6 +499,14 @@ const chatFixtures: ChatFixture[] = [
     question: '不要查詢病歷。請用一句話解釋 HbA1c 是什麼。',
     acceptedTools: [],
     requiredAnswerGroups: [/HbA1c/i, /(平均|血糖|二至三個月|2.*3.*月)/i],
+  },
+  {
+    id: 'current-guideline-no-patient-data',
+    question: '目前糖尿病用藥 guideline 有什麼更新？',
+    acceptedTools: [],
+    requiredAnswerGroups: [
+      /(無法|不能).{0,30}(最新|目前|即時)|(最新|目前).{0,30}(無法|不能|未能)/i,
+    ],
   },
 ]
 
@@ -713,6 +725,8 @@ async function runChatCase(
     })
     const tools = selectAgentToolsForQuestion(createFhirTools(sampleDataSource), fixture.question)
     const initialToolName = forcedInitialAgentToolName(fixture.question, Object.keys(tools ?? {}))
+    const generalMedicalQuestion = isGeneralMedicalKnowledgeQuestion(fixture.question)
+    const explicitPatientReference = explicitlyReferencesPatient(fixture.question)
     const system = buildAgentSystemPromptUseCase.execute({
       baseSystemPrompt: zhTW.chat.systemPrompt.medical,
       clinicalContext: '',
@@ -720,6 +734,10 @@ async function runChatCase(
       mode: 'local',
       hasPerplexityKey: false,
       availableToolNames: Object.keys(tools ?? {}),
+      turnDataScope: generalMedicalQuestion && !explicitPatientReference
+        ? 'general-no-patient'
+        : undefined,
+      currentEvidenceUnavailable: asksForCurrentMedicalEvidence(fixture.question),
       translations: zhTW.agent.systemPrompt,
     })
     const result = await runDeepModeAgent({
@@ -730,6 +748,7 @@ async function runChatCase(
       ],
       tools,
       initialToolName,
+      preExecuteInitialTool: initialToolName === 'getHealthSummarySnapshot',
       translations: {
         organizingResults: zhTW.agent.organizingResults,
         queriedFhirData: zhTW.agent.queriedFhirData,

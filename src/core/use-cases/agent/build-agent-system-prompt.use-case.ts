@@ -18,6 +18,10 @@ export interface BuildAgentSystemPromptInput {
   hasPerplexityKey: boolean
   /** Exact schemas exposed on this turn. Omit for the legacy/full tool list. */
   availableToolNames?: readonly string[]
+  /** Prevent a general medical question from inheriting loaded-patient context. */
+  turnDataScope?: 'general-no-patient'
+  /** The user asks for current evidence but this turn has no literature tool. */
+  currentEvidenceUnavailable?: boolean
   translations: {
     deepModeIntro: string
     currentPatient: string
@@ -76,7 +80,11 @@ export class BuildAgentSystemPromptUseCase {
     // Build patient context section. In local-bundle mode the patient ID is
     // implicit (single patient per bundle), so the warning about needing one
     // is misleading — swap it for a local-mode notice.
-    const patientSection = hasPatient
+    const patientSection = input.turnDataScope === 'general-no-patient'
+      ? `**Turn Data Scope**
+- This is a general medical-knowledge question, not a patient-record question.
+- Do not use, request, mention, or infer any loaded patient's FHIR data.`
+      : hasPatient
       ? `**${t.currentPatient}**
 - ${t.hasPermission}`
       : isLocalMode
@@ -143,9 +151,16 @@ These rules override every later style instruction. An answer that violates any 
 5. Every diagnosis, medication, laboratory value, status, range, and date must be grounded in tool output. Do not recommend treatment changes. Ask the user to discuss clinically important findings with their physician.
 Before returning, scan the complete answer once for unsupported medication explanations, invented ranges or diagnoses, internal contradictions, and Simplified Chinese; rewrite any violation.`
 
+    const currentEvidenceContract = input.currentEvidenceUnavailable
+      ? `# CURRENT-EVIDENCE LIMITATION
+No current literature-search tool is available for this turn. Do not claim that your training knowledge represents the latest guideline or update. Explicitly tell the user that you cannot verify the current version, then recommend checking the relevant official guideline or using a literature-enabled model.`
+      : ''
+
     // Put the safety contract first because smaller local models obey early,
     // concise constraints more reliably than rules appended after long schemas.
     const finalPrompt = `${safetyContract}
+
+${currentEvidenceContract}
 
 ${baseSystemPrompt}
 

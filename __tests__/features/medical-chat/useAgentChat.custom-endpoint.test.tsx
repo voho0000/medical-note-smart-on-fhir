@@ -10,6 +10,13 @@ const mockRunDeepModeAgent = jest.fn()
 const mockFhirTools = jest.fn()
 const mockSetChatMessages = jest.fn()
 const mockGetFullClinicalContext = jest.fn(() => 'selected clinical context')
+const mockBuildAgentSystemPrompt = jest.fn((..._args: unknown[]) => 'agent system prompt')
+let mockChatMessages: Array<{
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+}> = []
 
 jest.mock('@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter', () => ({
   AiSdkStreamAdapter: jest.fn().mockImplementation(() => ({
@@ -17,7 +24,7 @@ jest.mock('@/src/infrastructure/ai/streaming/ai-sdk-stream.adapter', () => ({
   })),
 }))
 jest.mock('@/src/application/stores/chat.store', () => ({
-  useChatMessages: () => [],
+  useChatMessages: () => mockChatMessages,
   useSetChatMessages: () => mockSetChatMessages,
 }))
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
@@ -62,7 +69,9 @@ jest.mock('@/src/core/use-cases/chat/build-standard-chat-system-prompt.use-case'
   buildStandardChatSystemPrompt: () => 'local system prompt',
 }))
 jest.mock('@/src/core/use-cases/agent/build-agent-system-prompt.use-case', () => ({
-  buildAgentSystemPromptUseCase: { execute: () => 'agent system prompt' },
+  buildAgentSystemPromptUseCase: {
+    execute: (...args: unknown[]) => mockBuildAgentSystemPrompt(...args),
+  },
 }))
 jest.mock('@/src/shared/utils/context-window-manager', () => ({
   truncateToContextWindow: (messages: unknown[]) => messages,
@@ -89,6 +98,7 @@ function setProfiles(openAiCompatibleProfiles: OpenAiCompatibleProfile[]) {
 describe('useAgentChat custom endpoint lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockChatMessages = []
     mockFhirTools.mockReturnValue(undefined)
     mockRunDeepModeAgent.mockResolvedValue({
       answer: '',
@@ -175,7 +185,7 @@ describe('useAgentChat custom endpoint lifecycle', () => {
       { wrapper },
     )
 
-    await act(async () => result.current.handleSend('clinical question'))
+    await act(async () => result.current.handleSend('請查這位病人的臨床資料'))
 
     expect(mockStandardChatStream).toHaveBeenCalledTimes(1)
   })
@@ -191,7 +201,7 @@ describe('useAgentChat custom endpoint lifecycle', () => {
     }])
     const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
 
-    await act(async () => result.current.handleSend('clinical question'))
+    await act(async () => result.current.handleSend('請查這位病人的臨床資料'))
 
     expect(mockStandardChatStream).not.toHaveBeenCalled()
     expect(mockRunDeepModeAgent).toHaveBeenCalledWith(expect.objectContaining({
@@ -219,6 +229,84 @@ describe('useAgentChat custom endpoint lifecycle', () => {
       tools: { getHealthSummarySnapshot: snapshotTool },
       initialToolName: 'getHealthSummarySnapshot',
       preExecuteInitialTool: true,
+    }))
+  })
+
+  it('withholds every FHIR tool for an unpersonalized guideline update question', async () => {
+    const snapshotTool = { description: 'Compact health summary tool' }
+    const medicationTool = { description: 'Medication tool' }
+    mockFhirTools.mockReturnValue({
+      getHealthSummarySnapshot: snapshotTool,
+      getActiveMedicationList: medicationTool,
+    })
+    mockChatMessages = [
+      {
+        id: 'prior-user',
+        role: 'user',
+        content: '請整理我的病歷',
+        timestamp: 1,
+      },
+      {
+        id: 'prior-assistant',
+        role: 'assistant',
+        content: 'PRIOR_PATIENT_SUMMARY_SHOULD_NOT_BE_SENT',
+        timestamp: 2,
+      },
+    ]
+    setProfiles([{
+      ...profile,
+      agentMode: 'auto',
+      agentCapability: 'verified',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    }])
+    const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
+
+    await act(async () => result.current.handleSend(
+      '目前糖尿病用藥 guideline 有什麼更新？',
+    ))
+
+    expect(mockRunDeepModeAgent).toHaveBeenCalledWith(expect.objectContaining({
+      tools: {},
+      initialToolName: undefined,
+      preExecuteInitialTool: false,
+    }))
+    const runInput = mockRunDeepModeAgent.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: string }>
+    }
+    expect(runInput.messages).toHaveLength(2)
+    expect(runInput.messages.map((message) => message.content).join('\n'))
+      .not.toContain('PRIOR_PATIENT_SUMMARY_SHOULD_NOT_BE_SENT')
+    expect(runInput.messages[1].content).toContain('糖尿病用藥 guideline')
+    expect(mockBuildAgentSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      availableToolNames: [],
+      turnDataScope: 'general-no-patient',
+      currentEvidenceUnavailable: true,
+    }))
+  })
+
+  it('allows the snapshot for an explicitly personalized guideline question', async () => {
+    const snapshotTool = { description: 'Compact health summary tool' }
+    mockFhirTools.mockReturnValue({ getHealthSummarySnapshot: snapshotTool })
+    setProfiles([{
+      ...profile,
+      agentMode: 'auto',
+      agentCapability: 'verified',
+      agentCapabilityTestedAt: 1_721_234_567_890,
+    }])
+    const { result } = renderHook(() => useAgentChat('system', CUSTOM_OPENAI_MODEL_ID))
+
+    await act(async () => result.current.handleSend(
+      '請根據我的病歷，說明最新糖尿病 guideline 對我有什麼影響。',
+    ))
+
+    expect(mockRunDeepModeAgent).toHaveBeenCalledWith(expect.objectContaining({
+      tools: { getHealthSummarySnapshot: snapshotTool },
+      initialToolName: 'getHealthSummarySnapshot',
+      preExecuteInitialTool: true,
+    }))
+    expect(mockBuildAgentSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      turnDataScope: undefined,
+      currentEvidenceUnavailable: true,
     }))
   })
 

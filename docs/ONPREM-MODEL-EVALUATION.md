@@ -34,6 +34,7 @@ npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5
 npm.cmd run eval:onprem-models -- --phase chat --models gemma4:31b --chat-cases hba1c-trend,penicillin-allergy
 npm.cmd run eval:onprem-models -- --phase summary --models tvghbrain3.5 --summary-cases cross-hospital-current-medications --summary-strategies single,single-retry-missing,split-3-2 --repeat 10
 npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases broad-health-summary --repeat 10
+npm.cmd run eval:onprem-models -- --phase chat --models tvghbrain3.5 --chat-cases current-guideline-no-patient-data --repeat 10
 ```
 
 `--repeat` repeats each selected case without retaining full outputs. Summary

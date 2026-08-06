@@ -193,5 +193,36 @@ describe('BuildAgentSystemPromptUseCase', () => {
       expect(result).toContain('Guidelines')
       expect(result).toContain('Prioritize data')
     })
+
+    it('isolates a general medical question from loaded-patient context', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPatient: true,
+        hasPerplexityKey: false,
+        availableToolNames: [],
+        turnDataScope: 'general-no-patient',
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('general medical-knowledge question')
+      expect(result).toContain("Do not use, request, mention, or infer any loaded patient's FHIR data")
+      expect(result).not.toContain('Has Permission')
+      expect(result).not.toContain('Query patient info')
+    })
+
+    it('requires an explicit freshness limitation without a literature tool', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPerplexityKey: false,
+        currentEvidenceUnavailable: true,
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('CURRENT-EVIDENCE LIMITATION')
+      expect(result).toContain('cannot verify the current version')
+      expect(result).toContain('official guideline')
+    })
   })
 })
