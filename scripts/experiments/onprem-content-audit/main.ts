@@ -7,6 +7,13 @@ import {
   summaryFixtures,
 } from '@/scripts/experiments/onprem-model-eval/main'
 import {
+  MEDICAL_SUMMARY_MODULE_IDS,
+  type MedicalSummaryAiResult,
+  type MedicalSummaryModuleId,
+  type MedicalSummaryModuleResultMap,
+} from '@/src/core/entities/medical-summary.entity'
+import { generateMedicalSummaryUseCase } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import {
   CONTENT_AUDIT_THRESHOLDS,
   createContentAuditReport,
   createReviewPacket,
@@ -239,6 +246,30 @@ function trajectoryEvidence(record: EvaluationRecord): string {
     : '本題沒有病人專屬工具結果。請依題目判斷一般醫療說明、資料範圍與時效性揭露。'
 }
 
+function finalizedSummaryResponse(
+  output: string,
+  fixture: (typeof summaryFixtures)[number],
+): string {
+  let draft: MedicalSummaryAiResult = generateMedicalSummaryUseCase.createEmptyAiResult()
+  MEDICAL_SUMMARY_MODULE_IDS.forEach((moduleId: MedicalSummaryModuleId) => {
+    const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, output)
+    if (!parsed) return
+    draft = generateMedicalSummaryUseCase.mergeModuleResult(
+      draft,
+      moduleId,
+      parsed as MedicalSummaryModuleResultMap[typeof moduleId],
+    )
+  })
+  return JSON.stringify(
+    generateMedicalSummaryUseCase.finalizeResult(draft, fixture.catalog, {
+      audience: fixture.audience,
+      locale: 'zh-TW',
+    }),
+    null,
+    2,
+  )
+}
+
 function recordToCandidate(record: EvaluationRecord, sourceFile: string): ReviewCandidate {
   if (!['summary', 'custom-summary', 'chat'].includes(record.phase)) {
     throw new Error(`${sourceFile}: unsupported phase ${String(record.phase)}`)
@@ -262,7 +293,9 @@ function recordToCandidate(record: EvaluationRecord, sourceFile: string): Review
       sourceEvidence: fixture.clinicalContext,
       requiredFacts: guidance.requiredFacts,
       riskFocus: guidance.riskFocus,
-      candidateResponse: record.error ? '[系統未產生回答]' : (record.output ?? ''),
+      candidateResponse: record.error
+        ? '[系統未產生回答]'
+        : finalizedSummaryResponse(record.output ?? '', fixture),
       model: record.model,
       strategy: record.strategy,
       repetition: record.repetition,
@@ -328,7 +361,7 @@ function packetInstructions(templateName: string, keyName: string): string {
     '',
     '1. Reviewers must not receive the private key or model names.',
     '2. Use at least two independent primary reviewers per answer. Medication-heavy cases should include a pharmacist when possible.',
-    '3. Count every patient-specific factual claim, then count how many are directly supported by source_evidence.',
+    '3. Count every independently verifiable factual claim. Patient-specific claims must be supported by source_evidence; general medical claims must match current authoritative evidence, with the reference noted in notes.',
     '4. Keep required_facts_total unchanged; record how many checklist facts are adequately covered.',
     '5. Score each 1–5 field independently. Usefulness is calculated from relevance, clarity, and actionability.',
     '   Shared anchors: 1=seriously inadequate/unsafe, 3=usable only after major revision, 5=correct and directly usable; use 2 or 4 for intermediate performance.',
@@ -339,6 +372,7 @@ function packetInstructions(templateName: string, keyName: string): string {
     '   - usable_without_major_edit: wording polish is allowed, but no key fact, error removal, or major reorganization is needed.',
     '7. If primary reviewers disagree on a binary field, add one adjudicator row with the same review_id and reviewer_role=adjudicator. Complete the whole row for traceability; scoring uses its four binary decisions while retaining primary reviewers’ counts and 1–5 scores.',
     '8. Save each reviewer copy as UTF-8 CSV; do not edit the prompt, evidence, checklist, candidate response, or private key.',
+    '9. reviewer_role=ai-preliminary is reserved for non-human triage. Those rows are reported separately and never count toward the clinical release gate.',
     '',
     'Release gates:',
     '',

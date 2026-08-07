@@ -9,13 +9,14 @@
 - 每個回答至少需要兩位獨立 primary reviewer。藥物題建議至少一位藥師；其他題至少一位醫師或合適專科人員。
 - 評審完成前不能宣稱模型已通過臨床正確性或實用度稽核。自動化 10/10、17/17 與本人工盲評的 PASS 是不同結果。
 - 二元安全判定有歧見時，必須增加一位 `adjudicator`。裁決只取代四個二元欄位，不會抹除兩位 primary reviewer 的事實計數與 1–5 分數。
+- 可用 `reviewer_role=ai-preliminary` 保存 AI 初審；計分器會把它另列為 triage，永遠不計入兩位臨床評審、release gate 或評審一致性。
 
 ## 評分欄位
 
 每位評審需填：
 
-- `fact_claims_total`：回答中可由病人資料查證的事實主張數。
-- `fact_claims_supported`：上述主張中，來源證據直接支持的數量。
+- `fact_claims_total`：回答中每一個可獨立查證的病人事實或一般醫療主張數。
+- `fact_claims_supported`：病人事實須由盲表來源證據直接支持；一般醫療主張須符合評審查核的現行權威資料，並在 `notes` 註明參考來源。
 - `required_facts_covered`：必要事實清單中有被充分涵蓋的數量；`required_facts_total` 不可修改。
 - 六個 1–5 分：事實正確性、完整性、相關性、清楚度、可行動性、不確定性／安全表達。
 - 四個 yes/no：重大錯誤、虛構核心事實、重大遺漏、無需大改即可使用。
@@ -70,6 +71,8 @@ npm.cmd run audit:onprem-content -- --mode generate `
 
 CSV 具 UTF-8 BOM，可直接用 Excel 開啟。私鑰會保存不可編輯內容的 SHA-256；若題目、來源、必要清單或候選回答在評分過程被改動，計分會拒絕該檔案。
 
+結構化醫療摘要的 `candidate_response` 是 app finalizer 完成來源解析、日期／院所補入與安全過濾後的結果，不是模型原始分卡文字；評審看到的是實際產品準備渲染的資料。
+
 ## 匯入評分與產生報告
 
 兩位評審各自完成 CSV 後：
@@ -86,4 +89,6 @@ npm.cmd run audit:onprem-content -- --mode score `
 
 已為 `tvghbrain3.5` 產生 26 題盲評包：結構化摘要 5 題、自定義摘要 4 題、Chat 17 題。包內包含先前 Chat endpoint timeout 的「未產生回答」，未只挑成功輸出。盲表不含模型名稱。
 
-目前狀態是 **PENDING HUMAN REVIEW**。在兩位臨床評審完成並通過上述 gate 前，只能引用既有工程穩定度與 grounding 結果，不能宣稱臨床內容正確率或實用度已達標。
+目前已完成一輪明確標示為 `ai-preliminary` 的初審：事實正確率 86.4%、必要事實涵蓋率 87.4%、實用度 4.28/5、無需大改可用率 80.8%。它發現 2 個重大錯誤、3 個虛構核心事實與 4 個重大遺漏，因此也顯示自動工程通過率不能代表內容品質。
+
+正式狀態仍是 **PENDING HUMAN REVIEW**，release gate 為 FAIL（26 題均尚缺兩位臨床 primary reviewer）。上述 AI 數字只用於優先找問題；在兩位臨床評審完成並通過 gate 前，不能宣稱正式臨床正確率或實用度已達標。

@@ -301,8 +301,34 @@ C. Chat / tool calling
 
 2026-08-07 已為 tvghbrain3.5 產生 26 題本機盲評包：結構化摘要 5、自定義摘要 4、Chat 17。它重用既有合成資料完整輸出以避免額外傳送 26 次病人 context，並保留一筆 endpoint timeout 為「系統未產生回答」，沒有只挑成功答案。驗證結果：26 個唯一 review_id、盲表未出現模型名稱、私鑰 26 筆。
 
-目前稽核狀態：PENDING HUMAN REVIEW。
+AI 初審已完成（不是臨床 release evidence）：
 
-這代表我們現在已能可靠地「做內容稽核」，但還沒有資格填入臨床正確率或實用度成績。完成兩位臨床評審與必要裁決後，才把產生的 content-audit-*.md 結果更新回本文件。
+- 事實正確率：86.4%（門檻 95%，未達）。
+- 必要事實涵蓋率：87.4%（門檻 90%，未達）。
+- 實用度：4.28/5（門檻 4.0，達標）。
+- 無需大改即可使用：80.8%（門檻 90%，未達）。
+- AI 初審標記重大錯誤 2、虛構核心事實 3、重大遺漏 4。
+
+主要內容問題：
+
+- 跨院藥物摘要雖完整列出 5 種藥，卻用 Atorvastatin 反推病人有「高脂血症」，也在來源沒有 HbA1c 目標或參考區間時宣稱「未達標」及需要評估調藥；這說明有效 source key 不等於該來源真的支持整句語意。
+- Amlodipine 衛教在沒有血壓數值時宣稱「控制穩定」，並加入來源未提供的副作用資訊。
+- 最近住院題完全沒有使用病人資料，反而回答「未指定特定病人」，漏掉 2025-05-18 心衰竭住院。
+- 最近三次就醫把 2026-05-13 藥局寫成門診，並以 2025-02-11 急診取代較新的 2025-05-18 住院。
+- X 光題遇到 endpoint failure，沒有產生回答。
+- 兩次重大住院雖列出事件、院所與開始日期，但沒有完整呈現兩段住院起訖日期。
+- 「目前糖尿病 guideline」題有誠實揭露無法即時驗證，主要用藥趨勢與 ADA 2026 相符；但把台灣來源寫成「台灣糖尿病年會 (TADA)」並不精確，也沒有提供真正的 2026 修訂重點。
+
+上述數字由 reviewer_role=ai-preliminary 產生，計分器會把這類列與臨床評審完全分開，不能拿來補足兩位 primary reviewer，也不計入評審一致性。
+
+正式稽核狀態仍為：PENDING HUMAN REVIEW／release gate FAIL（26/26 題尚缺兩位臨床評審）。
+
+這代表目前已有足夠證據判定「不可把工程 10/10 當內容 10/10」，但仍不能把 86.4% 當成正式臨床正確率。完成兩位臨床評審與必要裁決後，才以 human metrics 取代本段 AI 初審。
+
+AI 初審本機結果：content-audit-2026-08-07T00-47-08-921Z.md
+
+一般 guideline 初審參考：
+https://diabetesjournals.org/care/article/49/Supplement_1/S6/163930/Summary-of-Revisions-Standards-of-Care-in-Diabetes
+https://www.endo-dm.org.tw/dia/direct/
 
 完整操作與 rubric：docs/ONPREM-CONTENT-AUDIT.md

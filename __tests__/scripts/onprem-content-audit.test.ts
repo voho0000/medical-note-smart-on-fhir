@@ -139,4 +139,22 @@ describe('on-prem clinical content audit', () => {
       completedRow(packet.rows[0], 'doctor-c', { reviewer_role: 'adjudicator' }),
     ])).toThrow('adjudication requires a primary-reviewer binary disagreement')
   })
+
+  it('reports AI triage separately and never counts it as a clinical reviewer', () => {
+    const packet = createReviewPacket([candidate], {
+      randomId: () => 'review-1',
+      randomInt: () => 0,
+    })
+    const score = scoreContentAudit(packet.key, [
+      completedRow(packet.rows[0], 'ai-auditor', { reviewer_role: 'ai-preliminary' }),
+    ])
+
+    expect(score.passed).toBe(false)
+    expect(score.metrics.reviews).toBe(0)
+    expect(score.preliminaryAiMetrics?.reviews).toBe(1)
+    expect(score.preliminaryAiMetrics?.factAccuracy).toBe(1)
+    expect(score.insufficientReviewIds).toEqual(['review-1'])
+    expect(createContentAuditReport(score, '2026-08-07T00:00:00.000Z'))
+      .toContain('AI preliminary triage (not release evidence)')
+  })
 })

@@ -137,6 +137,7 @@ export interface ContentAuditScore {
   passed: boolean
   failures: string[]
   metrics: ContentAuditMetrics
+  preliminaryAiMetrics: ContentAuditMetrics | null
   agreement: AgreementMetrics
   insufficientReviewIds: string[]
   unresolvedDisagreementIds: string[]
@@ -421,6 +422,18 @@ function metricsFor(reviews: readonly ValidatedReview[]): ContentAuditMetrics {
   }
 }
 
+function isAdjudicator(review: ValidatedReview): boolean {
+  return review.reviewerRole.toLowerCase() === 'adjudicator'
+}
+
+function isPreliminaryAiReview(review: ValidatedReview): boolean {
+  return review.reviewerRole.toLowerCase() === 'ai-preliminary'
+}
+
+function isPrimaryClinicalReview(review: ValidatedReview): boolean {
+  return !isAdjudicator(review) && !isPreliminaryAiReview(review)
+}
+
 function pairs<T>(values: readonly T[]): Array<[T, T]> {
   const result: Array<[T, T]> = []
   for (let left = 0; left < values.length; left += 1) {
@@ -437,7 +450,7 @@ function binaryKappa(
 ): number | null {
   const reviewerMaps = new Map<string, Map<string, ValidatedReview>>()
   groups.forEach((reviews, reviewId) => reviews
-    .filter((review) => review.reviewerRole.toLowerCase() !== 'adjudicator')
+    .filter(isPrimaryClinicalReview)
     .forEach((review) => {
       const reviewerMap = reviewerMaps.get(review.reviewerId) ?? new Map<string, ValidatedReview>()
       reviewerMap.set(reviewId, review)
@@ -471,7 +484,7 @@ function ordinalWithinOnePointRate(groups: ReadonlyMap<string, ValidatedReview[]
   ]
   const differences = [...groups.values()].flatMap((reviews) => {
     const primaryPairs = pairs(
-      reviews.filter((review) => review.reviewerRole.toLowerCase() !== 'adjudicator'),
+      reviews.filter(isPrimaryClinicalReview),
     )
     return primaryPairs.flatMap(([left, right]) => selectors.map((select) => (
       Math.abs(select(left) - select(right))
@@ -483,7 +496,7 @@ function ordinalWithinOnePointRate(groups: ReadonlyMap<string, ValidatedReview[]
 }
 
 function hasBinaryDisagreement(reviews: readonly ValidatedReview[]): boolean {
-  const primaries = reviews.filter((review) => review.reviewerRole.toLowerCase() !== 'adjudicator')
+  const primaries = reviews.filter(isPrimaryClinicalReview)
   const selectors: Array<(review: ValidatedReview) => boolean> = [
     (review) => review.criticalError,
     (review) => review.fabricatedCoreFact,
@@ -495,8 +508,8 @@ function hasBinaryDisagreement(reviews: readonly ValidatedReview[]): boolean {
 
 function effectiveReviews(groups: ReadonlyMap<string, ValidatedReview[]>): ValidatedReview[] {
   return [...groups.values()].flatMap((reviews) => {
-    const primaries = reviews.filter((review) => review.reviewerRole.toLowerCase() !== 'adjudicator')
-    const adjudicators = reviews.filter((review) => review.reviewerRole.toLowerCase() === 'adjudicator')
+    const primaries = reviews.filter(isPrimaryClinicalReview)
+    const adjudicators = reviews.filter(isAdjudicator)
     const adjudicator = adjudicators[0]
     if (!adjudicator) return primaries
     // An adjudicator resolves only the binary release decisions. Independent
@@ -520,7 +533,7 @@ export function scoreContentAudit(key: ReviewKey, rows: readonly ReviewTemplateR
   ))
   const duplicateAdjudicatorIds = [...groups.entries()]
     .filter(([, answerReviews]) => answerReviews.filter(
-      (review) => review.reviewerRole.toLowerCase() === 'adjudicator',
+      isAdjudicator,
     ).length > 1)
     .map(([reviewId]) => reviewId)
   if (duplicateAdjudicatorIds.length > 0) {
@@ -528,7 +541,7 @@ export function scoreContentAudit(key: ReviewKey, rows: readonly ReviewTemplateR
   }
   const unnecessaryAdjudicatorIds = [...groups.entries()]
     .filter(([, answerReviews]) => answerReviews.some(
-      (review) => review.reviewerRole.toLowerCase() === 'adjudicator',
+      isAdjudicator,
     ) && !hasBinaryDisagreement(answerReviews))
     .map(([reviewId]) => reviewId)
   if (unnecessaryAdjudicatorIds.length > 0) {
@@ -536,19 +549,23 @@ export function scoreContentAudit(key: ReviewKey, rows: readonly ReviewTemplateR
   }
   const insufficientReviewIds = key.rows
     .filter((row) => (groups.get(row.reviewId) ?? []).filter(
-      (review) => review.reviewerRole.toLowerCase() !== 'adjudicator',
+      isPrimaryClinicalReview,
     ).length < CONTENT_AUDIT_THRESHOLDS.minimumPrimaryReviewsPerAnswer)
     .map((row) => row.reviewId)
   const unresolvedDisagreementIds = key.rows
     .filter((row) => {
       const answerReviews = groups.get(row.reviewId) ?? []
       return hasBinaryDisagreement(answerReviews) && !answerReviews.some(
-        (review) => review.reviewerRole.toLowerCase() === 'adjudicator',
+        isAdjudicator,
       )
     })
     .map((row) => row.reviewId)
   const effective = effectiveReviews(groups)
   const metrics = metricsFor(effective)
+  const preliminaryAiReviews = reviews.filter(isPreliminaryAiReview)
+  const preliminaryAiMetrics = preliminaryAiReviews.length > 0
+    ? metricsFor(preliminaryAiReviews)
+    : null
   const failures: string[] = []
   if (insufficientReviewIds.length > 0) failures.push(
     `${insufficientReviewIds.length} answer(s) have fewer than ${CONTENT_AUDIT_THRESHOLDS.minimumPrimaryReviewsPerAnswer} primary reviews`,
@@ -572,10 +589,11 @@ export function scoreContentAudit(key: ReviewKey, rows: readonly ReviewTemplateR
     failures.push(`usefulness score is ${metrics.usefulnessScore === null ? 'n/a' : metrics.usefulnessScore.toFixed(2)}`)
   }
   if (
+    metrics.reviews === 0 ||
     metrics.usableWithoutMajorEditRate <
     CONTENT_AUDIT_THRESHOLDS.minimumUsableWithoutMajorEditRate
   ) {
-    failures.push(`usable-without-major-edit rate is ${metrics.usableWithoutMajorEditRate.toFixed(3)}`)
+    failures.push(`usable-without-major-edit rate is ${metrics.reviews === 0 ? 'n/a' : metrics.usableWithoutMajorEditRate.toFixed(3)}`)
   }
   if (metrics.criticalErrors > CONTENT_AUDIT_THRESHOLDS.maximumCriticalErrors) {
     failures.push(`${metrics.criticalErrors} critical error review(s)`)
@@ -600,6 +618,7 @@ export function scoreContentAudit(key: ReviewKey, rows: readonly ReviewTemplateR
     passed: failures.length === 0,
     failures,
     metrics,
+    preliminaryAiMetrics,
     agreement: {
       criticalErrorKappa: binaryKappa(groups, (review) => review.criticalError),
       fabricatedCoreFactKappa: binaryKappa(groups, (review) => review.fabricatedCoreFact),
@@ -635,12 +654,30 @@ export function createContentAuditReport(score: ContentAuditScore, generatedAt: 
     `| Fact accuracy | ${percent(score.metrics.factAccuracy)} | >= ${percent(CONTENT_AUDIT_THRESHOLDS.minimumFactAccuracy)} |`,
     `| Required-fact coverage | ${percent(score.metrics.requiredFactCoverage)} | >= ${percent(CONTENT_AUDIT_THRESHOLDS.minimumRequiredFactCoverage)} |`,
     `| Usefulness | ${decimal(score.metrics.usefulnessScore)} / 5 | >= ${CONTENT_AUDIT_THRESHOLDS.minimumUsefulnessScore.toFixed(1)} |`,
-    `| Usable without major edit | ${percent(score.metrics.usableWithoutMajorEditRate)} | >= ${percent(CONTENT_AUDIT_THRESHOLDS.minimumUsableWithoutMajorEditRate)} |`,
+    `| Usable without major edit | ${percent(score.metrics.reviews > 0 ? score.metrics.usableWithoutMajorEditRate : null)} | >= ${percent(CONTENT_AUDIT_THRESHOLDS.minimumUsableWithoutMajorEditRate)} |`,
     `| Critical-error reviews | ${score.metrics.criticalErrors} | 0 |`,
     `| Fabricated-core-fact reviews | ${score.metrics.fabricatedCoreFacts} | 0 |`,
     `| Unresolved binary disagreements | ${score.unresolvedDisagreementIds.length} | 0 |`,
     `| Answers lacking two primary reviews | ${score.insufficientReviewIds.length} | 0 |`,
     '',
+    ...(score.preliminaryAiMetrics
+      ? [
+          '## AI preliminary triage (not release evidence)',
+          '',
+          '| Metric | AI preliminary result |',
+          '|---|---:|',
+          `| Fact accuracy | ${percent(score.preliminaryAiMetrics.factAccuracy)} |`,
+          `| Required-fact coverage | ${percent(score.preliminaryAiMetrics.requiredFactCoverage)} |`,
+          `| Usefulness | ${decimal(score.preliminaryAiMetrics.usefulnessScore)} / 5 |`,
+          `| Usable without major edit | ${percent(score.preliminaryAiMetrics.usableWithoutMajorEditRate)} |`,
+          `| Critical-error reviews | ${score.preliminaryAiMetrics.criticalErrors} |`,
+          `| Fabricated-core-fact reviews | ${score.preliminaryAiMetrics.fabricatedCoreFacts} |`,
+          `| Major-omission reviews | ${score.preliminaryAiMetrics.majorOmissions} |`,
+          '',
+          'Rows with reviewer_role=ai-preliminary are excluded from the clinical release gate and reviewer-agreement calculations.',
+          '',
+        ]
+      : []),
     '## Reviewer agreement',
     '',
     `- Critical error Cohen's kappa (mean pairwise): ${decimal(score.agreement.criticalErrorKappa)}`,
@@ -662,7 +699,8 @@ export function createContentAuditReport(score: ContentAuditScore, generatedAt: 
     lines.push('## Gate failures', '', ...score.failures.map((failure) => `- ${failure}`), '')
   }
   lines.push(
-    'This report measures blinded human review results. It does not replace local clinical governance, incident review, or specialty-specific validation.',
+    'The release gate uses blinded clinical-review rows only. AI preliminary triage, when present, is reported separately and cannot satisfy the two-reviewer requirement.',
+    'This report does not replace local clinical governance, incident review, or specialty-specific validation.',
     '',
   )
   return lines.join('\n')
