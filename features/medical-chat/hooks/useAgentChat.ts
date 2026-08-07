@@ -33,6 +33,7 @@ import {
   asksForCurrentMedicalEvidence,
   filterAgentToolsForDataScope,
   forcedInitialAgentToolName,
+  localAgentPrefetchInput,
   selectAgentToolsForQuestion,
   shouldPreExecuteLocalAgentTool,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
@@ -574,6 +575,9 @@ export function useAgentChat(
           tools: toolsForTurn,
           initialToolName,
           preExecuteInitialTool: isCustomEndpoint && shouldPreExecuteLocalAgentTool(initialToolName),
+          preExecuteInitialToolInput: isCustomEndpoint
+            ? localAgentPrefetchInput(routingQuestion, initialToolName)
+            : undefined,
           ...(isCustomEndpoint && /^gpt-oss(?::|-)/i.test(openAiCompatible?.modelId.trim() ?? '')
             ? { reasoningEffort: 'low' as const }
             : {}),

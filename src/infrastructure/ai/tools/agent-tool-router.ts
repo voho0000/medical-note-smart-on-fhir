@@ -233,10 +233,10 @@ export function forcedInitialAgentToolName(
 }
 
 /**
- * A small local model is more reliable when compact, argument-free tools are
- * executed deterministically after routing. Keep the list intentionally short:
- * these tools are complete enough with `{}` and avoid letting a model invent a
- * date range or translate a source label while constructing arguments.
+ * A small local model is more reliable when compact tools are executed
+ * deterministically after routing. Keep the list intentionally short: most are
+ * complete with `{}`, while getRecentVisits accepts only bounded arguments
+ * extracted from explicit user wording by localAgentPrefetchInput.
  * Frontier models never use this path because their data scope remains `auto`.
  */
 const LOCAL_AGENT_PREFETCH_TOOLS = new Set([
@@ -251,4 +251,43 @@ export function shouldPreExecuteLocalAgentTool(
   initialToolName: string | undefined,
 ): boolean {
   return !!initialToolName && LOCAL_AGENT_PREFETCH_TOOLS.has(initialToolName)
+}
+
+/**
+ * Preserve explicit visit constraints when a local model's first tool is
+ * executed by the harness. This is deliberately narrow: it only fills two
+ * optional getRecentVisits fields and never selects or authorizes a tool.
+ */
+export function localAgentPrefetchInput(
+  question: string,
+  initialToolName: string | undefined,
+): Record<string, unknown> {
+  if (initialToolName !== 'getRecentVisits') return {}
+
+  const input: Record<string, unknown> = {}
+  if (/(?:最近|上|前)(?:一|1)次住院|最近一次.*住院|latest (?:hospital )?admission|most recent (?:hospital )?admission/i.test(question)) {
+    input.type = 'inpatient'
+    input.limit = 1
+    return input
+  }
+
+  const countMatch = question.match(/(?:最近|近|前)\s*(\d+|[一二三四五六七八九十])\s*次(?:就醫|看診|門診|住院|visit|encounter)/i)
+    ?? question.match(/(?:last|recent)\s*(\d+)\s*(?:visits?|encounters?)/i)
+  if (!countMatch) return input
+
+  const chineseCounts: Record<string, number> = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
+  }
+  const parsed = chineseCounts[countMatch[1]] ?? Number.parseInt(countMatch[1], 10)
+  if (Number.isFinite(parsed)) input.limit = Math.min(Math.max(parsed, 1), 10)
+  return input
 }

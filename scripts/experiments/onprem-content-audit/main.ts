@@ -264,6 +264,7 @@ function finalizedSummaryResponse(
     generateMedicalSummaryUseCase.finalizeResult(draft, fixture.catalog, {
       audience: fixture.audience,
       locale: 'zh-TW',
+      strictGrounding: true,
     }),
     null,
     2,

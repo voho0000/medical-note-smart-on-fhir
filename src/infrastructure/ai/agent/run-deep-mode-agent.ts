@@ -94,8 +94,10 @@ export interface RunDeepModeAgentParams {
   abortController: AbortController
   /** Force only step zero when routing found one unambiguous record tool. */
   initialToolName?: string
-  /** Execute an unambiguous no-argument tool locally before the first model call. */
+  /** Execute an unambiguous compact tool locally before the first model call. */
   preExecuteInitialTool?: boolean
+  /** Deterministic arguments extracted from explicit user constraints. */
+  preExecuteInitialToolInput?: Record<string, unknown>
   /** Optional provider reasoning control. Callers must only opt in for a
    * compatible endpoint model (currently gpt-oss). */
   reasoningEffort?: 'low' | 'medium' | 'high'
@@ -134,6 +136,7 @@ export async function runDeepModeAgent(
     abortController,
     initialToolName,
     preExecuteInitialTool,
+    preExecuteInitialToolInput,
     reasoningEffort,
     onEvent,
   } = params
@@ -171,22 +174,23 @@ export async function runDeepModeAgent(
 
   const initialTool = initialToolName ? tools?.[initialToolName] : undefined
   const executableInitialTool = initialTool as {
-    execute?: (input: Record<string, never>) => unknown | Promise<unknown>
+    execute?: (input: Record<string, unknown>) => unknown | Promise<unknown>
   } | undefined
   const shouldPreExecute = Boolean(preExecuteInitialTool && initialToolName && executableInitialTool?.execute)
 
   if (shouldPreExecute && initialToolName && executableInitialTool?.execute) {
     if (abortController.signal.aborted) throw new DOMException('Aborted', 'AbortError')
+    const initialToolInput = preExecuteInitialToolInput ?? {}
     const displayName = getToolDisplayName(initialToolName, t.toolNames)
     usedToolNames.push(initialToolName)
-    trajectory.push({ round: 1, kind: 'tool-call', toolName: initialToolName, input: {} })
+    trajectory.push({ round: 1, kind: 'tool-call', toolName: initialToolName, input: initialToolInput })
     emit({
       type: 'tool-call',
       toolName: initialToolName,
       state: `🔍 ${displayName}...`,
       toolCalls: [...usedToolNames],
     })
-    const toolResult = await executableInitialTool.execute({})
+    const toolResult = await executableInitialTool.execute(initialToolInput)
     toolResults.push({ toolName: initialToolName, result: toolResult })
     trajectory.push({ round: 1, kind: 'tool-result', toolName: initialToolName, result: toolResult })
     emit({ type: 'tool-result', toolName: initialToolName, result: toolResult })

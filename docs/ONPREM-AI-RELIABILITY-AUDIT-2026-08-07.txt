@@ -332,3 +332,37 @@ https://diabetesjournals.org/care/article/49/Supplement_1/S6/163930/Summary-of-R
 https://www.endo-dm.org.tw/dia/direct/
 
 完整操作與 rubric：docs/ONPREM-CONTENT-AUDIT.md
+
+
+十、tvghbrain3.5 local-small harness v2 探索結果（2026-08-07）
+
+本輪目標不是再增加 prompt 警語，而是把模型不擅長、但程式可以確定的語意移到 deterministic harness：
+
+- 小模型摘要改用每個 module 專屬規則；Frontier 繼續使用完整 prompt，不套用此限制。
+- retry 只帶該 module 會用到的 evidence slice；priorities／problems 因需跨域判斷而保留完整證據。
+- DiagnosticReport／Observation 沒有 reference range、interpretation flag 或可判讀結構時，不允許輸出「正常／異常／控制良好／未達標」。
+- 單一檢驗點固定標為 single，不能因模型文字宣稱而變成上升／下降趨勢。
+- Condition 不能只靠 MedicationRequest／MedicationDispense 反推；藥品適應症若沒有 Condition、Encounter 或臨床文件支持，改為「用途請依處方與醫囑確認」。
+- 藥物副作用與監測提醒若沒有來源支持，不渲染模型自行補充的個別症狀清單，改為一般性安全提醒。
+- 住院 Encounter 保留 period.end，時間軸呈現起訖日期而不是只有入院日。
+- 醫療版用藥總覽的藥品數與院所數改由來源資料計算，不採用模型猜測。
+- Chat 只對 getRecentVisits 保留使用者明確指定的 type／limit，例如「最近一次住院」=> inpatient + limit 1、「最近三次就醫」=> limit 3。這不是新增意圖分類，也不影響 general 問題或 Frontier auto tool calling。
+
+Prompt 大小代理指標（cross-hospital-current-medications，以字元數比較，不等同 endpoint 實際 token）：
+
+- 首次五個 module：27,192 -> 8,562，減少 68.5%。
+- priorities retry：24,880 -> 4,030，減少 83.8%。
+- problems retry：24,904 -> 4,189，減少 83.2%。
+- timeline retry：24,877 -> 3,987，減少 84.0%。
+- investigations retry：25,039 -> 3,430，減少 86.3%。
+- medications retry：25,526 -> 5,247，減少 79.4%。
+
+舊 tvghbrain3.5 完整輸出離線 replay 至新 finalizer 的結果：
+
+- 跨院藥物：headline 移除無依據的「血糖控制不佳」；HbA1c 改為 single，並顯示「資料未提供參考範圍或個人目標」；刪除用單一 HbA1c 建立的「血糖控制不佳」問題與用 Atorvastatin 反推的「高脂血症」。
+- 病人用藥衛教：移除無血壓證據的「控制穩定」；無文件支持的用途與副作用改成來源中立說法。
+- 兩次重大住院：兩段住院皆顯示完整起訖日期。
+
+因此，AI 初審指出的上述三個摘要案例之已知 failure mode，在相同舊模型輸入下已不再出現在使用者可見結果。這證明 deterministic gate 有效，但不代表新模型推論已達到 90%、95% 或 10/10；本次執行環境沒有安全注入 endpoint credential，且沒有可連線的瀏覽器實例，所以尚未完成新 harness 的 live 10-run／26-case 重跑。
+
+工程驗證：相關 Jest 102/102 通過、TypeScript noEmit 通過、Next.js production build 通過。正式臨床 release gate 仍維持 PENDING HUMAN REVIEW；live model 重跑與兩位臨床評審都不可被本段離線結果取代。

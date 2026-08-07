@@ -278,7 +278,14 @@ export interface SummarySourceCatalogEntry {
   display: string
   /** ISO date (YYYY-MM-DD) taken from the resource — never from the AI. */
   date?: string
+  /** ISO period end date taken from the resource. Currently populated for
+   *  Encounter periods so admissions render their full stay deterministically. */
+  endDate?: string
   organization?: string
+  /** Whether the cited laboratory evidence itself contains an interpretation
+   *  flag or reference range. A numeric value alone must not be described as
+   *  high/low, controlled/uncontrolled, or at/not at target. */
+  supportsNormalityAssessment?: boolean
   /** Lazy decoded document narrative, used only for claim-level verification.
    *  Kept out of prompts/source pills so large discharge summaries are not
    *  duplicated in memory or exposed as metadata. */
@@ -299,12 +306,15 @@ export interface ResolvedSourceRef {
   resourceId?: string
   display?: string
   date?: string
+  endDate?: string
   organization?: string
 }
 
 export interface SummaryTimelineEvent {
   key: string
   date: string
+  /** Deterministic Encounter.period.end; omitted for point-in-time events. */
+  endDate?: string
   label: string
   category: TimelineCategory
   organization?: string

@@ -4,6 +4,7 @@ import {
   forcedInitialAgentToolName,
   implicitlyRequestsPatientRecord,
   isGeneralMedicalKnowledgeQuestion,
+  localAgentPrefetchInput,
   selectAgentToolNames,
   selectAgentToolsForQuestion,
   shouldPreExecuteLocalAgentTool,
@@ -161,7 +162,7 @@ describe('agent tool router', () => {
     expect(forcedInitialAgentToolName(question, names, 'auto')).toBeUndefined()
   })
 
-  it('prefetches only compact argument-free local tools', () => {
+  it('prefetches only compact local tools', () => {
     expect(shouldPreExecuteLocalAgentTool('getDataOverview')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getHealthSummarySnapshot')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('getActiveMedicationList')).toBe(true)
@@ -169,5 +170,14 @@ describe('agent tool router', () => {
     expect(shouldPreExecuteLocalAgentTool('queryImagingRecords')).toBe(true)
     expect(shouldPreExecuteLocalAgentTool('searchObservationByName')).toBe(false)
     expect(shouldPreExecuteLocalAgentTool(undefined)).toBe(false)
+  })
+
+  it('preserves explicit visit type and count in deterministic prefetch input', () => {
+    expect(localAgentPrefetchInput('最近一次住院的日期與主要原因是什麼？', 'getRecentVisits'))
+      .toEqual({ type: 'inpatient', limit: 1 })
+    expect(localAgentPrefetchInput('請列出最近三次就醫日期與就醫類型。', 'getRecentVisits'))
+      .toEqual({ limit: 3 })
+    expect(localAgentPrefetchInput('最近有哪些就醫紀錄？', 'getRecentVisits')).toEqual({})
+    expect(localAgentPrefetchInput('最近三次就醫', 'queryEncounters')).toEqual({})
   })
 })
