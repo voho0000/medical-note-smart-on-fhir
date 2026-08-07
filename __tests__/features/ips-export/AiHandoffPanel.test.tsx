@@ -17,7 +17,7 @@ jest.mock('@/src/shared/hooks/use-copy-to-clipboard', () => ({
 }))
 
 jest.mock('@/features/data-selection', () => ({
-  DataSelectionDrawer: () => null,
+  DataSelectionFeature: () => null,
 }))
 
 jest.mock('sonner', () => ({

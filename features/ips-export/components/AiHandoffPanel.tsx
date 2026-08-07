@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Sheet,
   SheetContent,
@@ -37,7 +38,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { DataSelectionDrawer } from '@/features/data-selection'
+import { DataSelectionFeature } from '@/features/data-selection'
 import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { useLanguage } from '@/src/application/providers/language.provider'
@@ -70,7 +71,6 @@ export function AiHandoffPanel() {
   const [profile, setProfile] = useState<AiArtifactProfile>('quick')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [maskIdentifiers, setMaskIdentifiers] = useState(true)
-  const [scopeOpen, setScopeOpen] = useState(false)
   const [unmaskConfirmationOpen, setUnmaskConfirmationOpen] = useState(false)
   const [pendingDestination, setPendingDestination] = useState<(typeof DESTINATIONS)[number] | null>(null)
   const [artifactIdentity, setArtifactIdentity] = useState(() => ({
@@ -147,11 +147,6 @@ export function AiHandoffPanel() {
       return
     }
     void copyAndOpen(artifact, destination.url, destination.label)
-  }
-
-  const openDataScope = () => {
-    setSettingsOpen(false)
-    setScopeOpen(true)
   }
 
   return (
@@ -234,16 +229,17 @@ export function AiHandoffPanel() {
           </div>
         )}
 
-        <Button
-          type="button"
-          size="lg"
-          className="mt-4 w-full gap-2"
-          onClick={copyArtifact}
-          disabled={!canHandoff}
-        >
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          {copied ? t.common.copied : x.copyData}
-        </Button>
+        <div className="mt-4 flex justify-end">
+          <Button
+            type="button"
+            className="gap-2 px-6"
+            onClick={copyArtifact}
+            disabled={!canHandoff}
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? t.common.copied : x.copyData}
+          </Button>
+        </div>
 
         <Collapsible open={previewExpanded} onOpenChange={setPreviewExpanded} className="mt-3">
           <CollapsibleTrigger asChild>
@@ -290,7 +286,7 @@ export function AiHandoffPanel() {
       </div>
 
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
+        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
           <SheetHeader className="border-b bg-muted/20 px-5 py-4 pr-10">
             <SheetTitle className="flex items-center gap-2 text-base">
               <Settings2 className="h-4 w-4 text-teal-600" />
@@ -298,39 +294,50 @@ export function AiHandoffPanel() {
             </SheetTitle>
             <SheetDescription className="text-xs leading-relaxed">{x.settingsDescription}</SheetDescription>
           </SheetHeader>
-          <div className="space-y-5 overflow-y-auto p-5">
-            <div>
-              <p className="mb-2 text-sm font-medium">{x.outputFormat}</p>
-              <Tabs value={profile} onValueChange={(value) => setProfile(value as AiArtifactProfile)}>
-                <TabsList className="grid h-9 w-full grid-cols-2">
-                  <TabsTrigger value="quick" className="text-xs">{x.quickProfile}</TabsTrigger>
-                  <TabsTrigger value="traceable" className="text-xs">{x.traceableProfile}</TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                {profile === 'quick' ? x.quickDescription : x.traceableDescription}
-              </p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="ai-export-mask-identifiers" className="text-sm font-medium">{x.maskIdentifiers}</label>
-                <Switch
-                  id="ai-export-mask-identifiers"
-                  checked={maskIdentifiers}
-                  onCheckedChange={handleMaskIdentifiersChange}
-                  aria-label={x.maskIdentifiers}
+          <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+            <div className="space-y-5 p-4 sm:p-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-sm font-medium">{x.outputFormat}</p>
+                  <Tabs value={profile} onValueChange={(value) => setProfile(value as AiArtifactProfile)}>
+                    <TabsList className="grid h-9 w-full grid-cols-2">
+                      <TabsTrigger value="quick" className="text-xs">{x.quickProfile}</TabsTrigger>
+                      <TabsTrigger value="traceable" className="text-xs">{x.traceableProfile}</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    {profile === 'quick' ? x.quickDescription : x.traceableDescription}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="ai-export-mask-identifiers" className="text-sm font-medium">{x.maskIdentifiers}</label>
+                    <Switch
+                      id="ai-export-mask-identifiers"
+                      checked={maskIdentifiers}
+                      onCheckedChange={handleMaskIdentifiersChange}
+                      aria-label={x.maskIdentifiers}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{x.maskingLimitNotice}</p>
+                </div>
+              </div>
+              <div className="border-t pt-5">
+                <div className="mb-3 flex items-start gap-2">
+                  <Database className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
+                  <div>
+                    <h3 className="text-sm font-semibold">{x.chooseData}</h3>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{x.scopeDescription}</p>
+                  </div>
+                </div>
+                <DataSelectionFeature
+                  consumer="aiExport"
+                  showTemplates={false}
+                  showScopeDescription={false}
                 />
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{x.maskingLimitNotice}</p>
             </div>
-            <Button type="button" variant="outline" className="w-full justify-between" onClick={openDataScope}>
-              <span className="flex items-center gap-2">
-                <Database className="h-4 w-4" />
-                {x.chooseData}
-              </span>
-              <ChevronDown className="h-4 w-4 -rotate-90" />
-            </Button>
-          </div>
+          </ScrollArea>
         </SheetContent>
       </Sheet>
 
@@ -370,15 +377,6 @@ export function AiHandoffPanel() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <DataSelectionDrawer
-        open={scopeOpen}
-        onOpenChange={setScopeOpen}
-        title={x.scopeTitle}
-        description={x.scopeDescription}
-        applyHint={x.scopeApplyHint}
-        consumer="aiExport"
-        showTemplates={false}
-      />
     </div>
   )
 }
