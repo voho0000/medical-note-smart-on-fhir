@@ -1,21 +1,30 @@
 "use client"
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Copy, Database, ExternalLink, MessageSquarePlus, ShieldCheck, X } from 'lucide-react'
+import { Check, Copy, Database, ExternalLink, MessageSquarePlus, ShieldCheck, SlidersHorizontal, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { DataSelectionDrawer } from '@/features/data-selection'
 import { useClinicalContext } from '@/src/application/hooks/use-clinical-context.hook'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
-import { useAudience } from '@/src/application/providers/audience.provider'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useCopyToClipboard } from '@/src/shared/hooks/use-copy-to-clipboard'
 import {
   buildAiArtifact,
-  buildQuestionOnlyArtifact,
   type AiArtifactProfile,
 } from '../utils/ai-export-artifact'
 
@@ -25,38 +34,29 @@ const DESTINATIONS = [
   { id: 'claude', label: 'Claude', url: 'https://claude.ai/new' },
 ] as const
 
-const OPEN_EVIDENCE_URL = 'https://www.openevidence.com/'
-
 function newExportId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return `export-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function openWithoutOpener(url: string): Window | null {
-  const popup = window.open('', '_blank')
-  if (popup) {
-    popup.opener = null
-    popup.location.replace(url)
-  }
-  return popup
-}
-
 export function AiHandoffPanel() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const x = t.ipsExport.aiHandoff
-  const { audience } = useAudience()
   const { patient } = usePatient()
   const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext('aiExport')
   const { copied, copy } = useCopyToClipboard()
   const [attachedQuestion, setAttachedQuestion] = useState('')
   const [questionExpanded, setQuestionExpanded] = useState(false)
-  const [openEvidenceQuestion, setOpenEvidenceQuestion] = useState('')
   const [profile, setProfile] = useState<AiArtifactProfile>('quick')
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [maskIdentifiers, setMaskIdentifiers] = useState(true)
   const [scopeOpen, setScopeOpen] = useState(false)
-  const [openEvidenceAttested, setOpenEvidenceAttested] = useState(false)
-  const [exportId, setExportId] = useState(newExportId)
-  const [generatedAt, setGeneratedAt] = useState(() => new Date().toISOString())
+  const [unmaskConfirmationOpen, setUnmaskConfirmationOpen] = useState(false)
+  const [pendingDestination, setPendingDestination] = useState<(typeof DESTINATIONS)[number] | null>(null)
+  const [artifactIdentity, setArtifactIdentity] = useState(() => ({
+    exportId: newExportId(),
+    generatedAt: new Date().toISOString(),
+  }))
 
   const clinicalContext = useMemo(
     () => maskIdentifiers ? getFullClinicalContext() : getFormattedClinicalContext(),
@@ -64,33 +64,29 @@ export function AiHandoffPanel() {
   )
 
   useEffect(() => {
-    setExportId(newExportId())
-    setGeneratedAt(new Date().toISOString())
+    // A changed question, scope, privacy mode, or patient is a new export
+    // artifact. Keep its identifier and timestamp in one atomic update so the
+    // exact preview always matches the copied payload.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setArtifactIdentity({
+      exportId: newExportId(),
+      generatedAt: new Date().toISOString(),
+    })
   }, [attachedQuestion, clinicalContext, maskIdentifiers, profile, patient?.id])
-
-  useEffect(() => {
-    setOpenEvidenceAttested(false)
-  }, [openEvidenceQuestion, patient?.id, audience])
 
   const artifact = useMemo(
     () => buildAiArtifact({
       profile,
       question: attachedQuestion,
       clinicalContext,
-      exportId,
-      generatedAt,
+      exportId: artifactIdentity.exportId,
+      generatedAt: artifactIdentity.generatedAt,
       identifiersMasked: maskIdentifiers,
+      locale,
     }),
-    [attachedQuestion, clinicalContext, exportId, generatedAt, maskIdentifiers, profile],
-  )
-  const questionOnlyArtifact = useMemo(
-    () => buildQuestionOnlyArtifact(openEvidenceQuestion),
-    [openEvidenceQuestion],
+    [artifactIdentity, attachedQuestion, clinicalContext, locale, maskIdentifiers, profile],
   )
   const canHandoff = clinicalContext.trim().length > 0
-  const openEvidenceEligible = audience === 'medical'
-    && openEvidenceAttested
-    && openEvidenceQuestion.trim().length > 0
 
   const copyArtifact = async () => {
     const ok = await copy(artifact)
@@ -117,16 +113,43 @@ export function AiHandoffPanel() {
     }
   }
 
+  const handleMaskIdentifiersChange = (checked: boolean) => {
+    if (checked) {
+      setMaskIdentifiers(true)
+      return
+    }
+    setUnmaskConfirmationOpen(true)
+  }
+
+  const handleDestination = (destination: (typeof DESTINATIONS)[number]) => {
+    if (!maskIdentifiers) {
+      setPendingDestination(destination)
+      return
+    }
+    void copyAndOpen(artifact, destination.url, destination.label)
+  }
+
   return (
     <div className="space-y-2">
       <div className="rounded-lg border bg-card p-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={profile} onValueChange={(value) => setProfile(value as AiArtifactProfile)}>
-            <TabsList className="grid h-8 w-56 grid-cols-2">
-              <TabsTrigger value="quick" className="text-xs">{x.quickProfile}</TabsTrigger>
-              <TabsTrigger value="traceable" className="text-xs">{x.traceableProfile}</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <Collapsible className="relative" open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs text-muted-foreground">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                {x.advancedOptions}: {profile === 'quick' ? x.quickProfile : x.traceableProfile}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="absolute z-20 mt-1 rounded-md border bg-popover p-2 shadow-md">
+              <p className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{x.outputFormat}</p>
+              <Tabs value={profile} onValueChange={(value) => setProfile(value as AiArtifactProfile)}>
+                <TabsList className="grid h-8 w-56 grid-cols-2">
+                  <TabsTrigger value="quick" className="text-xs">{x.quickProfile}</TabsTrigger>
+                  <TabsTrigger value="traceable" className="text-xs">{x.traceableProfile}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </CollapsibleContent>
+          </Collapsible>
           {!questionExpanded && (
             <Button
               type="button"
@@ -144,7 +167,7 @@ export function AiHandoffPanel() {
             <Switch
               id="ai-export-mask-identifiers"
               checked={maskIdentifiers}
-              onCheckedChange={setMaskIdentifiers}
+              onCheckedChange={handleMaskIdentifiersChange}
               aria-label={x.maskIdentifiers}
             />
             <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 text-xs" onClick={() => setScopeOpen(true)}>
@@ -153,6 +176,12 @@ export function AiHandoffPanel() {
             </Button>
           </div>
         </div>
+        <p className="mt-1.5 text-[0.6875rem] leading-relaxed text-muted-foreground">
+          {profile === 'quick' ? x.quickDescription : x.traceableDescription}
+        </p>
+        <p className="mt-1 text-[0.6875rem] leading-relaxed text-muted-foreground">
+          {x.maskingLimitNotice}
+        </p>
         {questionExpanded && (
           <div className="mt-2 rounded-md border bg-muted/10 p-2.5">
             <div className="flex items-center justify-between gap-2">
@@ -186,6 +215,9 @@ export function AiHandoffPanel() {
             {x.unmaskedWarning}
           </div>
         )}
+        <p className="mt-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
+          {x.exactPreviewHint}
+        </p>
         <div className="relative mt-2">
           <Button
             variant="outline"
@@ -221,7 +253,7 @@ export function AiHandoffPanel() {
               variant="outline"
               className="justify-between"
               disabled={!canHandoff}
-              onClick={() => copyAndOpen(artifact, destination.url, destination.label)}
+              onClick={() => handleDestination(destination)}
             >
               {destination.label}
               <ExternalLink className="h-3.5 w-3.5" />
@@ -231,50 +263,53 @@ export function AiHandoffPanel() {
         <p className="mt-2 text-[0.6875rem] leading-relaxed text-muted-foreground">{x.pasteHint}</p>
       </div>
 
-      <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900 dark:bg-violet-950/20">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold">OpenEvidence</h3>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{x.openEvidenceQuestionOnly}</p>
-          </div>
-          <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-2 text-xs" onClick={() => openWithoutOpener(OPEN_EVIDENCE_URL)}>
-            {x.openEvidencePreflight}
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+      <AlertDialog open={unmaskConfirmationOpen} onOpenChange={setUnmaskConfirmationOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{x.unmaskConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{x.unmaskConfirmDescription}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setMaskIdentifiers(false)}>
+              {x.unmaskConfirmAction}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-        <label htmlFor="open-evidence-question" className="mt-3 block text-xs font-medium">{x.openEvidenceQuestionLabel}</label>
-        <Textarea
-          id="open-evidence-question"
-          value={openEvidenceQuestion}
-          onChange={(event) => setOpenEvidenceQuestion(event.target.value)}
-          placeholder={x.openEvidenceQuestionPlaceholder}
-          className="mt-1 min-h-20 resize-y bg-background text-sm"
-        />
-
-        {audience !== 'medical' ? (
-          <p className="mt-2 rounded-md border bg-background px-2.5 py-2 text-xs text-muted-foreground">{x.openEvidenceClinicianOnly}</p>
-        ) : (
-          <label className="mt-2 flex items-start gap-2 rounded-md border bg-background px-2.5 py-2 text-xs leading-relaxed">
-            <input
-              type="checkbox"
-              checked={openEvidenceAttested}
-              onChange={(event) => setOpenEvidenceAttested(event.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-            />
-            <span>{x.openEvidenceAttestation}</span>
-          </label>
-        )}
-
-        <Button
-          className="mt-2 w-full justify-between"
-          disabled={!openEvidenceEligible}
-          onClick={() => copyAndOpen(questionOnlyArtifact, OPEN_EVIDENCE_URL, 'OpenEvidence')}
-        >
-          {x.openEvidenceAction}
-          <ExternalLink className="h-4 w-4" />
-        </Button>
-      </div>
+      <AlertDialog
+        open={pendingDestination !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDestination(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{x.externalConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {x.externalConfirmDescription.replace(
+                '{destination}',
+                pendingDestination?.label ?? '',
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const destination = pendingDestination
+                setPendingDestination(null)
+                if (destination) {
+                  void copyAndOpen(artifact, destination.url, destination.label)
+                }
+              }}
+            >
+              {x.externalConfirmAction}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <DataSelectionDrawer
         open={scopeOpen}

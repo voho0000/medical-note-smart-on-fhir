@@ -49,6 +49,8 @@ interface ContextTokenMeterProps {
 export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, consumer = 'insights' }: ContextTokenMeterProps) {
   const { t, locale } = useLanguage()
   const ds = t.dataSelection as unknown as Record<string, string>
+  const isExternalExport = consumer === 'aiExport'
+  const externalCopy = t.ipsExport.aiHandoff
   // The main Data Selection drawer edits the summary/insights profile. Read
   // that exact consumer here too so a stale legacy chat profile cannot make
   // the meter disagree with the subsequent summary request.
@@ -119,24 +121,32 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
     <div className="rounded-md border bg-muted/20 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[0.6875rem] font-medium text-muted-foreground">
-          {showsAdaptedScope
+          {isExternalExport
+            ? externalCopy.externalTokenLabel
+            : showsAdaptedScope
             ? locale === 'zh-TW' ? '本次實際送出內容' : 'Actual content for this run'
             : ds.tokenMeterLabel ?? "已選病歷內容"}
         </span>
-        <span className={`text-[0.6875rem] tabular-nums ${LEVEL_TEXT[budget.level]}`}>
-          ~{fmt(displayedTotal)} / {fmt(budget.usable)} tok · {pct}%
+        <span className={`text-[0.6875rem] tabular-nums ${isExternalExport ? 'text-muted-foreground' : LEVEL_TEXT[budget.level]}`}>
+          {isExternalExport
+            ? `~${fmt(displayedTotal)} tokens`
+            : `~${fmt(displayedTotal)} / ${fmt(budget.usable)} tok · ${pct}%`}
         </span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
-        <div
-          className={`h-full rounded-full transition-all ${LEVEL_BAR[budget.level]}`}
-          style={{ width: `${Math.min(100, pct)}%` }}
-        />
-      </div>
+      {!isExternalExport ? (
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+          <div
+            className={`h-full rounded-full transition-all ${LEVEL_BAR[budget.level]}`}
+            style={{ width: `${Math.min(100, pct)}%` }}
+          />
+        </div>
+      ) : null}
       <div className="mt-1 flex items-center justify-between gap-2">
-        <span className="truncate text-[0.625rem] text-muted-foreground">
-          {(ds.tokenMeterModel ?? "模型") + ": " + modelLabel}
-        </span>
+        {!isExternalExport ? (
+          <span className="truncate text-[0.625rem] text-muted-foreground">
+            {(ds.tokenMeterModel ?? "模型") + ": " + modelLabel}
+          </span>
+        ) : null}
         {topSections.length > 0 && !showsAdaptedScope && (
           <span className="truncate text-[0.625rem] text-muted-foreground" title={topSections.map((s) => `${s.title}: ${s.tokens}`).join("\n")}>
             {ds.tokenMeterTop ?? "最大宗"}: {topSections.map((s) => `${s.title} ${fmt(s.tokens)}`).join(" · ")}
@@ -144,7 +154,9 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
         )}
       </div>
       <p className="mt-1 text-[0.625rem] leading-snug text-muted-foreground">
-        {ds.tokenMeterRequestHint ?? "產生摘要時還會加入 AI 指令、輸出格式與來源索引；送出前會顯示完整輸入量。"}
+        {isExternalExport
+          ? externalCopy.externalTokenHint
+          : ds.tokenMeterRequestHint ?? "產生摘要時還會加入 AI 指令、輸出格式與來源索引；送出前會顯示完整輸入量。"}
       </p>
       {showsAdaptedScope && fittedClinicalInput.contextAdaptation ? (
         <div
@@ -194,7 +206,7 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
           ) : null}
         </div>
       ) : null}
-      {budget.level === "over" && (
+      {!isExternalExport && budget.level === "over" && (
         <p className="mt-1 text-[0.625rem] text-red-600 dark:text-red-400">
           {ds.tokenMeterOver ?? "已選病歷本身已超過此模型的可用輸入空間；建議縮小文件或檢驗範圍，或改用內容視窗更大的模型。"}
         </p>

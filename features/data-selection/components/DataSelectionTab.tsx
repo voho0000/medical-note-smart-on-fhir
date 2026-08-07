@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 import { ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -48,6 +48,9 @@ const GROUPS: Array<{ id: string; labelKey: string; fallback: string }> = [
   { id: 'documents', labelKey: 'documents', fallback: 'Documents' },
 ]
 const DEFAULT_OPEN = new Set(['patient', 'visit', 'reports', 'medication', 'documents'])
+const subscribeToHydration = () => () => undefined
+const getClientHydrationSnapshot = () => true
+const getServerHydrationSnapshot = () => false
 
 // Active segment in the 編輯對象 / 情境 pill toggles — light amber to match the
 // data-selection tab accent (so the selected option reads as selected, not just
@@ -80,10 +83,12 @@ export function DataSelectionTab({
     resetProfileFor,
     selectAllDataFor,
   } = useDataSelection()
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  )
   const [openGroups, setOpenGroups] = useState<Set<string>>(DEFAULT_OPEN)
-
-  useEffect(() => setMounted(true), [])
 
   const grouped = useMemo(() => {
     const map = new Map<string, DataItem[]>()

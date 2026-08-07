@@ -1,7 +1,4 @@
-import {
-  buildAiArtifact,
-  buildQuestionOnlyArtifact,
-} from '@/features/ips-export/utils/ai-export-artifact'
+import { buildAiArtifact } from '@/features/ips-export/utils/ai-export-artifact'
 
 const context = [
   'Medications:',
@@ -21,6 +18,7 @@ describe('AI export artifacts', () => {
       exportId: 'unused',
       generatedAt: '2026-07-23T10:00:00+08:00',
       identifiersMasked: true,
+      locale: 'zh-TW',
     })
 
     expect(artifact).toContain('# 我的問題\n\n這顆藥需要注意什麼？')
@@ -38,6 +36,7 @@ describe('AI export artifacts', () => {
       exportId: 'unused',
       generatedAt: '2026-07-23T10:00:00+08:00',
       identifiersMasked: true,
+      locale: 'zh-TW',
     })
 
     expect(artifact).not.toContain('# 我的問題')
@@ -53,6 +52,7 @@ describe('AI export artifacts', () => {
       exportId: 'export-1',
       generatedAt: '2026-07-23T10:00:00+08:00',
       identifiersMasked: false,
+      locale: 'en',
     })
 
     expect(artifact).toContain('schema: "ai-clinical-context/v1"')
@@ -62,10 +62,21 @@ describe('AI export artifacts', () => {
     expect(artifact).toContain('[boundary-like text removed]')
   })
 
-  it('keeps the OpenEvidence artifact question-only', () => {
-    const artifact = buildQuestionOnlyArtifact('Could aspirin explain bruising?')
-    expect(artifact).toContain('Could aspirin explain bruising?')
-    expect(artifact).not.toContain('Aspirin 100 mg daily')
-    expect(artifact).not.toContain('Data Coverage Manifest')
+  it('localizes English artifacts and states that masking is not anonymization', () => {
+    const artifact = buildAiArtifact({
+      profile: 'quick',
+      question: 'Could aspirin explain bruising?',
+      clinicalContext: context,
+      exportId: 'unused',
+      generatedAt: '2026-07-23T10:00:00+08:00',
+      identifiersMasked: true,
+      locale: 'en',
+    })
+
+    expect(artifact).toContain('# My question\n\nCould aspirin explain bruising?')
+    expect(artifact).toContain('# Data scope and gaps')
+    expect(artifact).toContain('# Selected health data')
+    expect(artifact).toContain('not anonymized')
+    expect(artifact).not.toContain('# 我的問題')
   })
 })

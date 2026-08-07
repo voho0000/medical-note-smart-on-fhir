@@ -1,12 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { AiHandoffPanel } from '@/features/ips-export/components/AiHandoffPanel'
 
-let audience: 'medical' | 'patient' = 'medical'
-
-jest.mock('@/src/application/providers/audience.provider', () => ({
-  useAudience: () => ({ audience }),
-}))
-
 jest.mock('@/src/application/hooks/patient/use-patient-query.hook', () => ({
   usePatient: () => ({ patient: { id: 'patient-1' } }),
 }))
@@ -31,33 +25,33 @@ jest.mock('sonner', () => ({
 }))
 
 const aiHandoff = {
-  title: 'Ask AI',
-  description: 'Free text',
   chooseData: 'Choose data',
   questionPlaceholder: 'Question',
   optionalQuestionAction: 'Attach a question (optional)',
   optionalQuestionLabel: 'Question to copy with the data (optional)',
   optionalQuestionHint: 'Leave this blank to copy only the health data.',
   optionalQuestionRemove: 'Remove question',
+  advancedOptions: 'Advanced',
+  outputFormat: 'Output format',
   quickProfile: 'Quick copy',
   traceableProfile: 'Traceable package',
   quickDescription: 'Quick',
   traceableDescription: 'Traceable',
   maskIdentifiers: 'Mask identifiers',
+  maskingLimitNotice: 'Masking is not anonymization',
   unmaskedWarning: 'Unmasked',
+  unmaskConfirmTitle: 'Show unmasked health data?',
+  unmaskConfirmDescription: 'Unmask description',
+  unmaskConfirmAction: 'Show unmasked data',
+  externalConfirmTitle: 'Confirm sharing unmasked data',
+  externalConfirmDescription: 'Share with {destination}',
+  externalConfirmAction: 'Copy and open',
   exactPreviewHint: 'Exact preview',
   destinationsTitle: 'Destinations',
   destinationsDescription: 'Copy and open',
   pasteHint: 'Paste it',
   popupBlocked: 'Blocked',
   copiedAndOpened: 'Opened {destination}',
-  openEvidenceQuestionOnly: 'Question only',
-  openEvidencePreflight: 'Check sign-in first',
-  openEvidenceClinicianOnly: 'Clinicians only',
-  openEvidenceQuestionLabel: 'Question for OpenEvidence',
-  openEvidenceQuestionPlaceholder: 'Enter a clinical question',
-  openEvidenceAttestation: 'I am registered and signed in',
-  openEvidenceAction: 'Copy question and open OpenEvidence',
   scopeTitle: 'Scope',
   scopeDescription: 'Scope description',
   scopeApplyHint: 'Apply',
@@ -65,8 +59,9 @@ const aiHandoff = {
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
+    locale: 'en',
     t: {
-      common: { copy: 'Copy', copied: 'Copied', copyFailed: 'Copy failed' },
+      common: { copy: 'Copy', copied: 'Copied', copyFailed: 'Copy failed', cancel: 'Cancel' },
       ipsExport: { aiHandoff },
     },
   }),
@@ -77,7 +72,6 @@ describe('AiHandoffPanel', () => {
   const replace = jest.fn()
 
   beforeEach(() => {
-    audience = 'medical'
     writeText.mockClear()
     replace.mockClear()
     Object.defineProperty(navigator, 'clipboard', {
@@ -99,7 +93,7 @@ describe('AiHandoffPanel', () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     expect(writeText.mock.calls[0][0]).toContain('MASKED CLINICAL CONTEXT')
-    expect(writeText.mock.calls[0][0]).not.toContain('# 我的問題')
+    expect(writeText.mock.calls[0][0]).not.toContain('# My question')
     expect(replace).toHaveBeenCalledWith('https://chatgpt.com/')
   })
 
@@ -116,31 +110,44 @@ describe('AiHandoffPanel', () => {
     expect(writeText.mock.calls[0][0]).toContain('Review my data')
   })
 
-  it('gates OpenEvidence and copies a question-only artifact', async () => {
+  it('keeps the traceable package in advanced options', async () => {
     render(<AiHandoffPanel />)
-    fireEvent.change(screen.getByLabelText('Question for OpenEvidence'), {
-      target: { value: 'Could aspirin explain bruising?' },
+    expect(screen.getByTestId('ai-export-exact-preview')).not.toHaveTextContent('export_id:')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced: Quick copy' }))
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Traceable package' }), {
+      button: 0,
+      ctrlKey: false,
     })
 
-    const action = screen.getByRole('button', { name: /Copy question and open OpenEvidence/ })
-    expect(action).toBeDisabled()
-    fireEvent.click(screen.getByLabelText('I am registered and signed in'))
-    expect(action).toBeEnabled()
-    fireEvent.click(action)
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-export-exact-preview')).toHaveTextContent('export_id:')
+      expect(screen.getByTestId('ai-export-exact-preview')).toHaveTextContent('locale: "en"')
+    })
+  })
+
+  it('requires confirmation before displaying and opening unmasked data', async () => {
+    render(<AiHandoffPanel />)
+    expect(screen.getByText('Masking is not anonymization')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Mask identifiers' }))
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    expect(screen.getByTestId('ai-export-exact-preview')).toHaveTextContent('MASKED CLINICAL CONTEXT')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show unmasked data' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-export-exact-preview')).toHaveTextContent('SENSITIVE CLINICAL CONTEXT')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /ChatGPT/ }))
+    expect(writeText).not.toHaveBeenCalled()
+    expect(screen.getByText('Share with ChatGPT')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy and open' }))
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     const payload = writeText.mock.calls[0][0] as string
-    expect(payload).toContain('Could aspirin explain bruising?')
+    expect(payload).toContain('SENSITIVE CLINICAL CONTEXT')
     expect(payload).not.toContain('MASKED CLINICAL CONTEXT')
-    expect(payload).not.toContain('SENSITIVE CLINICAL CONTEXT')
-    expect(replace).toHaveBeenCalledWith('https://www.openevidence.com/')
-  })
-
-  it('does not offer the OpenEvidence attestation outside medical mode', () => {
-    audience = 'patient'
-    render(<AiHandoffPanel />)
-    expect(screen.getByText('Clinicians only')).toBeInTheDocument()
-    expect(screen.queryByLabelText('I am registered and signed in')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Copy question and open OpenEvidence/ })).toBeDisabled()
+    expect(replace).toHaveBeenCalledWith('https://chatgpt.com/')
   })
 })

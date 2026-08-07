@@ -3,7 +3,7 @@
 // Per-consumer profiles. Each clinical-data consumer owns its own {selection,
 // filters, documentMode, documentIds}. Profiles are seeded identically (the 初診
 // default), then the user can fine-tune the main summary/insights selection or
-// the independent IPS export selection.
+// the independent IPS and external-AI export selections.
 //
 // The data-selection UI uses the convenience getters/setters below; consumers
 // read their resolved profile via getProfile(consumer).
@@ -36,7 +36,8 @@ export type DataConsumer = 'chat' | 'insights' | 'ips' | 'aiExport'
 // Standard summary/insights use `insights`. The mirrored `chat` profile is kept
 // for stored-profile compatibility and the shared token meter; agent chat does
 // not preload either profile and queries FHIR tools on demand. IPS is configured
-// independently on its own tab.
+// independently on its own tab. External AI export owns a fourth profile so
+// preparing a handoff never changes summary generation or IPS curation.
 const MAIN_TARGETS: DataConsumer[] = ['chat', 'insights']
 
 export interface ConsumerProfile {

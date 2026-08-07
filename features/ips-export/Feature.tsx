@@ -85,7 +85,11 @@ export default function IpsExportFeature() {
   }
 
   return (
-    <div>
+    <div className="space-y-2">
+      <div className="px-1">
+        <h2 className="text-sm font-semibold">{x.hubTitle}</h2>
+        <p className="text-xs leading-relaxed text-muted-foreground">{x.hubDescription}</p>
+      </div>
       <Tabs defaultValue="ai" className="space-y-2">
         <TabsList className="grid h-8 w-full grid-cols-2">
           <TabsTrigger value="ai" className="text-xs">{x.aiUseTab}</TabsTrigger>
@@ -100,63 +104,63 @@ export default function IpsExportFeature() {
           {/* Preview first & default: the copyable IPS markdown/JSON preview is
               the high-frequency exchange use; scope tuning is occasional. */}
           <Tabs defaultValue="preview" className="space-y-3">
-        <TabsList className="grid h-9 w-full grid-cols-2">
-          <TabsTrigger value="preview">{x.previewTab}</TabsTrigger>
-          <TabsTrigger value="scope">{x.scopeTab}</TabsTrigger>
-        </TabsList>
+            <TabsList className="grid h-9 w-full grid-cols-2">
+              <TabsTrigger value="preview">{x.previewTab}</TabsTrigger>
+              <TabsTrigger value="scope">{x.scopeTab}</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="preview">
-          <IpsExportPreview
-            bundle={bundle}
-            markdown={markdown}
-            validation={validation}
-            copiedFormat={copiedFormat}
-            copyError={copyError}
-            markdownFilename={markdownFilename}
-            includeImageAttachments={includeImageAttachments}
-            onToggleImageAttachments={setIncludeImageAttachments}
-            onDownloadJson={() => downloadJson(bundle)}
-            onDownloadMarkdown={() => downloadMarkdown(markdown)}
-            onCopyJson={() => copyJson(bundle)}
-            onCopyMarkdown={() => copyMarkdown(markdown)}
-          />
-        </TabsContent>
+            <TabsContent value="preview">
+              <IpsExportPreview
+                bundle={bundle}
+                markdown={markdown}
+                validation={validation}
+                copiedFormat={copiedFormat}
+                copyError={copyError}
+                markdownFilename={markdownFilename}
+                includeImageAttachments={includeImageAttachments}
+                onToggleImageAttachments={setIncludeImageAttachments}
+                onDownloadJson={() => downloadJson(bundle)}
+                onDownloadMarkdown={() => downloadMarkdown(markdown)}
+                onCopyJson={() => copyJson(bundle)}
+                onCopyMarkdown={() => copyMarkdown(markdown)}
+              />
+            </TabsContent>
 
-        <TabsContent value="scope" className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <FileOutput className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-base font-semibold">{x.title}</h2>
-            <InfoHint side="right" contentClassName="max-w-sm">
-              {x.help}
-            </InfoHint>
-            <span className="text-xs text-muted-foreground">
-              {x.resourceCountLabel.replace('{count}', String(resourceCount))}
-            </span>
-          </div>
+            <TabsContent value="scope" className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <FileOutput className="h-5 w-5 text-emerald-600" />
+                <h2 className="text-base font-semibold">{x.title}</h2>
+                <InfoHint side="right" contentClassName="max-w-sm">
+                  {x.help}
+                </InfoHint>
+                <span className="text-xs text-muted-foreground">
+                  {x.resourceCountLabel.replace('{count}', String(resourceCount))}
+                </span>
+              </div>
 
           {/* Problem-list candidates review. No enable-switch: nothing runs
               without an explicit button press (the press IS the consent), and
               the ICD import is deterministic anyway. Confirmed rows become
               extra conditions in the snapshot. */}
-          <InferredProblemsReview
-            status={inferred.status}
-            problems={inferred.problems}
-            confirmedIds={inferred.confirmedIds}
-            confirmedCount={inferred.confirmedCount}
-            available={inferred.available}
-            error={inferred.error}
-            onRun={inferred.run}
-            onToggle={inferred.toggleConfirm}
-            onSetAll={inferred.setAllConfirmed}
-            summaryCount={inferred.summaryProblemCount}
-            onImportEncounterIcds={inferred.importEncounterIcds}
-            onRemoveEncounterIcds={inferred.removeEncounterIcds}
-            onRemoveAiProblems={inferred.removeAiProblems}
-            encounterIcdCount={inferred.encounterIcdCount}
-          />
+              <InferredProblemsReview
+                status={inferred.status}
+                problems={inferred.problems}
+                confirmedIds={inferred.confirmedIds}
+                confirmedCount={inferred.confirmedCount}
+                available={inferred.available}
+                error={inferred.error}
+                onRun={inferred.run}
+                onToggle={inferred.toggleConfirm}
+                onSetAll={inferred.setAllConfirmed}
+                summaryCount={inferred.summaryProblemCount}
+                onImportEncounterIcds={inferred.importEncounterIcds}
+                onRemoveEncounterIcds={inferred.removeEncounterIcds}
+                onRemoveAiProblems={inferred.removeAiProblems}
+                encounterIcdCount={inferred.encounterIcdCount}
+              />
 
-          <IpsDataScopePanel bundle={bundle} curatedData={curatedData} />
-        </TabsContent>
+              <IpsDataScopePanel bundle={bundle} curatedData={curatedData} />
+            </TabsContent>
           </Tabs>
         </TabsContent>
       </Tabs>

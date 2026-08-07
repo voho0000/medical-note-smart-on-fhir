@@ -7,7 +7,7 @@ import { useClinicalData } from "@/src/application/hooks/clinical-data/use-clini
 import { DataSelectionPanel } from "./components/DataSelectionPanel"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { useClinicalDataMapper } from "@/src/application/hooks/data/use-clinical-data-mapper.hook"
-import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
+import type { DataFilters, DataSelection } from "@/src/core/entities/clinical-context.entity"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
 import type { DataConsumer } from "@/src/application/providers/data-selection.provider"
 
@@ -51,15 +51,23 @@ export function DataSelectionFeature({
   const rawClinicalData = useClinicalData() as RawClinicalData
   const clinicalDataMapper = useClinicalDataMapper()
   const dataSelection = useDataSelection()
+  const {
+    setSelectedData: setMainSelectedData,
+    setSelectionFor,
+    setFilters: setMainFilters,
+    setFiltersFor,
+  } = dataSelection
   const profile = dataSelection.getProfile(consumer)
   const selectedData = consumer === 'insights' ? dataSelection.selectedData : profile.selection
   const filters = consumer === 'insights' ? dataSelection.filters : profile.filters
-  const setSelectedData = consumer === 'insights'
-    ? dataSelection.setSelectedData
-    : (next: typeof selectedData) => dataSelection.setSelectionFor(consumer, next)
-  const setFilters = consumer === 'insights'
-    ? dataSelection.setFilters
-    : (next: DataFilters) => dataSelection.setFiltersFor(consumer, next)
+  const setSelectedData = useCallback((next: DataSelection) => {
+    if (consumer === 'insights') setMainSelectedData(next)
+    else setSelectionFor(consumer, next)
+  }, [consumer, setMainSelectedData, setSelectionFor])
+  const setFilters = useCallback((next: DataFilters) => {
+    if (consumer === 'insights') setMainFilters(next)
+    else setFiltersFor(consumer, next)
+  }, [consumer, setMainFilters, setFiltersFor])
 
   // Use ClinicalDataMapper service to transform data (Dependency Inversion Principle)
   const mappedData = useMemo(() => {
@@ -72,10 +80,6 @@ export function DataSelectionFeature({
   // Note: the sparse-patient auto-select-all runs app-wide via
   // <AdaptiveDataDefaultsRunner/> (mounted in RightPanelProviders), not here —
   // so it applies even when this panel was never opened.
-
-  const handleFiltersChange = useCallback((newFilters: DataFilters) => {
-    setFilters(newFilters)
-  }, [setFilters])
 
   if (rawClinicalData.isLoading) {
     return (
@@ -118,7 +122,7 @@ export function DataSelectionFeature({
         selectedData={selectedData}
         onSelectionChange={setSelectedData}
         filters={filters}
-        onFiltersChange={handleFiltersChange}
+        onFiltersChange={setFilters}
         modelId={modelId}
         fallbackModelId={fallbackModelId}
         overflowIssue={overflowIssue}

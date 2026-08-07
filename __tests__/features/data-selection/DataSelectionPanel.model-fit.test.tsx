@@ -137,4 +137,23 @@ describe('DataSelectionPanel model-fitted controls', () => {
       '"documentMode":"saved"',
     )
   })
+
+  it('keeps an external AI export exact instead of fitting it to the summary model', () => {
+    mockClinicalAiInput.mockReturnValue(fittedInput(false))
+    render(
+      <DataSelectionPanel
+        clinicalData={{} as never}
+        selectedData={{ ...ALL_DATA_SELECTION }}
+        filters={{ ...ALL_DATA_FILTERS }}
+        onSelectionChange={jest.fn()}
+        onFiltersChange={jest.fn()}
+        consumer="aiExport"
+      />,
+    )
+
+    expect(mockClinicalAiInput).toHaveBeenCalledWith(undefined, 'aiExport')
+    expect(screen.getByTestId('selection-values')).toHaveTextContent(
+      '"observations":true',
+    )
+  })
 })

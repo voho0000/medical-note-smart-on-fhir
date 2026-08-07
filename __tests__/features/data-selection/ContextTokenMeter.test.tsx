@@ -31,6 +31,12 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         tokenMeterTargetReached: '目前已低於建議值；關閉後可重新產生。',
         tokenMeterOver: '病歷本身過長。',
       },
+      ipsExport: {
+        aiHandoff: {
+          externalTokenLabel: '本次匯出內容',
+          externalTokenHint: '目的地限制不同，請縮小資料範圍。',
+        },
+      },
     },
   }),
 }))
@@ -118,5 +124,15 @@ describe('ContextTokenMeter overflow guidance', () => {
     expect(fittedScope).toHaveTextContent('本次實際送出約 600 tokens')
     expect(fittedScope).toHaveTextContent('你儲存的資料範圍沒有變更')
     expect(fittedScope).toHaveTextContent('切回較大模型會自動恢復')
+  })
+
+  it('shows destination-neutral size guidance for external AI export', () => {
+    render(<ContextTokenMeter consumer="aiExport" />)
+    act(() => jest.advanceTimersByTime(400))
+
+    expect(screen.getByText('本次匯出內容')).toBeInTheDocument()
+    expect(screen.getByText(/~2(?:\.0)?k tokens/)).toBeInTheDocument()
+    expect(screen.getByText('目的地限制不同，請縮小資料範圍。')).toBeInTheDocument()
+    expect(screen.queryByText(/模型:/)).not.toBeInTheDocument()
   })
 })
