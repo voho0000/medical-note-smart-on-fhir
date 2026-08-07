@@ -83,3 +83,28 @@ three required condition/medication/laboratory tool groups).
 
 Reports and JSONL run records are written under
 `scripts/experiments/onprem-model-eval/results/`, which is gitignored.
+
+## Clinical correctness and usefulness audit
+
+The automatic evaluator does not establish clinical correctness or practical
+usefulness. For that decision, generate a model-blinded review packet from
+synthetic `--include-output` runs and collect at least two independent clinical
+reviews per answer:
+
+```powershell
+npm.cmd run audit:onprem-content -- --mode generate `
+  --inputs scripts/experiments/onprem-model-eval/results/runs-a.jsonl,scripts/experiments/onprem-model-eval/results/runs-b.jsonl `
+  --models tvghbrain3.5 `
+  --reviewers physician-a:physician,physician-b:physician
+
+npm.cmd run audit:onprem-content -- --mode score `
+  --key scripts/experiments/onprem-model-eval/results/content-review-key-<stamp>.json `
+  --reviews scripts/experiments/onprem-model-eval/results/content-review-physician-a-<stamp>.csv,scripts/experiments/onprem-model-eval/results/content-review-physician-b-<stamp>.csv
+```
+
+The score command checks fact accuracy, required-fact coverage, usefulness,
+major-edit rate, critical errors, fabricated facts, two-reviewer coverage, and
+reviewer agreement. Binary disagreements require an explicit adjudicator.
+Model identity is stored only in the private key, and immutable review content
+is hash-checked before scoring. See [ONPREM-CONTENT-AUDIT.md](./ONPREM-CONTENT-AUDIT.md)
+for the rubric, release gates, and operational workflow.

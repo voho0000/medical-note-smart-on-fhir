@@ -75,7 +75,7 @@ interface CliOptions {
   requestTimeoutMs: number
 }
 
-interface SummaryFixture {
+export interface SummaryFixture {
   id: string
   audience: Audience
   clinicalContext: string
@@ -83,7 +83,7 @@ interface SummaryFixture {
   evaluate: (draft: MedicalSummaryAiResult) => string[]
 }
 
-interface ChatFixture {
+export interface ChatFixture {
   id: string
   question: string
   acceptedTools: string[]
@@ -94,7 +94,7 @@ interface ChatFixture {
   forbiddenAnswer?: RegExp
 }
 
-interface CustomSummaryFixture {
+export interface CustomSummaryFixture {
   id: string
   prompt: string
   clinicalContext: string
@@ -279,7 +279,7 @@ function changeSourceKeys(draft: MedicalSummaryAiResult): Set<string> {
   )
 }
 
-const summaryFixtures: SummaryFixture[] = [
+export const summaryFixtures: SummaryFixture[] = [
   {
     id: 'cross-hospital-current-medications',
     audience: 'medical',
@@ -437,7 +437,7 @@ Explain only what the supplied record supports.`,
   },
 ]
 
-const customSummaryFixtures: CustomSummaryFixture[] = [
+export const customSummaryFixtures: CustomSummaryFixture[] = [
   {
     id: 'medication-name-and-status-fidelity',
     prompt: '請用台灣繁體中文整理目前用藥與重要藥物變更，藥名必須照原始資料抄寫，不要自行翻譯。',
@@ -504,7 +504,7 @@ The claim code is the only diabetes-related entry in the supplied record.`,
   },
 ]
 
-const chatFixtures: ChatFixture[] = [
+export const chatFixtures: ChatFixture[] = [
   {
     id: 'patient-demographics',
     question: '請查詢這位病人的性別與年齡。',
