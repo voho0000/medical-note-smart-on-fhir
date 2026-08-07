@@ -1,7 +1,9 @@
 "use client"
 
 import { useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
+  AlertTriangle,
   Braces,
   Check,
   CheckCircle2,
@@ -15,6 +17,16 @@ import {
   Minimize2,
   XCircle,
 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -41,6 +53,8 @@ interface IpsExportPreviewProps {
   /** Opt-in: keep image/* presentedForm attachments in the FHIR export. */
   includeImageAttachments: boolean
   onToggleImageAttachments: (value: boolean) => void
+  includePatientIdentifiers: boolean
+  onTogglePatientIdentifiers: (value: boolean) => void
   onDownloadJson: () => void
   onDownloadMarkdown: () => void
   onCopyJson: () => void
@@ -90,6 +104,8 @@ export function IpsExportPreview({
   markdownFilename,
   includeImageAttachments,
   onToggleImageAttachments,
+  includePatientIdentifiers,
+  onTogglePatientIdentifiers,
   onDownloadJson,
   onDownloadMarkdown,
   onCopyJson,
@@ -101,6 +117,7 @@ export function IpsExportPreview({
   const [markdownView, setMarkdownView] = useState<MarkdownView>('rendered')
   const [showChecks, setShowChecks] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'copy' | 'download' | 'pdf' | null>(null)
   const printSourceRef = useRef<HTMLDivElement>(null)
   const json = useMemo(() => JSON.stringify(bundle, null, 2), [bundle])
   const markdownParts = useMemo(() => splitFrontmatter(markdown), [markdown])
@@ -113,12 +130,12 @@ export function IpsExportPreview({
   const copied = copiedFormat === format
   const pdfFilename = markdownFilename.replace(/\.md$/i, '.pdf')
 
-  const handleCopy = () => {
+  const performCopy = () => {
     if (isMarkdown) onCopyMarkdown()
     else onCopyJson()
   }
 
-  const handleDownload = () => {
+  const performDownload = () => {
     if (isMarkdown) onDownloadMarkdown()
     else onDownloadJson()
   }
@@ -127,10 +144,7 @@ export function IpsExportPreview({
     const html = printSourceRef.current?.innerHTML
     if (!html) return
     const printHtml = compactPrintHtml(html)
-    const win = window.open('', '_blank', 'width=900,height=1200')
-    if (!win) return
-    win.opener = null
-    win.document.write(`<!doctype html>
+    const printDocument = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -140,14 +154,21 @@ export function IpsExportPreview({
     body {
       color: #111827;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 9px;
-      line-height: 1.22;
+      font-size: 10px;
+      line-height: 1.35;
     }
     h1 { font-size: 16px; margin: 0 0 8px; }
     h2 { font-size: 12px; margin: 10px 0 4px; border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; }
     h3 { font-size: 11px; margin: 8px 0 3px; }
     h4 { font-size: 10px; margin: 6px 0 2px; }
     p, ul, ol { margin: 4px 0; }
+    blockquote {
+      margin: 6px 0 10px;
+      padding: 6px 8px;
+      border-left: 3px solid #d97706;
+      background: #fffbeb;
+      color: #78350f;
+    }
     table {
       width: auto;
       max-width: 100%;
@@ -173,15 +194,44 @@ export function IpsExportPreview({
 </head>
 <body>
   ${printHtml}
-  <script>
-    window.addEventListener('load', () => {
-      window.focus();
-      window.print();
-    });
-  </script>
 </body>
-</html>`)
-    win.document.close()
+</html>`
+
+    // Print from a same-page iframe so popup blockers do not make the PDF
+    // action silently fail. The iframe exists only long enough to open the
+    // browser's native print / Save as PDF dialog.
+    const frame = document.createElement('iframe')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.style.position = 'fixed'
+    frame.style.right = '0'
+    frame.style.bottom = '0'
+    frame.style.width = '0'
+    frame.style.height = '0'
+    frame.style.border = '0'
+    frame.onload = () => {
+      const printWindow = frame.contentWindow
+      if (!printWindow) {
+        toast.error(x.pdfPopupBlocked)
+        frame.remove()
+        return
+      }
+      printWindow.focus()
+      printWindow.print()
+      setTimeout(() => frame.remove(), 1000)
+    }
+    frame.srcdoc = printDocument
+    document.body.appendChild(frame)
+  }
+
+  const performAction = (action: NonNullable<typeof pendingAction>) => {
+    if (action === 'copy') performCopy()
+    else if (action === 'download') performDownload()
+    else handlePrintPdf()
+  }
+
+  const requestAction = (action: NonNullable<typeof pendingAction>) => {
+    if (includePatientIdentifiers) setPendingAction(action)
+    else performAction(action)
   }
 
   const expandButton = (isExpanded: boolean) => (
@@ -211,17 +261,18 @@ export function IpsExportPreview({
         className={isExpanded ? 'flex h-full min-h-0 flex-col space-y-2' : 'space-y-2'}
       >
         <div className="shrink-0 rounded-md border bg-card px-2 py-2">
-          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-            <TabsList className="grid h-9 w-full grid-cols-2 xl:w-64">
-            <TabsTrigger value="markdown">
-              <FileText className="h-4 w-4" />
-              {x.formatMarkdown}
-            </TabsTrigger>
-            <TabsTrigger value="json">
-              <Braces className="h-4 w-4" />
-              {x.formatFhirJson}
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <TabsList className="grid h-9 w-full grid-cols-2 sm:w-64">
+                <TabsTrigger value="markdown">
+                  <FileText className="h-4 w-4" />
+                  {x.formatMarkdown}
+                </TabsTrigger>
+                <TabsTrigger value="json">
+                  <Braces className="h-4 w-4" />
+                  {x.formatFhirJson}
+                </TabsTrigger>
+              </TabsList>
 
             {isMarkdown && (
               <div className="flex h-9 rounded-lg bg-muted/50 p-1">
@@ -248,8 +299,7 @@ export function IpsExportPreview({
               </div>
             )}
 
-            <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
-            {validation && (
+              {validation && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -272,28 +322,23 @@ export function IpsExportPreview({
               )}
             </div>
 
-            <div className="flex shrink-0 gap-1.5">
+            <div className="flex flex-wrap justify-end gap-1.5 border-t pt-2">
               {isMarkdown && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={handlePrintPdf}
-                      size="icon"
-                      variant="outline"
-                      aria-label={x.savePdf}
-                    >
-                      <FileDown className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {x.savePdf}
-                  </TooltipContent>
-                </Tooltip>
+                <Button
+                  onClick={() => requestAction('pdf')}
+                  size="sm"
+                  variant="outline"
+                  aria-label={x.savePdf}
+                  className="px-2"
+                >
+                  <FileDown className="mr-1 h-4 w-4" />
+                  {x.savePdf}
+                </Button>
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={handleDownload}
+                    onClick={() => requestAction('download')}
                     size="icon"
                     aria-label={isMarkdown ? x.downloadMarkdown : x.downloadJson}
                   >
@@ -307,7 +352,7 @@ export function IpsExportPreview({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={handleCopy}
+                    onClick={() => requestAction('copy')}
                     size="icon"
                     variant="outline"
                     aria-label={isMarkdown ? x.copyMarkdown : x.copyJson}
@@ -340,6 +385,21 @@ export function IpsExportPreview({
                 aria-label={x.includeImages}
               />
               <span>{x.includeImages}</span>
+            </label>
+          </div>
+
+          <div className={`mt-2 flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-2 text-xs ${includePatientIdentifiers ? 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100' : 'bg-muted/30 text-muted-foreground'}`}>
+            {includePatientIdentifiers && <AlertTriangle className="h-4 w-4 shrink-0" />}
+            <span className="min-w-48 flex-1">
+              {includePatientIdentifiers ? x.identifiersWarning : x.identifiersMasked}
+            </span>
+            <label className="flex cursor-pointer items-center gap-2 font-medium">
+              <Switch
+                checked={includePatientIdentifiers}
+                onCheckedChange={onTogglePatientIdentifiers}
+                aria-label={x.includeIdentifiers}
+              />
+              <span>{x.includeIdentifiers}</span>
             </label>
           </div>
 
@@ -398,6 +458,28 @@ export function IpsExportPreview({
     </div>
   )
 
+  const confirmationDialog = (
+    <AlertDialog open={pendingAction !== null} onOpenChange={(open) => !open && setPendingAction(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{x.shareConfirmTitle}</AlertDialogTitle>
+          <AlertDialogDescription>{x.shareConfirmDescription}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (pendingAction) performAction(pendingAction)
+              setPendingAction(null)
+            }}
+          >
+            {x.shareConfirmAction}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+
   if (expanded) {
     return (
       <>
@@ -416,9 +498,15 @@ export function IpsExportPreview({
             {previewPanel(true)}
           </div>
         </div>
+        {confirmationDialog}
       </>
     )
   }
 
-  return previewPanel(false)
+  return (
+    <>
+      {previewPanel(false)}
+      {confirmationDialog}
+    </>
+  )
 }

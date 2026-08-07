@@ -20,6 +20,7 @@ import { AiHandoffPanel } from './components/AiHandoffPanel'
 export default function IpsExportFeature() {
   const { t } = useLanguage()
   const x = t.ipsExport
+  const [includePatientIdentifiers, setIncludePatientIdentifiers] = useState(true)
   const {
     downloadJson,
     downloadMarkdown,
@@ -28,7 +29,7 @@ export default function IpsExportFeature() {
     copiedFormat,
     copyError,
     markdownFilename,
-  } = useIpsExport()
+  } = useIpsExport({ includePatientIdentifiers })
 
   // Phase 2.2b — async LLM problem-list inference runs as a side-channel. Only
   // the user-CONFIRMED suggestions are turned into synthetic conditions and
@@ -43,11 +44,16 @@ export default function IpsExportFeature() {
   const [includeImageAttachments, setIncludeImageAttachments] = useState(false)
 
   const { bundle, curatedData, patient, labels, validation, isLoading, error, hasPatient, resourceCount } =
-    useIpsBundle(confirmedConditions, { includeImageAttachments })
+    useIpsBundle(confirmedConditions, { includeImageAttachments, includePatientIdentifiers })
 
   const markdown = useMemo(
-    () => (curatedData ? buildIpsMarkdown({ patient, data: curatedData, labels }) : ''),
-    [curatedData, patient, labels],
+    () => (curatedData ? buildIpsMarkdown({
+      patient,
+      data: curatedData,
+      labels,
+      includePatientIdentifiers,
+    }) : ''),
+    [curatedData, patient, labels, includePatientIdentifiers],
   )
 
   // Loading clinical data
@@ -119,6 +125,8 @@ export default function IpsExportFeature() {
                 markdownFilename={markdownFilename}
                 includeImageAttachments={includeImageAttachments}
                 onToggleImageAttachments={setIncludeImageAttachments}
+                includePatientIdentifiers={includePatientIdentifiers}
+                onTogglePatientIdentifiers={setIncludePatientIdentifiers}
                 onDownloadJson={() => downloadJson(bundle)}
                 onDownloadMarkdown={() => downloadMarkdown(markdown)}
                 onCopyJson={() => copyJson(bundle)}
@@ -151,7 +159,6 @@ export default function IpsExportFeature() {
                 error={inferred.error}
                 onRun={inferred.run}
                 onToggle={inferred.toggleConfirm}
-                onSetAll={inferred.setAllConfirmed}
                 summaryCount={inferred.summaryProblemCount}
                 onImportEncounterIcds={inferred.importEncounterIcds}
                 onRemoveEncounterIcds={inferred.removeEncounterIcds}

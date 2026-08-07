@@ -29,15 +29,17 @@ function sanitizeForFilename(name: string): string {
   return name.replace(/[^\p{L}\p{N}_-]+/gu, '_').replace(/^_+|_+$/g, '') || 'patient'
 }
 
-export function useIpsExport(): UseIpsExportResult {
+export function useIpsExport(options: { includePatientIdentifiers?: boolean } = {}): UseIpsExportResult {
   const { data: patient } = usePatientQuery()
   const [copiedFormat, setCopiedFormat] = useState<IpsExportFormat | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
 
   const filename = useCallback((extension: 'json' | 'md') => {
-    const name = sanitizeForFilename(getPatientDisplayName(patient ?? null))
+    const name = options.includePatientIdentifiers === false
+      ? 'masked'
+      : sanitizeForFilename(getPatientDisplayName(patient ?? null))
     return `IPS_${name}_${dateStampForFilename()}.${extension}`
-  }, [patient])
+  }, [options.includePatientIdentifiers, patient])
 
   const jsonFilename = filename('json')
   const markdownFilename = filename('md')

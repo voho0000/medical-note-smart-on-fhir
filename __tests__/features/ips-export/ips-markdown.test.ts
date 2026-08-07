@@ -69,6 +69,8 @@ describe('buildIpsMarkdown', () => {
     })
 
     expect(md).toContain('format: clinical-summary-markdown')
+    expect(md).toContain('source: taiwan-nhi-my-health-bank')
+    expect(md).toContain('clinical_attestation: none')
     expect(md).toContain('generated_at: "2026-06-24T00:00:00.000Z"')
     expect(md).toContain('## Patient')
     expect(md).toContain('- Name: Test Patient')
@@ -83,6 +85,27 @@ describe('buildIpsMarkdown', () => {
     expect(md).toContain('## Diagnostic Results')
     expect(md).toContain('| Date | Glucose (mg/dL) |')
     expect(md).toContain('| 2024-03-01 | 99 |')
+  })
+
+  it('can mask direct patient identifiers and states the masking limit', () => {
+    const md = buildIpsMarkdown({
+      patient: {
+        ...PATIENT,
+        id: 'secret-patient-id',
+        identifier: [{ system: 'urn:test:mrn', value: 'MRN-123' }],
+      },
+      data: emptyCollection(),
+      generatedAt: new Date('2026-06-24T00:00:00Z'),
+      includePatientIdentifiers: false,
+    })
+
+    expect(md).toContain('identifiers_included: false')
+    expect(md).toContain('contains_phi: possible')
+    expect(md).toContain('- Name: Identity masked by the exporter')
+    expect(md).not.toContain('Test Patient')
+    expect(md).not.toContain('secret-patient-id')
+    expect(md).not.toContain('MRN-123')
+    expect(md).not.toContain('1980-01-15')
   })
 
   it('keeps per-cell units when a cumulative column still has mixed units', () => {
