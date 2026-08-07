@@ -529,6 +529,7 @@ export const zhTW = {
       scopeDescription: '這是獨立的 AI 匯出範圍，不會改動 IPS 或醫療摘要的選擇。所有選項都是自由調整，不套用問題模板。',
       scopeApplyHint: '關閉後預覽會立即依同一份選擇更新；未選取與查詢不到的類別仍會在資料涵蓋狀態中標示。',
       externalTokenLabel: '本次匯出內容',
+      externalDistributionLabel: '內容比例',
       externalTokenHint: '目的地 AI 可接受的內容長度依服務與方案而異；若內容過長，請先移除不需要的類別或縮短時間範圍。',
     },
     sections: {

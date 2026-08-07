@@ -35,6 +35,15 @@ const LEVEL_TEXT: Record<ContextBudgetLevel, string> = {
   over: "text-red-600 dark:text-red-400",
 }
 
+const DISTRIBUTION_COLORS = [
+  'bg-teal-500',
+  'bg-sky-500',
+  'bg-violet-500',
+  'bg-amber-500',
+  'bg-rose-500',
+  'bg-slate-400',
+] as const
+
 const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`)
 
 interface ContextTokenMeterProps {
@@ -114,6 +123,19 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
     () => [...sections].sort((a, b) => b.tokens - a.tokens).slice(0, 3).filter((s) => s.tokens > 0),
     [sections],
   )
+  const distributionSections = useMemo(() => {
+    const sorted = [...sections].filter((section) => section.tokens > 0).sort((a, b) => b.tokens - a.tokens)
+    if (sorted.length <= 5) return sorted
+    const otherTokens = sorted.slice(5).reduce((sum, section) => sum + section.tokens, 0)
+    return [
+      ...sorted.slice(0, 5),
+      { title: locale === 'zh-TW' ? '其他' : 'Other', tokens: otherTokens },
+    ]
+  }, [locale, sections])
+  const distributionTotal = useMemo(
+    () => distributionSections.reduce((sum, section) => sum + section.tokens, 0),
+    [distributionSections],
+  )
 
   const pct = Math.round(budget.fraction * 100)
 
@@ -141,13 +163,48 @@ export function ContextTokenMeter({ modelId, fallbackModelId, overflowIssue, con
           />
         </div>
       ) : null}
+      {isExternalExport && distributionTotal > 0 ? (
+        <div className="mt-2 space-y-1.5">
+          <div
+            role="img"
+            data-testid="token-distribution-bar"
+            aria-label={`${externalCopy.externalDistributionLabel}: ${distributionSections
+              .map((section) => `${section.title} ${Math.round((section.tokens / distributionTotal) * 100)}%`)
+              .join(', ')}`}
+            className="flex h-2.5 w-full overflow-hidden rounded-full bg-border/60"
+          >
+            {distributionSections.map((section, index) => {
+              const percentage = (section.tokens / distributionTotal) * 100
+              return (
+                <span
+                  key={section.title}
+                  tabIndex={0}
+                  aria-label={`${section.title}: ${fmt(section.tokens)} tokens, ${Math.round(percentage)}%`}
+                  className={`${DISTRIBUTION_COLORS[index]} h-full transition-[width] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white`}
+                  style={{ width: `${percentage}%` }}
+                  title={`${section.title}: ${fmt(section.tokens)} tokens (${Math.round(percentage)}%)`}
+                />
+              )
+            })}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {distributionSections.map((section, index) => (
+              <span key={section.title} className="inline-flex min-w-0 items-center gap-1 text-[0.625rem] text-muted-foreground">
+                <span className={`h-2 w-2 shrink-0 rounded-sm ${DISTRIBUTION_COLORS[index]}`} aria-hidden="true" />
+                <span className="max-w-44 truncate" title={section.title}>{section.title}</span>
+                <span className="shrink-0 tabular-nums">{Math.round((section.tokens / distributionTotal) * 100)}%</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-1 flex items-center justify-between gap-2">
         {!isExternalExport ? (
           <span className="truncate text-[0.625rem] text-muted-foreground">
             {(ds.tokenMeterModel ?? "模型") + ": " + modelLabel}
           </span>
         ) : null}
-        {topSections.length > 0 && !showsAdaptedScope && (
+        {topSections.length > 0 && !showsAdaptedScope && !isExternalExport && (
           <span className="truncate text-[0.625rem] text-muted-foreground" title={topSections.map((s) => `${s.title}: ${s.tokens}`).join("\n")}>
             {ds.tokenMeterTop ?? "最大宗"}: {topSections.map((s) => `${s.title} ${fmt(s.tokens)}`).join(" · ")}
           </span>

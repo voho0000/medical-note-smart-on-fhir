@@ -529,6 +529,7 @@ export const en = {
       scopeDescription: 'This scope is independent from IPS and Medical Summary. Adjust any category freely; no question template is applied.',
       scopeApplyHint: 'Closing this drawer immediately updates the exact preview. Excluded and unavailable categories remain explicit in coverage.',
       externalTokenLabel: 'Current export size',
+      externalDistributionLabel: 'Content distribution',
       externalTokenHint: 'Destination limits vary by AI service and plan. If this is too large, remove unnecessary categories or shorten time ranges before copying.',
     },
     sections: {

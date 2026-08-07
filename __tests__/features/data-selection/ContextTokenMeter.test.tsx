@@ -34,6 +34,7 @@ jest.mock('@/src/application/providers/language.provider', () => ({
       ipsExport: {
         aiHandoff: {
           externalTokenLabel: '本次匯出內容',
+          externalDistributionLabel: '內容比例',
           externalTokenHint: '目的地限制不同，請縮小資料範圍。',
         },
       },
@@ -132,6 +133,7 @@ describe('ContextTokenMeter overflow guidance', () => {
 
     expect(screen.getByText('本次匯出內容')).toBeInTheDocument()
     expect(screen.getByText(/~2(?:\.0)?k tokens/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /內容比例.*病歷 100%/ })).toBeInTheDocument()
     expect(screen.getByText('目的地限制不同，請縮小資料範圍。')).toBeInTheDocument()
     expect(screen.queryByText(/模型:/)).not.toBeInTheDocument()
   })
