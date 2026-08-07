@@ -25,6 +25,16 @@ jest.mock('sonner', () => ({
 }))
 
 const aiHandoff = {
+  pageTitle: 'Copy health data prepared for an AI',
+  pageDescription: 'Paste-ready health data',
+  currentData: 'Current data',
+  adjust: 'Adjust',
+  settingsTitle: 'Data and privacy',
+  settingsDescription: 'Settings description',
+  maskedBadge: 'Identifiers masked',
+  unmaskedBadge: 'Identifiers included',
+  copyData: 'Copy data',
+  exactPreview: 'View exact copied content',
   chooseData: 'Choose data',
   questionPlaceholder: 'Question',
   optionalQuestionAction: 'Attach a question (optional)',
@@ -112,9 +122,10 @@ describe('AiHandoffPanel', () => {
 
   it('keeps the traceable package in advanced options', async () => {
     render(<AiHandoffPanel />)
+    fireEvent.click(screen.getByRole('button', { name: 'View exact copied content' }))
     expect(screen.getByTestId('ai-export-exact-preview')).not.toHaveTextContent('export_id:')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced: Quick copy' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust' }))
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Traceable package' }), {
       button: 0,
       ctrlKey: false,
@@ -128,6 +139,8 @@ describe('AiHandoffPanel', () => {
 
   it('requires confirmation before displaying and opening unmasked data', async () => {
     render(<AiHandoffPanel />)
+    fireEvent.click(screen.getByRole('button', { name: 'View exact copied content' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust' }))
     expect(screen.getByText('Masking is not anonymization')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('switch', { name: 'Mask identifiers' }))
@@ -139,6 +152,7 @@ describe('AiHandoffPanel', () => {
       expect(screen.getByTestId('ai-export-exact-preview')).toHaveTextContent('SENSITIVE CLINICAL CONTEXT')
     })
 
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     fireEvent.click(screen.getByRole('button', { name: /ChatGPT/ }))
     expect(writeText).not.toHaveBeenCalled()
     expect(screen.getByText('Share with ChatGPT')).toBeInTheDocument()
