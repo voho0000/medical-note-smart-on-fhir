@@ -44,7 +44,7 @@ import {
   summaryCacheKey,
   SUMMARY_CACHE_MAX_AGE_MS,
 } from './medical-summary-store'
-import { createModelPrefsStore } from '@/src/application/hooks/ai-generation/create-model-prefs-store'
+import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 import {
   useAiSlotGeneration,
   type AiSlotDemoContext,
@@ -57,6 +57,8 @@ import {
 import { getUserErrorMessage } from '@/src/core/errors'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
+
+export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
 // Store + cache-key scheme live in medical-summary-store.ts so the IPS export
 // can peek at generated summaries without importing this full hook graph.
@@ -75,26 +77,6 @@ const legacyPatientSummaryCacheKeys = (scanKey: string) => [
 
 const medicalSummaryResultModelId = (result: MedicalSummaryResult) =>
   result.generation?.modelId
-
-interface SummaryPrefsStore {
-  autoGenerate: boolean
-  setAutoGenerate: (value: boolean) => void
-  modelId: string
-  setModelId: (id: string) => void
-}
-
-export const useSummaryPrefsStore = createModelPrefsStore<SummaryPrefsStore>({
-  storageName: 'medical-summary-prefs',
-  defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
-  initializer: (set) => ({
-    // Default OFF. The separate source-aware consent gate also prevents a demo
-    // preference from sending a later real patient's data to cloud AI.
-    autoGenerate: false,
-    setAutoGenerate: (value) => set({ autoGenerate: value }),
-    modelId: MEDICAL_SUMMARY_MODEL_ID,
-    setModelId: (id) => set({ modelId: id }),
-  }),
-})
 
 export interface UseMedicalSummaryReturn {
   result: MedicalSummaryResult | undefined

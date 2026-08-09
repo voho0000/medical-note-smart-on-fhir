@@ -6,6 +6,7 @@ import { AudienceProvider } from './audience.provider'
 import { QueryProvider } from './query-provider'
 import { AuthProvider } from '@/src/application/providers/auth.provider'
 import { RightPanelProvider } from './right-panel.provider'
+import { MedcloudLaunchProvider } from './medcloud-launch.provider'
 
 interface AppProvidersProps {
   children: ReactNode
@@ -51,7 +52,9 @@ export function AppProviders({ children }: AppProvidersProps) {
             <AudienceProvider>
               <AuthProvider>
                 <RightPanelProvider>
-                  {children}
+                  <MedcloudLaunchProvider>
+                    {children}
+                  </MedcloudLaunchProvider>
                 </RightPanelProvider>
               </AuthProvider>
             </AudienceProvider>
