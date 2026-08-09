@@ -7,6 +7,7 @@ import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import {
   asksForCurrentMedicalEvidence,
   forcedInitialAgentToolName,
+  localAgentPrefetchInput,
   selectAgentToolsForQuestion,
   shouldPreExecuteLocalAgentTool,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
@@ -286,7 +287,7 @@ export const summaryFixtures: SummaryFixture[] = [
     catalog: [
       { key: 'E1', resourceType: 'Encounter', resourceId: 'enc-1', date: '2026-06-18', organization: '甲醫院', display: '糖尿病門診追蹤' },
       { key: 'E2', resourceType: 'Encounter', resourceId: 'enc-2', date: '2026-06-25', organization: '乙診所', display: '高血壓門診追蹤' },
-      { key: 'L1', resourceType: 'DiagnosticReport', resourceId: 'lab-1', date: '2026-06-18', organization: '甲醫院', display: 'HbA1c 8.2%' },
+      { key: 'L1', resourceType: 'DiagnosticReport', resourceId: 'lab-1', date: '2026-06-18', organization: '甲醫院', display: 'HbA1c 8.2%', supportsNormalityAssessment: false },
       { key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', date: '2026-06-18', organization: '甲醫院', display: 'Metformin 500 mg BID，供藥至 2026-09-15' },
       { key: 'M2', resourceType: 'MedicationRequest', resourceId: 'med-2', date: '2026-06-18', organization: '甲醫院', display: 'Empagliflozin 10 mg QD，供藥至 2026-09-15' },
       { key: 'M3', resourceType: 'MedicationRequest', resourceId: 'med-3', date: '2026-06-25', organization: '乙診所', display: 'Amlodipine 5 mg QD，供藥至 2026-09-22' },
@@ -389,8 +390,8 @@ The values show a real downward direction. Do not invent intervening results.`,
     id: 'two-significant-admissions',
     audience: 'medical',
     catalog: [
-      { key: 'E1', resourceType: 'Encounter', resourceId: 'e1', date: '2025-01-05', organization: '甲醫院', display: '肺炎住院' },
-      { key: 'E2', resourceType: 'Encounter', resourceId: 'e2', date: '2026-02-11', organization: '乙醫院', display: '心衰竭住院' },
+      { key: 'E1', resourceType: 'Encounter', resourceId: 'e1', date: '2025-01-05', endDate: '2025-01-12', organization: '甲醫院', display: '肺炎住院' },
+      { key: 'E2', resourceType: 'Encounter', resourceId: 'e2', date: '2026-02-11', endDate: '2026-02-18', organization: '乙醫院', display: '心衰竭住院' },
       { key: 'D1', resourceType: 'DocumentReference', resourceId: 'd1', date: '2026-02-18', organization: '乙醫院', display: '心衰竭出院摘要' },
     ],
     clinicalContext: `## Encounters
@@ -740,6 +741,7 @@ async function runSummaryCase(
       catalog: fixture.catalog,
       locale: 'zh-TW' as const,
       audience: fixture.audience,
+      harnessProfile: 'local-small' as const,
     }
     const modules: Partial<{ [K in MedicalSummaryModuleId]: MedicalSummaryModuleResultMap[K] }> = {}
     const finishReasons: string[] = []
@@ -1041,6 +1043,7 @@ async function runChatCase(
       tools,
       initialToolName,
       preExecuteInitialTool: shouldPreExecuteLocalAgentTool(initialToolName),
+      preExecuteInitialToolInput: localAgentPrefetchInput(fixture.question, initialToolName),
       ...(/^gpt-oss(?::|-)/i.test(modelName)
         ? { reasoningEffort: 'low' as const }
         : {}),

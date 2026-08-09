@@ -29,7 +29,7 @@ if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1_000 || requestTi
 const catalog: SummarySourceCatalogEntry[] = [
   { key: 'E1', resourceType: 'Encounter', resourceId: 'enc-1', date: '2026-06-18', organization: '甲醫院', display: '糖尿病門診追蹤' },
   { key: 'E2', resourceType: 'Encounter', resourceId: 'enc-2', date: '2026-06-25', organization: '乙診所', display: '高血壓門診追蹤' },
-  { key: 'L1', resourceType: 'DiagnosticReport', resourceId: 'lab-1', date: '2026-06-18', organization: '甲醫院', display: 'HbA1c 8.2%' },
+  { key: 'L1', resourceType: 'DiagnosticReport', resourceId: 'lab-1', date: '2026-06-18', organization: '甲醫院', display: 'HbA1c 8.2%', supportsNormalityAssessment: false },
   { key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', date: '2026-06-18', organization: '甲醫院', display: 'Metformin 500 mg BID，供藥至 2026-09-15' },
   { key: 'M2', resourceType: 'MedicationRequest', resourceId: 'med-2', date: '2026-06-18', organization: '甲醫院', display: 'Empagliflozin 10 mg QD，供藥至 2026-09-15' },
   { key: 'M3', resourceType: 'MedicationRequest', resourceId: 'med-3', date: '2026-06-25', organization: '乙診所', display: 'Amlodipine 5 mg QD，供藥至 2026-09-22' },
@@ -64,6 +64,7 @@ const promptInput = {
   catalog,
   locale: 'zh-TW',
   audience: 'medical',
+  harnessProfile: 'local-small',
 } as const
 const messages = outputMode === 'module'
   ? generateMedicalSummaryUseCase.buildModuleMessages(promptInput, 'medications')

@@ -29,7 +29,7 @@ const CATALOG_INPUT = {
     },
     {
       id: 'enc-3',
-      period: { start: '2026-03-10T00:00:00+08:00' },
+      period: { start: '2026-03-10T00:00:00+08:00', end: '2026-03-16T00:00:00+08:00' },
       class: { code: 'IMP', display: 'inpatient encounter' },
       reasonCode: [{ text: '肺炎' }],
       serviceProvider: { display: '甲醫學中心' },
@@ -71,6 +71,7 @@ describe('buildSourceCatalog', () => {
     // Encounter.class → deterministic 住院/急診/門診 subtype (never the AI's).
     expect(byKey.get('E2')?.encounterClass).toBe('emergency') // via display text
     expect(byKey.get('E3')?.encounterClass).toBe('inpatient') // via v3-ActCode IMP
+    expect(byKey.get('E3')?.endDate).toBe('2026-03-16')
     expect(byKey.get('E1')?.encounterClass).toBeUndefined() // no class field
 
     // Sorted most-recent-first: E2 is the older ER visit.
@@ -616,6 +617,40 @@ describe('modular summary generation contract', () => {
     expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
+  it('uses a shorter module-scoped contract for an instruction-sensitive local endpoint', () => {
+    const frontier = useCase.buildBatchModuleMessages(input)
+    const local = useCase.buildBatchModuleMessages({
+      ...input,
+      harnessProfile: 'local-small' as const,
+    })
+
+    expect(local[0].content).toContain('NON-NEGOTIABLE EVIDENCE CONTRACT')
+    expect(local[0].content).toContain('Never create an active problem from medication evidence alone')
+    expect(local[0].content.length).toBeLessThan(frontier[0].content.length / 2)
+  })
+
+  it('sends only module-relevant keyed evidence on a local retry', () => {
+    const messages = useCase.buildModuleMessages({
+      ...input,
+      harnessProfile: 'local-small' as const,
+      clinicalContext: [
+        '## Records',
+        '- [M1] Metformin 500 mg BID',
+        '- [L1] HbA1c 8.2%',
+        'Newest record date: 2026-06-20.',
+      ].join('\n'),
+      catalog: [
+        { key: 'M1', resourceType: 'MedicationRequest', resourceId: 'med-1', display: 'Metformin 500 mg BID' },
+        { key: 'L1', resourceType: 'DiagnosticReport', resourceId: 'lab-1', display: 'HbA1c 8.2%' },
+      ],
+    }, 'medications')
+
+    expect(messages[1].content).toContain('[M1] Metformin 500 mg BID')
+    expect(messages[1].content).not.toContain('[L1] HbA1c 8.2%')
+    expect(messages[0].content).toContain('MEDICATIONS:')
+    expect(messages[0].content).not.toContain('INVESTIGATIONS:')
+  })
+
   it('scrubs patient literals from appended context and source labels at the final boundary', () => {
     const messages = useCase.buildBatchModuleMessages({
       ...input,
@@ -911,7 +946,11 @@ describe('finalizeResult', () => {
     expect(result.timeline.map((e) => e.key)).toEqual(['E1', 'L1', 'E3'])
     expect(result.timeline[0]).toMatchObject({ date: '2026-06-12', organization: '甲醫學中心' })
     // 住院 event keeps its bundle-derived subtype; AI could only say "encounter".
-    expect(result.timeline[2]).toMatchObject({ key: 'E3', encounterClass: 'inpatient' })
+    expect(result.timeline[2]).toMatchObject({
+      key: 'E3',
+      endDate: '2026-03-16',
+      encounterClass: 'inpatient',
+    })
     expect(result.timeline[0].encounterClass).toBeUndefined()
   })
 
@@ -991,6 +1030,10 @@ describe('finalizeResult', () => {
   })
 
   it('finalizes disease-oriented investigation trends before problem sources', () => {
+    const investigationCatalog = [
+      ...catalog,
+      { key: 'L2', resourceType: 'DiagnosticReport', resourceId: 'lab-2', display: 'HbA1c', date: '2025-06-01' },
+    ]
     const ai = {
       headline: 'h',
       summary: [{ text: 't', emphasis: false, sources: [] }],
@@ -1001,7 +1044,7 @@ describe('finalizeResult', () => {
           direction: 'worsening',
           trend: '6.8% → 7.2% → 7.9% → 8.4%',
           interpretation: '血糖控制變差',
-          sources: ['L1', 'L99'],
+          sources: ['L1', 'L2', 'L99'],
         },
         {
           label: '未知類型',
@@ -1016,12 +1059,12 @@ describe('finalizeResult', () => {
       decisions: [],
       timeline: [],
     }
-    const result = useCase.finalizeResult(ai, catalog)
+    const result = useCase.finalizeResult(ai, investigationCatalog)
     expect(result.investigations[0]).toMatchObject({
       kind: 'lab',
       direction: 'worsening',
       trend: '7.2% → 7.9% → 8.4%',
-      sourceKeys: ['L1', 'L99'],
+      sourceKeys: ['L1', 'L2', 'L99'],
     })
     expect(result.investigations[1]).toMatchObject({ kind: 'other', direction: 'unknown' })
     expect(result.sourceIndex.find((source) => source.key === 'L99')).toMatchObject({ verified: false })
@@ -1057,6 +1100,96 @@ describe('finalizeResult', () => {
     }
     const result = useCase.finalizeResult(ai, serialCatalog)
     expect(result.investigations[0].direction).toBe('unknown')
+  })
+
+  it('strictly blocks single-point control claims and medication-only diagnoses', () => {
+    const strictCatalog = [
+      {
+        key: 'L1',
+        resourceType: 'DiagnosticReport',
+        resourceId: 'lab-1',
+        display: 'HbA1c 8.2%',
+        date: '2026-06-18',
+        supportsNormalityAssessment: false,
+      },
+      {
+        key: 'M1',
+        resourceType: 'MedicationRequest',
+        resourceId: 'med-1',
+        display: 'Atorvastatin 20 mg QHS',
+        date: '2026-06-18',
+      },
+    ]
+    const ai = {
+      headline: '跨院追蹤，近期血糖控制不佳。',
+      summary: [
+        { text: 'HbA1c 8.2%。', emphasis: true, sources: ['L1'] },
+        { text: '顯示血糖控制未達標。', emphasis: false, sources: [] },
+      ],
+      investigations: [{
+        label: 'HbA1c',
+        kind: 'lab',
+        direction: 'worsening',
+        trend: 'HbA1c 8.2%',
+        interpretation: '數值偏高，血糖控制不佳，需評估用藥調整。',
+        sources: ['L1'],
+      }],
+      medicationEducation: [],
+      medicationReview: { regimen: [], changes: [], reconciliation: [] },
+      problems: [
+        { label: '血糖控制不佳', basis: 'HbA1c 8.2%', kind: 'lab', sources: ['L1'] },
+        { label: '高脂血症', basis: 'Atorvastatin 處方', kind: 'medication', sources: ['M1'] },
+      ],
+      decisions: [],
+      timeline: [],
+    }
+
+    const result = useCase.finalizeResult(ai, strictCatalog, {
+      locale: 'zh-TW',
+      strictGrounding: true,
+    })
+
+    expect(result.headline).toBe('跨院追蹤')
+    expect(result.summary.map((segment) => segment.text).join('')).toBe('HbA1c 8.2%。')
+    expect(result.investigations[0]).toMatchObject({
+      direction: 'single',
+      interpretation: '這是紀錄中的檢驗結果；資料未提供參考範圍或個人目標。',
+    })
+    expect(result.problems).toEqual([])
+  })
+
+  it('strictly grounds patient medication education and uses a generic reminder', () => {
+    const ai = {
+      headline: '用藥摘要',
+      summary: [{ text: '有 Amlodipine 用藥紀錄。', emphasis: false, sources: ['M1'] }],
+      investigations: [],
+      medicationEducation: [{
+        name: 'Amlodipine 5 mg QD',
+        benefit: '幫助控制血壓，維持心血管健康。',
+        attention: '若頭暈或腳踝腫脹請就醫。',
+        sources: ['M1'],
+      }],
+      medicationReview: { regimen: [], changes: [], reconciliation: [] },
+      problems: [],
+      decisions: [],
+      timeline: [],
+    }
+    const result = useCase.finalizeResult(ai, [{
+      key: 'M1',
+      resourceType: 'MedicationRequest',
+      resourceId: 'med-1',
+      display: 'Amlodipine 5 mg QD',
+      date: '2026-06-20',
+    }], {
+      audience: 'patient',
+      locale: 'zh-TW',
+      strictGrounding: true,
+    })
+
+    expect(result.medicationEducation[0]).toMatchObject({
+      benefit: '紀錄中有此藥物；實際用途請向醫師或藥師確認。',
+      attention: '請依醫囑使用；若有不適或疑問，請詢問醫師或藥師。',
+    })
   })
 
   it('guards against a single-result badge when the catalog has serial reports for the same topic', () => {

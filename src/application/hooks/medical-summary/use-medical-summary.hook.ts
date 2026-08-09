@@ -175,6 +175,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       catalog: ctx.catalog,
       locale: outputLocale,
       audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,
+      harnessProfile: isCustomOpenAiModelId(ctx.modelId) ? 'local-small' as const : 'frontier' as const,
     }
     const retryRequests = retryRequest
       ? targetModuleIds.map((moduleId) => ({
@@ -361,6 +362,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       clinicalData: ctx.clinicalData ?? undefined,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       locale: outputLocale,
+      strictGrounding: isCustomOpenAiModelId(ctx.modelId),
     })
     const generatedAt = Date.now()
     return {

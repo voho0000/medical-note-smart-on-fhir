@@ -7,6 +7,7 @@ import { runDeepModeAgent } from '@/src/infrastructure/ai/agent/run-deep-mode-ag
 import { createFhirTools } from '@/src/infrastructure/ai/tools/fhir-tools'
 import {
   forcedInitialAgentToolName,
+  localAgentPrefetchInput,
   selectAgentToolsForQuestion,
   shouldPreExecuteLocalAgentTool,
 } from '@/src/infrastructure/ai/tools/agent-tool-router'
@@ -140,6 +141,7 @@ async function runOne(
       tools,
       initialToolName,
       preExecuteInitialTool: shouldPreExecuteLocalAgentTool(initialToolName),
+      preExecuteInitialToolInput: localAgentPrefetchInput(QUESTION, initialToolName),
       ...(/^gpt-oss(?::|-)/i.test(modelName)
         ? { reasoningEffort: 'low' as const }
         : {}),
