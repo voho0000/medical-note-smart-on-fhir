@@ -95,6 +95,36 @@ describe('ai-config.store', () => {
     })
   })
 
+  describe('runtime-only OpenAI-compatible profile', () => {
+    it('never persists the launch credential, including after another profile is saved', async () => {
+      useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile({
+        profileId: 'vghtpe-tvghbrain',
+        runtimeOnly: true,
+        enabled: true,
+        baseUrl: 'https://whisper.vghtpe.gov.tw:30001/v1',
+        modelId: 'tvghbrain3.5',
+        apiKey: 'runtime-secret',
+        transport: 'direct',
+      })
+
+      expect(localStorage.getItem(CONNECTION_STORAGE_KEY)).toBeNull()
+
+      await useAiConfigStore.getState().addOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://other-hospital.example/v1',
+        modelId: 'other-model',
+        apiKey: 'durable-secret',
+        transport: 'direct',
+      })
+
+      const stored = readStoredConnections()
+      expect(stored.profiles).toHaveLength(1)
+      expect(stored.profiles[0].profile.modelId).toBe('other-model')
+      expect(JSON.stringify(stored)).not.toContain('runtime-secret')
+      expect(mockEncrypt).not.toHaveBeenCalledWith('runtime-secret')
+    })
+  })
+
   describe('setApiKey', () => {
     it('should set OpenAI API key', () => {
       const { setApiKey } = useAiConfigStore.getState()

@@ -162,7 +162,14 @@ export function OpenAiCompatibleSettings({
   onSettingsTargetHandled,
 }: OpenAiCompatibleSettingsProps = {}) {
   const { t } = useLanguage()
-  const profiles = useAiConfigStore((state) => state.openAiCompatibleProfiles)
+  const allProfiles = useAiConfigStore((state) => state.openAiCompatibleProfiles)
+  // Launch-managed credentials are intentionally invisible here: editing or
+  // saving them would blur the runtime-only boundary and invite accidental
+  // device persistence of a credential supplied by the hospital bridge.
+  const profiles = useMemo(
+    () => allProfiles.filter((profile) => profile.runtimeOnly !== true),
+    [allProfiles],
+  )
   const credentialsHydrating = useAiConfigStore((state) => state.credentialsHydrating)
   const addConfig = useAiConfigStore((state) => state.addOpenAiCompatibleConfig)
   const updateConfig = useAiConfigStore((state) => state.updateOpenAiCompatibleConfig)

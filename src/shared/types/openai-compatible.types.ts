@@ -44,6 +44,9 @@ export interface OpenAiCompatibleConfig {
  * it must never be derived from the endpoint URL or API key. */
 export interface OpenAiCompatibleProfile extends OpenAiCompatibleConfig {
   profileId: string
+  /** Ephemeral launch-managed profile. Its credential exists only in the
+   * current page runtime and must never enter browser persistence. */
+  runtimeOnly?: boolean
 }
 
 /** Keep the Settings list and every hydration/decryption pass bounded. Ten is
