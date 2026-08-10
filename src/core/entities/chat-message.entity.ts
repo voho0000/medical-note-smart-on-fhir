@@ -26,9 +26,9 @@ export interface ChatReplyReference {
 }
 
 /**
- * Explicit data boundary for a chat turn. This is intentionally user-selected
- * rather than inferred from wording: routing heuristics may reduce schemas,
- * but they must never grant access to patient records or literature.
+ * Resolved data boundary for a chat turn, including the user's explicit
+ * patient-data opt-out. It is persisted on each message so transcript
+ * filtering remains deterministic and auditable.
  */
 export type ChatDataScope = 'auto' | 'general' | 'patient' | 'patient-literature'
 

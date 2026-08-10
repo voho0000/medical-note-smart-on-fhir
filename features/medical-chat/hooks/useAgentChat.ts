@@ -21,6 +21,7 @@ import { shouldUseLocalBundle } from "@/src/infrastructure/fhir/client/fhir-clie
 import { createUserMessage, createAgentState, formatChatMessageContentForAi } from "@/src/shared/utils/chat-message.utils"
 import { useAuth } from "@/src/application/providers/auth.provider"
 import {
+  getModelDefinition,
   getModelDefinitionOrThrow,
   gateModelForKeys,
   isCustomOpenAiModelId,
@@ -60,6 +61,7 @@ import {
 import { truncateToContextWindow } from '@/src/shared/utils/context-window-manager'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
 import { formatClinicalContextAdaptationNotice } from '@/src/core/utils/adaptive-clinical-context.utils'
+import type { MedicalChatExecutionRecord } from '@/features/medical-chat/utils/ai-execution-export'
 
 const standardChatStream = createAiStreamOrchestrator()
 
@@ -144,6 +146,7 @@ export function useAgentChat(
   const hasProxyAccess = !!user || isAnonymous
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const [latestExecution, setLatestExecution] = useState<MedicalChatExecutionRecord | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const activeRequestRef = useRef<ActiveChatRequest | null>(null)
   const mountedRef = useRef(true)
@@ -234,9 +237,9 @@ export function useAgentChat(
       // custom endpoint's existing no-auxiliary-cloud privacy boundary.
       const agentTools = isCustomEndpoint ? fhirTools : cloudAgentTools
 
-      // Scope is selected by the user, not inferred from the question. If no
-      // patient is loaded, fail closed to the patient-free boundary even if a
-      // stale UI/session value says otherwise.
+      // The runtime default plus the user's explicit no-patient-data override
+      // resolve the scope. If no patient is loaded, fail closed to the
+      // patient-free boundary.
       const hasPatient = !!patient?.id
       const endpointScope: ChatDataScope = isCustomEndpoint && dataScope === 'auto'
         ? (hasPatient ? 'patient' : 'general')
@@ -246,6 +249,34 @@ export function useAgentChat(
         !hasPatient
         ? 'general'
         : endpointScope
+
+      const requestTimestamp = new Date().toISOString()
+      const modelDefinition = getModelDefinition(effectiveModelId)
+      const modelName = isCustomEndpoint
+        ? openAiCompatible?.modelId.trim() || modelDefinition?.label || effectiveModelId
+        : modelDefinition?.label || effectiveModelId
+      let executionPrompt = systemPrompt
+      let executionInput: unknown = []
+      let executionOutput = ''
+      const recordExecution = (
+        status: MedicalChatExecutionRecord['status'],
+        errorMessage: string | null = null,
+      ) => {
+        if (!mountedRef.current) return
+        setLatestExecution({
+          version: 1,
+          feature: 'medical-chat',
+          modelName,
+          modelId: effectiveModelId,
+          timestamp: requestTimestamp,
+          prompt: executionPrompt,
+          inputData: executionInput,
+          outputData: executionOutput,
+          hasError: status === 'error',
+          errorMessage,
+          status,
+        })
+      }
 
       // Create user message with images
       const replySource = replyTo
@@ -267,6 +298,12 @@ export function useAgentChat(
         )),
         userMessage,
       ]
+      executionInput = scopedConversation.map((message) => ({
+        role: message.role,
+        content: message.role === 'user'
+          ? scrubFreeText(formatChatMessageContentForAi(message), patientTextLiterals)
+          : formatChatMessageContentForAi(message),
+      }))
       setChatMessages(newMessages)
 
       // Create assistant message with thinking state
@@ -346,16 +383,18 @@ export function useAgentChat(
 
         // Check if the user can access agent chat.
         if (!hasDirectAccess && (!hasProxyAccess || isCustomEndpoint)) {
+          const unavailableMessage = isCustomEndpoint
+            ? t.settings.openAiCompatibleNotConfigured
+            : t.agent.apiKeyRequired
           setChatMessages((prev) =>
             prev.map((m) => m.id === assistantMessageId
               ? {
                   ...m,
-                  content: isCustomEndpoint
-                    ? t.settings.openAiCompatibleNotConfigured
-                    : t.agent.apiKeyRequired,
+                  content: unavailableMessage,
                 }
               : m)
           )
+          recordExecution('error', unavailableMessage)
           setIsLoading(false)
           return
         }
@@ -403,6 +442,9 @@ export function useAgentChat(
             throw new Error(t.medicalChat.localStandardContextTooLarge)
           }
 
+          executionPrompt = localSystemPrompt
+          executionInput = boundedHistory
+
           await standardChatStream.stream({
             messages: [
               { role: 'system', content: localSystemPrompt },
@@ -421,6 +463,7 @@ export function useAgentChat(
               ? { reasoningEffort: 'low' as const }
               : {}),
             onChunk: (content) => {
+              executionOutput = content
               if (!hasReceivedChunkRef.current && onInputClear) {
                 hasReceivedChunkRef.current = true
                 onInputClear()
@@ -428,6 +471,7 @@ export function useAgentChat(
               setContent(content)
             },
           })
+          recordExecution('completed')
           return
         }
 
@@ -437,9 +481,11 @@ export function useAgentChat(
         if (useProxy) {
           const validation = validateAiProxyAvailability(effectiveModelId)
           if (!validation.available) {
+            const unavailableMessage = validation.error || t.agent.apiKeyRequired
             setChatMessages((prev) =>
-              prev.map((m) => m.id === assistantMessageId ? { ...m, content: validation.error || t.agent.apiKeyRequired } : m)
+              prev.map((m) => m.id === assistantMessageId ? { ...m, content: unavailableMessage } : m)
             )
+            recordExecution('error', unavailableMessage)
             setIsLoading(false)
             return
           }
@@ -459,9 +505,9 @@ export function useAgentChat(
         const routingQuestion = latestUserQuestion
           ? formatChatMessageContentForAi(latestUserQuestion)
           : ''
-        // The explicit scope filters data sources for every model. Smaller
+        // The resolved scope filters data sources for every model. Smaller
         // custom models receive an additional relevance pass to reduce schema
-        // tokens; frontier models keep all schemas inside the chosen boundary.
+        // tokens; frontier models keep all schemas inside the runtime boundary.
         const toolDataScope: ChatDataScope = turnDataScope === 'auto' && !hasPatient
           ? 'general'
           : turnDataScope
@@ -504,6 +550,8 @@ export function useAgentChat(
               : formatChatMessageContentForAi(m),
           })),
         ]
+        executionPrompt = enhancedSystemPrompt
+        executionInput = apiMessages.slice(1)
 
         // UI rendering for the headless agent core's events. The orchestration
         // (the three streamText rounds, tool handling, follow-up/synthesis,
@@ -532,6 +580,7 @@ export function useAgentChat(
           if (abortController.signal.aborted) return
           switch (event.type) {
             case 'content': {
+              executionOutput = event.content
               if (!hasReceivedChunkRef.current && onInputClear) {
                 hasReceivedChunkRef.current = true
                 onInputClear()
@@ -557,6 +606,7 @@ export function useAgentChat(
               appendState(event.state, { toolCalls: event.toolCalls })
               break
             case 'final':
+              executionOutput = event.content
               clearPending()
               setChatMessages((prev) =>
                 prev.map((m) => m.id === assistantMessageId
@@ -569,7 +619,7 @@ export function useAgentChat(
           }
         }
 
-        await runDeepModeAgent({
+        const agentResult = await runDeepModeAgent({
           model,
           messages: apiMessages,
           tools: toolsForTurn,
@@ -598,10 +648,20 @@ export function useAgentChat(
             toolNames: t.agent.toolNames,
           },
         })
+        executionOutput = agentResult.answer
+        executionInput = {
+          messages: apiMessages.slice(1),
+          toolTrajectory: agentResult.trajectory,
+        }
+        recordExecution('completed')
       } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return
+        if (err instanceof Error && err.name === "AbortError") {
+          recordExecution('aborted')
+          return
+        }
         
         const errorMessage = getUserErrorMessage(err)
+        recordExecution('error', errorMessage)
         const errorObj = new Error(errorMessage)
         setError(errorObj)
         setChatMessages((prev) =>
@@ -633,6 +693,7 @@ export function useAgentChat(
   const handleReset = useCallback(() => {
     abortControllerRef.current?.abort()
     setChatMessages([])
+    setLatestExecution(null)
     useChatHistoryStore.getState().setCurrentSessionId(null)
   }, [setChatMessages])
 
@@ -641,5 +702,13 @@ export function useAgentChat(
     setIsLoading(false)
   }, [])
 
-  return { messages: chatMessages, isLoading, error, handleSend, handleReset, stopGeneration }
+  return {
+    messages: chatMessages,
+    isLoading,
+    error,
+    latestExecution,
+    handleSend,
+    handleReset,
+    stopGeneration,
+  }
 }

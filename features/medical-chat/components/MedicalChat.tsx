@@ -35,7 +35,6 @@ import { ChatHeader } from "./ChatHeader"
 import { ChatToolbar } from "./ChatToolbar"
 import { ChatTemplatesManagerDrawer } from "./ChatTemplatesManagerDrawer"
 import { ChatInputArea } from "./ChatInputArea"
-import { ChatDataScopeSelector } from "./ChatDataScopeSelector"
 import { SuggestionChips } from "./SuggestionChips"
 import { ExpandedOverlay } from '@/src/shared/components/ExpandedOverlay'
 import { useAgentChat } from "../hooks/useAgentChat"
@@ -80,6 +79,8 @@ import {
   normalizeOpenAiCompatibleTransport,
   type OpenAiCompatibleProfile,
 } from '@/src/shared/types/openai-compatible.types'
+import { downloadMedicalChatExecution } from '@/features/medical-chat/utils/ai-execution-export'
+import { AiExecutionDiagnosticsDialog } from '@/src/shared/components/AiExecutionDiagnosticsDialog'
 
 /**
  * Destination + execution identity for one chat transcript. A custom endpoint
@@ -132,7 +133,6 @@ export default function MedicalChat() {
   const openAiKey = useAiConfigStore((state) => state.apiKey)
   const geminiKey = useAiConfigStore((state) => state.geminiKey)
   const claudeKey = useAiConfigStore((state) => state.claudeKey)
-  const perplexityKey = useAiConfigStore((state) => state.perplexityKey)
   const openAiCompatibleProfiles = useAiConfigStore(
     (state) => state.openAiCompatibleProfiles,
   )
@@ -191,6 +191,7 @@ export default function MedicalChat() {
   
   // Auth Dialog state
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
 
   // New-conversation confirm — only shown when the current chat would be lost
   const [showNewChatConfirm, setShowNewChatConfirm] = useState(false)
@@ -224,16 +225,18 @@ export default function MedicalChat() {
   const isTemporaryMode = useIsTemporaryMode()
   const setIsTemporaryMode = useSetIsTemporaryMode()
   const setMessagesGlobal = useSetChatMessages()
-  const chatDataScope = useChatDataScope()
+  const storedChatDataScope = useChatDataScope()
   const setChatDataScope = useSetChatDataScope()
   const setCurrentSessionId = useSetCurrentSessionId()
 
   const defaultChatDataScope: ChatDataScope = isCustomEndpoint
     ? (patientId ? 'patient' : 'general')
     : 'auto'
-  const literatureAvailable = !isCustomEndpoint && !isStandardChat && (
-    !!perplexityKey || !!user || isAnonymous
-  )
+  // The runtime owns the default boundary. The only manual override is an
+  // explicit patient-data opt-out; there is no heuristic question classifier.
+  const chatDataScope: ChatDataScope = patientId && storedChatDataScope === 'general'
+    ? 'general'
+    : defaultChatDataScope
 
   const handleToggleTemporaryMode = useCallback(async () => {
     if (!isTemporaryMode) {
@@ -283,6 +286,12 @@ export default function MedicalChat() {
     generate: generateFollowups,
     clear: clearFollowups,
   } = useFollowupSuggestions(isCustomEndpoint ? model : undefined)
+
+  const handleTogglePatientData = useCallback(() => {
+    setChatDataScope(chatDataScope === 'general' ? defaultChatDataScope : 'general')
+    setReplyDraft(null)
+    clearFollowups()
+  }, [chatDataScope, clearFollowups, defaultChatDataScope, setChatDataScope])
 
   // Initial mount adopts the current destination. Subsequent changes are
   // privacy boundaries, including external profile edits/hydration that did
@@ -379,31 +388,12 @@ export default function MedicalChat() {
     }
   }, [patientId, defaultChatDataScope, setChatDataScope])
 
-  // Scope controls differ by runtime: frontier models use automatic routing
-  // with an optional no-patient override; custom/local models use explicit
-  // patient boundaries. Normalize old/saved scopes after a model switch.
+  // Normalize legacy scopes while preserving the explicit patient-data opt-out.
   useEffect(() => {
-    const invalidForFrontier = !isCustomEndpoint &&
-      chatDataScope !== 'auto' && chatDataScope !== 'general'
-    const invalidForLocal = isCustomEndpoint && (
-      chatDataScope === 'auto' ||
-      (chatDataScope !== 'general' && !patientId) ||
-      (chatDataScope === 'patient-literature' && !literatureAvailable)
-    )
-    if (invalidForFrontier || invalidForLocal) {
-      setChatDataScope(defaultChatDataScope)
+    if (storedChatDataScope !== chatDataScope) {
+      setChatDataScope(chatDataScope)
     }
-  }, [chatDataScope, isCustomEndpoint, patientId, literatureAvailable, defaultChatDataScope, setChatDataScope])
-
-  const handleChatDataScopeChange = useCallback((nextScope: ChatDataScope) => {
-    if (!isCustomEndpoint && nextScope !== 'auto' && nextScope !== 'general') return
-    if (isCustomEndpoint && nextScope === 'auto') return
-    if ((nextScope === 'patient' || nextScope === 'patient-literature') && !patientId) return
-    if (nextScope === 'patient-literature' && !literatureAvailable) return
-    setChatDataScope(nextScope)
-    setReplyDraft(null)
-    clearFollowups()
-  }, [isCustomEndpoint, patientId, literatureAvailable, setChatDataScope, clearFollowups])
+  }, [chatDataScope, setChatDataScope, storedChatDataScope])
 
   const template = useTemplateSelector()
 
@@ -614,6 +604,11 @@ export default function MedicalChat() {
     }
   }, [input, template.selectedTemplate, scrollTextareaToBottom])
 
+  const handleExportAiExecution = useCallback(() => {
+    if (!chat.latestExecution) return
+    downloadMedicalChatExecution(chat.latestExecution)
+  }, [chat.latestExecution])
+
   // Handle prompt selection from gallery
   const handleSelectPrompt = useCallback((prompt: SharedPrompt, useAs?: PromptType) => {
     // Insert prompt content into chat input
@@ -760,15 +755,10 @@ export default function MedicalChat() {
       </CardContent>
 
       <CardFooter className="flex flex-col gap-2 border-t px-3 sm:px-6 !pt-2 pb-2 shrink-0">
-        <div data-tour="medical-chat-composer" className="flex w-full flex-col gap-1">
-          <ChatDataScopeSelector
-            value={chatDataScope}
-            onChange={handleChatDataScopeChange}
-            hasPatient={!!patientId}
-            literatureAvailable={literatureAvailable}
-            frontierModel={!isCustomEndpoint}
-            disabled={chat.isLoading}
-          />
+        <div
+          data-tour="medical-chat-composer"
+          className="flex w-full flex-col gap-1"
+        >
           <ChatToolbar
             onInsertTemplate={handleInsertTemplate}
             templates={template.templates}
@@ -779,6 +769,12 @@ export default function MedicalChat() {
             onManageTemplates={() => setShowTemplateManager(true)}
             onModelSelect={handleModelSelect}
             showModelPicker={isExpanded}
+            patientDataDisabled={chatDataScope === 'general'}
+            canTogglePatientData={!!patientId}
+            patientDataToggleDisabled={chat.isLoading}
+            onTogglePatientData={handleTogglePatientData}
+            onOpenAiExecution={() => setDiagnosticsOpen(true)}
+            canExportAiExecution={!!chat.latestExecution && !chat.isLoading}
           />
           {showApiKeyWarning && (
             <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs">
@@ -916,6 +912,17 @@ export default function MedicalChat() {
     </AlertDialog>
   )
 
+  const diagnosticsDialog = (
+    <AiExecutionDiagnosticsDialog
+      open={diagnosticsOpen}
+      onOpenChange={setDiagnosticsOpen}
+      records={chat.latestExecution ? [chat.latestExecution] : []}
+      labels={t.aiDiagnostics}
+      onDownloadAll={handleExportAiExecution}
+      onDownloadRecord={handleExportAiExecution}
+    />
+  )
+
   // Render expanded overlay or normal view
   if (isExpanded) {
     return (
@@ -941,6 +948,7 @@ export default function MedicalChat() {
           onOpenChange={setShowAuthDialog}
         />
         {newChatConfirmDialog}
+        {diagnosticsDialog}
       </>
     )
   }
@@ -964,6 +972,7 @@ export default function MedicalChat() {
         onOpenChange={setShowAuthDialog}
       />
       {newChatConfirmDialog}
+      {diagnosticsDialog}
     </>
   )
 }

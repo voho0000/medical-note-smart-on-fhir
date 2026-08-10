@@ -20,7 +20,7 @@ export interface BuildAgentSystemPromptInput {
   hasPerplexityKey: boolean
   /** Exact schemas exposed on this turn. Omit for the legacy/full tool list. */
   availableToolNames?: readonly string[]
-  /** Explicit user-selected boundary for this turn. */
+  /** Runtime-resolved boundary for this turn. */
   turnDataScope?: ChatDataScope
   /** The user asks for current evidence but this turn has no literature tool. */
   currentEvidenceUnavailable?: boolean
@@ -88,7 +88,7 @@ export class BuildAgentSystemPromptUseCase {
 - Use the fewest relevant tools. Do not query patient data merely because it is available.`
       : input.turnDataScope === 'general'
       ? `**Turn Data Scope: General medical knowledge**
-- The user explicitly selected a patient-free turn.
+- No patient record is available or authorized for this turn.
 - Do not use, request, mention, or infer any loaded patient's FHIR data.`
       : input.turnDataScope === 'patient-literature'
         ? `**Turn Data Scope: Current patient + current literature**

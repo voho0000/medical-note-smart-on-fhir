@@ -12,7 +12,7 @@ import {
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useModelPref, MODEL_PREF_DEFAULTS } from "@/src/application/stores/model-prefs.store"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
-import { ChevronDown, FileText, Library, SlidersHorizontal } from "lucide-react"
+import { Bug, ChevronDown, FileText, Library, ShieldOff, SlidersHorizontal } from "lucide-react"
 
 interface Template {
   id: string
@@ -37,6 +37,12 @@ interface ChatToolbarProps {
    *  cramped); the fullscreen overlay has no header strip, so only there
    *  does the toolbar host it. */
   showModelPicker?: boolean
+  patientDataDisabled: boolean
+  canTogglePatientData: boolean
+  patientDataToggleDisabled?: boolean
+  onTogglePatientData: () => void
+  onOpenAiExecution: () => void
+  canExportAiExecution: boolean
 }
 
 export function ChatToolbar({
@@ -49,6 +55,12 @@ export function ChatToolbar({
   onManageTemplates,
   onModelSelect,
   showModelPicker = false,
+  patientDataDisabled,
+  canTogglePatientData,
+  patientDataToggleDisabled = false,
+  onTogglePatientData,
+  onOpenAiExecution,
+  canExportAiExecution,
 }: ChatToolbarProps) {
   const { t } = useLanguage()
   const chatModelPref = useModelPref('chat')
@@ -79,7 +91,7 @@ export function ChatToolbar({
             className="h-full min-w-0 flex-1 justify-start gap-2 rounded-none px-2.5 text-xs font-medium hover:bg-accent"
           >
             <FileText className="h-4 w-4 shrink-0 text-primary" />
-            <span className="hidden truncate sm:inline">{selectedTemplateLabel}</span>
+            <span className="hidden truncate xl:inline">{selectedTemplateLabel}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -124,13 +136,13 @@ export function ChatToolbar({
           className="h-9 shrink-0 gap-1.5 px-2.5 text-xs"
         >
           <Library className="h-4 w-4 text-primary" />
-          <span className="hidden sm:inline">{t.chat.templateGallery}</span>
+          <span className="hidden xl:inline">{t.chat.templateGallery}</span>
         </Button>
       )}
       <Button
         type="button"
         size="sm"
-        variant="outline"
+        variant="ghost"
         onClick={onManageTemplates}
         data-testid="chat-template-manage"
         aria-label={t.chat.manageTemplates}
@@ -138,7 +150,45 @@ export function ChatToolbar({
         className="h-9 shrink-0 gap-1.5 px-2.5 text-xs"
       >
         <SlidersHorizontal className="h-4 w-4" />
-        <span className="hidden sm:inline">{t.chat.manageTemplates}</span>
+        <span className="hidden xl:inline">{t.chat.manageTemplates}</span>
+      </Button>
+      {canTogglePatientData && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onTogglePatientData}
+          disabled={patientDataToggleDisabled}
+          data-testid="chat-patient-data-toggle"
+          aria-label={t.chat.patientDataOff}
+          aria-pressed={patientDataDisabled}
+          title={patientDataDisabled
+            ? t.chat.patientDataOffDisable
+            : t.chat.patientDataOffEnable}
+          className={`h-7 shrink-0 rounded-full px-2 text-[0.6875rem] shadow-none ${
+            patientDataDisabled
+              ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-300 dark:hover:bg-sky-900/60'
+              : 'text-muted-foreground'
+          }`}
+        >
+          <ShieldOff className="h-3.5 w-3.5" />
+          <span>{t.chat.patientDataOffBadge}</span>
+        </Button>
+      )}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={onOpenAiExecution}
+        disabled={!canExportAiExecution}
+        data-testid="chat-ai-execution-export"
+        aria-label={t.chat.exportAiExecution}
+        title={canExportAiExecution
+          ? t.chat.exportAiExecution
+          : t.chat.exportAiExecutionUnavailable}
+        className="h-7 w-7 shrink-0 text-muted-foreground opacity-35 transition-opacity hover:opacity-100"
+      >
+        <Bug className="h-3.5 w-3.5" />
       </Button>
       {showModelPicker && (
         <div className="ml-auto flex h-9 shrink-0 items-center">
