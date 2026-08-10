@@ -20,6 +20,7 @@ import { PreviewTab } from "./PreviewTab"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
+import type { DataConsumer } from "@/src/application/providers/data-selection.provider"
 
 interface DataSelectionPanelProps {
   clinicalData: ClinicalDataCollection
@@ -31,6 +32,8 @@ interface DataSelectionPanelProps {
   fallbackModelId?: string
   showScopeDescription?: boolean
   overflowIssue?: ContextOverflowIssue | null
+  consumer?: DataConsumer
+  showTemplates?: boolean
 }
 
 export function DataSelectionPanel({ 
@@ -43,12 +46,17 @@ export function DataSelectionPanel({
   fallbackModelId,
   showScopeDescription = true,
   overflowIssue,
+  consumer = 'insights',
+  showTemplates = true,
 }: DataSelectionPanelProps) {
   const { t, locale } = useLanguage()
   // Preview the same summary/insights scope that this panel edits.
-  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext('insights')
+  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext(consumer)
   const resolvedModel = useResolvedDataSelectionModel(modelId, fallbackModelId)
-  const fittedClinicalInput = useClinicalAiInput(resolvedModel.contextLimit)
+  const fittedClinicalInput = useClinicalAiInput(
+    consumer === 'insights' ? resolvedModel.contextLimit : undefined,
+    consumer,
+  )
   const [activeTab, setActiveTab] = useState('selection')
   const displayedProfile = fittedClinicalInput.contextAdaptation
     ? fittedClinicalInput.effectiveProfile
@@ -134,6 +142,8 @@ export function DataSelectionPanel({
             modelId={modelId}
             fallbackModelId={fallbackModelId}
             overflowIssue={overflowIssue}
+            consumer={consumer}
+            showTemplates={showTemplates}
           />
         </TabsContent>
         <TabsContent value="preview">

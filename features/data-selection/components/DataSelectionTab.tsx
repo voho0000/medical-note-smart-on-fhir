@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 import { ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useDataSelection } from "@/src/application/providers/data-selection.provider"
+import { useDataSelection, type DataConsumer } from "@/src/application/providers/data-selection.provider"
 import { dataCategoryRegistry } from "@/src/core/registry/data-category.registry"
 import { CategoryFilterControls } from "./CategoryFilterControls"
 import { DocumentChecklist } from "./DocumentChecklist"
@@ -34,6 +34,8 @@ interface DataSelectionTabProps {
   modelId?: string
   fallbackModelId?: string
   overflowIssue?: ContextOverflowIssue | null
+  consumer?: DataConsumer
+  showTemplates?: boolean
 }
 
 // Sections mirror the LEFT-panel tabs so what you toggle here maps 1:1 to what
@@ -46,6 +48,9 @@ const GROUPS: Array<{ id: string; labelKey: string; fallback: string }> = [
   { id: 'documents', labelKey: 'documents', fallback: 'Documents' },
 ]
 const DEFAULT_OPEN = new Set(['patient', 'visit', 'reports', 'medication', 'documents'])
+const subscribeToHydration = () => () => undefined
+const getClientHydrationSnapshot = () => true
+const getServerHydrationSnapshot = () => false
 
 // Active segment in the 編輯對象 / 情境 pill toggles — light amber to match the
 // data-selection tab accent (so the selected option reads as selected, not just
@@ -66,6 +71,8 @@ export function DataSelectionTab({
   modelId,
   fallbackModelId,
   overflowIssue,
+  consumer = 'insights',
+  showTemplates = true,
 }: DataSelectionTabProps) {
   const { t } = useLanguage()
   const {
@@ -73,11 +80,15 @@ export function DataSelectionTab({
     activePreset,
     resetToDefaults,
     selectAllData,
+    resetProfileFor,
+    selectAllDataFor,
   } = useDataSelection()
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  )
   const [openGroups, setOpenGroups] = useState<Set<string>>(DEFAULT_OPEN)
-
-  useEffect(() => setMounted(true), [])
 
   const grouped = useMemo(() => {
     const map = new Map<string, DataItem[]>()
@@ -100,10 +111,11 @@ export function DataSelectionTab({
         modelId={modelId}
         fallbackModelId={fallbackModelId}
         overflowIssue={overflowIssue}
+        consumer={consumer}
       />
 
       {/* Templates — one-tap fill, then tweak the single selection freely. */}
-      <div>
+      {showTemplates && <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">{ds.applyTemplate ?? '套用範本'}</span>
@@ -135,7 +147,7 @@ export function DataSelectionTab({
               size="sm"
               className="h-7 px-2 text-xs"
               title={ds.selectAllDataHint ?? '納入所有類別與全部時間範圍(配合上方內容量使用)'}
-              onClick={selectAllData}
+              onClick={() => consumer === 'insights' ? selectAllData() : selectAllDataFor(consumer)}
             >
               {ds.selectAllData ?? '全部資料'}
             </Button>
@@ -146,14 +158,28 @@ export function DataSelectionTab({
               variant="outline"
               size="sm"
               className="h-7 px-2 text-xs"
-              onClick={resetToDefaults}
+              onClick={() => consumer === 'insights' ? resetToDefaults() : resetProfileFor(consumer)}
             >
               {ds.restorePresetDefaults ?? ds.resetToDefault}
             </Button>
           </div>
         </div>
         <p className="mt-1 text-[0.6875rem] text-muted-foreground">{ds.applyTemplateHint ?? '點一下填入起點，之後可自由調整'}</p>
-      </div>
+      </div>}
+
+      {!showTemplates && (
+        <div className="flex justify-end gap-1">
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => selectAllDataFor(consumer)}>
+            {ds.selectAllData ?? '全部資料'}
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onToggleAll(!allSelected)}>
+            {allSelected ? ds.deselectAll : ds.selectAll}
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => resetProfileFor(consumer)}>
+            {ds.resetToDefault}
+          </Button>
+        </div>
+      )}
 
       {/* Accordion sections — one per left-panel tab */}
       <div className="space-y-2">
@@ -224,6 +250,7 @@ export function DataSelectionTab({
                         <div className="mt-2 pl-9">
                           <DocumentChecklist
                             clinicalData={clinicalData}
+                            consumer={consumer}
                             displayedDocumentMode={displayedDocumentMode}
                             displayedDocumentIds={displayedDocumentIds}
                           />

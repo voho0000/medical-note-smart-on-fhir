@@ -9,6 +9,7 @@
 export const IPS_BASE = 'http://hl7.org/fhir/uv/ips/StructureDefinition'
 
 export const IPS_PROFILES = {
+  bundle: `${IPS_BASE}/Bundle-uv-ips`,
   composition: `${IPS_BASE}/Composition-uv-ips`,
   patient: `${IPS_BASE}/Patient-uv-ips`,
   allergyIntolerance: `${IPS_BASE}/AllergyIntolerance-uv-ips`,
@@ -61,7 +62,7 @@ export const INFERENCE_TAG = {
 export const COMPOSITION_TYPE_LOINC = '60591-5'
 
 // Default author for app-assembled IPS documents (user-confirmed).
-export const IPS_AUTHOR_DISPLAY = 'MediPrisma App'
+export const IPS_AUTHOR_DISPLAY = 'MediPrisma (software-generated; no clinical attestation)'
 
 export const IPS_DOC_TITLE = 'International Patient Summary'
 

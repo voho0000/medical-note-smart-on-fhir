@@ -3,9 +3,17 @@
 import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FileOutput, Loader2 } from 'lucide-react'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { Switch } from '@/components/ui/switch'
+import { AlertTriangle, FileOutput, Image as ImageIcon, Loader2, Settings2, ShieldCheck } from 'lucide-react'
 import { CARD_BORDER_CLASSES } from '@/src/shared/config/ui-theme.config'
-import { InfoHint } from '@/src/shared/components/InfoHint'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useIpsBundle } from './hooks/useIpsBundle'
 import { useIpsExport } from './hooks/useIpsExport'
@@ -15,10 +23,13 @@ import { buildIpsMarkdown } from './utils/ips-markdown'
 import { IpsDataScopePanel } from './components/IpsDataScopePanel'
 import { IpsExportPreview } from './components/IpsExportPreview'
 import { InferredProblemsReview } from './components/InferredProblemsReview'
+import { AiHandoffPanel } from './components/AiHandoffPanel'
 
 export default function IpsExportFeature() {
   const { t } = useLanguage()
   const x = t.ipsExport
+  const [includePatientIdentifiers, setIncludePatientIdentifiers] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const {
     downloadJson,
     downloadMarkdown,
@@ -27,7 +38,7 @@ export default function IpsExportFeature() {
     copiedFormat,
     copyError,
     markdownFilename,
-  } = useIpsExport()
+  } = useIpsExport({ includePatientIdentifiers })
 
   // Phase 2.2b — async LLM problem-list inference runs as a side-channel. Only
   // the user-CONFIRMED suggestions are turned into synthetic conditions and
@@ -42,11 +53,16 @@ export default function IpsExportFeature() {
   const [includeImageAttachments, setIncludeImageAttachments] = useState(false)
 
   const { bundle, curatedData, patient, labels, validation, isLoading, error, hasPatient, resourceCount } =
-    useIpsBundle(confirmedConditions, { includeImageAttachments })
+    useIpsBundle(confirmedConditions, { includeImageAttachments, includePatientIdentifiers })
 
   const markdown = useMemo(
-    () => (curatedData ? buildIpsMarkdown({ patient, data: curatedData, labels }) : ''),
-    [curatedData, patient, labels],
+    () => (curatedData ? buildIpsMarkdown({
+      patient,
+      data: curatedData,
+      labels,
+      includePatientIdentifiers,
+    }) : ''),
+    [curatedData, patient, labels, includePatientIdentifiers],
   )
 
   // Loading clinical data
@@ -84,16 +100,22 @@ export default function IpsExportFeature() {
   }
 
   return (
-    <div className="space-y-3">
-      {/* Preview first & default: the copyable markdown/JSON preview is the
-          high-frequency use; scope tuning is the occasional one. */}
-      <Tabs defaultValue="preview" className="space-y-3">
-        <TabsList className="grid h-9 w-full grid-cols-2">
-          <TabsTrigger value="preview">{x.previewTab}</TabsTrigger>
-          <TabsTrigger value="scope">{x.scopeTab}</TabsTrigger>
+    <div className="mx-auto max-w-5xl space-y-4">
+      <div className="px-1">
+        <h1 className="text-xl font-semibold tracking-tight">{x.hubTitle}</h1>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{x.hubDescription}</p>
+      </div>
+      <Tabs defaultValue="ai" className="space-y-5">
+        <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl p-1 sm:max-w-md">
+          <TabsTrigger value="ai" className="text-sm">{x.aiUseTab}</TabsTrigger>
+          <TabsTrigger value="institution" className="text-sm">{x.institutionTab}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="preview">
+        <TabsContent value="ai">
+          <AiHandoffPanel />
+        </TabsContent>
+
+        <TabsContent value="institution">
           <IpsExportPreview
             bundle={bundle}
             markdown={markdown}
@@ -101,51 +123,99 @@ export default function IpsExportFeature() {
             copiedFormat={copiedFormat}
             copyError={copyError}
             markdownFilename={markdownFilename}
+            resourceCount={resourceCount}
             includeImageAttachments={includeImageAttachments}
-            onToggleImageAttachments={setIncludeImageAttachments}
+            includePatientIdentifiers={includePatientIdentifiers}
+            onOpenSettings={() => setSettingsOpen(true)}
             onDownloadJson={() => downloadJson(bundle)}
             onDownloadMarkdown={() => downloadMarkdown(markdown)}
             onCopyJson={() => copyJson(bundle)}
             onCopyMarkdown={() => copyMarkdown(markdown)}
           />
         </TabsContent>
-
-        <TabsContent value="scope" className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <FileOutput className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-base font-semibold">{x.title}</h2>
-            <InfoHint side="right" contentClassName="max-w-sm">
-              {x.help}
-            </InfoHint>
-            <span className="text-xs text-muted-foreground">
-              {x.resourceCountLabel.replace('{count}', String(resourceCount))}
-            </span>
-          </div>
-
-          {/* Problem-list candidates review. No enable-switch: nothing runs
-              without an explicit button press (the press IS the consent), and
-              the ICD import is deterministic anyway. Confirmed rows become
-              extra conditions in the snapshot. */}
-          <InferredProblemsReview
-            status={inferred.status}
-            problems={inferred.problems}
-            confirmedIds={inferred.confirmedIds}
-            confirmedCount={inferred.confirmedCount}
-            available={inferred.available}
-            error={inferred.error}
-            onRun={inferred.run}
-            onToggle={inferred.toggleConfirm}
-            onSetAll={inferred.setAllConfirmed}
-            summaryCount={inferred.summaryProblemCount}
-            onImportEncounterIcds={inferred.importEncounterIcds}
-            onRemoveEncounterIcds={inferred.removeEncounterIcds}
-            onRemoveAiProblems={inferred.removeAiProblems}
-            encounterIcdCount={inferred.encounterIcdCount}
-          />
-
-          <IpsDataScopePanel bundle={bundle} curatedData={curatedData} />
-        </TabsContent>
       </Tabs>
+
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-3xl">
+          <SheetHeader className="border-b bg-muted/20 px-4 py-3 pr-10 sm:px-5">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Settings2 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+              {x.settingsTitle}
+            </SheetTitle>
+            <SheetDescription className="text-xs leading-relaxed">{x.settingsDescription}</SheetDescription>
+          </SheetHeader>
+
+          <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+            <div className="space-y-4 p-4 sm:p-5">
+              <div className={`rounded-xl border p-3 ${includePatientIdentifiers ? 'border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/30' : 'bg-card'}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    {includePatientIdentifiers ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" /> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />}
+                    <div>
+                      <label htmlFor="ips-include-identifiers" className="text-sm font-medium">{x.includeIdentifiers}</label>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        {includePatientIdentifiers ? x.identifiersWarning : x.identifiersMasked}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="ips-include-identifiers"
+                    checked={includePatientIdentifiers}
+                    onCheckedChange={setIncludePatientIdentifiers}
+                    aria-label={x.includeIdentifiers}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-card p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <ImageIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div>
+                      <label htmlFor="ips-include-images" className="text-sm font-medium">{x.includeImages}</label>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{x.includeImagesDescription}</p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="ips-include-images"
+                    checked={includeImageAttachments}
+                    onCheckedChange={setIncludeImageAttachments}
+                    aria-label={x.includeImages}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold">{x.problemCandidatesTitle}</h3>
+                <p className="mb-3 mt-1 text-xs leading-relaxed text-muted-foreground">{x.problemCandidatesDescription}</p>
+                <InferredProblemsReview
+                  status={inferred.status}
+                  problems={inferred.problems}
+                  confirmedIds={inferred.confirmedIds}
+                  confirmedCount={inferred.confirmedCount}
+                  available={inferred.available}
+                  error={inferred.error}
+                  onRun={inferred.run}
+                  onToggle={inferred.toggleConfirm}
+                  summaryCount={inferred.summaryProblemCount}
+                  onImportEncounterIcds={inferred.importEncounterIcds}
+                  onRemoveEncounterIcds={inferred.removeEncounterIcds}
+                  onRemoveAiProblems={inferred.removeAiProblems}
+                  encounterIcdCount={inferred.encounterIcdCount}
+                />
+              </div>
+
+              <div className="border-t pt-4">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold">{x.scopeTab}</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{x.help}</p>
+                </div>
+                <IpsDataScopePanel bundle={bundle} curatedData={curatedData} />
+              </div>
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet"
 import { DataSelectionFeature } from "../Feature"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
+import type { DataConsumer } from "@/src/application/providers/data-selection.provider"
 
 export interface DataSelectionDrawerProps {
   open: boolean
@@ -23,6 +24,8 @@ export interface DataSelectionDrawerProps {
   /** Last exact full-request overflow, used to turn the selected-only meter
    * into a concrete reduction target instead of a dead-end green bar. */
   overflowIssue?: ContextOverflowIssue | null
+  consumer?: DataConsumer
+  showTemplates?: boolean
 }
 
 /**
@@ -41,6 +44,8 @@ export function DataSelectionDrawer({
   modelId,
   fallbackModelId,
   overflowIssue,
+  consumer = 'insights',
+  showTemplates = true,
 }: DataSelectionDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -60,6 +65,8 @@ export function DataSelectionDrawer({
               fallbackModelId={fallbackModelId}
               overflowIssue={overflowIssue}
               showScopeDescription={false}
+              consumer={consumer}
+              showTemplates={showTemplates}
             />
           </div>
         </ScrollArea>

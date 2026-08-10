@@ -28,7 +28,7 @@ import type {
   SectionMapResult,
 } from './ips-types'
 import { INFERENCE_TAG, IPS_PROFILES, SYSTEM, VITAL_SIGNS_PROFILE } from './ips-constants'
-import { formatDate, makeEntry } from './ips-helpers'
+import { escapeHtml, formatDate, makeEntry } from './ips-helpers'
 import { medicationDirectionsForFhir } from './medication-display'
 
 // ---------------------------------------------------------------------------
@@ -157,13 +157,18 @@ function patientIdentifiers(patient: PatientEntity | null): Array<Record<string,
   return identifiers.length ? identifiers : undefined
 }
 
-export function buildPatient(patient: PatientEntity | null): { entry: IpsBundleEntry; reference: string } {
+export function buildPatient(
+  patient: PatientEntity | null,
+  options: { includeIdentifiers?: boolean; maskedLabel?: string } = {},
+): { entry: IpsBundleEntry; reference: string } {
+  const includeIdentifiers = options.includeIdentifiers !== false
   const name = patient?.name?.[0]
   // Carry whatever the source had — text (TW Core/IPS local-script name),
   // family, given — so a round-trip never drops the name. Only when there is
   // no usable name at all do we fall back to the "Unknown Patient" sentinel.
-  const nameArray =
-    name && (name.text || name.family || name.given?.length)
+  const nameArray = !includeIdentifiers
+    ? [{ text: options.maskedLabel || 'Identity masked by the exporter' }]
+    : name && (name.text || name.family || name.given?.length)
       ? [
           {
             ...(name.text ? { text: name.text } : {}),
@@ -172,7 +177,7 @@ export function buildPatient(patient: PatientEntity | null): { entry: IpsBundleE
           },
         ]
       : [{ text: getPatientDisplayName(patient) }]
-  const identifiers = patientIdentifiers(patient)
+  const identifiers = includeIdentifiers ? patientIdentifiers(patient) : undefined
 
   const resource: FhirResource = {
     resourceType: 'Patient',
@@ -189,9 +194,13 @@ export function buildPatient(patient: PatientEntity | null): { entry: IpsBundleE
         : {}),
     },
     name: nameArray,
+    text: {
+      status: 'generated',
+      div: `<div xmlns="http://www.w3.org/1999/xhtml"><p>${escapeHtml(nameArray[0]?.text || getPatientDisplayName(patient))}</p></div>`,
+    },
     ...(identifiers ? { identifier: identifiers } : {}),
     ...(patient?.gender ? { gender: patient.gender } : {}),
-    ...(patient?.birthDate ? { birthDate: formatDate(patient.birthDate) } : {}),
+    ...(includeIdentifiers && patient?.birthDate ? { birthDate: formatDate(patient.birthDate) } : {}),
   }
   return makeEntry(resource)
 }
@@ -288,6 +297,7 @@ function problemCode(c: ConditionEntity): FhirCodeableConcept {
 
 export function mapProblemList(conditions: ConditionEntity[], patientRef: string): SectionMapResult {
   const entries = conditions.map((c) => {
+    const conditionLabel = c.code?.text || c.code?.coding?.[0]?.display || c.code?.coding?.[0]?.code || 'Unknown problem'
     const resource: FhirResource = {
       resourceType: 'Condition',
       meta: {
@@ -309,6 +319,10 @@ export function mapProblemList(conditions: ConditionEntity[], patientRef: string
         { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/condition-category', code: 'problem-list-item' }] },
       ],
       code: problemCode(c),
+      text: {
+        status: 'generated',
+        div: `<div xmlns="http://www.w3.org/1999/xhtml"><p>${escapeHtml(conditionLabel)}</p></div>`,
+      },
       subject: { reference: patientRef },
       ...(c.onsetDateTime ? { onsetDateTime: formatDate(c.onsetDateTime) } : {}),
       ...(c.recordedDate ? { recordedDate: formatDate(c.recordedDate) } : {}),
