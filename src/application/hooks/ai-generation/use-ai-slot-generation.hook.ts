@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
+import { isVghtpeMedcloudLaunchUrl } from '@/src/application/launch/medcloud-launch-context'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience, type Audience } from '@/src/application/providers/audience.provider'
@@ -327,6 +328,12 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const scopeSlotSuffix = slotKey ? `::ctx-${inputSignature}` : ''
   const cancellationEpochsRef = useRef<Map<string, number>>(new Map())
   const autoTriggeredRef = useRef<string | null>(null)
+  // The exact medcloud launch has its own credential-gated, message-id-scoped
+  // runner. Suppress saved background auto-run preferences on this route so a
+  // previous public-provider choice cannot send patient data before the
+  // Extension credential is authenticated, or duplicate the launch request.
+  const medcloudLaunchOwnsAutoRun = typeof window !== 'undefined' &&
+    isVghtpeMedcloudLaunchUrl(window.location.href)
 
   const exactResult = store((s) => (slotKey ? s.byKey[slotKey] : undefined))
   const setResult = store((s) => s.setResult)
@@ -649,7 +656,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // applied in resolvedModelId.
   useEffect(() => {
     if (!shouldAutoRunSummarySlot({
-      enabled: autoRunEnabled && selectedModelReady && !bundleTransitionActive && !demoSnapshotExpected,
+      enabled: autoRunEnabled &&
+        !medcloudLaunchOwnsAutoRun &&
+        selectedModelReady &&
+        !bundleTransitionActive &&
+        !demoSnapshotExpected,
       authLoading,
       slotKey,
       busy: isAnyRunning,
@@ -661,7 +672,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     })) return
     autoTriggeredRef.current = autoRunIdentity
     void generate()
-  }, [autoRunEnabled, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generate])
+  }, [autoRunEnabled, medcloudLaunchOwnsAutoRun, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generate])
 
   return {
     patientId,

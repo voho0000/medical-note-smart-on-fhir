@@ -94,6 +94,7 @@ import type {
   SummaryUrgency,
   TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
+import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook"
 
 type SummaryView = "standard" | "custom"
 
@@ -199,6 +200,14 @@ export default function MedicalSummaryFeature() {
     resolveSafetySource,
     activeGeneration,
   } = useMedicalSummaryOrchestrator()
+  useMedcloudAutoSummary({
+    hasPatient,
+    dataReady,
+    isGenerating: isBusy,
+    isRestoring,
+    modelId: model,
+    generate,
+  })
   const [overflowGuidance, setOverflowGuidance] = useState<ContextOverflowIssue | null>(null)
 
   // Keep the exact reduction target visible while the user edits the scope.

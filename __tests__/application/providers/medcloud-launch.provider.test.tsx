@@ -1,3 +1,4 @@
+import { webcrypto } from 'crypto'
 import { act, render, waitFor } from '@testing-library/react'
 import { MedcloudLaunchProvider } from '@/src/application/providers/medcloud-launch.provider'
 import {
@@ -10,10 +11,25 @@ import { useModelPrefsStore } from '@/src/application/stores/model-prefs.store'
 import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 import { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store'
 import { createEmptyOpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 
 const launchHref = 'https://mediprisma.tw/app/?medcloud2=auto&site=vghtpe'
+const ENCRYPTED_RUNTIME_SECRET =
+  'a256gcm.v1.AAECAwQFBgcICQoL.xdA13rrC_SiHbJycmQY.VPy_M14qGoZF29EY9sG1Qw'
+const jsdomCrypto = globalThis.crypto
 
-function extensionMessage(messageId = 'message-1', credential = 'runtime-secret') {
+beforeAll(() => {
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true })
+})
+
+afterAll(() => {
+  Object.defineProperty(globalThis, 'crypto', { value: jsdomCrypto, configurable: true })
+})
+
+function extensionMessage(
+  messageId = 'message-1',
+  credential = ENCRYPTED_RUNTIME_SECRET,
+) {
   const event = new MessageEvent('message', {
     data: {
       source: 'medcloud2-extension',
@@ -44,6 +60,7 @@ describe('MedcloudLaunchProvider', () => {
     })
     useSummaryPrefsStore.setState({ modelId: 'gemini-2.5-flash-lite' })
     useSafetyPrefsStore.setState({ modelId: 'gemini-2.5-flash-lite' })
+    useMedcloudLaunchStore.getState().clear()
   })
 
   afterEach(() => postMessage.mockRestore())
@@ -70,6 +87,7 @@ describe('MedcloudLaunchProvider', () => {
     })
     expect(useSummaryPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
     expect(useSafetyPrefsStore.getState().modelId).toBe(VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID)
+    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBe('message-1')
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({
       source: 'mediprisma',
       type: MEDCLOUD_LAUNCH_CONTEXT_ACK_TYPE,
@@ -100,6 +118,58 @@ describe('MedcloudLaunchProvider', () => {
       useAiConfigStore.getState().openAiCompatibleProfiles[0]?.profileId,
     ).toBe(VGTPE_TVGHBRAIN_PROFILE_ID))
     expect(postMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('acknowledges a successful retry without queuing or decrypting it again', async () => {
+    render(
+      <MedcloudLaunchProvider launchHref={launchHref}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    act(() => window.dispatchEvent(extensionMessage()))
+    await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(1))
+    expect(useMedcloudLaunchStore.getState().claimSummary('message-1')).toBe(true)
+
+    act(() => window.dispatchEvent(extensionMessage()))
+
+    expect(postMessage).toHaveBeenCalledTimes(2)
+    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
+  })
+
+  it('does not acknowledge or install a profile when authentication fails', async () => {
+    render(
+      <MedcloudLaunchProvider launchHref={launchHref}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+
+    act(() => window.dispatchEvent(extensionMessage(
+      'message-invalid',
+      `${ENCRYPTED_RUNTIME_SECRET.slice(0, -1)}A`,
+    )))
+
+    await act(async () => { await Promise.resolve() })
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
+    expect(postMessage).not.toHaveBeenCalled()
+  })
+
+  it('clears the in-memory credential and queued launch on page exit', async () => {
+    render(
+      <MedcloudLaunchProvider launchHref={launchHref}>
+        <div>app</div>
+      </MedcloudLaunchProvider>,
+    )
+    act(() => window.dispatchEvent(extensionMessage()))
+    await waitFor(() => expect(
+      useAiConfigStore.getState().openAiCompatibleProfiles,
+    ).toHaveLength(1))
+
+    act(() => window.dispatchEvent(new Event('pagehide')))
+
+    expect(useAiConfigStore.getState().openAiCompatibleProfiles).toHaveLength(0)
+    expect(useMedcloudLaunchStore.getState().pendingSummaryMessageId).toBeNull()
   })
 
   it('ignores messages from a different origin', () => {

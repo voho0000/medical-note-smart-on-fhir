@@ -3,6 +3,7 @@
 import { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   createVghtpeTvghbrainRuntimeProfile,
+  decryptVghtpeMedcloudCredential,
   isVghtpeMedcloudLaunchUrl,
   MEDCLOUD_LAUNCH_CONTEXT_ACK_TYPE,
   parseMedcloudLaunchContext,
@@ -10,6 +11,7 @@ import {
   VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID,
   VGTPE_TVGHBRAIN_PROFILE_ID,
 } from '@/src/application/launch/medcloud-launch-context'
+import { useMedcloudLaunchStore } from '@/src/application/launch/medcloud-launch.store'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { useModelPrefsStore } from '@/src/application/stores/model-prefs.store'
 import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
@@ -30,6 +32,8 @@ export function MedcloudLaunchProvider({
   const credentialsHydrating = useAiConfigStore((state) => state.credentialsHydrating)
   const pendingContextRef = useRef<MedcloudLaunchContext | null>(null)
   const processedMessageIdsRef = useRef(new Set<string>())
+  const processingMessageIdsRef = useRef(new Set<string>())
+  const activationEpochRef = useRef(0)
   const resolvedLaunchHref = launchHref ?? (
     typeof window === 'undefined' ? '' : window.location.href
   )
@@ -48,20 +52,21 @@ export function MedcloudLaunchProvider({
     }, launchOrigin)
   }, [launchOrigin])
 
-  const activate = useCallback((context: MedcloudLaunchContext) => {
+  const activate = useCallback((context: MedcloudLaunchContext, apiKey: string) => {
     useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile(
-      createVghtpeTvghbrainRuntimeProfile(context.credential),
+      createVghtpeTvghbrainRuntimeProfile(apiKey),
     )
 
-    // `medcloud2=auto` chooses the hospital model for every user-facing AI
-    // surface but deliberately does not enable automatic generation. Existing
-    // patient-data consent and manual/auto-run preferences remain authoritative.
+    // Select the runtime-only hospital connection everywhere first, then queue
+    // one generation. The summary feature claims that delivery only after its
+    // FHIR input and model/cache hydration are complete.
     const modelId = VGTPE_TVGHBRAIN_LOGICAL_MODEL_ID
     const modelPrefs = useModelPrefsStore.getState()
     modelPrefs.setModelFor('chat', modelId)
     modelPrefs.setModelFor('insights', modelId)
     useSummaryPrefsStore.getState().setModelId(modelId)
     useSafetyPrefsStore.getState().setModelId(modelId)
+    useMedcloudLaunchStore.getState().queueSummary(context.messageId)
 
     const processed = processedMessageIdsRef.current
     processed.add(context.messageId)
@@ -72,6 +77,31 @@ export function MedcloudLaunchProvider({
     }
     acknowledge(context.messageId)
   }, [acknowledge])
+
+  const processContext = useCallback(async (context: MedcloudLaunchContext) => {
+    if (processedMessageIdsRef.current.has(context.messageId)) {
+      acknowledge(context.messageId)
+      return
+    }
+    const processing = processingMessageIdsRef.current
+    if (processing.has(context.messageId)) return
+    processing.add(context.messageId)
+    const activationEpoch = activationEpochRef.current
+    try {
+      const apiKey = await decryptVghtpeMedcloudCredential(context.credential)
+      if (!apiKey || activationEpoch !== activationEpochRef.current) return
+      activate(context, apiKey)
+    } catch {
+      // Fail closed without exposing the credential through an exception or
+      // leaving a partially installed runtime connection behind.
+      useMedcloudLaunchStore.getState().clear()
+      useAiConfigStore.getState().clearRuntimeOpenAiCompatibleProfile(
+        VGTPE_TVGHBRAIN_PROFILE_ID,
+      )
+    } finally {
+      processing.delete(context.messageId)
+    }
+  }, [acknowledge, activate])
 
   useEffect(() => {
     if (!launchOrigin || typeof window === 'undefined') return
@@ -91,30 +121,39 @@ export function MedcloudLaunchProvider({
         pendingContextRef.current = context
         return
       }
-      activate(context)
+      void processContext(context)
     }
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [acknowledge, activate, credentialsHydrating, launchOrigin])
+  }, [acknowledge, credentialsHydrating, launchOrigin, processContext])
 
   useEffect(() => {
     if (credentialsHydrating || !launchOrigin) return
     const pending = pendingContextRef.current
     if (!pending) return
     pendingContextRef.current = null
-    activate(pending)
-  }, [activate, credentialsHydrating, launchOrigin])
+    void processContext(pending)
+  }, [credentialsHydrating, launchOrigin, processContext])
 
   useEffect(() => {
     if (!launchOrigin) return
     const processedMessageIds = processedMessageIdsRef.current
-    return () => {
+    const processingMessageIds = processingMessageIdsRef.current
+    const clearSensitiveLaunchState = () => {
+      activationEpochRef.current += 1
       pendingContextRef.current = null
       processedMessageIds.clear()
+      processingMessageIds.clear()
+      useMedcloudLaunchStore.getState().clear()
       useAiConfigStore.getState().clearRuntimeOpenAiCompatibleProfile(
         VGTPE_TVGHBRAIN_PROFILE_ID,
       )
+    }
+    window.addEventListener('pagehide', clearSensitiveLaunchState)
+    return () => {
+      window.removeEventListener('pagehide', clearSensitiveLaunchState)
+      clearSensitiveLaunchState()
     }
   }, [launchOrigin])
 
