@@ -19,6 +19,7 @@ import {
   type User as FirebaseUser
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore'
+import { useConnectivityStore } from '@/src/application/stores/connectivity.store'
 import { auth, db } from '@/src/shared/config/firebase.config'
 import { QUOTA_CONFIG } from '@/src/shared/config/quota.config'
 import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
@@ -198,7 +199,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const unsubscribe = onSnapshot(
       usageRef,
+      { includeMetadataChanges: true },
       (snapshot) => {
+        useConnectivityStore.getState().setFirestoreConnection(
+          snapshot.metadata.fromCache ? 'cache' : 'server',
+        )
         if (snapshot.exists()) {
           const data = snapshot.data()
           setDailyUsage(data.count || 0)
@@ -210,7 +215,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setWhisperUsage(0)
         }
       },
-      () => {}
+      () => {
+        useConnectivityStore.getState().setFirestoreConnection('unavailable')
+      }
     )
 
     return () => unsubscribe()

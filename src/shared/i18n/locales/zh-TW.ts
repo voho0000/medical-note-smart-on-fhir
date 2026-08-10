@@ -26,6 +26,36 @@ export const zhTW = {
     help: '說明',
     or: '或',
   },
+
+  connectivity: {
+    offline: '目前離線。變更會保留在此分頁並於連線恢復後自動同步，請先不要關閉分頁。',
+    cloudUnavailable: '雲端連線不穩定；目前仍可使用快取資料，待同步變更會自動重試。',
+    pendingSync: '連線較慢，最新對話正在等待同步…',
+    synced: '連線已恢復 · 最新變更已同步',
+    syncError: '雲端同步失敗；對話仍保留在此分頁，下次變更時會再次嘗試。',
+  },
+
+  aiDiagnostics: {
+    title: 'AI 診斷資料預覽',
+    description: '先檢查本次 AI 執行內容，確認後再決定是否下載 JSON。',
+    privacyNotice: '內容可能包含病歷資料與完整 Prompt；下載後請依院內資訊安全規範保存與傳送。',
+    execution: '執行紀錄',
+    model: '模型名稱',
+    modelId: '模型 ID',
+    timestamp: '時間',
+    status: '狀態',
+    prompt: 'Prompt',
+    input: '輸入資料',
+    output: '輸出資料',
+    error: '錯誤資訊',
+    noError: '無錯誤',
+    completed: '完成',
+    failed: '錯誤',
+    aborted: '已中止',
+    close: '關閉',
+    downloadAll: '下載全部紀錄 JSON',
+    downloadThis: '下載此份紀錄 JSON',
+  },
   
   header: {
     title: "MediPrisma · SMART on FHIR",

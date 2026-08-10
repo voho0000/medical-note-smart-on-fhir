@@ -29,6 +29,7 @@ import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/feat
 import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
 import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
 import { useAutoAiConsentState } from "@/src/application/hooks/ai-generation/auto-ai-consent"
+import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
 
 function PageContent() {
   const { t } = useLanguage()
@@ -198,6 +199,7 @@ function PageContent() {
       {/* Email Verification Banner */}
       <div className="px-3 sm:px-6">
         <EmailVerificationBanner />
+        <NetworkStatusBanner />
       </div>
       
       {/* Onboarding state: replace panels with welcome screen */}

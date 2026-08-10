@@ -24,6 +24,36 @@ export const en = {
     help: 'Help',
     or: 'or',
   },
+
+  connectivity: {
+    offline: 'You are offline. Changes stay in this tab and will sync automatically—keep it open until the connection returns.',
+    cloudUnavailable: 'Cloud connection is unstable. Cached data remains available and pending changes will retry automatically.',
+    pendingSync: 'Connection is slow. Your latest chat is waiting to sync…',
+    synced: 'Connection restored · latest changes synced',
+    syncError: 'Cloud sync failed. Your chat remains in this tab; another edit will retry it.',
+  },
+
+  aiDiagnostics: {
+    title: 'AI diagnostics preview',
+    description: 'Review this AI execution before deciding whether to download the JSON file.',
+    privacyNotice: 'This may contain clinical data and the full prompt. Store and share any download according to your organization’s security policy.',
+    execution: 'Execution',
+    model: 'Model name',
+    modelId: 'Model ID',
+    timestamp: 'Timestamp',
+    status: 'Status',
+    prompt: 'Prompt',
+    input: 'Input data',
+    output: 'Output data',
+    error: 'Error information',
+    noError: 'No error',
+    completed: 'Completed',
+    failed: 'Error',
+    aborted: 'Aborted',
+    close: 'Close',
+    downloadAll: 'Download all records JSON',
+    downloadThis: 'Download this record JSON',
+  },
   
   header: {
     title: "MediPrisma · SMART on FHIR",
