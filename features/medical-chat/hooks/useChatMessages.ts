@@ -5,7 +5,7 @@
  * Note: Renamed from useChatMessages to avoid confusion with the provider hook.
  */
 import { useCallback } from "react"
-import { useChatMessages, useSetChatMessages, type ChatMessage } from "@/src/application/stores/chat.store"
+import { useChatMessages, useSetChatMessages } from "@/src/application/stores/chat.store"
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useSendMessage } from "@/src/application/hooks/chat/use-send-message.hook"
@@ -45,7 +45,10 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
 
       try {
         // Call AI with prepared messages
-        const result = await ai.query(messages, { modelId: model })
+        const result = await ai.query(messages, {
+          modelId: model,
+          diagnosticFeature: 'medical-chat',
+        })
         
         // State management: Add assistant response
         const assistantMessage = sendMessage.createMessage(

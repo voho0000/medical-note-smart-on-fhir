@@ -34,6 +34,7 @@ import { resolveDefaultOpenAiCompatibleProfile } from '@/src/shared/utils/openai
 import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 // Persist a completed interpretation so a page reload reuses it instead of
 // re-billing. Same lifecycle/key discipline as the safety scan cache.
@@ -156,6 +157,7 @@ export function useReportInterpretation(
       if (useStore.getState().running[compositeKey]) return
       const myKey = compositeKey
       if (force) clearSlot(myKey)
+      useAiExecutionDiagnosticsStore.getState().clearOperation(myKey)
       await runGenerationJob({
         store: useStore,
         key: myKey,
@@ -173,6 +175,8 @@ export function useReportInterpretation(
           let full = ''
           await ai.stream(messages, {
             modelId: effectiveModelId,
+            operationKey: myKey,
+            diagnosticFeature: 'report-interpretation',
             onChunk: (chunk: string) => {
               full = chunk
             },

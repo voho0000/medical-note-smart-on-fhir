@@ -57,6 +57,7 @@ import {
 import { getUserErrorMessage } from '@/src/core/errors'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -159,6 +160,10 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   }, [audience])
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
+    useAiExecutionDiagnosticsStore.getState().clearOperationFeature(
+      ctx.operationKey,
+      'medical-summary',
+    )
     const outputLocale: 'en' | 'zh-TW' = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
     const longitudinalInvestigationContext = ctx.clinicalData
       ? buildLongitudinalInvestigationContext(ctx.clinicalData, ctx.catalog)
@@ -211,6 +216,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       const full = await ctx.ai.stream(messages, {
         modelId: ctx.modelId,
         operationKey: ctx.operationKey,
+        diagnosticFeature: 'medical-summary',
         throwOnAbort: true,
         // Structured JSON is more reliable on OpenAI-compatible local models
         // when sampling is deterministic. Providers that require/omit a fixed
@@ -245,6 +251,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         const full = await ctx.ai.stream(initialBatchMessages, {
           modelId: ctx.modelId,
           operationKey: ctx.operationKey,
+          diagnosticFeature: 'medical-summary',
           throwOnAbort: true,
           temperature: 0,
           ...(isCustomOpenAiModelId(ctx.modelId) ? { reasoningEffort: 'low' as const } : {}),

@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
+import { Bug, ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
@@ -94,6 +94,9 @@ import type {
   SummaryUrgency,
   TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
+import { useAiExecutionDiagnosticsStore } from "@/src/application/stores/ai-execution-diagnostics.store"
+import { downloadAiExecutionDiagnostics } from "@/src/shared/utils/ai-execution-diagnostics"
+import { AiExecutionDiagnosticsDialog } from "@/src/shared/components/AiExecutionDiagnosticsDialog"
 import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook"
 
 type SummaryView = "standard" | "custom"
@@ -137,6 +140,7 @@ export default function MedicalSummaryFeature() {
   const [customUnread, setCustomUnread] = useState(false)
   const [customManagerOpen, setCustomManagerOpen] = useState(false)
   const [dataScopeOpen, setDataScopeOpen] = useState(false)
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [overflowResolutionOpen, setOverflowResolutionOpen] = useState(false)
   const [selectedCustomPanelId, setSelectedCustomPanelId] = useState<string | undefined>()
   const previousLoadingPanelsRef = useRef<Set<string>>(new Set())
@@ -199,6 +203,8 @@ export default function MedicalSummaryFeature() {
     hasCompleteResult,
     resolveSafetySource,
     activeGeneration,
+    summaryGenerationSlotKey,
+    safetyGenerationSlotKey,
   } = useMedicalSummaryOrchestrator()
   useMedcloudAutoSummary({
     hasPatient,
@@ -208,6 +214,31 @@ export default function MedicalSummaryFeature() {
     modelId: model,
     generate,
   })
+  const allAiDiagnostics = useAiExecutionDiagnosticsStore((state) => state.records)
+  const visibleAiDiagnostics = useMemo(() => {
+    if (activeView === "custom") {
+      return allAiDiagnostics.filter((record) => record.feature === "clinical-insights")
+    }
+    return allAiDiagnostics.filter((record) => (
+      record.operationKey === summaryGenerationSlotKey ||
+      record.operationKey === safetyGenerationSlotKey
+    ))
+  }, [activeView, allAiDiagnostics, safetyGenerationSlotKey, summaryGenerationSlotKey])
+  const exportAiDiagnostics = useCallback(() => {
+    if (visibleAiDiagnostics.length === 0) return
+    downloadAiExecutionDiagnostics(
+      activeView === "custom" ? "medical-summary-custom" : "medical-summary",
+      visibleAiDiagnostics,
+    )
+  }, [activeView, visibleAiDiagnostics])
+  const exportOneAiDiagnostic = useCallback((index: number) => {
+    const record = visibleAiDiagnostics[index]
+    if (!record) return
+    downloadAiExecutionDiagnostics(
+      activeView === "custom" ? "medical-summary-custom" : "medical-summary",
+      [record],
+    )
+  }, [activeView, visibleAiDiagnostics])
   const [overflowGuidance, setOverflowGuidance] = useState<ContextOverflowIssue | null>(null)
 
   // Keep the exact reduction target visible while the user edits the scope.
@@ -903,6 +934,26 @@ export default function MedicalSummaryFeature() {
                   {ms.cardLayoutButton}
                 </Button>
               ) : null}
+              <div className="flex justify-end border-t pt-1">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  data-testid="medical-summary-ai-diagnostics-export"
+                  className="h-6 w-6 text-muted-foreground opacity-35 transition-opacity hover:opacity-100"
+                  onClick={() => {
+                    setSummarySettingsOpen(false)
+                    setDiagnosticsOpen(true)
+                  }}
+                  disabled={visibleAiDiagnostics.length === 0}
+                  title={visibleAiDiagnostics.length > 0
+                    ? ms.exportAiDiagnosticsTitle
+                    : ms.exportAiDiagnosticsUnavailable}
+                  aria-label={ms.exportAiDiagnosticsTitle}
+                >
+                  <Bug className="h-3 w-3" />
+                </Button>
+              </div>
             </PopoverContent>
           </Popover>
         </div>
@@ -1082,6 +1133,14 @@ export default function MedicalSummaryFeature() {
         open={customManagerOpen}
         onOpenChange={setCustomManagerOpen}
         initialPanelId={selectedCustomPanelId}
+      />
+      <AiExecutionDiagnosticsDialog
+        open={diagnosticsOpen}
+        onOpenChange={setDiagnosticsOpen}
+        records={visibleAiDiagnostics}
+        labels={t.aiDiagnostics}
+        onDownloadAll={exportAiDiagnostics}
+        onDownloadRecord={exportOneAiDiagnostic}
       />
       <AlertDialog open={overflowResolutionOpen} onOpenChange={setOverflowResolutionOpen}>
         <AlertDialogContent>

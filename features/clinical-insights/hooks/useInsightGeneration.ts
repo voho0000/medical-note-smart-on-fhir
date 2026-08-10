@@ -14,6 +14,7 @@ import {
   type ClinicalContextAdaptation,
 } from '@/src/core/utils/adaptive-clinical-context.utils'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 interface Panel {
   id: string
@@ -116,6 +117,7 @@ export function useInsightGeneration({
       ai.stop()
       const runId = ++runIdRef.current
       const activePanelIds = prepared.map(({ panel }) => panel.id)
+      useAiExecutionDiagnosticsStore.getState().clearFeature('clinical-insights')
 
       // Keep any previous complete result in place while regenerating. For a
       // first run the cards show only a loading state. No partial response is
@@ -157,6 +159,8 @@ export function useInsightGeneration({
             ...(isCustomOpenAiModelId(model)
               ? { temperature: 0, maxTokens: 4096, reasoningEffort: 'low' as const }
               : {}),
+            operationKey: `clinical-insight:${owner}:${panel.id}`,
+            diagnosticFeature: 'clinical-insights',
           })
           if (runIdRef.current !== runId || ownerChanged()) return
           entries[panel.id] = {

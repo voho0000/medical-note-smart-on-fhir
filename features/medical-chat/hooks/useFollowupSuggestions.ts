@@ -57,6 +57,7 @@ export function useFollowupSuggestions(modelId?: string) {
         // endpoint instead of leaking the exchange to the owner-funded helper.
         modelId: modelId || FOLLOWUP_MODEL_ID,
         temperature: 0.7,
+        diagnosticFeature: 'chat-followup-suggestions',
       })
       if (reqId !== reqRef.current) return // a newer request superseded us
       setSuggestions(generateFollowupSuggestionsUseCase.parse(full))

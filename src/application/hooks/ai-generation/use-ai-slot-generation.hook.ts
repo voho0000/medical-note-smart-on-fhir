@@ -456,6 +456,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const generate = useCallback(async () => {
     if (!slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
+    if (store.getState().running[slotKey]) return
     if (contextAdaptation) {
       toast.info(
         formatClinicalContextAdaptationNotice(contextAdaptation, locale),

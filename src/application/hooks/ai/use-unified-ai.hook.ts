@@ -23,6 +23,11 @@ import {
   resolveOpenAiCompatibleProfile,
 } from '@/src/shared/utils/openai-compatible.utils'
 import type { OpenAiCompatibleProfile } from '@/src/shared/types/openai-compatible.types'
+import { modelDisplayLabel } from '@/src/shared/utils/model-access.utils'
+import {
+  useAiExecutionDiagnosticsStore,
+  type AiExecutionStatus,
+} from '@/src/application/stores/ai-execution-diagnostics.store'
 
 interface UseUnifiedAiOptions {
   defaultModel?: string
@@ -39,6 +44,8 @@ interface QueryOptions {
   /** Optional owner identity for cancelling one structured generation slot
    * without aborting background work from another patient/input scope. */
   operationKey?: string
+  /** Human-readable owner included in the downloaded diagnostics bundle. */
+  diagnosticFeature?: string
 }
 
 interface StreamOptions extends QueryOptions {
@@ -57,6 +64,12 @@ interface ActiveAiRequest {
    * profile, so an in-flight request can be aborted without retaining or
    * serialising a second copy of its API key. */
   openAiCompatible: OpenAiCompatibleProfile | null
+}
+
+function diagnosticPrompt(messages: AiMessage[]): string {
+  return messages
+    .map((message) => `[${message.role}]\n${message.content}`)
+    .join('\n\n')
 }
 
 /**
@@ -131,6 +144,31 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         modelId,
         openAiCompatible,
       })
+      const timestamp = new Date().toISOString()
+      let outputData = ''
+      const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
+        useAiExecutionDiagnosticsStore.getState().addRecord({
+          version: 1,
+          id: `${timestamp}:${Math.random().toString(36).slice(2, 10)}`,
+          feature: queryOptions?.diagnosticFeature || 'ai',
+          operationKey: queryOptions?.operationKey ?? null,
+          transport: 'query',
+          modelName: modelDisplayLabel(modelId, openAiCompatible),
+          modelId,
+          timestamp,
+          prompt: diagnosticPrompt(messages),
+          inputData: {
+            messages,
+            temperature: queryOptions?.temperature ?? null,
+            maxTokens: queryOptions?.maxTokens ?? null,
+            responseFormat: queryOptions?.responseFormat ?? null,
+          },
+          outputData,
+          hasError: status === 'error',
+          errorMessage,
+          status,
+        })
+      }
 
       try {
         const queryUseCase = createQueryAiUseCase(liveConfig)
@@ -144,11 +182,17 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           signal: abortController.signal,
         })
 
-        options.onSuccess?.(result.text)
-        return result.text
+        outputData = result.text
+        record('completed')
+        options.onSuccess?.(outputData)
+        return outputData
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') throw err
+        if (err instanceof Error && err.name === 'AbortError') {
+          record('aborted', err.message)
+          throw err
+        }
         const errorMessage = getUserErrorMessage(err)
+        record('error', errorMessage)
         setError(errorMessage)
         options.onError?.(errorMessage)
         throw err
@@ -190,6 +234,33 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
       )
 
       let fullText = ''
+      const timestamp = new Date().toISOString()
+      let recorded = false
+      const record = (status: AiExecutionStatus, errorMessage: string | null = null) => {
+        if (recorded) return
+        recorded = true
+        useAiExecutionDiagnosticsStore.getState().addRecord({
+          version: 1,
+          id: `${timestamp}:${Math.random().toString(36).slice(2, 10)}`,
+          feature: streamOptions?.diagnosticFeature || 'ai',
+          operationKey: streamOptions?.operationKey ?? null,
+          transport: 'stream',
+          modelName: modelDisplayLabel(modelId, openAiCompatible),
+          modelId,
+          timestamp,
+          prompt: diagnosticPrompt(messages),
+          inputData: {
+            messages,
+            temperature: streamOptions?.temperature ?? null,
+            maxTokens: streamOptions?.maxTokens ?? null,
+            responseFormat: streamOptions?.responseFormat ?? null,
+          },
+          outputData: fullText,
+          hasError: status === 'error',
+          errorMessage,
+          status,
+        })
+      }
 
       try {
         // A custom model id must resolve to the exact enabled profile at the
@@ -220,17 +291,23 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
         // Some streaming adapters resolve normally after forwarding an abort
         // instead of rejecting. Structured callers still need a hard stop so
         // they neither parse buffered text nor launch their parse-retry pass.
-        if (abortController.signal.aborted && streamOptions?.throwOnAbort) {
-          const abortError = new Error('The operation was aborted')
-          abortError.name = 'AbortError'
-          throw abortError
+        if (abortController.signal.aborted) {
+          record('aborted', 'The operation was aborted')
+          if (streamOptions?.throwOnAbort) {
+            const abortError = new Error('The operation was aborted')
+            abortError.name = 'AbortError'
+            throw abortError
+          }
+          return fullText
         }
 
         streamOptions?.onComplete?.(fullText)
+        record('completed')
         options.onSuccess?.(fullText)
         return fullText
       } catch (err) {
         if (abortController.signal.aborted) {
+          record('aborted', err instanceof Error ? err.message : 'The operation was aborted')
           if (streamOptions?.throwOnAbort) {
             if (err instanceof Error && err.name === 'AbortError') throw err
             const abortError = new Error('The operation was aborted')
@@ -240,11 +317,13 @@ export function useUnifiedAi(options: UseUnifiedAiOptions = {}) {
           return fullText
         }
         if (err instanceof Error && err.name === 'AbortError') {
+          record('aborted', err.message)
           if (streamOptions?.throwOnAbort) throw err
           return fullText
         }
 
         const errorMessage = getUserErrorMessage(err)
+        record('error', errorMessage)
         setError(errorMessage)
         options.onError?.(errorMessage)
         throw err

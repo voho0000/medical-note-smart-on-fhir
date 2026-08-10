@@ -1113,5 +1113,7 @@ export function useMedicalSummaryOrchestrator() {
     } : null,
     activeBatchId: presentedBatch?.id ?? null,
     lastCompletedBatchId,
+    summaryGenerationSlotKey,
+    safetyGenerationSlotKey,
   }
 }

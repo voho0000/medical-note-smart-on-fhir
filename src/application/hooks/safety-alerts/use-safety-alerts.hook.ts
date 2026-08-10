@@ -36,6 +36,7 @@ import {
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 export { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store'
 
@@ -107,6 +108,10 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const { demographicsReadyForAi } = useAiDemographicsGate()
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<SafetyScanResult | null> => {
+    useAiExecutionDiagnosticsStore.getState().clearOperationFeature(
+      ctx.operationKey,
+      'safety-alerts',
+    )
     const messages = generateSafetyAlertsUseCase.buildMessages({
       clinicalContext: ctx.clinicalContext,
       piiLiterals: ctx.piiLiterals,
@@ -130,6 +135,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     await ctx.ai.stream(messages, {
       modelId: ctx.modelId,
       operationKey: ctx.operationKey,
+      diagnosticFeature: 'safety-alerts',
       throwOnAbort: true,
       onChunk: (chunk: string) => {
         full = chunk
