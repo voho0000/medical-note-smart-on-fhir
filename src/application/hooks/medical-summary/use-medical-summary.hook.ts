@@ -174,13 +174,14 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
     moduleRetryRequestsRef.current.delete(ctx.operationKey)
     const targetModuleIds = retryRequest?.moduleIds ?? [...MEDICAL_SUMMARY_MODULE_IDS]
+    const isLocalModel = isCustomOpenAiModelId(ctx.modelId)
     const promptInput = {
       clinicalContext,
       piiLiterals: ctx.piiLiterals,
       catalog: ctx.catalog,
       locale: outputLocale,
       audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,
-      harnessProfile: isCustomOpenAiModelId(ctx.modelId) ? 'local-small' as const : 'frontier' as const,
+      harnessProfile: isLocalModel ? 'local-small' as const : 'frontier' as const,
     }
     const retryRequests = retryRequest
       ? targetModuleIds.map((moduleId) => ({
@@ -209,6 +210,23 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       throw new ContextOverflowError(overflow, ctx.locale)
     }
 
+    const validationErrorMessage = (
+      moduleId: MedicalSummaryModuleId,
+      code: 'PARSE_FAILED' | 'GROUNDING_FAILED',
+      unknownSourceKeys: string[] = [],
+    ) => (
+      unknownSourceKeys.length > 0
+        ? `${moduleId}: ${code} (unknown source keys: ${unknownSourceKeys.join(', ')})`
+        : `${moduleId}: ${code}`
+    )
+    const markLatestValidationError = (message: string) => {
+      useAiExecutionDiagnosticsStore.getState().markLatestOperationFeatureError(
+        ctx.operationKey,
+        'medical-summary',
+        message,
+      )
+    }
+
     const runModule = async ({
       moduleId,
       messages,
@@ -221,11 +239,13 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         // Structured JSON is more reliable on OpenAI-compatible local models
         // when sampling is deterministic. Providers that require/omit a fixed
         // temperature normalize this option in their adapter.
-        temperature: 0,
-        ...(isCustomOpenAiModelId(ctx.modelId) ? { reasoningEffort: 'low' as const } : {}),
+        ...(isLocalModel
+          ? { temperature: 0, reasoningEffort: 'low' as const }
+          : {}),
       })
       const parsed = generateMedicalSummaryUseCase.parseModuleResult(moduleId, full)
       if (!parsed) {
+        markLatestValidationError(validationErrorMessage(moduleId, 'PARSE_FAILED'))
         return { moduleId, error: 'PARSE_FAILED' as const }
       }
       const unknownSourceKeys = generateMedicalSummaryUseCase.findUnknownSourceKeys(
@@ -237,6 +257,18 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           `[medical-summary:${moduleId}] grounding validation failed; unknown source keys:`,
           unknownSourceKeys,
         )
+      }
+      // Frontier providers historically allow the finalizer to retain an
+      // unknown citation as visibly unverified (and to drop an unknown
+      // timeline ref). Rejecting the entire card was introduced for small
+      // local models and must not turn one stray cloud citation into a card
+      // failure. Local output remains strict and receives a targeted retry.
+      if (isLocalModel && unknownSourceKeys.length > 0) {
+        markLatestValidationError(validationErrorMessage(
+          moduleId,
+          'GROUNDING_FAILED',
+          unknownSourceKeys,
+        ))
         return { moduleId, error: 'GROUNDING_FAILED' as const }
       }
       return { moduleId, result: parsed }
@@ -253,9 +285,11 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
           operationKey: ctx.operationKey,
           diagnosticFeature: 'medical-summary',
           throwOnAbort: true,
-          temperature: 0,
-          ...(isCustomOpenAiModelId(ctx.modelId) ? { reasoningEffort: 'low' as const } : {}),
+          ...(isLocalModel
+            ? { temperature: 0, reasoningEffort: 'low' as const }
+            : {}),
         })
+        const validationErrors: string[] = []
         targetModuleIds.forEach((moduleId) => {
           const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, full)
           const unknownSourceKeys = parsed
@@ -267,9 +301,18 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
               unknownSourceKeys,
             )
           }
+          if (!parsed) {
+            validationErrors.push(validationErrorMessage(moduleId, 'PARSE_FAILED'))
+          } else if (isLocalModel && unknownSourceKeys.length > 0) {
+            validationErrors.push(validationErrorMessage(
+              moduleId,
+              'GROUNDING_FAILED',
+              unknownSourceKeys,
+            ))
+          }
           settled.push({
             status: 'fulfilled',
-            value: parsed && unknownSourceKeys.length === 0
+            value: parsed && (!isLocalModel || unknownSourceKeys.length === 0)
               ? { moduleId, result: parsed }
               : {
                   moduleId,
@@ -277,13 +320,16 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
                 },
           })
         })
+        if (validationErrors.length > 0) {
+          markLatestValidationError(validationErrors.join('; '))
+        }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error
         targetModuleIds.forEach(() => {
           settled.push({ status: 'rejected', reason: error })
         })
       }
-    } else if (isCustomOpenAiModelId(ctx.modelId)) {
+    } else if (isLocalModel) {
       // A user-configured local endpoint remains sequential so a small
       // on-prem model is not unexpectedly hit with several retries at once.
       for (const request of retryRequests) {
@@ -302,11 +348,12 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // every summary into multiple calls would resend the entire patient context
     // and nearly double input tokens. Prefer one batch, then retry only cards
     // whose independently delimited JSON failed to parse or cited a nonexistent
-    // catalog key. Cap automatic retries
-    // at two so a badly failed batch cannot fan out into five full-context calls.
+    // catalog key. Module retries use the compact, module-relevant local prompt,
+    // so retry every failed card once instead of guaranteeing a visible error
+    // whenever more than two cards fail the initial batch.
     // If the whole request failed, preserve the previous medication-only fallback
     // instead of resending every card.
-    if (initialBatchMessages && isCustomOpenAiModelId(ctx.modelId)) {
+    if (initialBatchMessages && isLocalModel) {
       const allRejected = settled.length > 0 && settled.every((outcome) => outcome.status === 'rejected')
       const parseFailedModuleIds = targetModuleIds.filter((moduleId, index) => {
         const outcome = settled[index]
@@ -316,7 +363,6 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         ? ['medications' as const]
         : [...parseFailedModuleIds]
             .sort((left, right) => Number(right === 'medications') - Number(left === 'medications'))
-            .slice(0, 2)
 
       for (const moduleId of retryModuleIds) {
         const moduleIndex = targetModuleIds.indexOf(moduleId)
@@ -369,7 +415,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       clinicalData: ctx.clinicalData ?? undefined,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       locale: outputLocale,
-      strictGrounding: isCustomOpenAiModelId(ctx.modelId),
+      strictGrounding: isLocalModel,
     })
     const generatedAt = Date.now()
     return {

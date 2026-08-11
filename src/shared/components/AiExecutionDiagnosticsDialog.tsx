@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { formatAiExecutionTimestamp } from "@/src/shared/utils/ai-execution-diagnostics"
 
 export interface AiExecutionDiagnosticsPreviewRecord {
   id?: string
@@ -145,6 +146,11 @@ export function AiExecutionDiagnosticsDialog({
                       <span className={`rounded-full px-2 py-0.5 text-[0.6875rem] font-medium ${statusClass(record.status)}`}>
                         {statusLabel(record.status, labels)}
                       </span>
+                      {record.hasError && record.errorMessage ? (
+                        <span className="max-w-full truncate text-xs font-medium text-red-700 dark:text-red-300">
+                          {record.errorMessage}
+                        </span>
+                      ) : null}
                     </span>
                   </AccordionTrigger>
                   <AccordionContent className="min-w-0 space-y-4">
@@ -172,7 +178,9 @@ export function AiExecutionDiagnosticsDialog({
                       </div>
                       <div>
                         <dt className="text-muted-foreground">{labels.timestamp}</dt>
-                        <dd className="font-mono">{record.timestamp}</dd>
+                        <dd className="font-mono" title={record.timestamp}>
+                          {formatAiExecutionTimestamp(record.timestamp)}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground">{labels.status}</dt>

@@ -56,6 +56,8 @@ describe('AiExecutionDiagnosticsDialog', () => {
     expect(screen.getByText('SYSTEM PROMPT')).toBeInTheDocument()
     expect(screen.getByText(/"patient": "masked"/)).toBeInTheDocument()
     expect(screen.getByText('MODEL OUTPUT')).toBeInTheDocument()
+    expect(screen.getByTitle('2026-08-05T02:51:53.866Z')).toHaveTextContent(/\([^)]+\)$/)
+    expect(screen.queryByText('2026-08-05T02:51:53.866Z')).not.toBeInTheDocument()
     expect(onDownloadAll).not.toHaveBeenCalled()
     expect(onDownloadRecord).not.toHaveBeenCalled()
 
@@ -65,5 +67,34 @@ describe('AiExecutionDiagnosticsDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Download all records JSON' }))
     expect(onDownloadAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces an application validation failure in the collapsed record list', () => {
+    render(
+      <AiExecutionDiagnosticsDialog
+        open
+        onOpenChange={jest.fn()}
+        labels={labels}
+        onDownloadAll={jest.fn()}
+        onDownloadRecord={jest.fn()}
+        records={[{
+          id: 'execution-1',
+          modelName: 'tvghbrain3.5',
+          modelId: 'custom-openai:vghtpe-tvghbrain',
+          timestamp: '2026-08-05T02:51:53.866Z',
+          prompt: 'SYSTEM PROMPT',
+          inputData: {},
+          outputData: 'MODEL OUTPUT',
+          hasError: true,
+          errorMessage: 'investigations: GROUNDING_FAILED (unknown source keys: L9)',
+          status: 'error',
+        }]}
+      />,
+    )
+
+    expect(screen.getAllByText('Error').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(
+      'investigations: GROUNDING_FAILED (unknown source keys: L9)',
+    ).length).toBeGreaterThan(0)
   })
 })

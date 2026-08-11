@@ -594,9 +594,9 @@ describe('modular summary generation contract', () => {
       expect(prompt).toContain(`<<<MEDIPRISMA_MODULE:${moduleId}>>>`)
       expect(prompt).toContain(`<<<END_MEDIPRISMA_MODULE:${moduleId}>>>`)
     }
-    expect(prompt.indexOf('<<<MEDIPRISMA_MODULE:medications>>>'))
-      .toBeLessThan(prompt.indexOf('<<<MEDIPRISMA_MODULE:priorities>>>'))
-    expect(prompt).toContain('The medications block is FIRST and MANDATORY')
+    expect(prompt.indexOf('<<<MEDIPRISMA_MODULE:priorities>>>'))
+      .toBeLessThan(prompt.indexOf('<<<MEDIPRISMA_MODULE:medications>>>'))
+    expect(prompt).not.toContain('The medications block is FIRST and MANDATORY')
     expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
@@ -626,6 +626,9 @@ describe('modular summary generation contract', () => {
 
     expect(local[0].content).toContain('NON-NEGOTIABLE EVIDENCE CONTRACT')
     expect(local[0].content).toContain('Never create an active problem from medication evidence alone')
+    expect(local[0].content).toContain('The medications block is FIRST and MANDATORY')
+    expect(local[0].content.indexOf('<<<MEDIPRISMA_MODULE:medications>>>'))
+      .toBeLessThan(local[0].content.indexOf('<<<MEDIPRISMA_MODULE:priorities>>>'))
     expect(local[0].content.length).toBeLessThan(frontier[0].content.length / 2)
   })
 

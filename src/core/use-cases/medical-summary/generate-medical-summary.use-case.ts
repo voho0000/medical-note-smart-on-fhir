@@ -1163,7 +1163,7 @@ const moduleBlockEnd = (moduleId: MedicalSummaryModuleId) =>
 // medication-reconciliation card is the largest block and was therefore the
 // one most often omitted. Parsing remains marker-based, so presentation order
 // and merge order do not depend on this prompt order.
-const BATCH_MODULE_OUTPUT_ORDER: readonly MedicalSummaryModuleId[] = [
+const LOCAL_BATCH_MODULE_OUTPUT_ORDER: readonly MedicalSummaryModuleId[] = [
   'medications',
   'priorities',
   'problems',
@@ -1173,12 +1173,16 @@ const BATCH_MODULE_OUTPUT_ORDER: readonly MedicalSummaryModuleId[] = [
 
 const BATCH_OUTPUT_INSTRUCTION = (
   audience: GenerateMedicalSummaryInput['audience'],
-  moduleIds: readonly MedicalSummaryModuleId[] = BATCH_MODULE_OUTPUT_ORDER,
+  moduleIds: readonly MedicalSummaryModuleId[],
+  localSmallModel: boolean,
 ) => {
-  const orderedModuleIds = BATCH_MODULE_OUTPUT_ORDER.filter((moduleId) =>
+  const preferredOrder = localSmallModel
+    ? LOCAL_BATCH_MODULE_OUTPUT_ORDER
+    : MEDICAL_SUMMARY_MODULE_IDS
+  const orderedModuleIds = preferredOrder.filter((moduleId) =>
     moduleIds.includes(moduleId),
   )
-  const isCompleteBatch = orderedModuleIds.length === BATCH_MODULE_OUTPUT_ORDER.length
+  const isCompleteBatch = orderedModuleIds.length === MEDICAL_SUMMARY_MODULE_IDS.length
   const scopeInstruction = isCompleteBatch
     ? 'Generate all five modules in the exact order shown below. '
     : `Generate only the ${orderedModuleIds.length} requested modules in the exact order shown below. `
@@ -1188,7 +1192,7 @@ const BATCH_OUTPUT_INSTRUCTION = (
 
   return '\n\nBATCH MODULAR OUTPUT CONTRACT: ' + scopeInstruction +
   'Each module is an independent JSON object enclosed by its exact start and end markers. ' +
-  (orderedModuleIds.includes('medications')
+  (localSmallModel && orderedModuleIds.includes('medications')
     ? 'The medications block is FIRST and MANDATORY: finish its complete JSON object and exact end marker before starting any other block. ' +
       'Even when no medication is supported, emit the medications block with the required empty arrays; never skip it. '
     : '') +
@@ -1673,14 +1677,18 @@ export class GenerateMedicalSummaryUseCase {
    * single-module contract above without regenerating successful cards. */
   buildBatchModuleMessages(
     input: GenerateMedicalSummaryInput,
-    moduleIds: readonly MedicalSummaryModuleId[] = BATCH_MODULE_OUTPUT_ORDER,
+    moduleIds: readonly MedicalSummaryModuleId[] = MEDICAL_SUMMARY_MODULE_IDS,
   ): AiMessage[] {
     if (moduleIds.length === 0) {
       throw new Error('At least one medical summary module is required')
     }
     return this.buildMessagesForOutput(
       input,
-      BATCH_OUTPUT_INSTRUCTION(input.audience, moduleIds),
+      BATCH_OUTPUT_INSTRUCTION(
+        input.audience,
+        moduleIds,
+        input.harnessProfile === 'local-small',
+      ),
       moduleIds,
     )
   }
