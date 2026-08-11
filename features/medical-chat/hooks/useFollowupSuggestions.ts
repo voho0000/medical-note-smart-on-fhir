@@ -11,6 +11,7 @@ import {
 } from "@/src/core/use-cases/chat/generate-followup-suggestions.use-case"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { buildPatientTextLiterals } from "@/src/shared/utils/pii-text-scrub"
+import { BUNDLE_CHANGED_EVENT } from '@/src/shared/utils/reset-on-bundle-change'
 
 /**
  * Generates "next step" suggestion chips after a chat answer completes.
@@ -30,6 +31,8 @@ export function useFollowupSuggestions(modelId?: string) {
   // stable and the trigger effect in MedicalChat doesn't churn.
   const streamRef = useRef(ai.stream)
   useEffect(() => { streamRef.current = ai.stream }, [ai.stream])
+  const stopRef = useRef(ai.stop)
+  useEffect(() => { stopRef.current = ai.stop }, [ai.stop])
 
   const [suggestions, setSuggestions] = useState<FollowupSuggestion[]>([])
   const reqRef = useRef(0)
@@ -69,8 +72,17 @@ export function useFollowupSuggestions(modelId?: string) {
 
   const clear = useCallback(() => {
     reqRef.current++ // invalidate any in-flight request
+    stopRef.current()
     setSuggestions([])
   }, [])
+
+  // A same-tab Bundle replacement invalidates the transcript these suggestions
+  // came from. Separate MediPrisma tabs have separate window events, so A may
+  // keep running while B opens elsewhere.
+  useEffect(() => {
+    window.addEventListener(BUNDLE_CHANGED_EVENT, clear)
+    return () => window.removeEventListener(BUNDLE_CHANGED_EVENT, clear)
+  }, [clear])
 
   return { suggestions, generate, clear }
 }

@@ -7,19 +7,19 @@
 //   - The full bundle JSON lives in IndexedDB (large quota — bundles with
 //     inlined base64 imaging can be 16MB+, well over localStorage's ~5MB cap
 //     which throws QuotaExceededError on setItem).
-//   - A tiny presence marker stays in localStorage so `hasData()` can remain
-//     synchronous (it gates the whole data-source decision during render and
-//     must not become a promise).
+//   - A tiny active-import pointer stays in tab-scoped sessionStorage so
+//     `hasData()` remains synchronous without exposing one tab's patient to
+//     another tab.
 //   - The bundle is also cached in a module-level variable for the session so
 //     repeated reads don't hit IndexedDB.
-//   - Bundles written by older builds (full JSON under the same localStorage
-//     key) are migrated to IndexedDB transparently on first read.
+//   - IndexedDB records and image refs are keyed by import id. Bundles written
+//     by older builds under the origin-wide `current` key are migrated on read.
 //
 // Encryption at rest (audit B1, v0.12): everything in IndexedDB — bundle JSON
 // and image Blobs — is AES-GCM ciphertext under a tab-session key (see
-// bundle-crypto.ts). A new tab session that cannot decrypt what it finds
-// purges it, and records older than MAX_BUNDLE_AGE_MS are purged even within
-// a session, so an imported chart never lingers on a shared workstation.
+// bundle-crypto.ts). New imports rotate the key even when sessionStorage was
+// cloned from an opener. Records older than MAX_BUNDLE_AGE_MS are swept on
+// load/import, so an imported chart never lingers on a shared workstation.
 // Plaintext data written by older builds is re-encrypted on first read.
 
 import { FhirMapper } from '../mappers/fhir.mapper'
@@ -41,6 +41,7 @@ import type {
 } from '@/src/core/entities/clinical-data.entity'
 import {
   getSessionBundleKey,
+  rotateSessionBundleKey,
   clearSessionBundleKey,
   isEncryptedRecord,
   encryptBytes,
@@ -48,23 +49,33 @@ import {
   encryptJson,
   decryptJson,
 } from './bundle-crypto'
+import {
+  LOCAL_BUNDLE_DEMO_FLAG_KEY,
+  LOCAL_BUNDLE_IMPORT_MARKER_PREFIX,
+  LOCAL_BUNDLE_MARKER,
+  LOCAL_BUNDLE_STORAGE_KEY,
+  importIdFromLocalBundleMarker,
+  localBundleMarker,
+  readTabLocalImportId,
+} from './local-bundle-scope'
 
-// localStorage key. Holds the small marker `'1'` in the current scheme, but may
-// still hold a full bundle JSON written by an older build (migrated on read).
-const STORAGE_KEY = 'fhir_bundle_override'
-const MARKER = '1'
-const IMPORT_MARKER_PREFIX = 'import:'
+// New builds keep the active pointer in tab-scoped sessionStorage. These local
+// aliases keep the migration code readable while older origin-wide
+// localStorage markers are retired on the first successful load/import.
+const STORAGE_KEY = LOCAL_BUNDLE_STORAGE_KEY
+const MARKER = LOCAL_BUNDLE_MARKER
+const IMPORT_MARKER_PREFIX = LOCAL_BUNDLE_IMPORT_MARKER_PREFIX
 
 // Set while the loaded bundle is the bundled demo patient (試用資料). Owned
 // here so every bundle wipe (import-bundle clear, logout PHI wipe) removes it
 // from one place.
-export const DEMO_FLAG_KEY = 'mediprisma:demo-active'
+export const DEMO_FLAG_KEY = LOCAL_BUNDLE_DEMO_FLAG_KEY
 
 // IndexedDB coordinates for the bundle payload.
 const DB_NAME = 'mediprisma'
 const DB_VERSION = 2
 const STORE = 'bundles'
-const BUNDLE_KEY = 'current'
+const LEGACY_BUNDLE_KEY = 'current'
 // Separate store for inline imaging. At import we move each base64 image out of
 // the bundle into a Blob here (off-heap, disk-backed) and leave only a reference
 // (`_imageRef`) behind. This keeps hundreds of MB of imaging off the JS heap —
@@ -93,11 +104,7 @@ interface PersistedBundleEnvelope {
   bundle: object
 }
 
-function importIdFromMarker(raw: string | null): string | null {
-  if (!raw?.startsWith(IMPORT_MARKER_PREFIX)) return null
-  const importId = raw.slice(IMPORT_MARKER_PREFIX.length).trim()
-  return importId || null
-}
+const importIdFromMarker = importIdFromLocalBundleMarker
 
 function isPersistedBundleEnvelope(value: unknown): value is PersistedBundleEnvelope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -115,6 +122,54 @@ function isPersistedBundleEnvelope(value: unknown): value is PersistedBundleEnve
 // patient.
 const MAX_BUNDLE_AGE_MS = 12 * 60 * 60 * 1000
 
+function readTabBundleMarker(): string | null {
+  try {
+    return sessionStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function readLegacyBundleMarker(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeTabBundleScope(importId: string | null, demo: boolean): void {
+  sessionStorage.setItem(STORAGE_KEY, localBundleMarker(importId))
+  if (demo) sessionStorage.setItem(DEMO_FLAG_KEY, importId ?? MARKER)
+  else sessionStorage.removeItem(DEMO_FLAG_KEY)
+  // Retire the origin-wide pointer used by older builds. The IndexedDB legacy
+  // payload is migrated separately; new tabs must never discover another
+  // tab's active patient through localStorage.
+  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(DEMO_FLAG_KEY)
+}
+
+function clearTabBundleScope(): void {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(DEMO_FLAG_KEY)
+  } catch {
+    // sessionStorage unavailable — in-memory state is still cleared below.
+  }
+}
+
+function bundleRecordKey(importId: string | null): string {
+  return importId ?? LEGACY_BUNDLE_KEY
+}
+
+function migratedImportId(): string {
+  try {
+    return `local-${crypto.randomUUID()}`
+  } catch {
+    return `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  }
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
@@ -128,6 +183,35 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
+async function idbSweepExpiredRecords(now = Date.now()): Promise<void> {
+  const db = await openDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([STORE, IMG_STORE], 'readwrite')
+      for (const storeName of [STORE, IMG_STORE]) {
+        const req = tx.objectStore(storeName).openCursor()
+        req.onsuccess = () => {
+          const cursor = req.result
+          if (!cursor) return
+          if (
+            isEncryptedRecord(cursor.value)
+            && now - cursor.value.savedAt > MAX_BUNDLE_AGE_MS
+          ) {
+            cursor.delete()
+          }
+          cursor.continue()
+        }
+        req.onerror = () => reject(req.error)
+      }
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
 /** Decode raw base64 → binary Blob. Tolerates a stray `data:<mime>;base64,`
  *  prefix even though the bridge omits it. The intermediate Uint8Array is
  *  per-image and short-lived; the resulting Blob is off-heap (disk-backed). */
@@ -139,12 +223,12 @@ function base64ToBlob(base64: string, contentType: string): Blob {
   return new Blob([bytes], { type: contentType || 'image/jpeg' })
 }
 
-async function idbPut(value: unknown): Promise<void> {
+async function idbPut(value: unknown, bundleKey = LEGACY_BUNDLE_KEY): Promise<void> {
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite')
-      tx.objectStore(STORE).put(value, BUNDLE_KEY)
+      tx.objectStore(STORE).put(value, bundleKey)
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
       tx.onabort = () => reject(tx.error)
@@ -154,12 +238,12 @@ async function idbPut(value: unknown): Promise<void> {
   }
 }
 
-async function idbGet<T = unknown>(): Promise<T | null> {
+async function idbGet<T = unknown>(bundleKey = LEGACY_BUNDLE_KEY): Promise<T | null> {
   const db = await openDb()
   try {
     return await new Promise<T | null>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readonly')
-      const req = tx.objectStore(STORE).get(BUNDLE_KEY)
+      const req = tx.objectStore(STORE).get(bundleKey)
       req.onsuccess = () => resolve((req.result as T) ?? null)
       req.onerror = () => reject(req.error)
     })
@@ -168,12 +252,12 @@ async function idbGet<T = unknown>(): Promise<T | null> {
   }
 }
 
-async function idbDelete(): Promise<void> {
+async function idbDelete(bundleKey = LEGACY_BUNDLE_KEY): Promise<void> {
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite')
-      tx.objectStore(STORE).delete(BUNDLE_KEY)
+      tx.objectStore(STORE).delete(bundleKey)
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
       tx.onabort = () => reject(tx.error)
@@ -185,12 +269,14 @@ async function idbDelete(): Promise<void> {
 
 // --- Image Blob store ---------------------------------------------------------
 
-async function idbClearImages(): Promise<void> {
+async function idbDeleteImages(imageIds: string[]): Promise<void> {
+  if (imageIds.length === 0) return
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IMG_STORE, 'readwrite')
-      tx.objectStore(IMG_STORE).clear()
+      const store = tx.objectStore(IMG_STORE)
+      for (const imageId of imageIds) store.delete(imageId)
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
       tx.onabort = () => reject(tx.error)
@@ -198,6 +284,52 @@ async function idbClearImages(): Promise<void> {
   } finally {
     db.close()
   }
+}
+
+/** Delete only image records owned by one import. Cursor deletion avoids
+ * clearing another MediPrisma tab's concurrently-open patient. */
+async function idbDeleteImagesForImport(importId: string): Promise<void> {
+  const prefix = `${importId}:`
+  const db = await openDb()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IMG_STORE, 'readwrite')
+      const req = tx.objectStore(IMG_STORE).openKeyCursor()
+      req.onsuccess = () => {
+        const cursor = req.result
+        if (!cursor) return
+        if (typeof cursor.key === 'string' && cursor.key.startsWith(prefix)) {
+          tx.objectStore(IMG_STORE).delete(cursor.key)
+        }
+        cursor.continue()
+      }
+      req.onerror = () => reject(req.error)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
+}
+
+function legacyImageRefsInBundle(bundle: object | null): string[] {
+  const refs = new Set<string>()
+  const entries = Array.isArray((bundle as { entry?: unknown[] } | null)?.entry)
+    ? (bundle as { entry: any[] }).entry
+    : []
+  for (const entry of entries) {
+    const forms = entry?.resource?.resourceType === 'DiagnosticReport'
+      && Array.isArray(entry.resource.presentedForm)
+      ? entry.resource.presentedForm
+      : []
+    for (const form of forms) {
+      if (typeof form?._imageRef === 'string' && !form._imageRef.includes(':')) {
+        refs.add(form._imageRef)
+      }
+    }
+  }
+  return [...refs]
 }
 
 // Persist all extracted image records in a single transaction (one DB open for
@@ -243,7 +375,10 @@ async function idbGetImage(id: string): Promise<unknown> {
 // Non-image attachments and reports without images are untouched. If a base64
 // payload fails to decode it is LEFT INLINE (the viewer falls back to decoding
 // `data` directly) rather than dropped — we never silently lose data.
-export function prepareImagesForStorage(bundle: any): Array<{ id: string; blob: Blob }> {
+export function prepareImagesForStorage(
+  bundle: any,
+  importId?: string | null,
+): Array<{ id: string; blob: Blob }> {
   const entries: any[] = Array.isArray(bundle?.entry) ? bundle.entry : []
   const toStore: Array<{ id: string; blob: Blob }> = []
   let counter = 0
@@ -261,7 +396,8 @@ export function prepareImagesForStorage(bundle: any): Array<{ id: string; blob: 
       } catch {
         continue // malformed base64 — leave inline for the viewer to attempt
       }
-      const id = `img_${counter++}`
+      const localId = `img_${counter++}`
+      const id = importId ? `${importId}:${localId}` : localId
       toStore.push({ id, blob })
       delete form.data
       form._imageRef = id
@@ -272,24 +408,22 @@ export function prepareImagesForStorage(bundle: any): Array<{ id: string; blob: 
 }
 
 // Strip images out of the bundle (in place), encrypt each one, and persist to
-// the IndexedDB image store. Always clears the previous import's images first
-// (even when this import has none) so stale Blobs don't accumulate. When no
-// session key is available the bundle is left untouched (images stay inline);
-// the caller will then also skip persisting the bundle itself.
-async function extractAndStoreImages(bundle: any): Promise<void> {
+// the import-scoped IndexedDB image keys. Rewriting one import clears only that
+// import's prior images; another open tab's image records are never touched.
+// When no session key is available the bundle is left untouched (images stay
+// inline); the caller will then also skip persisting the bundle itself.
+async function extractAndStoreImages(bundle: any, importId: string | null): Promise<void> {
   if (typeof indexedDB === 'undefined') return
   const key = await getSessionBundleKey({ create: true })
-  if (!key) {
-    await idbClearImages()
-    return
-  }
-  const toStore = prepareImagesForStorage(bundle)
+  if (!key) return
+  const toStore = prepareImagesForStorage(bundle, importId)
   const encrypted: Array<{ id: string; record: unknown }> = []
   for (const { id, blob } of toStore) {
     const bytes = await blob.arrayBuffer()
     encrypted.push({ id, record: await encryptBytes(key, bytes, blob.type) })
   }
-  await idbClearImages()
+  if (importId) await idbDeleteImagesForImport(importId)
+  else await idbDeleteImages(toStore.map(({ id }) => id))
   await idbPutImages(encrypted)
 }
 
@@ -660,36 +794,47 @@ function attachEncounterRefsForMeds(
 
 export const LocalBundleService = {
   // Synchronous presence check. Reads the in-memory cache first (set the moment
-  // a bundle is imported this session) then the localStorage marker. Stays sync
-  // because `shouldUseLocalBundle()` / `hasAnyDataSource()` call it during render.
+  // a bundle is imported this session) then this tab's sessionStorage marker.
+  // The localStorage fallback exists only to migrate pre-tab-isolation builds.
   hasData(): boolean {
     if (typeof window === 'undefined') return false
     if (memBundle !== null) return true
-    return !!localStorage.getItem(STORAGE_KEY)
+    try {
+      if (sessionStorage.getItem(STORAGE_KEY)) return true
+      return !!localStorage.getItem(STORAGE_KEY)
+    } catch {
+      return false
+    }
   },
 
-  /** Import identity of the Bundle this JS realm is actually serving. The
-   * in-memory identity wins over the origin-wide marker because another tab
-   * may overwrite IndexedDB while this tab legitimately keeps its own copy. */
+  /** Import identity of the Bundle this browser tab is actually serving. */
   getActiveImportId(): string | null {
     if (memBundle !== null) return memBundleImportId
     if (typeof window === 'undefined') return null
     try {
-      return importIdFromMarker(localStorage.getItem(STORAGE_KEY))
+      return readTabLocalImportId()
+        ?? importIdFromMarker(localStorage.getItem(STORAGE_KEY))
     } catch {
       return null
     }
   },
 
-  /** Source classification bound to the same Bundle identity. This prevents a
-   * demo loaded in another tab from making this tab's real patient look demo. */
+  /** Source classification bound to this tab's active Bundle identity. */
   isDemoData(): boolean {
     if (memBundle !== null) return memBundleIsDemo
     if (typeof window === 'undefined') return false
     try {
-      const demoMarker = localStorage.getItem(DEMO_FLAG_KEY)
-      const importId = importIdFromMarker(localStorage.getItem(STORAGE_KEY))
-      return importId ? demoMarker === importId : demoMarker === MARKER
+      const tabMarker = sessionStorage.getItem(STORAGE_KEY)
+      if (tabMarker) {
+        const importId = importIdFromMarker(tabMarker)
+        const demoMarker = sessionStorage.getItem(DEMO_FLAG_KEY)
+        return importId ? demoMarker === importId : demoMarker === MARKER
+      }
+      const legacyImportId = importIdFromMarker(localStorage.getItem(STORAGE_KEY))
+      const legacyDemoMarker = localStorage.getItem(DEMO_FLAG_KEY)
+      return legacyImportId
+        ? legacyDemoMarker === legacyImportId
+        : legacyDemoMarker === MARKER
     } catch {
       return false
     }
@@ -698,8 +843,9 @@ export const LocalBundleService = {
   // Persist a bundle. Inline base64 images are first moved out to the IndexedDB
   // Blob store (off-heap) — `extractAndStoreImages` mutates `bundle` in place so
   // the retained copies (memBundle + the JSON in IndexedDB) stay small. Only a
-  // tiny marker goes to localStorage. After save resolves, `memBundle` holds the
-  // stripped bundle, so no image base64 lingers in the JS heap.
+  // tiny active pointer goes to sessionStorage. After save resolves,
+  // `memBundle` holds the stripped bundle, so no image base64 lingers in the JS
+  // heap.
   // Everything persisted is ciphertext; if encryption is unavailable the bundle
   // lives in memory only for this session — never plaintext at rest.
   async save(
@@ -717,12 +863,22 @@ export const LocalBundleService = {
     const demo = options.demo === true
     const sourceMetadata = options.sourceMetadata
     const patientProfile = parseUserEnteredPatientProfile(options.patientProfile)
+    const activeImportId = typeof window !== 'undefined'
+      ? (memBundle !== null ? memBundleImportId : readTabLocalImportId())
+      : null
+    const isNewImport = Boolean(importId && importId !== activeImportId)
     if (typeof window !== 'undefined') {
-      try {
-        await extractAndStoreImages(bundle)
-      } catch {
-        // IndexedDB image store unavailable — keep images inline; the bundle is
-        // still usable and the viewer falls back to decoding `data` directly.
+      if (isNewImport) {
+        // A new import is a new patient-workspace encryption boundary. This is
+        // essential when the browser cloned sessionStorage from an opener tab.
+        await rotateSessionBundleKey()
+        try {
+          await idbSweepExpiredRecords()
+          await extractAndStoreImages(bundle, importId)
+        } catch {
+          // IndexedDB image store unavailable — keep images inline; the bundle is
+          // still usable and the viewer falls back to decoding `data` directly.
+        }
       }
     }
     memBundle = bundle
@@ -744,44 +900,53 @@ export const LocalBundleService = {
             bundle,
           } satisfies PersistedBundleEnvelope
         : bundle
-      await idbPut(await encryptJson(key, persisted))
-      localStorage.setItem(
-        STORAGE_KEY,
-        importId ? `${IMPORT_MARKER_PREFIX}${importId}` : MARKER,
-      )
-      if (demo) localStorage.setItem(DEMO_FLAG_KEY, importId ?? MARKER)
-      else localStorage.removeItem(DEMO_FLAG_KEY)
+      await idbPut(await encryptJson(key, persisted), bundleRecordKey(importId))
+      writeTabBundleScope(importId, demo)
     } catch {
-      // Could not persist ciphertext — make sure no stale marker/payload from a
-      // previous import survives pointing at the wrong data. The current import
-      // still works from the in-memory cache for this session.
+      // Could not persist ciphertext. Detach only this tab and this import;
+      // another MediPrisma tab's Bundle must remain untouched.
       try {
-        localStorage.removeItem(STORAGE_KEY)
-        localStorage.removeItem(DEMO_FLAG_KEY)
-        await idbDelete()
+        await idbDelete(bundleRecordKey(importId))
+        if (importId) await idbDeleteImagesForImport(importId)
       } catch {
         // Best-effort cleanup.
+      }
+      // The Bundle is still active in this tab's memory. Keep its scope marker
+      // so AI/cache/chat ownership remains isolated until reload; load() will
+      // remove the marker if no IndexedDB record exists then.
+      try {
+        writeTabBundleScope(importId, demo)
+      } catch {
+        // sessionStorage unavailable; the in-memory chart remains usable.
       }
     }
   },
 
   async clear(): Promise<void> {
+    const activeImportId = memBundle !== null
+      ? memBundleImportId
+      : readTabLocalImportId()
+    const legacyImageRefs = legacyImageRefsInBundle(memBundle)
     memBundle = null
     memBundleImportId = null
     memBundleIsDemo = false
     memBundleSourceMetadata = null
     memUserEnteredPatientProfile = null
     if (typeof window === 'undefined') return
+    clearTabBundleScope()
+    // Remove only legacy origin-wide markers. New tab-local markers never
+    // touch another tab when this tab clears its patient.
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(DEMO_FLAG_KEY)
     clearSessionBundleKey()
     try {
-      await idbDelete()
+      await idbDelete(bundleRecordKey(activeImportId))
     } catch {
       // Best-effort: the marker is already gone, so hasData() is false regardless.
     }
     try {
-      await idbClearImages()
+      if (activeImportId) await idbDeleteImagesForImport(activeImportId)
+      await idbDeleteImages(legacyImageRefs)
     } catch {
       // Best-effort image cleanup.
     }
@@ -812,24 +977,37 @@ export const LocalBundleService = {
     if (memBundle) return memBundle
     if (typeof window === 'undefined') return null
 
-    // Primary path: IndexedDB.
+    const tabMarker = readTabBundleMarker()
+    const tabImportId = importIdFromMarker(tabMarker)
+    const bundleKey = bundleRecordKey(tabImportId)
+
+    // Primary path: this tab's import-scoped IndexedDB record. With no
+    // tab-local pointer, read only the legacy `current` key for migration.
     try {
-      const fromIdb = await idbGet<unknown>()
+      await idbSweepExpiredRecords()
+      const fromIdb = await idbGet<unknown>(bundleKey)
       if (isEncryptedRecord(fromIdb)) {
-        // Expired (workstation left open) or undecryptable (previous tab
-        // session's data) → purge so the chart never outlives its session.
+        // Expired (workstation left open) → remove only this import's record.
         if (Date.now() - fromIdb.savedAt > MAX_BUNDLE_AGE_MS) {
           await this.clear()
           return null
         }
         const key = await getSessionBundleKey()
         if (!key) {
-          await this.clear()
+          clearTabBundleScope()
+          if (!tabMarker) {
+            localStorage.removeItem(STORAGE_KEY)
+            localStorage.removeItem(DEMO_FLAG_KEY)
+          }
           return null
         }
         try {
           const decrypted = await decryptJson<unknown>(key, fromIdb)
           if (isPersistedBundleEnvelope(decrypted)) {
+            if (tabImportId && decrypted.importId !== tabImportId) {
+              clearTabBundleScope()
+              return null
+            }
             memBundle = decrypted.bundle
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
@@ -837,38 +1015,73 @@ export const LocalBundleService = {
             memUserEnteredPatientProfile = parseUserEnteredPatientProfile(
               decrypted.patientProfile,
             )
-            localStorage.setItem(
-              STORAGE_KEY,
-              `${IMPORT_MARKER_PREFIX}${decrypted.importId}`,
-            )
-            if (decrypted.demo) localStorage.setItem(DEMO_FLAG_KEY, decrypted.importId)
-            else localStorage.removeItem(DEMO_FLAG_KEY)
+            // Older builds stored every envelope under `current`. Move it to
+            // its immutable import key so future tabs cannot overwrite it.
+            if (!tabImportId) {
+              await idbPut(fromIdb, decrypted.importId)
+              await idbDelete(LEGACY_BUNDLE_KEY)
+            }
+            writeTabBundleScope(decrypted.importId, decrypted.demo)
             return decrypted.bundle
           }
           const bundle = decrypted as object
+          const importId = migratedImportId()
           memBundle = bundle
-          memBundleImportId = null
+          memBundleImportId = importId
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           memBundleSourceMetadata = null
           memUserEnteredPatientProfile = null
+          const migrated = {
+            __mediprismaBundle: 1,
+            importId,
+            demo: memBundleIsDemo,
+            bundle,
+          } satisfies PersistedBundleEnvelope
+          await idbPut(await encryptJson(key, migrated), importId)
+          await idbDelete(LEGACY_BUNDLE_KEY)
+          writeTabBundleScope(importId, memBundleIsDemo)
           return bundle
         } catch {
-          await this.clear()
+          // Never delete an undecryptable scoped record: this tab may have
+          // inherited only the pointer while another tab still owns the key.
+          memBundle = null
+          memBundleImportId = null
+          memBundleIsDemo = false
+          memBundleSourceMetadata = null
+          memUserEnteredPatientProfile = null
+          clearTabBundleScope()
+          clearSessionBundleKey()
+          if (!tabMarker) {
+            localStorage.removeItem(STORAGE_KEY)
+            localStorage.removeItem(DEMO_FLAG_KEY)
+          }
           return null
         }
       }
       if (fromIdb) {
         // Plaintext bundle written by an older build — serve it this once and
         // immediately re-encrypt in place so it stops existing as plaintext.
+        const importId = migratedImportId()
         memBundle = fromIdb as object
-        memBundleImportId = null
+        memBundleImportId = importId
         memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
         memBundleSourceMetadata = null
         memUserEnteredPatientProfile = null
         try {
           const key = await getSessionBundleKey({ create: true })
-          if (key) await idbPut(await encryptJson(key, fromIdb))
-          else await idbDelete()
+          if (key) {
+            const migrated = {
+              __mediprismaBundle: 1,
+              importId,
+              demo: memBundleIsDemo,
+              bundle: fromIdb as object,
+            } satisfies PersistedBundleEnvelope
+            await idbPut(await encryptJson(key, migrated), importId)
+            await idbDelete(bundleKey)
+            writeTabBundleScope(importId, memBundleIsDemo)
+          } else {
+            await idbDelete(bundleKey)
+          }
         } catch {
           // Re-encryption failed — leave the in-memory copy serving this session.
         }
@@ -879,13 +1092,14 @@ export const LocalBundleService = {
     }
 
     // Migration path: older builds stored the full bundle JSON under STORAGE_KEY.
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = readLegacyBundleMarker()
     if (raw && raw !== MARKER && !raw.startsWith(IMPORT_MARKER_PREFIX)) {
       try {
         const parsed = JSON.parse(raw)
         if (parsed && (parsed.resourceType === 'Bundle' || Array.isArray(parsed.entry))) {
+          const importId = migratedImportId()
           memBundle = parsed
-          memBundleImportId = null
+          memBundleImportId = importId
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
           memBundleSourceMetadata = null
           memUserEnteredPatientProfile = null
@@ -894,8 +1108,14 @@ export const LocalBundleService = {
           try {
             const key = await getSessionBundleKey({ create: true })
             if (key) {
-              await idbPut(await encryptJson(key, parsed))
-              localStorage.setItem(STORAGE_KEY, MARKER)
+              const migrated = {
+                __mediprismaBundle: 1,
+                importId,
+                demo: memBundleIsDemo,
+                bundle: parsed,
+              } satisfies PersistedBundleEnvelope
+              await idbPut(await encryptJson(key, migrated), importId)
+              writeTabBundleScope(importId, memBundleIsDemo)
             }
           } catch {
             // Migration write failed — keep serving from the in-memory copy.
@@ -904,6 +1124,18 @@ export const LocalBundleService = {
         }
       } catch {
         // Corrupt JSON — treat as no data.
+      }
+    }
+    if (tabMarker) {
+      clearTabBundleScope()
+      clearSessionBundleKey()
+    }
+    if (raw) {
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+        localStorage.removeItem(DEMO_FLAG_KEY)
+      } catch {
+        // Storage unavailable; there is no plaintext fallback.
       }
     }
     return null
@@ -1187,11 +1419,11 @@ export const LocalBundleService = {
     } satisfies PersistedBundleEnvelope
 
     // Update in-memory state only after the encrypted IndexedDB write succeeds.
-    await idbPut(await encryptJson(key, persisted))
-    localStorage.setItem(
-      STORAGE_KEY,
-      `${IMPORT_MARKER_PREFIX}${memBundleImportId}`,
+    await idbPut(
+      await encryptJson(key, persisted),
+      bundleRecordKey(memBundleImportId),
     )
+    writeTabBundleScope(memBundleImportId, memBundleIsDemo)
     memUserEnteredPatientProfile = normalized
   },
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { fhirClient, LocalBundleModeError, shouldUseLocalBundle, hasSmartContext } from '@/src/infrastructure/fhir/client/fhir-client.service'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
 import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
 
@@ -14,6 +15,12 @@ import { getPatientDisplayName } from '@/src/core/entities/patient.entity'
  * a friendly label instead of leaking the raw string.
  */
 export const LOCAL_BUNDLE_FHIR_URL = 'local-bundle'
+export const localBundleFhirUrl = (importId: string | null): string => (
+  importId ? `${LOCAL_BUNDLE_FHIR_URL}:${importId}` : LOCAL_BUNDLE_FHIR_URL
+)
+export const isLocalBundleFhirUrl = (value: string | null | undefined): boolean => (
+  value === LOCAL_BUNDLE_FHIR_URL || value?.startsWith(`${LOCAL_BUNDLE_FHIR_URL}:`) === true
+)
 
 interface FhirContext {
   patientId: string | null
@@ -36,7 +43,7 @@ export function useFhirContext(): FhirContext {
       // save + load both target the same partition in Firestore.
       if (shouldUseLocalBundle()) {
         if (mounted) {
-          setFhirServerUrl(LOCAL_BUNDLE_FHIR_URL)
+          setFhirServerUrl(localBundleFhirUrl(LocalBundleService.getActiveImportId()))
           setIsLoadingServer(false)
         }
         return

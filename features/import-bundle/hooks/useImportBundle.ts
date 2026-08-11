@@ -14,7 +14,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 import { shouldUseLocalBundle } from '@/src/infrastructure/fhir/client/fhir-client.service'
-import { purgeAiResultCaches } from '@/src/infrastructure/cache/encrypted-session-cache'
+import {
+  purgeAiResultCaches,
+  purgeExpiredAiResultCaches,
+} from '@/src/infrastructure/cache/encrypted-session-cache'
 import {
   clearLocalImportAiConsent,
   markLocalImportAiConsentReady,
@@ -73,7 +76,11 @@ export function useImportBundle(): UseImportBundleReturn {
     let active = true
     const reconcileInitialState = async () => {
       if (LocalBundleService.hasData()) {
-        await LocalBundleService.load()
+        // A freshly opened tab may have inherited sessionStorage from an
+        // opener while the bridge immediately starts a new import. Serialize
+        // startup reconciliation with save/clear so a late legacy load cannot
+        // overwrite the newly imported tab scope in memory.
+        await serializeLocalBundleMutation(() => LocalBundleService.load())
       }
       if (active) sync()
     }
@@ -122,6 +129,7 @@ export function useImportBundle(): UseImportBundleReturn {
     // bundles share a patient id). Drop the persisted AI caches here; the
     // in-memory AI stores reset off the notifyBundleChanged() event below. This
     // is the same cleanup clear() does — import = clear-then-load.
+    purgeExpiredAiResultCaches()
     purgeAiResultCaches()
     setHasBundle(true)
     setBundleIsActive(shouldUseLocalBundle())
@@ -181,11 +189,12 @@ export function useImportBundle(): UseImportBundleReturn {
 
   const clear = useCallback(async () => {
     await serializeLocalBundleMutation(async () => {
+      const importId = LocalBundleService.getActiveImportId()
       clearLocalImportAiConsent()
       await LocalBundleService.clear() // also removes the demo flag
       // Clearing the bundle must also drop cached AI results (safety scan,
       // insights) so re-importing the same patient starts fresh, not stale.
-      purgeAiResultCaches()
+      purgeAiResultCaches(importId)
       setHasBundle(false)
       setBundleIsActive(false)
       setIsDemo(false)

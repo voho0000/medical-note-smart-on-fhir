@@ -9,6 +9,7 @@ import { useChatMessages, useSetChatMessages } from "@/src/application/stores/ch
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useSendMessage } from "@/src/application/hooks/chat/use-send-message.hook"
+import { readTabLocalImportId } from '@/src/infrastructure/fhir/services/local-bundle-scope'
 
 export function useChatMessagesHandler(systemPrompt: string, model: string) {
   const chatMessages = useChatMessages()
@@ -42,6 +43,8 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
       // State management: Add user message optimistically
       const userMessage = sendMessage.createMessage("user", input.trim())
       setChatMessages((prev) => [...prev, userMessage])
+      const importId = readTabLocalImportId()
+      const ownsCurrentImport = () => readTabLocalImportId() === importId
 
       try {
         // Call AI with prepared messages
@@ -50,6 +53,9 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
           diagnosticFeature: 'medical-chat',
         })
         
+        // A same-tab import may have replaced this patient while the request
+        // was in flight. A different tab keeps its own sessionStorage scope.
+        if (!ownsCurrentImport()) return
         // State management: Add assistant response
         const assistantMessage = sendMessage.createMessage(
           "assistant",
@@ -58,6 +64,7 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
         )
         setChatMessages((prev) => [...prev, assistantMessage])
       } catch (err) {
+        if (!ownsCurrentImport()) return
         const errorMessage = getUserErrorMessage(err)
         
         // State management: Add error message

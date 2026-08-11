@@ -47,8 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     useAiConfigStore.getState().clearAllKeys()
     clearSessionKey()
+    const importId = LocalBundleService.getActiveImportId()
     await LocalBundleService.clear()
-    purgeAiResultCaches()
+    purgeAiResultCaches(importId)
     notifyBundleChanged()
     await queryClient.invalidateQueries()
   }

@@ -24,6 +24,7 @@ jest.mock('@/src/infrastructure/fhir/client/fhir-client.service', () => ({
 
 jest.mock('@/src/infrastructure/cache/encrypted-session-cache', () => ({
   purgeAiResultCaches: jest.fn(),
+  purgeExpiredAiResultCaches: jest.fn(),
 }))
 
 jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
