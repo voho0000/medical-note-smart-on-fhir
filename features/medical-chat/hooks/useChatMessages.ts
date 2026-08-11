@@ -9,7 +9,7 @@ import { useChatMessages, useSetChatMessages } from "@/src/application/stores/ch
 import { useUnifiedAi } from "@/src/application/hooks/ai/use-unified-ai.hook"
 import { getUserErrorMessage } from "@/src/core/errors"
 import { useSendMessage } from "@/src/application/hooks/chat/use-send-message.hook"
-import { readTabLocalImportId } from '@/src/infrastructure/fhir/services/local-bundle-scope'
+import { getActiveLocalBundleImportId } from '@/src/application/services/local-bundle-scope.service'
 
 export function useChatMessagesHandler(systemPrompt: string, model: string) {
   const chatMessages = useChatMessages()
@@ -43,8 +43,8 @@ export function useChatMessagesHandler(systemPrompt: string, model: string) {
       // State management: Add user message optimistically
       const userMessage = sendMessage.createMessage("user", input.trim())
       setChatMessages((prev) => [...prev, userMessage])
-      const importId = readTabLocalImportId()
-      const ownsCurrentImport = () => readTabLocalImportId() === importId
+      const importId = getActiveLocalBundleImportId()
+      const ownsCurrentImport = () => getActiveLocalBundleImportId() === importId
 
       try {
         // Call AI with prepared messages
