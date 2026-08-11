@@ -1,9 +1,18 @@
 # Dependabot keeps dependencies and GitHub Actions up to date.
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates
 version: 2
+registries:
+  voho0000-github-packages:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    scope: "@voho0000"
+    token: ${{secrets.PACKAGES_TOKEN}}
+
 updates:
   - package-ecosystem: npm
     directory: "/"
+    registries:
+      - voho0000-github-packages
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

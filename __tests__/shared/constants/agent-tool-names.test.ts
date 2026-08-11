@@ -8,6 +8,7 @@ describe('agent-tool-names.constants', () => {
       expect(AGENT_TOOL_NAMES).toContain('queryAllergies')
       expect(AGENT_TOOL_NAMES).toContain('queryObservations')
       expect(AGENT_TOOL_NAMES).toContain('queryDiagnosticReports')
+      expect(AGENT_TOOL_NAMES).toContain('queryLabResultsByCategory')
       expect(AGENT_TOOL_NAMES).toContain('queryProcedures')
       expect(AGENT_TOOL_NAMES).toContain('queryEncounters')
       expect(AGENT_TOOL_NAMES).toContain('searchMedicalLiterature')

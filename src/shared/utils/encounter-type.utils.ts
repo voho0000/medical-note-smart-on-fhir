@@ -37,6 +37,14 @@ export function getEncounterKindText(encounter: any): string | undefined {
   return entry?.text || entry?.coding?.[0]?.display
 }
 
+/** Convenience: machine-readable kind code (including v1.6 TCM/dental values). */
+export function getEncounterKindCode(encounter: any): string | undefined {
+  const entry = findEncounterTypeBySystem(encounter, ENCOUNTER_KIND_SYSTEM)
+  return entry?.coding?.find(
+    (coding: any) => coding?.system === ENCOUNTER_KIND_SYSTEM,
+  )?.code
+}
+
 /** Convenience: channel text ("IC卡資料" / "申報資料") if v0.9.2 emits it. */
 export function getEncounterChannelText(encounter: any): string | undefined {
   const entry = findEncounterTypeBySystem(encounter, ENCOUNTER_CHANNEL_SYSTEM)

@@ -1,4 +1,5 @@
 import {
+  generateReportInterpretationUseCase,
   LONG_DOCUMENT_INPUT_CHAR_CAP,
   REPORT_INPUT_CHAR_CAP,
   prepareReportText,
@@ -40,5 +41,21 @@ describe('prepareReportText', () => {
       coverage: 'full',
       mode: 'long-document',
     })
+  })
+
+  it('masks patient literals in unlabeled report prose before clamping', () => {
+    const prepared = prepareReportText('王小明右肺結節，建議追蹤。', 'standard', ['王小明'])
+    expect(prepared.text).toBe('[已遮蔽]右肺結節，建議追蹤。')
+  })
+
+  it('masks patient literals in the report title at the final outbound boundary', () => {
+    const messages = generateReportInterpretationUseCase.buildMessages({
+      reportTitle: '王小明胸部 CT',
+      reportText: 'No acute finding.',
+      piiLiterals: ['王小明'],
+      locale: 'zh-TW',
+    })
+    expect(messages[1].content).not.toContain('王小明')
+    expect(messages[1].content).toContain('Report title: [已遮蔽]胸部 CT')
   })
 })

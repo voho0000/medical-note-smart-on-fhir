@@ -5,6 +5,10 @@ import { useChatHistoryStore } from '@/src/application/stores/chat-history.store
 import { getChatSessionRepository } from '@/src/application/composition.chat'
 import { LoadChatSessionUseCase } from '@/src/core/use-cases/chat/load-chat-session.use-case'
 import { logger } from '@/src/shared/services/logger.service'
+import {
+  isChatDataScope,
+  type ChatDataScope,
+} from '@/src/core/entities/chat-message.entity'
 // Note: we mutate isTemporaryMode via useChatStore.getState() instead of a
 // subscribing selector — loadSession is an imperative action, no need to
 // re-render this hook when temp mode flips.
@@ -16,6 +20,7 @@ const chatSessionLogger = logger.scope('Chat Session')
 export function useChatSession() {
   const { user } = useAuth()
   const setMessages = useChatStore(state => state.setMessages)
+  const setChatDataScope = useChatStore(state => state.setChatDataScope)
   const setCurrentSessionId = useChatHistoryStore(state => state.setCurrentSessionId)
 
   const loadSession = useCallback(async (sessionId: string) => {
@@ -32,6 +37,15 @@ export function useChatSession() {
         // auto-exit temporary mode so further edits get saved.
         useChatStore.getState().setIsTemporaryMode(false)
         setMessages(session.messages)
+        const savedScope = [...session.messages]
+          .reverse()
+          .find((message) => isChatDataScope(message.dataScope))
+          ?.dataScope
+        setChatDataScope(savedScope ?? (
+          session.patientId && session.patientId !== 'no-patient'
+            ? 'patient'
+            : 'general'
+        ))
         setCurrentSessionId(session.id)
 
         return session
@@ -42,12 +56,13 @@ export function useChatSession() {
       chatSessionLogger.error('Failed to load', error)
       throw error
     }
-  }, [user?.uid, setMessages, setCurrentSessionId])
+  }, [user, setMessages, setChatDataScope, setCurrentSessionId])
 
-  const startNewSession = useCallback(() => {
+  const startNewSession = useCallback((defaultScope: ChatDataScope = 'general') => {
     setMessages([])
+    setChatDataScope(defaultScope)
     setCurrentSessionId(null)
-  }, [setMessages, setCurrentSessionId])
+  }, [setMessages, setChatDataScope, setCurrentSessionId])
 
   return {
     loadSession,

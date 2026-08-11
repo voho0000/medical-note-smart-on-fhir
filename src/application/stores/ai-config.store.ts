@@ -70,6 +70,8 @@ interface AiConfigState {
   deleteOpenAiCompatibleConfig: (profileId: string) => void
   setOpenAiCompatibleConfig: (config: OpenAiCompatibleConfig) => Promise<void>
   setOpenAiCompatibleEnabled: (enabled: boolean) => Promise<void>
+  setRuntimeOpenAiCompatibleProfile: (profile: OpenAiCompatibleProfile) => void
+  clearRuntimeOpenAiCompatibleProfile: (profileId: string) => void
   clearOpenAiCompatibleConfig: () => void
   setStorageType: (type: StorageType) => Promise<void>
   clearAllKeys: () => void
@@ -272,6 +274,7 @@ const resetOpenAiCompatibleAgentTrust = <T extends object>(value: T) => ({
 })
 
 const LEGACY_SUGGESTED_CONTEXT_WINDOW = 15000
+const PREVIOUS_DEFAULT_SUGGESTED_CONTEXT_WINDOW = 32768
 
 const normalizeStoredOpenAiCompatibleConfig = (
   value: unknown,
@@ -301,10 +304,12 @@ const normalizeStoredOpenAiCompatibleConfig = (
       baseUrl,
       modelId,
       transport: normalizeOpenAiCompatibleTransport(parsed.transport),
-      // Upgrade only the old automatic fallback. Values that were detected
-      // from an endpoint or entered manually remain untouched.
+      // Upgrade only old automatic fallbacks. Values that were detected from
+      // an endpoint or entered manually remain untouched. Known model-family
+      // suggestions are recalculated, so Qwen 2.5 correctly remains at 32K.
       contextWindowTokens: contextWindowSource === 'suggested' &&
-        normalizedContextWindow === LEGACY_SUGGESTED_CONTEXT_WINDOW
+        (normalizedContextWindow === LEGACY_SUGGESTED_CONTEXT_WINDOW ||
+          normalizedContextWindow === PREVIOUS_DEFAULT_SUGGESTED_CONTEXT_WINDOW)
         ? suggestedOpenAiCompatibleContextWindow(modelId)
         : normalizedContextWindow,
       contextWindowSource,
@@ -462,7 +467,9 @@ const persistOpenAiCompatibleProfilesOnDevice = async (
   const storage = getStorage('localStorage')
   if (!storage) return
 
-  const storedProfiles = await Promise.all(profiles.map(async (profile) => ({
+  const storedProfiles = await Promise.all(profiles
+    .filter((profile) => profile.runtimeOnly !== true)
+    .map(async (profile) => ({
     profileId: profile.profileId,
     profile: toStoredOpenAiCompatibleConfig(profile),
     encryptedApiKey: profile.apiKey ? await encrypt(profile.apiKey) : null,
@@ -558,7 +565,24 @@ const toOpenAiCompatibleProfile = (
       normalized.agentCapabilityTestedAt = null
     }
   }
-  return { profileId, ...normalized }
+  return {
+    profileId,
+    ...normalized,
+    ...(previous?.runtimeOnly === true ? { runtimeOnly: true } : {}),
+  }
+}
+
+const mergeRuntimeOpenAiCompatibleProfiles = (
+  hydrated: OpenAiCompatibleProfile[],
+  current: OpenAiCompatibleProfile[],
+): OpenAiCompatibleProfile[] => {
+  const runtimeProfiles = current.filter((profile) => profile.runtimeOnly === true)
+  if (runtimeProfiles.length === 0) return hydrated
+  const runtimeIds = new Set(runtimeProfiles.map((profile) => profile.profileId))
+  return [
+    ...runtimeProfiles,
+    ...hydrated.filter((profile) => !runtimeIds.has(profile.profileId)),
+  ]
 }
 
 const compatibilityOpenAiCompatibleConfig = (
@@ -707,7 +731,8 @@ export const useAiConfigStore = create<AiConfigState>()(
 
       addOpenAiCompatibleConfig: async (config) => {
         const current = get().openAiCompatibleProfiles
-        if (current.length >= MAX_OPENAI_COMPATIBLE_PROFILES) {
+        const persistedCount = current.filter((profile) => profile.runtimeOnly !== true).length
+        if (persistedCount >= MAX_OPENAI_COMPATIBLE_PROFILES) {
           throw new Error(`At most ${MAX_OPENAI_COMPATIBLE_PROFILES} custom endpoints can be saved`)
         }
         const profileId = createOpenAiCompatibleProfileId(current)
@@ -796,6 +821,33 @@ export const useAiConfigStore = create<AiConfigState>()(
         ) ?? current[0]
         if (!target) return
         await get().setOpenAiCompatibleProfileEnabled(target.profileId, enabled)
+      },
+
+      setRuntimeOpenAiCompatibleProfile: (profile) => {
+        const normalized = {
+          ...toOpenAiCompatibleProfile(profile.profileId, profile),
+          runtimeOnly: true,
+        }
+        const current = get().openAiCompatibleProfiles
+        const next = [
+          normalized,
+          ...current.filter((candidate) => candidate.profileId !== normalized.profileId),
+        ]
+        set({
+          openAiCompatibleProfiles: next,
+          openAiCompatible: compatibilityOpenAiCompatibleConfig(next),
+        })
+      },
+
+      clearRuntimeOpenAiCompatibleProfile: (profileId) => {
+        const current = get().openAiCompatibleProfiles
+        const target = current.find((profile) => profile.profileId === profileId)
+        if (target?.runtimeOnly !== true) return
+        const next = current.filter((profile) => profile.profileId !== profileId)
+        set({
+          openAiCompatibleProfiles: next,
+          openAiCompatible: compatibilityOpenAiCompatibleConfig(next),
+        })
       },
 
       clearOpenAiCompatibleConfig: () => {
@@ -1362,9 +1414,13 @@ export const useAiConfigStore = create<AiConfigState>()(
             updates.storageType = storageType
           }
           if (hydratedOpenAiCompatibleProfiles) {
-            updates.openAiCompatibleProfiles = hydratedOpenAiCompatibleProfiles
-            updates.openAiCompatible = compatibilityOpenAiCompatibleConfig(
+            const mergedProfiles = mergeRuntimeOpenAiCompatibleProfiles(
               hydratedOpenAiCompatibleProfiles,
+              get().openAiCompatibleProfiles,
+            )
+            updates.openAiCompatibleProfiles = mergedProfiles
+            updates.openAiCompatible = compatibilityOpenAiCompatibleConfig(
+              mergedProfiles,
             )
           }
           set(updates)

@@ -10,6 +10,7 @@ import { ObservationTrendDialog } from './ObservationTrendDialog'
 import { TrendingUp } from 'lucide-react'
 import { CompactLabResultRow } from '@/features/clinical-summary/components/CompactLabResultRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
+import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 
 interface ObservationBlockProps {
   observation: Observation
@@ -103,6 +104,9 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
     ? getOriginalValueWithUnit(observation.valueQuantity)
     : observation.valueString || codedValue || '—'
   const isLongText = !observation.valueQuantity && (observation.valueString?.length ?? 0) > 80
+  const inferredUnitLabel = isInferredObservationUnit(observation)
+    ? (locale.startsWith('zh') ? ' · 推估單位' : ' · inferred unit')
+    : ''
 
   // Procedure detail container: flat list of attribute rows, no main row.
   // Components flagged `_isSubHeader` (a grouped session's sub-procedure name)
@@ -111,6 +115,54 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
     return (
       <div className="space-y-0">
         {observation.component!.map((component, idx) => {
+          const procedureChild = component as typeof component & {
+            _isProcedureChild?: boolean
+            _procedureCodeLabel?: string
+            _procedureSourceLabel?: string
+            _procedureSource?: string
+            _procedureDateLabel?: string
+            _procedureDate?: string
+          }
+          if (procedureChild._isProcedureChild) {
+            const heading = getCodeableConceptText(component.code) || '—'
+            const codeValue = component.valueString || '—'
+            return (
+              <div
+                key={idx}
+                className={`mt-1 grid min-w-0 grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)] gap-x-4 gap-y-0.5 border-t px-2.5 py-2 ${nested ? 'pl-6' : ''}`}
+              >
+                <div className="row-span-2 min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground">
+                  {heading}
+                </div>
+                <div className="min-w-0 text-xs leading-snug text-foreground">
+                  <span className="min-w-0">
+                    <span className="mr-1 text-muted-foreground">
+                      {procedureChild._procedureCodeLabel}
+                    </span>
+                    <span className="font-semibold break-words">{codeValue}</span>
+                  </span>
+                </div>
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-0.5 text-xs leading-snug">
+                  <span className="whitespace-nowrap">
+                    <span className="mr-1 text-muted-foreground">
+                      {procedureChild._procedureSourceLabel}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {procedureChild._procedureSource}
+                    </span>
+                  </span>
+                  <span className="whitespace-nowrap">
+                    <span className="mr-1 text-muted-foreground">
+                      {procedureChild._procedureDateLabel}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {procedureChild._procedureDate}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )
+          }
           if ((component as { _isSubHeader?: boolean })._isSubHeader) {
             const heading = getCodeableConceptText(component.code) || '—'
             return (
@@ -126,7 +178,25 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
           const cValue = component.valueQuantity
             ? getValueWithUnit(component.valueQuantity)
             : component.valueString || getCodeableConceptText(component.valueCodeableConcept) || '—'
-          return <ObsRow key={idx} name={cName || '—'} value={cValue} originalValue={cValue} interp={null} refText="" nested={nested} />
+          // Procedure attributes are descriptive clinical text, not compact
+          // lab values. Give the value column all remaining width and wrap it
+          // instead of applying CompactLabResultRow's 9rem truncation.
+          return (
+            <div
+              key={idx}
+              className={`grid min-w-0 grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.5fr)] items-start gap-x-4 px-2.5 py-0 first:pt-2 last:pb-2 hover:bg-muted/60 ${nested ? 'pl-6' : ''}`}
+            >
+              <span aria-hidden="true" />
+              <span className="flex min-w-0 items-baseline gap-x-2 text-[0.8125rem] leading-snug">
+                <span className="shrink-0 text-muted-foreground">
+                  {cName || '—'}
+                </span>
+                <span className="min-w-0 whitespace-normal break-words font-bold text-foreground">
+                  {cValue}
+                </span>
+              </span>
+            </div>
+          )
         })}
       </div>
     )
@@ -153,7 +223,7 @@ export function ObservationBlock({ observation, nested = false }: ObservationBlo
         {/* Main observation row */}
         <ObsRow
           name={title || '—'}
-          value={primaryValue}
+          value={`${primaryValue}${inferredUnitLabel}`}
           originalValue={originalPrimaryValue}
           interp={interp}
           refText={ref}

@@ -2,6 +2,10 @@
  * Utility functions for calculating report row counts
  * Used by both Data Selection and Reports features to ensure consistent counting
  */
+import {
+  inferGroupFromDiagnosticReport,
+  inferGroupFromObservation,
+} from '@/src/shared/utils/report-grouping-helpers'
 
 const getCodeableConceptText = (concept: any): string => {
   if (!concept) return ""
@@ -11,31 +15,6 @@ const getCodeableConceptText = (concept: any): string => {
     return concept.coding[0].display || concept.coding[0].code || ""
   }
   return ""
-}
-
-const inferGroupFromCategory = (category: any): string => {
-  if (!category) return "lab"
-  const categoryArray = Array.isArray(category) ? category : [category]
-  
-  for (const cat of categoryArray) {
-    const text = getCodeableConceptText(cat).toLowerCase()
-    if (text.includes("imaging") || text.includes("radiology")) return "imaging"
-    if (text.includes("laboratory") || text.includes("lab")) return "lab"
-  }
-  return "lab"
-}
-
-const inferGroupFromObservation = (obs: any): string => {
-  const category = obs?.category
-  if (!category) return "lab"
-  const categoryArray = Array.isArray(category) ? category : [category]
-  
-  for (const cat of categoryArray) {
-    const text = getCodeableConceptText(cat).toLowerCase()
-    if (text.includes("imaging")) return "imaging"
-    if (text.includes("laboratory") || text.includes("lab")) return "lab"
-  }
-  return "lab"
 }
 
 export interface ReportsRowCounts {
@@ -214,7 +193,7 @@ export function calculateReportsRowCounts(
 
   // Count diagnostic reports by group
   validReports.forEach((dr: any) => {
-    const group = inferGroupFromCategory(dr.category)
+    const group = inferGroupFromDiagnosticReport(dr)
     if (group === "lab") labCount++
     else if (group === "imaging") imagingCount++
   })

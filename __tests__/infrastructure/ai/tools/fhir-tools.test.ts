@@ -113,6 +113,20 @@ describe('createFhirTools (unified)', () => {
       // Two HbA1c values flagged H
       expect(r.count).toBe(2)
     })
+
+    it('does not report an unloaded collection as zero clinical records', async () => {
+      const unloadedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: null,
+      }))
+      const r = await (unloadedTools.queryObservations as any).execute({
+        codeQuery: 'HbA1c',
+      })
+
+      expect(r.success).toBe(false)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+    })
   })
 
   describe('queryDiagnosticReports', () => {
@@ -138,6 +152,472 @@ describe('createFhirTools (unified)', () => {
       expect(labReport.results.length).toBe(2)
       expect(labReport.results.some((x: any) => x.abnormal === true)).toBe(true)
     })
+
+    it('uses the same category-less imaging inference as the reports UI', async () => {
+      const inferredTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-us',
+            status: 'final',
+            code: { text: '腹部超音波' },
+            issued: '2025-02-01T12:00:00+08:00',
+          } as any],
+        },
+      }))
+      const r = await (inferredTools.queryDiagnosticReports as any).execute({
+        category: 'imaging',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].reportName).toBe('腹部超音波')
+    })
+
+    it('fuzzy-searches a named older report before applying the output cap', async () => {
+      const reports = Array.from({ length: 11 }, (_, index) => ({
+        id: `report-${index + 1}`,
+        status: 'final',
+        code: { text: index === 10 ? 'Target Old Lab' : `Lab ${index + 1}` },
+        category: [{ coding: [{ code: 'LAB' }] }],
+        effectiveDateTime: `2025-${String(12 - index).padStart(2, '0')}-01`,
+      }))
+      const reportTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: { ...sampleCollection, diagnosticReports: reports as any },
+      }))
+
+      const all = await (reportTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+      })
+      const named = await (reportTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+        query: 'target old',
+      })
+
+      expect(all.totalCount).toBe(11)
+      expect(all.returnedCount).toBe(10)
+      expect(all.truncated).toBe(true)
+      expect(all.hasMore).toBe(true)
+      expect(named.count).toBe(1)
+      expect(named.truncated).toBe(false)
+      expect(named.data[0].reportName).toBe('Target Old Lab')
+    })
+
+    it('matches CA tumor-marker separator variants and checks multiple names independently', async () => {
+      const markerTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [
+            {
+              id: 'ca-125',
+              status: 'final',
+              code: { text: 'CA-125' },
+              category: [{ coding: [{ code: 'LAB' }] }],
+              effectiveDateTime: '2025-02-01',
+            },
+            {
+              id: 'ca-199',
+              status: 'final',
+              code: { text: 'CA–199腫瘤標記 (EIA/LIA法)' },
+              category: [{ coding: [{ code: 'LAB' }] }],
+              effectiveDateTime: '2025-02-02',
+            },
+          ] as any,
+        },
+      }))
+
+      const ca199 = await (markerTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+        query: 'CA19-9',
+      })
+      const both = await (markerTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+        queries: ['CA 125', 'CA199'],
+      })
+      const commaSeparated = await (markerTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+        query: 'CA125, CA199',
+      })
+
+      expect(ca199.count).toBe(1)
+      expect(ca199.data[0].reportName).toContain('CA–199')
+      expect(both.count).toBe(2)
+      expect(both.matchedQueryTerms).toEqual(['CA 125', 'CA199'])
+      expect(both.unmatchedQueryTerms).toEqual([])
+      expect(commaSeparated.count).toBe(2)
+      expect(commaSeparated.matchedQueryTerms).toEqual(['CA125', 'CA199'])
+    })
+
+    it('keeps a representative of every requested lab inside the default page', async () => {
+      const reports = [
+        ...Array.from({ length: 11 }, (_, index) => ({
+          id: `ca125-${index}`,
+          status: 'final',
+          code: { text: 'CA-125' },
+          category: [{ coding: [{ code: 'LAB' }] }],
+          effectiveDateTime: `2025-${String(12 - index).padStart(2, '0')}-01`,
+        })),
+        {
+          id: 'older-ca199',
+          status: 'final',
+          code: { text: 'CA–199腫瘤標記' },
+          category: [{ coding: [{ code: 'LAB' }] }],
+          effectiveDateTime: '2024-01-01',
+        },
+      ]
+      const markerTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: { ...sampleCollection, diagnosticReports: reports as any },
+      }))
+
+      const result = await (markerTools.queryDiagnosticReports as any).execute({
+        category: 'lab',
+        queries: ['CA125', 'CA199'],
+      })
+
+      expect(result.totalCount).toBe(12)
+      expect(result.returnedCount).toBe(10)
+      expect(result.truncated).toBe(true)
+      expect(result.matchedQueryTerms).toEqual(['CA125', 'CA199'])
+      expect(result.data.some((report: any) => report.reportName.includes('CA–199'))).toBe(true)
+    })
+
+    it('uses issued as the report date when effectiveDateTime is absent', async () => {
+      const issuedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'issued-only',
+            status: 'final',
+            code: { text: 'Issued-only report' },
+            category: [{ coding: [{ code: 'LAB' }] }],
+            issued: '2025-02-01T12:00:00+08:00',
+          } as any],
+        },
+      }))
+      const r = await (issuedTools.queryDiagnosticReports as any).execute({
+        dateFrom: '2025-01-01',
+        dateTo: '2025-12-31',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].date).toBe('2025-02-01T12:00:00+08:00')
+    })
+
+    it('does not turn a failed DiagnosticReport query into clinical absence', async () => {
+      const failedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [],
+          resourceQueryStatus: {
+            DiagnosticReport: {
+              resourceType: 'DiagnosticReport',
+              state: 'forbidden',
+              httpStatus: 403,
+            },
+          },
+        },
+      }))
+      const r = await (failedTools.queryDiagnosticReports as any).execute({})
+
+      expect(r.success).toBe(false)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+      expect(r.queryIssues[0]).toMatchObject({
+        resourceType: 'DiagnosticReport',
+        state: 'forbidden',
+      })
+    })
+  })
+
+  describe('queryLabResultsByCategory', () => {
+    const markerObservation = (
+      id: string,
+      text: string,
+      value: number,
+      date: string,
+      loinc?: string,
+    ) => ({
+      id,
+      status: 'final',
+      code: {
+        text,
+        coding: loinc ? [{ system: 'http://loinc.org', code: loinc }] : [],
+      },
+      category: [{ coding: [{ code: 'laboratory' }] }],
+      valueQuantity: { value, unit: 'U/mL' },
+      effectiveDateTime: `${date}T00:00:00+08:00`,
+    }) as any
+
+    const categoryTools = createFhirTools(() => ({
+      patient: samplePatient,
+      collection: {
+        ...sampleCollection,
+        observations: [
+          markerObservation('afp', 'AFP', 2.1, '2025-04-01', '1834-1'),
+          markerObservation('cea', 'CEA', 3.2, '2025-04-01', '2039-6'),
+          markerObservation('ca125-old', 'CA-125', 10, '2025-01-01', '10334-1'),
+          markerObservation('ca125-new', 'CA125', 12, '2025-04-01', '10334-1'),
+          markerObservation('ca199', 'CA–199腫瘤標記', 31.83, '2025-04-01', '24108-3'),
+          {
+            id: 'creatinine',
+            status: 'final',
+            code: {
+              text: 'Creatinine',
+              coding: [{ system: 'http://loinc.org', code: '2160-0' }],
+            },
+            category: [{ coding: [{ code: 'laboratory' }] }],
+            valueQuantity: { value: 1.2, unit: 'mg/dL' },
+            effectiveDateTime: '2025-04-01T00:00:00+08:00',
+          },
+        ] as any,
+        vitalSigns: [],
+      },
+    }))
+
+    it('returns every tumor-marker analyte and excludes other lab categories', async () => {
+      const result = await (categoryTools.queryLabResultsByCategory as any).execute({
+        category: 'tumor',
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.analyteCount).toBe(4)
+      expect(result.observationCount).toBe(5)
+      expect(result.availableAnalytes).toEqual(['AFP', 'CEA', 'CA-125', 'CA-199'])
+      expect(result.data.map((group: any) => group.analyte)).not.toContain('Creatinine')
+      expect(result.data.find((group: any) => group.analyte === 'CA-125').results).toHaveLength(1)
+      expect(result.data.find((group: any) => group.analyte === 'CA-125').results[0].value).toBe(12)
+      expect(result.groundingRules.normalityStatusIsAuthoritative).toBe(true)
+    })
+
+    it('returns a date-sorted series per analyte when withTrend is true', async () => {
+      const result = await (categoryTools.queryLabResultsByCategory as any).execute({
+        category: 'tumor',
+        withTrend: true,
+      })
+      const ca125 = result.data.find((group: any) => group.analyte === 'CA-125')
+
+      expect(ca125.observationCount).toBe(2)
+      expect(ca125.results.map((item: any) => item.value)).toEqual([12, 10])
+    })
+
+    it('keeps source interpretation authoritative and omits a conflicting range', async () => {
+      const observation = markerObservation('cea', 'CEA', 3.8, '2025-04-01', '2039-6')
+      observation.interpretation = [{ coding: [{ code: 'N' }] }]
+      observation.referenceRange = [{ low: { value: 4 }, high: { value: 5 } }]
+      const tools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: { ...sampleCollection, observations: [observation], vitalSigns: [] },
+      }))
+
+      const result = await (tools.queryLabResultsByCategory as any).execute({ category: 'tumor' })
+      const item = result.data[0].results[0]
+
+      expect(item).toMatchObject({
+        abnormal: false,
+        normalityStatus: 'Normal',
+        assessmentBasis: 'source-interpretation',
+      })
+      expect(item.referenceRange).toBeUndefined()
+    })
+
+    it('exposes only an audited range when source interpretation is absent', async () => {
+      const observation = markerObservation('cea', 'CEA', 6, '2025-04-01', '2039-6')
+      observation.referenceRange = [{ low: { value: 0 }, high: { value: 5 } }]
+      const tools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: { ...sampleCollection, observations: [observation], vitalSigns: [] },
+      }))
+
+      const result = await (tools.queryLabResultsByCategory as any).execute({ category: 'tumor' })
+
+      expect(result.data[0].results[0]).toMatchObject({
+        abnormal: true,
+        normalityStatus: 'Outside audited reference range',
+        assessmentBasis: 'audited-reference-range',
+        referenceRange: { low: 0, high: 5 },
+      })
+    })
+
+    it('does not treat an unavailable Observation query as an empty category', async () => {
+      const unavailableTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          observations: [],
+          resourceQueryStatus: {
+            Observation: {
+              resourceType: 'Observation',
+              state: 'forbidden',
+              httpStatus: 403,
+            },
+          },
+        },
+      }))
+      const result = await (unavailableTools.queryLabResultsByCategory as any).execute({
+        category: 'tumor',
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.incomplete).toBe(true)
+      expect(result.canConcludeAbsence).toBe(false)
+    })
+  })
+
+  describe('queryImagingRecords', () => {
+    it('returns a standalone ImagingStudy that queryDiagnosticReports cannot contain', async () => {
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [],
+          imagingStudies: [{
+            id: 'study-1',
+            status: 'available',
+            started: '2024-01-01T09:00:00+08:00',
+            description: 'Brain CT',
+            modality: [{ code: 'CT', display: 'Computed Tomography' }],
+            series: [{
+              bodySite: { code: 'BRAIN', display: 'Brain' },
+            }],
+          } as any],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: 'brain',
+        modality: 'CT',
+      })
+
+      expect(r.success).toBe(true)
+      expect(r.count).toBe(1)
+      expect(r.data[0]).toMatchObject({
+        resourceType: 'ImagingStudy',
+        studyName: 'Brain CT',
+      })
+    })
+
+    it('combines a linked ImagingStudy with its DiagnosticReport without duplicating it', async () => {
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-ct',
+            status: 'final',
+            code: { text: 'Chest CT' },
+            effectiveDateTime: '2026-06-01T09:00:00+08:00',
+            imagingStudy: [{ reference: 'ImagingStudy/study-ct' }],
+            conclusion: 'No focal consolidation.',
+          } as any],
+          imagingStudies: [{
+            id: 'study-ct',
+            status: 'available',
+            started: '2026-06-01T09:00:00+08:00',
+            description: 'CT chest without contrast',
+            modality: [{ code: 'CT' }],
+          } as any],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: 'chest',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].resourceType).toBe('DiagnosticReport')
+      expect(r.data[0].linkedImagingStudies).toHaveLength(1)
+      expect(r.data[0].linkedImagingStudies[0].studyName)
+        .toBe('CT chest without contrast')
+    })
+
+    it('reports image presence and decodes textual report attachments without sending pixels', async () => {
+      const text = Buffer.from('影像報告：未見急性病灶', 'utf8').toString('base64')
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-attachments',
+            status: 'final',
+            code: { text: 'Chest X-ray' },
+            category: [{ coding: [{ code: 'RAD' }] }],
+            effectiveDateTime: '2026-01-01',
+            presentedForm: [
+              { title: 'Report text', contentType: 'text/plain', data: text },
+              { title: 'X-ray image', contentType: 'image/jpeg', data: 'AA==' },
+            ],
+          } as any],
+          imagingStudies: [],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: 'Chest X-ray',
+      })
+
+      expect(r.data[0].imageAttachmentCount).toBe(1)
+      expect(r.data[0].attachments[0].text).toContain('未見急性病灶')
+      expect(r.data[0].attachments[1]).not.toHaveProperty('data')
+    })
+
+    it('bridges a Taiwan Chinese chest X-ray query to an English FHIR report name', async () => {
+      const imagingTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [{
+            id: 'dr-chest-xray',
+            status: 'final',
+            code: { text: 'Chest X-ray' },
+            category: [{ coding: [{ code: 'RAD' }] }],
+            effectiveDateTime: '2025-05-18',
+          } as any],
+          imagingStudies: [],
+        },
+      }))
+
+      const r = await (imagingTools.queryImagingRecords as any).execute({
+        query: '胸部 X 光',
+      })
+
+      expect(r.count).toBe(1)
+      expect(r.data[0].reportName).toBe('Chest X-ray')
+    })
+
+    it('does not assert absence when either imaging resource query is incomplete', async () => {
+      const failedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          diagnosticReports: [],
+          imagingStudies: [],
+          resourceQueryStatus: {
+            DiagnosticReport: {
+              resourceType: 'DiagnosticReport',
+              state: 'ok',
+              count: 0,
+            },
+            ImagingStudy: {
+              resourceType: 'ImagingStudy',
+              state: 'unsupported',
+              httpStatus: 400,
+            },
+          },
+        },
+      }))
+
+      const r = await (failedTools.queryImagingRecords as any).execute({})
+
+      expect(r.success).toBe(false)
+      expect(r.count).toBe(0)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+    })
   })
 
   describe('queryMedications', () => {
@@ -146,6 +626,10 @@ describe('createFhirTools (unified)', () => {
       // Both refill cycles of Sotalol / 通舒錠 are chronic
       expect(r.count).toBe(2)
       expect(r.data.every((m: any) => m.chronic === true)).toBe(true)
+      expect(r.data[0]).toMatchObject({
+        medication: 'Sotalol',
+        recordedName: '通舒錠',
+      })
     })
 
     it('chronic=false returns non-chronic', async () => {
@@ -244,6 +728,29 @@ describe('createFhirTools (unified)', () => {
         latest: '2026-05-13',
       })
     })
+
+    it('surfaces resource query failures instead of presenting a complete zero inventory', async () => {
+      const overviewTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          imagingStudies: [],
+          resourceQueryStatus: {
+            ImagingStudy: {
+              resourceType: 'ImagingStudy',
+              state: 'unsupported',
+              httpStatus: 400,
+            },
+          },
+        },
+      }))
+      const r = await (overviewTools.getDataOverview as any).execute({})
+
+      expect(r.success).toBe(true)
+      expect(r.incomplete).toBe(true)
+      expect(r.canConcludeAbsence).toBe(false)
+      expect(r.data.imagingStudies.queryStatus).toBe('unsupported')
+    })
   })
 
   describe('getEncounterDetails (cross-resource)', () => {
@@ -294,6 +801,67 @@ describe('createFhirTools (unified)', () => {
       const r = await call('getActiveMedicationList')
       const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
       expect(sotalol?.refillCount).toBe(2)
+      expect(sotalol?.recordedName).toBe('通舒錠')
+      expect(sotalol?.status).toBe('active')
+    })
+
+    it('keeps status and fields from the newest refill regardless of input order', async () => {
+      const reversedTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          medications: [...sampleCollection.medications].reverse(),
+        },
+      }))
+
+      const r = await (reversedTools.getActiveMedicationList as any).execute({})
+      const sotalol = r.data.find((m: any) => m.medication === 'Sotalol')
+
+      expect(sotalol).toMatchObject({
+        status: 'active',
+        authoredOn: '2026-04-27T00:00:00+08:00',
+        refillCount: 2,
+      })
+    })
+  })
+
+  describe('getHealthSummarySnapshot', () => {
+    it('returns a compact, deduplicated cross-domain summary', async () => {
+      const r = await call('getHealthSummarySnapshot')
+
+      expect(r).toMatchObject({
+        success: true,
+        incomplete: false,
+        canConcludeAbsence: true,
+        counts: {
+          conditions: 1,
+          activeMedications: 1,
+          abnormalLabs: 1,
+          recentVitals: 1,
+        },
+      })
+      expect(r.data.conditions).toHaveLength(1)
+      expect(r.data.medications).toHaveLength(1)
+      expect(r.data.medications[0].name).toBe('Sotalol')
+      expect(r.data.medications[0].recordedName).toBe('通舒錠')
+      expect(r.data.abnormalLabs).toEqual([
+        expect.objectContaining({ name: 'HbA1c', value: 8.2, abnormal: true }),
+      ])
+      expect(r.data.recentVitals).toEqual([
+        expect.objectContaining({ name: 'Body Height', value: 168 }),
+      ])
+      expect(r.groundingRules).toMatchObject({
+        medicationFieldsOnly: true,
+        normalityStatusIsAuthoritative: true,
+      })
+    })
+
+    it('does not expose patient identifiers in the snapshot', async () => {
+      const r = await call('getHealthSummarySnapshot')
+      const serialized = JSON.stringify(r)
+
+      expect(serialized).not.toContain(samplePatient.id)
+      expect(serialized).not.toContain('Dr. Wang')
     })
   })
 
@@ -323,6 +891,35 @@ describe('createFhirTools (unified)', () => {
     it('matches Chinese substrings too', async () => {
       const r = await call('searchObservationByName', { query: 'Body Height' })
       expect(r.count).toBe(1)
+    })
+
+    it('finds a CA–199 observation when the user types CA199', async () => {
+      const markerTools = createFhirTools(() => ({
+        patient: samplePatient,
+        collection: {
+          ...sampleCollection,
+          observations: [{
+            id: 'ca199-observation',
+            status: 'final',
+            code: { text: 'CA–199腫瘤標記 (EIA/LIA法)' },
+            category: [{ coding: [{ code: 'laboratory' }] }],
+            valueQuantity: { value: 31.83, unit: 'U/mL' },
+            effectiveDateTime: '2025-12-09T00:00:00+08:00',
+          }] as any,
+          vitalSigns: [],
+        },
+      }))
+
+      const result = await (markerTools.searchObservationByName as any).execute({
+        query: 'CA199',
+      })
+
+      expect(result.count).toBe(1)
+      expect(result.data[0]).toMatchObject({
+        code: 'CA–199腫瘤標記 (EIA/LIA法)',
+        value: 31.83,
+        unit: 'U/mL',
+      })
     })
   })
 
@@ -529,6 +1126,34 @@ describe('createFhirTools (unified)', () => {
 
     it('does NOT return birthDate', async () => {
       const r = await call('queryPatientInfo')
+      expect(r.data.birthDate).toBeUndefined()
+    })
+
+    it('labels demographics that came from the local user profile', async () => {
+      const localTools = createFhirTools(() => ({
+        patient: {
+          ...samplePatient,
+          demographicsSource: 'user-entered-local-profile',
+        },
+        collection: sampleCollection,
+      }))
+      const r = await (localTools.queryPatientInfo as any).execute({})
+      expect(r.data.source).toBe('user-entered-local-profile')
+      expect(r.data.name).toBeUndefined()
+      expect(r.data.birthDate).toBeUndefined()
+    })
+
+    it('marks age as approximate when only a birth year is available', async () => {
+      const yearOnlyTools = createFhirTools(() => ({
+        patient: {
+          ...samplePatient,
+          birthDate: '1980',
+        },
+        collection: sampleCollection,
+      }))
+      const r = await (yearOnlyTools.queryPatientInfo as any).execute({})
+      expect(typeof r.data.age).toBe('number')
+      expect(r.data.ageApproximate).toBe(true)
       expect(r.data.birthDate).toBeUndefined()
     })
   })

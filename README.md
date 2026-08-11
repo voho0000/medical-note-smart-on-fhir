@@ -22,7 +22,7 @@
   - **自訂摘要模組**：嵌入**醫療摘要**的提示詞工作台；每個模組可排序、隱藏、手動執行或設定自動生成，也可從提示範本庫加入。主動安全警示由固定摘要流程獨立生成，不屬於自訂模組。
   - **語音口述**：Whisper 轉錄。
 - **AI 資料範圍**：從醫療摘要的側邊 panel 調整要納入摘要與自訂摘要的 FHIR 資料（門診／檢驗／用藥…），並預覽 AI 主要收到的內容；臨床對話改由 Agent 按需查詢。
-- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、57 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製。
+- **醫療計算機**：MDCalc 風格的臨床評分／公式（eGFR、KFRE、CHA₂DS₂-VASc、Child-Pugh、CURB-65… 共 10 類、58 個），**檢驗數值自動從病人報告帶入**（依 canonical／LOINC／檢體判定），附適用時機與注意事項，結果可一鍵複製。
 - **匯出（IPS）**：組出 International Patient Summary FHIR 文件，附可直接複製的 Markdown 預覽與 AI 問題清單推論（逐項確認後才納入）。
 - **提示範本庫**：Cloud 模式提供社群共享的提示範本；on-prem 保留本機 templates，但不連共享 gallery。
 - **雙受眾**：首次使用可選擇醫療人員或民眾身份；藥名、檢驗名稱、臨床代碼與 AI 輸出會配合調整，並可隨時切換。
@@ -68,8 +68,8 @@ On-prem 模式只顯示院內／地端 OpenAI-compatible profiles，不接受公
 
 | 類別 | 模型 |
 |------|------|
-| 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、Claude Haiku 4.5 |
-| 進階（需自備金鑰） | GPT-5.6 Luna／GPT-5.6 Terra／GPT-5.6 Sol；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
+| 免費內建（免金鑰，經代理） | **Gemini 3 Flash Preview（預設）**、Gemini 3.1 Flash-Lite、GPT-5.4 Nano、GPT-5.6 Luna、Claude Haiku 4.5 |
+| 進階（需自備金鑰） | GPT-5.6 Terra／GPT-5.6 Sol；Gemini 3.5 Flash／Gemini 3.1 Pro Preview；Claude Sonnet 4.6／Claude Opus 4.8 |
 
 醫學文獻搜尋使用 Perplexity（cloud 模式的 AI Agent 對話）；on-prem 不掛載外部文獻搜尋工具。
 
@@ -234,7 +234,7 @@ Documentation baseline: v0.43.0 (2026-07-22). Runtime registries, composition ro
   - **Custom summary modules**: reusable prompt templates embedded in **Medical Summary**; users can add, order, preview, manually run, or auto-generate selected modules without switching tabs.
   - **Voice dictation**: Whisper transcription.
 - **AI data scope**: a reusable drawer inside Medical Summary for selecting and previewing the main FHIR context supplied to standard and custom summaries; agent chat queries FHIR on demand.
-- **Medical Calculator**: 57 MDCalc-style clinical scores/formulas across 10 categories (eGFR, CHA₂DS₂-VASc, Child-Pugh, CURB-65…) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy.
+- **Medical Calculator**: 58 MDCalc-style clinical scores/formulas across 10 categories (eGFR, KFRE, CHA₂DS₂-VASc, Child-Pugh, CURB-65…) that **auto-fill lab values from the patient's reports** (resolved by canonical/LOINC/specimen), with when-to-use/caveats and one-click copy.
 - **Export (IPS)**: builds an International Patient Summary FHIR document, with a copy-ready Markdown preview and AI problem-list inference (each suggestion confirmed before inclusion).
 - **Prompt Gallery**: cloud mode provides community-shared prompt templates; on-prem keeps local templates without connecting to the shared gallery.
 - **Two audiences**: choose healthcare-professional or patient/citizen; medication names, test labels, clinical codes, and AI output adapt, and the audience can be switched at any time.
@@ -280,8 +280,8 @@ On-prem mode shows only hospital/local OpenAI-compatible profiles. It rejects pu
 
 | Tier | Models |
 |------|--------|
-| Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, Claude Haiku 4.5 |
-| Advanced (your own key) | GPT-5.6 Luna / GPT-5.6 Terra / GPT-5.6 Sol; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
+| Free, built-in (no key, via proxy) | **Gemini 3 Flash Preview (default)**, Gemini 3.1 Flash-Lite, GPT-5.4 Nano, GPT-5.6 Luna, Claude Haiku 4.5 |
+| Advanced (your own key) | GPT-5.6 Terra / GPT-5.6 Sol; Gemini 3.5 Flash / Gemini 3.1 Pro Preview; Claude Sonnet 4.6 / Claude Opus 4.8 |
 
 Literature search uses Perplexity in cloud AI Agent chat; on-prem never mounts the external literature-search tool.
 

@@ -1,5 +1,6 @@
 import type { CalculatorDef, L } from '../types'
 import { n, round, SEX_INPUT, AGE_INPUT, WEIGHT_LOINC } from './_shared'
+import { calculateKfre } from '@/src/core/clinical-calculators/kfre'
 
 export const RENAL: CalculatorDef[] = [
   // ── eGFR — CKD-EPI 2021 (race-free) ─────────────────────────────────────
@@ -159,6 +160,105 @@ export const RENAL: CalculatorDef[] = [
       coherence: { keys: ['uUrea', 'pBun', 'uCr', 'pCr'], windowDays: 1 },
     },
 
+  // ── Kidney Failure Risk Equation (4-variable KFRE) ───────────────────────
+    {
+      id: 'kfre-4-variable',
+      name: { en: 'Kidney Failure Risk Equation (KFRE)', zh: '腎衰竭風險方程式 (KFRE)' },
+      category: 'renal',
+      audience: 'medical',
+      blurb: {
+        en: '2- and 5-year treated kidney-failure risk using age, sex, eGFR, and urine ACR.',
+        zh: '以年齡、性別、eGFR 與尿液 ACR 估算 2 年及 5 年內需透析或腎臟移植的風險。',
+      },
+      inputs: [
+        AGE_INPUT,
+        SEX_INPUT,
+        {
+          key: 'egfr',
+          type: 'number',
+          label: { en: 'eGFR', zh: '腎絲球過濾率 (eGFR)' },
+          unit: 'mL/min/1.73m²',
+          source: { kind: 'lab', keys: ['EGFR', 'EGFR(EPI)', 'EGFR(M)'] },
+        },
+        {
+          key: 'acr',
+          type: 'number',
+          label: { en: 'Urine albumin/creatinine ratio (ACR)', zh: '尿液白蛋白/肌酸酐比值 (ACR)' },
+          unit: 'mg/g',
+          dimension: 'albumin-creatinine-ratio',
+          source: { kind: 'labSpecimen', keys: ['ACR'], loinc: ['9318-7', '14959-1'], specimen: 'urine' },
+        },
+      ],
+      compute: (v) => {
+        const age = n(v, 'age')
+        const egfr = n(v, 'egfr')
+        const acr = n(v, 'acr')
+        if (age === undefined || egfr === undefined || acr === undefined) return null
+        if (v.sex !== 'male' && v.sex !== 'female') return null
+
+        const result = calculateKfre({
+          ageYears: age,
+          sex: v.sex,
+          egfrMlMin173m2: egfr,
+          urineAcrMgG: acr,
+          calibration: 'non-north-america',
+        })
+        if (!result) return null
+
+        const twoYear = round(result.twoYearRiskPercent, 1)
+        const fiveYear = round(result.fiveYearRiskPercent, 1)
+        let interpretation: L
+        let severity: 'normal' | 'low' | 'moderate' | 'high'
+
+        if (result.twoYearRiskPercent > 40) {
+          interpretation = {
+            en: 'Above the KDIGO threshold for KRT education and preparation',
+            zh: '高於 KDIGO 腎臟替代治療衛教與準備閾值',
+          }
+          severity = 'high'
+        } else if (result.twoYearRiskPercent > 10) {
+          interpretation = {
+            en: 'Above the KDIGO threshold for multidisciplinary kidney care',
+            zh: '高於 KDIGO 多專業腎臟照護閾值',
+          }
+          severity = 'moderate'
+        } else if (result.fiveYearRiskPercent >= 5) {
+          interpretation = {
+            en: 'Above the 5-year risk range used to inform nephrology referral',
+            zh: '高於可輔助腎臟專科轉介的 5 年風險區間',
+          }
+          severity = 'moderate'
+        } else if (result.fiveYearRiskPercent >= 3) {
+          interpretation = {
+            en: 'Within the 3%–5% range used to inform nephrology referral',
+            zh: '落在可輔助腎臟專科轉介的 3%–5% 區間',
+          }
+          severity = 'low'
+        } else {
+          interpretation = {
+            en: 'Below KDIGO kidney-failure risk thresholds',
+            zh: '低於 KDIGO 腎衰竭風險決策閾值',
+          }
+          severity = 'normal'
+        }
+
+        return {
+          value: `${twoYear}% / ${fiveYear}%`,
+          interpretation,
+          severity,
+          extra: [
+            { label: { en: '2-year kidney-failure risk', zh: '2 年腎衰竭風險' }, value: `${twoYear}%` },
+            { label: { en: '5-year kidney-failure risk', zh: '5 年腎衰竭風險' }, value: `${fiveYear}%` },
+          ],
+          notes: {
+            en: 'Uses the published non–North American regional calibration. Apply only to stable adults with CKD G3–G5; combine with eGFR, ACR, clinical context, and local referral pathways.',
+            zh: '採用已發表的非北美區域校正。僅適用於腎功能穩定的成人 CKD G3–G5；須合併 eGFR、ACR、臨床情境與院內轉介流程判斷。',
+          },
+        }
+      },
+      reference: 'Tangri N, et al. JAMA 2011;305:1553–1559 (4-variable KFRE). Tangri N, et al. JAMA 2016;315:164–174 (multinational validation and non–North American recalibration). KDIGO 2024 CKD Guideline, Recommendation 2.2.1.',
+    },
+
   // ── CKD prognosis / follow-up — KDIGO 2012 heat map (NHI 健保存摺) ─────────
     // Patient-facing CKD risk & follow-up tool from Taiwan's 健保存摺, built on
     // the KDIGO 2012 GFR×albuminuria grid. Risk colour = KDIGO 4-colour
@@ -177,7 +277,7 @@ export const RENAL: CalculatorDef[] = [
       },
       inputs: [
         { key: 'egfr', type: 'number', label: { en: 'eGFR', zh: '腎絲球過濾率 (eGFR)' }, unit: 'mL/min/1.73m²', normalRange: { low: 90, high: 120 }, source: { kind: 'lab', keys: ['EGFR', 'EGFR(EPI)', 'EGFR(M)'] } },
-        { key: 'acr', type: 'number', label: { en: 'Urine albumin/creatinine ratio (ACR)', zh: '尿液白蛋白/肌酸酐比值 (ACR)' }, unit: 'mg/g', optional: true, source: { kind: 'labSpecimen', keys: ['ACR'], loinc: ['9318-7', '14959-1'], specimen: 'urine' } },
+        { key: 'acr', type: 'number', label: { en: 'Urine albumin/creatinine ratio (ACR)', zh: '尿液白蛋白/肌酸酐比值 (ACR)' }, unit: 'mg/g', dimension: 'albumin-creatinine-ratio', optional: true, source: { kind: 'labSpecimen', keys: ['ACR'], loinc: ['9318-7', '14959-1'], specimen: 'urine' } },
         { key: 'pcr', type: 'number', label: { en: 'Urine protein/creatinine ratio (PCR)', zh: '尿液蛋白/肌酸酐比值 (PCR)' }, unit: 'mg/g', optional: true, source: { kind: 'labLoinc', loinc: ['2890-2'] } },
       ],
       compute: (v) => {

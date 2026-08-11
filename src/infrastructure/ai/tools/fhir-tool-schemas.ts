@@ -60,9 +60,43 @@ export const encountersSchema = z.object({
 
 export const diagnosticReportsSchema = z.object({
   category: z.string().optional().describe('Filter by category (e.g., "LAB", "RAD")'),
+  query: z.string().optional().describe('Case- and separator-insensitive fuzzy search across report/panel/test name, code, component observation names, conclusion, notes, and attachment titles. Comma-separated test names are matched independently. Use this for "does the patient have X?" questions.'),
+  queries: z.array(z.string().min(1)).max(20).optional().describe('When checking multiple specific tests, pass each name separately (for example ["CA125", "CA199"]). Records matching any requested name are returned, together with matchedQueryTerms and unmatchedQueryTerms.'),
   abnormalOnly: z.boolean().optional().describe('Return only reports containing at least one abnormal observation'),
   dateFrom: z.string().optional().describe('Filter reports from this date (YYYY-MM-DD)'),
   dateTo: z.string().optional().describe('Filter reports until this date (YYYY-MM-DD)'),
+  limit: limitParam,
+  summarize: summarizeParam,
+})
+
+export const labResultsByCategorySchema = z.object({
+  category: z.enum([
+    'cbc',
+    'coag',
+    'chem',
+    'endocrine',
+    'lipid',
+    'glucose',
+    'hep',
+    'tumor',
+    'urine',
+    'bloodgas',
+    'serology',
+  ]).describe('Semantic lab category. Use tumor for tumor/cancer markers (腫瘤標記/癌症指數), cbc for blood counts, coag for coagulation, chem for biochemistry/renal/liver/electrolytes, endocrine for hormones, lipid for lipids, glucose for glucose/HbA1c, hep for hepatitis markers, urine for urinalysis, bloodgas for blood gases, and serology for viral antigen/serology.'),
+  withTrend: z.boolean().optional().describe('If true, return up to 10 latest values per analyte. Default false returns the latest value of every analyte in the category.'),
+  abnormalOnly: z.boolean().optional().describe('Return only abnormal observations within the selected category.'),
+  dateFrom: z.string().optional().describe('Filter observations from this date (YYYY-MM-DD)'),
+  dateTo: z.string().optional().describe('Filter observations until this date (YYYY-MM-DD)'),
+  limit: z.number().int().positive().max(100).optional().describe('Maximum distinct analytes to return (default 50).'),
+})
+
+export const imagingRecordsSchema = z.object({
+  query: z.string().optional().describe('Case-insensitive fuzzy search across imaging/pathology report names, codes, conclusions, notes, attachment titles, ImagingStudy descriptions, procedure/reason text, and series metadata.'),
+  modality: z.string().optional().describe('Filter by modality text/code (e.g., CT, MR, US, X-ray).'),
+  bodySite: z.string().optional().describe('Filter by body-site text/code (e.g., chest, brain, abdomen).'),
+  status: z.string().optional().describe('Filter by report/study status (e.g., final, available).'),
+  dateFrom: z.string().optional().describe('Filter imaging records from this date (YYYY-MM-DD)'),
+  dateTo: z.string().optional().describe('Filter imaging records until this date (YYYY-MM-DD)'),
   limit: limitParam,
   summarize: summarizeParam,
 })
@@ -74,6 +108,7 @@ export const immunizationsSchema = z.object({
 })
 
 export const patientInfoSchema = z.object({})
+export const healthSummarySnapshotSchema = z.object({})
 
 // ----------------------------------------------------------------------------
 // Phase 3 — cross-resource tools

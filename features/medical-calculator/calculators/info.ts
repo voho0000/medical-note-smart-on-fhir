@@ -21,6 +21,16 @@ export const CALC_INFO: Record<string, CalcInfo> = {
     useWhen: { en: 'Renal drug dosing in stable adults (the equation most drug labels use).', zh: '穩定成人之腎臟藥物劑量調整（多數藥品仿單採用此公式）。' },
     caveats: { en: 'Assumes stable renal function; uses actual body weight — over/underestimates in obesity or edema (consider ideal/adjusted weight). Not for AKI.', zh: '假設腎功能穩定；採實際體重 — 肥胖或水腫時會高／低估（可考慮理想／校正體重）。不適用於急性腎損傷。' },
   },
+  'kfre-4-variable': {
+    useWhen: {
+      en: 'Estimating 2- and 5-year treated kidney-failure risk in adults with stable CKD G3–G5 (eGFR <60) and a quantitative urine ACR.',
+      zh: '成人腎功能穩定的 CKD G3–G5（eGFR <60）且已有定量尿液 ACR 時，估算 2 年與 5 年內需透析或腎臟移植的風險。',
+    },
+    caveats: {
+      en: 'Not validated for CKD G1–G2, children, AKI/rapidly changing kidney function, or semiquantitative ACR. This Taiwan-facing implementation uses the published non–North American calibration. Use disease-specific models for IgA nephropathy or ADPKD where appropriate.',
+      zh: '未驗證於 CKD G1–G2、兒童、急性腎損傷／腎功能快速變化或半定量 ACR。本台灣版採已發表的非北美校正；IgA 腎病或 ADPKD 應視情況使用疾病專屬模型。',
+    },
+  },
   'fena': {
     useWhen: { en: 'Oliguric AKI, to distinguish prerenal from intrinsic (ATN).', zh: '寡尿性急性腎損傷，用以區分腎前性與腎實質性（ATN）。' },
     caveats: { en: 'Unreliable on diuretics, in CKD, or contrast/pigment nephropathy — use FEUrea instead. Interpret only in oliguric AKI.', zh: '使用利尿劑、慢性腎臟病或顯影劑／色素腎病時不可靠 — 請改用 FEUrea。僅在寡尿性急性腎損傷判讀。' },

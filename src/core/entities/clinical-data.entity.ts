@@ -155,6 +155,30 @@ export interface MedicationEntity {
     }>
   }>
   /**
+   * App-side terminology resolved from an exact NHI drug code plus authoredOn
+   * date. These fields are derived from the pinned official drug-master
+   * snapshot, never copied from or written over the source MedicationRequest.
+   */
+  drugTerminology?: {
+    source: 'nhi-official-drug-master'
+    snapshotId: string
+    officialNameZh?: string
+    officialNameEn?: string
+    ingredientText?: string
+    doseForm?: string
+    atcCode?: string
+    atcNameZh?: string
+    atcNameEn?: string
+    /** Governed three-character ATC therapeutic subgroup. Unlike atcCode,
+     *  this is resolved from the versioned hierarchy rather than sliced and
+     *  labelled inside the App. */
+    atcLevel2Code?: string
+    atcLevel2NameZh?: string
+    atcLevel2NameEn?: string
+    atcHierarchySnapshotId?: string
+    officialProductUrl?: string
+  }
+  /**
    * Originating FHIR resource type. 'MedicationRequest' = 醫師處方/健保開立紀錄
    * (bridge default); 'MedicationStatement' = 病人目前服用中的藥物清單 (IPS
    * default). Drives the source hint shown in MedListCard; not part of the
@@ -235,6 +259,14 @@ export interface AllergyEntity {
 export interface ObservationEntity {
   id?: string
   resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
   code?: {
     text?: string
     coding?: Array<{
@@ -246,6 +278,8 @@ export interface ObservationEntity {
   valueQuantity?: {
     value?: number
     unit?: string
+    system?: string
+    code?: string
   }
   valueString?: string
   valueCodeableConcept?: {
@@ -286,6 +320,8 @@ export interface ObservationEntity {
     valueQuantity?: {
       value?: number
       unit?: string
+      system?: string
+      code?: string
     }
     valueString?: string
     interpretation?: {
@@ -311,6 +347,11 @@ export interface ObservationEntity {
     reference?: string
   }>
   effectiveDateTime?: string
+  effectivePeriod?: {
+    start?: string
+    end?: string
+  }
+  issued?: string
   status?: string
   category?: Array<{
     coding?: Array<{
@@ -324,6 +365,7 @@ export interface ObservationEntity {
     reference?: string
   }
   performer?: Array<{ display?: string; reference?: string }>
+  note?: Array<{ text?: string }>
   // Specimen routing signal (set by NHI-FHIR-Bridge based on the NHI 醫令碼).
   // categorizeObservation uses this as the authoritative blood vs urine
   // boundary; missing this field caused blood-typing / antibody / antigen
@@ -339,6 +381,14 @@ export interface ObservationEntity {
 
 export interface DiagnosticReportEntity {
   id: string
+  meta?: {
+    source?: string
+    tag?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
   identifier?: Array<{
     system?: string
     value?: string
@@ -356,6 +406,10 @@ export interface DiagnosticReportEntity {
   }>
   conclusion?: string
   effectiveDateTime?: string
+  effectivePeriod?: {
+    start?: string
+    end?: string
+  }
   _observations?: ObservationEntity[]
   status?: string
   issued?: string
@@ -453,6 +507,15 @@ export interface ImagingStudyEntity {
 
 export interface ProcedureEntity {
   id: string
+  /** Source-derived procedure class from FHIR Procedure.category. */
+  category?: {
+    text?: string
+    coding?: Array<{
+      system?: string
+      code?: string
+      display?: string
+    }>
+  }
   code?: {
     text?: string
     coding?: Array<{
@@ -909,6 +972,30 @@ export interface ClinicalDataQueryStatus {
  * truth for "is this a report member?" and "is this a vital?". Re-deriving
  * those rules per-feature is exactly what produced duplicate / mislabeled rows.
  */
+export interface ClinicalSourceMetadata {
+  source: 'health-bank-sdk-json'
+  convertedAt: string
+  converterVersion: string
+  resourceCounts: Record<string, number>
+  warnings: Array<{ code: string; count?: number }>
+  labDuplicateMerge: {
+    sourceCount: number
+    convertedCount: number
+    mergedCount: number
+    conflictingValueGroupCount: number
+  }
+  unitInference: {
+    policyVersion: string
+    inferredCount: number
+    unitlessCount: number
+    unresolvedCount: number
+  }
+  sourceCapabilities: Array<{
+    key: string
+    availability: 'provided' | 'not-provided' | 'not-distinguished' | 'embedded' | 'partial'
+  }>
+}
+
 export interface ClinicalDataCollection {
   conditions: ConditionEntity[]
   medications: MedicationEntity[]
@@ -925,6 +1012,10 @@ export interface ClinicalDataCollection {
   consents: ConsentEntity[]
   devices: DeviceEntity[]
   carePlans: CarePlanEntity[]
+  /** Encrypted sidecar describing an SDK→FHIR conversion. It contains counts
+   * and source limitations only — never the uploaded SDK JSON or clinical
+   * values. */
+  sourceMetadata?: ClinicalSourceMetadata
   /**
    * Per-search outcome for SMART data. Optional because imported/local bundles
    * do not perform network searches. This prevents an authorization or server

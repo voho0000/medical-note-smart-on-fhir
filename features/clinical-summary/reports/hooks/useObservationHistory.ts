@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useClinicalData } from '@/src/application/hooks/clinical-data/use-clinical-data-query.hook'
 import { canonicalTestKeyFromString } from '@/src/shared/utils/lab-normalize'
+import { isInferredObservationUnit } from '@/src/shared/utils/observation-provenance.utils'
 
 export interface ObservationHistoryItem {
   id: string
@@ -16,6 +17,7 @@ export interface ObservationHistoryItem {
   }
   reportName?: string
   reportId?: string
+  unitInferred?: boolean
 }
 
 export interface ComponentHistoryItem {
@@ -250,6 +252,7 @@ export function useObservationHistory(observationCode?: string) {
           referenceRange,
           reportName,
           reportId,
+          unitInferred: isInferredObservationUnit(obs),
         })
       }
     })

@@ -4,9 +4,22 @@ import type { ContextOverflowIssue } from '@/src/shared/utils/context-budget'
 
 const getClinicalContext = jest.fn(() => [{ title: '病歷', items: ['內容'] }])
 const formatClinicalContext = jest.fn(() => '病'.repeat(3_000))
+let fittedClinicalInput = {
+  dataReady: true,
+  clinicalContext: '病'.repeat(3_000),
+  inputSignature: 'scope-1',
+  contextAdaptation: null as null | {
+    tier: 'compact'
+    contextLimit: number
+    targetTokens: number
+    originalTokens: number
+    adaptedTokens: number
+  },
+}
 
 jest.mock('@/src/application/providers/language.provider', () => ({
   useLanguage: () => ({
+    locale: 'zh-TW',
     t: {
       dataSelection: {
         tokenMeterLabel: '已選病歷內容',
@@ -18,8 +31,18 @@ jest.mock('@/src/application/providers/language.provider', () => ({
         tokenMeterTargetReached: '目前已低於建議值；關閉後可重新產生。',
         tokenMeterOver: '病歷本身過長。',
       },
+      ipsExport: {
+        aiHandoff: {
+          externalTokenLabel: '本次匯出內容',
+          externalDistributionLabel: '內容比例',
+          externalTokenHint: '目的地限制不同，請縮小資料範圍。',
+        },
+      },
     },
   }),
+}))
+jest.mock('@/src/application/hooks/ai-generation/use-clinical-ai-input.hook', () => ({
+  useClinicalAiInput: () => fittedClinicalInput,
 }))
 jest.mock('@/src/application/hooks/use-clinical-context.hook', () => ({
   useClinicalContext: () => ({ getClinicalContext, formatClinicalContext }),
@@ -41,6 +64,12 @@ describe('ContextTokenMeter overflow guidance', () => {
   beforeEach(() => {
     jest.useFakeTimers()
     jest.clearAllMocks()
+    fittedClinicalInput = {
+      dataReady: true,
+      clinicalContext: '病'.repeat(3_000),
+      inputSignature: 'scope-1',
+      contextAdaptation: null,
+    }
   })
 
   afterEach(() => jest.useRealTimers())
@@ -71,5 +100,41 @@ describe('ContextTokenMeter overflow guidance', () => {
     expect(guidance).toHaveTextContent('至少需減少約 4k tokens')
     expect(guidance).toHaveTextContent('降至 2.4k tokens 以下')
     expect(guidance).toHaveTextContent('目前已低於建議值')
+  })
+
+  it('shows the model-fitted scope and token reduction without replacing the saved scope', () => {
+    fittedClinicalInput = {
+      dataReady: true,
+      clinicalContext: '病'.repeat(900),
+      inputSignature: 'scope-1',
+      contextAdaptation: {
+        tier: 'compact',
+        contextLimit: 32_768,
+        targetTokens: 15_822,
+        originalTokens: 20_000,
+        adaptedTokens: 600,
+      },
+    }
+
+    render(<ContextTokenMeter modelId="gpt-5.4-nano" />)
+    act(() => jest.advanceTimersByTime(400))
+
+    expect(screen.getByText('本次實際送出內容')).toBeInTheDocument()
+    const fittedScope = screen.getByTestId('model-fitted-scope')
+    expect(fittedScope).toHaveTextContent('原始選擇約 2k tokens')
+    expect(fittedScope).toHaveTextContent('本次實際送出約 600 tokens')
+    expect(fittedScope).toHaveTextContent('你儲存的資料範圍沒有變更')
+    expect(fittedScope).toHaveTextContent('切回較大模型會自動恢復')
+  })
+
+  it('shows destination-neutral size guidance for external AI export', () => {
+    render(<ContextTokenMeter consumer="aiExport" />)
+    act(() => jest.advanceTimersByTime(400))
+
+    expect(screen.getByText('本次匯出內容')).toBeInTheDocument()
+    expect(screen.getByText(/~2(?:\.0)?k tokens/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /內容比例.*病歷 100%/ })).toBeInTheDocument()
+    expect(screen.getByText('目的地限制不同，請縮小資料範圍。')).toBeInTheDocument()
+    expect(screen.queryByText(/模型:/)).not.toBeInTheDocument()
   })
 })

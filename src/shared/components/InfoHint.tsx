@@ -20,6 +20,8 @@ interface InfoHintProps {
   contentClassName?: string
   /** Trigger icon size — defaults to h-3.5 w-3.5. */
   iconClassName?: string
+  /** Optional short status label shown beside the info icon. */
+  label?: React.ReactNode
   "aria-label"?: string
 }
 
@@ -43,6 +45,7 @@ export function InfoHint({
   className,
   contentClassName,
   iconClassName,
+  label,
   "aria-label": ariaLabel,
 }: InfoHintProps) {
   const [open, setOpen] = React.useState(false)
@@ -65,6 +68,7 @@ export function InfoHint({
             )}
           >
             <Info className={cn("h-3.5 w-3.5", iconClassName)} />
+            {label}
           </button>
         </TooltipTrigger>
         <TooltipContent side={side} className={cn("max-w-xs", contentClassName)}>

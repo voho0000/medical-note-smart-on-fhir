@@ -17,20 +17,36 @@
 //  • once per bundle (keyed by a cheap signature), so re-renders don't re-apply;
 //  • reversible — 還原範本預設 restores the 6-month factory filters;
 //  • a one-time toast tells the user why the whole record was pulled in.
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { toast } from "sonner"
 import { useDataSelection } from "@/src/application/providers/data-selection.provider"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useOpenAiCompatibleProfiles } from "@/src/application/stores/ai-config.store"
 import { DEFAULT_DATA_FILTERS } from "@/src/shared/constants/data-selection.constants"
 import { estimateTokens } from "@/src/shared/utils/token-estimator"
 import { listClinicalDocuments } from "@/src/core/utils/clinical-documents.utils"
+import { clinicalContextTokenTarget } from "@/src/core/utils/adaptive-clinical-context.utils"
+import { isOpenAiCompatibleRuntimeReady } from "@/src/shared/utils/openai-compatible.utils"
+import { normalizeOpenAiCompatibleContextWindow } from "@/src/shared/types/openai-compatible.types"
 import type { DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 
-// Auto-select-all when the whole record is estimated at or below this many
-// context tokens — small enough to leave ample headroom even on the tightest
-// model window (GPT ~120k), so pulling everything in is safe.
+// Maximum used when every configured model has ample room. Smaller custom
+// context windows lower this threshold dynamically.
 export const AUTO_SELECT_ALL_TOKENS = 40_000
+
+/** Conservative auto-all threshold for the smallest ready custom endpoint. */
+export function autoSelectAllTokenLimit(
+  readyContextWindows: readonly number[],
+): number {
+  return readyContextWindows.reduce(
+    (limit, contextWindow) => Math.min(
+      limit,
+      clinicalContextTokenTarget(contextWindow),
+    ),
+    AUTO_SELECT_ALL_TOKENS,
+  )
+}
 
 // Skip the (document-decoding) estimate entirely above this structured-record
 // count: such a patient is unambiguously data-heavy, so there's no point
@@ -86,7 +102,19 @@ function isPristineDefaultFilters(filters: DataFilters): boolean {
 export function useAdaptiveDataDefaults(clinicalData: ClinicalDataCollection | null): void {
   const { filters, activePreset, selectAllData } = useDataSelection()
   const { t } = useLanguage()
+  const openAiCompatibleProfiles = useOpenAiCompatibleProfiles()
   const appliedSigRef = useRef<string | null>(null)
+  const autoSelectThreshold = useMemo(
+    () => autoSelectAllTokenLimit(
+      openAiCompatibleProfiles
+        .filter((profile) => isOpenAiCompatibleRuntimeReady(profile))
+        .map((profile) => normalizeOpenAiCompatibleContextWindow(
+          profile.contextWindowTokens,
+          profile.modelId,
+        )),
+    ),
+    [openAiCompatibleProfiles],
+  )
 
   useEffect(() => {
     if (!clinicalData) return
@@ -102,11 +130,11 @@ export function useAdaptiveDataDefaults(clinicalData: ClinicalDataCollection | n
       return
     }
 
-    if (structured > 0 && estimateFullRecordTokens(clinicalData) <= AUTO_SELECT_ALL_TOKENS) {
+    if (structured > 0 && estimateFullRecordTokens(clinicalData) <= autoSelectThreshold) {
       selectAllData()
       const ds = t.dataSelection as unknown as Record<string, string>
       toast.info(ds.autoSelectAllToast ?? '因資料量少,已自動帶入全部資料(可在「資料範圍」調整)。')
     }
     appliedSigRef.current = sig
-  }, [clinicalData, filters, activePreset, selectAllData, t])
+  }, [clinicalData, filters, activePreset, selectAllData, t, autoSelectThreshold])
 }

@@ -23,6 +23,8 @@ describe('BuildAgentSystemPromptUseCase', () => {
       queryConditions: 'Query conditions',
       queryObservations: 'Query observations',
       queryDiagnosticReports: 'Query reports',
+      queryLabResultsByCategory: 'Query labs by category',
+      queryImagingRecords: 'Query imaging records',
       searchObservationByName: 'Search obs by name',
       listAvailableObservationCodes: 'List obs codes',
       queryProcedures: 'Query procedures',
@@ -65,6 +67,8 @@ describe('BuildAgentSystemPromptUseCase', () => {
       const result = useCase.execute(input)
 
       expect(result).toContain('Base prompt')
+      expect(result).toContain('Query labs by category')
+      expect(result).toContain('Query imaging records')
       expect(typeof result).toBe('string')
       expect(result.length).toBeGreaterThan(0)
     })
@@ -142,6 +146,25 @@ describe('BuildAgentSystemPromptUseCase', () => {
       expect(result).toContain('Query allergies')
     })
 
+    it('should list only schemas exposed for the current routed turn', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPerplexityKey: false,
+        availableToolNames: ['queryAllergies'],
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('Query allergies')
+      expect(result).not.toContain('Query medications')
+      expect(result).not.toContain('Query reports')
+      expect(result).toContain('use the fewest relevant tools')
+      expect(result.startsWith('# NON-NEGOTIABLE CLINICAL OUTPUT CONTRACT')).toBe(true)
+      expect(result).toContain('Taiwanese Traditional Chinese')
+      expect(result).toContain('Never infer a medication')
+      expect(result).toContain('use only tool-provided normalityStatus')
+    })
+
     it('should handle empty clinical context', () => {
       const input: BuildAgentSystemPromptInput = {
         baseSystemPrompt: 'Base prompt',
@@ -169,6 +192,52 @@ describe('BuildAgentSystemPromptUseCase', () => {
 
       expect(result).toContain('Guidelines')
       expect(result).toContain('Prioritize data')
+    })
+
+    it('isolates a general medical question from loaded-patient context', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPatient: true,
+        hasPerplexityKey: false,
+        availableToolNames: [],
+        turnDataScope: 'general',
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('General medical knowledge')
+      expect(result).toContain("Do not use, request, mention, or infer any loaded patient's FHIR data")
+      expect(result).not.toContain('Has Permission')
+      expect(result).not.toContain('Query patient info')
+    })
+
+    it('requires an explicit freshness limitation without a literature tool', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPerplexityKey: false,
+        currentEvidenceUnavailable: true,
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('CURRENT-EVIDENCE LIMITATION')
+      expect(result).toContain('cannot verify the current version')
+      expect(result).toContain('official guideline')
+    })
+
+    it('lets a frontier model choose relevant data sources in automatic scope', () => {
+      const result = useCase.execute({
+        baseSystemPrompt: 'Base prompt',
+        clinicalContext: '',
+        hasPatient: true,
+        hasPerplexityKey: true,
+        turnDataScope: 'auto',
+        translations: mockTranslations,
+      })
+
+      expect(result).toContain('Turn Data Scope: Automatic')
+      expect(result).toContain('patient-record tools, current-literature search, both, or neither')
+      expect(result).toContain('Do not query patient data merely because it is available')
     })
   })
 })

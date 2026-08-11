@@ -25,6 +25,17 @@ export interface ChatReplyReference {
   timestamp: number
 }
 
+/**
+ * Resolved data boundary for a chat turn, including the user's explicit
+ * patient-data opt-out. It is persisted on each message so transcript
+ * filtering remains deterministic and auditable.
+ */
+export type ChatDataScope = 'auto' | 'general' | 'patient' | 'patient-literature'
+
+export function isChatDataScope(value: unknown): value is ChatDataScope {
+  return value === 'auto' || value === 'general' || value === 'patient' || value === 'patient-literature'
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant" | "system"
@@ -35,4 +46,6 @@ export interface ChatMessage {
   images?: ChatImage[]  // Support multiple images
   toolCalls?: string[]  // List of tool names that were called
   replyTo?: ChatReplyReference
+  /** Scope active when this message was sent/generated. */
+  dataScope?: ChatDataScope
 }

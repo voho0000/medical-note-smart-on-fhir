@@ -55,7 +55,7 @@ describe('buildIpsBundle — structure', () => {
     expect(first.meta?.profile).toContain(IPS_PROFILES.composition)
     const type = first.type as { coding?: Array<{ code?: string }> }
     expect(type.coding?.[0]?.code).toBe(COMPOSITION_TYPE_LOINC)
-    expect((first.author as Array<{ display?: string }>)[0].display).toBe('MediPrisma App')
+    expect((first.author as Array<{ display?: string }>)[0].display).toContain('no clinical attestation')
     expect((first.subject as { reference?: string }).reference).toBe(bundle.entry[1].fullUrl)
   })
 
@@ -66,6 +66,24 @@ describe('buildIpsBundle — structure', () => {
     expect(patient.meta?.profile).toContain(IPS_PROFILES.patient)
     expect((patient.name as Array<{ family?: string }>)[0].family).toBe('Patient')
     expect(patient.birthDate).toBe('1980-01-15')
+  })
+
+  it('marks user-entered patient demographics in the exported Patient', () => {
+    const bundle = buildIpsBundle({
+      patient: {
+        ...PATIENT,
+        demographicsSource: 'user-entered-local-profile',
+        userEnteredDemographicFields: ['name', 'gender', 'birthDate'],
+      },
+      data: emptyCollection(),
+    })
+    const patient = bundle.entry
+      .map((entry: any) => entry.resource)
+      .find((resource: any) => resource.resourceType === 'Patient')
+
+    expect(patient.meta.tag).toContainEqual(expect.objectContaining({
+      code: 'user-entered-local-profile',
+    }))
   })
 
   it('preserves Patient identifiers in the IPS Patient resource', () => {
@@ -104,6 +122,36 @@ describe('buildIpsBundle — structure', () => {
         },
       },
     ])
+  })
+
+  it('can mask direct identifiers while preserving the document references', () => {
+    const bundle = buildIpsBundle({
+      patient: {
+        ...PATIENT,
+        identifier: [{ system: 'urn:test:mrn', value: 'MRN-123' }],
+      },
+      data: emptyCollection(),
+      includePatientIdentifiers: false,
+    })
+    const patient = bundle.entry[1].resource
+    const composition = bundle.entry[0].resource
+
+    expect(patient.name).toEqual([{ text: 'Identity masked by the exporter' }])
+    expect(patient.identifier).toBeUndefined()
+    expect(patient.birthDate).toBeUndefined()
+    expect(patient.gender).toBe('female')
+    expect((composition.subject as { reference?: string }).reference).toBe(bundle.entry[1].fullUrl)
+  })
+
+  it('marks the Bundle as IPS-formatted, restricted, and patient-mediated', () => {
+    const bundle = buildIpsBundle({ patient: PATIENT, data: emptyCollection() })
+    expect(bundle.meta?.profile).toContain(IPS_PROFILES.bundle)
+    expect(bundle.meta?.security).toContainEqual(expect.objectContaining({ code: 'R' }))
+    expect(bundle.meta?.tag).toContainEqual(expect.objectContaining({ code: 'patient-mediated-health-bank-export' }))
+    expect(bundle.entry[0].resource.text).toEqual(expect.objectContaining({
+      div: expect.stringContaining('My Health Bank'),
+    }))
+    expect(bundle.entry[0].resource.attester).toBeUndefined()
   })
 
   it('always includes the three required sections, even when empty', () => {

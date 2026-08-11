@@ -23,6 +23,28 @@ export class StreamIdleTimeoutError extends Error {
   }
 }
 
+function abortError(): Error {
+  const error = new Error('Aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+function abortWait(signal?: AbortSignal): {
+  promise: Promise<never>
+  cleanup: () => void
+} | null {
+  if (!signal) return null
+  let onAbort = () => {}
+  const promise = new Promise<never>((_, reject) => {
+    onAbort = () => reject(abortError())
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  return {
+    promise,
+    cleanup: () => signal.removeEventListener('abort', onAbort),
+  }
+}
+
 /**
  * Wrap an async iterable so it aborts if no item arrives for `idleMs`. Idle-
  * based: a reply that keeps streaming (text, or tool events in agent mode)
@@ -32,10 +54,14 @@ export async function* withIdleTimeout<T>(
   source: AsyncIterable<T>,
   idleMs: number,
   onTimeout: () => void,
+  signal?: AbortSignal,
 ): AsyncGenerator<T> {
   const iterator = source[Symbol.asyncIterator]()
   try {
     while (true) {
+      if (signal?.aborted) {
+        throw abortError()
+      }
       let timer: ReturnType<typeof setTimeout> | null = null
       const idle = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
@@ -43,11 +69,17 @@ export async function* withIdleTimeout<T>(
           reject(new StreamIdleTimeoutError())
         }, idleMs)
       })
+      const aborted = abortWait(signal)
       let step: IteratorResult<T>
       try {
-        step = await Promise.race([iterator.next(), idle])
+        step = await Promise.race([
+          iterator.next(),
+          idle,
+          ...(aborted ? [aborted.promise] : []),
+        ])
       } finally {
         if (timer) clearTimeout(timer)
+        aborted?.cleanup()
       }
       if (step.done) return
       yield step.value

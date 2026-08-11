@@ -11,6 +11,7 @@ import type {
   CompositionEntity,
   DocumentReferenceEntity,
 } from '../entities/clinical-data.entity'
+import { estimateTokens } from '@/src/shared/utils/token-estimator'
 
 /** LOINC 18842-5 = 出院病摘 (discharge summary). */
 export const DISCHARGE_SUMMARY_LOINC = '18842-5'
@@ -204,14 +205,64 @@ export function resolveSelectedDocuments(
   return docs.length ? [docs[0]] : []
 }
 
-export function formatDocumentsSection(docs: ClinicalDocumentRef[]): ClinicalContextSection | null {
+export const DOCUMENT_CONTEXT_OMISSION_MARKER =
+  '\n[... middle of document omitted to fit the selected model context window ...]\n'
+
+/**
+ * Preserve both the start and end of a long clinical document. Discharge
+ * diagnoses/history are commonly near the beginning, while discharge plans
+ * and follow-up instructions are commonly near the end.
+ */
+export function fitDocumentTextToTokenBudget(text: string, maxTokens: number): string {
+  if (!text || estimateTokens(text) <= maxTokens) return text
+  const markerTokens = estimateTokens(DOCUMENT_CONTEXT_OMISSION_MARKER)
+  if (maxTokens <= markerTokens) {
+    let prefix = DOCUMENT_CONTEXT_OMISSION_MARKER.trim()
+    while (prefix && estimateTokens(prefix) > maxTokens) {
+      prefix = prefix.slice(0, Math.floor(prefix.length * 0.75))
+    }
+    return prefix
+  }
+
+  let low = 0
+  let high = text.length
+  let best = DOCUMENT_CONTEXT_OMISSION_MARKER.trim()
+  while (low <= high) {
+    const keptCharacters = Math.floor((low + high) / 2)
+    const headCharacters = Math.ceil(keptCharacters / 2)
+    const tailCharacters = keptCharacters - headCharacters
+    const candidate = `${text.slice(0, headCharacters)}${DOCUMENT_CONTEXT_OMISSION_MARKER}${
+      tailCharacters > 0 ? text.slice(-tailCharacters) : ''
+    }`
+    if (estimateTokens(candidate) <= maxTokens) {
+      best = candidate
+      low = keptCharacters + 1
+    } else {
+      high = keptCharacters - 1
+    }
+  }
+  return best
+}
+
+export function formatDocumentsSection(
+  docs: ClinicalDocumentRef[],
+  documentTokenBudget?: number,
+): ClinicalContextSection | null {
   if (docs.length === 0) return null
   const escapeBoundaryToken = (value: string): string =>
     value.replace(/<(BEGIN_DOCUMENT|END_DOCUMENT)\b/gi, '&lt;$1')
+  const perDocumentBudget = documentTokenBudget === undefined
+    ? undefined
+    : Math.max(1, Math.floor(documentTokenBudget / docs.length))
   const items = docs.map((d) => {
     const date = d.date ? new Date(d.date).toLocaleDateString() : ''
     const header = `${d.title}${date ? ` (${date})` : ''}`
-    const body = escapeBoundaryToken(d.text || '[No document body was available]')
+    const bodyText = d.text || '[No document body was available]'
+    const body = escapeBoundaryToken(
+      perDocumentBudget === undefined
+        ? bodyText
+        : fitDocumentTextToTokenBudget(bodyText, perDocumentBudget),
+    )
     // Only a sanitized FHIR id is allowed in the delimiter. Document titles
     // are untrusted source text and must not be able to close or mutate the
     // boundary by injecting quotes / angle brackets into an attribute.

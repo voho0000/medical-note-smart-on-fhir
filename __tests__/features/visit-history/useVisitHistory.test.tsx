@@ -10,7 +10,8 @@ import {
   ENCOUNTER_CHANNEL_SYSTEM,
 } from '@/src/shared/utils/encounter-type.utils'
 
-function render(encounters: any[]) {
+function render(encounters: any[], locale: 'en' | 'zh-TW' = 'zh-TW') {
+  localStorage.setItem('medical-note-locale', locale)
   return renderHook(() => useVisitHistory(encounters), {
     wrapper: ({ children }) => <LanguageProvider>{children}</LanguageProvider>,
   })
@@ -93,9 +94,58 @@ describe('useVisitHistory — bridge bug regression locks', () => {
       expect(result.current[0].type).toBe('outpatient')
       expect(result.current[0].department).toBe('IC卡資料')
     })
+
+    it('localizes the two fixed channel labels in the English UI', () => {
+      const { result } = render([
+        {
+          id: 'enc-card',
+          status: 'finished',
+          class: { code: 'AMB' },
+          type: [
+            { text: '門診', coding: [{ system: ENCOUNTER_KIND_SYSTEM, code: 'outpatient' }] },
+            { text: 'IC卡資料', coding: [{ system: ENCOUNTER_CHANNEL_SYSTEM, code: 'ic-card' }] },
+          ],
+          period: { start: '2026-05-13T00:00:00+08:00' },
+        },
+        {
+          id: 'enc-claims',
+          status: 'finished',
+          class: { code: 'EMER' },
+          type: [
+            { text: '急診', coding: [{ system: ENCOUNTER_KIND_SYSTEM, code: 'emergency' }] },
+            { text: '申報資料', coding: [{ system: ENCOUNTER_CHANNEL_SYSTEM, code: 'claims' }] },
+          ],
+          period: { start: '2026-05-12T00:00:00+08:00' },
+        },
+      ], 'en')
+
+      expect(result.current.map((visit) => visit.department))
+        .toEqual(['NHI card data', 'Claims data'])
+    })
   })
 
   describe('visit-type classification fallbacks', () => {
+    it('keeps SDK 門急診 explicitly ambiguous instead of classifying it as emergency or outpatient', () => {
+      const { result } = render([
+        {
+          id: 'sdk-r1',
+          status: 'finished',
+          class: { code: 'AMB' },
+          type: [{
+            text: '門急診',
+            coding: [{
+              system: ENCOUNTER_KIND_SYSTEM,
+              code: 'outpatient-or-emergency',
+              display: '門急診',
+            }],
+          }],
+          period: { start: '2026-05-13T00:00:00+08:00' },
+        },
+      ])
+
+      expect(result.current[0].type).toBe('outpatient-or-emergency')
+    })
+
     it('classifies by class.code when type[].text is missing', () => {
       const { result } = render([
         {
@@ -123,6 +173,64 @@ describe('useVisitHistory — bridge bug regression locks', () => {
         },
       ])
       expect(result.current[0].type).toBe('pharmacy')
+    })
+  })
+
+  describe('NHI care-discipline classification', () => {
+    it.each([
+      ['western', 'outpatient', '門診'],
+      ['tcm', 'tcm-outpatient', '中醫門診'],
+      ['dental', 'dental-outpatient', '牙科門診'],
+    ])('classifies %s from the bridge v1.6 encounter-kind code', (
+      expectedDiscipline,
+      kindCode,
+      kindText,
+    ) => {
+      const { result } = render([{
+        id: `enc-${kindCode}`,
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [
+          {
+            text: kindText,
+            coding: [{
+              system: ENCOUNTER_KIND_SYSTEM,
+              code: kindCode,
+              display: kindText,
+            }],
+          },
+          {
+            text: '申報資料',
+            coding: [{
+              system: ENCOUNTER_CHANNEL_SYSTEM,
+              code: 'claims',
+              display: '申報資料',
+            }],
+          },
+        ],
+        period: { start: '2026-06-23T00:00:00+08:00' },
+      }])
+
+      expect(result.current[0].careDiscipline).toBe(expectedDiscipline)
+      expect(result.current[0].type).toBe('outpatient')
+    })
+
+    it.each([
+      ['tcm', '中醫門診'],
+      ['dental', '牙醫門診'],
+    ])('falls back to legacy %s text when the code is absent', (
+      expectedDiscipline,
+      kindText,
+    ) => {
+      const { result } = render([{
+        id: `legacy-${expectedDiscipline}`,
+        status: 'finished',
+        class: { code: 'AMB' },
+        type: [{ text: kindText }],
+        period: { start: '2025-04-11T00:00:00+08:00' },
+      }])
+
+      expect(result.current[0].careDiscipline).toBe(expectedDiscipline)
     })
   })
 

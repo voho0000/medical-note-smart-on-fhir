@@ -7,6 +7,7 @@ import type {
   MedicationRequest,
   DosageInstruction,
 } from '@/src/shared/types/fhir.types'
+import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
 export type {
   CodeableConcept,
@@ -22,9 +23,23 @@ export type DurationLike = Duration
 export type PeriodLike = Period
 export type Medication = MedicationRequest
 
+export interface MedicationExecutionPeriod {
+  /** Source-reported execution start; kept as ISO/FHIR date or dateTime. */
+  start?: string
+  /** Source-reported execution end; kept as ISO/FHIR date or dateTime. */
+  end?: string
+}
+
 export interface MedicationRow {
   id: string
+  /** Stable source medication key used for grouping; never infer identity from
+   *  the audience-facing title because different products can share an
+   *  ingredient name. */
+  drugKey?: string
   title: string
+  /** Optional product/brand name shown after the medical ingredient title on
+   *  the same line. Patient rows intentionally leave this empty. */
+  secondaryTitle?: string
   status: string
   dose?: string
   route?: string
@@ -46,6 +61,8 @@ export interface MedicationRow {
    *  Sourced from FHIR MedicationRequest.category[0]. Empty when no category
    *  is attached (older bundles or uncategorised one-off meds). */
   category?: string
+  /** Official, date-effective drug-master data added by the App. */
+  drugTerminology?: MedicationEntity['drugTerminology']
   // ── Refill-history aggregate (derived across all MedicationRequests for
   //    this drug). Lets a single row surface compliance / adherence info
   //    without forcing the user to expand the per-drug accordion in the

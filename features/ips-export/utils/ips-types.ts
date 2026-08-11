@@ -21,6 +21,8 @@ export interface FhirReference {
 
 export interface FhirMeta {
   profile?: string[]
+  tag?: FhirCoding[]
+  security?: FhirCoding[]
 }
 
 /**
@@ -57,6 +59,7 @@ export interface IpsBundleEntry {
 
 export interface IpsBundle {
   resourceType: 'Bundle'
+  meta?: FhirMeta
   type: 'document'
   identifier?: {
     system?: string

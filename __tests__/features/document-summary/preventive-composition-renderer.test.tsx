@@ -84,7 +84,7 @@ describe('preventive-care Composition continuous document mode', () => {
     const tableNarrative = tableSection?.children.item(1)
     expect(tableNarrative?.className).toContain('[&_table]:w-full')
     expect(tableNarrative?.className).toContain('[&_table]:table-fixed')
-    expect(tableNarrative?.className).toContain('[&_col:first-child]:w-[36%]')
+    expect(tableNarrative?.className).toContain('preventive-narrative')
     expect(screen.queryByRole('button', { name: /一般檢查|血壓|血脂肪/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '收合全文' }))

@@ -89,4 +89,16 @@ describe('GenerateFollowupSuggestionsUseCase.buildMessages', () => {
     const user = uc.buildMessages({ lastUser: 'q', lastAssistant: 'a', locale: 'en' })[1].content
     expect(user).not.toContain('do NOT re-suggest')
   })
+
+  it('scrubs patient literals from the latest turn, answer, and earlier questions', () => {
+    const user = uc.buildMessages({
+      lastUser: '請整理王小明的狀況',
+      lastAssistant: '王小明目前腎功能穩定',
+      locale: 'zh-TW',
+      recentUserMessages: ['王小明上次的 HbA1c？'],
+      piiLiterals: ['王小明'],
+    })[1].content
+    expect(user).not.toContain('王小明')
+    expect(user.match(/\[已遮蔽\]/g)?.length).toBe(3)
+  })
 })

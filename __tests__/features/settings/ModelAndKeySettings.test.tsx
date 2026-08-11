@@ -360,7 +360,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(screen.queryByText('尚未設定端點')).not.toBeInTheDocument()
   })
 
-  it('starts a new endpoint at 32,768 and applies known model suggestions until edited', () => {
+  it('starts a new endpoint at 262,144 and applies known model suggestions until edited', () => {
     useAiConfigStore.setState({
       openAiCompatibleProfiles: [],
       openAiCompatible: {
@@ -377,7 +377,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     const contextInput = screen.getByRole('spinbutton', {
       name: '內容視窗（tokens）',
     })
-    expect(contextInput).toHaveValue(32768)
+    expect(contextInput).toHaveValue(262144)
 
     fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
       target: { value: 'qwen2.5vl:7b' },
@@ -1048,12 +1048,15 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     const contextInput = await screen.findByRole('spinbutton', {
       name: '內容視窗（tokens）',
     })
+    const contextSource = screen.getByTestId('openai-compatible-context-window-source')
     await waitFor(() => expect(contextInput).toHaveValue(262144))
+    expect(contextSource).toHaveTextContent('來源：端點偵測')
     expect(useAiConfigStore.getState().openAiCompatible.contextWindowTokens).toBe(32768)
     expect(screen.getByText(/端點回報 262,144 tokens/)).toBeInTheDocument()
 
     fireEvent.change(contextInput, { target: { value: '65536' } })
     expect(contextInput).toHaveValue(65536)
+    expect(contextSource).toHaveTextContent('來源：手動自訂')
     expect(screen.getByRole('button', { name: '套用偵測值' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '測試連線' }))
@@ -1076,6 +1079,42 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(sessionStorage.getItem('openai_compatible_config')).toBeNull()
   })
 
+  it('restores the system suggestion when a manual context window is cleared and saved', async () => {
+    const manualConfig = {
+      ...useAiConfigStore.getState().openAiCompatible,
+      baseUrl: 'https://llm.intra.example/v1',
+      modelId: 'hospital-model',
+      contextWindowTokens: 65536,
+      contextWindowSource: 'manual' as const,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [{ profileId: 'legacy', ...manualConfig }],
+      openAiCompatible: manualConfig,
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    const contextInput = screen.getByRole('spinbutton', {
+      name: '內容視窗（tokens）',
+    })
+    fireEvent.change(contextInput, { target: { value: '' } })
+
+    expect(contextInput).toHaveValue(null)
+    expect(contextInput).toHaveAttribute('placeholder', '262144')
+    expect(screen.getByTestId('openai-compatible-context-window-source'))
+      .toHaveTextContent('來源：系統建議')
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存並啟用' }))
+
+    await waitFor(() => {
+      expect(contextInput).toHaveValue(262144)
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        contextWindowTokens: 262144,
+        contextWindowSource: 'suggested',
+      })
+    })
+  })
+
   it('saves an accepted auto-detected value with detected provenance', async () => {
     mockTestOpenAiCompatibleConnection.mockResolvedValue({
       models: ['qwen2.5:7b'],
@@ -1091,6 +1130,8 @@ describe('ModelAndKeySettings progressive disclosure', () => {
       name: '內容視窗（tokens）',
     })
     await waitFor(() => expect(contextInput).toHaveValue(262144))
+    expect(screen.getByTestId('openai-compatible-context-window-source'))
+      .toHaveTextContent('來源：端點偵測')
     fireEvent.click(screen.getByRole('button', { name: '儲存並啟用' }))
 
     await waitFor(() => {
@@ -1099,6 +1140,16 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         contextWindowSource: 'detected',
       })
     })
+  })
+
+  it('shows when the context window is a system suggestion before testing', () => {
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+
+    expect(screen.getByRole('spinbutton', { name: '內容視窗（tokens）' })).toHaveValue(32768)
+    expect(screen.getByTestId('openai-compatible-context-window-source'))
+      .toHaveTextContent('來源：系統建議')
   })
 
   it('does not overwrite a saved manual context window during connection testing', async () => {

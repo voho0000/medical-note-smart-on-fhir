@@ -36,6 +36,7 @@ export interface StreamConfig {
   onChunk: (content: string) => void
   temperature?: number
   maxTokens?: number
+  reasoningEffort?: 'low' | 'medium' | 'high'
   responseFormat?: 'json'
   /** Optional per-request idle window. Slow local models need longer for the
    *  first token after evaluating a large selected clinical context. */
@@ -91,6 +92,10 @@ export class AiSdkStreamAdapter {
       abortSignal: controller.signal,
       ...(temperature !== undefined ? { temperature } : {}),
       ...(config.maxTokens !== undefined ? { maxOutputTokens: config.maxTokens } : {}),
+      ...(isCustom && config.reasoningEffort !== undefined &&
+        /^gpt-oss(?::|-)/i.test(config.openAiCompatible?.modelId.trim() ?? '')
+        ? { providerOptions: { openai: { reasoningEffort: config.reasoningEffort } } }
+        : {}),
       ...(config.responseFormat === 'json' ? { output: Output.json() } : {}),
       onError: ({ error }) => { streamError = error },
     })
@@ -113,6 +118,7 @@ export class AiSdkStreamAdapter {
         result.textStream,
         idleTimeoutMs,
         () => controller.abort(),
+        config.signal,
       )) {
         fullText += delta
         config.onChunk(fullText)

@@ -94,6 +94,8 @@ const clampedText = (max: number) =>
   z.string().min(1).transform((s) => (s.length > max ? s.slice(0, max) : s))
 const clampedKeys = (max: number) =>
   z.array(z.string()).optional().default([]).transform((a) => a.slice(0, max))
+const clampedRequiredKeys = (max: number) =>
+  z.array(z.string().min(1)).min(1).transform((a) => a.slice(0, max))
 
 // One narrative segment. `emphasis` segments render as highlights; `sources`
 // hold catalog keys (e.g. "E1") — never free-text citations.
@@ -130,7 +132,7 @@ export const SummaryProblemSchema = z.object({
   basis: z.string().transform((s) => (s.length > 80 ? s.slice(0, 80) : s)).optional(),
   /** What kind of evidence — drives the badge (off-list → 'other'). */
   kind: z.string().optional(),
-  sources: clampedKeys(6),
+  sources: clampedRequiredKeys(6),
 })
 
 // A compact, disease-relevant lab / imaging analysis. The model writes the
@@ -144,7 +146,7 @@ export const SummaryInvestigationSchema = z.object({
   trend: clampedText(240),
   /** One short, patient-specific interpretation of why the result matters. */
   interpretation: clampedText(400),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 // Patient-facing medication education. This intentionally describes how a
@@ -155,27 +157,27 @@ export const SummaryMedicationEducationSchema = z.object({
   name: clampedText(120),
   benefit: clampedText(400),
   attention: clampedText(400),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 const SummaryMedicationRegimenSchema = z.object({
   group: clampedText(80),
   name: clampedText(160),
   sig: z.string().transform((s) => (s.length > 240 ? s.slice(0, 240) : s)).optional(),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 const SummaryMedicationChangeSchema = z.object({
   type: z.string().optional(),
   medication: clampedText(160),
   summary: clampedText(320),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 const SummaryMedicationReconciliationItemSchema = z.object({
   reason: z.string().optional(),
   text: clampedText(320),
-  sources: clampedKeys(8),
+  sources: clampedRequiredKeys(8),
 })
 
 export const SummaryMedicationReviewSchema = z.object({
@@ -211,6 +213,53 @@ export const MedicalSummaryAiResultSchema = z.object({
 })
 export type MedicalSummaryAiResult = z.infer<typeof MedicalSummaryAiResultSchema>
 
+// The fixed summary is generated as independently validated modules. Keeping
+// these ids in the domain layer lets generation, cache, orchestration, and UI
+// agree on exactly which card failed without coupling those layers together.
+export const MEDICAL_SUMMARY_MODULE_IDS = [
+  'priorities',
+  'problems',
+  'timeline',
+  'investigations',
+  'medications',
+] as const
+export type MedicalSummaryModuleId = (typeof MEDICAL_SUMMARY_MODULE_IDS)[number]
+
+export const MedicalSummaryPrioritiesModuleSchema = z.object({
+  headline: clampedText(240),
+  summary: z.array(SummarySegmentSchema).min(1).transform((a) => a.slice(0, 32)),
+})
+export const MedicalSummaryProblemsModuleSchema = z.object({
+  problems: z.array(SummaryProblemSchema).default([]).transform((a) => a.slice(0, 20)),
+})
+export const MedicalSummaryTimelineModuleSchema = z.object({
+  timeline: z.array(TimelinePickSchema).default([]).transform((a) => a.slice(0, 50)),
+})
+export const MedicalSummaryInvestigationsModuleSchema = z.object({
+  investigations: z.array(SummaryInvestigationSchema).default([]).transform((a) => a.slice(0, 8)),
+})
+export const MedicalSummaryMedicationsModuleSchema = z.object({
+  medicationEducation: z.array(SummaryMedicationEducationSchema).default([]).transform((a) => a.slice(0, 5)),
+  medicationReview: SummaryMedicationReviewSchema.default({
+    regimen: [],
+    changes: [],
+    reconciliation: [],
+  }),
+})
+
+export interface MedicalSummaryModuleResultMap {
+  priorities: z.infer<typeof MedicalSummaryPrioritiesModuleSchema>
+  problems: z.infer<typeof MedicalSummaryProblemsModuleSchema>
+  timeline: z.infer<typeof MedicalSummaryTimelineModuleSchema>
+  investigations: z.infer<typeof MedicalSummaryInvestigationsModuleSchema>
+  medications: z.infer<typeof MedicalSummaryMedicationsModuleSchema>
+}
+
+export type MedicalSummaryModuleResult<T extends MedicalSummaryModuleId = MedicalSummaryModuleId> =
+  MedicalSummaryModuleResultMap[T]
+
+export type MedicalSummaryModuleErrors = Partial<Record<MedicalSummaryModuleId, string>>
+
 // ---------------------------------------------------------------------------
 // App-side catalog & finalized (verified) result
 // ---------------------------------------------------------------------------
@@ -229,7 +278,14 @@ export interface SummarySourceCatalogEntry {
   display: string
   /** ISO date (YYYY-MM-DD) taken from the resource — never from the AI. */
   date?: string
+  /** ISO period end date taken from the resource. Currently populated for
+   *  Encounter periods so admissions render their full stay deterministically. */
+  endDate?: string
   organization?: string
+  /** Whether the cited laboratory evidence itself contains an interpretation
+   *  flag or reference range. A numeric value alone must not be described as
+   *  high/low, controlled/uncontrolled, or at/not at target. */
+  supportsNormalityAssessment?: boolean
   /** Lazy decoded document narrative, used only for claim-level verification.
    *  Kept out of prompts/source pills so large discharge summaries are not
    *  duplicated in memory or exposed as metadata. */
@@ -250,12 +306,15 @@ export interface ResolvedSourceRef {
   resourceId?: string
   display?: string
   date?: string
+  endDate?: string
   organization?: string
 }
 
 export interface SummaryTimelineEvent {
   key: string
   date: string
+  /** Deterministic Encounter.period.end; omitted for point-in-time events. */
+  endDate?: string
   label: string
   category: TimelineCategory
   organization?: string
@@ -322,6 +381,10 @@ export interface MedicalSummaryResult {
    * different model or timestamp. Legacy caches may omit it; bundled demo
    * snapshots use explicit pre-generated provenance without a timestamp. */
   generation?: MedicalSummaryGeneration
+  /** Per-card generation failures. Successful modules remain renderable and
+   * cached; Retry regenerates only these ids. Missing means a legacy or fully
+   * successful result. */
+  moduleErrors?: MedicalSummaryModuleErrors
   headline: string
   summary: Array<{ text: string; emphasis: boolean; sourceKeys: string[] }>
   investigations: SummaryInvestigation[]

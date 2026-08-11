@@ -16,6 +16,8 @@ import {
   Stethoscope,
   User as UserIcon,
   Languages,
+  PanelLeft,
+  PanelRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,7 +38,15 @@ import { localeNames, type Locale } from '@/src/shared/i18n/i18n.config'
 
 const AUDIENCE_ORDER: Audience[] = ['medical', 'patient']
 
-export function HeaderOverflowMenu() {
+export function HeaderOverflowMenu({
+  tourDisabled = false,
+  onStartLeftTour,
+  onStartRightTour,
+}: {
+  tourDisabled?: boolean
+  onStartLeftTour?: () => void
+  onStartRightTour?: () => void
+}) {
   const { t, locale, setLocale } = useLanguage()
   const { audience, setAudience } = useAudience()
   const { setActiveTab } = useRightPanel()
@@ -94,6 +104,25 @@ export function HeaderOverflowMenu() {
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={onStartLeftTour}
+            disabled={tourDisabled || !onStartLeftTour}
+            className="gap-2"
+          >
+            <PanelLeft className="h-4 w-4" />
+            {locale === 'en' ? 'Source record tour' : '左側病歷導覽'}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={onStartRightTour}
+            disabled={tourDisabled || !onStartRightTour}
+            className="gap-2"
+          >
+            <PanelRight className="h-4 w-4" />
+            {locale === 'en' ? 'Clinical tools tour' : '右側功能導覽'}
+          </DropdownMenuItem>
 
           <DropdownMenuSeparator />
 

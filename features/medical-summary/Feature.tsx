@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
+import { Bug, ClipboardList, Database, LayoutList, Loader2, Settings2 } from "lucide-react"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useRightPanel } from "@/src/application/providers/right-panel.provider"
@@ -33,6 +33,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
+import { InfoHint } from "@/src/shared/components/InfoHint"
 import {
   MODEL_PREF_DEFAULTS,
   useModelPref,
@@ -44,6 +45,7 @@ import {
   openAiCompatibleProfileIdFromModelId,
 } from "@/src/shared/constants/ai-models.constants"
 import { formatApproxTokenCount, type ContextOverflowIssue } from "@/src/shared/utils/context-budget"
+import { formatClinicalContextAdaptationNotice } from "@/src/core/utils/adaptive-clinical-context.utils"
 import { CurrentPrioritiesCard } from "./components/CurrentPrioritiesCard"
 import { DecisionList } from "./components/DecisionList"
 import { InvestigationTrendsCard } from "./components/InvestigationTrendsCard"
@@ -82,16 +84,22 @@ import {
 import { buildSummaryGenerationInfo } from "./utils/summary-generation-info"
 import { useClinicalInsightsRuntime } from "@/features/clinical-insights/ClinicalInsightsRuntimeProvider"
 import { MAX_SUMMARY_INSIGHT_MODULES } from "@/src/shared/constants/clinical-insights.constants"
+import { MEDICAL_SUMMARY_MODULE_IDS } from "@/src/core/entities/medical-summary.entity"
 import type {
   EncounterClass,
   InvestigationDirection,
   InvestigationKind,
+  MedicalSummaryModuleId,
   MedicationChangeType,
   ProblemKind,
   ResolvedSourceRef,
   SummaryUrgency,
   TimelineCategory,
 } from "@/src/core/entities/medical-summary.entity"
+import { useAiExecutionDiagnosticsStore } from "@/src/application/stores/ai-execution-diagnostics.store"
+import { downloadAiExecutionDiagnostics } from "@/src/shared/utils/ai-execution-diagnostics"
+import { AiExecutionDiagnosticsDialog } from "@/src/shared/components/AiExecutionDiagnosticsDialog"
+import { useMedcloudAutoSummary } from "@/src/application/hooks/medical-summary/use-medcloud-auto-summary.hook"
 
 type SummaryView = "standard" | "custom"
 
@@ -134,6 +142,7 @@ export default function MedicalSummaryFeature() {
   const [customUnread, setCustomUnread] = useState(false)
   const [customManagerOpen, setCustomManagerOpen] = useState(false)
   const [dataScopeOpen, setDataScopeOpen] = useState(false)
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [overflowResolutionOpen, setOverflowResolutionOpen] = useState(false)
   const [selectedCustomPanelId, setSelectedCustomPanelId] = useState<string | undefined>()
   const previousLoadingPanelsRef = useRef<Set<string>>(new Set())
@@ -189,13 +198,50 @@ export default function MedicalSummaryFeature() {
     isSafetyGenerating,
     isRestoring,
     summaryError,
+    summaryModuleErrors,
     safetyError,
     contextOverflowIssue,
+    contextAdaptation,
     hasAnyResult,
     hasCompleteResult,
     resolveSafetySource,
     activeGeneration,
+    summaryGenerationSlotKey,
+    safetyGenerationSlotKey,
   } = useMedicalSummaryOrchestrator()
+  useMedcloudAutoSummary({
+    hasPatient,
+    dataReady,
+    isGenerating: isBusy,
+    isRestoring,
+    modelId: model,
+    generate,
+  })
+  const allAiDiagnostics = useAiExecutionDiagnosticsStore((state) => state.records)
+  const visibleAiDiagnostics = useMemo(() => {
+    if (activeView === "custom") {
+      return allAiDiagnostics.filter((record) => record.feature === "clinical-insights")
+    }
+    return allAiDiagnostics.filter((record) => (
+      record.operationKey === summaryGenerationSlotKey ||
+      record.operationKey === safetyGenerationSlotKey
+    ))
+  }, [activeView, allAiDiagnostics, safetyGenerationSlotKey, summaryGenerationSlotKey])
+  const exportAiDiagnostics = useCallback(() => {
+    if (visibleAiDiagnostics.length === 0) return
+    downloadAiExecutionDiagnostics(
+      activeView === "custom" ? "medical-summary-custom" : "medical-summary",
+      visibleAiDiagnostics,
+    )
+  }, [activeView, visibleAiDiagnostics])
+  const exportOneAiDiagnostic = useCallback((index: number) => {
+    const record = visibleAiDiagnostics[index]
+    if (!record) return
+    downloadAiExecutionDiagnostics(
+      activeView === "custom" ? "medical-summary-custom" : "medical-summary",
+      [record],
+    )
+  }, [activeView, visibleAiDiagnostics])
   const [overflowGuidance, setOverflowGuidance] = useState<ContextOverflowIssue | null>(null)
 
   // Keep the exact reduction target visible while the user edits the scope.
@@ -214,20 +260,43 @@ export default function MedicalSummaryFeature() {
     () => (isPatient ? { ...t.safetyAlerts, ...t.safetyAlerts.patient } : t.safetyAlerts),
     [isPatient, t.safetyAlerts],
   )
-  const generationErrors = useMemo(() => [
-    summaryError ? {
-      label: ms.prioritiesTitle,
-      message: summaryError === "PARSE_FAILED"
-        ? ms.parseError
-        : summaryError,
-    } : null,
-    safetyError ? {
-      label: ms.careSafetyTitle,
-      message: safetyError === "PARSE_FAILED"
-        ? safetyText.parseError
-        : safetyError,
-    } : null,
-  ].filter((item): item is { label: string; message: string } => item !== null), [ms, safetyError, safetyText.parseError, summaryError])
+  const summaryModuleLabels = useMemo<Record<MedicalSummaryModuleId, string>>(() => ({
+    priorities: ms.prioritiesTitle,
+    problems: ms.problemsTitle,
+    timeline: ms.timelineTitle,
+    investigations: ms.investigationsTitle,
+    medications: isPatient ? ms.medicationEducationTitle : ms.medicationReviewTitle,
+  }), [isPatient, ms])
+  const hasSummaryModuleErrors = Object.values(summaryModuleErrors).some(Boolean)
+  const generationErrors = useMemo(() => {
+    const moduleErrors = MEDICAL_SUMMARY_MODULE_IDS.flatMap((moduleId) => {
+      const error = summaryModuleErrors[moduleId]
+      return error ? [{
+        label: summaryModuleLabels[moduleId],
+        message: error === "PARSE_FAILED" ? ms.parseError : error,
+      }] : []
+    })
+    const genericSummaryError = summaryError && summaryError !== "MODULES_FAILED"
+      ? [{
+          label: ms.prioritiesTitle,
+          message: summaryError === "PARSE_FAILED" ? ms.parseError : summaryError,
+        }]
+      : []
+    const safetyErrors = safetyError
+      ? [{
+          label: ms.careSafetyTitle,
+          message: safetyError === "PARSE_FAILED" ? safetyText.parseError : safetyError,
+        }]
+      : []
+    return [...moduleErrors, ...genericSummaryError, ...safetyErrors]
+  }, [
+    ms,
+    safetyError,
+    safetyText.parseError,
+    summaryError,
+    summaryModuleErrors,
+    summaryModuleLabels,
+  ])
   const displayedGenerationErrors = useMemo(() => {
     if (
       !contextOverflowIssue ||
@@ -393,16 +462,20 @@ export default function MedicalSummaryFeature() {
   const cardRefs = useRef<Partial<Record<MedicalSummaryCardId, HTMLDivElement | null>>>({})
 
   const showSafetyCard = Boolean(safetyResult || (!safetyError && result))
+  const moduleSucceeded = useCallback(
+    (moduleId: MedicalSummaryModuleId) => Boolean(result && !summaryModuleErrors[moduleId]),
+    [result, summaryModuleErrors],
+  )
   const availableCardIds = useMemo<MedicalSummaryCardId[]>(() => {
     const ids: MedicalSummaryCardId[] = []
-    if (result) ids.push("problems")
-    if (result?.timeline.length) ids.push("timeline")
+    if (moduleSucceeded("problems")) ids.push("problems")
+    if (moduleSucceeded("timeline") && result?.timeline.length) ids.push("timeline")
     if (showSafetyCard) ids.push("safety")
     if (result?.decisions.length) ids.push("decisions")
-    if (result) ids.push("investigations")
-    if (result) ids.push("medications")
+    if (moduleSucceeded("investigations")) ids.push("investigations")
+    if (moduleSucceeded("medications")) ids.push("medications")
     return ids
-  }, [result, showSafetyCard])
+  }, [moduleSucceeded, result, showSafetyCard])
 
   const cardLayout = useMedicalSummaryCardLayout({ audience, availableIds: availableCardIds })
 
@@ -555,7 +628,7 @@ export default function MedicalSummaryFeature() {
   }, [])
 
   const summaryCards: Partial<Record<MedicalSummaryCardId, ReactNode>> = {
-    problems: result ? (
+    problems: result && moduleSucceeded("problems") ? (
       <div
         id="medical-summary-card-problems"
         ref={(node) => { cardRefs.current.problems = node }}
@@ -575,7 +648,7 @@ export default function MedicalSummaryFeature() {
         />
       </div>
     ) : null,
-    timeline: result?.timeline.length ? (
+    timeline: result && moduleSucceeded("timeline") && result.timeline.length ? (
       <div
         id="medical-summary-card-timeline"
         ref={(node) => { cardRefs.current.timeline = node }}
@@ -634,7 +707,7 @@ export default function MedicalSummaryFeature() {
         />
       </div>
     ) : null,
-    investigations: result ? (
+    investigations: result && moduleSucceeded("investigations") ? (
       <div
         id="medical-summary-card-investigations"
         ref={(node) => { cardRefs.current.investigations = node }}
@@ -659,7 +732,7 @@ export default function MedicalSummaryFeature() {
         />
       </div>
     ) : null,
-    medications: result ? (
+    medications: result && moduleSucceeded("medications") ? (
       <div
         id="medical-summary-card-medications"
         ref={(node) => { cardRefs.current.medications = node }}
@@ -753,7 +826,10 @@ export default function MedicalSummaryFeature() {
             ) : null}
           </TabsTrigger>
         </TabsList>
-        <div className="ml-auto flex min-w-0 flex-nowrap items-center justify-end gap-1.5">
+        <div
+          data-tour="medical-summary-controls"
+          className="ml-auto flex min-w-0 flex-nowrap items-center justify-end gap-1.5"
+        >
           {activeView === "standard" ? (
             <ModelPicker
               modelId={model}
@@ -772,6 +848,21 @@ export default function MedicalSummaryFeature() {
               compact
             />
           )}
+          {activeView === "standard" && contextAdaptation ? (
+            <InfoHint
+              aria-label={ms.adaptedScopeLabel}
+              side="bottom"
+              className="h-7 shrink-0 gap-1 rounded-md border border-violet-300 bg-violet-50 px-1.5 text-violet-700 hover:bg-violet-100 hover:text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300 dark:hover:bg-violet-950/70 dark:hover:text-violet-100"
+              contentClassName="max-w-[min(90vw,24rem)] text-left leading-relaxed"
+              label={(
+                <span className="hidden text-[0.6875rem] font-medium @min-[44rem]:inline">
+                  {ms.adaptedScopeLabel}
+                </span>
+              )}
+            >
+              {formatClinicalContextAdaptationNotice(contextAdaptation, locale)}
+            </InfoHint>
+          ) : null}
           {activeView === "standard" ? (
             hasPatient && dataReady ? (
               <SummaryGenerationButton
@@ -861,6 +952,26 @@ export default function MedicalSummaryFeature() {
                   {ms.cardLayoutButton}
                 </Button>
               ) : null}
+              <div className="flex justify-end border-t pt-1">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  data-testid="medical-summary-ai-diagnostics-export"
+                  className="h-6 w-6 text-muted-foreground opacity-35 transition-opacity hover:opacity-100"
+                  onClick={() => {
+                    setSummarySettingsOpen(false)
+                    setDiagnosticsOpen(true)
+                  }}
+                  disabled={visibleAiDiagnostics.length === 0}
+                  title={visibleAiDiagnostics.length > 0
+                    ? ms.exportAiDiagnosticsTitle
+                    : ms.exportAiDiagnosticsUnavailable}
+                  aria-label={ms.exportAiDiagnosticsTitle}
+                >
+                  <Bug className="h-3 w-3" />
+                </Button>
+              </div>
             </PopoverContent>
           </Popover>
         </div>
@@ -972,7 +1083,7 @@ export default function MedicalSummaryFeature() {
             runningAriaTemplate={ms.summaryGenerationRunningProvenance}
           />
 
-          {result ? (
+          {result && moduleSucceeded("priorities") ? (
             <CurrentPrioritiesCard
               result={result}
               title={ms.prioritiesTitle}
@@ -982,7 +1093,9 @@ export default function MedicalSummaryFeature() {
               typeLabel={typeLabel}
               unverifiedLabel={ms.unverified}
               onNavigate={navigateToResource}
-              updating={isSummaryGenerating}
+              updating={isSummaryGenerating && (
+                !hasSummaryModuleErrors || Boolean(summaryModuleErrors.priorities)
+              )}
             />
           ) : null}
 
@@ -1038,6 +1151,14 @@ export default function MedicalSummaryFeature() {
         open={customManagerOpen}
         onOpenChange={setCustomManagerOpen}
         initialPanelId={selectedCustomPanelId}
+      />
+      <AiExecutionDiagnosticsDialog
+        open={diagnosticsOpen}
+        onOpenChange={setDiagnosticsOpen}
+        records={visibleAiDiagnostics}
+        labels={t.aiDiagnostics}
+        onDownloadAll={exportAiDiagnostics}
+        onDownloadRecord={exportOneAiDiagnostic}
       />
       <AlertDialog open={overflowResolutionOpen} onOpenChange={setOverflowResolutionOpen}>
         <AlertDialogContent>

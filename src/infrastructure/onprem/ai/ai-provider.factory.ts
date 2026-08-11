@@ -1,5 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai'
-import { CUSTOM_OPENAI_MODEL_ID } from '@/src/shared/constants/ai-models.constants'
+import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import type { OpenAiCompatibleConfig } from '@/src/shared/types/openai-compatible.types'
 import {
   isOpenAiCompatibleReady,
@@ -24,7 +24,7 @@ export interface ProviderResult {
 
 export class AiProviderFactory {
   create(config: ProviderConfig): ProviderResult {
-    if (config.modelId !== CUSTOM_OPENAI_MODEL_ID) {
+    if (!isCustomOpenAiModelId(config.modelId)) {
       throw new Error(`Model ${config.modelId} is disabled by the onprem deployment profile`)
     }
     if (!isOpenAiCompatibleReady(config.openAiCompatible)) {
@@ -43,7 +43,7 @@ export class AiProviderFactory {
   validateProxyAvailability(modelId: string): { available: boolean; error?: string } {
     return {
       available: false,
-      error: modelId === CUSTOM_OPENAI_MODEL_ID
+      error: isCustomOpenAiModelId(modelId)
         ? 'OpenAI-compatible endpoints do not use the MediPrisma proxy.'
         : 'Cloud AI is disabled by the onprem deployment profile.',
     }

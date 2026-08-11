@@ -23,9 +23,15 @@ import { CumulativeLabReport } from './components/CumulativeLabReport'
 import type { Row } from './types'
 import { rowInnerMatch } from './utils/report-search'
 import { LAB_CATEGORIES } from '@/src/shared/utils/lab-categories'
+import { cn } from '@/src/shared/utils/cn.utils'
 import { ReportNameModeProvider } from './context/report-name-mode.context'
 import { ReportNameModeSwitch } from './components/ReportNameModeSwitch'
+import {
+  PROCEDURE_CATEGORY_CODES,
+  type ProcedureCategoryCode,
+} from './utils/procedure-category'
 import type { AnalyteNameMode } from '@/src/shared/utils/lab-normalize'
+import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 
 // Stable empty array so React.memo / virtualizer keep skipping when no
 // search match needs expansion. Recreating [] every render would break
@@ -34,11 +40,14 @@ const EMPTY_EXPANDED_IDS: string[] = []
 const EMPTY_RESOURCES: any[] = []
 const CUMULATIVE_CATEGORY_IDS = new Set(LAB_CATEGORIES.map((category) => category.id))
 const NAME_MODE_TABS = new Set(['cumulative', 'all', 'lab', 'imaging', 'vitals'])
+type ProcedureCategoryFilter = 'all' | 'uncategorized' | ProcedureCategoryCode
 
 export function ReportsCard() {
   const { t } = useLanguage()
   const { diagnosticReports = [], imagingStudies = [], observations = [], procedures = [], isLoading, error } = useClinicalData()
   const [activeTab, setActiveTab] = useState("cumulative")
+  const tourActive = useLeftBrowserTourStore((state) => state.active)
+  const tourStep = useLeftBrowserTourStore((state) => state.stepId)
   // The cumulative destination only needs Observation pivots. Defer the much
   // heavier raw-report pipeline (DR grouping, narrative dedup, orphan rows,
   // day grouping) until a raw tab is actually requested.
@@ -96,7 +105,32 @@ export function ReportsCard() {
   }
   const [expanded, setExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [procedureCategoryFilter, setProcedureCategoryFilter] =
+    useState<ProcedureCategoryFilter>('all')
   const [nameMode, setNameMode] = useState<AnalyteNameMode>('standardized')
+
+  // Open a concrete raw-report view for the trend / imaging tour steps. The
+  // report card unmounts when the outer tour moves away, so its normal default
+  // is restored naturally after the tour.
+  useEffect(() => {
+    if (!tourActive || !tourStep) return
+    const target = tourStep === 'reports'
+      ? 'cumulative'
+      : tourStep === 'trend'
+        ? 'all'
+        : tourStep === 'imaging-ai'
+          ? 'imaging'
+          : null
+    if (!target) return
+    const timer = window.setTimeout(() => {
+      if (target !== 'cumulative') setRawReportsEnabled(true)
+      setSearchQuery('')
+      setPendingTab(null)
+      setActiveTab(target)
+      setVisitedTabs((previous) => previous.has(target) ? previous : new Set(previous).add(target))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [tourActive, tourStep])
   // The same preference follows the user across report views whose titles can
   // be normalized. Procedures have no matching control, so they retain their
   // established standardized labels.
@@ -111,42 +145,11 @@ export function ReportsCard() {
   )
   const procedureRows = useProcedureRows(
     rawReportsEnabled ? procedures : EMPTY_RESOURCES,
-    rawReportsEnabled ? observations : EMPTY_RESOURCES,
   )
-
-  // Mark procedure-category observations as seen so they don't appear as orphans
-  const procedureObsIds = useMemo(() => {
-    const ids = new Set<string>()
-    if (!rawReportsEnabled) return ids
-    observations.forEach((obs: any) => {
-      if (!obs?.category || !obs?.id) return
-      const categories = Array.isArray(obs.category) ? obs.category : [obs.category]
-      const isProcedureObs = categories.some((cat: any) => {
-        const coding = cat?.coding?.[0]
-        return coding?.code?.toLowerCase() === 'procedure'
-      })
-      if (isProcedureObs && obs.encounter?.reference) {
-        // Check if this observation is linked to a procedure
-        const hasMatchingProcedure = procedures.some((proc: any) =>
-          proc?.encounter?.reference === obs.encounter.reference
-        )
-        if (hasMatchingProcedure) {
-          ids.add(obs.id)
-        }
-      }
-    })
-    return ids
-  }, [observations, procedures, rawReportsEnabled])
-
-  const allSeenIds = useMemo(() => {
-    const combined = new Set(seenIds)
-    procedureObsIds.forEach(id => combined.add(id))
-    return combined
-  }, [seenIds, procedureObsIds])
 
   const orphanRows = useOrphanObservations(
     rawReportsEnabled ? observations : EMPTY_RESOURCES,
-    allSeenIds,
+    seenIds,
     effectiveNameMode,
   )
 
@@ -249,6 +252,77 @@ export function ReportsCard() {
 
   const groupedRows = useGroupedRows(filteredRows)
 
+  const procedureCategoryCounts = useMemo(() => {
+    const counts: Record<Exclude<ProcedureCategoryFilter, 'all'>, number> = {
+      'surgical-procedure': 0,
+      'major-procedure': 0,
+      'outpatient-treatment': 0,
+      uncategorized: 0,
+    }
+    for (const row of groupedRows.procedures) {
+      counts[row.procedureCategory ?? 'uncategorized'] += 1
+    }
+    return counts
+  }, [groupedRows.procedures])
+
+  const filteredProcedureRows = useMemo(() => {
+    if (procedureCategoryFilter === 'all') return groupedRows.procedures
+    return groupedRows.procedures.filter(
+      (row) => (row.procedureCategory ?? 'uncategorized') === procedureCategoryFilter,
+    )
+  }, [groupedRows.procedures, procedureCategoryFilter])
+
+  const procedureCategoryOptions = useMemo(() => {
+    // Some embedded/test language providers may expose only the Reports
+    // namespace. Keep the card renderable until a procedure tab is present.
+    const labels = t.procedures ?? {
+      categoryAll: 'All',
+      categoryUncategorized: 'Uncategorized',
+      categoryLabels: {
+        'surgical-procedure': 'Surgical procedure',
+        'major-procedure': 'Major procedure',
+        'outpatient-treatment': 'Outpatient treatment',
+      },
+    }
+    const options: Array<{
+      value: ProcedureCategoryFilter
+      label: string
+      count: number
+    }> = [{
+      value: 'all',
+      label: labels.categoryAll,
+      count: groupedRows.procedures.length,
+    }]
+
+    for (const code of PROCEDURE_CATEGORY_CODES) {
+      const count = procedureCategoryCounts[code]
+      if (count > 0 || procedureCategoryFilter === code) {
+        options.push({
+          value: code,
+          label: labels.categoryLabels[code],
+          count,
+        })
+      }
+    }
+
+    if (
+      procedureCategoryCounts.uncategorized > 0
+      || procedureCategoryFilter === 'uncategorized'
+    ) {
+      options.push({
+        value: 'uncategorized',
+        label: labels.categoryUncategorized,
+        count: procedureCategoryCounts.uncategorized,
+      })
+    }
+    return options
+  }, [
+    groupedRows.procedures.length,
+    procedureCategoryCounts,
+    procedureCategoryFilter,
+    t,
+  ])
+
   // Apply multi-region NHI study grouping to the imaging tab. Same-day
   // same-code studies (typical CT/MRI multi-region exams that NHI bills
   // under one code without a body-part field) collapse into a single
@@ -288,18 +362,23 @@ export function ReportsCard() {
       // the cards they can click on match.
       { value: "imaging", label: withCount(reportTabs.imaging, imagingRows.length), rows: imagingRows, isCumulative: false },
       { value: "vitals", label: withCount(reportTabs.vitals, groupedRows.vitals.length), rows: groupedRows.vitals, isCumulative: false },
-      { value: "procedures", label: withCount(reportTabs.procedures, groupedRows.procedures.length), rows: groupedRows.procedures, isCumulative: false },
+      { value: "procedures", label: withCount(reportTabs.procedures, filteredProcedureRows.length), rows: filteredProcedureRows, isCumulative: false },
     ]
     // Always show Cumulative, All, Lab, Imaging, Vitals tabs; only hide Procedures if empty
-    return configs.filter((config) =>
-      config.value === "cumulative" ||
-      config.value === "all" ||
-      config.value === "lab" ||
-      config.value === "imaging" ||
-      config.value === "vitals" ||
-      config.rows.length > 0
+    return configs.filter(
+      // Use the underlying resources rather than lazy-built rows so users can
+      // open Procedures directly from the default cumulative view.
+      (config) => config.value !== "procedures" || procedures.length > 0,
     )
-  }, [groupedRows, imagingRows, labRows, rawReportsEnabled, t])
+  }, [
+    filteredProcedureRows,
+    groupedRows,
+    imagingRows,
+    labRows,
+    procedures.length,
+    rawReportsEnabled,
+    t,
+  ])
 
   // Claim DiagnosticReport / Observation navigations. Row.id is the DR id;
   // orphan-observation rows carry the obs id, so match either directly or
@@ -424,7 +503,7 @@ export function ReportsCard() {
         className={`${expanded ? 'flex h-full w-full min-w-0 flex-col overflow-hidden' : 'w-full min-w-0'} ${activeTab === 'cumulative' ? 'gap-0' : ''}`}
       >
         {/* Desktop tabs */}
-        <TabsList className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+        <TabsList data-tour="report-tabs" className={`hidden md:!flex !justify-start shrink-0 ${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1 ${expanded ? 'pr-28' : 'pr-12'} [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full`}>
           {tabConfigs.map((tab) => {
             // Spinner appears on the tab the user is currently switching to,
             // for the duration of useTransition's pending window. Tells the
@@ -435,6 +514,7 @@ export function ReportsCard() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
+                data-tour={`report-tab-${tab.value}`}
                 className={`!flex-none !min-w-fit px-2 capitalize text-sm whitespace-nowrap ${TAB_ACTIVE_CLASSES.clinical}`}
               >
                 {showSpinner && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
@@ -445,7 +525,7 @@ export function ReportsCard() {
         </TabsList>
 
         {/* Mobile dropdown - shown on small screens (maximize button is absolute, no need here) */}
-        <div className={`${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} md:hidden pr-12`}>
+        <div data-tour="report-tabs" className={`${activeTab === 'cumulative' ? 'mb-0.5' : 'mb-2'} md:hidden pr-12`}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="w-full justify-between">
@@ -548,6 +628,41 @@ export function ReportsCard() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+            {activeTab === "procedures" && (
+              <div
+                className="mt-2 flex flex-wrap items-center gap-1.5"
+                role="group"
+                aria-label={t.procedures.categoryFilterLabel}
+              >
+                {procedureCategoryOptions.map((option) => {
+                  const active = procedureCategoryFilter === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setProcedureCategoryFilter(option.value)}
+                      aria-pressed={active}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        active
+                          ? "border-primary bg-primary/10 font-medium text-primary"
+                          : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <span>{option.label}</span>
+                      <span
+                        className={cn(
+                          "min-w-4 rounded-full px-1 text-center text-[0.625rem] tabular-nums",
+                          active ? "bg-primary/15" : "bg-muted",
+                        )}
+                      >
+                        {option.count}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>

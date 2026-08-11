@@ -25,7 +25,7 @@ import {
   demoSafetyScanSnapshots,
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
 import { createAiResultStore } from '@/src/application/hooks/ai-generation/create-ai-result-store'
-import { createModelPrefsStore } from '@/src/application/hooks/ai-generation/create-model-prefs-store'
+import { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store'
 import {
   useAiSlotGeneration,
   type AiSlotDemoContext,
@@ -35,6 +35,10 @@ import {
   isAutoAiEnabledForSource,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
+import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+
+export { useSafetyPrefsStore } from '@/src/application/stores/safety-prefs.store'
 
 // Persist a completed scan per-patient so a page reload reuses it instead of
 // re-billing the model. Same lifecycle as the bundle: encrypted with the tab
@@ -59,29 +63,6 @@ function resolveSafetyModelOverride(): string | undefined {
   }
   return undefined
 }
-
-// Persisted user preferences: auto-scan on patient load, and the model the scan
-// runs on (INDEPENDENT of the chat/insights model in ai-config-storage).
-interface SafetyPrefsStore {
-  autoScan: boolean
-  setAutoScan: (value: boolean) => void
-  modelId: string
-  setModelId: (id: string) => void
-}
-// Exported so the first-run onboarding can set the auto-scan preference WITHOUT
-// mounting the full useSafetyAlerts hook (which carries the auto-scan effect).
-export const useSafetyPrefsStore = createModelPrefsStore<SafetyPrefsStore>({
-  storageName: 'safety-alerts-prefs',
-  defaultModelId: SAFETY_ALERTS_MODEL_ID,
-  initializer: (set) => ({
-    // Default OFF to match medical-summary autoGenerate. Real-data auto-runs
-    // also pass through the separate source-aware consent gate.
-    autoScan: false,
-    setAutoScan: (value) => set({ autoScan: value }),
-    modelId: SAFETY_ALERTS_MODEL_ID,
-    setModelId: (id) => set({ modelId: id }),
-  }),
-})
 
 export interface UseSafetyAlertsReturn {
   result: SafetyScanResult | undefined
@@ -124,10 +105,16 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
   const modelId = useSafetyPrefsStore((s) => s.modelId)
   const setModelId = useSafetyPrefsStore((s) => s.setModelId)
   const autoAiConsent = useAutoAiConsentState()
+  const { demographicsReadyForAi } = useAiDemographicsGate()
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<SafetyScanResult | null> => {
+    useAiExecutionDiagnosticsStore.getState().clearOperationFeature(
+      ctx.operationKey,
+      'safety-alerts',
+    )
     const messages = generateSafetyAlertsUseCase.buildMessages({
       clinicalContext: ctx.clinicalContext,
+      piiLiterals: ctx.piiLiterals,
       locale: ctx.locale === 'zh-TW' ? 'zh-TW' : 'en',
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       catalog: ctx.catalog,
@@ -148,6 +135,7 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     await ctx.ai.stream(messages, {
       modelId: ctx.modelId,
       operationKey: ctx.operationKey,
+      diagnosticFeature: 'safety-alerts',
       throwOnAbort: true,
       onChunk: (chunk: string) => {
         full = chunk
@@ -189,7 +177,9 @@ export function useSafetyAlerts(): UseSafetyAlertsReturn {
     defaultModelId: SAFETY_ALERTS_MODEL_ID,
     selectedModelId: modelId,
     // Do not let a demo preference become authorization for real patient data.
-    autoRunEnabled: isAutoAiEnabledForSource(autoScan, autoAiConsent),
+    autoRunEnabled:
+      demographicsReadyForAi &&
+      isAutoAiEnabledForSource(autoScan, autoAiConsent),
     // A safety result over partial data is itself unsafe and may be cached for
     // 12h, so manual and automatic scans share the same readiness gate.
     requireDataReadyToGenerate: true,

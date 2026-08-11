@@ -1,6 +1,7 @@
 // Custom Hook: Insight Generation State Management
 // Business logic delegated to Use Case
 import { useCallback, useRef } from 'react'
+import { toast } from 'sonner'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { getUserErrorMessage } from '@/src/core/errors'
 import { useGenerateInsight } from '@/src/application/hooks/clinical-insights/use-generate-insight.hook'
@@ -8,6 +9,12 @@ import { useInsightResponsesStore } from './useInsightResponsesStore'
 import type { ResponseEntry, PanelStatus } from '../types'
 import { preflightContextWarning } from '@/src/shared/utils/context-budget'
 import { useLanguage } from '@/src/application/providers/language.provider'
+import {
+  formatClinicalContextAdaptationNotice,
+  type ClinicalContextAdaptation,
+} from '@/src/core/utils/adaptive-clinical-context.utils'
+import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 interface Panel {
   id: string
@@ -19,8 +26,11 @@ interface UseInsightGenerationProps {
   panels: Panel[]
   prompts: Record<string, string>
   context: string
+  piiLiterals: string[]
   model: string
   contextLimit: number
+  contextAdaptation: ClinicalContextAdaptation | null
+  inputSignature: string
 }
 
 interface UseInsightGenerationReturn {
@@ -37,8 +47,11 @@ export function useInsightGeneration({
   panels,
   prompts,
   context,
+  piiLiterals,
   model,
   contextLimit,
+  contextAdaptation,
+  inputSignature,
 }: UseInsightGenerationProps): UseInsightGenerationReturn {
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
@@ -70,7 +83,9 @@ export function useInsightGeneration({
         const input = {
           prompt: prompts[panelId] ?? panel.prompt,
           clinicalContext: context,
+          piiLiterals,
           modelId: model,
+          locale: locale === 'zh-TW' ? 'zh-TW' as const : 'en' as const,
         }
         const validation = generateInsight.validate(input)
         if (!validation.valid) {
@@ -80,6 +95,14 @@ export function useInsightGeneration({
         return [{ panel, messages: generateInsight.buildMessages(input) }]
       })
       if (prepared.length === 0) return
+      if (contextAdaptation) {
+        toast.info(
+          formatClinicalContextAdaptationNotice(contextAdaptation, locale),
+          {
+            id: `clinical-context-fit:insights:${inputSignature}:${contextAdaptation.tier}`,
+          },
+        )
+      }
 
       // The responses store + ai instance survive patient switches (module
       // store, forceMounted tab), but panel ids are stable across patients — a
@@ -94,6 +117,7 @@ export function useInsightGeneration({
       ai.stop()
       const runId = ++runIdRef.current
       const activePanelIds = prepared.map(({ panel }) => panel.id)
+      useAiExecutionDiagnosticsStore.getState().clearFeature('clinical-insights')
 
       // Keep any previous complete result in place while regenerating. For a
       // first run the cards show only a loading state. No partial response is
@@ -126,7 +150,18 @@ export function useInsightGeneration({
             { selectedContext: context, contextLimit },
           )
           if (overflow) throw new Error(overflow)
-          const fullText = await ai.query(messages, { modelId: model })
+          const fullText = await ai.query(messages, {
+            modelId: model,
+            // Deterministic decoding improves factual repeatability on local
+            // OpenAI-compatible models. A bounded completion also prevents
+            // reasoning models from spending thousands of hidden tokens on a
+            // single concise card. Keep frontier-provider defaults intact.
+            ...(isCustomOpenAiModelId(model)
+              ? { temperature: 0, maxTokens: 4096, reasoningEffort: 'low' as const }
+              : {}),
+            operationKey: `clinical-insight:${owner}:${panel.id}`,
+            diagnosticFeature: 'clinical-insights',
+          })
           if (runIdRef.current !== runId || ownerChanged()) return
           entries[panel.id] = {
             text: fullText,
@@ -144,7 +179,7 @@ export function useInsightGeneration({
       if (runIdRef.current !== runId || ownerChanged()) return
       completeBatch(activePanelIds, entries, errors)
     },
-    [ai, completeBatch, context, contextLimit, generateInsight, locale, model, panels, prompts, setPanelStatus],
+    [ai, completeBatch, context, contextAdaptation, contextLimit, generateInsight, inputSignature, locale, model, panels, piiLiterals, prompts, setPanelStatus],
   )
 
   const runPanel = useCallback(

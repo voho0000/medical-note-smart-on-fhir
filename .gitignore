@@ -27,6 +27,7 @@
 # production
 /build
 /artifacts/
+/tmp/
 
 # misc
 .DS_Store
@@ -49,6 +50,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 *.pdf
+!public/clinical-guidelines/taiwan-nhi/*.pdf
+!public/clinical-guidelines/taiwan-t2dm-2022/*.pdf
 
 # IDE and editor files
 .claude
@@ -60,3 +63,6 @@ next-env.d.ts
 /.loop/
 /scripts/loop/goal.md
 scripts/experiments/*/results/
+*.tgz
+private-packages/
+packages/*/dist/

@@ -5,7 +5,7 @@
 
 import { useMemo } from "react"
 import { EncounterObservationCard } from "./EncounterObservationCard"
-import { MedicationRow, ProcedureRow, DiagnosisTag } from "./EncounterCards"
+import { ProcedureRow, DiagnosisTag } from "./EncounterCards"
 import { AnalyteTrendRow } from "./AnalyteTrendRow"
 import { MedTrendRow } from "./MedTrendRow"
 import { EncounterSection } from "./EncounterSection"
@@ -16,6 +16,7 @@ import { getDocumentPlainText } from "@/features/clinical-summary/document-summa
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import type { EncounterDetails } from "../hooks/useEncounterDetails"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { MedicationItem } from "@/features/clinical-summary/medications/components/MedicationItem"
 
 // Auto-collapse thresholds — counts above these flip the section to closed by
 // default. Tuned for the typical inpatient stay (50+ labs, 10+ meds) while
@@ -31,6 +32,8 @@ interface VisitDetailContentProps {
   details?: EncounterDetails
   documents?: DocumentEntry[]
   abnormalCount?: number
+  /** Show exact source-reported execution dates for inpatient orders. */
+  showMedicationExecutionPeriods?: boolean
 }
 
 /** True when this visit has anything worth expanding. */
@@ -45,7 +48,12 @@ export function visitHasDetails(details?: EncounterDetails, documents?: Document
   )))
 }
 
-export function VisitDetailContent({ details, documents, abnormalCount = 0 }: VisitDetailContentProps) {
+export function VisitDetailContent({
+  details,
+  documents,
+  abnormalCount = 0,
+  showMedicationExecutionPeriods = false,
+}: VisitDetailContentProps) {
   const { t } = useLanguage()
   const docStrings = useDocumentSummaryStrings()
   const resolveDocSectionLabel = makeResolveSectionLabel(docStrings)
@@ -161,9 +169,25 @@ export function VisitDetailContent({ details, documents, abnormalCount = 0 }: Vi
         >
           <div className="grid gap-0 mt-2">
             {details.isMultiDay && details.medSeries.length > 0 ? (
-              details.medSeries.map((s) => <MedTrendRow key={s.id} series={s} />)
+              details.medSeries.map((s) => (
+                <MedTrendRow
+                  key={s.id}
+                  series={s}
+                  showExecutionPeriods={showMedicationExecutionPeriods}
+                />
+              ))
             ) : (
-              details.medications.map((med) => <MedicationRow key={med.id} medication={med} />)
+              details.medications.map((med) => (
+                <MedicationItem
+                  key={med.id}
+                  medication={med}
+                  executionPeriods={
+                    showMedicationExecutionPeriods && med.executionPeriod
+                      ? [med.executionPeriod]
+                      : undefined
+                  }
+                />
+              ))
             )}
           </div>
         </EncounterSection>

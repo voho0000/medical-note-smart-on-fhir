@@ -822,6 +822,44 @@ describe('CKD prognosis / follow-up (KDIGO 健保存摺)', () => {
   })
 })
 
+describe('Kidney Failure Risk Equation (KFRE)', () => {
+  it('returns 2- and 5-year risks using the non-North-American calibration', () => {
+    const r = run('kfre-4-variable', {
+      age: '72',
+      sex: 'male',
+      egfr: '35',
+      acr: '450',
+    })
+
+    expect(r).not.toBeNull()
+    expect(r!.value).toBe('3.1% / 11.6%')
+    expect(r!.extra).toEqual([
+      expect.objectContaining({ value: '3.1%' }),
+      expect.objectContaining({ value: '11.6%' }),
+    ])
+    expect(r!.notes!.en).toContain('non–North American')
+  })
+
+  it('maps KDIGO action thresholds from the unrounded risk', () => {
+    const r = run('kfre-4-variable', {
+      age: '50',
+      sex: 'male',
+      egfr: '10',
+      acr: '2000',
+    })
+
+    expect(r!.severity).toBe('high')
+    expect(r!.interpretation!.en).toContain('KRT')
+  })
+
+  it('requires confirmed sex, positive quantitative ACR, and eGFR below 60', () => {
+    const base = { age: '72', sex: 'male', egfr: '35', acr: '450' }
+    expect(run('kfre-4-variable', { ...base, sex: '' })).toBeNull()
+    expect(run('kfre-4-variable', { ...base, acr: '0' })).toBeNull()
+    expect(run('kfre-4-variable', { ...base, egfr: '60' })).toBeNull()
+  })
+})
+
 describe('sex is required — no silent male default', () => {
   it('eGFR (CKD-EPI) returns null when sex is blank/unknown, computes when set', () => {
     expect(run('egfr-ckd-epi-2021', { scr: '1.0', age: '60', sex: '' })).toBeNull()

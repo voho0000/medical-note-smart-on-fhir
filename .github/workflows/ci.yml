@@ -30,15 +30,28 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # One commit of history so the lockfile guard below can compare
+          # against the state this push changed.
+          fetch-depth: 2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
 
+      # `npm install` on macOS drops the optional entries and platform fields
+      # that only Linux installs — see scripts/check-lockfile.mjs. `npm ci`
+      # below would fail on that, but with an error that points at the symptom
+      # rather than the cause, so name it first.
+      - name: Lockfile keeps its platform entries
+        run: node scripts/check-lockfile.mjs --against HEAD^
+
       - name: Install dependencies
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
       - name: Typecheck
         run: npx tsc --noEmit

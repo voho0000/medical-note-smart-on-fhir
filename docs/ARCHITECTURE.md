@@ -98,7 +98,7 @@ FHIR 搜尋使用 `requestAllPages()` 跟隨 `Bundle.link[relation="next"]`，�
 
 1. Medical Summary：預設 tab；force-mounted，外層面板負責捲動。
 2. Medical Chat：force-mounted，保留對話與串流狀態。
-3. Medical Calculator：57 個定義，分為 10 類，支援病人數值自動帶入。
+3. Medical Calculator：58 個定義，分為 10 類，支援病人數值自動帶入；KFRE 等跨功能公式由 core 純函式提供，供計算機與個人化指引共用。
 4. IPS Export：force-mounted，保留 AI 推論與人工確認狀態。
 5. Settings：固定在最右側且不可取消 pin。
 

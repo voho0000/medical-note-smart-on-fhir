@@ -1,6 +1,6 @@
 // Unified Feature Card Wrapper Component
 import { ReactNode } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoadingSkeleton } from './LoadingSkeleton'
 import { ErrorMessage } from './ErrorMessage'
 import { EmptyState } from './EmptyState'
@@ -18,6 +18,7 @@ interface FeatureCardProps {
   error?: Error | null
   isEmpty?: boolean
   emptyMessage?: string
+  headerAction?: ReactNode
   children: ReactNode
 }
 
@@ -30,6 +31,7 @@ export function FeatureCard({
   error = null,
   isEmpty = false,
   emptyMessage = "No data available",
+  headerAction,
   children
 }: FeatureCardProps) {
   // Get theme from registry or use defaults
@@ -54,6 +56,7 @@ export function FeatureCard({
             {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
             {title}
           </CardTitle>
+          {headerAction && <CardAction>{headerAction}</CardAction>}
         </CardHeader>
       )}
       <CardContent>

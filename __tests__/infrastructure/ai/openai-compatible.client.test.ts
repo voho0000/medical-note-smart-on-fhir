@@ -564,6 +564,21 @@ describe('OpenAI-compatible browser client', () => {
     }
   })
 
+  it('uses low reasoning effort for every gpt-oss Agent probe request', async () => {
+    const fetchImpl = agentRoundTripFetch()
+
+    await expect(testOpenAiCompatibleAgentCapability({
+      ...profile,
+      modelId: 'gpt-oss:120b',
+    }, { fetchImpl })).resolves.toEqual({ status: 'verified' })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    for (const call of fetchImpl.mock.calls) {
+      const request = JSON.parse(String(call[1]?.body))
+      expect(request.reasoning_effort).toBe('low')
+    }
+  })
+
   it('allows the hosted Nemotron probe seven minutes for both reasoning steps', async () => {
     const timeoutSpy = jest.spyOn(globalThis, 'setTimeout')
     try {

@@ -32,6 +32,9 @@ import { useAiConfigStore } from '@/src/application/stores/ai-config.store'
 import { customOpenAiModelIdForProfile } from '@/src/shared/constants/ai-models.constants'
 import { resolveDefaultOpenAiCompatibleProfile } from '@/src/shared/utils/openai-compatible.utils'
 import { modelRuntimeIdentity } from '@/src/shared/utils/model-access.utils'
+import { usePatient } from '@/src/application/hooks/patient/use-patient-query.hook'
+import { buildPatientTextLiterals } from '@/src/shared/utils/pii-text-scrub'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
 
 // Persist a completed interpretation so a page reload reuses it instead of
 // re-billing. Same lifecycle/key discipline as the safety scan cache.
@@ -81,6 +84,8 @@ export function useReportInterpretation(
   const ai = useUnifiedAi()
   const { locale } = useLanguage()
   const { audience } = useAudience()
+  const { patient } = usePatient()
+  const piiLiterals = useMemo(() => buildPatientTextLiterals(patient), [patient])
   const openAiCompatibleProfiles = useAiConfigStore(
     (state) => state.openAiCompatibleProfiles,
   )
@@ -102,7 +107,7 @@ export function useReportInterpretation(
   // text changes, and keeps the key bounded for huge documents.
   const compositeKey = useMemo(() => {
     if (!hasText) return ''
-    const { text } = prepareReportText(clean, mode)
+    const { text } = prepareReportText(clean, mode, piiLiterals)
     const contentKey = buildReportInterpretationCompositeKey({
       mode,
       audience: targetAudience,
@@ -110,7 +115,7 @@ export function useReportInterpretation(
       preparedText: text,
     })
     return `${runtimeModelId}::${contentKey}`
-  }, [hasText, clean, mode, targetAudience, targetLocale, runtimeModelId])
+  }, [hasText, clean, mode, targetAudience, targetLocale, runtimeModelId, piiLiterals])
 
   const result = useStore((s) => (compositeKey ? s.byKey[compositeKey] : undefined))
   const setResult = useStore((s) => s.setResult)
@@ -152,22 +157,26 @@ export function useReportInterpretation(
       if (useStore.getState().running[compositeKey]) return
       const myKey = compositeKey
       if (force) clearSlot(myKey)
+      useAiExecutionDiagnosticsStore.getState().clearOperation(myKey)
       await runGenerationJob({
         store: useStore,
         key: myKey,
         cacheKey: cacheKey(myKey),
         produce: async () => {
-          const prepared = prepareReportText(clean, mode)
+          const prepared = prepareReportText(clean, mode, piiLiterals)
           const messages = generateReportInterpretationUseCase.buildMessages({
             reportText: clean,
             reportTitle,
             locale: targetLocale,
             audience: targetAudience,
             mode,
+            piiLiterals,
           })
           let full = ''
           await ai.stream(messages, {
             modelId: effectiveModelId,
+            operationKey: myKey,
+            diagnosticFeature: 'report-interpretation',
             onChunk: (chunk: string) => {
               full = chunk
             },
@@ -180,7 +189,7 @@ export function useReportInterpretation(
         },
       })
     },
-    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, ai, clearSlot, effectiveModelId],
+    [compositeKey, hasText, clean, mode, reportTitle, targetLocale, targetAudience, ai, clearSlot, effectiveModelId, piiLiterals],
   )
 
   const generate = useCallback(() => run(false), [run])

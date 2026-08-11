@@ -109,10 +109,13 @@ export function CrossFacilityTimeline({
             const encClass = event.category === "encounter" ? event.encounterClass : undefined
             const style = encClass ? ENCOUNTER_CLASS_STYLES[encClass] : CATEGORY_STYLES[event.category]
             const pillLabel = encClass ? encounterClassLabel(encClass) : categoryLabel(event.category)
+            const displayedDate = event.endDate && event.endDate !== event.date
+              ? `${event.date}–${event.endDate}`
+              : event.date
             const inner = (
               <div className="@min-[30rem]:flex @min-[30rem]:items-baseline @min-[30rem]:gap-2">
                 <div className="flex flex-wrap items-center gap-1.5 @min-[30rem]:w-[16rem] @min-[30rem]:shrink-0">
-                  <span className="text-[0.6875rem] font-bold tabular-nums text-foreground/80">{event.date}</span>
+                  <span className="text-[0.6875rem] font-bold tabular-nums text-foreground/80">{displayedDate}</span>
                   <span className={cn("rounded px-1.5 py-px text-[0.65rem] font-semibold", style.pill)}>
                     {pillLabel}
                   </span>

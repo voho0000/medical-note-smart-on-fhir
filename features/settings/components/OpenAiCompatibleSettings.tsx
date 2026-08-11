@@ -162,7 +162,14 @@ export function OpenAiCompatibleSettings({
   onSettingsTargetHandled,
 }: OpenAiCompatibleSettingsProps = {}) {
   const { t } = useLanguage()
-  const profiles = useAiConfigStore((state) => state.openAiCompatibleProfiles)
+  const allProfiles = useAiConfigStore((state) => state.openAiCompatibleProfiles)
+  // Launch-managed credentials are intentionally invisible here: editing or
+  // saving them would blur the runtime-only boundary and invite accidental
+  // device persistence of a credential supplied by the hospital bridge.
+  const profiles = useMemo(
+    () => allProfiles.filter((profile) => profile.runtimeOnly !== true),
+    [allProfiles],
+  )
   const credentialsHydrating = useAiConfigStore((state) => state.credentialsHydrating)
   const addConfig = useAiConfigStore((state) => state.addOpenAiCompatibleConfig)
   const updateConfig = useAiConfigStore((state) => state.updateOpenAiCompatibleConfig)
@@ -393,7 +400,11 @@ export function OpenAiCompatibleSettings({
     }
     const normalizedModelId = modelId.trim()
     if (!normalizedModelId) throw new Error(t.settings.openAiCompatibleModelRequired)
-    const normalizedContextWindow = Number(contextWindowTokens.replace(/,/g, '').trim())
+    const contextWindowDraft = contextWindowTokens.replace(/,/g, '').trim()
+    const contextWindowWasCleared = contextWindowDraft.length === 0
+    const normalizedContextWindow = contextWindowWasCleared
+      ? suggestedOpenAiCompatibleContextWindow(normalizedModelId)
+      : Number(contextWindowDraft)
     if (
       !Number.isInteger(normalizedContextWindow) ||
       normalizedContextWindow < MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW ||
@@ -411,7 +422,7 @@ export function OpenAiCompatibleSettings({
       apiKey: apiKey.trim() || null,
       transport: normalizedTransport,
       contextWindowTokens: normalizedContextWindow,
-      contextWindowSource,
+      contextWindowSource: contextWindowWasCleared ? 'suggested' : contextWindowSource,
       agentMode,
       agentCapability,
       agentCapabilityTestedAt,
@@ -759,6 +770,13 @@ export function OpenAiCompatibleSettings({
     }
   }
 
+  const contextWindowSourceLabel =
+    contextWindowSource === 'detected'
+      ? t.settings.openAiCompatibleContextWindowSourceDetected
+      : contextWindowSource === 'manual'
+        ? t.settings.openAiCompatibleContextWindowSourceManual
+        : t.settings.openAiCompatibleContextWindowSourceSuggested
+
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/25 p-1.5">
@@ -987,39 +1005,56 @@ export function OpenAiCompatibleSettings({
                   step={1024}
                   value={contextWindowTokens}
                   onChange={(event) => {
-                    setContextWindowTokens(event.target.value)
-                    setContextWindowSource('manual')
+                    const nextValue = event.target.value
+                    setContextWindowTokens(nextValue)
+                    setContextWindowSource(nextValue.trim() ? 'manual' : 'suggested')
                   }}
+                  placeholder={String(suggestedOpenAiCompatibleContextWindow(modelId))}
                   inputMode="numeric"
                   disabled={busy}
                   className={COMPACT_INPUT_CLASS}
                 />
-                {detectedContextWindowTokens !== null && (
-                  <div
-                    className="col-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] text-muted-foreground"
-                    aria-live="polite"
-                  >
-                    <span>
-                      {t.settings.openAiCompatibleContextWindowDetected.replace(
-                        '{tokens}',
-                        detectedContextWindowTokens.toLocaleString('en-US'),
-                      )}
-                    </span>
-                    {Number(contextWindowTokens) !== detectedContextWindowTokens && (
-                      <button
-                        type="button"
-                        className="font-medium text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={busy}
-                        onClick={() => {
-                          setContextWindowTokens(String(detectedContextWindowTokens))
-                          setContextWindowSource('detected')
-                        }}
-                      >
-                        {t.settings.openAiCompatibleUseDetectedContextWindow}
-                      </button>
+                <div
+                  className="col-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] text-muted-foreground"
+                  aria-live="polite"
+                >
+                  <span
+                    data-testid="openai-compatible-context-window-source"
+                    className={cn(
+                      'inline-flex shrink-0 rounded-full border px-1.5 py-0.5 font-medium',
+                      contextWindowSource === 'detected'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : contextWindowSource === 'manual'
+                          ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300'
+                          : 'border-border bg-muted/60 text-muted-foreground',
                     )}
-                  </div>
-                )}
+                  >
+                    {contextWindowSourceLabel}
+                  </span>
+                  {detectedContextWindowTokens !== null && (
+                    <>
+                      <span>
+                        {t.settings.openAiCompatibleContextWindowDetected.replace(
+                          '{tokens}',
+                          detectedContextWindowTokens.toLocaleString('en-US'),
+                        )}
+                      </span>
+                      {Number(contextWindowTokens) !== detectedContextWindowTokens && (
+                        <button
+                          type="button"
+                          className="font-medium text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={busy}
+                          onClick={() => {
+                            setContextWindowTokens(String(detectedContextWindowTokens))
+                            setContextWindowSource('detected')
+                          }}
+                        >
+                          {t.settings.openAiCompatibleUseDetectedContextWindow}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">

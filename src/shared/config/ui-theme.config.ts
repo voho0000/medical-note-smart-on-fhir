@@ -21,6 +21,8 @@ import {
   ListChecks,
   FileOutput,
   Calculator,
+  BookOpen,
+  BookOpenCheck,
   type LucideIcon
 } from 'lucide-react'
 
@@ -167,6 +169,16 @@ export const RIGHT_PANEL_TAB_THEMES: Record<string, TabThemeConfig> = {
   'medical-calculator': {
     id: 'medical-calculator',
     icon: Calculator,
+    colorKey: 'clinical',
+  },
+  'clinical-decision-support': {
+    id: 'clinical-decision-support',
+    icon: BookOpenCheck,
+    colorKey: 'clinical',
+  },
+  'personalized-education': {
+    id: 'personalized-education',
+    icon: BookOpen,
     colorKey: 'clinical',
   },
   'settings': {

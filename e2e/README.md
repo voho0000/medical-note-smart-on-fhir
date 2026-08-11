@@ -38,6 +38,7 @@ Never commit real patient exports, Playwright traces, screenshots or report arti
 | `safety-alerts.spec.ts` | Unified summary + safety, model sync, auto-run and encrypted cache reuse |
 | `slash-template.spec.ts` | `/` menu, shortcut filtering, Enter insertion and Escape |
 | `ai-chat-agent-only.spec.ts` | Single Agent path and locked-model settings route |
+| `ai-chat-fhir-tools.spec.ts` | Full Chat → tool call → imported FHIR data → tool result → final-answer loop for imaging and semantic lab categories |
 | `ai-chat-stream.spec.ts` | Markdown streaming, large-block responsiveness and idle timeout |
 
 Auth-gated Firestore history, real SMART redirects and real provider answers are not part of the main suite.
@@ -55,6 +56,13 @@ The helper supports:
 - a stream that emits some frames and then never closes;
 - per-page idle-timeout override;
 - request count and Long Tasks observation.
+
+`fixtures/mock-agent-tool-flow.ts` separately drives a deterministic two-step
+tool-call loop. It mocks only the model responses: the browser executes the real
+registered FHIR tool against the normally imported Bundle, sends that result
+back through the agent loop, and receives a final response only when expected
+clinical-result fragments are present. This guards imaging and semantic lab
+category retrieval without relying on live-model behavior.
 
 Tests therefore cover the app's streaming renderer, throttling, Markdown blocks, timeout and cache behavior without testing a provider's current model quality or wire compatibility.
 

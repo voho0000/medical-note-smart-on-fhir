@@ -25,6 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
+import { isVghtpeMedcloudLaunchUrl } from '@/src/application/launch/medcloud-launch-context'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience, type Audience } from '@/src/application/providers/audience.provider'
@@ -62,11 +63,14 @@ import {
   modelDisplayLabel,
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
+import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
-  /** Exact text whose signature is part of this run's slot key. */
+  /** Exact model-fitted text sent by this run. */
   clinicalContext: string
+  /** Exact identifying literals from the loaded Patient for final-boundary scrubs. */
+  piiLiterals: string[]
   clinicalData: ClinicalAiDataInput | null
   catalog: SummarySourceCatalogEntry[]
   locale: Locale
@@ -80,6 +84,8 @@ export interface AiSlotRunContext {
   operationKey: string
   /** Full context window, including the dynamic custom-endpoint setting. */
   contextLimit: number
+  /** Transient model-aware reduction applied to this request, if any. */
+  contextAdaptation: ClinicalContextAdaptation | null
 }
 
 export interface AiSlotDemoContext {
@@ -112,7 +118,7 @@ export interface AiSlotGenerationConfig<T> {
    *  Writes always go through cacheKeyFor. */
   loadCached?: (slotKey: string) => Promise<T | null>
   /** Streams + parses one generation; null = parse failed → 'PARSE_FAILED'.
-   *  Any internal retry policy (summary retries once) lives in here. */
+   *  Any feature-specific modularization or retry policy lives in here. */
   run: (ctx: AiSlotRunContext) => Promise<T | null>
   /** Demo bundle seeding: build the pre-generated snapshot result (through the
    *  same parse/validate pipeline as a live reply) instead of burning an AI
@@ -162,6 +168,10 @@ export interface AiSlotGenerationReturn<T> {
   error: string | null
   issue: AiGenerationIssue | null
   contextLimit: number
+  /** Model-aware transient reduction currently applied to this input. Exposed
+   *  so the feature can explain it beside the model picker without an
+   *  interrupting toast. */
+  contextAdaptation: ClinicalContextAdaptation | null
   /** True once this exact cache slot was restored, or when an opted-in feature
    *  can keep a completed result for the same clinical input visible. */
   isHydrated: boolean
@@ -191,14 +201,6 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     retainResultOnModelChange = false,
   } = config
 
-  const {
-    patientId,
-    dataReady,
-    clinicalContext,
-    inputSignature,
-    clinicalData: scopedClinicalData,
-    catalog,
-  } = useClinicalAiInput()
   const ai = useUnifiedAi()
   const stopAi = ai.stop
   const { locale } = useLanguage()
@@ -256,6 +258,16 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     () => modelContextLimit(resolvedModelId, openAiCompatible),
     [resolvedModelId, openAiCompatible],
   )
+  const {
+    patientId,
+    piiLiterals = [],
+    dataReady,
+    clinicalContext,
+    inputSignature,
+    clinicalData: scopedClinicalData,
+    catalog,
+    contextAdaptation,
+  } = useClinicalAiInput(resolvedContextLimit)
 
   // A cache/result slot is reusable only for the exact selected clinical
   // input. While data is loading or background-fetching inputSignature is
@@ -316,6 +328,12 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const scopeSlotSuffix = slotKey ? `::ctx-${inputSignature}` : ''
   const cancellationEpochsRef = useRef<Map<string, number>>(new Map())
   const autoTriggeredRef = useRef<string | null>(null)
+  // The exact medcloud launch has its own credential-gated, message-id-scoped
+  // runner. Suppress saved background auto-run preferences on this route so a
+  // previous public-provider choice cannot send patient data before the
+  // Extension credential is authenticated, or duplicate the launch request.
+  const medcloudLaunchOwnsAutoRun = typeof window !== 'undefined' &&
+    isVghtpeMedcloudLaunchUrl(window.location.href)
 
   const exactResult = store((s) => (slotKey ? s.byKey[slotKey] : undefined))
   const setResult = store((s) => s.setResult)
@@ -438,6 +456,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   const generate = useCallback(async () => {
     if (!slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
+    if (store.getState().running[slotKey]) return
     const cancellationEpoch = cancellationEpochsRef.current.get(slotKey) ?? 0
     const generatedResult = await runGenerationJob({
       store,
@@ -449,6 +468,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
       produce: () =>
         run({
           clinicalContext,
+          piiLiterals,
           clinicalData: scopedClinicalData,
           catalog,
           locale,
@@ -458,6 +478,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
           modelName: resolvedModelName,
           operationKey: slotKey,
           contextLimit: resolvedContextLimit,
+          contextAdaptation,
         }),
     })
     if (
@@ -472,7 +493,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, store, cacheKeyFor, run, clinicalContext, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
@@ -628,7 +649,11 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
   // applied in resolvedModelId.
   useEffect(() => {
     if (!shouldAutoRunSummarySlot({
-      enabled: autoRunEnabled && selectedModelReady && !bundleTransitionActive && !demoSnapshotExpected,
+      enabled: autoRunEnabled &&
+        !medcloudLaunchOwnsAutoRun &&
+        selectedModelReady &&
+        !bundleTransitionActive &&
+        !demoSnapshotExpected,
       authLoading,
       slotKey,
       busy: isAnyRunning,
@@ -640,7 +665,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     })) return
     autoTriggeredRef.current = autoRunIdentity
     void generate()
-  }, [autoRunEnabled, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generate])
+  }, [autoRunEnabled, medcloudLaunchOwnsAutoRun, selectedModelReady, bundleTransitionActive, demoSnapshotExpected, authLoading, slotKey, autoRunIdentity, isAnyRunning, result, dataReady, hydrated, generate])
 
   return {
     patientId,
@@ -660,6 +685,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     error,
     issue,
     contextLimit: resolvedContextLimit,
+    contextAdaptation,
     isHydrated: !slotKey || hydrated === slotKey || retainedResult !== null,
     generate,
     cancel,

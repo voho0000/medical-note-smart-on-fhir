@@ -1,18 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useClinicalContext } from "@/src/application/hooks/use-clinical-context.hook"
+import { useClinicalAiInput } from "@/src/application/hooks/ai-generation/use-clinical-ai-input.hook"
+import { formatClinicalContextAdaptationNotice } from "@/src/core/utils/adaptive-clinical-context.utils"
 import { useDataFiltering } from "../hooks/useDataFiltering"
 import { useDataCategories } from "../hooks/useDataCategories"
 import { useSelectionLogic } from "../hooks/useSelectionLogic"
+import { useResolvedDataSelectionModel } from "../hooks/useResolvedDataSelectionModel"
+import {
+  mergeDisplayedFiltersChange,
+  mergeDisplayedSelectionChange,
+} from "../model-fitted-profile"
 import { DataSelectionTab } from "./DataSelectionTab"
 import { PreviewTab } from "./PreviewTab"
 import type { DataSelection, DataFilters } from "@/src/core/entities/clinical-context.entity"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 import type { ContextOverflowIssue } from "@/src/shared/utils/context-budget"
+import type { DataConsumer } from "@/src/application/providers/data-selection.provider"
 
 interface DataSelectionPanelProps {
   clinicalData: ClinicalDataCollection
@@ -24,6 +32,8 @@ interface DataSelectionPanelProps {
   fallbackModelId?: string
   showScopeDescription?: boolean
   overflowIssue?: ContextOverflowIssue | null
+  consumer?: DataConsumer
+  showTemplates?: boolean
 }
 
 export function DataSelectionPanel({ 
@@ -36,19 +46,68 @@ export function DataSelectionPanel({
   fallbackModelId,
   showScopeDescription = true,
   overflowIssue,
+  consumer = 'insights',
+  showTemplates = true,
 }: DataSelectionPanelProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   // Preview the same summary/insights scope that this panel edits.
-  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext('insights')
+  const { getFormattedClinicalContext, getFullClinicalContext } = useClinicalContext(consumer)
+  const resolvedModel = useResolvedDataSelectionModel(modelId, fallbackModelId)
+  const fittedClinicalInput = useClinicalAiInput(
+    consumer === 'insights' ? resolvedModel.contextLimit : undefined,
+    consumer,
+  )
   const [activeTab, setActiveTab] = useState('selection')
-  const { filterKey, handleFilterChange } = useDataFiltering(filters, onFiltersChange)
-  const dataCategories = useDataCategories(clinicalData, filterKey, filters)
+  const displayedProfile = fittedClinicalInput.contextAdaptation
+    ? fittedClinicalInput.effectiveProfile
+    : null
+  const displayedSelection = displayedProfile?.selection ?? selectedData
+  const displayedFilters = displayedProfile?.filters ?? filters
+
+  const handleDisplayedSelectionChange = useCallback(
+    (nextDisplayed: DataSelection) => {
+      onSelectionChange(
+        displayedProfile
+          ? mergeDisplayedSelectionChange(
+              selectedData,
+              displayedSelection,
+              nextDisplayed,
+            )
+          : nextDisplayed,
+      )
+    },
+    [
+      displayedProfile,
+      displayedSelection,
+      onSelectionChange,
+      selectedData,
+    ],
+  )
+  const handleDisplayedFiltersChange = useCallback(
+    (nextDisplayed: DataFilters) => {
+      onFiltersChange(
+        displayedProfile
+          ? mergeDisplayedFiltersChange(filters, displayedFilters, nextDisplayed)
+          : nextDisplayed,
+      )
+    },
+    [displayedFilters, displayedProfile, filters, onFiltersChange],
+  )
+  const { filterKey, handleFilterChange } = useDataFiltering(
+    displayedFilters,
+    handleDisplayedFiltersChange,
+  )
+  const dataCategories = useDataCategories(
+    clinicalData,
+    filterKey,
+    displayedFilters,
+  )
 
   // Use selection logic hook (Single Responsibility Principle)
   const { handleToggle, handleToggleAll, allSelected, someSelected } = useSelectionLogic({
-    selectedData,
+    selectedData: displayedSelection,
     dataCategories,
-    onSelectionChange
+    onSelectionChange: handleDisplayedSelectionChange,
   })
 
   return (
@@ -71,8 +130,10 @@ export function DataSelectionPanel({
           <DataSelectionTab
             clinicalData={clinicalData}
             dataCategories={dataCategories}
-            selectedData={selectedData}
-            filters={filters}
+            selectedData={displayedSelection}
+            filters={displayedFilters}
+            displayedDocumentMode={displayedProfile?.documentMode}
+            displayedDocumentIds={displayedProfile?.documentIds}
             onToggle={handleToggle}
             onToggleAll={handleToggleAll}
             onFilterChange={handleFilterChange}
@@ -81,12 +142,28 @@ export function DataSelectionPanel({
             modelId={modelId}
             fallbackModelId={fallbackModelId}
             overflowIssue={overflowIssue}
+            consumer={consumer}
+            showTemplates={showTemplates}
           />
         </TabsContent>
         <TabsContent value="preview">
           <PreviewTab
-            formattedClinicalContext={activeTab === 'preview' ? getFormattedClinicalContext() : ''}
-            maskedClinicalContext={activeTab === 'preview' ? getFullClinicalContext() : ''}
+            formattedClinicalContext={activeTab === 'preview'
+              ? fittedClinicalInput.contextAdaptation
+                ? fittedClinicalInput.formattedClinicalContext
+                : getFormattedClinicalContext()
+              : ''}
+            maskedClinicalContext={activeTab === 'preview'
+              ? fittedClinicalInput.contextAdaptation
+                ? fittedClinicalInput.clinicalContext
+                : getFullClinicalContext()
+              : ''}
+            scopeNotice={fittedClinicalInput.contextAdaptation
+              ? formatClinicalContextAdaptationNotice(
+                  fittedClinicalInput.contextAdaptation,
+                  locale,
+                )
+              : undefined}
           />
         </TabsContent>
       </Tabs>

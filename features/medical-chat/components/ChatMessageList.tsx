@@ -11,7 +11,7 @@ import { StreamingIndicator } from "@/src/shared/components/StreamingIndicator"
 import { useCopyToClipboard } from "@/src/shared/hooks/use-copy-to-clipboard"
 import { markdownToPlainText } from "@/src/shared/utils/markdown-to-text"
 import { modelDisplayLabel } from "@/src/shared/utils/model-access.utils"
-import type { ChatMessage, ChatReplyReference } from "@/src/application/stores/chat.store"
+import type { ChatDataScope, ChatMessage, ChatReplyReference } from "@/src/application/stores/chat.store"
 import { createReplyReference } from "@/src/shared/utils/chat-message.utils"
 import { AgentStateHistory } from "./AgentStateHistory"
 import { CollapsibleMessage } from "./CollapsibleMessage"
@@ -23,6 +23,7 @@ interface ChatMessageListProps {
   /** Local OpenAI-compatible models receive a fixed clinical snapshot and do
    * not have access to the Agent's FHIR or literature tools. */
   isStandardChatMode?: boolean
+  dataScope?: ChatDataScope
   /** Rendered at the very bottom of the thread, under the last message (e.g. the
    *  follow-up suggestion chips) — so it scrolls with the conversation like ChatGPT. */
   afterMessages?: ReactNode
@@ -315,6 +316,7 @@ export function ChatMessageList({
   messages,
   isLoading,
   isStandardChatMode = false,
+  dataScope = 'patient',
   afterMessages,
   scrollSignal,
   onReplyToSelection,
@@ -358,14 +360,26 @@ export function ChatMessageList({
           <div className="flex flex-col items-center justify-center h-full py-12 text-center">
             <div className="text-4xl mb-3 opacity-20">💬</div>
             <div className="max-w-2xl text-sm font-medium leading-relaxed text-foreground">
-              {isStandardChatMode
-                ? t.chat.localEmptyStateTitle
-                : t.chat.emptyStateTitle}
+              {dataScope === 'auto'
+                ? t.chat.autoEmptyStateTitle
+                : dataScope === 'general'
+                ? t.chat.generalEmptyStateTitle
+                : dataScope === 'patient-literature'
+                  ? t.chat.patientLiteratureEmptyStateTitle
+                  : isStandardChatMode
+                    ? t.chat.localEmptyStateTitle
+                    : t.chat.emptyStateTitle}
             </div>
             <div className="mt-1.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-              {isStandardChatMode
-                ? t.chat.localEmptyState
-                : t.chat.emptyState}
+              {dataScope === 'auto'
+                ? t.chat.autoEmptyState
+                : dataScope === 'general'
+                ? t.chat.generalEmptyState
+                : dataScope === 'patient-literature'
+                  ? t.chat.patientLiteratureEmptyState
+                  : isStandardChatMode
+                    ? t.chat.localEmptyState
+                    : t.chat.emptyState}
             </div>
           </div>
         ) : (

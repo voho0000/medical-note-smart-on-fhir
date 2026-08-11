@@ -4,6 +4,7 @@
 // behaviour regardless of data source.
 
 import { isObservationAbnormal } from '@/src/shared/utils/interpretation-helpers'
+import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
 
 export function isWithinDateRange(
   date: string | undefined,
@@ -100,10 +101,30 @@ export function matchEncounterClass(encounterClass: any, target: string | undefi
   return false
 }
 
-export function matchDiagnosticReportCategory(category: any, target: string | undefined): boolean {
-  // Same alias logic as matchCategoryCoding so "imaging" matches "RAD",
-  // "lab" matches "LAB", etc.
-  return matchCategoryCoding(category, target)
+export function matchDiagnosticReportCategory(report: any, target: string | undefined): boolean {
+  if (!target) return true
+
+  // DiagnosticReport grouping is richer than a category-code comparison. The
+  // reports UI also recognises Health Bank SDK R8 tags, linked ImagingStudy
+  // resources, NHI order codes, and conservative title patterns. Reusing that
+  // classifier prevents "visible in the Imaging tab, absent from the AI tool"
+  // disagreements for category-less reports.
+  const normalizedTarget = normalizeCategoryCode(target)
+  const group = inferGroupFromDiagnosticReport(report)
+  if (['imaging', 'radiology', 'rad'].includes(normalizedTarget)) {
+    return group === 'imaging'
+  }
+  if (['lab', 'laboratory'].includes(normalizedTarget)) {
+    return group === 'lab'
+  }
+  if (['procedure', 'procedures'].includes(normalizedTarget)) {
+    return group === 'procedures'
+  }
+  if (['vital', 'vitals', 'vitalsigns'].includes(normalizedTarget)) {
+    return group === 'vitals'
+  }
+
+  return matchCategoryCoding(report?.category, target)
 }
 
 export function matchAllergyType(type: string | undefined, target: string | undefined): boolean {
@@ -126,7 +147,18 @@ export function isAbnormalObservation(obs: any): boolean {
 export function matchSubstring(haystack: string | undefined, needle: string | undefined): boolean {
   if (!needle) return true
   if (!haystack) return false
-  return haystack.toLowerCase().includes(needle.toLowerCase())
+
+  const normalizedHaystack = haystack.normalize('NFKC').toLowerCase()
+  const normalizedNeedle = needle.normalize('NFKC').toLowerCase()
+  if (normalizedHaystack.includes(normalizedNeedle)) return true
+
+  // Clinical names are frequently written with interchangeable separators:
+  // CA199 / CA-199 / CA–199 / CA 19-9, Hb-A1c / HbA1c, Anti HCV / Anti-HCV.
+  // Ignore only spacing and separator characters here; keep clinically
+  // meaningful symbols such as +, <, and > intact.
+  const compact = (value: string) => value.replace(/[\s\p{Pd}\u2212_.]+/gu, '')
+  const compactNeedle = compact(normalizedNeedle)
+  return compactNeedle.length > 0 && compact(normalizedHaystack).includes(compactNeedle)
 }
 
 const CRITICALITY_BY_SEVERITY: Record<string, string[]> = {

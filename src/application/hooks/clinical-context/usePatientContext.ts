@@ -21,7 +21,15 @@ export function usePatientContext(includePatientInfo: boolean): ClinicalContextS
     
     const age = calculateAge(currentPatient.birthDate)
     if (age !== "Unknown") {
-      items.push(`Age: ${age}`)
+      items.push(
+        currentPatient.birthDate && currentPatient.birthDate.length < 10
+          ? `Approximate age (from birth year): ${age.replace(/^~/, '')}`
+          : `Age: ${age}`,
+      )
+    }
+
+    if (currentPatient.demographicsSource === 'user-entered-local-profile') {
+      items.push('Demographics source: User-entered in the App (not supplied by the source record)')
     }
     
     if (items.length === 0) return null

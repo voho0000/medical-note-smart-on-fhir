@@ -1,19 +1,23 @@
 import { act, renderHook } from '@testing-library/react'
 import {
   AUTO_AI_REAL_DATA_DECISION_KEY,
+  LOCAL_IMPORT_AI_TODAY_DECISION_KEY,
   LOCAL_IMPORT_AI_CONSENT_KEY,
   LOCAL_IMPORT_AI_CONSENT_MAX_AGE_MS,
   canAutoRunAi,
+  clearTodayLocalImportAiDecision,
   clearLocalImportAiConsent,
   ensureLocalImportAiConsent,
   getAutoAiConsentState,
   getAutoAiRealDataDecision,
   getLocalImportAiConsent,
+  getTodayLocalImportAiDecision,
   hasAutoAiRealDataConsent,
   isAutoAiEnabledForSource,
   markLocalImportAiConsentReady,
   recordAutoAiRealDataDecision,
   recordLocalImportAiDecision,
+  recordTodayLocalImportAiDecision,
   startLocalImportAiConsent,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
@@ -29,6 +33,7 @@ describe('source-aware automatic AI consent', () => {
     localStorage.clear()
     sessionStorage.clear()
     clearLocalImportAiConsent()
+    clearTodayLocalImportAiDecision()
     hasLocalData = jest.spyOn(LocalBundleService, 'hasData').mockReturnValue(false)
     jest.spyOn(Date, 'now').mockReturnValue(NOW)
   })
@@ -98,6 +103,81 @@ describe('source-aware automatic AI consent', () => {
         importId: null,
       })
       expect(canAutoRunAi(getAutoAiConsentState(NOW))).toBe(false)
+    })
+
+    it('applies today\'s explicit choice to later imports but expires on the next local day', () => {
+      expect(recordTodayLocalImportAiDecision('auto', NOW)).toBe(true)
+      expect(JSON.parse(localStorage.getItem(LOCAL_IMPORT_AI_TODAY_DECISION_KEY)!)).toEqual({
+        decision: 'auto',
+        localDate: '2026-07-18',
+        version: 1,
+      })
+
+      startLocalImportAiConsent('import-a', NOW)
+      expect(markLocalImportAiConsentReady('import-a', NOW, {
+        useTodayDecision: true,
+      })).toBe(true)
+      expect(getLocalImportAiConsent(NOW)).toMatchObject({
+        importId: 'import-a',
+        decision: 'auto',
+        decidedAt: NOW,
+      })
+
+      expect(recordTodayLocalImportAiDecision('manual', NOW + 1)).toBe(true)
+      startLocalImportAiConsent('import-b', NOW + 1)
+      markLocalImportAiConsentReady('import-b', NOW + 1, {
+        useTodayDecision: true,
+      })
+      expect(getLocalImportAiConsent(NOW + 1)).toMatchObject({
+        importId: 'import-b',
+        decision: 'manual',
+      })
+
+      const nextLocalDay = NOW + 12 * 60 * 60 * 1000
+      expect(getTodayLocalImportAiDecision(nextLocalDay)).toBeNull()
+      startLocalImportAiConsent('import-c', nextLocalDay)
+      markLocalImportAiConsentReady('import-c', nextLocalDay, {
+        useTodayDecision: true,
+      })
+      expect(getLocalImportAiConsent(nextLocalDay)?.decision).toBe('pending')
+    })
+
+    it('fails closed when today\'s automatic choice cannot get an import receipt', () => {
+      recordTodayLocalImportAiDecision('auto')
+      startLocalImportAiConsent('import-a', NOW)
+      jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('storage full', 'QuotaExceededError')
+      })
+      jest.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+        throw new DOMException('storage unavailable', 'SecurityError')
+      })
+
+      expect(markLocalImportAiConsentReady('import-a', NOW, {
+        useTodayDecision: true,
+      })).toBe(true)
+      expect(getAutoAiConsentState(NOW).decision).toBe('pending')
+      expect(canAutoRunAi(getAutoAiConsentState(NOW))).toBe(false)
+    })
+
+    it('does not reuse the earlier permanent-preference format', () => {
+      localStorage.setItem('mediprisma:local-import-ai-remembered-decision-v1', 'auto')
+
+      expect(getTodayLocalImportAiDecision(NOW)).toBeNull()
+      startLocalImportAiConsent('import-a', NOW)
+      markLocalImportAiConsentReady('import-a', NOW, {
+        useTodayDecision: true,
+      })
+      expect(getLocalImportAiConsent(NOW)?.decision).toBe('pending')
+    })
+
+    it('allows the current import to change from automatic to manual', () => {
+      startLocalImportAiConsent('import-a', NOW)
+      markLocalImportAiConsentReady('import-a', NOW)
+      recordLocalImportAiDecision('import-a', 'auto', NOW + 1)
+
+      expect(recordLocalImportAiDecision('import-a', 'manual', NOW + 2)).toBe(true)
+      expect(getLocalImportAiConsent(NOW + 2)?.decision).toBe('manual')
+      expect(canAutoRunAi(getAutoAiConsentState(NOW + 2))).toBe(false)
     })
 
     it('records only the expected import id so a stale dialog cannot authorize newer data', () => {

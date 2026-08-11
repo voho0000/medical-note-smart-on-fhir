@@ -105,6 +105,7 @@ export function MedicalSummaryCardNav({
   return (
     <nav
       aria-label={ariaLabel}
+      data-tour="medical-summary-card-nav"
       className="sticky top-0 z-20 -mx-1 border-y border-border/60 bg-background/95 py-1.5 shadow-sm backdrop-blur-sm supports-[backdrop-filter]:bg-background/80"
     >
       <div className="flex min-w-0 flex-nowrap items-center gap-1.5 px-1">

@@ -95,6 +95,36 @@ describe('ai-config.store', () => {
     })
   })
 
+  describe('runtime-only OpenAI-compatible profile', () => {
+    it('never persists the launch credential, including after another profile is saved', async () => {
+      useAiConfigStore.getState().setRuntimeOpenAiCompatibleProfile({
+        profileId: 'vghtpe-tvghbrain',
+        runtimeOnly: true,
+        enabled: true,
+        baseUrl: 'https://whisper.vghtpe.gov.tw:30001/v1',
+        modelId: 'tvghbrain3.5',
+        apiKey: 'runtime-secret',
+        transport: 'direct',
+      })
+
+      expect(localStorage.getItem(CONNECTION_STORAGE_KEY)).toBeNull()
+
+      await useAiConfigStore.getState().addOpenAiCompatibleConfig({
+        enabled: true,
+        baseUrl: 'https://other-hospital.example/v1',
+        modelId: 'other-model',
+        apiKey: 'durable-secret',
+        transport: 'direct',
+      })
+
+      const stored = readStoredConnections()
+      expect(stored.profiles).toHaveLength(1)
+      expect(stored.profiles[0].profile.modelId).toBe('other-model')
+      expect(JSON.stringify(stored)).not.toContain('runtime-secret')
+      expect(mockEncrypt).not.toHaveBeenCalledWith('runtime-secret')
+    })
+  })
+
   describe('setApiKey', () => {
     it('should set OpenAI API key', () => {
       const { setApiKey } = useAiConfigStore.getState()
@@ -550,6 +580,53 @@ describe('ai-config.store', () => {
           },
         ],
       })
+    })
+
+    it('upgrades the previous 32K unknown-model suggestion to the new 262K default', async () => {
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+        version: 2,
+        profiles: [
+          {
+            profileId: 'unknown-model',
+            profile: {
+              enabled: true,
+              baseUrl: 'https://llm.intra.example/v1',
+              modelId: 'hospital-model',
+              transport: 'direct',
+              contextWindowTokens: 32768,
+              contextWindowSource: 'suggested',
+            },
+            encryptedApiKey: null,
+          },
+          {
+            profileId: 'known-qwen',
+            profile: {
+              enabled: true,
+              baseUrl: 'http://127.0.0.1:11434/v1',
+              modelId: 'qwen2.5:7b',
+              transport: 'direct',
+              contextWindowTokens: 32768,
+              contextWindowSource: 'suggested',
+            },
+            encryptedApiKey: null,
+          },
+        ],
+      }))
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({
+          profileId: 'unknown-model',
+          contextWindowTokens: 262144,
+          contextWindowSource: 'suggested',
+        }),
+        expect.objectContaining({
+          profileId: 'known-qwen',
+          contextWindowTokens: 32768,
+          contextWindowSource: 'suggested',
+        }),
+      ])
     })
 
     it('persists manual provenance even when the value equals the model suggestion', async () => {

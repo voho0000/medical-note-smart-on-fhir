@@ -39,6 +39,8 @@ export interface UseIpsBundleResult {
 export interface UseIpsBundleOptions {
   /** Opt-in: keep image/* presentedForm attachments (default: stripped). */
   includeImageAttachments?: boolean
+  /** Include direct patient identifiers in the Patient resource (default true). */
+  includePatientIdentifiers?: boolean
 }
 
 export function useIpsBundle(
@@ -46,6 +48,7 @@ export function useIpsBundle(
   options: UseIpsBundleOptions = {},
 ): UseIpsBundleResult {
   const includeImageAttachments = !!options.includeImageAttachments
+  const includePatientIdentifiers = options.includePatientIdentifiers !== false
   const { t } = useLanguage()
   const { data, isLoading: dataLoading, error } = useClinicalDataQuery()
   const { data: patient, isLoading: patientLoading } = usePatientQuery()
@@ -65,6 +68,11 @@ export function useIpsBundle(
     const s = t.ipsExport?.sections
     if (!s) return {}
     return {
+      documentTitle: t.ipsExport?.documentTitle,
+      sourceNotice: t.ipsExport?.sourceNotice,
+      notMedicalRecordNotice: t.ipsExport?.notMedicalRecordNotice,
+      noClinicalAttestationNotice: t.ipsExport?.noClinicalAttestationNotice,
+      maskedPatient: t.ipsExport?.maskedPatient,
       problemList: s.problemList,
       allergies: s.allergies,
       medications: s.medications,
@@ -95,8 +103,14 @@ export function useIpsBundle(
 
   const bundle = useMemo<IpsBundle | null>(() => {
     if (!curatedData) return null
-    return buildIpsBundle({ patient: patient ?? null, data: curatedData, labels, includeImageAttachments })
-  }, [curatedData, patient, labels, includeImageAttachments])
+    return buildIpsBundle({
+      patient: patient ?? null,
+      data: curatedData,
+      labels,
+      includeImageAttachments,
+      includePatientIdentifiers,
+    })
+  }, [curatedData, patient, labels, includeImageAttachments, includePatientIdentifiers])
 
   const validation = useMemo<ValidationResult | null>(
     () => (bundle ? validateIpsBundle(bundle) : null),

@@ -34,6 +34,7 @@ import { MedicationList } from './components/MedicationList'
 import { VaccineList } from './components/VaccineList'
 import { MedicationTimeline } from './timeline/MedicationTimeline'
 import { AllergyList } from '../allergies/components/AllergyList'
+import { useLeftBrowserTourStore } from '@/features/left-browser-tour'
 
 type DataTab = 'medications' | 'allergies' | 'vaccines'
 type MedView = 'list' | 'timeline'
@@ -59,13 +60,26 @@ export function MedListCard() {
   const [tab, setTab] = useState<DataTab>('medications')
   const [view, setView] = useState<MedView>('list')
   const [searchQuery, setSearchQuery] = useState('')
+  const tourActive = useLeftBrowserTourStore((state) => state.active)
+  const tourStep = useLeftBrowserTourStore((state) => state.stepId)
   const pendingNav = useResourceNavigationStore((s) => s.pending)
   const navSeq = useResourceNavigationStore((s) => s.seq)
 
   useEffect(() => {
-    if (!pendingNav || !['MedicationRequest', 'MedicationStatement'].includes(pendingNav.resourceType)) return
+    if (!pendingNav || ![
+      'MedicationRequest',
+      'MedicationStatement',
+      'AllergyIntolerance',
+      'Immunization',
+    ].includes(pendingNav.resourceType)) return
     const timer = window.setTimeout(() => {
-      setTab('medications')
+      setTab(
+        pendingNav.resourceType === 'AllergyIntolerance'
+          ? 'allergies'
+          : pendingNav.resourceType === 'Immunization'
+            ? 'vaccines'
+            : 'medications',
+      )
       setView('list')
       setSearchQuery('')
     }, 0)
@@ -114,6 +128,29 @@ export function MedListCard() {
     // re-sync only when the filtered set changes (not on every rightDetail tick)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredMedications])
+
+  useEffect(() => {
+    if (!tourActive || !tourStep || ![
+      'medications',
+      'medication-timeline',
+      'right-pane',
+    ].includes(tourStep)) return
+
+    const timer = window.setTimeout(() => {
+      setTab('medications')
+      setSearchQuery('')
+      setView(tourStep === 'medication-timeline' ? 'timeline' : 'list')
+
+      if (tourStep === 'right-pane' && rows.length > 0) {
+        showDetail({
+          sourceId: MED_TIMELINE_ID,
+          title: timelineTitle,
+          node: <MedicationTimeline medications={filteredMedications} />,
+        })
+      }
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [filteredMedications, rows.length, showDetail, timelineTitle, tourActive, tourStep])
   // IPS-source hint copy. Bridge data (the dominant source) never triggers
   // this UI — the strings only render when an IPS bundle is loaded.
   const sourceHintStatement: string = mt.sourceHintStatement
@@ -149,7 +186,7 @@ export function MedListCard() {
     >
       <Tabs value={tab} onValueChange={(v) => setTab(v as DataTab)} className="w-full">
         {/* Top tab bar (matches ReportsCard styling) */}
-        <TabsList className="!flex !justify-start shrink-0 mb-2 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1">
+        <TabsList data-tour="medication-tabs" className="!flex !justify-start shrink-0 mb-2 !flex-nowrap w-full min-w-0 overflow-x-auto h-9 bg-muted/40 p-1 border border-border/50 gap-1">
           {tabConfigs.map((c) => (
             <TabsTrigger
               key={c.value}
@@ -168,13 +205,14 @@ export function MedListCard() {
         </TabsList>
 
         <TabsContent value="medications" className="mt-0 space-y-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div data-tour="medication-toolbar" className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-1.5">
               <div className="inline-flex rounded-md border bg-muted/40 p-0.5 text-xs">
                 {(['list', 'timeline'] as MedView[]).map((v) => (
                   <button
                     key={v}
                     type="button"
+                    data-tour={v === 'timeline' ? 'medication-timeline-switch' : undefined}
                     onClick={() => setView(v)}
                     className={cn(
                       'px-3 py-1 rounded-sm transition-colors',
@@ -191,6 +229,7 @@ export function MedListCard() {
               {rows.length > 0 && (
                 <button
                   type="button"
+                  data-tour="medication-open-right"
                   onClick={openTimelineRight}
                   title={mt.openTimelineRight ?? '時間軸移到右側面板並排顯示'}
                   aria-label={mt.openTimelineRight ?? '時間軸移到右側面板'}
@@ -258,7 +297,9 @@ export function MedListCard() {
               sourceChipStatementTooltip={sourceHintStatement}
             />
           ) : (
-            <MedicationTimeline medications={filteredMedications} />
+            <div data-tour="medication-timeline">
+              <MedicationTimeline medications={filteredMedications} />
+            </div>
           )}
         </TabsContent>
 

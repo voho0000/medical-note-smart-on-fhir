@@ -111,6 +111,11 @@ export class FhirMapper implements IDataMapper {
   static toMedication(fhirResource: MedicationRequest | MedicationStatement): MedicationEntity {
     const statement = fhirResource as MedicationStatement
     const request = fhirResource as MedicationRequest
+    const drugTerminology = (
+      fhirResource as MedicationRequest & {
+        drugTerminology?: MedicationEntity['drugTerminology']
+      }
+    ).drugTerminology
     const isStatement = fhirResource.resourceType === 'MedicationStatement'
       || request._sourceResourceType === 'MedicationStatement'
 
@@ -132,6 +137,7 @@ export class FhirMapper implements IDataMapper {
       requester: request.requester,
       informationSource: statement.informationSource,
       reasonCode: fhirResource.reasonCode,
+      ...(drugTerminology ? { drugTerminology } : {}),
       _sourceResourceType: isStatement ? 'MedicationStatement' : 'MedicationRequest',
       sourceSystem: FHIR_SOURCE_SYSTEM,
       sourceId: fhirResource.id
@@ -163,12 +169,15 @@ export class FhirMapper implements IDataMapper {
   static toObservation(fhirResource: Observation): ObservationEntity {
     return {
       id: fhirResource.id || '',
+      meta: fhirResource.meta,
       code: fhirResource.code,
       valueQuantity: fhirResource.valueQuantity,
       valueString: fhirResource.valueString,
       valueCodeableConcept: fhirResource.valueCodeableConcept,
       component: fhirResource.component,
       effectiveDateTime: fhirResource.effectiveDateTime,
+      effectivePeriod: fhirResource.effectivePeriod,
+      issued: fhirResource.issued,
       status: fhirResource.status,
       category: fhirResource.category,
       // Specimen is the authoritative blood/urine signal — bridge sets
@@ -182,6 +191,7 @@ export class FhirMapper implements IDataMapper {
       specimen: fhirResource.specimen,
       encounter: fhirResource.encounter,
       performer: fhirResource.performer,
+      note: fhirResource.note,
       referenceRange: fhirResource.referenceRange,
       interpretation: fhirResource.interpretation,
       sourceSystem: FHIR_SOURCE_SYSTEM,
@@ -192,11 +202,13 @@ export class FhirMapper implements IDataMapper {
   static toDiagnosticReport(fhirResource: DiagnosticReport, observations: ObservationEntity[]): DiagnosticReportEntity {
     const report: DiagnosticReportEntity = {
       id: fhirResource.id || '',
+      meta: fhirResource.meta,
       identifier: fhirResource.identifier,
       code: fhirResource.code,
       result: fhirResource.result,
       conclusion: fhirResource.conclusion,
       effectiveDateTime: fhirResource.effectiveDateTime,
+      effectivePeriod: fhirResource.effectivePeriod,
       status: fhirResource.status,
       issued: fhirResource.issued,
       category: fhirResource.category,
@@ -281,6 +293,7 @@ export class FhirMapper implements IDataMapper {
     }
     return {
       id: fhirResource.id || '',
+      category: fhirResource.category,
       code: fhirResource.code,
       status: fhirResource.status,
       performedDateTime: fhirResource.performedDateTime,

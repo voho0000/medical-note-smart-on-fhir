@@ -52,6 +52,12 @@ describe('convertToBase', () => {
     expect(convertToBase(21, '%', 'fio2')!.changed).toBe(false)
   })
 
+  it('converts urine ACR mg/mmol → mg/g and accepts equivalent ratio units', () => {
+    expect(convertToBase(50, 'mg/mmol', 'albumin-creatinine-ratio')!.value).toBeCloseTo(442, 5)
+    expect(convertToBase(80, 'µg/mg', 'albumin-creatinine-ratio')!.value).toBe(80)
+    expect(convertToBase(80, 'mg/g{creat}', 'albumin-creatinine-ratio')!.changed).toBe(false)
+  })
+
   it('converts calcium mmol/L → mg/dL', () => {
     const r = convertToBase(2.5, 'mmol/L', 'calcium')
     expect(r!.value).toBeCloseTo(10.02, 1)

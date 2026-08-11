@@ -1,5 +1,7 @@
 // Right Panel Feature Registry - Central configuration for right panel features
 // This allows contributors to easily add/remove/replace features in the right panel
+import { CLINICAL_DECISION_SUPPORT_MODULE } from '@/features/clinical-decision-support/module'
+import { PERSONALIZED_EDUCATION_MODULE } from '@/features/personalized-education/module'
 
 export interface RightPanelFeatureConfig {
   id: string
@@ -10,6 +12,8 @@ export interface RightPanelFeatureConfig {
   order: number
   /** Whether this feature is enabled */
   enabled: boolean
+  /** Roles allowed to see this feature. Omit to show it to both roles. */
+  audiences?: ReadonlyArray<'medical' | 'patient'>
   /**
    * Default tab-bar placement (default true). false = starts in the "more"
    * overflow menu. The menu is hidden when overflow is empty and appears
@@ -24,6 +28,8 @@ export interface RightPanelFeatureConfig {
   pinLocked?: boolean
   /** Render the tab trigger icon-only at every width (name kept in title/aria). */
   iconOnly?: boolean
+  /** Optional compact status badge shown beside the tab label. */
+  badge?: string
   /** Optional: force mount the tab content (useful for chat to preserve state) */
   forceMount?: boolean
   /** Optional: custom wrapper className for the tab content */
@@ -75,11 +81,13 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     forceMount: true,
     contentClassName: 'flex-1 overflow-hidden mt-1',
   },
+  PERSONALIZED_EDUCATION_MODULE.rightPanel,
+  CLINICAL_DECISION_SUPPORT_MODULE.rightPanel,
   {
     id: 'ips-export',
     name: 'IPS Export',
     tabLabel: 'ipsExport',
-    order: 5,
+    order: 6,
     enabled: true,
     // AI-inferred suggestions + per-item confirmations are expensive (LLM call)
     // and clinically reviewed state — they must survive tab switches.
@@ -101,7 +109,7 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
     id: 'settings',
     name: 'Settings',
     tabLabel: 'settings',
-    order: 6,
+    order: 7,
     enabled: true,
     pinLocked: true,
     iconOnly: true,
@@ -112,9 +120,14 @@ export const RIGHT_PANEL_FEATURES: RightPanelFeatureConfig[] = [
 /**
  * Get enabled right panel features sorted by order
  */
-export function getEnabledRightPanelFeatures(): RightPanelFeatureConfig[] {
+export function getEnabledRightPanelFeatures(
+  audience?: 'medical' | 'patient',
+): RightPanelFeatureConfig[] {
   return RIGHT_PANEL_FEATURES
-    .filter(feature => feature.enabled)
+    .filter((feature) => (
+      feature.enabled
+      && (!audience || !feature.audiences || feature.audiences.includes(audience))
+    ))
     .sort((a, b) => a.order - b.order)
 }
 

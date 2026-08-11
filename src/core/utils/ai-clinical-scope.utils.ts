@@ -1,6 +1,9 @@
 import type { DataFilters, DataSelection } from '@/src/core/entities/clinical-context.entity'
 import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
-import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
+import {
+  inferGroupFromCategory,
+  inferGroupFromDiagnosticReport,
+} from '@/src/shared/utils/report-grouping-helpers'
 import { makeTimeRangeTest } from '@/src/core/utils/date-filter.utils'
 import {
   filterEncounterRecords,
@@ -217,7 +220,7 @@ export function scopeClinicalDataForAi(
   let imagingReports = selection.imagingReports
     ? (input.diagnosticReports ?? []).filter((report) =>
         reportStatusOk(report)
-        && (inferGroupFromCategory(report.category) === 'imaging' || (report.imagingStudy?.length ?? 0) > 0)
+        && inferGroupFromDiagnosticReport(report) === 'imaging'
         && imagingWindow(report.effectiveDateTime || report.issued),
       )
     : []

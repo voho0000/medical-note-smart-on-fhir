@@ -163,6 +163,8 @@ const SYSTEM_PATIENT =
 
 export interface GenerateSafetyAlertsInput {
   clinicalContext: string
+  /** Patient-specific values to mask again at the final outbound boundary. */
+  piiLiterals?: string[]
   locale: 'en' | 'zh-TW'
   /** Tailors the prompt: clinician-facing risks vs patient-facing reminders. */
   audience?: 'medical' | 'patient'
@@ -236,9 +238,12 @@ export class GenerateSafetyAlertsUseCase {
       { role: 'system', content: system + lang },
       {
         role: 'user',
-        // Outbound PII mask (身分證 / labeled 病歷號/姓名) — idempotent over
-        // what getFullClinicalContext already scrubbed upstream.
-        content: `Patient clinical data:\n${scrubFreeText(input.clinicalContext)}${catalogBlock}`,
+        // Scrub the complete payload, including source labels, at the final
+        // outbound boundary. This is idempotent over the upstream context mask.
+        content: scrubFreeText(
+          `Patient clinical data:\n${input.clinicalContext}${catalogBlock}`,
+          input.piiLiterals,
+        ),
       },
     ]
   }

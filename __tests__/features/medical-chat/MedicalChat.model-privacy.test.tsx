@@ -18,11 +18,13 @@ const mockResetChat = jest.fn(() => {
   mockMessages = []
 })
 const mockClearFollowups = jest.fn(() => mockEvents.push('clear-followups'))
+const mockSetChatDataScope = jest.fn()
 const mockGenerateFollowups = jest.fn()
 const mockForceSave = jest.fn()
 const mockAutoSaveEnabled: boolean[] = []
 const mockDrawerPersistenceEnabled: boolean[] = []
 const mockSmartTitleEnabled: boolean[] = []
+const mockAgentDataScopes: string[] = []
 let mockMessages: Array<Record<string, unknown>> = []
 let mockExpanded = false
 
@@ -71,6 +73,8 @@ jest.mock('@/src/application/stores/chat.store', () => ({
   useIsTemporaryMode: () => false,
   useSetIsTemporaryMode: () => jest.fn(),
   useSetChatMessages: () => jest.fn(),
+  useChatDataScope: () => 'patient',
+  useSetChatDataScope: () => mockSetChatDataScope,
 }))
 
 jest.mock('@/src/application/stores/chat-history.store', () => ({
@@ -78,14 +82,17 @@ jest.mock('@/src/application/stores/chat-history.store', () => ({
 }))
 
 jest.mock('@/features/medical-chat/hooks/useAgentChat', () => ({
-  useAgentChat: () => ({
-    messages: mockMessages,
-    isLoading: false,
-    error: null,
-    handleSend: jest.fn(),
-    handleReset: mockResetChat,
-    stopGeneration: jest.fn(),
-  }),
+  useAgentChat: (...args: unknown[]) => {
+    mockAgentDataScopes.push(String(args[4]))
+    return {
+      messages: mockMessages,
+      isLoading: false,
+      error: null,
+      handleSend: jest.fn(),
+      handleReset: mockResetChat,
+      stopGeneration: jest.fn(),
+    }
+  },
 }))
 
 jest.mock('@/features/medical-chat/hooks/useFollowupSuggestions', () => ({
@@ -123,22 +130,46 @@ jest.mock('@/src/shared/components/ModelPicker', () => ({
   ),
 }))
 
+jest.mock('@/src/shared/components/AiExecutionDiagnosticsDialog', () => ({
+  AiExecutionDiagnosticsDialog: () => null,
+}))
+
 jest.mock('@/features/medical-chat/components/ChatToolbar', () => ({
   ChatToolbar: ({
     onModelSelect,
     showModelPicker,
+    patientDataDisabled,
+    canTogglePatientData,
+    onTogglePatientData,
   }: {
     onModelSelect: (id: string) => void
     showModelPicker: boolean
-  }) => showModelPicker ? (
-    <button
-      type="button"
-      data-testid="toolbar-model-picker"
-      onClick={() => onModelSelect('gemini-3-flash-preview')}
-    >
-      switch toolbar model
-    </button>
-  ) : null,
+    patientDataDisabled: boolean
+    canTogglePatientData: boolean
+    onTogglePatientData: () => void
+  }) => (
+    <>
+      {canTogglePatientData && (
+        <button
+          type="button"
+          data-testid="toolbar-patient-data-toggle"
+          aria-pressed={patientDataDisabled}
+          onClick={onTogglePatientData}
+        >
+          no chart
+        </button>
+      )}
+      {showModelPicker && (
+        <button
+          type="button"
+          data-testid="toolbar-model-picker"
+          onClick={() => onModelSelect('gemini-3-flash-preview')}
+        >
+          switch toolbar model
+        </button>
+      )}
+    </>
+  ),
 }))
 
 jest.mock('@/src/shared/hooks/ui/use-expandable.hook', () => ({
@@ -272,6 +303,7 @@ describe('MedicalChat model privacy boundary', () => {
     mockAutoSaveEnabled.length = 0
     mockDrawerPersistenceEnabled.length = 0
     mockSmartTitleEnabled.length = 0
+    mockAgentDataScopes.length = 0
     mockExpanded = false
     mockMessages = [{ id: 'local-message', role: 'user', content: 'private local question' }]
     localStorage.clear()
@@ -293,6 +325,7 @@ describe('MedicalChat model privacy boundary', () => {
     render(<MedicalChat />)
 
     expect(mockResetChat).not.toHaveBeenCalled()
+    expect(mockAgentDataScopes[0]).toBe('patient')
     expect(mockAutoSaveEnabled[0]).toBe(false)
     expect(mockDrawerPersistenceEnabled[0]).toBe(false)
     expect(mockSmartTitleEnabled[0]).toBe(false)
@@ -312,6 +345,7 @@ describe('MedicalChat model privacy boundary', () => {
     expect(mockAutoSaveEnabled).toContain(true)
     expect(mockDrawerPersistenceEnabled).toContain(true)
     expect(mockSmartTitleEnabled).toContain(true)
+    expect(mockAgentDataScopes).toContain('auto')
     unsubscribe()
   })
 
@@ -325,6 +359,19 @@ describe('MedicalChat model privacy boundary', () => {
       MODEL_PREF_DEFAULTS.chat,
     ))
     expect(mockResetChat).toHaveBeenCalledTimes(1)
+    expect(mockClearFollowups).toHaveBeenCalled()
+  })
+
+  it('changes to a patient-free boundary only when the user enables the badge', () => {
+    render(<MedicalChat />)
+
+    const toggle = screen.getByTestId('toolbar-patient-data-toggle')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(mockAgentDataScopes[0]).toBe('patient')
+
+    fireEvent.click(toggle)
+
+    expect(mockSetChatDataScope).toHaveBeenLastCalledWith('general')
     expect(mockClearFollowups).toHaveBeenCalled()
   })
 

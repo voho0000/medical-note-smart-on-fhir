@@ -11,7 +11,14 @@
 // a bar for each refill (start = authoredOn, end = start + supplyDays) and
 // group them by canonical drug key.
 import { useMemo } from 'react'
-import { isChronicPrescription, pickLocalizedText, pickByLocale } from '../../utils/fhir-helpers'
+import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
+import {
+  isChronicPrescription,
+  medicationClinicalIdentityKey,
+  medicationSourceCode,
+  pickLocalizedText,
+  pickByLocale,
+} from '../../utils/fhir-helpers'
 
 export type TimeRange = '3m' | '6m' | '1y' | '3y' | 'all'
 
@@ -21,6 +28,9 @@ export interface RefillBar {
   endMs: number
   supplyDays: number
   authoredOnIso: string
+  /** Original per-refill source code retained even when package-code variants
+   *  share one clinical timeline row. */
+  sourceMedicationCode?: string
   pharmacy?: string
   icdCode?: string
   icdText?: string
@@ -30,6 +40,10 @@ export interface RefillBar {
 export interface TimelineDrug {
   drugKey: string
   drugName: string
+  /** Medical product/brand name retained for hover details while the compact
+   *  timeline label prioritizes ingredient + strength. */
+  drugProductName?: string
+  drugTerminology?: MedicationEntity['drugTerminology']
   isChronic: boolean
   categoryKey: string
   categoryLabel: string
@@ -67,23 +81,73 @@ const RANGE_MONTHS: Record<TimeRange, number | null> = {
 }
 
 const FALLBACK_CATEGORY_KEY = '__other__'
+const ATC_LEVEL_ONE_CODES = new Set([
+  'A', 'B', 'C', 'D', 'G', 'H', 'J',
+  'L', 'M', 'N', 'P', 'R', 'S', 'V',
+])
 
-function drugKeyOf(m: any): string {
-  return (
-    m?.medicationCodeableConcept?.coding?.[0]?.code ||
-    m?.medicationCodeableConcept?.text ||
-    m?.medicationReference?.display ||
-    m?.code?.text ||
-    ''
-  )
-}
+function categoryOf(
+  medication: any,
+  locale: string,
+  fallbackCategoryLabel: string,
+  atcCategoryLabels: Record<string, string>,
+): { key: string; label: string } {
+  // The Bridge terminology module owns ATC hierarchy resolution. The App
+  // consumes its governed three-character category and never invents a
+  // level-2 label by slicing the full ingredient code.
+  const atcLevel2Code =
+    typeof medication?.drugTerminology?.atcLevel2Code === 'string'
+      ? medication.drugTerminology.atcLevel2Code.trim().toUpperCase()
+      : ''
+  const atcLevel2Name =
+    locale === 'en'
+      ? medication?.drugTerminology?.atcLevel2NameEn
+        || medication?.drugTerminology?.atcLevel2NameZh
+      : medication?.drugTerminology?.atcLevel2NameZh
+        || medication?.drugTerminology?.atcLevel2NameEn
+  if (/^[A-Z]\d{2}$/.test(atcLevel2Code) && typeof atcLevel2Name === 'string') {
+    const label = atcLevel2Name.replace(/\s+/g, ' ').trim()
+    if (label) {
+      return {
+        key: `atc-level2:${atcLevel2Code}`,
+        label,
+      }
+    }
+  }
 
-function categoryKeyOf(m: any): string {
-  return (
-    m?.category?.[0]?.coding?.[0]?.display ||
-    m?.category?.[0]?.text ||
-    FALLBACK_CATEGORY_KEY
-  )
+  // An explicit source classification is more informative than falling back
+  // to the very broad ATC anatomical letter on older, unenriched bundles.
+  const sourceCategory = medication?.category?.[0]
+  const sourceLabel = pickByLocale(sourceCategory, locale)?.replace(/\s+/g, ' ').trim()
+  if (sourceLabel) {
+    const sourceKey =
+      sourceCategory?.coding?.[0]?.code ||
+      sourceCategory?.coding?.[0]?.display ||
+      sourceCategory?.text ||
+      sourceLabel
+    return {
+      key: `source:${String(sourceKey).trim()}`,
+      label: sourceLabel,
+    }
+  }
+
+  // Final terminology fallback for an older resource that carries only the
+  // full ATC code: use the anatomical level-one group, clearly keyed as such.
+  const atcCode = typeof medication?.drugTerminology?.atcCode === 'string'
+    ? medication.drugTerminology.atcCode.trim().toUpperCase()
+    : ''
+  const atcGroup = atcCode.charAt(0)
+  if (ATC_LEVEL_ONE_CODES.has(atcGroup)) {
+    return {
+      key: `atc-level1:${atcGroup}`,
+      label: atcCategoryLabels[atcGroup] || `ATC ${atcGroup}`,
+    }
+  }
+
+  return {
+    key: FALLBACK_CATEGORY_KEY,
+    label: fallbackCategoryLabel,
+  }
 }
 
 export function useMedicationTimeline(
@@ -92,6 +156,7 @@ export function useMedicationTimeline(
   range: TimeRange,
   fallbackCategoryLabel: string,
   locale: string = 'zh-TW',
+  atcCategoryLabels: Record<string, string> = {},
 ): TimelineData {
   return useMemo(() => {
     const empty: TimelineData = {
@@ -115,7 +180,7 @@ export function useMedicationTimeline(
     const chronicDrugs = new Set<string>()
     for (const m of medications) {
       if (m && isChronicPrescription(m)) {
-        const k = drugKeyOf(m)
+        const k = medicationClinicalIdentityKey(m)
         if (k) chronicDrugs.add(k)
       }
     }
@@ -134,7 +199,7 @@ export function useMedicationTimeline(
 
     for (const med of medications) {
       if (!med) continue
-      const drugKey = drugKeyOf(med)
+      const drugKey = medicationClinicalIdentityKey(med)
       if (!drugKey) continue
 
       const startIso = med.authoredOn || med.effectiveDateTime
@@ -147,12 +212,33 @@ export function useMedicationTimeline(
       const endMs = startMs + supplyDays * 24 * 60 * 60 * 1000
 
       const isChronic = chronicDrugs.has(drugKey)
-      const drugName = pickLocalizedText(med.medicationCodeableConcept, audience, locale) || drugKey
-      const categoryKey = categoryKeyOf(med)
-      // Category labels follow UI locale (not audience) — see
-      // medications/utils/fhir-helpers.ts `pickByLocale` rationale.
-      const categoryLabel =
-        pickByLocale(med.category?.[0], locale) || fallbackCategoryLabel
+      const officialProductName = audience === 'medical'
+        ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
+        : locale === 'en'
+          ? med.drugTerminology?.officialNameEn || med.drugTerminology?.officialNameZh
+          : med.drugTerminology?.officialNameZh
+      const ingredientName = audience === 'medical'
+        ? med.drugTerminology?.ingredientText?.trim()
+        : undefined
+      const drugName = ingredientName
+        || officialProductName
+        || pickLocalizedText(med.medicationCodeableConcept, audience, locale)
+        || drugKey
+      const drugProductName =
+        audience === 'medical' &&
+        ingredientName &&
+        officialProductName &&
+        ingredientName.localeCompare(officialProductName, undefined, { sensitivity: 'accent' }) !== 0
+          ? officialProductName
+          : undefined
+      // Category labels follow UI locale (not audience). Prefer the shared
+      // Governed ATC level-two group, source category, ATC level one, Other.
+      const { key: categoryKey, label: categoryLabel } = categoryOf(
+        med,
+        locale,
+        fallbackCategoryLabel,
+        atcCategoryLabels,
+      )
 
       const icdCoding = med.reasonCode?.[0]?.coding?.[0]
       const icdCode = icdCoding?.code as string | undefined
@@ -164,11 +250,12 @@ export function useMedicationTimeline(
         : undefined
 
       const bar: RefillBar = {
-        refillId: med.id || `${drugKey}-${startIso}`,
+        refillId: med.id || `${medicationSourceCode(med) || drugKey}-${startIso}`,
         startMs,
         endMs,
         supplyDays,
         authoredOnIso: startIso,
+        sourceMedicationCode: medicationSourceCode(med) || undefined,
         pharmacy: med.requester?.display?.trim() || undefined,
         icdCode,
         icdText,
@@ -188,6 +275,8 @@ export function useMedicationTimeline(
         // localisations; the bridge's latest is usually most correct.
         if (startMs >= existing.lastStartMs) {
           existing.drugName = drugName
+          existing.drugProductName = drugProductName
+          existing.drugTerminology = med.drugTerminology
           existing.categoryKey = categoryKey
           existing.categoryLabel = categoryLabel
         }
@@ -195,6 +284,8 @@ export function useMedicationTimeline(
         drugsMap.set(drugKey, {
           drugKey,
           drugName,
+          drugProductName,
+          drugTerminology: med.drugTerminology,
           isChronic,
           categoryKey,
           categoryLabel,
@@ -245,7 +336,8 @@ export function useMedicationTimeline(
       const aHasChronic = a.chronicCount > 0
       const bHasChronic = b.chronicCount > 0
       if (aHasChronic !== bHasChronic) return aHasChronic ? -1 : 1
-      return b.drugs.length - a.drugs.length
+      const countOrder = b.drugs.length - a.drugs.length
+      return countOrder || a.key.localeCompare(b.key)
     })
 
     return {
@@ -257,5 +349,5 @@ export function useMedicationTimeline(
       chronicCount: drugs.filter(d => d.isChronic).length,
       acuteCount: drugs.filter(d => !d.isChronic).length,
     }
-  }, [medications, audience, range, fallbackCategoryLabel, locale])
+  }, [medications, audience, range, fallbackCategoryLabel, locale, atcCategoryLabels])
 }

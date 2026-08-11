@@ -13,6 +13,7 @@ interface ReportInterpretationButtonProps {
   active: boolean
   onToggle: (e: React.MouseEvent) => void
   className?: string
+  dataTour?: string
   /** Render as a div[role=button] instead of a <button>. Needed when the host
    *  header is itself a <button> (e.g. a Radix AccordionTrigger on a panel
    *  report) — a nested <button> is invalid HTML. Defaults to a real <button>. */
@@ -23,6 +24,7 @@ export function ReportInterpretationButton({
   active,
   onToggle,
   className,
+  dataTour,
   asDiv,
 }: ReportInterpretationButtonProps) {
   const { locale } = useLanguage()
@@ -55,6 +57,7 @@ export function ReportInterpretationButton({
     return (
       <div
         role="button"
+        data-tour={dataTour}
         tabIndex={0}
         onClick={onToggle}
         // stop the parent header-button (accordion trigger) from also toggling.
@@ -78,6 +81,7 @@ export function ReportInterpretationButton({
   return (
     <button
       type="button"
+      data-tour={dataTour}
       onClick={onToggle}
       title={active ? activeLabel : label}
       aria-label={active ? activeLabel : label}

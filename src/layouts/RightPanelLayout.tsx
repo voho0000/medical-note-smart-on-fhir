@@ -2,7 +2,7 @@
 // Contributors can easily add/remove/replace features by modifying the registry
 "use client"
 
-import { ComponentType, memo, ReactNode } from "react"
+import { ComponentType, memo, ReactNode, useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
 import { MoreHorizontal, SlidersHorizontal } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -18,7 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
 import { useLanguage } from "@/src/application/providers/language.provider"
+import { useAudience } from "@/src/application/providers/audience.provider"
 import { getEnabledRightPanelFeatures, type RightPanelFeatureConfig } from "@/src/shared/config/right-panel-registry"
 import { groupRightPanelFeatures, isFeaturePinned, useRightPanelTabsStore } from "@/src/application/stores/right-panel-tabs.store"
 import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/ui-theme.config"
@@ -26,6 +28,9 @@ import { RIGHT_PANEL_TAB_THEMES, TAB_ACTIVE_CLASSES } from "@/src/shared/config/
 // header's overflow menu can navigate to right-panel tabs (e.g. open
 // Settings → 顯示). Only useRightPanel is imported here now.
 import { useRightPanel } from '@/src/application/providers/right-panel.provider'
+import { CLINICAL_DECISION_SUPPORT_FEATURE_ID } from '@/features/clinical-decision-support/module'
+import { PERSONALIZED_EDUCATION_FEATURE_ID } from '@/features/personalized-education/module'
+import { useRightFeatureTourStore } from '@/features/right-feature-tour/right-feature-tour.store'
 
 // ============================================================================
 // FEATURE COMPONENTS - lazy-loaded so each feature is its own chunk instead of
@@ -55,6 +60,14 @@ const MedicalCalculatorFeature = dynamic(() => import("@/features/medical-calcul
   ssr: false,
   loading: FeatureLoading,
 })
+const PersonalizedGuidanceFeature = dynamic(() => import("@/features/clinical-decision-support/LiveFeature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
+const PersonalizedEducationFeature = dynamic(() => import("@/features/personalized-education/LiveFeature"), {
+  ssr: false,
+  loading: FeatureLoading,
+})
 const SettingsFeature = dynamic(() => import("@/features/settings/Feature"), {
   ssr: false,
   loading: FeatureLoading,
@@ -79,6 +92,8 @@ const FEATURE_COMPONENTS: Record<string, ComponentType> = {
   'medical-chat': MedicalChatFeature,
   'ips-export': IpsExportFeature,
   'medical-calculator': MedicalCalculatorFeature,
+  [PERSONALIZED_EDUCATION_FEATURE_ID]: PersonalizedEducationFeature,
+  [CLINICAL_DECISION_SUPPORT_FEATURE_ID]: PersonalizedGuidanceFeature,
   'settings': SettingsFeature,
 }
 
@@ -120,7 +135,7 @@ function RightPanelContent() {
 
 export function RightPanelFeature() {
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" data-tour="right-panel">
       <RightPanelContent />
     </div>
   )
@@ -191,10 +206,50 @@ const FeatureTabContent = memo(function FeatureTabContent({ feature }: { feature
 
 function RightPanelContentInner() {
   const { t } = useLanguage()
-  const features = getEnabledRightPanelFeatures()
+  const { audience } = useAudience()
+  const features = getEnabledRightPanelFeatures(audience)
   const { activeTab, setActiveTab } = useRightPanel()
+  const tourActive = useRightFeatureTourStore((state) => state.active)
+  const tourStep = useRightFeatureTourStore((state) => state.stepId)
+  const preTourTabRef = useRef<string | null>(null)
+  const wasTourActiveRef = useRef(false)
   const pinOverrides = useRightPanelTabsStore((s) => s.pinOverrides)
   const setPinned = useRightPanelTabsStore((s) => s.setPinned)
+
+  // Each step opens the feature it explains. Preserve the user's original
+  // right-panel tab and restore it when the tour is completed or skipped.
+  useEffect(() => {
+    if (tourActive && !wasTourActiveRef.current) {
+      preTourTabRef.current = activeTab
+      wasTourActiveRef.current = true
+    }
+
+    if (!tourActive && wasTourActiveRef.current) {
+      wasTourActiveRef.current = false
+      setActiveTab(preTourTabRef.current ?? 'medical-summary')
+      preTourTabRef.current = null
+      return
+    }
+
+    if (!tourActive || !tourStep) return
+    const targetTab: Partial<Record<typeof tourStep, string>> = {
+      overview: 'medical-summary',
+      summary: 'medical-summary',
+      'summary-settings': 'medical-summary',
+      chat: 'medical-chat',
+      'chat-compose': 'medical-chat',
+      'chat-template': 'medical-chat',
+      calculator: 'medical-calculator',
+      guidance: CLINICAL_DECISION_SUPPORT_FEATURE_ID,
+      export: 'ips-export',
+      settings: 'settings',
+      finish: 'medical-summary',
+    }
+    const target = targetTab[tourStep]
+    if (target && features.some((feature) => feature.id === target)) {
+      setActiveTab(target)
+    }
+  }, [activeTab, features, setActiveTab, tourActive, tourStep])
 
   // Pluggability guard: the provider's default (or a stale selection) may
   // point at a feature that has been unplugged in the registry — fall back
@@ -232,13 +287,15 @@ function RightPanelContentInner() {
     const Icon = theme.icon
     const activeClasses = TAB_ACTIVE_CLASSES[theme.colorKey] || TAB_ACTIVE_CLASSES.settings
     const label = getTabLabel(feature)
+    const accessibleLabel = feature.badge ? `${label} · ${feature.badge}` : label
     return (
       <TabsTrigger
         key={feature.id}
         value={feature.id}
+        data-tour={`right-tab-${feature.id}`}
         className={`text-sm font-semibold min-w-0 flex items-center gap-1.5 ${activeClasses}`}
-        title={label}
-        aria-label={label}
+        title={accessibleLabel}
+        aria-label={accessibleLabel}
       >
         <Icon className="h-4 w-4 shrink-0" />
         {/* Below sm the multi-way grid leaves ~50px per tab — a 2-3 char
@@ -247,6 +304,15 @@ function RightPanelContentInner() {
             every width. */}
         {!feature.iconOnly && (
           <span className="truncate hidden sm:inline">{label}</span>
+        )}
+        {feature.badge && (
+          <Badge
+            variant="outline"
+            className="hidden border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 sm:inline-flex dark:border-amber-700/70 dark:bg-amber-950/50 dark:text-amber-300"
+            aria-hidden="true"
+          >
+            {feature.badge}
+          </Badge>
         )}
       </TabsTrigger>
     )
@@ -258,6 +324,14 @@ function RightPanelContentInner() {
       <>
         <Icon className="h-4 w-4 shrink-0" />
         {getTabLabel(feature)}
+        {feature.badge && (
+          <Badge
+            variant="outline"
+            className="ml-auto border-amber-300 bg-amber-50 px-1 py-0 text-[0.5625rem] font-bold uppercase leading-4 text-amber-700 dark:border-amber-700/70 dark:bg-amber-950/50 dark:text-amber-300"
+          >
+            {feature.badge}
+          </Badge>
+        )}
       </>
     )
   }
@@ -273,6 +347,7 @@ function RightPanelContentInner() {
       className="h-full flex flex-col"
     >
       <TabsList
+        data-tour="right-tabs"
         className="w-full grid gap-1 h-12 shrink-0 bg-muted/50 p-1 border"
         style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
@@ -284,6 +359,7 @@ function RightPanelContentInner() {
         {showOverflowMenu ? (
           <DropdownMenu>
             <DropdownMenuTrigger
+              data-tour="right-tabs-overflow"
               className="text-sm font-medium min-w-0 flex items-center justify-center gap-1.5 rounded-lg text-foreground/70 dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground/90 transition-colors data-[state=open]:bg-background data-[state=open]:text-foreground dark:data-[state=open]:bg-card"
               title={t.tabs.more}
               aria-label={t.tabs.more}
@@ -330,6 +406,7 @@ function RightPanelContentInner() {
         <TabsContent
           key={feature.id}
           value={feature.id}
+          data-tour={`right-content-${feature.id}`}
           className={feature.contentClassName || 'flex-1 mt-1'}
           forceMount={feature.forceMount ? true : undefined}
         >

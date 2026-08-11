@@ -46,6 +46,8 @@ export interface BuildIpsMarkdownOptions {
   data: ClinicalDataCollection
   labels?: Partial<IpsSectionLabels>
   generatedAt?: Date
+  /** Include direct patient identifiers. Default true. */
+  includePatientIdentifiers?: boolean
 }
 
 function clean(value: unknown): string {
@@ -201,7 +203,13 @@ function patientIdentifiers(patient: PatientEntity | null): string {
     .join('; ')
 }
 
-function patientSection(patient: PatientEntity | null): string {
+function patientSection(patient: PatientEntity | null, labels: IpsSectionLabels, includeIdentifiers: boolean): string {
+  if (!includeIdentifiers) {
+    return section('Patient', [
+      `- Name: ${labels.maskedPatient}`,
+      `- Gender: ${dash(patient?.gender)}`,
+    ].join('\n'))
+  }
   const lines = [
     `- Name: ${dash(getPatientDisplayName(patient))}`,
     `- Gender: ${dash(patient?.gender)}`,
@@ -685,14 +693,16 @@ function consentRows(rows: ConsentEntity[]): string[][] {
   ])
 }
 
-function frontmatter(generatedAt: Date): string {
+function frontmatter(generatedAt: Date, includeIdentifiers: boolean): string {
   return [
     '---',
     'format: clinical-summary-markdown',
-    'source: ips-curated-data',
+    'source: taiwan-nhi-my-health-bank',
     'source_format: fhir-derived',
     `generated_at: "${generatedAt.toISOString()}"`,
-    'contains_phi: true',
+    'clinical_attestation: none',
+    `identifiers_included: ${includeIdentifiers}`,
+    `contains_phi: ${includeIdentifiers ? 'true' : 'possible'}`,
     '---',
   ].join('\n')
 }
@@ -701,10 +711,12 @@ export function buildIpsMarkdown(opts: BuildIpsMarkdownOptions): string {
   const labels: IpsSectionLabels = { ...DEFAULT_SECTION_LABELS, ...(opts.labels ?? {}) }
   const generatedAt = opts.generatedAt ?? new Date()
   const data = opts.data
+  const includeIdentifiers = opts.includePatientIdentifiers !== false
   const parts = [
-    frontmatter(generatedAt),
-    '# International Patient Summary - Markdown Export',
-    patientSection(opts.patient),
+    frontmatter(generatedAt, includeIdentifiers),
+    `# ${labels.documentTitle}`,
+    `> **${labels.sourceNotice}**\n>\n> ${labels.notMedicalRecordNotice}\n>\n> ${labels.noClinicalAttestationNotice}`,
+    patientSection(opts.patient, labels, includeIdentifiers),
     problemsSection(labels.problemList, data.conditions),
     allergiesSection(labels.allergies, data.allergies),
     medicationsSection(labels.medications, data.medications, labels.medicationTable),

@@ -99,6 +99,30 @@ describe('useEncounterDetails — multi-day rollups', () => {
     expect(d.medSeries[1].refills).toHaveLength(1)
   })
 
+  it('preserves source-reported inpatient execution windows', () => {
+    const inpatientMedication = {
+      ...med('m1', 'POTASSIUM CRESOLSULFONATE', '2025-05-20T00:00:00+08:00'),
+      status: 'completed',
+      dispenseRequest: {
+        validityPeriod: {
+          start: '2025-05-20T00:00:00+08:00',
+          end: '2025-05-21T23:59:59+08:00',
+        },
+      },
+    }
+    const d = run(
+      [
+        obs('o1', 'WBC', '2025-05-20T08:00:00Z'),
+        obs('o2', 'WBC', '2025-05-21T08:00:00Z'),
+      ],
+      [inpatientMedication],
+    )
+
+    expect(d.medSeries[0].refills[0].executionPeriod).toEqual(
+      inpatientMedication.dispenseRequest.validityPeriod,
+    )
+  })
+
   it('does not build medSeries for single-day visits', () => {
     const d = run(
       [obs('o1', 'WBC', '2025-05-18T08:00:00Z')],

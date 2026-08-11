@@ -1,19 +1,21 @@
 // Medication Item Component — dense 2-line layout so 10+ drugs fit on screen.
 // Line 1: drug name (truncate) + chronic badge + status badge
-// Line 2: dose · freq · route · date range · pharmacy · billing ICD (medical) · refill count
+// Line 2: dose · freq · route · date range · pharmacy · ATC/ICD (medical) · refill count
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
 import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.hook"
 import { cn } from "@/src/shared/utils/cn.utils"
-import type { MedicationRow } from '../types'
+import { formatDate as formatCalendarDate } from "@/src/shared/utils/date.utils"
+import type { MedicationExecutionPeriod, MedicationRow } from '../types'
 import {
   medicationCategoryChipClass,
   medicationDaysLeftBadgeClass,
   medicationIcdChipClass,
   medicationIcdTextClass,
 } from './medication-chip-styles'
+import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
 
 interface MedicationItemProps {
   medication: MedicationRow
@@ -23,6 +25,10 @@ interface MedicationItemProps {
   showSourceChip?: boolean
   sourceChipStatementLabel?: string
   sourceChipStatementTooltip?: string
+  /** Exact source-reported inpatient execution windows. When provided, these
+   *  replace the generic prescription/supply date text without changing the
+   *  shared medication title, terminology, badges, or metadata layout. */
+  executionPeriods?: MedicationExecutionPeriod[]
 }
 
 function getStatusBadge(medication: MedicationRow, mt: any) {
@@ -46,6 +52,17 @@ function shortDate(s?: string): string {
   return s.replace(/(\d{1,2})\/(\d{1,2})\/(\d{2})(\d{2})/, '$1/$2/$4')
 }
 
+function sourceCalendarDate(value: string, locale: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  if (!match) return formatCalendarDate(value, locale)
+  const [, year, month, day] = match
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(Number(year), Number(month) - 1, Number(day)))
+}
+
 function Sep() {
   return <span className="text-muted-foreground/40 select-none" aria-hidden>·</span>
 }
@@ -55,8 +72,9 @@ export function MedicationItem({
   showSourceChip = false,
   sourceChipStatementLabel,
   sourceChipStatementTooltip,
+  executionPeriods,
 }: MedicationItemProps) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const { audience } = useAudience()
   const mt = (t.medications as any)
   const badge = getStatusBadge(medication, mt)
@@ -70,6 +88,12 @@ export function MedicationItem({
     !medication.isInactive &&
     medication.daysRemaining !== undefined &&
     medication.daysRemaining > 0
+  const terminology = medication.drugTerminology
+  const fullMedicationTitle = [
+    medication.title,
+    medication.secondaryTitle,
+    terminology?.atcCode ? `ATC ${terminology.atcCode}` : undefined,
+  ].filter(Boolean).join(' · ')
 
   // ── Line-2 inline parts (collapse empties) ────────────────────────────
   // Single-word dose/freq/route join into "5mg · PO · QD"; date range and
@@ -79,24 +103,55 @@ export function MedicationItem({
   if (medication.route) parts.push(<span key="route">{medication.route}</span>)
   if (medication.frequency) parts.push(<span key="freq">{medication.frequency}</span>)
 
-  // Date range: prefer "start → end" for active, "ended end" for inactive.
-  const startShort = shortDate(medication.startedOn)
-  const endShort = shortDate(medication.endDate)
-  if (startShort || endShort) {
-    let dateLabel: string
-    if (medication.isInactive && endShort) {
-      dateLabel = `${mt.endedPrefix ?? 'ended'} ${endShort}`
-    } else if (startShort && endShort) {
-      dateLabel = `${startShort} → ${endShort}`
-    } else if (startShort) {
-      dateLabel = startShort
-    } else {
-      dateLabel = endShort
+  const normalizedExecutionPeriods = (executionPeriods ?? [])
+    .filter((period) => period.start || period.end)
+    .filter((period, index, all) => {
+      const key = `${period.start || ''}|${period.end || ''}`
+      return all.findIndex(
+        (candidate) => `${candidate.start || ''}|${candidate.end || ''}` === key,
+      ) === index
+    })
+
+  if (normalizedExecutionPeriods.length > 0) {
+    const periodLabels = normalizedExecutionPeriods.map((period) => {
+      const start = period.start
+        ? sourceCalendarDate(period.start, locale)
+        : ''
+      const end = period.end
+        ? sourceCalendarDate(period.end, locale)
+        : start
+      if (!start) return end
+      if (!end || start === end) return start
+      return `${start}–${end}`
+    }).filter(Boolean)
+    const executionLabel = `${mt.executionPeriod ?? '執行'} ${periodLabels.join('、')}`
+    parts.push(
+      <span key="execution-period" className="truncate" title={executionLabel}>
+        {executionLabel}
+      </span>,
+    )
+  } else {
+    // Generic medication list: prefer "start → end" for active and
+    // "ended end" for inactive. Inpatient execution dates use the branch
+    // above because their source semantics are different from supply coverage.
+    const startShort = shortDate(medication.startedOn)
+    const endShort = shortDate(medication.endDate)
+    if (startShort || endShort) {
+      let dateLabel: string
+      if (medication.isInactive && endShort) {
+        dateLabel = `${mt.endedPrefix ?? 'ended'} ${endShort}`
+      } else if (startShort && endShort) {
+        dateLabel = `${startShort} → ${endShort}`
+      } else if (startShort) {
+        dateLabel = startShort
+      } else {
+        dateLabel = endShort
+      }
+      if (medication.durationDays && !medication.isInactive) {
+        dateLabel += ` (${medication.durationDays}d)`
+      }
+      parts.push(<span key="date">{dateLabel}</span>)
     }
-    if (medication.durationDays && !medication.isInactive) {
-      dateLabel += ` (${medication.durationDays}d)`
-    }
-    parts.push(<span key="date">{dateLabel}</span>)
   }
 
   if (medication.pharmacy) {
@@ -150,12 +205,30 @@ export function MedicationItem({
       {/* ── Line 1 ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <span
-            className="text-[0.8125rem] font-semibold truncate"
-            title={medication.title}
-          >
-            {medication.title}
-          </span>
+          <MedicationTerminologyTooltip medication={medication} enabled>
+            <span
+              className={cn(
+                "flex min-w-0 flex-1 items-baseline gap-1",
+                terminology && "cursor-help",
+              )}
+              title={fullMedicationTitle}
+              tabIndex={terminology ? 0 : undefined}
+            >
+              <span
+                className={cn(
+                  "truncate text-[0.8125rem] font-semibold",
+                  medication.secondaryTitle ? "max-w-[62%] shrink-0" : "min-w-0",
+                )}
+              >
+                {medication.title}
+              </span>
+              {isMedical && medication.secondaryTitle && (
+                <span className="min-w-0 truncate text-[0.6875rem] font-normal text-muted-foreground">
+                  · {medication.secondaryTitle}
+                </span>
+              )}
+            </span>
+          </MedicationTerminologyTooltip>
           {medication.category && (
             <span
               title={medication.category}

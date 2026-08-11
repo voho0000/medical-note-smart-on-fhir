@@ -23,6 +23,49 @@ const filters = {
 } as any
 
 describe('imagingReportsCategory — ImagingStudy', () => {
+  it('includes a category-less Health Bank chest X-ray for AI selection', () => {
+    const clinicalData = {
+      diagnosticReports: [{
+        id: 'sdk-r8-32001c',
+        status: 'final',
+        code: {
+          coding: [{ system: 'nhi', code: '32001C' }],
+          text: '胸腔檢查（包括各種角度部位之胸腔檢查）',
+        },
+        effectiveDateTime: '2026-06-02',
+        conclusion: 'Radiography of Chest A-P View(Supine)',
+      }],
+      imagingStudies: [],
+      observations: [],
+      encounters: [],
+    }
+
+    const data = imagingReportsCategory.extractData(clinicalData)
+    expect(data.map((report) => report.id)).toEqual(['sdk-r8-32001c'])
+    expect(imagingReportsCategory.getCount(data, filters, clinicalData)).toBe(1)
+  })
+
+  it('includes a category-less Health Bank pathology report for AI selection', () => {
+    const clinicalData = {
+      diagnosticReports: [{
+        id: 'sdk-r8-pathology',
+        status: 'final',
+        code: {
+          coding: [{ system: 'nhi', code: '25004C' }],
+          text: '第四級外科病理',
+        },
+        effectiveDateTime: '2026-06-03',
+        conclusion: 'Pathology report content',
+      }],
+      imagingStudies: [],
+      observations: [],
+      encounters: [],
+    }
+
+    const data = imagingReportsCategory.extractData(clinicalData)
+    expect(data.map((report) => report.id)).toEqual(['sdk-r8-pathology'])
+  })
+
   it('includes a linked metadata-only report once and exposes study text to AI context', () => {
     const clinicalData = {
       diagnosticReports: [{

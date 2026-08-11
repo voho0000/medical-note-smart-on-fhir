@@ -53,6 +53,23 @@ describe('GenerateSafetyAlertsUseCase', () => {
       const msgs = generateSafetyAlertsUseCase.buildMessages({ clinicalContext: 'x', locale: 'en' })
       expect(msgs[1].content).not.toContain('SOURCE LIST')
     })
+
+    it('scrubs patient literals from both clinical context and source labels', () => {
+      const msgs = generateSafetyAlertsUseCase.buildMessages({
+        clinicalContext: '王小明 eGFR 32',
+        piiLiterals: ['王小明'],
+        locale: 'zh-TW',
+        catalog: [{
+          key: 'D1',
+          resourceType: 'DocumentReference',
+          resourceId: 'd1',
+          display: '王小明出院病摘',
+        }],
+      })
+      expect(msgs[1].content).not.toContain('王小明')
+      expect(msgs[1].content).toContain('[已遮蔽] eGFR 32')
+      expect(msgs[1].content).toContain('[已遮蔽]出院病摘')
+    })
   })
 
   describe('parseScanResult', () => {

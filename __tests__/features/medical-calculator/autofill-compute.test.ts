@@ -58,6 +58,25 @@ describe('resolveInput — unit-dimension safety gate for name matches', () => {
     const r = resolveInput(naInput, fakeAutofill({ NA: val('mg/dL') }))
     expect(r.filled).toBe(true)
   })
+
+  it('converts an auto-filled ACR from mg/mmol to the formula base unit mg/g', () => {
+    const acrInput: CalcInput = {
+      key: 'acr',
+      type: 'number',
+      label: { en: 'ACR', zh: 'ACR' },
+      unit: 'mg/g',
+      dimension: 'albumin-creatinine-ratio',
+      source: { kind: 'labSpecimen', keys: ['ACR'], specimen: 'urine' },
+    }
+    const result = resolveInput(acrInput, fakeAutofill({
+      ACR: { value: 50, unit: 'mg/mmol', date: '2026-01-01', viaLoinc: true },
+    }))
+
+    expect(Number(result.value)).toBeCloseTo(442, 5)
+    expect(result.displayUnit).toBe('mg/g')
+    expect(result.changed).toBe(true)
+    expect(result.unconvertible).toBe(false)
+  })
 })
 
 describe('calcReadiness / relevanceScore — "for this patient" ranking', () => {

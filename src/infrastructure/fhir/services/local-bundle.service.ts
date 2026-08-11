@@ -26,9 +26,19 @@ import { FhirMapper } from '../mappers/fhir.mapper'
 import { PatientMapper } from '../mappers/patient.mapper'
 import { expandClaimResources } from './claim-expander'
 import { expandRocheResources } from './roche-expander'
+import { enrichBundleWithNhiDrugTerminology } from './nhi-drug-terminology-enrichment.service'
 import { referenceId } from '@/src/core/utils/observation-selectors'
-import type { PatientEntity } from '@/src/core/entities/patient.entity'
-import type { ClinicalDataCollection } from '@/src/core/entities/clinical-data.entity'
+import {
+  applyUserEnteredPatientProfile,
+  parseUserEnteredPatientProfile,
+  type PatientEntity,
+  type UserEnteredPatientProfile,
+} from '@/src/core/entities/patient.entity'
+import type {
+  ClinicalDataCollection,
+  ClinicalSourceMetadata,
+  MedicationEntity,
+} from '@/src/core/entities/clinical-data.entity'
 import {
   getSessionBundleKey,
   clearSessionBundleKey,
@@ -67,11 +77,19 @@ const IMG_STORE = 'images'
 let memBundle: object | null = null
 let memBundleImportId: string | null = null
 let memBundleIsDemo = false
+let memBundleSourceMetadata: ClinicalSourceMetadata | null = null
+let memUserEnteredPatientProfile: UserEnteredPatientProfile | null = null
+// A stored bundle can be requested concurrently by the Patient and clinical
+// data repositories during startup. Share one terminology migration per
+// plaintext bundle object so the 12 MB snapshot is never parsed twice.
+const terminologyMigrationByBundle = new WeakMap<object, Promise<object>>()
 
 interface PersistedBundleEnvelope {
   __mediprismaBundle: 1
   importId: string
   demo: boolean
+  sourceMetadata?: ClinicalSourceMetadata
+  patientProfile?: UserEnteredPatientProfile
   bundle: object
 }
 
@@ -437,6 +455,159 @@ function toDateStr(dateStr?: string): string | null {
   return dateStr.slice(0, 10)
 }
 
+const NHI_DRUG_CODE_SYSTEM =
+  'https://twcore.mohw.gov.tw/CodeSystem/nhi-drug-code'
+const NHI_DRUG_SNAPSHOT_TAG_SYSTEM =
+  'https://nhi-fhir-bridge.github.io/CodeSystem/drug-terminology-snapshot'
+const NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM =
+  'https://nhi-fhir-bridge.github.io/IdentifierSystem/nhi-drug-official-url'
+const ATC_HIERARCHY_TAG_SYSTEM =
+  'https://nhi-fhir-bridge.github.io/CodeSystem/atc-hierarchy-snapshot'
+
+function hasNhiDrugTerminologyKnowledge(bundle: object): boolean {
+  const entries = Array.isArray((bundle as { entry?: unknown }).entry)
+    ? (bundle as { entry: any[] }).entry
+    : []
+  const governedKnowledge = entries
+    .map((entry: any) => entry?.resource)
+    .filter((resource: any) =>
+      resource?.resourceType === 'MedicationKnowledge'
+      && Array.isArray(resource.meta?.tag)
+      && resource.meta.tag.some(
+        (tag: any) => tag?.system === NHI_DRUG_SNAPSHOT_TAG_SYSTEM,
+      ))
+  if (governedKnowledge.length === 0) return false
+  return governedKnowledge.every((resource: any) =>
+    Array.isArray(resource.meta?.tag)
+    && resource.meta.tag.some(
+      (tag: any) =>
+        tag?.system === ATC_HIERARCHY_TAG_SYSTEM
+        && typeof tag?.code === 'string',
+    ))
+}
+
+function terminologyFromMedicationKnowledge(
+  request: any,
+  knowledgeById: Map<string, any>,
+): MedicationEntity['drugTerminology'] | undefined {
+  const references = Array.isArray(request.supportingInformation)
+    ? request.supportingInformation
+    : []
+  for (const candidate of references) {
+    const ref = typeof candidate?.reference === 'string'
+      ? candidate.reference
+      : ''
+    if (!ref) continue
+    const id = referenceId(ref)
+    const knowledge = id ? knowledgeById.get(id) : undefined
+    if (!knowledge) continue
+
+    const snapshotTag = Array.isArray(knowledge.meta?.tag)
+      ? knowledge.meta.tag.find(
+        (tag: any) =>
+          tag?.system === NHI_DRUG_SNAPSHOT_TAG_SYSTEM
+          && typeof tag?.code === 'string',
+      )
+      : undefined
+    const drugCoding = Array.isArray(knowledge.code?.coding)
+      ? knowledge.code.coding.find(
+        (coding: any) => coding?.system === NHI_DRUG_CODE_SYSTEM,
+      )
+      : undefined
+    const snapshotId = snapshotTag?.code ?? drugCoding?.version
+    if (typeof snapshotId !== 'string' || !snapshotId) continue
+
+    const classifications = Array.isArray(
+      knowledge.medicineClassification?.[0]?.classification,
+    )
+      ? knowledge.medicineClassification[0].classification
+      : []
+    const atcConcepts = classifications
+      .map((classification: any) => {
+        const coding = Array.isArray(classification?.coding)
+          ? classification.coding.find(
+            (candidate: any) =>
+              candidate?.system === 'http://www.whocc.no/atc'
+              && typeof candidate?.code === 'string',
+          )
+          : undefined
+        return { classification, coding }
+      })
+      .filter(({ coding }: any) => coding)
+    const fullAtc = atcConcepts.find(
+      ({ coding }: any) => /^[A-Z]\d{2}[A-Z]{2}\d{2}$/.test(coding.code),
+    )
+    const level2Atc = atcConcepts.find(
+      ({ coding }: any) => /^[A-Z]\d{2}$/.test(coding.code),
+    )
+    const atcCoding = fullAtc?.coding
+    const classification = fullAtc?.classification
+    const level2Coding = level2Atc?.coding
+    const level2Classification = level2Atc?.classification
+    const officialProductIdentifier = Array.isArray(knowledge.identifier)
+      ? knowledge.identifier.find(
+        (identifier: any) =>
+          identifier?.system === NHI_DRUG_OFFICIAL_URL_IDENTIFIER_SYSTEM,
+      )
+      : undefined
+
+    const officialNameZh = typeof knowledge.code?.text === 'string'
+      ? knowledge.code.text
+      : undefined
+    const officialNameEn = typeof drugCoding?.display === 'string'
+      ? drugCoding.display
+      : undefined
+    const atcNameEn = typeof atcCoding?.display === 'string'
+      ? atcCoding.display
+      : undefined
+    const classificationText = typeof classification?.text === 'string'
+      ? classification.text
+      : undefined
+    const atcLevel2NameEn = typeof level2Coding?.display === 'string'
+      ? level2Coding.display
+      : undefined
+    const atcLevel2NameZh =
+      typeof level2Classification?.text === 'string'
+      && level2Classification.text !== atcLevel2NameEn
+        ? level2Classification.text
+        : undefined
+
+    return {
+      source: 'nhi-official-drug-master',
+      snapshotId,
+      ...(officialNameZh ? { officialNameZh } : {}),
+      ...(officialNameEn && officialNameEn !== officialNameZh
+        ? { officialNameEn }
+        : {}),
+      ...(typeof knowledge.ingredient?.[0]?.itemCodeableConcept?.text === 'string'
+        ? { ingredientText: knowledge.ingredient[0].itemCodeableConcept.text }
+        : {}),
+      ...(typeof knowledge.doseForm?.text === 'string'
+        ? { doseForm: knowledge.doseForm.text }
+        : {}),
+      ...(typeof atcCoding?.code === 'string'
+        ? { atcCode: atcCoding.code }
+        : {}),
+      ...(atcNameEn ? { atcNameEn } : {}),
+      ...(classificationText && classificationText !== atcNameEn
+        ? { atcNameZh: classificationText }
+        : {}),
+      ...(typeof level2Coding?.code === 'string'
+        ? { atcLevel2Code: level2Coding.code }
+        : {}),
+      ...(atcLevel2NameEn ? { atcLevel2NameEn } : {}),
+      ...(atcLevel2NameZh ? { atcLevel2NameZh } : {}),
+      ...(typeof level2Coding?.version === 'string'
+        ? { atcHierarchySnapshotId: level2Coding.version }
+        : {}),
+      ...(typeof officialProductIdentifier?.value === 'string'
+        ? { officialProductUrl: officialProductIdentifier.value }
+        : {}),
+    }
+  }
+  return undefined
+}
+
 // Attach encounter references for non-medication resources by same-day match.
 // Used by Observation / Procedure / Condition / DiagnosticReport / ImagingStudy — these
 // don't carry a "requester / provider" field, so date alone is the best we
@@ -533,12 +704,19 @@ export const LocalBundleService = {
   // lives in memory only for this session — never plaintext at rest.
   async save(
     bundle: object,
-    options: { importId?: string; demo?: boolean } = {},
+    options: {
+      importId?: string
+      demo?: boolean
+      sourceMetadata?: ClinicalSourceMetadata
+      patientProfile?: UserEnteredPatientProfile | null
+    } = {},
   ): Promise<void> {
     const importId = typeof options.importId === 'string' && options.importId.trim()
       ? options.importId.trim()
       : null
     const demo = options.demo === true
+    const sourceMetadata = options.sourceMetadata
+    const patientProfile = parseUserEnteredPatientProfile(options.patientProfile)
     if (typeof window !== 'undefined') {
       try {
         await extractAndStoreImages(bundle)
@@ -550,12 +728,21 @@ export const LocalBundleService = {
     memBundle = bundle
     memBundleImportId = importId
     memBundleIsDemo = demo
+    memBundleSourceMetadata = sourceMetadata ?? null
+    memUserEnteredPatientProfile = patientProfile
     if (typeof window === 'undefined') return
     try {
       const key = await getSessionBundleKey({ create: true })
       if (!key) throw new Error('bundle session key unavailable')
       const persisted: object = importId
-        ? { __mediprismaBundle: 1, importId, demo, bundle } satisfies PersistedBundleEnvelope
+        ? {
+            __mediprismaBundle: 1,
+            importId,
+            demo,
+            ...(sourceMetadata ? { sourceMetadata } : {}),
+            ...(patientProfile ? { patientProfile } : {}),
+            bundle,
+          } satisfies PersistedBundleEnvelope
         : bundle
       await idbPut(await encryptJson(key, persisted))
       localStorage.setItem(
@@ -582,6 +769,8 @@ export const LocalBundleService = {
     memBundle = null
     memBundleImportId = null
     memBundleIsDemo = false
+    memBundleSourceMetadata = null
+    memUserEnteredPatientProfile = null
     if (typeof window === 'undefined') return
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(DEMO_FLAG_KEY)
@@ -644,6 +833,10 @@ export const LocalBundleService = {
             memBundle = decrypted.bundle
             memBundleImportId = decrypted.importId
             memBundleIsDemo = decrypted.demo
+            memBundleSourceMetadata = decrypted.sourceMetadata ?? null
+            memUserEnteredPatientProfile = parseUserEnteredPatientProfile(
+              decrypted.patientProfile,
+            )
             localStorage.setItem(
               STORAGE_KEY,
               `${IMPORT_MARKER_PREFIX}${decrypted.importId}`,
@@ -656,6 +849,8 @@ export const LocalBundleService = {
           memBundle = bundle
           memBundleImportId = null
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
+          memBundleSourceMetadata = null
+          memUserEnteredPatientProfile = null
           return bundle
         } catch {
           await this.clear()
@@ -668,6 +863,8 @@ export const LocalBundleService = {
         memBundle = fromIdb as object
         memBundleImportId = null
         memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
+        memBundleSourceMetadata = null
+        memUserEnteredPatientProfile = null
         try {
           const key = await getSessionBundleKey({ create: true })
           if (key) await idbPut(await encryptJson(key, fromIdb))
@@ -690,6 +887,8 @@ export const LocalBundleService = {
           memBundle = parsed
           memBundleImportId = null
           memBundleIsDemo = localStorage.getItem(DEMO_FLAG_KEY) === MARKER
+          memBundleSourceMetadata = null
+          memUserEnteredPatientProfile = null
           // Move it (encrypted) to IndexedDB and shrink the marker so we don't
           // re-migrate.
           try {
@@ -710,7 +909,10 @@ export const LocalBundleService = {
     return null
   },
 
-  parse(bundle: any): LocalBundleData | null {
+  parse(
+    bundle: any,
+    sourceMetadata?: ClinicalSourceMetadata,
+  ): LocalBundleData | null {
     // Canonicalise identity FIRST: stamp ids onto id-less resources and rewrite
     // urn:uuid / absolute references to the relative ResourceType/id form, so
     // every downstream step (patient-id gate, report-member linking, the inline
@@ -771,6 +973,9 @@ export const LocalBundleService = {
     // map is keyed by the (now-canonicalised) Medication id.
     const medicationResources = byType('Medication')
     const medicationMap = new Map(medicationResources.map((m: any) => [m.id, m]))
+    const medicationKnowledgeMap = new Map(
+      byType('MedicationKnowledge').map((resource: any) => [resource.id, resource]),
+    )
 
     // Promote a referenced Medication.code into medicationCodeableConcept so the
     // display helpers (which only look at medicationCodeableConcept) find a drug
@@ -807,10 +1012,17 @@ export const LocalBundleService = {
     // Stamp MedicationRequest with its source type too so downstream code can
     // tell a mixed-source list from a pure one. Resolve its medicationReference
     // as well (IPS-style orders reference a Medication rather than inlining it).
-    const medicationRequests = byType('MedicationRequest').map((m: any) => ({
-      ...resolveMedicationCode(m),
-      _sourceResourceType: 'MedicationRequest' as const,
-    }))
+    const medicationRequests = byType('MedicationRequest').map((m: any) => {
+      const drugTerminology = terminologyFromMedicationKnowledge(
+        m,
+        medicationKnowledgeMap,
+      )
+      return {
+        ...resolveMedicationCode(m),
+        _sourceResourceType: 'MedicationRequest' as const,
+        ...(drugTerminology ? { drugTerminology } : {}),
+      }
+    })
 
     // Pre-process resources: attach encounter refs where missing.
     // Medications use provider-aware matching (date + requester); everything
@@ -837,7 +1049,19 @@ export const LocalBundleService = {
     const comps  = byType('Composition')
     const imms   = byType('Immunization')
     const consents = byType('Consent')
-    const devices  = byType('Device')
+    // The SDK converter records its unit-inference software as a Device linked
+    // from Provenance. It is an audit agent, not a device implanted in or used
+    // by the patient, and must never enter clinical Device cards, AI context,
+    // or IPS exports.
+    const devices = byType('Device').filter((resource: any) => {
+      const names = Array.isArray(resource.deviceName)
+        ? resource.deviceName.map((item: any) => String(item?.name ?? ''))
+        : []
+      const isSdkUnitPolicyAgent = names.some((name: string) =>
+        name.startsWith('NHI-FHIR-Bridge sdk-unit-policy-'),
+      )
+      return !isSdkUnitPolicyAgent
+    })
     const carePlans = byType('CarePlan')
 
     // Build observation map for DiagnosticReport expansion
@@ -872,14 +1096,102 @@ export const LocalBundleService = {
       consents:         consents.map((r: any) => FhirMapper.toConsent(r)),
       devices:          devices.map((r: any) => FhirMapper.toDevice(r)),
       carePlans:        carePlans.map((r: any) => FhirMapper.toCarePlan(r)),
+      ...(sourceMetadata ? { sourceMetadata } : {}),
     }
 
     return { patient, collection }
   },
 
   async parseStored(): Promise<LocalBundleData | null> {
-    const bundle = await this.load()
+    let bundle = await this.load()
     if (!bundle) return null
-    return this.parse(bundle)
+
+    // Bundles persisted before App-side drug terminology existed do not carry
+    // MedicationKnowledge, so medical users would fall back to the source
+    // Chinese product name after a reload. Upgrade them once, locally and
+    // fail-closed, then re-encrypt the enriched FHIR under the same import id.
+    // The raw SDK JSON is neither needed nor recovered.
+    if (!hasNhiDrugTerminologyKnowledge(bundle)) {
+      let migration = terminologyMigrationByBundle.get(bundle)
+      if (!migration) {
+        migration = (async () => {
+          const result = await enrichBundleWithNhiDrugTerminology(
+            bundle as Record<string, unknown>,
+          )
+          if (
+            result.report.status === 'enriched'
+            && result.report.linkedRequestCount > 0
+          ) {
+            await this.save(result.bundle, {
+              ...(memBundleImportId ? { importId: memBundleImportId } : {}),
+              demo: memBundleIsDemo,
+              ...(memBundleSourceMetadata
+                ? { sourceMetadata: memBundleSourceMetadata }
+                : {}),
+              patientProfile: memUserEnteredPatientProfile,
+            })
+            return result.bundle
+          }
+          return bundle
+        })()
+        terminologyMigrationByBundle.set(bundle, migration)
+      }
+      bundle = await migration
+    }
+
+    const parsed = this.parse(bundle, memBundleSourceMetadata ?? undefined)
+    if (!parsed) return null
+    return {
+      ...parsed,
+      patient: applyUserEnteredPatientProfile(
+        parsed.patient,
+        memUserEnteredPatientProfile,
+      ),
+    }
+  },
+
+  getUserEnteredPatientProfile(): UserEnteredPatientProfile | null {
+    return memUserEnteredPatientProfile
+      ? { ...memUserEnteredPatientProfile }
+      : null
+  },
+
+  /** Persist a local-import demographic overlay in the same AES-GCM envelope
+   * as the Bundle. The original FHIR Patient is never mutated. */
+  async setUserEnteredPatientProfile(
+    profile: UserEnteredPatientProfile | null,
+  ): Promise<void> {
+    const bundle = await this.load()
+    if (!bundle || !memBundleImportId) {
+      throw new Error('No active local import is available')
+    }
+    const normalized = parseUserEnteredPatientProfile(profile)
+    if (profile && !normalized) {
+      throw new Error('Invalid user-entered patient profile')
+    }
+    if (typeof window === 'undefined') {
+      throw new Error('Encrypted browser storage is unavailable')
+    }
+
+    const key = await getSessionBundleKey()
+    if (!key) throw new Error('Encrypted browser storage is unavailable')
+    const persisted = {
+      __mediprismaBundle: 1,
+      importId: memBundleImportId,
+      demo: memBundleIsDemo,
+      ...(memBundleSourceMetadata
+        ? { sourceMetadata: memBundleSourceMetadata }
+        : {}),
+      ...(normalized ? { patientProfile: normalized } : {}),
+      bundle,
+    } satisfies PersistedBundleEnvelope
+
+    // Update in-memory state only after the encrypted IndexedDB write succeeds.
+    await idbPut(await encryptJson(key, persisted))
+    localStorage.setItem(
+      STORAGE_KEY,
+      `${IMPORT_MARKER_PREFIX}${memBundleImportId}`,
+    )
+    memUserEnteredPatientProfile = normalized
   },
 }

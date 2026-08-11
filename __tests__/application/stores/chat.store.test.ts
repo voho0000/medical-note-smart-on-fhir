@@ -3,7 +3,14 @@ import type { ChatMessage } from '@/src/application/stores/chat.store'
 
 describe('chat.store', () => {
   beforeEach(() => {
-    useChatStore.setState({ messages: [] })
+    useChatStore.setState({ messages: [], chatDataScope: 'auto' })
+  })
+
+  describe('chat data scope', () => {
+    it('keeps the explicit scope in conversation state', () => {
+      useChatStore.getState().setChatDataScope('patient-literature')
+      expect(useChatStore.getState().chatDataScope).toBe('patient-literature')
+    })
   })
 
   describe('initial state', () => {

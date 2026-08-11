@@ -20,6 +20,9 @@ const mockRecordLocalImportAiDecision = jest.fn((
   _decision: 'auto' | 'manual',
 ) => true)
 const mockRecordAutoAiRealDataDecision = jest.fn()
+const mockGetTodayLocalImportAiDecision = jest.fn(() => null as 'auto' | 'manual' | null)
+const mockRecordTodayLocalImportAiDecision = jest.fn()
+const mockRequestDemographicsForAi = jest.fn(async () => true)
 
 jest.mock('@/src/application/hooks/medical-summary/use-medical-summary.hook', () => ({
   useMedicalSummary: jest.fn(),
@@ -39,12 +42,23 @@ jest.mock('@/src/application/hooks/ai-generation/auto-ai-consent', () => ({
   recordAutoAiRealDataDecision: (decision: 'auto' | 'manual') => (
     mockRecordAutoAiRealDataDecision(decision)
   ),
+  getTodayLocalImportAiDecision: () => mockGetTodayLocalImportAiDecision(),
+  recordTodayLocalImportAiDecision: (decision: 'auto' | 'manual') => (
+    mockRecordTodayLocalImportAiDecision(decision)
+  ),
+}))
+jest.mock('@/src/application/providers/ai-demographics-gate.provider', () => ({
+  useAiDemographicsGate: () => ({
+    demographicsReadyForAi: true,
+    requestDemographicsForAi: mockRequestDemographicsForAi,
+  }),
 }))
 
 const mockUseMedicalSummary = useMedicalSummary as jest.MockedFunction<typeof useMedicalSummary>
 const mockUseSafetyAlerts = useSafetyAlerts as jest.MockedFunction<typeof useSafetyAlerts>
 
 const summaryGenerate = jest.fn(async () => {})
+const summaryRetryFailedModules = jest.fn(async () => {})
 const safetyGenerate = jest.fn(async () => {})
 const summaryCancel = jest.fn()
 const safetyCancel = jest.fn()
@@ -147,6 +161,7 @@ function arrange({
     isGenerating: summaryGenerating,
     error: summaryError,
     issue: summaryIssue,
+    contextAdaptation: null,
     hasPatient: true,
     dataReady: true,
     scopeKey: summaryScopeKey,
@@ -161,6 +176,7 @@ function arrange({
     setModel: setSummaryModel,
     recordGenerationCompletion,
     generate: summaryGenerate,
+    retryFailedModules: summaryRetryFailedModules,
     cancel: summaryCancel,
     restoreGenerationSlot: restoreSummaryGenerationSlot,
   })
@@ -193,6 +209,8 @@ describe('useMedicalSummaryOrchestrator', () => {
     useAiConfigStore.setState({ openAiCompatibleProfiles: [] })
     mockStartLocalImportAiConsent.mockImplementation((importId: string) => ({ importId }))
     mockAutoAiConsent = { source: 'other', decision: null, importId: null }
+    mockGetTodayLocalImportAiDecision.mockReturnValue(null)
+    mockRequestDemographicsForAi.mockResolvedValue(true)
     arrange()
   })
 
@@ -205,6 +223,17 @@ describe('useMedicalSummaryOrchestrator', () => {
     await act(async () => result.current.generate())
     expect(summaryGenerate).toHaveBeenCalledTimes(1)
     expect(safetyGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start manual generation when required demographics are cancelled', async () => {
+    mockRequestDemographicsForAi.mockResolvedValueOnce(false)
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    await act(async () => result.current.generate())
+
+    expect(mockRequestDemographicsForAi).toHaveBeenCalledTimes(1)
+    expect(summaryGenerate).not.toHaveBeenCalled()
+    expect(safetyGenerate).not.toHaveBeenCalled()
   })
 
   it('aborts a deleted custom-profile batch before its queued safety request starts', async () => {
@@ -1453,6 +1482,25 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(recordGenerationCompletion).not.toHaveBeenCalled()
   })
 
+  it('retries only failed summary modules and preserves the successful safety scan', async () => {
+    arrange({
+      summaryResult: {
+        headline: '',
+        moduleErrors: { priorities: 'PARSE_FAILED' },
+      },
+    })
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    expect(result.current.summaryModuleErrors).toEqual({ priorities: 'PARSE_FAILED' })
+    expect(result.current.hasCompleteResult).toBe(false)
+
+    await act(async () => result.current.retryFailed())
+
+    expect(summaryRetryFailedModules).toHaveBeenCalledTimes(1)
+    expect(summaryGenerate).not.toHaveBeenCalled()
+    expect(safetyGenerate).not.toHaveBeenCalled()
+  })
+
   it('waits for both audience cache slots before presenting the summary', () => {
     arrange({ safetyHydrated: false })
     const { result } = renderHook(() => useMedicalSummaryOrchestrator())
@@ -1504,6 +1552,16 @@ describe('useMedicalSummaryOrchestrator', () => {
     expect(mockRecordLocalImportAiDecision).toHaveBeenCalledWith('import-a', 'manual')
     expect(setSummaryAuto).not.toHaveBeenCalled()
     expect(setSafetyAuto).not.toHaveBeenCalled()
+  })
+
+  it('updates today\'s local choice when automatic generation is turned off', () => {
+    mockAutoAiConsent = { source: 'local', decision: 'auto', importId: 'import-a' }
+    mockGetTodayLocalImportAiDecision.mockReturnValue('auto')
+    const { result } = renderHook(() => useMedicalSummaryOrchestrator())
+
+    act(() => result.current.setAutoGenerate(false))
+
+    expect(mockRecordTodayLocalImportAiDecision).toHaveBeenCalledWith('manual')
   })
 
   it('publishes refreshed summary and safety results together after a batch settles', async () => {

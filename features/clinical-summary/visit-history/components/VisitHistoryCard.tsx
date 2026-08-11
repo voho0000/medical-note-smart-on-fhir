@@ -10,20 +10,28 @@ import { CARD_BORDER_CLASSES } from "@/src/shared/config/ui-theme.config"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { dateSearchTokens } from "@/src/shared/utils/date.utils"
 import { buildIcdDictionary } from "@/src/shared/utils/icd-lookup"
-import { useVisitHistory } from "../hooks/useVisitHistory"
+import { useVisitHistory, type VisitCareDiscipline } from "../hooks/useVisitHistory"
 import { useEncounterDetails } from "../hooks/useEncounterDetails"
 import { useClinicalNotes } from "../hooks/useClinicalNotes"
 import { useVisitStats } from "../hooks/useVisitStats"
+import { useMedicationRows } from "@/features/clinical-summary/medications/hooks/useMedicationRows"
 import { useDocumentSummaries } from "@/features/clinical-summary/document-summary/hooks/useDocumentSummaries"
 import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
 import { VisitItem } from "./VisitItem"
+import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
+import {
+  navigationEncounterId,
+  visibleCountForNavigation,
+} from "../utils/source-navigation"
 
-type VisitTypeFilter = 'all' | 'outpatient' | 'inpatient' | 'emergency' | 'pharmacy'
+type VisitTypeFilter = 'all' | 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'pharmacy'
+type CareDisciplineFilter = 'all' | VisitCareDiscipline
 type SortMode = 'date-desc' | 'date-asc' | 'abnormal'
 type ContentFlag = 'tests' | 'medications' | 'procedures' | 'discharge'
 
-const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'inpatient', 'emergency', 'pharmacy']
+const FILTER_TYPES: VisitTypeFilter[] = ['all', 'outpatient', 'outpatient-or-emergency', 'inpatient', 'emergency', 'pharmacy']
+const CARE_DISCIPLINES: CareDisciplineFilter[] = ['all', 'western', 'tcm', 'dental']
 
 export function VisitHistoryCard() {
   const { t, locale } = useLanguage()
@@ -45,6 +53,7 @@ export function VisitHistoryCard() {
   // Set (not a single id) so several visits can stay expanded at once —
   // opening one no longer collapses the others.
   const [expandedVisitIds, setExpandedVisitIds] = useState<Set<string>>(new Set())
+  const [careDisciplineFilter, setCareDisciplineFilter] = useState<CareDisciplineFilter>('all')
   const [typeFilter, setTypeFilter] = useState<VisitTypeFilter>('all')
   const [institutionFilter, setInstitutionFilter] = useState<string>('all')
   const [contentFlags, setContentFlags] = useState<Set<ContentFlag>>(new Set())
@@ -55,12 +64,19 @@ export function VisitHistoryCard() {
   // let the user page in more. (Filters/search usually narrow it below the cap.)
   const VISIT_PAGE_SIZE = 25
   const [visibleCount, setVisibleCount] = useState(VISIT_PAGE_SIZE)
+  const pendingNavigation = useResourceNavigationStore((state) => state.pending)
+  const navigationSequence = useResourceNavigationStore((state) => state.seq)
 
   // ── Data derivation ────────────────────────────────────────────────────
   const clinicalNotes = useClinicalNotes(documentReferences, compositions)
+  // Build the exact same audience-aware medication view model used by the
+  // dedicated 用藥 tab. Encounter details keep the raw resources only for
+  // their Encounter links; names, terminology, categories and status display
+  // all come from this shared row model.
+  const medicationRows = useMedicationRows(medications, audience, locale)
   const encounterDetails = useEncounterDetails(
     medications, diagnosticReports, observations, procedures,
-    clinicalNotes, conditions, locale, audience,
+    clinicalNotes, conditions, locale, audience, medicationRows,
   )
   // ICD dict prefers Chinese when UI is zh-TW; English coding[].display when UI is en.
   const icdDict = useMemo(() => buildIcdDictionary(conditions, locale), [conditions, locale])
@@ -99,14 +115,33 @@ export function VisitHistoryCard() {
   // filters narrow the result list but the per-type chip count remains stable
   // for orientation).
   const counts = useMemo(() => {
-    const c = { all: visitHistory.length, outpatient: 0, inpatient: 0, emergency: 0, pharmacy: 0 }
+    const c = {
+      all: visitHistory.length,
+      outpatient: 0,
+      'outpatient-or-emergency': 0,
+      inpatient: 0,
+      emergency: 0,
+      pharmacy: 0,
+    }
     for (const v of visitHistory) {
       if (v.type === 'outpatient') c.outpatient++
+      else if (v.type === 'outpatient-or-emergency') c['outpatient-or-emergency']++
       else if (v.type === 'inpatient') c.inpatient++
       else if (v.type === 'emergency') c.emergency++
       else if (v.type === 'pharmacy') c.pharmacy++
     }
     return c
+  }, [visitHistory])
+
+  const careDisciplineCounts = useMemo(() => {
+    const counts: Record<CareDisciplineFilter, number> = {
+      all: visitHistory.length,
+      western: 0,
+      tcm: 0,
+      dental: 0,
+    }
+    for (const visit of visitHistory) counts[visit.careDiscipline]++
+    return counts
   }, [visitHistory])
 
   // ── Filter + sort pipeline ─────────────────────────────────────────────
@@ -118,6 +153,8 @@ export function VisitHistoryCard() {
     const wantsDischarge = contentFlags.has('discharge')
 
     const result = visitHistory.filter((v) => {
+      // care discipline (western medicine / TCM / dentistry)
+      if (careDisciplineFilter !== 'all' && v.careDiscipline !== careDisciplineFilter) return false
       // type
       if (typeFilter !== 'all' && v.type !== typeFilter) return false
       // institution
@@ -156,7 +193,8 @@ export function VisitHistoryCard() {
             }
           }
           for (const m of d.medications) {
-            if (m.name) parts.push(m.name)
+            if (m.title) parts.push(m.title)
+            if (m.searchHaystack) parts.push(m.searchHaystack)
           }
           for (const p of d.procedures) {
             if (p.title) parts.push(p.title)
@@ -191,13 +229,58 @@ export function VisitHistoryCard() {
     })()
 
     return [...result].sort(cmp)
-  }, [visitHistory, typeFilter, institutionFilter, contentFlags, searchQuery, sortMode, visitStats, docsByEncounter])
+  }, [
+    visitHistory,
+    careDisciplineFilter,
+    typeFilter,
+    institutionFilter,
+    contentFlags,
+    searchQuery,
+    sortMode,
+    visitStats,
+    docsByEncounter,
+    encounterDetails,
+  ])
 
-  // Reset the render window whenever the filtered set changes shape, so a new
-  // filter/search always starts from the top of a fresh page.
+  // Procedure resources render inside their parent visit rather than as
+  // top-level cards. Reveal that visit first; once expanded, ProcedureRow's
+  // resource anchor consumes the pending request and pinpoints the exact row.
+  // The same reveal step also makes older Encounter citations navigable when
+  // progressive rendering has not mounted their row yet.
   useEffect(() => {
-    setVisibleCount(VISIT_PAGE_SIZE)
-  }, [typeFilter, institutionFilter, contentFlags, searchQuery, sortMode])
+    const encounterId = navigationEncounterId(pendingNavigation, procedures)
+    if (!encounterId) return
+
+    const navigationVisibleCount = visibleCountForNavigation(
+      visitHistory,
+      encounterId,
+      VISIT_PAGE_SIZE,
+    )
+    if (!navigationVisibleCount) return
+
+    // Schedule after the current commit: the navigation request itself is an
+    // external store update, and the destination reveal is its UI response.
+    const revealTimer = window.setTimeout(() => {
+      setTypeFilter('all')
+      setCareDisciplineFilter('all')
+      setInstitutionFilter('all')
+      setContentFlags(new Set())
+      setSearchQuery('')
+      setSortMode('date-desc')
+      setVisibleCount(navigationVisibleCount)
+
+      if (pendingNavigation?.resourceType === 'Procedure') {
+        setExpandedVisitIds((previous) => {
+          if (previous.has(encounterId)) return previous
+          const next = new Set(previous)
+          next.add(encounterId)
+          return next
+        })
+      }
+    }, 0)
+
+    return () => window.clearTimeout(revealTimer)
+  }, [pendingNavigation, navigationSequence, procedures, visitHistory])
 
   const visibleVisits = filteredVisits.slice(0, visibleCount)
   const remainingVisits = filteredVisits.length - visibleVisits.length
@@ -206,6 +289,12 @@ export function VisitHistoryCard() {
   const handleFilterChange = (f: VisitTypeFilter) => {
     setTypeFilter(f)
     setExpandedVisitIds(new Set())
+    setVisibleCount(VISIT_PAGE_SIZE)
+  }
+  const handleCareDisciplineFilterChange = (f: CareDisciplineFilter) => {
+    setCareDisciplineFilter(f)
+    setExpandedVisitIds(new Set())
+    setVisibleCount(VISIT_PAGE_SIZE)
   }
   const toggleContent = (f: ContentFlag) => {
     setContentFlags((prev) => {
@@ -214,15 +303,19 @@ export function VisitHistoryCard() {
       return next
     })
     setExpandedVisitIds(new Set())
+    setVisibleCount(VISIT_PAGE_SIZE)
   }
   const clearAllFilters = () => {
+    setCareDisciplineFilter('all')
     setTypeFilter('all')
     setInstitutionFilter('all')
     setContentFlags(new Set())
     setSearchQuery('')
     setSortMode('date-desc')
+    setVisibleCount(VISIT_PAGE_SIZE)
   }
   const hasActiveFilters =
+    careDisciplineFilter !== 'all' ||
     typeFilter !== 'all' ||
     institutionFilter !== 'all' ||
     contentFlags.size > 0 ||
@@ -236,7 +329,7 @@ export function VisitHistoryCard() {
   // card, so the heading would be redundant. gap-2 py-3 mirrors FeatureCard
   // for consistent spacing (base Card is gap-6 py-6).
   return (
-    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-3`}>
+    <Card className={`${CARD_BORDER_CLASSES.clinical} gap-2 py-3`} data-tour="visits-card">
       <CardContent>
         {isLoading ? (
           <div className="text-sm text-muted-foreground">{t.common.loading}</div>
@@ -263,14 +356,20 @@ export function VisitHistoryCard() {
                   data-1p-ignore="true"
                   data-lpignore="true"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setVisibleCount(VISIT_PAGE_SIZE)
+                  }}
                   placeholder={vt.searchPlaceholder}
                   className="w-full rounded-md border bg-background pl-7 pr-7 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 {searchQuery && (
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => {
+                      setSearchQuery('')
+                      setVisibleCount(VISIT_PAGE_SIZE)
+                    }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     aria-label="Clear search"
                   >
@@ -280,7 +379,10 @@ export function VisitHistoryCard() {
               </div>
               <select
                 value={sortMode}
-                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                onChange={(e) => {
+                  setSortMode(e.target.value as SortMode)
+                  setVisibleCount(VISIT_PAGE_SIZE)
+                }}
                 className="rounded-md border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
                 aria-label={vt.sortLabel}
               >
@@ -294,6 +396,22 @@ export function VisitHistoryCard() {
                 by the content toggles (multi-select) + result count — all the
                 filters grouped together, separate from search/sort above. ──── */}
             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              {/* NHI care discipline is independent from visit setting:
+                  e.g. both western and dental records can be outpatient. */}
+              <select
+                value={careDisciplineFilter}
+                onChange={(e) => handleCareDisciplineFilterChange(
+                  e.target.value as CareDisciplineFilter,
+                )}
+                className="rounded-md border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/40"
+                aria-label={vt.careDisciplineLabel}
+              >
+                {CARE_DISCIPLINES.map((discipline) => (
+                  <option key={discipline} value={discipline}>
+                    {vt.careDisciplines[discipline]} ({careDisciplineCounts[discipline]})
+                  </option>
+                ))}
+              </select>
               {/* 就診類型 is single-select (擇一), so a dropdown is both
                   semantically right and far more compact than five chips; counts
                   stay visible inside each option, e.g. "門診 (117)". */}
@@ -313,7 +431,11 @@ export function VisitHistoryCard() {
               {institutions.length > 0 && (
                 <select
                   value={institutionFilter}
-                  onChange={(e) => { setInstitutionFilter(e.target.value); setExpandedVisitIds(new Set()) }}
+                  onChange={(e) => {
+                    setInstitutionFilter(e.target.value)
+                    setExpandedVisitIds(new Set())
+                    setVisibleCount(VISIT_PAGE_SIZE)
+                  }}
                   className="rounded-md border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
                   aria-label={vt.institutionAll}
                 >

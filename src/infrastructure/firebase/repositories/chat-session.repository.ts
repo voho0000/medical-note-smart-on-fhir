@@ -60,6 +60,7 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
       if (msg.modelId) cleanMsg.modelId = msg.modelId
       if (msg.agentStates) cleanMsg.agentStates = msg.agentStates
       if (msg.replyTo) cleanMsg.replyTo = msg.replyTo
+      if (msg.dataScope) cleanMsg.dataScope = msg.dataScope
       
       // DO NOT store images in Firestore (too large, not needed for history)
       // Images are only used for sending to AI API, not for storage
@@ -177,6 +178,7 @@ export class FirestoreChatSessionRepository implements IChatSessionRepository {
         ...(msg.modelId && { modelId: msg.modelId }),
         ...(msg.agentStates && { agentStates: msg.agentStates }),
         ...(msg.replyTo && { replyTo: msg.replyTo }),
+        ...(msg.dataScope && { dataScope: msg.dataScope }),
       }))
       updateData.messages = cleanMessages
       updateData.messageCount = cleanMessages.length

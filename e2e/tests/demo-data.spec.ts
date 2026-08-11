@@ -13,6 +13,7 @@ test.describe('demo data (試用資料)', () => {
       localStorage.setItem('medical-note-audience-selected', '1')
       // Skip the first-run onboarding stepper (overlays the app on first load).
       localStorage.setItem('medical-note-onboarding-v1', '1')
+      localStorage.setItem('medical-note-left-browser-tour-v1', '1')
     })
     await page.goto('/')
   })

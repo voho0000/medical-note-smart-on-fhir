@@ -11,12 +11,10 @@
 'use client'
 
 import { forwardRef, useCallback, useImperativeHandle, useRef } from 'react'
-import { useImportBundle } from '../hooks/useImportBundle'
 
-/** File types the local-import picker offers. FHIR bundles are JSON; some
- *  sources (e.g. Roche DIP) ship the same JSON with a `.txt` extension, so we
- *  accept both. Import validates by CONTENT (resourceType === "Bundle" + a
- *  Patient), not by extension — this list only filters the OS file dialog. */
+/** File types the local-import picker offers. FHIR Bundles and Health Bank SDK
+ *  exports are JSON; some sources ship the same JSON with a `.txt` extension,
+ *  so we accept both. Import detects and validates by content. */
 export const BUNDLE_FILE_ACCEPT = '.json,.txt,application/json,text/plain'
 
 export interface BundleFileInputHandle {
@@ -27,11 +25,13 @@ export interface BundleFileInputHandle {
 interface BundleFileInputProps {
   /** Optional test id forwarded to the underlying <input> (e2e hooks). */
   testId?: string
+  /** Import callback from the parent hook instance so loading/errors remain in
+   * sync with the visible button or welcome screen. */
+  importFile: (file: File) => Promise<void>
 }
 
 export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInputProps>(
-  function BundleFileInput({ testId }, ref) {
-    const { importFile } = useImportBundle()
+  function BundleFileInput({ testId, importFile }, ref) {
     const inputRef = useRef<HTMLInputElement>(null)
 
     useImperativeHandle(ref, () => ({ open: () => inputRef.current?.click() }), [])
@@ -42,7 +42,7 @@ export const BundleFileInput = forwardRef<BundleFileInputHandle, BundleFileInput
         try {
           if (file) await importFile(file)
         } catch {
-          // error surfaces via useImportBundle().error — nothing to do here.
+          // Error surfaces through the parent hook instance.
         } finally {
           // Reset so re-picking the SAME file still fires onChange.
           if (inputRef.current) inputRef.current.value = ''

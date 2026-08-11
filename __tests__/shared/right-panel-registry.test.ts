@@ -9,26 +9,32 @@ describe('right-panel registry', () => {
       'medical-summary',
       'medical-chat',
       'medical-calculator',
+      'personalized-education',
+      'clinical-decision-support',
       'ips-export',
       'settings',
     ])
     expect(featureIds).not.toContain('data-selection')
   })
 
-  it('has no overflow by default, but restores it for overrides and plug-ins', () => {
+  it('keeps education and CDSS as separate pinned modules', () => {
     const features = getEnabledRightPanelFeatures()
     const defaults = groupRightPanelFeatures(features, {})
 
-    expect(defaults.overflowFeatures).toHaveLength(0)
+    expect(defaults.overflowFeatures.map((feature) => feature.id)).toEqual([])
     expect(defaults.pinnedFeatures.map((feature) => feature.id)).toEqual([
       'medical-summary',
       'medical-chat',
       'medical-calculator',
+      'personalized-education',
+      'clinical-decision-support',
       'ips-export',
     ])
 
     const customized = groupRightPanelFeatures(features, { 'medical-calculator': false })
-    expect(customized.overflowFeatures.map((feature) => feature.id)).toEqual(['medical-calculator'])
+    expect(customized.overflowFeatures.map((feature) => feature.id)).toEqual([
+      'medical-calculator',
+    ])
 
     const pluggedIn = groupRightPanelFeatures([
       ...features,
@@ -41,7 +47,41 @@ describe('right-panel registry', () => {
         pinned: false,
       },
     ], {})
-    expect(pluggedIn.overflowFeatures.map((feature) => feature.id)).toEqual(['future-feature'])
+    expect(pluggedIn.overflowFeatures.map((feature) => feature.id)).toEqual([
+      'future-feature',
+    ])
+  })
+
+  it('shows education only to citizens and guidance only to medical users', () => {
+    const patientIds = getEnabledRightPanelFeatures('patient').map(
+      (feature) => feature.id,
+    )
+    const medicalIds = getEnabledRightPanelFeatures('medical').map(
+      (feature) => feature.id,
+    )
+
+    expect(patientIds).toContain('personalized-education')
+    expect(patientIds).not.toContain('clinical-decision-support')
+    expect(medicalIds).not.toContain('personalized-education')
+    expect(medicalIds).toContain('clinical-decision-support')
+
+    expect(patientIds.indexOf('personalized-education')).toBe(
+      patientIds.indexOf('medical-calculator') + 1,
+    )
+    expect(medicalIds.indexOf('clinical-decision-support')).toBe(
+      medicalIds.indexOf('medical-calculator') + 1,
+    )
+
+    expect(
+      getEnabledRightPanelFeatures('patient').find(
+        (feature) => feature.id === 'personalized-education',
+      )?.badge,
+    ).toBe('Beta')
+    expect(
+      getEnabledRightPanelFeatures('medical').find(
+        (feature) => feature.id === 'clinical-decision-support',
+      )?.badge,
+    ).toBe('Beta')
   })
 
   it('lets medical summary scroll with the panel so only its card chips stay sticky', () => {

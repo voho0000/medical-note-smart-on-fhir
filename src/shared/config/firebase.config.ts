@@ -1,6 +1,14 @@
 // Firebase Configuration
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth'
+import {
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+  browserSessionPersistence,
+  connectAuthEmulator,
+  getAuth,
+  initializeAuth,
+  type Auth,
+} from 'firebase/auth'
 import {
   initializeFirestore,
   getFirestore,
@@ -39,7 +47,24 @@ if (typeof window !== 'undefined' && !ENV_CONFIG.offlineMode) {
     app = getApps()[0]
   }
   
-  auth = getAuth(app)
+  // Firebase's getAuth() prefers IndexedDB persistence. Since Firebase Auth
+  // 1.13.4, hiding a tab closes that database immediately; an initialization
+  // write still in flight can then reject with "Database is closing/hidden"
+  // and surface as an unhandled runtime error. We already want durable browser
+  // sign-in, so choose localStorage explicitly (sessionStorage is the fallback)
+  // and avoid the IndexedDB page-visibility race altogether.
+  try {
+    auth = initializeAuth(app, {
+      persistence: [browserLocalPersistence, browserSessionPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    })
+  } catch (error) {
+    // Fast Refresh can re-evaluate this module after Auth was initialized with
+    // the same Firebase app. Reuse that instance; a full reload will apply the
+    // explicit non-IndexedDB persistence list above.
+    if ((error as { code?: string })?.code !== 'auth/already-initialized') throw error
+    auth = getAuth(app)
+  }
   
   // Set language to user's preferred language
   auth.languageCode = 'zh-TW'
@@ -78,31 +103,44 @@ if (typeof window !== 'undefined' && !ENV_CONFIG.offlineMode) {
     }
   }
 
-  // App Check (anti-abuse): attests that proxy requests come from the genuine
-  // app via reCAPTCHA v3, so the owner-funded AI proxy can't be driven by raw
-  // scripts minting throwaway anonymous sessions. The token is attached to proxy
-  // requests in the proxy-fetch interceptor and verified in the Cloud Functions.
-  //
-  // Skipped under the emulator (e2e) and when no site key is configured (local
-  // dev without App Check) so neither path breaks. For headless/dev runs set
-  // NEXT_PUBLIC_APPCHECK_DEBUG to a debug token registered in the Firebase
-  // console (gated so production always uses real reCAPTCHA attestation).
+}
+
+/**
+ * Initialize App Check only when a proxy request actually needs a token.
+ *
+ * ReCaptchaV3Provider appends a hidden placeholder to document.body. Doing
+ * that while React is still hydrating changes the server-rendered DOM; React
+ * then rebuilds the body and removes the placeholder before reCAPTCHA renders,
+ * causing both a hydration mismatch and "placeholder element" runtime error.
+ */
+export async function getOrInitializeAppCheck(): Promise<AppCheck | undefined> {
   const appCheckSiteKey = process.env.NEXT_PUBLIC_APPCHECK_RECAPTCHA_SITE_KEY
-  if (process.env.NEXT_PUBLIC_FIREBASE_EMULATOR !== '1' && appCheckSiteKey) {
-    const debugToken = process.env.NEXT_PUBLIC_APPCHECK_DEBUG
-    if (debugToken) {
-      ;(self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string }).FIREBASE_APPCHECK_DEBUG_TOKEN =
-        debugToken
-    }
-    try {
-      appCheck = initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(appCheckSiteKey),
-        isTokenAutoRefreshEnabled: true,
-      })
-    } catch {
-      // Already initialized (Fast Refresh re-evaluated this module).
-    }
+  if (
+    typeof window === 'undefined'
+    || !app
+    || ENV_CONFIG.offlineMode
+    || process.env.NEXT_PUBLIC_FIREBASE_EMULATOR === '1'
+    || !appCheckSiteKey
+  ) {
+    return undefined
   }
+  if (appCheck) return appCheck
+
+  const debugToken = process.env.NEXT_PUBLIC_APPCHECK_DEBUG
+  if (debugToken) {
+    ;(self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string }).FIREBASE_APPCHECK_DEBUG_TOKEN =
+      debugToken
+  }
+
+  try {
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  } catch {
+    appCheck = undefined
+  }
+  return appCheck
 }
 
 export { app, auth, db, appCheck }

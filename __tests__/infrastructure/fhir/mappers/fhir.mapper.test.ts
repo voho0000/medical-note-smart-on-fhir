@@ -205,6 +205,43 @@ describe('FhirMapper', () => {
   })
 
   describe('toObservation', () => {
+    it('preserves effectivePeriod and issued date fallbacks used by AI tools', () => {
+      const result = FhirMapper.toObservation({
+        resourceType: 'Observation',
+        id: 'obs-period',
+        status: 'final',
+        code: { text: 'Period-dated observation' },
+        effectivePeriod: {
+          start: '2025-01-01T08:00:00+08:00',
+          end: '2025-01-01T09:00:00+08:00',
+        },
+        issued: '2025-01-02T08:00:00+08:00',
+      })
+
+      expect(result.effectivePeriod?.start).toBe('2025-01-01T08:00:00+08:00')
+      expect(result.issued).toBe('2025-01-02T08:00:00+08:00')
+    })
+
+    it('preserves SDK unit-inference provenance tags and notes', () => {
+      const fhirObservation = {
+        id: 'sdk-inferred-unit',
+        meta: {
+          tag: [{
+            system: 'https://nhi-fhir-bridge.github.io/CodeSystem/sdk-unit-origin',
+            code: 'bridge-inferred',
+          }],
+        },
+        code: { text: 'Glucose' },
+        valueQuantity: { value: 98, unit: 'mg/dL' },
+        note: [{ text: 'Unit inferred under sdk-unit-policy-v1.' }],
+      }
+
+      const result = FhirMapper.toObservation(fhirObservation)
+
+      expect(result.meta).toEqual(fhirObservation.meta)
+      expect(result.note).toEqual(fhirObservation.note)
+    })
+
     it('should map FHIR Observation with valueQuantity', () => {
       const fhirObservation = {
         id: 'obs-123',
@@ -302,9 +339,30 @@ describe('FhirMapper', () => {
   })
 
   describe('toDiagnosticReport', () => {
+    it('preserves effectivePeriod for report date filtering', () => {
+      const result = FhirMapper.toDiagnosticReport({
+        resourceType: 'DiagnosticReport',
+        id: 'dr-period',
+        status: 'final',
+        code: { text: 'Period-dated report' },
+        effectivePeriod: {
+          start: '2025-03-01T08:00:00+08:00',
+          end: '2025-03-01T09:00:00+08:00',
+        },
+      }, [])
+
+      expect(result.effectivePeriod?.start).toBe('2025-03-01T08:00:00+08:00')
+    })
+
     it('should map FHIR DiagnosticReport without observations', () => {
       const fhirReport = {
         id: 'report-123',
+        meta: {
+          tag: [{
+            system: 'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section',
+            code: 'r8',
+          }],
+        },
         code: {
           coding: [{ code: 'LAB', display: 'Laboratory' }],
           text: 'Lab Report'
@@ -319,6 +377,7 @@ describe('FhirMapper', () => {
       const result = FhirMapper.toDiagnosticReport(fhirReport, [])
 
       expect(result.id).toBe('report-123')
+      expect(result.meta).toEqual(fhirReport.meta)
       expect(result.code).toEqual(fhirReport.code)
       expect(result.status).toBe('final')
       expect(result.conclusion).toBe('All values within normal range')
@@ -470,6 +529,14 @@ describe('FhirMapper', () => {
     it('should map FHIR Procedure with performedDateTime', () => {
       const fhirProcedure = {
         id: 'proc-123',
+        category: {
+          coding: [{
+            system: 'https://nhi-fhir-bridge.github.io/CodeSystem/procedure-classification',
+            code: 'surgical-procedure',
+            display: 'Surgical procedure',
+          }],
+          text: '手術',
+        },
         code: {
           coding: [{ code: '80146002', display: 'Appendectomy' }],
           text: 'Appendectomy'
@@ -481,6 +548,7 @@ describe('FhirMapper', () => {
       const result = FhirMapper.toProcedure(fhirProcedure)
 
       expect(result.id).toBe('proc-123')
+      expect(result.category).toEqual(fhirProcedure.category)
       expect(result.code).toEqual(fhirProcedure.code)
       expect(result.status).toBe('completed')
       expect(result.performedDateTime).toBe('2024-01-10T09:00:00Z')

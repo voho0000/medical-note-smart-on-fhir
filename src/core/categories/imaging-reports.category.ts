@@ -1,7 +1,7 @@
 // Imaging Reports Category
 import type { DataCategory, ClinicalContextSection } from '../interfaces/data-category.interface'
 import type { DiagnosticReport, ImagingStudy, Observation } from '@/src/shared/types/fhir.types'
-import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
+import { inferGroupFromDiagnosticReport } from '@/src/shared/utils/report-grouping-helpers'
 import { makeTimeRangeTest } from '../utils/date-filter.utils'
 import { getLatestByName, getCodeableConceptText } from '../utils/data-grouping.utils'
 import { referenceId } from '../utils/observation-selectors'
@@ -51,7 +51,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
   id: 'imagingReports',
   label: 'Imaging Reports',
   labelKey: 'dataSelection.imagingReports',
-  description: 'Radiology and imaging study reports',
+  description: 'Radiology, imaging study, and pathology reports',
   descriptionKey: 'dataSelection.imagingReportsDesc',
   group: 'reports',
   order: 50,
@@ -93,10 +93,7 @@ export const imagingReportsCategory: DataCategory<ImagingReportData> = {
     const linkedIds = new Set<string>()
 
     const reportItems = reports
-      .filter((report) =>
-        inferGroupFromCategory(report.category) === 'imaging'
-        || (report.imagingStudy?.length ?? 0) > 0
-      )
+      .filter((report) => inferGroupFromDiagnosticReport(report) === 'imaging')
       .map((report): ImagingReportData => {
         const ids = (report.imagingStudy ?? [])
           .map((ref) => referenceId(ref.reference))

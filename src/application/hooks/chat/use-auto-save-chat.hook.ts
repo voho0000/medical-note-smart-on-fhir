@@ -8,6 +8,9 @@ import { getChatSessionRepository } from '@/src/application/composition.chat'
 import { SaveChatSessionUseCase } from '@/src/core/use-cases/chat/save-chat-session.use-case'
 import { UpdateChatSessionUseCase } from '@/src/core/use-cases/chat/update-chat-session.use-case'
 import { logger } from '@/src/shared/services/logger.service'
+import type { ChatMessage } from '@/src/core/entities/chat-message.entity'
+import { createCoalescingSaveQueue } from '@/src/shared/utils/coalescing-save-queue'
+import { useConnectivityStore } from '@/src/application/stores/connectivity.store'
 
 const repository = getChatSessionRepository()
 const saveChatSessionUseCase = new SaveChatSessionUseCase(repository)
@@ -21,6 +24,38 @@ interface UseAutoSaveChatOptions {
   enabled?: boolean
 }
 
+interface ChatSaveSnapshot {
+  conversationKey: string
+  revision: string
+  sessionId: string | null
+  userId: string
+  patientId: string
+  fhirServerUrl: string
+  locale: string
+  messages: ChatMessage[]
+}
+
+type ChatSaveQueue = ReturnType<typeof createCoalescingSaveQueue<ChatSaveSnapshot>>
+
+function conversationKeyFor(messages: ChatMessage[]): string | null {
+  return messages[0]?.id ?? null
+}
+
+function revisionFor(messages: ChatMessage[]): string {
+  // Images are deliberately omitted because Firestore chat history never
+  // stores them. Everything that can change in the persisted transcript stays
+  // in this revision, including streamed assistant content and reply metadata.
+  return JSON.stringify(messages.map((message) => [
+    message.id,
+    message.role,
+    message.content,
+    message.timestamp,
+    message.modelId,
+    message.agentStates,
+    message.replyTo,
+  ]))
+}
+
 export function useAutoSaveChat({
   patientId,
   fhirServerUrl,
@@ -30,19 +65,31 @@ export function useAutoSaveChat({
   const { user } = useAuth()
   const { locale } = useLanguage()
   const messages = useChatStore(state => state.messages)
+  const userId = user?.uid
   const currentSessionId = useChatHistoryStore(state => state.currentSessionId)
   const setCurrentSessionId = useChatHistoryStore(state => state.setCurrentSessionId)
   const { addSession } = useAddSessionMutation()
   const { updateSession } = useUpdateSessionMutation()
+  const isSaving = useConnectivityStore((state) => state.chatSyncStatus === 'pending')
   
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
-  const lastSavedMessageCountRef = useRef(0)
-  const isSavingRef = useRef(false)
   const prevMessageCountRef = useRef(0)
+  const lastSavedRevisionRef = useRef(new Map<string, string>())
+  const sessionIdByConversationRef = useRef(new Map<string, string>())
+  const persistSnapshotRef = useRef<(snapshot: ChatSaveSnapshot) => Promise<void>>(async () => {})
+  const saveQueueRef = useRef<ChatSaveQueue | null>(null)
+  const mountedRef = useRef(true)
 
   // Track last message content to detect when streaming completes
   const lastMessageContentRef = useRef<string>('')
   const isSessionChangingRef = useRef(false)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   // Reset refs when session changes
   useEffect(() => {
@@ -50,10 +97,14 @@ export function useAutoSaveChat({
     isSessionChangingRef.current = true
     
     // Set to current message count to avoid triggering save when just loading a session
-    lastSavedMessageCountRef.current = messages.length
-    prevMessageCountRef.current = messages.length
+    const currentMessages = useChatStore.getState().messages
+    prevMessageCountRef.current = currentMessages.length
+    const conversationKey = conversationKeyFor(currentMessages)
+    if (conversationKey && currentSessionId) {
+      sessionIdByConversationRef.current.set(conversationKey, currentSessionId)
+    }
     // Also update content ref to current state
-    const lastMessage = messages[messages.length - 1]
+    const lastMessage = currentMessages[currentMessages.length - 1]
     lastMessageContentRef.current = lastMessage?.content || ''
     
     // Reset flag after a short delay to allow effects to settle
@@ -63,6 +114,79 @@ export function useAutoSaveChat({
     
     return () => clearTimeout(timer)
   }, [currentSessionId])
+
+  const persistSnapshot = useCallback(async (snapshot: ChatSaveSnapshot) => {
+    const knownSessionId = snapshot.sessionId
+      || sessionIdByConversationRef.current.get(snapshot.conversationKey)
+
+    if (!knownSessionId) {
+      const newSession = await saveChatSessionUseCase.execute({
+        userId: snapshot.userId,
+        fhirServerUrl: snapshot.fhirServerUrl,
+        patientId: snapshot.patientId,
+        messages: snapshot.messages,
+        locale: snapshot.locale,
+      })
+
+      sessionIdByConversationRef.current.set(snapshot.conversationKey, newSession.id)
+      if (mountedRef.current) {
+        const liveMessages = useChatStore.getState().messages
+        const liveSessionId = useChatHistoryStore.getState().currentSessionId
+        if (conversationKeyFor(liveMessages) === snapshot.conversationKey && !liveSessionId) {
+          setCurrentSessionId(newSession.id)
+        }
+        addSession(
+          snapshot.userId,
+          snapshot.patientId,
+          snapshot.fhirServerUrl,
+          {
+            id: newSession.id,
+            userId: newSession.userId,
+            fhirServerUrl: newSession.fhirServerUrl,
+            patientId: newSession.patientId,
+            title: newSession.title,
+            summary: newSession.summary,
+            createdAt: newSession.createdAt,
+            updatedAt: newSession.updatedAt,
+            messageCount: newSession.messageCount,
+            tags: newSession.tags,
+          },
+        )
+      }
+    } else {
+      await updateChatSessionUseCase.execute(knownSessionId, snapshot.userId, {
+        messages: snapshot.messages,
+      })
+
+      if (mountedRef.current) {
+        updateSession(
+          snapshot.userId,
+          snapshot.patientId,
+          snapshot.fhirServerUrl,
+          knownSessionId,
+          { messageCount: snapshot.messages.length },
+        )
+      }
+    }
+
+    lastSavedRevisionRef.current.set(snapshot.conversationKey, snapshot.revision)
+    useConnectivityStore.getState().setFirestoreConnection('server')
+  }, [addSession, setCurrentSessionId, updateSession])
+
+  useEffect(() => {
+    persistSnapshotRef.current = persistSnapshot
+    if (!saveQueueRef.current) {
+      saveQueueRef.current = createCoalescingSaveQueue<ChatSaveSnapshot>({
+        save: (snapshot) => persistSnapshotRef.current(snapshot),
+        onStatusChange: (status) => {
+          useConnectivityStore.getState().setChatSyncStatus(status)
+        },
+        onError: (error) => {
+          autoSaveLogger.error('Failed to save chat session', error)
+        },
+      })
+    }
+  }, [persistSnapshot])
 
   const saveSession = useCallback(async (force: boolean = false) => {
     // Custom hospital-model mode disables cloud history. forceSave must honor
@@ -74,7 +198,7 @@ export function useAutoSaveChat({
     const { currentSessionId } = useChatHistoryStore.getState()
 
     // Only require user to be logged in
-    if (!user?.uid) {
+    if (!userId) {
       return
     }
 
@@ -91,80 +215,30 @@ export function useAutoSaveChat({
       return
     }
 
-    // Skip count check if force is true (when forceSave is called)
-    if (!force && currentMessages.length === lastSavedMessageCountRef.current) {
+    const conversationKey = conversationKeyFor(currentMessages)
+    if (!conversationKey) return
+    const revision = revisionFor(currentMessages)
+
+    if (!force && lastSavedRevisionRef.current.get(conversationKey) === revision) {
       return
     }
 
-    if (isSavingRef.current) {
-      return
-    }
-
-    isSavingRef.current = true
-
-    try {
-      if (!currentSessionId) {
-        const newSession = await saveChatSessionUseCase.execute({
-          userId: user.uid,
-          fhirServerUrl: effectiveFhirServerUrl,
-          patientId: effectivePatientId,
-          messages: currentMessages,
-          locale,
-        })
-
-        setCurrentSessionId(newSession.id)
-        addSession(
-          user.uid,
-          effectivePatientId,
-          effectiveFhirServerUrl,
-          {
-            id: newSession.id,
-            userId: newSession.userId,
-            fhirServerUrl: newSession.fhirServerUrl,
-            patientId: newSession.patientId,
-            title: newSession.title,
-            summary: newSession.summary,
-            createdAt: newSession.createdAt,
-            updatedAt: newSession.updatedAt,
-            messageCount: newSession.messageCount,
-            tags: newSession.tags,
-          }
-        )
-
-      } else {
-        // Only update messages in Firestore, don't update updatedAt
-        // updatedAt will be updated by Firestore trigger only when messages actually change
-        await updateChatSessionUseCase.execute(currentSessionId, user.uid, {
-          messages: currentMessages,
-        })
-
-        // Update local cache with new message count but keep original updatedAt
-        // The updatedAt will be synced from Firestore if it actually changed
-        updateSession(
-          user.uid,
-          effectivePatientId,
-          effectiveFhirServerUrl,
-          currentSessionId,
-          {
-            messageCount: currentMessages.length,
-          }
-        )
-
-      }
-
-      lastSavedMessageCountRef.current = currentMessages.length
-    } catch (error) {
-      autoSaveLogger.error('Failed to save chat session', error)
-    } finally {
-      isSavingRef.current = false
-    }
+    saveQueueRef.current?.enqueue(conversationKey, {
+      conversationKey,
+      revision,
+      sessionId: currentSessionId
+        || sessionIdByConversationRef.current.get(conversationKey)
+        || null,
+      userId,
+      patientId: effectivePatientId,
+      fhirServerUrl: effectiveFhirServerUrl,
+      locale,
+      messages: currentMessages,
+    })
   }, [
-    user?.uid,
+    userId,
     patientId,
     fhirServerUrl,
-    setCurrentSessionId,
-    addSession,
-    updateSession,
     locale,
     enabled,
   ])
@@ -226,11 +300,8 @@ export function useAutoSaveChat({
       return
     }
 
-    if (messageCount === lastSavedMessageCountRef.current) {
-      return
-    }
     saveTimeoutRef.current = setTimeout(() => {
-      saveSession()
+      void saveSession()
     }, debounceMs)
 
     return () => {
@@ -249,6 +320,6 @@ export function useAutoSaveChat({
 
   return {
     forceSave,
-    isSaving: isSavingRef.current,
+    isSaving,
   }
 }

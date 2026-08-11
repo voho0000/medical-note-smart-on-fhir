@@ -17,6 +17,8 @@ export const AGENT_TOOL_NAMES = [
   // Reports
   'queryObservations',
   'queryDiagnosticReports',
+  'queryLabResultsByCategory',
+  'queryImagingRecords',
   'searchObservationByName',
   'listAvailableObservationCodes',
   'queryProcedures',

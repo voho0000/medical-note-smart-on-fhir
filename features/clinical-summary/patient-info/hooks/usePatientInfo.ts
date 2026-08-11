@@ -3,7 +3,6 @@ import { useMemo } from 'react'
 import type { PatientInfo } from '../types'
 import {
   calculateAge,
-  formatGender,
   formatName,
   formatIdentifiers,
   formatTelecom,
@@ -18,10 +17,21 @@ export function usePatientInfo(patient: any) {
   const { t } = useLanguage()
   return useMemo<PatientInfo | null>(() => {
     if (!patient) return null
+    const rawName = formatName(patient)
+    const missingName = ['n/a', 'unknown', 'unknown patient'].includes(
+      rawName.trim().toLowerCase(),
+    )
+    const gender = patient.gender === 'male'
+      ? t.patient.male
+      : patient.gender === 'female'
+        ? t.patient.female
+        : patient.gender === 'other'
+          ? t.patient.other
+          : t.patient.unknown
 
     return {
-      name: formatName(patient),
-      gender: formatGender(patient.gender),
+      name: missingName ? t.patient.unknown : rawName,
+      gender,
       age: calculateAge(patient.birthDate),
       id: patient.id,
       identifiers: formatIdentifiers(patient, t.patient),
@@ -31,6 +41,7 @@ export function usePatientInfo(patient: any) {
       maritalStatus: formatMaritalStatus(patient, t.patient),
       languages: formatLanguages(patient, t.patient),
       contacts: formatContacts(patient, t.patient),
+      userEnteredFields: patient.userEnteredDemographicFields,
     }
   }, [patient, t])
 }

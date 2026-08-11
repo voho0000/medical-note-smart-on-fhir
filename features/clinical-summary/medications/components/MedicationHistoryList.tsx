@@ -19,8 +19,11 @@ import { useResourceNavigationStore } from "@/src/application/stores/resource-na
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { MedicationRow } from '../types'
 import { medicationHistoryCategoryChipClass } from './medication-chip-styles'
+import { MedicationTerminologyTooltip } from './MedicationTerminologyTooltip'
 
 export interface MedicationHistoryGroup {
+  /** Stable grouping identity; distinct products may share the same display name. */
+  key: string
   name: string
   count: number
   /** Newest-first (sorted upstream in useGroupedMedications). */
@@ -42,7 +45,7 @@ function isInjectable(m: MedicationRow): boolean {
     if (INJECTION_ABBR.has(route.toUpperCase())) return true
     if (INJECTION_RE.test(route)) return true
   }
-  return INJECTION_RE.test(m.title || '')
+  return INJECTION_RE.test(`${m.title || ''} ${m.secondaryTitle || ''}`)
 }
 
 /** Most recent activity date for a prescription (end → stopped → start). */
@@ -98,7 +101,7 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
     <div className="max-h-[28rem] space-y-2 overflow-y-auto scrollbar-thin-persistent pr-1">
       <ul className="space-y-0">
         {regular.map((group) => (
-          <HistoryRow key={group.name} group={group} mt={mt} />
+          <HistoryRow key={group.key} group={group} mt={mt} />
         ))}
       </ul>
 
@@ -124,7 +127,7 @@ export function MedicationHistoryList({ groups }: MedicationHistoryListProps) {
           {showInjectables && (
             <ul className="space-y-0 px-1.5 pb-1.5">
               {injectable.map((group) => (
-                <HistoryRow key={group.name} group={group} mt={mt} />
+                <HistoryRow key={group.key} group={group} mt={mt} />
               ))}
             </ul>
           )}
@@ -143,6 +146,13 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
   const latest = group.medications[0]
   const latestDate = latestDateOf(latest)
   const timesUnit = mt.refillTimes ?? '次'
+  const fullMedicationTitle = [
+    group.name,
+    latest?.secondaryTitle,
+    latest?.drugTerminology?.atcCode
+      ? `ATC ${latest.drugTerminology.atcCode}`
+      : undefined,
+  ].filter(Boolean).join(' · ')
   const groupAnchorRef = useResourceAnchor<HTMLLIElement>(
     ['MedicationRequest', 'MedicationStatement'],
     group.medications.map((medication) => medication.id),
@@ -170,9 +180,30 @@ function HistoryRow({ group, mt }: { group: MedicationHistoryGroup; mt: any }) {
           )}
           aria-hidden
         />
-        <span className="truncate text-[0.8125rem] font-medium" title={group.name}>
-          {group.name}
-        </span>
+        <MedicationTerminologyTooltip medication={latest} enabled>
+          <span
+            className={cn(
+              "flex min-w-0 flex-1 items-baseline gap-1",
+              latest?.drugTerminology && "cursor-help",
+            )}
+            title={fullMedicationTitle}
+            tabIndex={latest?.drugTerminology ? 0 : undefined}
+          >
+            <span
+              className={cn(
+                "truncate text-[0.8125rem] font-medium",
+                isMedical && latest?.secondaryTitle ? "max-w-[62%] shrink-0" : "min-w-0",
+              )}
+            >
+              {group.name}
+            </span>
+            {isMedical && latest?.secondaryTitle && (
+              <span className="min-w-0 truncate text-[0.6875rem] font-normal text-muted-foreground">
+                · {latest.secondaryTitle}
+              </span>
+            )}
+          </span>
+        </MedicationTerminologyTooltip>
         {latest?.category && (
           <span
             title={latest.category}

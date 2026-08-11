@@ -6,6 +6,7 @@ import {
   ENCOUNTER_KIND_SYSTEM,
   ENCOUNTER_CHANNEL_SYSTEM,
   findEncounterTypeBySystem,
+  getEncounterKindCode,
   getEncounterKindText,
   getEncounterChannelText,
 } from '@/src/shared/utils/encounter-type.utils'
@@ -66,6 +67,20 @@ describe('encounter-type.utils', () => {
         ],
       }
       expect(getEncounterKindText(noText)).toBe('門診')
+      expect(getEncounterKindCode(noText)).toBe('outpatient')
+    })
+
+    it.each([
+      ['tcm-outpatient', '中醫門診'],
+      ['dental-outpatient', '牙科門診'],
+    ])('reads the bridge v1.6 %s encounter-kind code', (code, display) => {
+      const encounter = {
+        type: [{
+          text: display,
+          coding: [{ system: ENCOUNTER_KIND_SYSTEM, code, display }],
+        }],
+      }
+      expect(getEncounterKindCode(encounter)).toBe(code)
     })
 
     it('handles future unknown values that only carry system + display', () => {
@@ -87,6 +102,7 @@ describe('encounter-type.utils', () => {
       // OR channel text but never coding, so system lookup must miss.
       const legacy = { type: [{ text: 'IC卡資料' }], class: { code: 'AMB' } }
       expect(getEncounterKindText(legacy)).toBeUndefined()
+      expect(getEncounterKindCode(legacy)).toBeUndefined()
       expect(getEncounterChannelText(legacy)).toBeUndefined()
     })
   })

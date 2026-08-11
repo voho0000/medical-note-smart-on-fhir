@@ -3,7 +3,7 @@
 // Per-consumer profiles. Each clinical-data consumer owns its own {selection,
 // filters, documentMode, documentIds}. Profiles are seeded identically (the 初診
 // default), then the user can fine-tune the main summary/insights selection or
-// the independent IPS export selection.
+// the independent IPS and external-AI export selections.
 //
 // The data-selection UI uses the convenience getters/setters below; consumers
 // read their resolved profile via getProfile(consumer).
@@ -32,11 +32,12 @@ import { ensureCategoriesInitialized } from '@/src/core/categories/init'
 ensureCategoriesInitialized()
 
 type DataType = keyof DataSelection
-export type DataConsumer = 'chat' | 'insights' | 'ips'
+export type DataConsumer = 'chat' | 'insights' | 'ips' | 'aiExport'
 // Standard summary/insights use `insights`. The mirrored `chat` profile is kept
 // for stored-profile compatibility and the shared token meter; agent chat does
 // not preload either profile and queries FHIR tools on demand. IPS is configured
-// independently on its own tab.
+// independently on its own tab. External AI export owns a fourth profile so
+// preparing a handoff never changes summary generation or IPS curation.
 const MAIN_TARGETS: DataConsumer[] = ['chat', 'insights']
 
 export interface ConsumerProfile {
@@ -72,8 +73,13 @@ interface DataSelectionContextValue {
   // ── Per-consumer accessors — the real consumers read these; the IPS tab uses
   //    the *For setters to edit ONLY the 'ips' profile, decoupled from the panel.
   getProfile: (consumer: DataConsumer) => ConsumerProfile
+  setSelectionFor: (consumer: DataConsumer, next: DataSelection) => void
   updateSelectionFor: (consumer: DataConsumer, dataType: DataType, value: boolean) => void
   setFiltersFor: (consumer: DataConsumer, next: DataFilters) => void
+  setDocumentModeFor: (consumer: DataConsumer, mode: DocumentMode) => void
+  setDocumentIdsFor: (consumer: DataConsumer, ids: string[]) => void
+  resetProfileFor: (consumer: DataConsumer) => void
+  selectAllDataFor: (consumer: DataConsumer) => void
 }
 
 const DataSelectionContext = createContext<DataSelectionContextValue | null>(null)
@@ -185,6 +191,7 @@ function getInitialProfiles(): ProfilesState {
     chat: coerceProfile(saved?.chat),
     insights: coerceProfile(saved?.insights),
     ips: coerceProfile(saved?.ips, IPS_DEFAULT_DATA_FILTERS),
+    aiExport: coerceProfile(saved?.aiExport),
   }
 }
 
@@ -355,6 +362,39 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
     [patchProfile],
   )
 
+  const setSelectionFor = useCallback(
+    (consumer: DataConsumer, next: DataSelection) => patchProfile(consumer, { selection: { ...next } }),
+    [patchProfile],
+  )
+
+  const setDocumentModeFor = useCallback(
+    (consumer: DataConsumer, mode: DocumentMode) => patchProfile(consumer, { documentMode: mode }),
+    [patchProfile],
+  )
+
+  const setDocumentIdsFor = useCallback(
+    (consumer: DataConsumer, ids: string[]) => patchProfile(consumer, { documentIds: [...ids] }),
+    [patchProfile],
+  )
+
+  const resetProfileFor = useCallback(
+    (consumer: DataConsumer) => patchProfile(
+      consumer,
+      makeDefaultProfile(consumer === 'ips' ? IPS_DEFAULT_DATA_FILTERS : DEFAULT_DATA_FILTERS),
+    ),
+    [patchProfile],
+  )
+
+  const selectAllDataFor = useCallback(
+    (consumer: DataConsumer) => patchProfile(consumer, {
+      selection: { ...ALL_DATA_SELECTION },
+      filters: { ...ALL_DATA_FILTERS },
+      documentMode: 'all',
+      documentIds: [],
+    }),
+    [patchProfile],
+  )
+
   const getProfile = useCallback((consumer: DataConsumer): ConsumerProfile => profiles[consumer], [profiles])
 
   const value = useMemo<DataSelectionContextValue>(
@@ -374,12 +414,18 @@ export function DataSelectionProvider({ children }: { children: ReactNode }) {
       setDocumentMode,
       setDocumentIds,
       getProfile,
+      setSelectionFor,
       updateSelectionFor,
       setFiltersFor,
+      setDocumentModeFor,
+      setDocumentIdsFor,
+      resetProfileFor,
+      selectAllDataFor,
     }),
     [
       current, setSelectedData, updateSelection, resetToDefaults, applyPreset, selectAllData, activePreset,
-      setFilters, setDocumentMode, setDocumentIds, getProfile, updateSelectionFor, setFiltersFor,
+      setFilters, setDocumentMode, setDocumentIds, getProfile, setSelectionFor, updateSelectionFor, setFiltersFor,
+      setDocumentModeFor, setDocumentIdsFor, resetProfileFor, selectAllDataFor,
     ],
   )
 

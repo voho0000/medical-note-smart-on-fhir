@@ -35,6 +35,7 @@ export async function importBundle(
     localStorage.setItem('medical-note-audience', 'medical')
     localStorage.setItem('medical-note-audience-selected', '1')
     localStorage.setItem('medical-note-onboarding-v1', '1')
+    localStorage.setItem('medical-note-left-browser-tour-v1', '1')
   })
   await page.goto('/')
   // Register before choosing the file so a fast import cannot settle between
@@ -58,7 +59,10 @@ export async function importBundle(
     const auto = page.getByRole('button', { name: /^自動產生/ })
     await expect(auto).toBeVisible({ timeout: 20_000 })
     await auto.click()
-    await page.getByRole('checkbox').click()
+    await page.getByRole('checkbox', {
+      name: '我了解上述資料使用方式，並選擇啟用自動摘要與安全洞察',
+      exact: true,
+    }).click()
     await page.getByRole('button', { name: '確認並啟用', exact: true }).click()
   } else {
     const importOnly = page.getByRole('button', { name: '只匯入並查看', exact: true })

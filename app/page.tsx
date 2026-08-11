@@ -20,9 +20,16 @@ import { useResizableLayout } from "@/src/shared/hooks/layout/use-resizable-layo
 import { useResponsiveView } from "@/src/shared/hooks/layout/use-responsive-view.hook"
 import { usePatient } from "@/src/application/hooks/patient/use-patient-query.hook"
 import { useResourceNavigationStore } from "@/src/application/stores/resource-navigation.store"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { cn } from "@/src/shared/utils/cn.utils"
 import { ChevronsLeft, ChevronsRight, ChevronUp, ChevronDown } from "lucide-react"
+import { AiDemographicsGateProvider } from "@/src/application/providers/ai-demographics-gate.provider"
+import { AiDemographicsGateDialog } from "@/features/medical-summary/components/AiDemographicsGateDialog"
+import { LeftBrowserTour, TourHelpButton, useLeftBrowserTourStore } from "@/features/left-browser-tour"
+import { RightFeatureTour, useRightFeatureTourStore } from "@/features/right-feature-tour"
+import { useOnboarding } from "@/src/application/hooks/onboarding/use-onboarding.hook"
+import { useAutoAiConsentState } from "@/src/application/hooks/ai-generation/auto-ai-consent"
+import { NetworkStatusBanner } from "@/src/shared/components/NetworkStatusBanner"
 
 function PageContent() {
   const { t } = useLanguage()
@@ -47,6 +54,39 @@ function PageContent() {
   // null = normal resizable split. Kept in-session (not persisted) to avoid the
   // SSR/localStorage hydration mismatch class of bugs.
   const [collapsed, setCollapsed] = useState<'left' | 'right' | null>(null)
+  const leftTourActive = useLeftBrowserTourStore((state) => state.active)
+  const startLeftTour = useLeftBrowserTourStore((state) => state.start)
+  const rightTourActive = useRightFeatureTourStore((state) => state.active)
+  const startRightTour = useRightFeatureTourStore((state) => state.start)
+  const anyTourActive = leftTourActive || rightTourActive
+  const tourWasActiveRef = useRef(false)
+  const preTourLayoutRef = useRef<{
+    mobileView: 'left' | 'right'
+    collapsed: 'left' | 'right' | null
+  } | null>(null)
+
+  // Guided tours make their corresponding panel visible, then return the
+  // user's mobile/collapsed layout when the tour is closed or completed.
+  useEffect(() => {
+    if (anyTourActive) {
+      if (!tourWasActiveRef.current) {
+        tourWasActiveRef.current = true
+        preTourLayoutRef.current = { mobileView, collapsed }
+      }
+      setMobileView(rightTourActive ? 'right' : 'left')
+      setCollapsed(null)
+      return
+    }
+    if (tourWasActiveRef.current) {
+      tourWasActiveRef.current = false
+      const previous = preTourLayoutRef.current
+      preTourLayoutRef.current = null
+      if (previous) {
+        setMobileView(previous.mobileView)
+        setCollapsed(previous.collapsed)
+      }
+    }
+  }, [anyTourActive, collapsed, mobileView, rightTourActive, setMobileView])
 
   // Resource navigation (cited source clicked in the Medical Summary tab): the
   // target lives in the LEFT panel, so make sure it's visible BEFORE its
@@ -70,6 +110,13 @@ function PageContent() {
   // screen instead of empty / failing panels.
   const { patient, loading: patientLoading, error: patientError } = usePatient()
   const showOnboarding = !patientLoading && !patient && !patientError
+  const { ready: onboardingReady, completed: onboardingCompleted } = useOnboarding()
+  const autoAiConsent = useAutoAiConsentState()
+  const dataLoaded = !!patient && !patientLoading && !patientError
+  const consentResolved = autoAiConsent.source === 'demo'
+    || autoAiConsent.decision === 'auto'
+    || autoAiConsent.decision === 'manual'
+  const tourEligible = dataLoaded && onboardingReady && onboardingCompleted && consentResolved
 
   // Right-pane detail: a left-panel card can push its expanded detail here
   // instead of expanding downward (see RightDetailProvider). When set, the right
@@ -79,6 +126,9 @@ function PageContent() {
   useEffect(() => {
     clearDetail()
   }, [patient?.id, clearDetail])
+  useEffect(() => {
+    if (rightTourActive) clearDetail()
+  }, [clearDetail, rightTourActive])
 
   return (
     <div className="flex h-svh flex-col overflow-hidden bg-gradient-to-br from-blue-50/50 via-background to-purple-50/30">
@@ -121,8 +171,13 @@ function PageContent() {
               <AudienceSwitcher />
               <LanguageSwitcher />
             </div>
+            <TourHelpButton disabled={!dataLoaded} />
             <HeaderAuthButton />
-            <HeaderOverflowMenu />
+            <HeaderOverflowMenu
+              tourDisabled={!dataLoaded}
+              onStartLeftTour={startLeftTour}
+              onStartRightTour={startRightTour}
+            />
           </div>
         </div>
         {/* Centred collapse handle — straddles the header's bottom edge so it
@@ -144,6 +199,7 @@ function PageContent() {
       {/* Email Verification Banner */}
       <div className="px-3 sm:px-6">
         <EmailVerificationBanner />
+        <NetworkStatusBanner />
       </div>
       
       {/* Onboarding state: replace panels with welcome screen */}
@@ -318,6 +374,8 @@ function PageContent() {
       )}
 
       <FirstRunOnboardingDialog />
+      <LeftBrowserTour eligible={tourEligible} />
+      <RightFeatureTour />
     </div>
   )
 }
@@ -326,9 +384,12 @@ export default function Page() {
   return (
     <AppProviders>
       <ErrorBoundary>
-        <RightDetailProvider>
-          <PageContent />
-        </RightDetailProvider>
+        <AiDemographicsGateProvider>
+          <RightDetailProvider>
+            <PageContent />
+          </RightDetailProvider>
+          <AiDemographicsGateDialog />
+        </AiDemographicsGateProvider>
       </ErrorBoundary>
     </AppProviders>
   )

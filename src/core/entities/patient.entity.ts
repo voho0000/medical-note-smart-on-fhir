@@ -52,18 +52,162 @@ export interface PatientEntity {
     name?: { text?: string; given?: string[]; family?: string }
     telecom?: { system?: string; value?: string; use?: string }[]
   }[]
+  /** Present only when the App has overlaid user-entered demographics.
+   * The source FHIR Patient remains unchanged. */
+  demographicsSource?: 'user-entered-local-profile'
+  userEnteredDemographicFields?: PatientDemographicField[]
+}
+
+export type PatientDemographicField = 'name' | 'gender' | 'birthDate'
+
+export interface UserEnteredPatientProfile {
+  source: 'user-entered'
+  name?: string
+  gender?: 'male' | 'female' | 'other'
+  birthDate?: string
+  updatedAt: string
+}
+
+export interface UserEnteredPatientProfileInput {
+  name?: string
+  gender?: 'male' | 'female' | 'other'
+  birthDate?: string
+}
+
+const PROFILE_GENDERS = new Set(['male', 'female', 'other'])
+const FHIR_YEAR_PATTERN = /^\d{4}$/
+const FHIR_YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/
+const FHIR_FULL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+function localDateString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function isValidPatientBirthDate(
+  value: string,
+  today = new Date(),
+): boolean {
+  if (FHIR_YEAR_PATTERN.test(value)) {
+    return value >= '0001' && value <= localDateString(today).slice(0, 4)
+  }
+  if (FHIR_YEAR_MONTH_PATTERN.test(value)) {
+    return value <= localDateString(today).slice(0, 7)
+  }
+  if (!FHIR_FULL_DATE_PATTERN.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) return false
+  if (parsed.toISOString().slice(0, 10) !== value) return false
+  return value <= localDateString(today)
+}
+
+/** FHIR date values may intentionally carry only year or year-month precision. */
+export function isPartialPatientBirthDate(value?: string | null): boolean {
+  return Boolean(
+    value
+    && (FHIR_YEAR_PATTERN.test(value) || FHIR_YEAR_MONTH_PATTERN.test(value)),
+  )
+}
+
+/** Build the only accepted shape for encrypted, user-entered demographics.
+ * Empty strings are treated as "not supplied"; invalid dates fail closed. */
+export function createUserEnteredPatientProfile(
+  input: UserEnteredPatientProfileInput,
+  now = new Date(),
+): UserEnteredPatientProfile | null {
+  const name = typeof input.name === 'string'
+    ? input.name.trim().replace(/\s+/g, ' ').slice(0, 100)
+    : ''
+  const gender = PROFILE_GENDERS.has(input.gender ?? '')
+    ? input.gender
+    : undefined
+  const birthDate = typeof input.birthDate === 'string' && input.birthDate.trim()
+    ? input.birthDate.trim()
+    : undefined
+
+  if (birthDate && !isValidPatientBirthDate(birthDate, now)) {
+    throw new Error('Invalid patient birth date')
+  }
+  if (!name && !gender && !birthDate) return null
+
+  return {
+    source: 'user-entered',
+    ...(name ? { name } : {}),
+    ...(gender ? { gender } : {}),
+    ...(birthDate ? { birthDate } : {}),
+    updatedAt: now.toISOString(),
+  }
+}
+
+/** Parse untrusted decrypted storage without inventing or guessing values. */
+export function parseUserEnteredPatientProfile(
+  value: unknown,
+): UserEnteredPatientProfile | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Partial<UserEnteredPatientProfile>
+  if (candidate.source !== 'user-entered') return null
+  if (
+    typeof candidate.updatedAt !== 'string'
+    || Number.isNaN(Date.parse(candidate.updatedAt))
+  ) {
+    return null
+  }
+  try {
+    const profile = createUserEnteredPatientProfile({
+      name: candidate.name,
+      gender: candidate.gender,
+      birthDate: candidate.birthDate,
+    }, new Date(candidate.updatedAt))
+    return profile ? { ...profile, updatedAt: candidate.updatedAt } : null
+  } catch {
+    return null
+  }
+}
+
+export function applyUserEnteredPatientProfile(
+  patient: PatientEntity,
+  profile: UserEnteredPatientProfile | null,
+): PatientEntity {
+  if (!profile) return patient
+
+  const fields: PatientDemographicField[] = []
+  const next: PatientEntity = { ...patient }
+  if (profile.name) {
+    next.name = [{ use: 'usual', text: profile.name }]
+    fields.push('name')
+  }
+  if (profile.gender) {
+    next.gender = profile.gender
+    fields.push('gender')
+  }
+  if (profile.birthDate) {
+    next.birthDate = profile.birthDate
+    next.age = calculateAge(profile.birthDate) ?? undefined
+    fields.push('birthDate')
+  }
+  next.demographicsSource = 'user-entered-local-profile'
+  next.userEnteredDemographicFields = fields
+  return next
 }
 
 export function calculateAge(birthDate?: string | null): number | null {
-  if (!birthDate) return null
-  const birth = new Date(birthDate)
-  if (Number.isNaN(birth.getTime())) return null
+  if (!birthDate || !isValidPatientBirthDate(birthDate)) return null
+  const [yearText, monthText, dayText] = birthDate.split('-')
+  const year = Number(yearText)
 
   const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
-  const monthDiff = today.getMonth() - birth.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age -= 1
+  let age = today.getFullYear() - year
+  if (monthText) {
+    const birthMonth = Number(monthText) - 1
+    const monthDiff = today.getMonth() - birthMonth
+    if (
+      monthDiff < 0
+      || (dayText && monthDiff === 0 && today.getDate() < Number(dayText))
+    ) {
+      age -= 1
+    }
   }
   return age >= 0 ? age : null
 }

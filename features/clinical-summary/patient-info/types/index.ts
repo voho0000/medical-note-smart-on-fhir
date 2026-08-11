@@ -12,4 +12,5 @@ export interface PatientInfo {
   maritalStatus?: string
   languages?: string[]
   contacts?: Array<{ relationship: string; name: string; phone?: string }>
+  userEnteredFields?: Array<'name' | 'gender' | 'birthDate'>
 }

@@ -55,6 +55,10 @@ export interface ReferenceRange {
 export interface Observation {
   id?: string
   resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Coding[]
+  }
   code?: CodeableConcept
   status?: string
   category?: CodeableConcept[]
@@ -82,6 +86,10 @@ export interface Observation {
 export interface DiagnosticReport {
   id?: string
   resourceType?: string
+  meta?: {
+    source?: string
+    tag?: Coding[]
+  }
   identifier?: Identifier[]
   status?: string
   category?: CodeableConcept | CodeableConcept[]
@@ -212,6 +220,7 @@ export interface MedicationRequest {
   requester?: Reference
   reasonCode?: CodeableConcept[]
   courseOfTherapyType?: CodeableConcept
+  supportingInformation?: Reference[]
   // Marker stamped by LocalBundleService.parse (MedicationRequest vs
   // MedicationStatement); bridge data omits it
   _sourceResourceType?: 'MedicationRequest' | 'MedicationStatement'

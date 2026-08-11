@@ -16,6 +16,21 @@ const pureImageReport = {
 }
 
 describe('calculateReportsRowCounts — inline imaging', () => {
+  it('counts a category-less Health Bank chest X-ray in Imaging', () => {
+    const counts = calculateReportsRowCounts([{
+      id: 'sdk-r8-32001c',
+      code: {
+        coding: [{ system: 'nhi', code: '32001C' }],
+        text: '胸腔檢查（包括各種角度部位之胸腔檢查）',
+      },
+      conclusion: 'Radiography of Chest A-P View(Supine)',
+    }], [], [])
+
+    expect(counts.total).toBe(1)
+    expect(counts.imaging).toBe(1)
+    expect(counts.lab).toBe(0)
+  })
+
   it('counts a pure-image report (no obs / conclusion / note)', () => {
     const counts = calculateReportsRowCounts([pureImageReport], [], [])
     expect(counts.total).toBe(1)

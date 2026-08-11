@@ -1,6 +1,7 @@
 // The 資料選擇 panel drives the "working" AI (chat + insights) as one selection;
-// IPS is configured independently on its own tab. These lock the decoupling:
-// panel edits never touch ips, and the per-consumer setters never touch the panel.
+// IPS and external-AI export are configured independently on their own tabs.
+// These lock the decoupling: panel edits never touch either export profile,
+// and the per-consumer setters never touch the panel.
 import { renderHook, act } from '@testing-library/react'
 import { DataSelectionProvider, useDataSelection, coerceProfile } from '@/src/application/providers/data-selection.provider'
 import { IPS_DEFAULT_DATA_FILTERS } from '@/src/shared/constants/data-selection.constants'
@@ -11,13 +12,14 @@ function setup() {
   return renderHook(() => useDataSelection(), { wrapper: DataSelectionProvider })
 }
 
-describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () => {
-  it('panel updateSelection broadcasts to chat + insights, never ips', () => {
+describe('DataSelectionProvider — chat+insights panel vs decoupled exports', () => {
+  it('panel updateSelection broadcasts to chat + insights, never export profiles', () => {
     const { result } = setup()
     act(() => result.current.updateSelection('medications', false))
     expect(result.current.getProfile('chat').selection.medications).toBe(false)
     expect(result.current.getProfile('insights').selection.medications).toBe(false)
     expect(result.current.getProfile('ips').selection.medications).toBe(true) // untouched
+    expect(result.current.getProfile('aiExport').selection.medications).toBe(true)
   })
 
   it('applyPreset (template fill) loads chat + insights, not ips', () => {
@@ -64,6 +66,27 @@ describe('DataSelectionProvider — chat+insights panel vs decoupled ips', () =>
     act(() => result.current.setFiltersFor('ips', next))
     expect(result.current.getProfile('ips').filters.labReportTimeRange).toBe('1y')
     expect(result.current.getProfile('chat').filters.labReportTimeRange).toBe('6m') // default, untouched
+  })
+
+  it('keeps AI export selection and documents independent from summary and IPS', () => {
+    const { result } = setup()
+    const nextSelection = {
+      ...result.current.getProfile('aiExport').selection,
+      documents: true,
+      medications: false,
+    }
+
+    act(() => {
+      result.current.setSelectionFor('aiExport', nextSelection)
+      result.current.setDocumentModeFor('aiExport', 'custom')
+      result.current.setDocumentIdsFor('aiExport', ['document-1'])
+    })
+
+    expect(result.current.getProfile('aiExport').selection.medications).toBe(false)
+    expect(result.current.getProfile('aiExport').documentMode).toBe('custom')
+    expect(result.current.getProfile('aiExport').documentIds).toEqual(['document-1'])
+    expect(result.current.getProfile('insights').selection.medications).toBe(true)
+    expect(result.current.getProfile('ips').documentIds).toEqual([])
   })
 
   it('defaults to 初診 and keeps the selected mode while the user tweaks it', () => {

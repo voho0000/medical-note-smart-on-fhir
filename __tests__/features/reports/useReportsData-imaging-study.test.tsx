@@ -44,6 +44,46 @@ function run(diagnosticReports: any[], imagingStudies: any[]) {
 }
 
 describe('useReportsData — ImagingStudy metadata', () => {
+  it('puts a category-less Health Bank chest X-ray in the Imaging group', () => {
+    const rows = run([{
+      id: 'sdk-r8-32001c',
+      status: 'final',
+      code: {
+        coding: [{ system: 'nhi', code: '32001C' }],
+        text: '胸腔檢查（包括各種角度部位之胸腔檢查）',
+      },
+      effectiveDateTime: '2026-06-02',
+      conclusion: 'Radiography of Chest A-P View(Supine)',
+    }], [])
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: 'sdk-r8-32001c',
+      group: 'imaging',
+      effectiveDate: '2026-06-02',
+    })
+    expect(rows[0].meta).toMatch(/影像|Imaging/)
+  })
+
+  it('puts a category-less Health Bank pathology report in the same group', () => {
+    const rows = run([{
+      id: 'sdk-r8-pathology',
+      status: 'final',
+      code: {
+        coding: [{ system: 'nhi', code: '25004C' }],
+        text: '第四級外科病理',
+      },
+      effectiveDateTime: '2026-06-03',
+      conclusion: 'Pathology report content',
+    }], [])
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: 'sdk-r8-pathology',
+      group: 'imaging',
+    })
+  })
+
   it('renders a standalone ImagingStudy in the Imaging group', () => {
     const rows = run([], [study])
 

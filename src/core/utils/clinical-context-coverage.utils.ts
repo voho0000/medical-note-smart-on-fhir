@@ -8,12 +8,16 @@ import type {
   ClinicalDataQueryKey,
   ClinicalDataQueryStatus,
 } from '@/src/core/entities/clinical-data.entity'
-import { inferGroupFromCategory } from '@/src/shared/utils/report-grouping-helpers'
+import {
+  inferGroupFromCategory,
+  inferGroupFromDiagnosticReport,
+} from '@/src/shared/utils/report-grouping-helpers'
 import {
   selectLabOrphanObservations,
   selectOtherObservations,
 } from '@/src/core/utils/observation-selectors'
 import { scopeClinicalDataForAi } from '@/src/core/utils/ai-clinical-scope.utils'
+import { sdkPreservesDistinctSameDayLabResults } from '@/src/shared/utils/sdk-converter-version.utils'
 
 type CoverageSource = Partial<ClinicalDataCollection>
 
@@ -48,10 +52,9 @@ function hasQueryIssue(
 
 function reportCount(source: CoverageSource, group: 'lab' | 'imaging'): number {
   return (source.diagnosticReports ?? []).filter((report) => {
-    const inferred = inferGroupFromCategory(report.category)
     return group === 'lab'
-      ? inferred === 'lab'
-      : inferred === 'imaging' || (report.imagingStudy?.length ?? 0) > 0
+      ? inferGroupFromCategory(report.category) === 'lab'
+      : inferGroupFromDiagnosticReport(report) === 'imaging'
   }).length
 }
 
@@ -111,6 +114,14 @@ export function buildClinicalContextCoverageSection(
     { label: 'Immunizations', selected: selection.immunizations, sourceCount: data.immunizations?.length ?? 0, includedCount: scoped.immunizations?.length ?? 0, queryKeys: ['Immunization'] },
     { label: 'Documents', selected: selection.documents, sourceCount: sourceDocumentCount, includedCount: includedDocumentCount, queryKeys: ['Composition', 'DocumentReference'] },
   ]
+  const sdkMetadata = data.sourceMetadata?.source === 'health-bank-sdk-json'
+    ? data.sourceMetadata
+    : null
+  const sdkAudit = sdkMetadata
+    ? sdkPreservesDistinctSameDayLabResults(sdkMetadata.converterVersion)
+      ? `SDK conversion audit: converter_version=${sdkMetadata.converterVersion}; evidence_qualified_lab_duplicates_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; same_day_distinct_value_groups_preserved=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}.`
+      : `SDK conversion audit: converter_version=${sdkMetadata.converterVersion}; legacy_same_day_lab_rows_merged=${sdkMetadata.labDuplicateMerge.mergedCount}; distinct_value_groups_potentially_dropped=${sdkMetadata.labDuplicateMerge.conflictingValueGroupCount}; inferred_lab_units=${sdkMetadata.unitInference.inferredCount}; unresolved_lab_units=${sdkMetadata.unitInference.unresolvedCount}; unit_policy=${sdkMetadata.unitInference.policyVersion}. This legacy conversion predates fail-closed preservation of distinct same-day results; re-import the original SDK JSON with converter 0.1.3 or later before relying on laboratory completeness.`
+    : ''
 
   return {
     title: 'Data Coverage Manifest',
@@ -120,6 +131,10 @@ export function buildClinicalContextCoverageSection(
       // prompt signature and invalidate cached AI results on every tab focus.
       `Export metadata: generated_at=${localIsoDay(nowMs)}; contains_phi=possible; deidentified=false. Direct-identifier masking is not guaranteed full de-identification.`,
       'Counts are FHIR source records before display grouping; status distinguishes exclusion, source absence, filtered-empty data, included data, and unavailable queries.',
+      ...(sdkMetadata ? [
+        'Source boundary: converted locally from Health Bank SDK JSON. The SDK provides no reliably mappable structured patient name, birth date, sex, or age fields, but full-text imaging/pathology reports may contain this personal information. The converter does not infer Patient demographics from report text. Medication dosage, laboratory source units, laboratory abnormal flags, and complete diagnostic-report categories are not provided; outpatient and emergency claims are not distinguishable. Do not infer absent structured fields or treat report-text demographics as verified Patient fields.',
+        sdkAudit,
+      ] : []),
       ...rows.map((row) => {
         if (!row.selected) return `${row.label}: status=excluded`
         const query = stateText(row.queryKeys, statuses)

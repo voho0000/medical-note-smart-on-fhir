@@ -1,4 +1,18 @@
 // Unit Tests: OpenAI Service
+jest.mock('@/src/shared/config/env.config', () => ({
+  ENV_CONFIG: {
+    hasChatProxy: true,
+    chatProxyUrl: 'https://proxy.example/openai',
+    proxyClientKey: '',
+  },
+}))
+
+jest.mock('@/src/infrastructure/ai/utils/proxy-auth', () => ({
+  getProxyAuthHeaders: jest.fn().mockResolvedValue({
+    Authorization: 'Bearer firebase-test-token',
+  }),
+}))
+
 import { OpenAiService } from '@/src/infrastructure/ai/services/openai.service'
 import type { AiQueryRequest } from '@/src/core/entities/ai.entity'
 
@@ -220,6 +234,50 @@ describe('OpenAiService', () => {
       expect(body.input).toEqual(request.messages)
       expect(body.max_output_tokens).toBe(4096)
       expect(result).toMatchObject({ text: 'Response', metadata: { tokensUsed: 99 } })
+    })
+
+    it('uses the proxy for Luna without a personal key and reads a wrapped Responses payload', async () => {
+      const service = new OpenAiService(null)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          message: 'Proxy Luna response',
+          openAiResponse: {
+            output: [{
+              type: 'message',
+              content: [{ type: 'output_text', text: 'Proxy Luna response' }],
+            }],
+            usage: { total_tokens: 42 },
+          },
+        }),
+      } as Response)
+
+      const result = await service.query({
+        modelId: 'gpt-5.6-luna',
+        messages: [{ role: 'user', content: 'Test' }],
+        temperature: 0.5,
+        maxTokens: 2048,
+      })
+
+      const [url, init] = mockFetch.mock.calls[0]
+      const body = JSON.parse(init?.body as string)
+      expect(String(url)).toBe('https://proxy.example/openai')
+      expect((init?.headers as Record<string, string>).Authorization)
+        .toBe('Bearer firebase-test-token')
+      expect(body).toMatchObject({
+        model: 'gpt-5.6-luna',
+        input: [{ role: 'user', content: 'Test' }],
+        max_output_tokens: 2048,
+      })
+      expect(body).not.toHaveProperty('temperature')
+      expect(result).toEqual({
+        text: 'Proxy Luna response',
+        metadata: {
+          modelId: 'gpt-5.6-luna',
+          provider: 'openai',
+          tokensUsed: 42,
+        },
+      })
     })
 
     it('should attach an auth header derived from the API key', async () => {

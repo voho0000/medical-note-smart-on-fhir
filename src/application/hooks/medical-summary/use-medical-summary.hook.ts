@@ -10,7 +10,7 @@
 // remains visible until an explicit regeneration succeeds.
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useAudience } from '@/src/application/providers/audience.provider'
 import {
   ContextOverflowError,
@@ -26,13 +26,15 @@ import {
   generateMedicalSummaryUseCase,
   buildCoverageStats,
   buildLongitudinalInvestigationContext,
-  isMedicalSummaryLanguageConsistent,
   MEDICAL_SUMMARY_MODEL_ID,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type {
+  MedicalSummaryModuleErrors,
+  MedicalSummaryModuleId,
   MedicalSummaryResult,
   SummaryCoverageStats,
 } from '@/src/core/entities/medical-summary.entity'
+import { MEDICAL_SUMMARY_MODULE_IDS } from '@/src/core/entities/medical-summary.entity'
 import {
   DEMO_MEDICAL_SUMMARY_GENERATION,
   demoMedicalSummarySnapshots,
@@ -42,7 +44,7 @@ import {
   summaryCacheKey,
   SUMMARY_CACHE_MAX_AGE_MS,
 } from './medical-summary-store'
-import { createModelPrefsStore } from '@/src/application/hooks/ai-generation/create-model-prefs-store'
+import { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 import {
   useAiSlotGeneration,
   type AiSlotDemoContext,
@@ -52,12 +54,19 @@ import {
   isAutoAiEnabledForSource,
   useAutoAiConsentState,
 } from '@/src/application/hooks/ai-generation/auto-ai-consent'
-import { useLanguage } from '@/src/application/providers/language.provider'
+import { getUserErrorMessage } from '@/src/core/errors'
+import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
+import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
+import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
+
+export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
 // Store + cache-key scheme live in medical-summary-store.ts so the IPS export
 // can peek at generated summaries without importing this full hook graph.
-// The v12 change is clinician-only. Patient summaries from v11/v10/v9/v8/v7/v6/v5 remain valid,
-// so retain them instead of making an audience switch lose its saved summary.
+// v14 retains unknown citations as claim-level warnings. Patient summaries
+// from v11/v10/v9/v8/v7/v6/v5 remain valid legacy fallbacks; v12 live results
+// and v13 grounding failures intentionally regenerate into this cache shape.
 const legacyPatientSummaryCacheKeys = (scanKey: string) => [
   aiResultCacheKey('medsummary11', scanKey),
   aiResultCacheKey('medsummary10', scanKey),
@@ -71,26 +80,6 @@ const legacyPatientSummaryCacheKeys = (scanKey: string) => [
 const medicalSummaryResultModelId = (result: MedicalSummaryResult) =>
   result.generation?.modelId
 
-interface SummaryPrefsStore {
-  autoGenerate: boolean
-  setAutoGenerate: (value: boolean) => void
-  modelId: string
-  setModelId: (id: string) => void
-}
-
-export const useSummaryPrefsStore = createModelPrefsStore<SummaryPrefsStore>({
-  storageName: 'medical-summary-prefs',
-  defaultModelId: MEDICAL_SUMMARY_MODEL_ID,
-  initializer: (set) => ({
-    // Default OFF. The separate source-aware consent gate also prevents a demo
-    // preference from sending a later real patient's data to cloud AI.
-    autoGenerate: false,
-    setAutoGenerate: (value) => set({ autoGenerate: value }),
-    modelId: MEDICAL_SUMMARY_MODEL_ID,
-    setModelId: (id) => set({ modelId: id }),
-  }),
-})
-
 export interface UseMedicalSummaryReturn {
   result: MedicalSummaryResult | undefined
   /** Actual model that owns result; differs from model while an empty selected
@@ -102,6 +91,8 @@ export interface UseMedicalSummaryReturn {
   isGenerating: boolean
   error: string | null
   issue: ContextOverflowIssue | null
+  /** Temporary scope reduction used to fit the selected model. */
+  contextAdaptation: ClinicalContextAdaptation | null
   hasPatient: boolean
   dataReady: boolean
   /** Model-independent Bundle/patient/audience/locale/input identity used by
@@ -135,6 +126,10 @@ export interface UseMedicalSummaryReturn {
     durationMs: number
   }) => void
   generate: () => Promise<void>
+  /** Regenerate only modules recorded in result.moduleErrors, preserving
+   * successful cards in the same slot. Falls back to a full generation when
+   * the selected slot has no partial result. */
+  retryFailedModules: () => Promise<void>
   cancel: (slotKey?: string) => void
   restoreGenerationSlot: (slotKey: string, result: MedicalSummaryResult | undefined) => void
 }
@@ -145,10 +140,14 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const modelId = useSummaryPrefsStore((s) => s.modelId)
   const setModelId = useSummaryPrefsStore((s) => s.setModelId)
   const { audience } = useAudience()
-  const { locale } = useLanguage()
+  const { demographicsReadyForAi } = useAiDemographicsGate()
   const autoAiConsent = useAutoAiConsentState()
+  const moduleRetryRequestsRef = useRef(new Map<string, {
+    moduleIds: MedicalSummaryModuleId[]
+    baseResult: MedicalSummaryResult
+  }>())
 
-  // v6 first, v5 fallback for patient summaries (see key comments above).
+  // Current key first, then older patient-only fallbacks (see comments above).
   const loadCached = useCallback(async (slotKey: string) => {
     let cached = await loadEncryptedCache<MedicalSummaryResult>(
       summaryCacheKey(slotKey),
@@ -160,68 +159,248 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
         if (cached) break
       }
     }
-    // Do not resurrect a previously cached mixed-language result after the
-    // English-output contract is tightened. The next generation overwrites
-    // this exact locale-bound cache slot.
-    if (cached && !isMedicalSummaryLanguageConsistent(cached, locale)) return null
     return cached
-  }, [audience, locale])
+  }, [audience])
 
   const run = useCallback(async (ctx: AiSlotRunContext): Promise<MedicalSummaryResult | null> => {
-    const outputLocale = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
+    useAiExecutionDiagnosticsStore.getState().clearOperationFeature(
+      ctx.operationKey,
+      'medical-summary',
+    )
+    const outputLocale: 'en' | 'zh-TW' = ctx.locale === 'zh-TW' ? 'zh-TW' : 'en'
     const longitudinalInvestigationContext = ctx.clinicalData
       ? buildLongitudinalInvestigationContext(ctx.clinicalData, ctx.catalog)
       : ''
     const clinicalContext = [ctx.clinicalContext, longitudinalInvestigationContext]
       .filter(Boolean)
       .join('\n\n')
-    const messages = generateMedicalSummaryUseCase.buildMessages({
+    const retryRequest = moduleRetryRequestsRef.current.get(ctx.operationKey)
+    moduleRetryRequestsRef.current.delete(ctx.operationKey)
+    const targetModuleIds = retryRequest?.moduleIds ?? [...MEDICAL_SUMMARY_MODULE_IDS]
+    const isLocalModel = isCustomOpenAiModelId(ctx.modelId)
+    const promptInput = {
       clinicalContext,
+      piiLiterals: ctx.piiLiterals,
       catalog: ctx.catalog,
       locale: outputLocale,
-      audience: ctx.audience === 'patient' ? 'patient' : 'medical',
-    })
-    const overflow = createContextOverflowIssue(
-      messages.map((message) => message.content).join('\n\n'),
-      ctx.modelId,
-      {
-        selectedContext: ctx.clinicalContext,
-        contextLimit: ctx.contextLimit,
-      },
-    )
+      audience: ctx.audience === 'patient' ? 'patient' as const : 'medical' as const,
+      harnessProfile: isLocalModel ? 'local-small' as const : 'frontier' as const,
+    }
+    const retryRequests = retryRequest
+      ? targetModuleIds.map((moduleId) => ({
+          moduleId,
+          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
+        }))
+      : []
+    const initialBatchMessages = retryRequest
+      ? null
+      : generateMedicalSummaryUseCase.buildBatchModuleMessages(promptInput)
+    const messageSets = initialBatchMessages
+      ? [initialBatchMessages]
+      : retryRequests.map(({ messages }) => messages)
+    const overflow = messageSets
+      .map((messages) => createContextOverflowIssue(
+        messages.map((message) => message.content).join('\n\n'),
+        ctx.modelId,
+        {
+          selectedContext: ctx.clinicalContext,
+          contextLimit: ctx.contextLimit,
+        },
+      ))
+      .filter((issue): issue is ContextOverflowIssue => issue !== null)
+      .sort((left, right) => right.overBy - left.overBy)[0] ?? null
     if (overflow) {
       throw new ContextOverflowError(overflow, ctx.locale)
     }
 
-    const streamOnce = async () => {
-      let full = ''
-      await ctx.ai.stream(messages, {
-        modelId: ctx.modelId,
-        operationKey: ctx.operationKey,
-        throwOnAbort: true,
-        onChunk: (chunk: string) => {
-          full = chunk
-        },
-      })
-      return generateMedicalSummaryUseCase.parseResult(full)
+    const validationErrorMessage = (
+      moduleId: MedicalSummaryModuleId,
+    ) => `${moduleId}: PARSE_FAILED`
+    const markLatestValidationError = (message: string) => {
+      useAiExecutionDiagnosticsStore.getState().markLatestOperationFeatureError(
+        ctx.operationKey,
+        'medical-summary',
+        message,
+      )
     }
 
-    // Flash-Lite occasionally returns malformed/truncated JSON on large
-    // contexts or copies Chinese prose into an English result. Retry either
-    // contract failure once, never in a loop.
-    let parsed = await streamOnce()
-    if (!parsed || !isMedicalSummaryLanguageConsistent(parsed, outputLocale)) {
-      parsed = await streamOnce()
+    const runModule = async ({
+      moduleId,
+      messages,
+    }: typeof retryRequests[number]) => {
+      const full = await ctx.ai.stream(messages, {
+        modelId: ctx.modelId,
+        operationKey: ctx.operationKey,
+        diagnosticFeature: 'medical-summary',
+        throwOnAbort: true,
+        // Structured JSON is more reliable on OpenAI-compatible local models
+        // when sampling is deterministic. Providers that require/omit a fixed
+        // temperature normalize this option in their adapter.
+        ...(isLocalModel
+          ? { temperature: 0, reasoningEffort: 'low' as const }
+          : {}),
+      })
+      const parsed = generateMedicalSummaryUseCase.parseModuleResult(moduleId, full)
+      if (!parsed) {
+        markLatestValidationError(validationErrorMessage(moduleId))
+        return { moduleId, error: 'PARSE_FAILED' as const }
+      }
+      const unknownSourceKeys = generateMedicalSummaryUseCase.findUnknownSourceKeys(
+        parsed,
+        ctx.catalog,
+      )
+      if (unknownSourceKeys.length > 0) {
+        console.warn(
+          `[medical-summary:${moduleId}] grounding warning; unknown source keys:`,
+          unknownSourceKeys,
+        )
+      }
+      // Unknown citations are a claim-level warning, not a transport/card
+      // failure. The finalizer keeps them visibly unverified so SourceSup can
+      // show an amber warning beside the exact claim. High-risk fallbacks
+      // remain enforced there: unresolved timeline events and ungrounded
+      // medication items are not promoted as verified clinical facts.
+      return { moduleId, result: parsed }
     }
-    if (!parsed || !isMedicalSummaryLanguageConsistent(parsed, outputLocale)) return null
-    const finalized = generateMedicalSummaryUseCase.finalizeResult(parsed, ctx.catalog, {
+
+    // Initial generation sends the large clinical context once, then validates
+    // each delimited card independently. Retry requests remain one call per
+    // failed card so successful content is neither re-billed nor replaced.
+    const settled: Array<PromiseSettledResult<Awaited<ReturnType<typeof runModule>>>> = []
+    if (initialBatchMessages) {
+      try {
+        const full = await ctx.ai.stream(initialBatchMessages, {
+          modelId: ctx.modelId,
+          operationKey: ctx.operationKey,
+          diagnosticFeature: 'medical-summary',
+          throwOnAbort: true,
+          ...(isLocalModel
+            ? { temperature: 0, reasoningEffort: 'low' as const }
+            : {}),
+        })
+        const validationErrors: string[] = []
+        targetModuleIds.forEach((moduleId) => {
+          const parsed = generateMedicalSummaryUseCase.parseBatchModuleResult(moduleId, full)
+          const unknownSourceKeys = parsed
+            ? generateMedicalSummaryUseCase.findUnknownSourceKeys(parsed, ctx.catalog)
+            : []
+          if (unknownSourceKeys.length > 0) {
+            console.warn(
+              `[medical-summary:${moduleId}] grounding warning; unknown source keys:`,
+              unknownSourceKeys,
+            )
+          }
+          if (!parsed) {
+            validationErrors.push(validationErrorMessage(moduleId))
+          }
+          settled.push({
+            status: 'fulfilled',
+            value: parsed
+              ? { moduleId, result: parsed }
+              : { moduleId, error: 'PARSE_FAILED' as const },
+          })
+        })
+        if (validationErrors.length > 0) {
+          markLatestValidationError(validationErrors.join('; '))
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error
+        targetModuleIds.forEach(() => {
+          settled.push({ status: 'rejected', reason: error })
+        })
+      }
+    } else if (isLocalModel) {
+      // A user-configured local endpoint remains sequential so a small
+      // on-prem model is not unexpectedly hit with several retries at once.
+      for (const request of retryRequests) {
+        try {
+          settled.push({ status: 'fulfilled', value: await runModule(request) })
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') throw error
+          settled.push({ status: 'rejected', reason: error })
+        }
+      }
+    } else {
+      settled.push(...await Promise.allSettled(retryRequests.map(runModule)))
+    }
+
+    // Local Chat Completions endpoints are stateless, so permanently splitting
+    // every summary into multiple calls would resend the entire patient context
+    // and nearly double input tokens. Prefer one batch, then retry only cards
+    // whose independently delimited JSON failed to parse. Module retries use
+    // the compact, module-relevant local prompt,
+    // so retry every failed card once instead of guaranteeing a visible error
+    // whenever more than two cards fail the initial batch.
+    // If the whole request failed, preserve the previous medication-only fallback
+    // instead of resending every card.
+    if (initialBatchMessages && isLocalModel) {
+      const allRejected = settled.length > 0 && settled.every((outcome) => outcome.status === 'rejected')
+      const parseFailedModuleIds = targetModuleIds.filter((moduleId, index) => {
+        const outcome = settled[index]
+        return outcome?.status === 'fulfilled' && 'error' in outcome.value
+      })
+      const retryModuleIds = allRejected && targetModuleIds.includes('medications')
+        ? ['medications' as const]
+        : [...parseFailedModuleIds]
+            .sort((left, right) => Number(right === 'medications') - Number(left === 'medications'))
+
+      for (const moduleId of retryModuleIds) {
+        const moduleIndex = targetModuleIds.indexOf(moduleId)
+        const moduleRequest = {
+          moduleId,
+          messages: generateMedicalSummaryUseCase.buildModuleMessages(promptInput, moduleId),
+        }
+        try {
+          settled[moduleIndex] = {
+            status: 'fulfilled',
+            value: await runModule(moduleRequest),
+          }
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') throw error
+          settled[moduleIndex] = { status: 'rejected', reason: error }
+        }
+      }
+    }
+
+    const aborted = settled.find((outcome) =>
+      outcome.status === 'rejected' &&
+      outcome.reason instanceof Error &&
+      outcome.reason.name === 'AbortError',
+    )
+    if (aborted?.status === 'rejected') throw aborted.reason
+
+    let draft = generateMedicalSummaryUseCase.createAiDraftFromResult(retryRequest?.baseResult)
+    const moduleErrors: MedicalSummaryModuleErrors = {
+      ...(retryRequest?.baseResult.moduleErrors ?? {}),
+    }
+    settled.forEach((outcome, index) => {
+      const moduleId = targetModuleIds[index]
+      if (outcome.status === 'rejected') {
+        moduleErrors[moduleId] = getUserErrorMessage(outcome.reason)
+        return
+      }
+      if ('error' in outcome.value) {
+        moduleErrors[moduleId] = outcome.value.error
+        return
+      }
+      draft = generateMedicalSummaryUseCase.mergeModuleResult(
+        draft,
+        moduleId,
+        outcome.value.result,
+      )
+      delete moduleErrors[moduleId]
+    })
+
+    const finalized = generateMedicalSummaryUseCase.finalizeResult(draft, ctx.catalog, {
       clinicalData: ctx.clinicalData ?? undefined,
       audience: ctx.audience === 'patient' ? 'patient' : 'medical',
       locale: outputLocale,
+      strictGrounding: isLocalModel,
     })
     const generatedAt = Date.now()
     return {
       ...finalized,
+      moduleErrors: Object.keys(moduleErrors).length > 0 ? moduleErrors : undefined,
       generation: {
         source: 'live',
         // This is the resolved model that actually ran, not the raw picker
@@ -255,7 +434,9 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     selectedModelId: modelId,
     // A demo-first visit must never authorize a later real patient's data.
     // Manual generation remains available; only background cloud runs are gated.
-    autoRunEnabled: isAutoAiEnabledForSource(autoGenerate, autoAiConsent),
+    autoRunEnabled:
+      demographicsReadyForAi &&
+      isAutoAiEnabledForSource(autoGenerate, autoAiConsent),
     // Even a MANUAL generate waits for the full clinical dataset.
     requireDataReadyToGenerate: true,
     store: medicalSummaryStore,
@@ -281,6 +462,36 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
   const setModel = useCallback((id: string) => {
     setModelId(id)
   }, [setModelId])
+
+  const generationSlotKey = slot.slotKey
+  const runSlotGeneration = slot.generate
+  const generate = useCallback(async () => {
+    moduleRetryRequestsRef.current.delete(generationSlotKey)
+    await runSlotGeneration()
+  }, [generationSlotKey, runSlotGeneration])
+
+  const retryFailedModules = useCallback(async () => {
+    const exactResult = medicalSummaryStore.getState().byKey[generationSlotKey]
+    const moduleIds = MEDICAL_SUMMARY_MODULE_IDS.filter(
+      (moduleId) => Boolean(exactResult?.moduleErrors?.[moduleId]),
+    )
+    if (!exactResult || moduleIds.length === 0) {
+      await generate()
+      return
+    }
+    const request = {
+      moduleIds,
+      baseResult: exactResult,
+    }
+    moduleRetryRequestsRef.current.set(generationSlotKey, request)
+    try {
+      await runSlotGeneration()
+    } finally {
+      if (moduleRetryRequestsRef.current.get(generationSlotKey) === request) {
+        moduleRetryRequestsRef.current.delete(generationSlotKey)
+      }
+    }
+  }, [generate, generationSlotKey, runSlotGeneration])
 
   const readGenerationSlot = useCallback((slotKey: string) => {
     const state = medicalSummaryStore.getState()
@@ -342,6 +553,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     isGenerating: slot.isAnyRunning,
     error: slot.error,
     issue: slot.issue,
+    contextAdaptation: slot.contextAdaptation,
     hasPatient: slot.hasPatient,
     dataReady: slot.dataReady,
     scopeKey: slot.scopeKey,
@@ -355,7 +567,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     resolvedModelName: slot.resolvedModelName,
     setModel,
     recordGenerationCompletion,
-    generate: slot.generate,
+    generate,
+    retryFailedModules,
     cancel: slot.cancel,
     restoreGenerationSlot: slot.restoreSlot,
   }

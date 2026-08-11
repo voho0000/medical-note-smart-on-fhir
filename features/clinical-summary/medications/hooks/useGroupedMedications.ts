@@ -12,13 +12,19 @@ export interface MedicationGroup {
  *  a useMemo wrapper). */
 export function groupMedications(medications: MedicationRow[]) {
   const activeRaw: MedicationRow[] = []
-  const inactiveByName = new Map<string, MedicationRow[]>()
+  const inactiveByKey = new Map<string, { name: string; medications: MedicationRow[] }>()
+  const groupKeyOf = (medication: MedicationRow): string =>
+    medication.drugKey || medication.title
 
   medications.forEach((med) => {
     if (med.isInactive) {
-      const existing = inactiveByName.get(med.title) || []
-      existing.push(med)
-      inactiveByName.set(med.title, existing)
+      const key = groupKeyOf(med)
+      const existing = inactiveByKey.get(key)
+      if (existing) {
+        existing.medications.push(med)
+      } else {
+        inactiveByKey.set(key, { name: med.title, medications: [med] })
+      }
     } else {
       activeRaw.push(med)
     }
@@ -60,16 +66,18 @@ export function groupMedications(medications: MedicationRow[]) {
 
   const byDrug = new Map<string, MedicationRow[]>()
   for (const m of activeRaw) {
-    const arr = byDrug.get(m.title)
+    const key = groupKeyOf(m)
+    const arr = byDrug.get(key)
     if (arr) arr.push(m)
-    else byDrug.set(m.title, [m])
+    else byDrug.set(key, [m])
   }
   const emittedDrugs = new Set<string>()
   const active: MedicationRow[] = []
   for (const m of activeRaw) {
-    if (emittedDrugs.has(m.title)) continue
-    emittedDrugs.add(m.title)
-    const fills = byDrug.get(m.title)!
+    const key = groupKeyOf(m)
+    if (emittedDrugs.has(key)) continue
+    emittedDrugs.add(key)
+    const fills = byDrug.get(key)!
     const prescriberFills = fills.filter((f) => !isPharmacy(f.pharmacy))
     const prescribers = [...new Set(prescriberFills.map((f) => (f.pharmacy ?? '').trim()))]
 
@@ -91,8 +99,8 @@ export function groupMedications(medications: MedicationRow[]) {
   }
 
   // Sort inactive medications by date (newest first) within each group
-  inactiveByName.forEach((meds) => {
-    meds.sort((a, b) => {
+  inactiveByKey.forEach((group) => {
+    group.medications.sort((a, b) => {
       const dateA = a.startedOn || ''
       const dateB = b.startedOn || ''
       return dateB.localeCompare(dateA)
@@ -101,10 +109,11 @@ export function groupMedications(medications: MedicationRow[]) {
 
   return {
     activeMedications: active,
-    inactiveMedicationGroups: Array.from(inactiveByName.entries()).map(([name, meds]) => ({
+    inactiveMedicationGroups: Array.from(inactiveByKey.entries()).map(([key, { name, medications }]) => ({
+      key,
       name,
-      count: meds.length,
-      medications: meds
+      count: medications.length,
+      medications,
     }))
   }
 }

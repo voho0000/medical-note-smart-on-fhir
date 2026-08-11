@@ -214,6 +214,7 @@ export function useInferredProblems(): UseInferredProblemsResult {
           modelId: customModelId ?? undefined,
           responseFormat: 'json',
           temperature: 0.2,
+          diagnosticFeature: 'ips-problem-inference',
         })
       } catch (e) {
         llmError = e

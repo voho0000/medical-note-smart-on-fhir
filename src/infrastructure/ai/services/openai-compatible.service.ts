@@ -51,6 +51,16 @@ export class OpenAiCompatibleService {
     }
     if (request.temperature !== undefined) body.temperature = request.temperature
     if (request.maxTokens !== undefined) body.max_tokens = request.maxTokens
+    // gpt-oss uses this field to bound hidden CoT. Sending it to other models
+    // on the hospital gateway can suppress their final channel or expose raw
+    // reasoning, so gate by the configured endpoint model (not the logical UI
+    // profile id).
+    if (
+      request.reasoningEffort !== undefined &&
+      /^gpt-oss(?::|-)/i.test(config.modelId.trim())
+    ) {
+      body.reasoning_effort = request.reasoningEffort
+    }
     if (request.responseFormat === 'json') {
       body.response_format = { type: 'json_object' }
     }

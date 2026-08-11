@@ -6,7 +6,7 @@
 // includes.
 import { useMemo } from "react"
 import { useLanguage } from "@/src/application/providers/language.provider"
-import { useDataSelection } from "@/src/application/providers/data-selection.provider"
+import { useDataSelection, type DataConsumer } from "@/src/application/providers/data-selection.provider"
 import {
   listClinicalDocuments,
   resolveSelectedDocuments,
@@ -14,10 +14,36 @@ import {
 } from "@/src/core/utils/clinical-documents.utils"
 import type { ClinicalDataCollection } from "@/src/core/entities/clinical-data.entity"
 
-export function DocumentChecklist({ clinicalData }: { clinicalData: ClinicalDataCollection }) {
+interface DocumentChecklistProps {
+  clinicalData: ClinicalDataCollection
+  consumer?: DataConsumer
+  /** Transient values actually used by a context-limited model. The provider
+   * remains the persistence target, so removing these props restores the
+   * original saved document settings immediately. */
+  displayedDocumentMode?: DocumentMode
+  displayedDocumentIds?: string[]
+}
+
+export function DocumentChecklist({
+  clinicalData,
+  consumer = 'insights',
+  displayedDocumentMode,
+  displayedDocumentIds,
+}: DocumentChecklistProps) {
   const { t } = useLanguage()
-  const { documentMode, documentIds, setDocumentMode, setDocumentIds } = useDataSelection()
+  const dataSelection = useDataSelection()
+  const profile = dataSelection.getProfile(consumer)
+  const savedDocumentMode = consumer === 'insights' ? dataSelection.documentMode : profile.documentMode
+  const savedDocumentIds = consumer === 'insights' ? dataSelection.documentIds : profile.documentIds
+  const setDocumentMode = (mode: DocumentMode) => consumer === 'insights'
+    ? dataSelection.setDocumentMode(mode)
+    : dataSelection.setDocumentModeFor(consumer, mode)
+  const setDocumentIds = (ids: string[]) => consumer === 'insights'
+    ? dataSelection.setDocumentIds(ids)
+    : dataSelection.setDocumentIdsFor(consumer, ids)
   const ds = t.dataSelection as unknown as Record<string, string>
+  const documentMode = displayedDocumentMode ?? savedDocumentMode
+  const documentIds = displayedDocumentIds ?? savedDocumentIds
 
   const docs = useMemo(() => listClinicalDocuments(clinicalData), [clinicalData])
   const selectedIds = useMemo(

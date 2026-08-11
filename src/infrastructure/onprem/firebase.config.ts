@@ -4,3 +4,7 @@ export const app = undefined
 export const auth = undefined
 export const db = undefined
 export const appCheck = undefined
+
+export async function getOrInitializeAppCheck(): Promise<undefined> {
+  return undefined
+}

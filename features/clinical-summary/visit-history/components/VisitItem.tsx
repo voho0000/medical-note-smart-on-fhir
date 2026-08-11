@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { PanelRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { VisitDetailContent, visitHasDetails } from "./VisitDetailContent"
 import { useDocumentSummaryStrings } from "@/features/clinical-summary/document-summary/utils/strings"
 import type { DocumentEntry } from "@/features/clinical-summary/document-summary/types"
@@ -14,7 +15,7 @@ import { useResourceAnchor } from "@/src/application/hooks/use-resource-anchor.h
 import { formatDate as formatDateUtil } from "@/src/shared/utils/date.utils"
 import { cn } from "@/src/shared/utils/cn.utils"
 
-type VisitType = 'outpatient' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
+type VisitType = 'outpatient' | 'outpatient-or-emergency' | 'inpatient' | 'emergency' | 'home' | 'virtual' | 'pharmacy' | 'other'
 
 interface VisitItemProps {
   visit: VisitRecord
@@ -35,6 +36,7 @@ const getTypeBadge = (type: VisitType, labels: any) => {
   // 門診 blue · 急診 rose · 住院 violet — still distinct at a glance.
   const typeMap: Record<VisitType, { label: string; className: string }> = {
     outpatient: { label: labels.outpatient, className: 'border-blue-200 bg-blue-50 text-blue-700' },
+    'outpatient-or-emergency': { label: labels['outpatient-or-emergency'], className: 'border-sky-200 bg-sky-50 text-sky-700' },
     inpatient:  { label: labels.inpatient,  className: 'border-violet-200 bg-violet-50 text-violet-700' },
     emergency:  { label: labels.emergency,  className: 'border-rose-200 bg-rose-50 text-rose-700' },
     home:       { label: labels.home,       className: '' },
@@ -46,7 +48,29 @@ const getTypeBadge = (type: VisitType, labels: any) => {
   return <Badge variant="outline" className={cn("h-5 px-1.5 py-0 text-[0.6875rem]", className || undefined)}>{label}</Badge>
 }
 
-export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpanded, onToggle }: VisitItemProps) {
+const getCareDisciplineBadge = (
+  discipline: VisitRecord['careDiscipline'],
+  labels: Record<VisitRecord['careDiscipline'], string>,
+) => {
+  return (
+    <Badge
+      variant="outline"
+      data-care-discipline={discipline}
+      className="h-5 border-border bg-muted/60 px-1.5 py-0 text-[0.6875rem] font-medium text-muted-foreground"
+    >
+      {labels[discipline]}
+    </Badge>
+  )
+}
+
+export function VisitItem({
+  visit,
+  details,
+  documents,
+  abnormalCount = 0,
+  isExpanded,
+  onToggle,
+}: VisitItemProps) {
   const { t, locale } = useLanguage()
   const docStrings = useDocumentSummaryStrings()
   const { detail: rightDetail, toggleDetail } = useRightDetail()
@@ -57,6 +81,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
   const docs = documents ?? []
   const hasDetails = visitHasDetails(details, documents)
   const isRightActive = rightDetail?.sourceId === visit.id
+  const showMedicationExecutionPeriods = visit.type === 'inpatient'
 
   // Date label: a "住院日 ~ 出院日" range for inpatient stays that carry a
   // discharge date (Encounter.period.end on a different day); otherwise the
@@ -78,11 +103,19 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
       title: (
         <span className="flex items-center gap-1.5">
           {getTypeBadge(visit.type, t.visitHistory.badges)}
+          {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
           <span>{dateLabel}</span>
           {visit.location && <span className="text-xs font-normal text-muted-foreground">· {visit.location}</span>}
         </span>
       ),
-      node: <VisitDetailContent details={details} documents={documents} abnormalCount={abnormalCount} />,
+      node: (
+        <VisitDetailContent
+          details={details}
+          documents={documents}
+          abnormalCount={abnormalCount}
+          showMedicationExecutionPeriods={showMedicationExecutionPeriods}
+        />
+      ),
     })
   }
 
@@ -93,6 +126,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
   return (
     <div
       ref={anchorRef}
+      data-tour="visit-tour-row"
       className={cn(
         "min-w-0 max-w-full overflow-hidden rounded-lg border transition-colors",
         // 向右展開 active: tint the whole row so it's clear which visit the
@@ -124,6 +158,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
         <div className="flex items-center justify-between gap-1.5 leading-5">
           <div className="flex flex-1 items-center gap-x-1.5 overflow-hidden min-w-0">
             {getTypeBadge(visit.type, t.visitHistory.badges)}
+            {getCareDisciplineBadge(visit.careDiscipline, t.visitHistory.careDisciplines)}
             {visit.location && (
               <span
                 className="inline-flex h-5 max-w-[9rem] shrink-0 items-center rounded-md border border-border bg-muted px-1.5 py-0 text-[0.6875rem] text-muted-foreground"
@@ -198,6 +233,7 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
             {hasDetails && (
               <button
                 type="button"
+                data-tour="visit-open-right"
                 onClick={openInRightPane}
                 onMouseDown={(e) => e.stopPropagation()}
                 title={(t.visitHistory as any).openRight ?? '在右側展開'}
@@ -244,22 +280,35 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
                 {hasIcdCodes ? (
                   <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden align-middle">
                     {/* Default: primary only. Click "+N" to reveal secondaries inline. */}
-                    {(icdExpanded ? reasonCodes : reasonCodes.slice(0, 1)).map((rc, i) => (
-                      <span
-                        key={`${rc.code}-${i}`}
-                        title={(t.visitHistory as any).icdCodesTooltip}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="inline-flex h-5 min-w-0 max-w-[16rem] items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0 text-xs text-amber-800 select-text cursor-text"
-                      >
-                        <span className="font-mono font-medium">{rc.code}</span>
-                        {rc.description && (
-                          <span className="min-w-0 truncate text-amber-700/80">
-                            {rc.description}
-                          </span>
-                        )}
-                      </span>
-                    ))}
+                    {(icdExpanded ? reasonCodes : reasonCodes.slice(0, 1)).map((rc, i) => {
+                      const fullIcdLabel = [rc.code, rc.description].filter(Boolean).join(' ')
+                      return (
+                        <Tooltip key={`${rc.code}-${i}`}>
+                          <TooltipTrigger asChild>
+                            <span
+                              aria-label={fullIcdLabel}
+                              tabIndex={0}
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="inline-flex h-5 min-w-0 max-w-[16rem] items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0 text-xs text-amber-800 select-text cursor-text"
+                            >
+                              <span className="font-mono font-medium">{rc.code}</span>
+                              {rc.description && (
+                                <span className="min-w-0 truncate text-amber-700/80">
+                                  {rc.description}
+                                </span>
+                              )}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            className="max-w-[min(90vw,28rem)] whitespace-normal break-words text-xs leading-relaxed"
+                          >
+                            {fullIcdLabel}
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    })}
                     {hasSecondaryIcds && (
                       <button
                         type="button"
@@ -299,7 +348,12 @@ export function VisitItem({ visit, details, documents, abnormalCount = 0, isExpa
 
       {isExpanded && (
         <div className="min-w-0 max-w-full overflow-hidden border-t bg-muted/30 px-3 py-3 text-sm">
-          <VisitDetailContent details={details} documents={documents} abnormalCount={abnormalCount} />
+          <VisitDetailContent
+            details={details}
+            documents={documents}
+            abnormalCount={abnormalCount}
+            showMedicationExecutionPeriods={showMedicationExecutionPeriods}
+          />
         </div>
       )}
     </div>

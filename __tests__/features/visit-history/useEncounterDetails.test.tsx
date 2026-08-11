@@ -6,6 +6,7 @@
 // is what users reported looked clinically wrong.
 import { renderHook } from '@testing-library/react'
 import { useEncounterDetails } from '@/features/clinical-summary/visit-history/hooks/useEncounterDetails'
+import type { MedicationRow } from '@/features/clinical-summary/medications/types'
 
 const obs = (id: string, text: string) => ({
   id,
@@ -53,6 +54,109 @@ describe('useEncounterDetails — clinical category grouping', () => {
     const ids = details.testGroups.map((g) => g.categoryId)
     expect(ids[0]).toBe('cbc')
     expect(ids[ids.length - 1]).toBeNull()
+  })
+})
+
+describe('useEncounterDetails — medication quantity localization', () => {
+  const medication = (overrides: Record<string, unknown> = {}) => ({
+    id: 'm1',
+    encounter: { reference: 'Encounter/e1' },
+    medicationCodeableConcept: {
+      text: '葉酸',
+      coding: [{ display: 'Folic acid' }],
+    },
+    status: 'active',
+    ...overrides,
+  })
+
+  const runMedications = (medications: any[], locale: string) => {
+    const { result } = renderHook(() =>
+      useEncounterDetails(medications, [], [], [], [], [], locale, 'medical'),
+    )
+    return result.current.get('e1')!
+  }
+
+  it('translates the common NHI dispensing sentence in the English UI', () => {
+    const details = runMedications([
+      medication({
+        dosageInstruction: [{
+          text: '給藥總量 28，給藥日數 28 天（平均每日 1）',
+        }],
+      }),
+    ], 'en')
+
+    expect(details.medications[0].detail)
+      .toBe('Total quantity 28 · Days supplied 28 (avg. 1/day)')
+  })
+
+  it('keeps the original FHIR sentence in the Traditional Chinese UI', () => {
+    const sourceText = '給藥總量 70，給藥日數 28 天（平均每日 2.5）'
+    const details = runMedications([
+      medication({ dosageInstruction: [{ text: sourceText }] }),
+    ], 'zh-TW')
+
+    expect(details.medications[0].detail).toBe(sourceText)
+  })
+
+  it('localizes the structured quantity fallback without inventing an average', () => {
+    const details = runMedications([
+      medication({
+        dispenseRequest: {
+          quantity: { value: 7 },
+          expectedSupplyDuration: { value: 28 },
+        },
+      }),
+    ], 'en')
+
+    expect(details.medications[0].detail)
+      .toBe('Total quantity 7 · Days supplied 28')
+  })
+
+  it('attaches the canonical medication row used by the dedicated medication tab', () => {
+    const standardRow: MedicationRow = {
+      id: 'm1',
+      drugKey: 'AC49322100',
+      title: 'BUPROPION HYDROCHLORIDE 150 MG',
+      secondaryTitle: 'Official English name',
+      status: 'active',
+      isInactive: false,
+      isChronic: true,
+      category: '抗憂鬱劑',
+      drugTerminology: {
+        source: 'nhi-official-drug-master',
+        snapshotId: 'nhi-drug-terminology-20260728',
+        officialNameZh: '官方中文藥名',
+        officialNameEn: 'Official English name',
+        ingredientText: 'BUPROPION HYDROCHLORIDE 150 MG',
+        atcCode: 'N06AX12',
+      },
+      refillCount: 1,
+      searchHaystack: 'bupropion n06ax12 官方中文藥名',
+    }
+    const sourceMedication = medication({
+      medicationCodeableConcept: {
+        text: '來源中文藥名',
+        coding: [{ code: 'AC49322100', display: 'Source English name' }],
+      },
+    })
+    const { result } = renderHook(() =>
+      useEncounterDetails(
+        [sourceMedication],
+        [],
+        [],
+        [],
+        [],
+        [],
+        'zh-TW',
+        'medical',
+        [standardRow],
+      ),
+    )
+    const encounterMedication = result.current.get('e1')!.medications[0]
+
+    expect(encounterMedication.title).toBe('BUPROPION HYDROCHLORIDE 150 MG')
+    expect(encounterMedication.isChronic).toBe(true)
+    expect(encounterMedication.drugTerminology).toBe(standardRow.drugTerminology)
   })
 })
 

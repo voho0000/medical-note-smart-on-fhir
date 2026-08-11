@@ -177,6 +177,25 @@ export const CALC_SCORING: Record<string, CalcScoring> = {
       zh: 'Scr 單位 mg/dL，體重單位 kg（實際體重）。Cockcroft DW, Gault MH. Nephron 1976。',
     },
   },
+  'kfre-4-variable': {
+    formula: {
+      en: 'LP = −0.2201×(age/10−7.036) + 0.2467×(male−0.5642) − 0.5567×(eGFR/5−7.222) + 0.4510×(ln ACR−5.137); risk(t) = 1−S₀(t)^exp(LP). Non–North American S₀: 0.9832 (2 y), 0.9365 (5 y).',
+      zh: 'LP = −0.2201×(年齡/10−7.036) + 0.2467×(男性−0.5642) − 0.5567×(eGFR/5−7.222) + 0.4510×(ln ACR−5.137)；風險(t) = 1−S₀(t)^exp(LP)。非北美 S₀：0.9832（2 年）、0.9365（5 年）。',
+    },
+    outcome: {
+      scoreHeader: { en: 'KFRE result', zh: 'KFRE 結果' },
+      outcomeHeader: { en: 'KDIGO 2024 use', zh: 'KDIGO 2024 應用' },
+      rows: [
+        { score: '5 y 3%–5%', outcome: { en: 'May inform nephrology referral', zh: '可輔助決定腎臟專科轉介' } },
+        { score: '2 y >10%', outcome: { en: 'May inform multidisciplinary-care timing', zh: '可輔助決定多專業照護時機' } },
+        { score: '2 y >40%', outcome: { en: 'May inform KRT education and preparation', zh: '可輔助腎臟替代治療衛教與準備' } },
+      ],
+    },
+    note: {
+      en: 'ACR is the natural log of mg/g; male = 1 and female = 0. Thresholds supplement rather than replace eGFR, ACR, clinical considerations, and local pathways.',
+      zh: 'ACR 以 mg/g 取自然對數；男性 = 1、女性 = 0。閾值用於輔助，不取代 eGFR、ACR、臨床情境與院內流程。',
+    },
+  },
   'fena': {
     formula: {
       en: 'FENa = (UNa × PCr) / (PNa × UCr) × 100',

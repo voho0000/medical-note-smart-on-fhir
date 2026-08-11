@@ -125,6 +125,7 @@ export function useClinicalData() {
       consents: data?.consents ?? [],
       devices: data?.devices ?? [],
       carePlans: data?.carePlans ?? [],
+      sourceMetadata: data?.sourceMetadata,
       resourceQueryStatus,
       queryIssues,
       hasBlockingQueryIssues,
