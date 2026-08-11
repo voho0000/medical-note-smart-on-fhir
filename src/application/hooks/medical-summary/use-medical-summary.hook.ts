@@ -63,9 +63,9 @@ export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-p
 
 // Store + cache-key scheme live in medical-summary-store.ts so the IPS export
 // can peek at generated summaries without importing this full hook graph.
-// v13 modularizes live card generation for both audiences. Patient summaries
+// v14 retains unknown citations as claim-level warnings. Patient summaries
 // from v11/v10/v9/v8/v7/v6/v5 remain valid legacy fallbacks; v12 live results
-// intentionally regenerate into the module-aware cache shape.
+// and v13 grounding failures intentionally regenerate into this cache shape.
 const legacyPatientSummaryCacheKeys = (scanKey: string) => [
   aiResultCacheKey('medsummary11', scanKey),
   aiResultCacheKey('medsummary10', scanKey),
@@ -144,7 +144,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     baseResult: MedicalSummaryResult
   }>())
 
-  // v6 first, v5 fallback for patient summaries (see key comments above).
+  // Current key first, then older patient-only fallbacks (see comments above).
   const loadCached = useCallback(async (slotKey: string) => {
     let cached = await loadEncryptedCache<MedicalSummaryResult>(
       summaryCacheKey(slotKey),
@@ -212,13 +212,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
 
     const validationErrorMessage = (
       moduleId: MedicalSummaryModuleId,
-      code: 'PARSE_FAILED' | 'GROUNDING_FAILED',
-      unknownSourceKeys: string[] = [],
-    ) => (
-      unknownSourceKeys.length > 0
-        ? `${moduleId}: ${code} (unknown source keys: ${unknownSourceKeys.join(', ')})`
-        : `${moduleId}: ${code}`
-    )
+    ) => `${moduleId}: PARSE_FAILED`
     const markLatestValidationError = (message: string) => {
       useAiExecutionDiagnosticsStore.getState().markLatestOperationFeatureError(
         ctx.operationKey,
@@ -245,7 +239,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       })
       const parsed = generateMedicalSummaryUseCase.parseModuleResult(moduleId, full)
       if (!parsed) {
-        markLatestValidationError(validationErrorMessage(moduleId, 'PARSE_FAILED'))
+        markLatestValidationError(validationErrorMessage(moduleId))
         return { moduleId, error: 'PARSE_FAILED' as const }
       }
       const unknownSourceKeys = generateMedicalSummaryUseCase.findUnknownSourceKeys(
@@ -254,23 +248,15 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
       )
       if (unknownSourceKeys.length > 0) {
         console.warn(
-          `[medical-summary:${moduleId}] grounding validation failed; unknown source keys:`,
+          `[medical-summary:${moduleId}] grounding warning; unknown source keys:`,
           unknownSourceKeys,
         )
       }
-      // Frontier providers historically allow the finalizer to retain an
-      // unknown citation as visibly unverified (and to drop an unknown
-      // timeline ref). Rejecting the entire card was introduced for small
-      // local models and must not turn one stray cloud citation into a card
-      // failure. Local output remains strict and receives a targeted retry.
-      if (isLocalModel && unknownSourceKeys.length > 0) {
-        markLatestValidationError(validationErrorMessage(
-          moduleId,
-          'GROUNDING_FAILED',
-          unknownSourceKeys,
-        ))
-        return { moduleId, error: 'GROUNDING_FAILED' as const }
-      }
+      // Unknown citations are a claim-level warning, not a transport/card
+      // failure. The finalizer keeps them visibly unverified so SourceSup can
+      // show an amber warning beside the exact claim. High-risk fallbacks
+      // remain enforced there: unresolved timeline events and ungrounded
+      // medication items are not promoted as verified clinical facts.
       return { moduleId, result: parsed }
     }
 
@@ -297,27 +283,18 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
             : []
           if (unknownSourceKeys.length > 0) {
             console.warn(
-              `[medical-summary:${moduleId}] grounding validation failed; unknown source keys:`,
+              `[medical-summary:${moduleId}] grounding warning; unknown source keys:`,
               unknownSourceKeys,
             )
           }
           if (!parsed) {
-            validationErrors.push(validationErrorMessage(moduleId, 'PARSE_FAILED'))
-          } else if (isLocalModel && unknownSourceKeys.length > 0) {
-            validationErrors.push(validationErrorMessage(
-              moduleId,
-              'GROUNDING_FAILED',
-              unknownSourceKeys,
-            ))
+            validationErrors.push(validationErrorMessage(moduleId))
           }
           settled.push({
             status: 'fulfilled',
-            value: parsed && (!isLocalModel || unknownSourceKeys.length === 0)
+            value: parsed
               ? { moduleId, result: parsed }
-              : {
-                  moduleId,
-                  error: parsed ? 'GROUNDING_FAILED' as const : 'PARSE_FAILED' as const,
-                },
+              : { moduleId, error: 'PARSE_FAILED' as const },
           })
         })
         if (validationErrors.length > 0) {
@@ -347,8 +324,8 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     // Local Chat Completions endpoints are stateless, so permanently splitting
     // every summary into multiple calls would resend the entire patient context
     // and nearly double input tokens. Prefer one batch, then retry only cards
-    // whose independently delimited JSON failed to parse or cited a nonexistent
-    // catalog key. Module retries use the compact, module-relevant local prompt,
+    // whose independently delimited JSON failed to parse. Module retries use
+    // the compact, module-relevant local prompt,
     // so retry every failed card once instead of guaranteeing a visible error
     // whenever more than two cards fail the initial batch.
     // If the whole request failed, preserve the previous medication-only fallback

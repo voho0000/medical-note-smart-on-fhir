@@ -86,6 +86,16 @@ const LONGITUDINAL_MAX_IMAGING_POINTS = MAX_INVESTIGATION_TREND_POINTS
 export const EMPHASIS_MAX_CHARS = 24
 export const EMPHASIS_MAX_COUNT = 5
 
+/** Repair presentation-only citation drift from instruction-sensitive models
+ * without guessing a different source. `[l 1]`, `l1`, and `L1` all identify
+ * the same app-issued catalog key; anything beyond that narrow shape remains
+ * unverified and is surfaced to the user. */
+export function normaliseSummarySourceKey(rawKey: string): string {
+  const trimmed = rawKey.trim()
+  const match = trimmed.match(/^\[?\s*([a-z])\s*(\d+)\s*\]?$/i)
+  return match ? `${match[1].toUpperCase()}${match[2]}` : trimmed
+}
+
 /** Prompt/orchestration policy is capability-based. Frontier providers retain
  * the established full clinical prompt, while instruction-sensitive local
  * endpoints receive a shorter, module-scoped contract. */
@@ -852,7 +862,7 @@ function guardedInvestigationDirection(
   const direction = normaliseInvestigationDirection(rawDirection)
   const citedEvidenceDates = new Set(
     (rawSources ?? [])
-      .map((rawKey) => catalogByKey.get(rawKey.trim()))
+      .map((rawKey) => catalogByKey.get(normaliseSummarySourceKey(rawKey)))
       .filter((entry): entry is SummarySourceCatalogEntry =>
         (entry?.resourceType === 'DiagnosticReport' || entry?.resourceType === 'Observation') &&
         !!entry.date,
@@ -897,7 +907,7 @@ function citedSourcesSupportNormalityAssessment(
   catalogByKey: Map<string, SummarySourceCatalogEntry>,
 ): boolean {
   return (rawSources ?? []).some((rawKey) => {
-    const entry = catalogByKey.get(rawKey.trim())
+    const entry = catalogByKey.get(normaliseSummarySourceKey(rawKey))
     return Boolean(entry && catalogEntrySupportsNormalityAssessment(entry))
   })
 }
@@ -1312,12 +1322,14 @@ function completeChronicMedicationRegimen(
 
   const currentAiRegimen = aiRegimen.filter((item) => {
     const citedMedicationKeys = item.sources
-      .map((key) => key.trim())
+      .map(normaliseSummarySourceKey)
       .filter((key) => medicationCatalogKeys.has(key))
     return citedMedicationKeys.length === 0 ||
       !citedMedicationKeys.every((key) => historicalChronicSourceKeys.has(key))
   })
-  const aiSourceKeys = new Set(currentAiRegimen.flatMap((item) => item.sources.map((key) => key.trim())))
+  const aiSourceKeys = new Set(currentAiRegimen.flatMap((item) =>
+    item.sources.map(normaliseSummarySourceKey),
+  ))
   const missing = chronicGroups.filter(
     (group) => !group.sourceKeys.some((key) => aiSourceKeys.has(key)),
   )
@@ -1440,7 +1452,7 @@ function collectClaimedSourceKeys(value: unknown): string[] {
     if (Array.isArray(current)) {
       if (parentKey === 'sources') {
         current.forEach((item) => {
-          if (typeof item === 'string') sourceKeys.push(item.trim())
+          if (typeof item === 'string') sourceKeys.push(normaliseSummarySourceKey(item))
         })
       } else {
         current.forEach((item) => visit(item))
@@ -1449,7 +1461,9 @@ function collectClaimedSourceKeys(value: unknown): string[] {
     }
     if (!current || typeof current !== 'object') return
     Object.entries(current as Record<string, unknown>).forEach(([key, item]) => {
-      if (key === 'ref' && typeof item === 'string') sourceKeys.push(item.trim())
+      if (key === 'ref' && typeof item === 'string') {
+        sourceKeys.push(normaliseSummarySourceKey(item))
+      }
       else visit(item, key)
     })
   }
@@ -1776,17 +1790,17 @@ export class GenerateMedicalSummaryUseCase {
   }
 
   /**
-   * Validate the model's citation keys before a card is accepted. Parsed JSON
-   * is not automatically grounded: smaller models sometimes invent plausible
-   * keys such as M1 even when the supplied catalog contains no medications.
-   * Returning the unknown keys lets the local retry path regenerate only that
-   * card instead of rendering an unsupported clinical claim.
+   * Inspect the model's citation keys after parsing. Harmless formatting drift
+   * is normalized first; remaining unknown keys are logged and carried into
+   * the final result as visibly unverified claim-level citations. This does not
+   * make an unknown source valid: high-risk finalizer guards still decide what
+   * can safely render, and unresolved timeline events remain hidden.
    */
   findUnknownSourceKeys(
     value: unknown,
     catalog: readonly SummarySourceCatalogEntry[],
   ): string[] {
-    const known = new Set(catalog.map((entry) => entry.key))
+    const known = new Set(catalog.map((entry) => normaliseSummarySourceKey(entry.key)))
     return [...new Set(collectClaimedSourceKeys(value).filter((key) => !known.has(key)))]
   }
 
@@ -1972,7 +1986,7 @@ export class GenerateMedicalSummaryUseCase {
     const sourceIndex: ResolvedSourceRef[] = []
     const numByKey = new Map<string, number>()
     const registerKey = (rawKey: string): string => {
-      const key = rawKey.trim()
+      const key = normaliseSummarySourceKey(rawKey)
       if (!numByKey.has(key)) {
         const entry = byKey.get(key)
         const num = sourceIndex.length + 1
@@ -2056,11 +2070,11 @@ export class GenerateMedicalSummaryUseCase {
       // is too risky to render. Unlike ordinary narrative citations, require at
       // least one verified Medication* source before the item enters the card.
       const hasVerifiedMedication = rawSources.some((rawKey) =>
-        byKey.get(rawKey.trim())?.resourceType.startsWith('Medication'),
+        byKey.get(normaliseSummarySourceKey(rawKey))?.resourceType.startsWith('Medication'),
       )
       if (!hasVerifiedMedication) return []
       const hasDocumentedPurpose = rawSources.some((rawKey) => {
-        const resourceType = byKey.get(rawKey.trim())?.resourceType
+        const resourceType = byKey.get(normaliseSummarySourceKey(rawKey))?.resourceType
         return resourceType === 'Condition' ||
           resourceType === 'CarePlan' ||
           resourceType === 'Composition' ||
@@ -2081,7 +2095,9 @@ export class GenerateMedicalSummaryUseCase {
     })
 
     const hasVerifiedMedicationSource = (rawSources: string[]) =>
-      rawSources.some((rawKey) => byKey.get(rawKey.trim())?.resourceType.startsWith('Medication'))
+      rawSources.some((rawKey) =>
+        byKey.get(normaliseSummarySourceKey(rawKey))?.resourceType.startsWith('Medication'),
+      )
 
     // The clinician medication card follows the same evidence rule as patient
     // education: an item without a real Medication* record is omitted. Dates
@@ -2116,7 +2132,7 @@ export class GenerateMedicalSummaryUseCase {
       if (SIG_FILLER.test(trimmed) || SIG_ARITHMETIC.test(trimmed)) return undefined
       if (medicationsById.size === 0) return trimmed
       const recorded = rawSources
-        .map((key) => byKey.get(key.trim()))
+        .map((key) => byKey.get(normaliseSummarySourceKey(key)))
         .filter((entry) => entry?.resourceType.startsWith('Medication'))
         .flatMap((entry) => {
           const medication = medicationsById.get(entry!.resourceId)
@@ -2130,7 +2146,7 @@ export class GenerateMedicalSummaryUseCase {
 
     const hasDocumentedTreatmentArea = (rawSources: string[]): boolean =>
       rawSources.some((rawKey) => {
-        const resourceType = byKey.get(rawKey.trim())?.resourceType
+        const resourceType = byKey.get(normaliseSummarySourceKey(rawKey))?.resourceType
         return resourceType === 'Condition' ||
           resourceType === 'CarePlan' ||
           resourceType === 'Composition' ||
@@ -2140,7 +2156,7 @@ export class GenerateMedicalSummaryUseCase {
     const groundedMedicationGroup = (rawSources: string[], modelGroup: string): string => {
       if (!strictGrounding) return modelGroup
       const governedGroups = rawSources
-        .map((key) => byKey.get(key.trim()))
+        .map((key) => byKey.get(normaliseSummarySourceKey(key)))
         .filter((entry) => entry?.resourceType.startsWith('Medication'))
         .flatMap((entry) => {
           const medication = medicationsById.get(entry!.resourceId)
@@ -2185,7 +2201,7 @@ export class GenerateMedicalSummaryUseCase {
         // instead. Every other item still needs a real Medication record.
         const grounded =
           reason === 'condition-without-therapy'
-            ? rawSources.some((rawKey) => byKey.has(rawKey.trim()))
+            ? rawSources.some((rawKey) => byKey.has(normaliseSummarySourceKey(rawKey)))
             : hasVerifiedMedicationSource(rawSources)
         if (!grounded) return []
         // Health Bank commonly omits complete directions. Treat missing SIG as
@@ -2245,7 +2261,7 @@ export class GenerateMedicalSummaryUseCase {
       const basis = p.basis?.trim() || undefined
       const kind = normaliseProblemKind(p.kind)
       const resolvedSources = rawSources
-        .map((key) => byKey.get(key.trim()))
+        .map((key) => byKey.get(normaliseSummarySourceKey(key)))
         .filter((entry): entry is SummarySourceCatalogEntry => Boolean(entry))
       const medicationOnly = resolvedSources.length > 0 &&
         resolvedSources.every((entry) => entry.resourceType.startsWith('Medication'))
@@ -2270,7 +2286,7 @@ export class GenerateMedicalSummaryUseCase {
       const basisType = classifyEvidenceType(basis)
       const suspectSourceKeys = basisType
         ? rawSources
-            .map((key) => key.trim())
+            .map(normaliseSummarySourceKey)
             .filter((key) => {
               const entry = byKey.get(key)
               if (entry?.resourceType !== 'DiagnosticReport') return false
@@ -2298,7 +2314,7 @@ export class GenerateMedicalSummaryUseCase {
     const seenTimelineEvents = new Set<string>()
     const timeline = ai.timeline
       .flatMap((pick) => {
-        const entry = byKey.get(pick.ref.trim())
+        const entry = byKey.get(normaliseSummarySourceKey(pick.ref))
         if (!entry || !entry.date) {
           droppedTimelineCount += 1
           return []

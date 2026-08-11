@@ -86,7 +86,7 @@ describe('AiExecutionDiagnosticsDialog', () => {
           inputData: {},
           outputData: 'MODEL OUTPUT',
           hasError: true,
-          errorMessage: 'investigations: GROUNDING_FAILED (unknown source keys: L9)',
+          errorMessage: 'investigations: PARSE_FAILED',
           status: 'error',
         }]}
       />,
@@ -94,7 +94,7 @@ describe('AiExecutionDiagnosticsDialog', () => {
 
     expect(screen.getAllByText('Error').length).toBeGreaterThan(0)
     expect(screen.getAllByText(
-      'investigations: GROUNDING_FAILED (unknown source keys: L9)',
+      'investigations: PARSE_FAILED',
     ).length).toBeGreaterThan(0)
   })
 })

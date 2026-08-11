@@ -234,7 +234,7 @@ export const zhTW = {
     urgencyLow: '低',
     basisLabel: '依據',
     aiInferred: 'AI 推斷，無直接資料來源，僅供參考',
-    unverified: '未驗證',
+    unverified: '來源可能有問題，請核對',
     sourceTypeMismatch: '來源類型與依據不符，請核對',
     timelineDropped: '另有 {count} 筆 AI 選取事件因無法對應原始資料而未顯示。',
     timelineShowEarlier: '更早 {count} 筆事件',

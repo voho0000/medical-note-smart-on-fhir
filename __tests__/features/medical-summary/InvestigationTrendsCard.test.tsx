@@ -39,16 +39,17 @@ const target: InvestigationCumulativeTarget = {
 function renderCard(
   onOpenCumulative = jest.fn(),
   openingCumulativeTarget: InvestigationCumulativeTarget | null = null,
+  cardResult: MedicalSummaryResult = result,
 ) {
   render(
     <InvestigationTrendsCard
-      result={result}
+      result={cardResult}
       title="關鍵檢驗與檢查趨勢"
       subtitle="最近結果"
       kindLabel={(kind) => kind}
       directionLabel={(direction) => direction}
       typeLabel={(type) => type ?? ''}
-      unverifiedLabel="未驗證"
+      unverifiedLabel="來源可能有問題，請核對"
       showMoreLabel="再看 {count} 項"
       showLessLabel="收合內容"
       openCumulativeLabel="查看累積報告"
@@ -85,5 +86,28 @@ describe('InvestigationTrendsCard', () => {
     expect(button).toHaveTextContent('正在開啟…')
     fireEvent.click(button)
     expect(onOpenCumulative).not.toHaveBeenCalled()
+  })
+
+  it('keeps an investigation with an unknown source and flags its citation locally', () => {
+    const warningResult: MedicalSummaryResult = {
+      ...result,
+      investigations: [{
+        ...result.investigations[0],
+        sourceKeys: ['L99'],
+      }],
+      sourceIndex: [{
+        key: 'L99',
+        num: 1,
+        verified: false,
+      }],
+    }
+
+    renderCard(jest.fn(), null, warningResult)
+
+    expect(screen.getByText('腎功能 (eGFR)')).toBeInTheDocument()
+    const citation = screen.getByRole('button', { name: /1 .*來源可能有問題，請核對/ })
+    expect(citation.querySelector('.lucide-circle-alert')).toBeInTheDocument()
+    fireEvent.click(citation)
+    expect(screen.getByText('L99 · 來源可能有問題，請核對')).toBeInTheDocument()
   })
 })

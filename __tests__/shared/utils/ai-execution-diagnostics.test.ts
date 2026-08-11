@@ -90,7 +90,7 @@ describe('AI execution diagnostics', () => {
     store.markLatestOperationFeatureError(
       'summary-slot',
       'medical-summary',
-      'investigations: GROUNDING_FAILED (unknown source keys: L9)',
+      'investigations: PARSE_FAILED',
     )
 
     expect(useAiExecutionDiagnosticsStore.getState().records).toEqual([
@@ -99,7 +99,7 @@ describe('AI execution diagnostics', () => {
         id: 'latest',
         status: 'error',
         hasError: true,
-        errorMessage: 'investigations: GROUNDING_FAILED (unknown source keys: L9)',
+        errorMessage: 'investigations: PARSE_FAILED',
       }),
     ])
   })

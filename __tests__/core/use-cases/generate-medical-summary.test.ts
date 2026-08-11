@@ -8,6 +8,7 @@ import {
   buildLongitudinalInvestigationContext,
   scopeDocumentSources,
   classifyEncounterClass,
+  normaliseSummarySourceKey,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
 
@@ -763,16 +764,17 @@ describe('modular summary generation contract', () => {
       .toEqual([])
   })
 
-  it('rejects citation keys that were not present in the supplied catalog', () => {
+  it('repairs harmless citation formatting and reports only truly unknown keys', () => {
     const problems = useCase.parseModuleResult('problems', JSON.stringify({
       problems: [{
         label: 'Invented medication problem',
         kind: 'medication',
-        sources: ['M1', 'E1'],
+        sources: ['M1', '[ e 1 ]'],
       }],
     }))
 
     expect(problems).not.toBeNull()
+    expect(normaliseSummarySourceKey('[ e 1 ]')).toBe('E1')
     expect(useCase.findUnknownSourceKeys(problems, [{
       key: 'E1',
       resourceType: 'Encounter',
@@ -978,6 +980,23 @@ describe('finalizeResult', () => {
       '出院後持續追蹤',
     ])
     expect(result.timeline.map((event) => event.key)).toEqual(['E1', 'E1'])
+  })
+
+  it('resolves harmlessly reformatted citations to the canonical source key', () => {
+    const ai = {
+      headline: 'h',
+      problems: [],
+      summary: [{ text: '於甲院追蹤。', emphasis: false, sources: ['[ e 1 ]'] }],
+      decisions: [],
+      timeline: [],
+    }
+
+    const result = useCase.finalizeResult(ai, catalog)
+
+    expect(result.summary[0].sourceKeys).toEqual(['E1'])
+    expect(result.sourceIndex).toEqual([
+      expect.objectContaining({ key: 'E1', verified: true }),
+    ])
   })
 
   it('demotes over-long highlights and caps the emphasised count', () => {

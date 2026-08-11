@@ -6,7 +6,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { ArrowUpRight } from "lucide-react"
+import { ArrowUpRight, CircleAlert } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/src/shared/utils/cn.utils"
 import type { ResolvedSourceRef } from "@/src/core/entities/medical-summary.entity"
@@ -114,6 +114,9 @@ export function SourceSup({ sources, typeLabel, unverifiedLabel, onNavigate, cla
             className,
           )}
         >
+          {hasWarning ? (
+            <CircleAlert className="mr-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+          ) : null}
           {sources.map((s) => s.num).join(",")}
         </sup>
       </PopoverTrigger>

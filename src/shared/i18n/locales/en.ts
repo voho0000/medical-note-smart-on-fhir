@@ -233,7 +233,7 @@ export const en = {
     urgencyLow: 'Low',
     basisLabel: 'Basis',
     aiInferred: 'AI inference — no direct data source, for reference only',
-    unverified: 'unverified',
+    unverified: 'source may be incorrect — please verify',
     sourceTypeMismatch: 'report type does not match the stated basis — please verify',
     timelineDropped: '{count} AI-picked event(s) hidden — they could not be matched to the source data.',
     timelineShowEarlier: '{count} earlier event(s)',
