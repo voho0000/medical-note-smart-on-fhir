@@ -86,6 +86,69 @@ describe('buildSourceCatalog', () => {
     expect(byKey.get('C1')).toMatchObject({ resourceId: 'cond-1' })
   })
 
+  it('cites Health Bank lab Observations without indexing their bridge-generated report containers', () => {
+    const catalog = buildSourceCatalog({
+      diagnosticReports: [
+        {
+          id: 'synthetic-cbc',
+          meta: { source: 'nhi-fhir-bridge/scraper' },
+          category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'LAB' }] }],
+          code: { text: 'CBC' },
+          result: [{ reference: 'Observation/hb' }],
+          effectiveDateTime: '2026-05-05',
+        },
+        {
+          id: 'real-r8-report',
+          meta: {
+            source: 'https://nhi-fhir-bridge.github.io/source/health-bank-sdk-json',
+            tag: [{
+              system: 'https://nhi-fhir-bridge.github.io/CodeSystem/health-bank-sdk-section',
+              code: 'r8',
+            }],
+          },
+          category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }],
+          code: { text: 'Chest X-ray' },
+          conclusion: 'No acute pulmonary finding.',
+          effectiveDateTime: '2026-05-04',
+        },
+      ],
+      observations: [{
+        id: 'hb',
+        meta: { source: 'nhi-fhir-bridge/scraper' },
+        code: { text: 'Hb' },
+        effectiveDateTime: '2026-05-05',
+        valueQuantity: { value: 9.2, unit: 'g/dL' },
+      }],
+    })
+
+    expect(catalog.find((source) => source.resourceId === 'synthetic-cbc')).toBeUndefined()
+    expect(catalog.find((source) => source.resourceId === 'hb')).toMatchObject({
+      key: 'O1',
+      resourceType: 'Observation',
+      display: 'Hb',
+    })
+    expect(catalog.find((source) => source.resourceId === 'real-r8-report')).toMatchObject({
+      key: 'L2',
+      resourceType: 'DiagnosticReport',
+    })
+  })
+
+  it('does not classify an ordinary server DiagnosticReport as a synthetic Health Bank grouping', () => {
+    const catalog = buildSourceCatalog({
+      diagnosticReports: [{
+        id: 'server-cbc',
+        category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'LAB' }] }],
+        code: { text: 'CBC' },
+        result: [{ reference: 'Observation/server-hb' }],
+        effectiveDateTime: '2026-05-05',
+      }],
+    })
+
+    expect(catalog).toEqual([
+      expect.objectContaining({ resourceId: 'server-cbc', resourceType: 'DiagnosticReport' }),
+    ])
+  })
+
   it('uses English encounter type and ICD display while preserving the organization', () => {
     const [source] = buildSourceCatalog({
       encounters: [{
@@ -297,9 +360,11 @@ describe('buildSourceCatalog — clinical documents', () => {
 
 describe('buildLongitudinalInvestigationContext', () => {
   it('surfaces serial labs and imaging from all available reports so they are not labeled single', () => {
+    const bridgeLabMeta = { meta: { source: 'nhi-fhir-bridge/scraper' } }
     const input = {
       diagnosticReports: [
         {
+          ...bridgeLabMeta,
           id: 'a1c-new',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -307,6 +372,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-new' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'a1c-old',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -314,6 +380,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-old' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'a1c-mid-1',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -321,6 +388,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-mid-1' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'a1c-mid-2',
           category: [{ text: 'Laboratory' }],
           code: { text: 'HbA1c' },
@@ -328,6 +396,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-a1c-mid-2' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'psa-new',
           category: [{ text: 'Laboratory' }],
           code: { text: 'PSA' },
@@ -335,6 +404,7 @@ describe('buildLongitudinalInvestigationContext', () => {
           result: [{ reference: 'Observation/obs-psa-new' }],
         },
         {
+          ...bridgeLabMeta,
           id: 'psa-old',
           category: [{ text: 'Laboratory' }],
           code: { text: 'PSA' },
@@ -400,11 +470,11 @@ describe('buildLongitudinalInvestigationContext', () => {
 
     expect(context).toContain('NOT a single result')
     expect(context).not.toContain('6.7 % (2025-12-09;')
-    expect(context).toContain('HbA1c: 7 % (2026-01-08;')
-    expect(context).toContain('6.8 % (2026-03-10;')
-    expect(context).toContain('6.6 % (2026-06-02;')
-    expect(context).toContain('PSA: 1.32 ng/mL (2025-02-10;')
-    expect(context).toContain('0.64 ng/mL (2026-06-02;')
+    expect(context).toContain('HbA1c: 7 % (2026-01-08; O4)')
+    expect(context).toContain('6.8 % (2026-03-10; O3)')
+    expect(context).toContain('6.6 % (2026-06-02; O1)')
+    expect(context).toContain('PSA: 1.32 ng/mL (2025-02-10; O6)')
+    expect(context).toContain('0.64 ng/mL (2026-06-02; O2)')
     expect(context).toContain('胸腔檢查:')
     expect(context).toContain('2026-05-25;')
     expect(context).toContain('2026-06-02;')

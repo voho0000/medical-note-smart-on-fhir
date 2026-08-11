@@ -56,6 +56,7 @@ import { referenceId } from '@/src/core/utils/observation-selectors'
 import {
   inferGroupFromCategory,
   inferGroupFromDiagnosticReport,
+  isNhiBridgeSyntheticLabReport,
 } from '@/src/shared/utils/report-grouping-helpers'
 import { listClinicalDocuments } from '@/src/core/utils/clinical-documents.utils'
 import { scrubFreeText } from '@/src/shared/utils/pii-text-scrub'
@@ -382,6 +383,12 @@ export function buildSourceCatalog(
 
   sortByDateDesc(input.diagnosticReports ?? [], (r) => r.effectiveDateTime ?? r.issued)
     .forEach((r, i) => {
+      // Health Bank laboratory DiagnosticReports created by NHI-FHIR-Bridge are
+      // UI grouping containers whose `result` points to the actual source
+      // Observations. Indexing both invents a second source for the same evidence.
+      // Keep `i` from the complete sorted list so genuine historical L keys do
+      // not silently retarget to a different report when containers disappear.
+      if (isNhiBridgeSyntheticLabReport(r)) return
       const reportObservations = observationsForReport(r, observationsById)
       entries.push({
         key: `L${i + 1}`,
@@ -726,20 +733,24 @@ function collectLongitudinalLabPoints(
   for (const report of input.diagnosticReports ?? []) {
     if (inferGroupFromCategory(report.category) !== 'lab') continue
     const reportKey = report.id ? sourceByResourceId.get(report.id)?.key : undefined
-    if (!reportKey) continue
     const reportDate = day(report.effectiveDateTime ?? report.issued)
     const observations = observationsForReport(report, byObservationId)
     for (const obs of observations) {
       const value = obsValue(obs)
       const date = obsDate(obs) ?? reportDate
-      if (!value || !date) continue
+      const observationKey = obs.id ? sourceByResourceId.get(obs.id)?.key : undefined
+      const sourceKey = observationKey ?? reportKey
+      if (!value || !date || !sourceKey) continue
       const label = conceptText(obs.code) ?? conceptText(report.code) ?? 'Lab'
       points.push({
         label,
         key: canonicalKey(label),
         date,
         value,
-        sourceKey: reportKey,
+        // A numeric analyte is directly supported by its Observation. The
+        // parent DiagnosticReport is only a fallback for unusual bundles that
+        // did not make the member Observation independently citable.
+        sourceKey,
         abnormal: obs.interpretation?.text ?? obs.interpretation?.coding?.[0]?.code,
       })
     }
@@ -840,8 +851,8 @@ export function buildLongitudinalInvestigationContext(
   if (labLines.length === 0 && imagingLines.length === 0) return ''
 
   const sections = [
-    '## Longitudinal Investigation Evidence (app-derived from selected DiagnosticReports)',
-    `Use this section for the medical-summary "investigations" card. Show at most the latest ${MAX_INVESTIGATION_TREND_POINTS} dated points/reports. If a topic below has 2+ points, it is NOT a single result; use the sequence and cite the shown L keys.`,
+    '## Longitudinal Investigation Evidence (app-derived from selected results and reports)',
+    `Use this section for the medical-summary "investigations" card. Show at most the latest ${MAX_INVESTIGATION_TREND_POINTS} dated points/reports. If a topic below has 2+ points, it is NOT a single result; use the sequence and cite the shown O keys for laboratory values or L keys for report-level findings.`,
   ]
   if (labLines.length > 0) {
     sections.push('### Serial lab values (oldest → newest)', ...labLines)
@@ -994,7 +1005,7 @@ const SHARED_RULES =
   'NEVER call a worsening value 穩定/stable; in patient language prefer calm-but-true phrasing (e.g. 數值逐漸下降，醫師正在追蹤) over false reassurance. ' +
   'For "investigations", create a disease-oriented overview of the 3–6 MOST clinically relevant laboratory, pathology, and imaging topics for THIS patient, not a dump of every test. ' +
   'Choose topics from the active clinical context: for a cancer patient prioritize documented tumor markers, pathology, and serial imaging; for diabetes prioritize HbA1c, renal function/eGFR, and urine albumin when present; adapt similarly for other conditions. ' +
-  `Each item must cite the DiagnosticReport source(s) that contain the stated values/findings. Put at most the latest ${MAX_INVESTIGATION_TREND_POINTS} points/reports in "trend" (include units when present) and a concise patient-specific meaning in "interpretation". ` +
+  `Each laboratory value must cite its matching Observation (O) source when available. Cite a DiagnosticReport (L) only for report-level findings or conclusions, not merely because it contains that Observation. Put at most the latest ${MAX_INVESTIGATION_TREND_POINTS} points/reports in "trend" (include units when present) and a concise patient-specific meaning in "interpretation". ` +
   'Use "direction" for CLINICAL direction, not numeric direction (e.g. falling eGFR is "worsening"). Claim a trend only with at least 2 comparable time points; with one report use "single" and explicitly say it is a single result. ' +
   'If the Longitudinal Investigation Evidence section lists 2+ dated points/reports for a topic, NEVER label that topic "single" and NEVER write "single result" for it; summarize the serial pattern instead. ' +
   'Never infer stability from one value, never invent a test that is absent, never mix non-comparable units/methods into one sequence, and do not repeat routine normal tests unless they materially answer an active problem. ' +

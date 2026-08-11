@@ -2,9 +2,14 @@ import {
   DEMO_MEDICAL_SUMMARY_GENERATION,
   DEMO_SAFETY_SCAN_GENERATION,
   demoMedicalSummarySnapshots,
+  demoSafetyScanSnapshots,
   getDemoClinicalInsightSnapshot,
 } from '@/src/infrastructure/demo/demo-ai-snapshots'
-import { generateMedicalSummaryUseCase } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import {
+  buildSourceCatalog,
+  generateMedicalSummaryUseCase,
+} from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
+import { LocalBundleService } from '@/src/infrastructure/fhir/services/local-bundle.service'
 
 describe('demo clinical-insight snapshots', () => {
   it('selects the bundled snapshot without consulting a retained model preference', () => {
@@ -43,5 +48,32 @@ describe('demo medical-summary snapshots', () => {
 
   it.each(['medical', 'patient'] as const)('does not restore the retired %s decisions card', (audience) => {
     expect(demoMedicalSummarySnapshots[audience].decisions).toEqual([])
+  })
+
+  it('resolves every bundled summary and safety citation against the current demo source catalog', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bundle = require('../../../public/demo/demo-bundle.json')
+    const parsedData = LocalBundleService.parse(bundle)
+    expect(parsedData).not.toBeNull()
+    const catalog = buildSourceCatalog(parsedData!.collection)
+    const catalogKeys = new Set(catalog.map((source) => source.key))
+
+    for (const audience of ['medical', 'patient'] as const) {
+      const parsedSummary = generateMedicalSummaryUseCase.parseResult(
+        JSON.stringify(demoMedicalSummarySnapshots[audience]),
+      )
+      expect(parsedSummary).not.toBeNull()
+      const finalized = generateMedicalSummaryUseCase.finalizeResult(parsedSummary!, catalog, {
+        clinicalData: parsedData!.collection,
+        audience,
+        locale: 'zh-TW',
+      })
+      expect(finalized.sourceIndex.filter((source) => !source.verified)).toEqual([])
+      expect(finalized.droppedTimelineCount).toBe(0)
+
+      for (const alert of demoSafetyScanSnapshots[audience].alerts) {
+        expect((alert.sources ?? []).filter((key) => !catalogKeys.has(key))).toEqual([])
+      }
+    }
   })
 })
