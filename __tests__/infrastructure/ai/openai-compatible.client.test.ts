@@ -118,7 +118,7 @@ const finalTextStream = (content: string) => sseResponse([
   },
 ])
 
-function agentRoundTripFetch(finalText?: string) {
+function agentRoundTripFetch(finalText?: string | ((nonce: string) => string)) {
   return jest.fn(async (
     _input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -129,7 +129,10 @@ function agentRoundTripFetch(finalText?: string) {
     const toolMessage = body.messages?.find((message) => message.role === 'tool')
     if (!toolMessage) return firstToolCallStream()
     const nonce = JSON.parse(String(toolMessage.content)).data.nonce as string
-    return finalTextStream(finalText ?? nonce)
+    const responseText = typeof finalText === 'function'
+      ? finalText(nonce)
+      : finalText ?? nonce
+    return finalTextStream(responseText)
   }) as jest.MockedFunction<typeof fetch>
 }
 
@@ -533,8 +536,11 @@ describe('OpenAI-compatible browser client', () => {
     // no clinical resource payload is present because the production tool
     // factory is bound to a null patient/collection above.
     expect(firstRequest.messages).toHaveLength(2)
-    expect(secondRequest.tools).toBeUndefined()
-    expect(secondRequest.tool_choice).toBeUndefined()
+    expect(secondRequest.tools).toHaveLength(productionToolNames.length)
+    expect(secondRequest.tools.map((entry: { function: { name: string } }) => (
+      entry.function.name
+    )).sort()).toEqual(productionToolNames)
+    expect(secondRequest.tool_choice).toBe('none')
     expect(secondRequest.messages.slice(-2)).toEqual([
       expect.objectContaining({
         role: 'assistant',
@@ -713,6 +719,20 @@ describe('OpenAI-compatible browser client', () => {
         status: 'inconclusive',
         reason: expect.stringContaining('nonce'),
       })
+  })
+
+  it.each([
+    ['quotes', (nonce: string) => `"${nonce}"`],
+    ['Markdown', (nonce: string) => `\`${nonce}\``],
+    ['a short explanatory prefix', (nonce: string) => `The nonce is ${nonce}`],
+  ])('accepts a nonce wrapped in %s after a valid tool round-trip', async (
+    _label,
+    responseText,
+  ) => {
+    const fetchImpl = agentRoundTripFetch(responseText)
+
+    await expect(testOpenAiCompatibleAgentCapability(profile, { fetchImpl }))
+      .resolves.toEqual({ status: 'verified' })
   })
 
   it.each([

@@ -514,7 +514,8 @@ function agentCapabilityProbeNonce(): string {
  * and asks the model to return that nonce. A verified result therefore proves
  * that the endpoint accepts the real schemas as well as streamed tool-call
  * parsing, local execution, assistant/tool message round-tripping, and post-tool
- * streamed text. No patient record is read or included in either request.
+ * streamed text containing the nonce. No patient record is read or included in
+ * either request.
  */
 export async function testOpenAiCompatibleAgentCapability(
   config: OpenAiCompatibleConfig,
@@ -606,7 +607,10 @@ export async function testOpenAiCompatibleAgentCapability(
           toolChoice: { type: 'tool', toolName: AGENT_CAPABILITY_PROBE_TOOL },
         }
         : {
-          activeTools: [],
+          // Keep the tool schemas in the post-tool request. OpenRouter requires
+          // them alongside tool-result history, and retaining them also keeps
+          // tool-aware provider routing consistent across both probe steps.
+          // toolChoice prevents the model from starting another tool call.
           toolChoice: 'none',
         },
     })
@@ -648,10 +652,14 @@ export async function testOpenAiCompatibleAgentCapability(
         reason: 'Endpoint produced no streamed final text after the tool result',
       }
     }
-    if (finalText.trim() !== nonce) {
+    // The nonce is synthetic and appears only in the local tool result, so its
+    // presence proves that the model consumed the result. Do not require the
+    // entire response to equal it: otherwise harmless quotes, Markdown, or a
+    // short explanatory prefix create false negatives for capable models.
+    if (!finalText.includes(nonce)) {
       return {
         status: 'inconclusive',
-        reason: 'Tool round-trip completed, but the model did not return the requested probe nonce exactly',
+        reason: 'Tool round-trip completed, but the model response did not contain the requested probe nonce',
       }
     }
     return { status: 'verified' }
