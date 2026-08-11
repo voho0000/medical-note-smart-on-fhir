@@ -400,7 +400,11 @@ export function OpenAiCompatibleSettings({
     }
     const normalizedModelId = modelId.trim()
     if (!normalizedModelId) throw new Error(t.settings.openAiCompatibleModelRequired)
-    const normalizedContextWindow = Number(contextWindowTokens.replace(/,/g, '').trim())
+    const contextWindowDraft = contextWindowTokens.replace(/,/g, '').trim()
+    const contextWindowWasCleared = contextWindowDraft.length === 0
+    const normalizedContextWindow = contextWindowWasCleared
+      ? suggestedOpenAiCompatibleContextWindow(normalizedModelId)
+      : Number(contextWindowDraft)
     if (
       !Number.isInteger(normalizedContextWindow) ||
       normalizedContextWindow < MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW ||
@@ -418,7 +422,7 @@ export function OpenAiCompatibleSettings({
       apiKey: apiKey.trim() || null,
       transport: normalizedTransport,
       contextWindowTokens: normalizedContextWindow,
-      contextWindowSource,
+      contextWindowSource: contextWindowWasCleared ? 'suggested' : contextWindowSource,
       agentMode,
       agentCapability,
       agentCapabilityTestedAt,
@@ -1001,9 +1005,11 @@ export function OpenAiCompatibleSettings({
                   step={1024}
                   value={contextWindowTokens}
                   onChange={(event) => {
-                    setContextWindowTokens(event.target.value)
-                    setContextWindowSource('manual')
+                    const nextValue = event.target.value
+                    setContextWindowTokens(nextValue)
+                    setContextWindowSource(nextValue.trim() ? 'manual' : 'suggested')
                   }}
+                  placeholder={String(suggestedOpenAiCompatibleContextWindow(modelId))}
                   inputMode="numeric"
                   disabled={busy}
                   className={COMPACT_INPUT_CLASS}

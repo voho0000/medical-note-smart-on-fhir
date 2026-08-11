@@ -57,7 +57,7 @@ export const LEGACY_OPENAI_COMPATIBLE_PROFILE_ID = 'legacy'
 /** Safe starting point for a newly added local/custom model. Model size alone
  * does not determine context length; endpoint metadata and explicit user input
  * still take precedence over this fallback. */
-export const DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 32768
+export const DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 262144
 export const MIN_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 1024
 export const MAX_OPENAI_COMPATIBLE_CONTEXT_WINDOW = 2_000_000
 

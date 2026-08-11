@@ -110,9 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const handleRedirect = async () => {
       try {
-        // 不 log URL（redirect 期間可能含 auth code）與 email/UID — 共用工作站的 console 會留存
-        await setPersistence(firebaseAuth, browserLocalPersistence)
-
+        // 不 log URL（redirect 期間可能含 auth code）與 email/UID — 共用工作站的 console 會留存。
+        // Persistence is selected synchronously in firebase.config.ts; changing
+        // it again here would create a second storage write during page startup.
         const result = await getRedirectResult(firebaseAuth)
         if (result) {
           // User successfully signed in via redirect

@@ -121,6 +121,7 @@ export function useMedicalSummaryOrchestrator() {
     isGenerating: isSummaryGenerating,
     error: summaryError,
     issue: summaryIssue,
+    contextAdaptation,
     hasPatient,
     dataReady,
     scopeKey,
@@ -1099,6 +1100,7 @@ export function useMedicalSummaryOrchestrator() {
     summaryIssue: presentedSummaryIssue,
     safetyIssue: presentedSafetyIssue,
     contextOverflowIssue,
+    contextAdaptation,
     hasAnyResult: Boolean(presentedResult || presentedSafetyResult),
     hasCompleteResult: Boolean(
       presentedResult &&

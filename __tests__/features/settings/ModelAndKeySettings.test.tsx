@@ -360,7 +360,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     expect(screen.queryByText('尚未設定端點')).not.toBeInTheDocument()
   })
 
-  it('starts a new endpoint at 32,768 and applies known model suggestions until edited', () => {
+  it('starts a new endpoint at 262,144 and applies known model suggestions until edited', () => {
     useAiConfigStore.setState({
       openAiCompatibleProfiles: [],
       openAiCompatible: {
@@ -377,7 +377,7 @@ describe('ModelAndKeySettings progressive disclosure', () => {
     const contextInput = screen.getByRole('spinbutton', {
       name: '內容視窗（tokens）',
     })
-    expect(contextInput).toHaveValue(32768)
+    expect(contextInput).toHaveValue(262144)
 
     fireEvent.change(screen.getByRole('combobox', { name: '上游模型 ID' }), {
       target: { value: 'qwen2.5vl:7b' },
@@ -1077,6 +1077,42 @@ describe('ModelAndKeySettings progressive disclosure', () => {
         }],
       })
     expect(sessionStorage.getItem('openai_compatible_config')).toBeNull()
+  })
+
+  it('restores the system suggestion when a manual context window is cleared and saved', async () => {
+    const manualConfig = {
+      ...useAiConfigStore.getState().openAiCompatible,
+      baseUrl: 'https://llm.intra.example/v1',
+      modelId: 'hospital-model',
+      contextWindowTokens: 65536,
+      contextWindowSource: 'manual' as const,
+    }
+    useAiConfigStore.setState({
+      openAiCompatibleProfiles: [{ profileId: 'legacy', ...manualConfig }],
+      openAiCompatible: manualConfig,
+    })
+    renderSettings(true)
+
+    fireEvent.click(screen.getByRole('button', { name: /自訂 AI 端點/ }))
+    const contextInput = screen.getByRole('spinbutton', {
+      name: '內容視窗（tokens）',
+    })
+    fireEvent.change(contextInput, { target: { value: '' } })
+
+    expect(contextInput).toHaveValue(null)
+    expect(contextInput).toHaveAttribute('placeholder', '262144')
+    expect(screen.getByTestId('openai-compatible-context-window-source'))
+      .toHaveTextContent('來源：系統建議')
+
+    fireEvent.click(screen.getByRole('button', { name: '儲存並啟用' }))
+
+    await waitFor(() => {
+      expect(contextInput).toHaveValue(262144)
+      expect(useAiConfigStore.getState().openAiCompatible).toMatchObject({
+        contextWindowTokens: 262144,
+        contextWindowSource: 'suggested',
+      })
+    })
   })
 
   it('saves an accepted auto-detected value with detected provenance', async () => {

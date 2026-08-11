@@ -582,6 +582,53 @@ describe('ai-config.store', () => {
       })
     })
 
+    it('upgrades the previous 32K unknown-model suggestion to the new 262K default', async () => {
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+        version: 2,
+        profiles: [
+          {
+            profileId: 'unknown-model',
+            profile: {
+              enabled: true,
+              baseUrl: 'https://llm.intra.example/v1',
+              modelId: 'hospital-model',
+              transport: 'direct',
+              contextWindowTokens: 32768,
+              contextWindowSource: 'suggested',
+            },
+            encryptedApiKey: null,
+          },
+          {
+            profileId: 'known-qwen',
+            profile: {
+              enabled: true,
+              baseUrl: 'http://127.0.0.1:11434/v1',
+              modelId: 'qwen2.5:7b',
+              transport: 'direct',
+              contextWindowTokens: 32768,
+              contextWindowSource: 'suggested',
+            },
+            encryptedApiKey: null,
+          },
+        ],
+      }))
+
+      await useAiConfigStore.getState().rehydrateFromBrowserStorage()
+
+      expect(useAiConfigStore.getState().openAiCompatibleProfiles).toEqual([
+        expect.objectContaining({
+          profileId: 'unknown-model',
+          contextWindowTokens: 262144,
+          contextWindowSource: 'suggested',
+        }),
+        expect.objectContaining({
+          profileId: 'known-qwen',
+          contextWindowTokens: 32768,
+          contextWindowSource: 'suggested',
+        }),
+      ])
+    })
+
     it('persists manual provenance even when the value equals the model suggestion', async () => {
       await useAiConfigStore.getState().setOpenAiCompatibleConfig({
         enabled: true,

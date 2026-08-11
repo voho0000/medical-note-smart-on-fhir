@@ -21,9 +21,9 @@ import {
 } from '@/src/shared/types/openai-compatible.types'
 
 describe('OpenAI-compatible context-window suggestions', () => {
-  it('uses 32,768 as the safe default for a new unknown model', () => {
-    expect(DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW).toBe(32768)
-    expect(suggestedOpenAiCompatibleContextWindow('hospital-7b')).toBe(32768)
+  it('uses 262,144 as the default for a new unknown model', () => {
+    expect(DEFAULT_OPENAI_COMPATIBLE_CONTEXT_WINDOW).toBe(262144)
+    expect(suggestedOpenAiCompatibleContextWindow('hospital-7b')).toBe(262144)
   })
 
   it.each([

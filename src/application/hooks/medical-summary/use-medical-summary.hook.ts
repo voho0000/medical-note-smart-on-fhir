@@ -58,6 +58,7 @@ import { getUserErrorMessage } from '@/src/core/errors'
 import { isCustomOpenAiModelId } from '@/src/shared/constants/ai-models.constants'
 import { useAiDemographicsGate } from '@/src/application/providers/ai-demographics-gate.provider'
 import { useAiExecutionDiagnosticsStore } from '@/src/application/stores/ai-execution-diagnostics.store'
+import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
 
 export { useSummaryPrefsStore } from '@/src/application/stores/medical-summary-prefs.store'
 
@@ -90,6 +91,8 @@ export interface UseMedicalSummaryReturn {
   isGenerating: boolean
   error: string | null
   issue: ContextOverflowIssue | null
+  /** Temporary scope reduction used to fit the selected model. */
+  contextAdaptation: ClinicalContextAdaptation | null
   hasPatient: boolean
   dataReady: boolean
   /** Model-independent Bundle/patient/audience/locale/input identity used by
@@ -550,6 +553,7 @@ export function useMedicalSummary(): UseMedicalSummaryReturn {
     isGenerating: slot.isAnyRunning,
     error: slot.error,
     issue: slot.issue,
+    contextAdaptation: slot.contextAdaptation,
     hasPatient: slot.hasPatient,
     dataReady: slot.dataReady,
     scopeKey: slot.scopeKey,

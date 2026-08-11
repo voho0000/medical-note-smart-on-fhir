@@ -161,6 +161,7 @@ function arrange({
     isGenerating: summaryGenerating,
     error: summaryError,
     issue: summaryIssue,
+    contextAdaptation: null,
     hasPatient: true,
     dataReady: true,
     scopeKey: summaryScopeKey,

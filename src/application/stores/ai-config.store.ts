@@ -274,6 +274,7 @@ const resetOpenAiCompatibleAgentTrust = <T extends object>(value: T) => ({
 })
 
 const LEGACY_SUGGESTED_CONTEXT_WINDOW = 15000
+const PREVIOUS_DEFAULT_SUGGESTED_CONTEXT_WINDOW = 32768
 
 const normalizeStoredOpenAiCompatibleConfig = (
   value: unknown,
@@ -303,10 +304,12 @@ const normalizeStoredOpenAiCompatibleConfig = (
       baseUrl,
       modelId,
       transport: normalizeOpenAiCompatibleTransport(parsed.transport),
-      // Upgrade only the old automatic fallback. Values that were detected
-      // from an endpoint or entered manually remain untouched.
+      // Upgrade only old automatic fallbacks. Values that were detected from
+      // an endpoint or entered manually remain untouched. Known model-family
+      // suggestions are recalculated, so Qwen 2.5 correctly remains at 32K.
       contextWindowTokens: contextWindowSource === 'suggested' &&
-        normalizedContextWindow === LEGACY_SUGGESTED_CONTEXT_WINDOW
+        (normalizedContextWindow === LEGACY_SUGGESTED_CONTEXT_WINDOW ||
+          normalizedContextWindow === PREVIOUS_DEFAULT_SUGGESTED_CONTEXT_WINDOW)
         ? suggestedOpenAiCompatibleContextWindow(modelId)
         : normalizedContextWindow,
       contextWindowSource,

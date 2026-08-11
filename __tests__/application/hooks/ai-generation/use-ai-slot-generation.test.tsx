@@ -747,6 +747,7 @@ describe('useAiSlotGeneration demo snapshot', () => {
     expect(context.contextAdaptation?.tier).toBe('compact')
     expect(context.contextAdaptation?.adaptedTokens)
       .toBeLessThan(context.contextAdaptation?.originalTokens ?? 0)
+    expect(result.current.contextAdaptation?.tier).toBe('compact')
     expect(result.current.result?.headline).toBe('compact:compact')
   })
 

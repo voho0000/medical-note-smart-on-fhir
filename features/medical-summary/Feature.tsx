@@ -33,6 +33,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { ModelPicker } from "@/src/shared/components/ModelPicker"
+import { InfoHint } from "@/src/shared/components/InfoHint"
 import {
   MODEL_PREF_DEFAULTS,
   useModelPref,
@@ -44,6 +45,7 @@ import {
   openAiCompatibleProfileIdFromModelId,
 } from "@/src/shared/constants/ai-models.constants"
 import { formatApproxTokenCount, type ContextOverflowIssue } from "@/src/shared/utils/context-budget"
+import { formatClinicalContextAdaptationNotice } from "@/src/core/utils/adaptive-clinical-context.utils"
 import { CurrentPrioritiesCard } from "./components/CurrentPrioritiesCard"
 import { DecisionList } from "./components/DecisionList"
 import { InvestigationTrendsCard } from "./components/InvestigationTrendsCard"
@@ -199,6 +201,7 @@ export default function MedicalSummaryFeature() {
     summaryModuleErrors,
     safetyError,
     contextOverflowIssue,
+    contextAdaptation,
     hasAnyResult,
     hasCompleteResult,
     resolveSafetySource,
@@ -845,6 +848,21 @@ export default function MedicalSummaryFeature() {
               compact
             />
           )}
+          {activeView === "standard" && contextAdaptation ? (
+            <InfoHint
+              aria-label={ms.adaptedScopeLabel}
+              side="bottom"
+              className="h-7 shrink-0 gap-1 rounded-md border border-violet-300 bg-violet-50 px-1.5 text-violet-700 hover:bg-violet-100 hover:text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300 dark:hover:bg-violet-950/70 dark:hover:text-violet-100"
+              contentClassName="max-w-[min(90vw,24rem)] text-left leading-relaxed"
+              label={(
+                <span className="hidden text-[0.6875rem] font-medium @min-[44rem]:inline">
+                  {ms.adaptedScopeLabel}
+                </span>
+              )}
+            >
+              {formatClinicalContextAdaptationNotice(contextAdaptation, locale)}
+            </InfoHint>
+          ) : null}
           {activeView === "standard" ? (
             hasPatient && dataReady ? (
               <SummaryGenerationButton

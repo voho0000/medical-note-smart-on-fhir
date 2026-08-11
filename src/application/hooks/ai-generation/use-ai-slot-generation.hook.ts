@@ -24,7 +24,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import { useUnifiedAi } from '@/src/application/hooks/ai/use-unified-ai.hook'
 import { isVghtpeMedcloudLaunchUrl } from '@/src/application/launch/medcloud-launch-context'
 import { useAllApiKeys } from '@/src/application/stores/ai-config.store'
@@ -64,10 +63,7 @@ import {
   modelDisplayLabel,
   modelRuntimeIdentity,
 } from '@/src/shared/utils/model-access.utils'
-import {
-  formatClinicalContextAdaptationNotice,
-  type ClinicalContextAdaptation,
-} from '@/src/core/utils/adaptive-clinical-context.utils'
+import type { ClinicalContextAdaptation } from '@/src/core/utils/adaptive-clinical-context.utils'
 
 /** Everything a feature's stream+parse producer gets from the engine. */
 export interface AiSlotRunContext {
@@ -172,6 +168,10 @@ export interface AiSlotGenerationReturn<T> {
   error: string | null
   issue: AiGenerationIssue | null
   contextLimit: number
+  /** Model-aware transient reduction currently applied to this input. Exposed
+   *  so the feature can explain it beside the model picker without an
+   *  interrupting toast. */
+  contextAdaptation: ClinicalContextAdaptation | null
   /** True once this exact cache slot was restored, or when an opted-in feature
    *  can keep a completed result for the same clinical input visible. */
   isHydrated: boolean
@@ -457,14 +457,6 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     if (!slotKey) return
     if (requireDataReadyToGenerate && !dataReady) return
     if (store.getState().running[slotKey]) return
-    if (contextAdaptation) {
-      toast.info(
-        formatClinicalContextAdaptationNotice(contextAdaptation, locale),
-        {
-          id: `clinical-context-fit:${inputSignature}:${contextAdaptation.contextLimit}:${contextAdaptation.tier}`,
-        },
-      )
-    }
     const cancellationEpoch = cancellationEpochsRef.current.get(slotKey) ?? 0
     const generatedResult = await runGenerationJob({
       store,
@@ -501,7 +493,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
         result: generatedResult,
       })
     }
-  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId, inputSignature])
+  }, [slotKey, requireDataReadyToGenerate, dataReady, contextAdaptation, store, cacheKeyFor, run, clinicalContext, piiLiterals, scopedClinicalData, catalog, locale, audience, ai, resolvedModelId, resolvedModelName, resolvedContextLimit, allowResultRetention, resultScope, runtimeModelId])
 
   const cancel = useCallback((targetSlotKey: string = slotKey) => {
     // Invalidate first: a provider may resolve with buffered text before its
@@ -693,6 +685,7 @@ export function useAiSlotGeneration<T>(config: AiSlotGenerationConfig<T>): AiSlo
     error,
     issue,
     contextLimit: resolvedContextLimit,
+    contextAdaptation,
     isHydrated: !slotKey || hydrated === slotKey || retainedResult !== null,
     generate,
     cancel,

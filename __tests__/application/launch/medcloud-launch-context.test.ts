@@ -95,6 +95,8 @@ describe('medcloud launch context', () => {
       modelId: VGTPE_TVGHBRAIN_MODEL_ID,
       apiKey: 'extension-secret',
       transport: 'direct',
+      contextWindowTokens: 262144,
+      contextWindowSource: 'suggested',
       agentMode: 'auto',
       agentCapability: 'unknown',
     })

@@ -1,6 +1,14 @@
 // Firebase Configuration
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth'
+import {
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+  browserSessionPersistence,
+  connectAuthEmulator,
+  getAuth,
+  initializeAuth,
+  type Auth,
+} from 'firebase/auth'
 import {
   initializeFirestore,
   getFirestore,
@@ -39,7 +47,24 @@ if (typeof window !== 'undefined' && !ENV_CONFIG.offlineMode) {
     app = getApps()[0]
   }
   
-  auth = getAuth(app)
+  // Firebase's getAuth() prefers IndexedDB persistence. Since Firebase Auth
+  // 1.13.4, hiding a tab closes that database immediately; an initialization
+  // write still in flight can then reject with "Database is closing/hidden"
+  // and surface as an unhandled runtime error. We already want durable browser
+  // sign-in, so choose localStorage explicitly (sessionStorage is the fallback)
+  // and avoid the IndexedDB page-visibility race altogether.
+  try {
+    auth = initializeAuth(app, {
+      persistence: [browserLocalPersistence, browserSessionPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    })
+  } catch (error) {
+    // Fast Refresh can re-evaluate this module after Auth was initialized with
+    // the same Firebase app. Reuse that instance; a full reload will apply the
+    // explicit non-IndexedDB persistence list above.
+    if ((error as { code?: string })?.code !== 'auth/already-initialized') throw error
+    auth = getAuth(app)
+  }
   
   // Set language to user's preferred language
   auth.languageCode = 'zh-TW'
