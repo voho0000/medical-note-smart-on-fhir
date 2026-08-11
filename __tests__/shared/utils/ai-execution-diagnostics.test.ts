@@ -37,7 +37,7 @@ describe('AI execution diagnostics', () => {
       '2026-08-05T02:51:53.866Z',
       'zh-TW',
       'Asia/Taipei',
-    )).toMatch(/^2026\/08\/05 10:51:53 \[?GMT\+08:00\]? \(Asia\/Taipei\)$/)
+    )).toMatch(/^2026\/08\/05\s+10:51:53\s+\[?GMT\+08:00\]?\s+\(Asia\/Taipei\)$/u)
   })
 
   it('exports explicit UTC and local timestamps instead of an ambiguous time field', () => {

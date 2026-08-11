@@ -16,8 +16,8 @@ test.describe('AI chat agent-only UI', () => {
     await expect(panel.getByTestId('chat-template-gallery')).toBeVisible()
     await expect(panel.getByTestId('chat-template-manage')).toBeVisible()
     await expect(panel.getByTestId('chat-ai-settings')).toHaveCount(0)
-    await expect(panel.getByText('直接提問即可，Frontier 模型會自行判斷是否查詢病歷或最新文獻')).toBeVisible()
-    await expect(panel.getByText('一般問題可直接回答；需要病人資料或最新來源時，模型會選擇相應工具。也可切換為「不使用病人資料」。')).toBeVisible()
+    await expect(panel.getByText('AI 會依問題判斷是否需要查詢病歷或最新醫學文獻')).toBeVisible()
+    await expect(panel.getByText('需要病人資料或最新來源時，模型會自動選擇相應工具。不希望使用病歷時，可開啟「不讀病歷」。')).toBeVisible()
     await expect(panel.getByRole('button', { name: '傳送' })).toBeVisible()
   })
 
