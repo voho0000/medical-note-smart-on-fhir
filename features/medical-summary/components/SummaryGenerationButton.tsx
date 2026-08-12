@@ -24,16 +24,19 @@ interface SummaryGenerationButtonProps {
 export function getSummaryGenerationActivityState({
   isBusy,
   hasContextOverflow,
-  hasCompleteResult = false,
+  hasAnyResult = false,
 }: {
   isBusy: boolean
   hasContextOverflow: boolean
-  hasCompleteResult?: boolean
+  /** A validated partial card is already presentable. Keep the blocking loader
+   * only until that first card arrives; remaining cards may stream or retry
+   * without hiding successful work. */
+  hasAnyResult?: boolean
 }) {
   const actionBusy = isBusy && !hasContextOverflow
   return {
     actionBusy,
-    showBlockingLoader: actionBusy && !hasCompleteResult,
+    showBlockingLoader: actionBusy && !hasAnyResult,
     showGenerationErrors: !isBusy || hasContextOverflow,
   }
 }

@@ -11,6 +11,10 @@ import {
   normaliseSummarySourceKey,
 } from '@/src/core/use-cases/medical-summary/generate-medical-summary.use-case'
 import type { MedicationEntity } from '@/src/core/entities/clinical-data.entity'
+import {
+  MEDICAL_SUMMARY_CARD_REGISTRY,
+  registeredMedicalSummaryCards,
+} from '@/src/core/use-cases/medical-summary/medical-summary-card-registry'
 
 const useCase = new GenerateMedicalSummaryUseCase()
 
@@ -671,6 +675,87 @@ describe('modular summary generation contract', () => {
     expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
   })
 
+  it('builds one batch from the six registered cards with Safety last', () => {
+    const cards = registeredMedicalSummaryCards(input)
+    const messages = useCase.buildRegisteredCardBatchMessages(
+      input,
+      cards.map((card) => card.buildBatchInstruction(input)),
+    )
+    const prompt = messages[0].content
+
+    expect(cards.map((card) => card.id)).toEqual([
+      'priorities',
+      'problems',
+      'timeline',
+      'investigations',
+      'medications',
+      'safety',
+    ])
+    expect(prompt).toContain('Generate all 6 registered cards')
+    expect(prompt).not.toContain('Output ONLY a JSON object matching this schema')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+    expect(prompt).toContain('<<<END_MEDIPRISMA_MODULE:safety>>>')
+    expect(prompt.indexOf('<<<MEDIPRISMA_MODULE:safety>>>'))
+      .toBeGreaterThan(prompt.indexOf('<<<END_MEDIPRISMA_MODULE:medications>>>'))
+    expect(messages[1].content.match(/Patient clinical data:/g)).toHaveLength(1)
+  })
+
+  it('puts the compact priorities card first for a local endpoint', () => {
+    const cards = registeredMedicalSummaryCards({
+      ...input,
+      harnessProfile: 'local-small',
+    })
+
+    expect(cards.map((card) => card.id)).toEqual([
+      'priorities',
+      'medications',
+      'problems',
+      'timeline',
+      'investigations',
+      'safety',
+    ])
+  })
+
+  it('supports removing a card without adding an orchestration branch', () => {
+    const cards = registeredMedicalSummaryCards(input, [
+      'priorities',
+      'problems',
+      'timeline',
+      'investigations',
+      'medications',
+    ])
+    const messages = useCase.buildRegisteredCardBatchMessages(
+      input,
+      cards.map((card) => card.buildBatchInstruction(input)),
+    )
+    const prompt = messages[0].content
+
+    expect(MEDICAL_SUMMARY_CARD_REGISTRY.safety.id).toBe('safety')
+    expect(prompt).toContain('Generate all 5 registered cards')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+  })
+
+  it('builds one retry batch containing only the failed registered cards', () => {
+    const cards = registeredMedicalSummaryCards(input, [
+      'problems',
+      'timeline',
+      'investigations',
+    ])
+    const messages = useCase.buildRegisteredCardBatchMessages(
+      input,
+      cards.map((card) => card.buildBatchInstruction(input)),
+    )
+    const prompt = messages[0].content
+
+    expect(prompt).toContain('Generate all 3 registered cards')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:problems>>>')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:timeline>>>')
+    expect(prompt).toContain('<<<MEDIPRISMA_MODULE:investigations>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:priorities>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:medications>>>')
+    expect(prompt).not.toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+  })
+
   it('can build a smaller requested-module batch for local-model A/B evaluation', () => {
     const messages = useCase.buildBatchModuleMessages(input, [
       'medications',
@@ -832,6 +917,20 @@ describe('modular summary generation contract', () => {
 
     expect(useCase.parseBatchModuleResult('medications', reply)?.medicationReview.changes)
       .toEqual([])
+  })
+
+  it('does not treat a parseable streaming block as complete before its closing marker', () => {
+    const openBlock = [
+      '<<<MEDIPRISMA_MODULE:problems>>>',
+      JSON.stringify({ problems: [] }),
+    ].join('\n')
+
+    expect(useCase.parseBatchModuleResult('problems', openBlock)?.problems).toEqual([])
+    expect(useCase.hasCompleteBatchModuleBlock('problems', openBlock)).toBe(false)
+    expect(useCase.hasCompleteBatchModuleBlock(
+      'problems',
+      `${openBlock}\n<<<END_MEDIPRISMA_MODULE:problems>>>`,
+    )).toBe(true)
   })
 
   it('repairs harmless citation formatting and reports only truly unknown keys', () => {

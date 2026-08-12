@@ -1221,14 +1221,14 @@ const BATCH_OUTPUT_INSTRUCTION = (
   omissionInstruction +
   'Use empty arrays or optional omissions allowed by that module schema instead of explanatory prose.\n\n' +
   orderedModuleIds.map((moduleId) =>
-    `${moduleBlockStart(moduleId)}\n${medicationAudienceOverride(moduleId, audience)}${moduleSchemaHint(moduleId, audience)}\n${moduleBlockEnd(moduleId)}`,
-  ).join('\n\n')
+      `${moduleBlockStart(moduleId)}\n${medicationAudienceOverride(moduleId, audience)}${moduleSchemaHint(moduleId, audience)}\n${moduleBlockEnd(moduleId)}`,
+    ).join('\n\n')
 }
 
 const SYSTEM_MEDICAL_PREFIX =
   'You are preparing a structured cross-hospital patient summary for a physician who is seeing this patient ' +
   'without knowing their history at other facilities. Precise clinical language; cite actual values and trends. ' +
-  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the separate safety analysis. ' +
+  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the Safety module in this same batch. ' +
   'Return "medicationEducation" as an empty array; this benefit-first education card is patient-facing. ' +
   'Populate "medicationReview" as a concise clinician medication-reconciliation overview.'
 
@@ -1241,7 +1241,7 @@ const SYSTEM_PATIENT_PREFIX =
   'stay calm, matter-of-fact and reassuring; avoid frightening or worst-case phrasing, and do NOT tie a past scary event ' +
   '(confusion, a fall, a hospital visit) to a current medicine as cause-and-effect — frame anything to review as a routine ' +
   'check with the doctor, not a danger. ' +
-  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the separate safety analysis. ' +
+  'Return "decisions" as an empty array. Follow-up and safety actions are handled by the Safety module in this same batch. ' +
   'Populate "medicationEducation" as benefit-first, reassuring medication education ' +
   'grounded in the patient\'s medication records. ' +
   'Return "medicationReview" with empty regimen, changes, and reconciliation arrays.'
@@ -1718,6 +1718,37 @@ export class GenerateMedicalSummaryUseCase {
     )
   }
 
+  buildBatchCardInstruction(
+    input: GenerateMedicalSummaryInput,
+    moduleId: MedicalSummaryModuleId,
+  ): string {
+    return `${moduleBlockStart(moduleId)}\n${medicationAudienceOverride(moduleId, input.audience)}${moduleSchemaHint(moduleId, input.audience)}\n${moduleBlockEnd(moduleId)}`
+  }
+
+  /** Build a transport-agnostic batch from the registered card definitions.
+   * Adding/removing/reordering a card is therefore a registry concern rather
+   * than a new orchestration branch. */
+  buildRegisteredCardBatchMessages(
+    input: GenerateMedicalSummaryInput,
+    cardInstructions: readonly string[],
+  ): AiMessage[] {
+    if (cardInstructions.length === 0) {
+      throw new Error('At least one medical summary card is required')
+    }
+    const outputInstruction = '\n\nBATCH CARD OUTPUT CONTRACT: ' +
+      `Generate all ${cardInstructions.length} registered cards in the exact order shown below. ` +
+      'Each card is an independent JSON object enclosed by its exact start and end markers. ' +
+      'The markers are the only permitted non-JSON output text. Do NOT wrap the cards in one outer object or array, ' +
+      'do NOT use markdown fences, and do NOT omit later cards if an earlier card is uncertain. ' +
+      'Use empty arrays or optional omissions allowed by each card schema instead of explanatory prose.\n\n' +
+      cardInstructions.join('\n\n')
+    return this.buildMessagesForOutput(
+      input,
+      outputInstruction,
+      MEDICAL_SUMMARY_MODULE_IDS,
+    )
+  }
+
   /**
    * Parse the model's reply, or null if it isn't valid JSON for the schema.
    * Failures log a truncated head of the raw reply — Flash-Lite occasionally
@@ -1813,6 +1844,18 @@ export class GenerateMedicalSummaryUseCase {
   ): string[] {
     const known = new Set(catalog.map((entry) => normaliseSummarySourceKey(entry.key)))
     return [...new Set(collectClaimedSourceKeys(value).filter((key) => !known.has(key)))]
+  }
+
+  /** Streaming callers must publish a card only after its exact closing
+   * marker has arrived. parseBatchModuleResult deliberately salvages a final
+   * block whose marker was truncated, but that EOF fallback is unsafe while
+   * the response is still growing. */
+  hasCompleteBatchModuleBlock(
+    moduleId: MedicalSummaryModuleId,
+    text: string,
+  ): boolean {
+    const startIndex = text.indexOf(moduleBlockStart(moduleId))
+    return startIndex >= 0 && text.indexOf(moduleBlockEnd(moduleId), startIndex) >= 0
   }
 
   /** Extract and validate one independently delimited card from the shared

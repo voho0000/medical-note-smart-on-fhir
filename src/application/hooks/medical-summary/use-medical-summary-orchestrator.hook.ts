@@ -1,6 +1,5 @@
-// Medical Summary orchestration layer. The structured summary and safety scan
-// remain independently validated AI pipelines, but the product exposes one
-// generation lifecycle, one model/auto preference, and one restore state.
+// Medical Summary orchestration layer. All registered cards, including Safety,
+// share one generation lifecycle, result artifact, model slot, and cache.
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -37,10 +36,10 @@ function monotonicNow() {
   return globalThis.performance?.now?.() ?? Date.now()
 }
 
-function hasSummaryModuleErrors(result?: MedicalSummaryResult) {
+function hasCardErrors(result?: MedicalSummaryResult) {
   return Boolean(
-    result?.moduleErrors &&
-    Object.values(result.moduleErrors).some(Boolean),
+    result?.cardErrors &&
+    Object.values(result.cardErrors).some(Boolean),
   )
 }
 
@@ -109,11 +108,15 @@ interface CancelledBaseline {
 
 type GenerationPipeline = {
   kind: 'summary' | 'safety'
+  /** The summary runner normally owns the shared six-card transport and also
+   * publishes the Safety block into Safety's independent result store. */
+  includesSafety?: boolean
   run: () => Promise<void>
 }
 
 export function useMedicalSummaryOrchestrator() {
   const { requestDemographicsForAi } = useAiDemographicsGate()
+  const summary = useMedicalSummary()
   const {
     result,
     resultOwnerRuntimeId: summaryResultOwnerRuntimeId,
@@ -138,8 +141,7 @@ export function useMedicalSummaryOrchestrator() {
     generate: generateSummary,
     retryFailedModules: retryFailedSummaryModules,
     cancel: cancelSummary,
-    restoreGenerationSlot: restoreSummaryGenerationSlot,
-  } = useMedicalSummary()
+  } = summary
   const {
     result: safetyResult,
     resultOwnerRuntimeId: safetyResultOwnerRuntimeId,
@@ -154,11 +156,9 @@ export function useMedicalSummaryOrchestrator() {
     setAutoScan,
     model: safetyModel,
     setModel: setSafetyModel,
-    scan: generateSafety,
     cancel: cancelSafety,
-    restoreGenerationSlot: restoreSafetyGenerationSlot,
     resolveSource: resolveSafetySource,
-  } = useSafetyAlerts()
+  } = useSafetyAlerts(summary)
   const currentModelPair = useMemo<PresentedModelPair | null>(() => {
     if (
       !result ||
@@ -361,9 +361,9 @@ export function useMedicalSummaryOrchestrator() {
           ),
         }
       : null
-    // Keep the last complete briefing visible throughout a refresh. New
-    // summary/safety responses publish together when the batch settles, so the
-    // page never mixes one newly generated half with one stale half.
+    // Capture the visible briefing at refresh start. Each validated pipeline
+    // replaces its own half progressively; unfinished or failed pipelines keep
+    // their baseline content instead of flashing empty state.
     const matchingCancelledBaseline =
       cancelledBaseline?.scopeKey === scopeKey &&
       cancelledBaseline.summarySlotKey === summaryGenerationSlotKey &&
@@ -409,12 +409,16 @@ export function useMedicalSummaryOrchestrator() {
 
   const markManualPipelineStarted = useCallback((
     batchId: string,
-    kind: GenerationPipeline['kind'],
+    job: Pick<GenerationPipeline, 'kind' | 'includesSafety'>,
   ) => {
     const current = activeBatchRef.current
     if (!current || current.id !== batchId) return
-    const next: ActiveGenerationBatch = kind === 'summary'
-      ? { ...current, summaryStarted: true }
+    const next: ActiveGenerationBatch = job.kind === 'summary'
+      ? {
+          ...current,
+          summaryStarted: true,
+          safetyStarted: current.safetyStarted || Boolean(job.includesSafety),
+        }
       : { ...current, safetyStarted: true }
     activeBatchRef.current = next
     setActiveBatch(next)
@@ -424,7 +428,7 @@ export function useMedicalSummaryOrchestrator() {
     const batchScopeKey = scopeKey
     const batchId = beginBatch({
       summary: jobs.some((job) => job.kind === 'summary'),
-      safety: jobs.some((job) => job.kind === 'safety'),
+      safety: jobs.some((job) => job.kind === 'safety' || job.includesSafety),
     })
     manualBatchIdsRef.current.add(batchId)
     setManualBatchCounts((current) => ({
@@ -439,7 +443,7 @@ export function useMedicalSummaryOrchestrator() {
             // The local path is intentionally sequential, so an expected safety
             // slot may contain stale state for a long time before its new job
             // really begins. Mark ownership at the exact invocation boundary.
-            markManualPipelineStarted(batchId, job.kind)
+            markManualPipelineStarted(batchId, job)
             await job.run()
           },
         })),
@@ -465,11 +469,9 @@ export function useMedicalSummaryOrchestrator() {
   const generate = useCallback(async () => {
     if (!await requestDemographicsForAi()) return
     await runManualBatch([
-      { kind: 'summary', run: generateSummary },
-      { kind: 'safety', run: generateSafety },
+      { kind: 'summary', includesSafety: true, run: generateSummary },
     ])
   }, [
-    generateSafety,
     generateSummary,
     requestDemographicsForAi,
     runManualBatch,
@@ -491,41 +493,13 @@ export function useMedicalSummaryOrchestrator() {
     if (current.expectsSummary) cancelSummary(current.summarySlotKey)
     if (current.expectsSafety) cancelSafety(current.safetySlotKey)
 
-    // A local sequential batch may have committed summary before safety began.
-    // Restore that exact slot (and its encrypted cache) immediately; the
-    // cancelled-baseline presentation below covers retained-model state until
-    // the next complete batch succeeds.
-    if (
-      current.expectsSummary &&
-      !Object.is(
-        readSummaryGenerationSlot(current.summarySlotKey).result,
-        current.summaryPreviousResult,
-      )
-    ) {
-      restoreSummaryGenerationSlot(
-        current.summarySlotKey,
-        current.summaryPreviousResult,
-      )
-    }
-    if (
-      current.expectsSafety &&
-      !Object.is(
-        readSafetyGenerationSlot(current.safetySlotKey).result,
-        current.safetyPreviousResult,
-      )
-    ) {
-      restoreSafetyGenerationSlot(
-        current.safetySlotKey,
-        current.safetyPreviousResult,
-      )
-    }
+    // Completed pipelines are intentionally left in their exact cache slots.
+    // The presentation layer publishes each validated half progressively, so
+    // stopping a later sequential safety request must not discard a summary
+    // that already finished successfully.
   }, [
     cancelSafety,
     cancelSummary,
-    readSafetyGenerationSlot,
-    readSummaryGenerationSlot,
-    restoreSafetyGenerationSlot,
-    restoreSummaryGenerationSlot,
   ])
 
   const cancelGeneration = useCallback(() => {
@@ -637,22 +611,17 @@ export function useMedicalSummaryOrchestrator() {
   // cards and a successful safety scan are not billed twice.
   const retryFailed = useCallback(async () => {
     if (!await requestDemographicsForAi()) return
-    const jobs: GenerationPipeline[] = []
-    if (hasSummaryModuleErrors(result)) {
-      jobs.push({ kind: 'summary', run: retryFailedSummaryModules })
-    } else if (presentedSummaryError || !result) {
-      jobs.push({ kind: 'summary', run: generateSummary })
-    }
-    if (presentedSafetyError || !safetyResult) jobs.push({ kind: 'safety', run: generateSafety })
-    if (jobs.length === 0) {
-      jobs.push(
-        { kind: 'summary', run: generateSummary },
-        { kind: 'safety', run: generateSafety },
-      )
-    }
-    await runManualBatch(jobs)
+    const hasFailedCard = hasCardErrors(result) ||
+      Boolean(presentedSummaryError) ||
+      Boolean(presentedSafetyError) ||
+      !result ||
+      !safetyResult
+    await runManualBatch([{
+      kind: 'summary',
+      includesSafety: true,
+      run: hasFailedCard ? retryFailedSummaryModules : generateSummary,
+    }])
   }, [
-    generateSafety,
     generateSummary,
     presentedSafetyError,
     presentedSummaryError,
@@ -664,13 +633,13 @@ export function useMedicalSummaryOrchestrator() {
   ])
 
   // Keep a manual local-model batch active across the intentional gap between
-  // sequential summary and safety jobs. Otherwise the newly generated summary
-  // could briefly publish beside the previous safety scan.
+  // sequential summary and safety jobs. The completed summary may already be
+  // visible, while the shared lifecycle and timer continue for pending safety.
   const manualBatchRunning = Boolean(manualBatchCounts[scopeKey])
   const presentedActiveBatch = activeBatch?.scopeKey === scopeKey ? activeBatch : null
   // Summary and safety auto-runs are initiated by independently hydrated
-  // hooks. Keep one atomic batch alive across the short false gap where the
-  // first pipeline has settled but the second has not started yet.
+  // hooks. Keep one coordinated batch alive across the short false gap where
+  // the first pipeline has settled but the second has not started yet.
   const awaitingCoordinatedAutoPipeline = Boolean(
     presentedActiveBatch?.coordinatedAuto &&
     !presentedActiveBatch.cancelled &&
@@ -717,7 +686,8 @@ export function useMedicalSummaryOrchestrator() {
 
       if (currentBatch.expectsSummary && !summarySettled && !summarySlot?.isRunning) {
         const hasFreshResult = Boolean(
-          summarySlot?.result && !Object.is(summarySlot.result, batchBaseline.result),
+          summarySlot?.result &&
+          !Object.is(summarySlot.result, currentBatch.summaryPreviousResult),
         )
         if (summaryStarted) {
           if (summarySlot?.error || summarySlot?.issue) {
@@ -727,12 +697,8 @@ export function useMedicalSummaryOrchestrator() {
             summaryOutcomeIssue = summarySlot.issue
           } else if (hasFreshResult) {
             summarySettled = true
-            summarySucceeded = !hasSummaryModuleErrors(summarySlot?.result)
+            summarySucceeded = !hasCardErrors(summarySlot?.result)
             summaryOutcomeError = summarySucceeded ? null : 'MODULES_FAILED'
-          } else {
-            summarySettled = true
-            summarySucceeded = false
-            summaryOutcomeError = 'PARSE_FAILED'
           }
         } else if (
           currentBatch.coordinatedAuto &&
@@ -743,13 +709,14 @@ export function useMedicalSummaryOrchestrator() {
           // A separately hydrated cache may satisfy an expected auto pipeline
           // without starting a network run.
           summarySettled = true
-          summarySucceeded = !hasSummaryModuleErrors(summarySlot?.result)
+          summarySucceeded = !hasCardErrors(summarySlot?.result)
           summaryOutcomeError = summarySucceeded ? null : 'MODULES_FAILED'
         }
       }
       if (currentBatch.expectsSafety && !safetySettled && !safetySlot?.isRunning) {
         const hasFreshResult = Boolean(
-          safetySlot?.result && !Object.is(safetySlot.result, batchBaseline.safetyResult),
+          safetySlot?.result &&
+          !Object.is(safetySlot.result, currentBatch.safetyPreviousResult),
         )
         if (safetyStarted) {
           if (safetySlot?.error || safetySlot?.issue) {
@@ -760,10 +727,6 @@ export function useMedicalSummaryOrchestrator() {
           } else if (hasFreshResult) {
             safetySettled = true
             safetySucceeded = true
-          } else {
-            safetySettled = true
-            safetySucceeded = false
-            safetyOutcomeError = 'PARSE_FAILED'
           }
         } else if (
           currentBatch.coordinatedAuto &&
@@ -845,12 +808,30 @@ export function useMedicalSummaryOrchestrator() {
       cancelledScopeKeysRef.current.delete(scopeKey)
       if (completedBatch) cancelledBatchIdsRef.current.delete(completedBatch.id)
       activeBatchRef.current = null
-      // Preserve the last complete, internally consistent pair. One local
-      // pipeline may already have committed before the user stopped the next
-      // sequential request; publishing that half would recreate the exact
-      // "new summary + old safety" state this orchestrator prevents.
+      // Keep every validated pipeline that settled before cancellation. A
+      // local batch commonly finishes summary first and then waits on safety;
+      // cancelling that second request must not roll the visible summary back.
+      const cancelledSummarySlot = completedBatch?.expectsSummary
+        ? readSummaryGenerationSlot(completedBatch.summarySlotKey)
+        : null
+      const cancelledSafetySlot = completedBatch?.expectsSafety
+        ? readSafetyGenerationSlot(completedBatch.safetySlotKey)
+        : null
       const preservedBaseline = completedBatch
-        ? batchBaseline
+        ? {
+            result:
+              cancelledSummarySlot?.result &&
+              !cancelledSummarySlot.isRunning &&
+              !Object.is(cancelledSummarySlot.result, completedBatch.summaryPreviousResult)
+                ? cancelledSummarySlot.result
+                : batchBaseline.result,
+            safetyResult:
+              cancelledSafetySlot?.result &&
+              !cancelledSafetySlot.isRunning &&
+              !Object.is(cancelledSafetySlot.result, completedBatch.safetyPreviousResult)
+                ? cancelledSafetySlot.result
+                : batchBaseline.safetyResult,
+          }
         : {
             result: selectedPresentationResult,
             safetyResult: selectedPresentationSafetyResult,
@@ -1041,8 +1022,22 @@ export function useMedicalSummaryOrchestrator() {
     })
   }, [currentModelPair, presentedBatchOwnsSelectedSlots])
 
+  const presentedBatchSummaryResult = presentedBatchOwnsSelectedSlots && presentedBatch
+    ? readSummaryGenerationSlot(presentedBatch.summarySlotKey).result
+    : undefined
+  const hasFreshPresentedBatchSummary = Boolean(
+    presentedBatchSummaryResult &&
+    presentedBatch &&
+    !Object.is(presentedBatchSummaryResult, presentedBatch.summaryPreviousResult),
+  )
+  // The summary slot publishes each validated card as soon as its delimited
+  // JSON block completes. Keep showing the pre-run baseline until the first
+  // fresh card, then expose the progressively merged result even while other
+  // cards are streaming or retrying in the background.
   const presentedResultBase = presentedBatchOwnsSelectedSlots
-    ? batchBaseline.result
+    ? hasFreshPresentedBatchSummary
+      ? presentedBatchSummaryResult
+      : batchBaseline.result
     : scopedCancelledBaseline
       ? scopedCancelledBaseline.result
       : selectedPresentationResult
@@ -1067,11 +1062,31 @@ export function useMedicalSummaryOrchestrator() {
       },
     }
   }, [lastCompletedTiming, presentedResultBase, scopeKey])
+  const presentedBatchSafetyResult = presentedBatchOwnsSelectedSlots && presentedBatch
+    ? readSafetyGenerationSlot(presentedBatch.safetySlotKey).result
+    : undefined
+  const hasFreshPresentedBatchSafety = Boolean(
+    presentedBatchSafetyResult &&
+    presentedBatch &&
+    !Object.is(presentedBatchSafetyResult, presentedBatch.safetyPreviousResult),
+  )
   const presentedSafetyResult = presentedBatchOwnsSelectedSlots
-    ? batchBaseline.safetyResult
+    ? hasFreshPresentedBatchSafety
+      ? presentedBatchSafetyResult
+      : batchBaseline.safetyResult
     : scopedCancelledBaseline
       ? scopedCancelledBaseline.safetyResult
       : selectedPresentationSafetyResult
+  const presentedSummaryGenerating = isSummaryGenerating || Boolean(
+    presentedBatchOwnsSelectedSlots &&
+    presentedBatch?.expectsSummary &&
+    !presentedBatch.summarySettled,
+  )
+  const presentedSafetyGenerating = isSafetyGenerating || Boolean(
+    presentedBatchOwnsSelectedSlots &&
+    presentedBatch?.expectsSafety &&
+    !presentedBatch.safetySettled,
+  )
   const contextOverflowIssue = [presentedSummaryIssue, presentedSafetyIssue]
     .filter((issue): issue is NonNullable<typeof issue> => issue?.kind === 'context-overflow')
     .sort((left, right) => right.overBy - left.overBy)[0] ?? null
@@ -1091,11 +1106,11 @@ export function useMedicalSummaryOrchestrator() {
     retryFailed,
     isGenerating,
     isStopping: cancellingScopeKey === scopeKey,
-    isSummaryGenerating,
-    isSafetyGenerating,
+    isSummaryGenerating: presentedSummaryGenerating,
+    isSafetyGenerating: presentedSafetyGenerating,
     isRestoring,
     summaryError: presentedSummaryError,
-    summaryModuleErrors: presentedResult?.moduleErrors ?? {},
+    cardErrors: presentedResult?.cardErrors ?? {},
     safetyError: presentedSafetyError,
     summaryIssue: presentedSummaryIssue,
     safetyIssue: presentedSafetyIssue,
@@ -1105,7 +1120,7 @@ export function useMedicalSummaryOrchestrator() {
     hasCompleteResult: Boolean(
       presentedResult &&
       presentedSafetyResult &&
-      !hasSummaryModuleErrors(presentedResult)
+      !hasCardErrors(presentedResult)
     ),
     resolveSafetySource,
     activeGeneration: presentedBatch && !presentedBatch.cancelled ? {

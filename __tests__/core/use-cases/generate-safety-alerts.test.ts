@@ -54,6 +54,27 @@ describe('GenerateSafetyAlertsUseCase', () => {
       expect(msgs[1].content).not.toContain('SOURCE LIST')
     })
 
+    it('uses a compact Safety-specific instruction inside a shared card batch', () => {
+      const medical = generateSafetyAlertsUseCase.buildBatchModuleInstruction({
+        locale: 'zh-TW',
+        audience: 'medical',
+      })
+      const patient = generateSafetyAlertsUseCase.buildBatchModuleInstruction({
+        locale: 'zh-TW',
+        audience: 'patient',
+      })
+
+      expect(medical.length).toBeLessThan(3_500)
+      expect(patient.length).toBeLessThan(4_000)
+      expect(medical).toContain('TIME-TO-HARM')
+      expect(medical).toContain('TWO DIFFERENT non-pharmacy facilities')
+      expect(medical).toContain('within about 3 months')
+      expect(medical).toContain('<<<MEDIPRISMA_MODULE:safety>>>')
+      expect(medical).toContain('<<<END_MEDIPRISMA_MODULE:safety>>>')
+      expect(medical).not.toContain('Output ONLY a JSON object matching this schema')
+      expect(patient).toContain('never tell the patient to start, stop, or change a medicine')
+    })
+
     it('scrubs patient literals from both clinical context and source labels', () => {
       const msgs = generateSafetyAlertsUseCase.buildMessages({
         clinicalContext: '王小明 eGFR 32',
@@ -182,6 +203,19 @@ describe('GenerateSafetyAlertsUseCase', () => {
       expect(
         generateSafetyAlertsUseCase.parseScanResult('{"alerts":[{"severity":"critical","title":"x","detail":"y"}]}'),
       ).toBeNull()
+    })
+
+    it('parses only a complete independently delimited Safety block', () => {
+      const openBlock = [
+        '<<<MEDIPRISMA_MODULE:safety>>>',
+        '{"scannedCount":1,"alerts":[]}',
+      ].join('\n')
+      expect(generateSafetyAlertsUseCase.hasCompleteBatchModuleBlock(openBlock)).toBe(false)
+      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(openBlock)).toBeNull()
+
+      const completeBlock = `${openBlock}\n<<<END_MEDIPRISMA_MODULE:safety>>>`
+      expect(generateSafetyAlertsUseCase.hasCompleteBatchModuleBlock(completeBlock)).toBe(true)
+      expect(generateSafetyAlertsUseCase.parseBatchModuleResult(completeBlock)?.alerts).toEqual([])
     })
   })
 })

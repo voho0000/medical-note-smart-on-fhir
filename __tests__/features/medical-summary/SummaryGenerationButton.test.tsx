@@ -114,7 +114,7 @@ describe("SummaryGenerationButton", () => {
     expect(getSummaryGenerationActivityState({
       isBusy: true,
       hasContextOverflow: true,
-      hasCompleteResult: false,
+      hasAnyResult: false,
     })).toEqual({
       actionBusy: false,
       showBlockingLoader: false,
@@ -124,10 +124,22 @@ describe("SummaryGenerationButton", () => {
     expect(getSummaryGenerationActivityState({
       isBusy: true,
       hasContextOverflow: false,
-      hasCompleteResult: false,
+      hasAnyResult: false,
     })).toEqual({
       actionBusy: true,
       showBlockingLoader: true,
+      showGenerationErrors: false,
+    })
+  })
+
+  it("stops blocking as soon as the first validated card is available", () => {
+    expect(getSummaryGenerationActivityState({
+      isBusy: true,
+      hasContextOverflow: false,
+      hasAnyResult: true,
+    })).toEqual({
+      actionBusy: true,
+      showBlockingLoader: false,
       showGenerationErrors: false,
     })
   })

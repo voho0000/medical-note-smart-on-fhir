@@ -5,6 +5,7 @@
 // never AI output — they are resolved app-side from the FHIR bundle, which is
 // what makes the timeline and source chips hallucination-proof.
 import { z } from 'zod'
+import type { SafetyScanResult } from './safety-alert.entity'
 
 export const SUMMARY_URGENCIES = ['high', 'medium', 'low'] as const
 export type SummaryUrgency = (typeof SUMMARY_URGENCIES)[number]
@@ -258,7 +259,12 @@ export interface MedicalSummaryModuleResultMap {
 export type MedicalSummaryModuleResult<T extends MedicalSummaryModuleId = MedicalSummaryModuleId> =
   MedicalSummaryModuleResultMap[T]
 
-export type MedicalSummaryModuleErrors = Partial<Record<MedicalSummaryModuleId, string>>
+export const MEDICAL_SUMMARY_CARD_IDS = [
+  ...MEDICAL_SUMMARY_MODULE_IDS,
+  'safety',
+] as const
+export type MedicalSummaryCardId = (typeof MEDICAL_SUMMARY_CARD_IDS)[number]
+export type MedicalSummaryCardErrors = Partial<Record<MedicalSummaryCardId, string>>
 
 // ---------------------------------------------------------------------------
 // App-side catalog & finalized (verified) result
@@ -384,7 +390,15 @@ export interface MedicalSummaryResult {
   /** Per-card generation failures. Successful modules remain renderable and
    * cached; Retry regenerates only these ids. Missing means a legacy or fully
    * successful result. */
-  moduleErrors?: MedicalSummaryModuleErrors
+  cardErrors?: MedicalSummaryCardErrors
+  /** Cards that have completed validation in this artifact. Present on live
+   * v15 results so streaming UI can distinguish completed empty cards from
+   * cards that are still pending. Omitted legacy results are treated as
+   * complete for backward-compatible rendering. */
+  completedCardIds?: MedicalSummaryCardId[]
+  /** Safety is a first-class generated card in the same briefing artifact,
+   * not a separately validated or cached pipeline. */
+  safety?: SafetyScanResult
   headline: string
   summary: Array<{ text: string; emphasis: boolean; sourceKeys: string[] }>
   investigations: SummaryInvestigation[]
