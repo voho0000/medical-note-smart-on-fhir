@@ -25,6 +25,10 @@ describe('VisitItem ICD tooltip', () => {
     })
   })
 
+  beforeEach(() => {
+    localStorage.setItem('medical-note-locale', 'zh-TW')
+  })
+
   it.each([
     ['western', '西醫'],
     ['tcm', '中醫'],
@@ -52,6 +56,36 @@ describe('VisitItem ICD tooltip', () => {
     const badge = screen.getByText(label)
     expect(badge).toHaveAttribute('data-care-discipline', careDiscipline)
     expect(badge).toHaveClass('bg-muted/60', 'text-muted-foreground')
+  })
+
+  it.each([
+    ['western', 'Western Medicine'],
+    ['tcm', 'Traditional Chinese Medicine'],
+    ['dental', 'Dental'],
+  ] as const)('localizes the %s care-discipline badge in English', (careDiscipline, label) => {
+    localStorage.setItem('medical-note-locale', 'en')
+    render(
+      <LanguageProvider>
+        <RightDetailProvider>
+          <VisitItem
+            visit={{
+              id: `visit-en-${careDiscipline}`,
+              type: 'outpatient',
+              careDiscipline,
+              date: '2026-06-23',
+              icdCodes: [],
+              status: 'finished',
+            }}
+            isExpanded={false}
+            onToggle={() => undefined}
+          />
+        </RightDetailProvider>
+      </LanguageProvider>,
+    )
+
+    expect(screen.getByText('Outpatient')).toBeInTheDocument()
+    const badge = screen.getByText(label)
+    expect(badge).toHaveAttribute('data-care-discipline', careDiscipline)
   })
 
   it('shows the complete code and diagnosis in an explicit tooltip', async () => {
