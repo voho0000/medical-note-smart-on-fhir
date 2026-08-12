@@ -213,6 +213,43 @@ describe('useEncounterDetails — narrative reports (conclusion-only)', () => {
     })
   })
 
+  it('surfaces a live Viewer-only report under the linked visit', () => {
+    const details = runReports([report({
+      conclusion: '   ',
+      extension: [{
+        url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-nhi-viewer-request',
+        extension: [
+          { url: 'version', valueInteger: 1 },
+          { url: 'proc-id', valueCode: 'IMUE0130' },
+          { url: 'patient-context-hash', valueString: 'd'.repeat(64) },
+          { url: 'ipl-case-seq-no', valueString: 'VISIT-CASE' },
+        ],
+      }],
+    })])
+
+    expect(details.reports).toHaveLength(1)
+    expect(details.reports[0].row.viewerActions).toEqual([
+      {
+        kind: 'live',
+        descriptor: {
+          version: 1,
+          procId: 'IMUE0130',
+          patientContextHash: 'd'.repeat(64),
+          iplCaseSeqNo: 'VISIT-CASE',
+          readPos: '',
+          ordMark: '',
+          fileType: '',
+          fileQty: '',
+          feeYm: '',
+        },
+      },
+    ])
+    expect(details.reports[0].row.obs[0]).toMatchObject({
+      code: { text: 'Report Summary' },
+      valueString: '',
+    })
+  })
+
   it('ignores a report with no conclusion (nothing to show)', () => {
     const details = runReports([report({ conclusion: '   ' })])
     expect(details.reports).toHaveLength(0)

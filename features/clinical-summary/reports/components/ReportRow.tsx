@@ -3,7 +3,7 @@ import { useRef, useState, memo } from 'react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TrendingUp, Building2, AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
+import { TrendingUp, AlertCircle, Copy, Check, ChevronDown, GripHorizontal, ImageIcon, Info, PanelRight } from 'lucide-react'
 import { cn } from "@/src/shared/utils/cn.utils"
 import { useLanguage } from "@/src/application/providers/language.provider"
 import { useAudience } from "@/src/application/providers/audience.provider"
@@ -24,6 +24,8 @@ import { CompactLabResultRow } from '@/features/clinical-summary/components/Comp
 // but safe: `export function ReportRow` is hoisted, and the reference is only
 // dereferenced at render time, long after both modules finish initialising.
 import { LabDayGroupCard } from './LabDayGroupCard'
+import { NhiViewerActions } from './NhiViewerActions'
+import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 
 /** Small badge surfaced on a Row's header when bridge sent N duplicate
  *  DRs that the SMART app merged via strict-prefix dedup. It's a QA signal
@@ -433,6 +435,8 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
 
   const images = row.images
   const hasImages = !!images && images.length > 0
+  const viewerActions = row.viewerActions
+  const hasViewerActions = !!viewerActions && viewerActions.length > 0
 
   // Inline-image indicator. Clicking opens the lazy lightbox. `stopProp` is set
   // when the button lives inside an AccordionTrigger so the click doesn't also
@@ -525,11 +529,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     const headerRight = (
       <div className="flex items-center gap-2 shrink-0">
         {row.bridgeDupCount && row.bridgeDupCount > 0 ? <BridgeDupBadge count={row.bridgeDupCount} /> : null}
+        {hasViewerActions && <NhiViewerActions actions={viewerActions} />}
         {!hideMeta && row.institution && (
-          <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
-            <Building2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">{row.institution}</span>
-          </span>
+          <ReportInstitutionLabel institution={row.institution} className="max-w-[10rem]" />
         )}
         {!hideMeta && (
           <Tooltip>
@@ -777,55 +779,57 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
     // value and institution are capped/truncate first (full text on hover) and
     // the date stays fully visible. Keeps a long report name like "Nucleic acid
     // amplification (DNA), quantitative" readable instead of collapsing to "Nu…".
+    const compactRow = (
+      <CompactLabResultRow
+        title={row.title}
+        titleNode={<HighlightText text={row.title} query={query} />}
+        value={value}
+        abnormal={isAbnormal}
+        referenceText={refText}
+        rangeUnassessed={isReferenceRangeAssessmentUnavailable(obs)}
+        titleActions={(
+          <>
+            {renderTrendButton()}
+            {hasImages && renderImageButton()}
+          </>
+        )}
+        trailingContent={(
+          <>
+            {hasViewerActions && <NhiViewerActions actions={viewerActions} />}
+            {/* Institution + date — the compact badge shows only the date to give
+                the report name maximum width; category/status (row.meta) move to
+                the hover tooltip. Falls back to the full meta when there's no date.
+                Hidden inside a LabDayGroupCard (hideMeta) — the group header
+                already states both. */}
+            {!hideMeta && (
+              <div className="flex shrink-0 items-center gap-2">
+                {row.institution && (
+                  <ReportInstitutionLabel institution={row.institution} className="max-w-[9rem]" />
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>{metaWithDate}</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+            {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
+              <Badge variant="outline" className="shrink-0 text-xs font-normal tabular-nums whitespace-nowrap">
+                {formatTimeOnly(row.effectiveDate)}
+              </Badge>
+            )}
+            {row.isPossibleDuplicate && (
+              <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400">⚠ 可能重複</span>
+            )}
+          </>
+        )}
+      />
+    )
+
     return (
       <>
-        <CompactLabResultRow
-          title={row.title}
-          titleNode={<HighlightText text={row.title} query={query} />}
-          value={value}
-          abnormal={isAbnormal}
-          referenceText={refText}
-          rangeUnassessed={isReferenceRangeAssessmentUnavailable(obs)}
-          titleActions={(
-            <>
-              {renderTrendButton()}
-              {hasImages && renderImageButton()}
-            </>
-          )}
-          trailingContent={(
-            <>
-              {/* Institution + date — the compact badge shows only the date to give
-                  the report name maximum width; category/status (row.meta) move to
-                  the hover tooltip. Falls back to the full meta when there's no date.
-                  Hidden inside a LabDayGroupCard (hideMeta) — the group header
-                  already states both. */}
-              {!hideMeta && (
-                <div className="flex shrink-0 items-center gap-2">
-                  {row.institution && (
-                    <span className="inline-flex min-w-0 max-w-[5rem] items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
-                      <Building2 className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{row.institution}</span>
-                    </span>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">{dateLabel || metaWithDate}</Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>{metaWithDate}</TooltipContent>
-                  </Tooltip>
-                </div>
-              )}
-              {hideMeta && row.showTime && formatTimeOnly(row.effectiveDate) && (
-                <Badge variant="outline" className="shrink-0 text-xs font-normal tabular-nums whitespace-nowrap">
-                  {formatTimeOnly(row.effectiveDate)}
-                </Badge>
-              )}
-              {row.isPossibleDuplicate && (
-                <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400">⚠ 可能重複</span>
-              )}
-            </>
-          )}
-        />
+        {compactRow}
         {imageLightbox}
         {trendDialogMounted && (
           <ObservationTrendDialog
@@ -956,11 +960,9 @@ function ReportRowImpl({ row, defaultOpen, query, hideMeta }: ReportRowProps) {
                 panelHasNarrative && 'order-last w-full min-w-0 flex-wrap justify-start gap-1.5 sm:order-none sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2',
               )}
             >
+              {hasViewerActions && <NhiViewerActions actions={viewerActions} nestedInButton />}
               {!hideMeta && row.institution && (
-                <span className="inline-flex items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80 min-w-0 max-w-[6rem]">
-                  <Building2 className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{row.institution}</span>
-                </span>
+                <ReportInstitutionLabel institution={row.institution} className="max-w-[10rem]" />
               )}
               {!hideMeta && (
                 <Tooltip>

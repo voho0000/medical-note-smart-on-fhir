@@ -145,4 +145,60 @@ describe('scopeClinicalDataForAi', () => {
 
     expect(scoped.imagingStudies?.map((study) => study.id).sort()).toEqual(['new-ct', 'xray'])
   })
+
+  it('removes attachment capability URLs at the structured-AI scope boundary', () => {
+    const sensitiveUrl = 'https://meddcm.nhi.gov.tw/zfp/IMME/secret-payload_123456'
+    const imagingInput = {
+      diagnosticReports: [{
+        id: 'viewer-report',
+        status: 'final',
+        category: [{ coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
+          code: 'RAD',
+        }] }],
+        code: { text: 'Chest imaging' },
+        effectiveDateTime: '2026-07-01',
+        extension: [{
+          url: 'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-nhi-viewer-request',
+          extension: [
+            { url: 'version', valueInteger: 1 },
+            { url: 'patient-context-hash', valueString: 'secret-patient-hash' },
+            { url: 'ipl-case-seq-no', valueString: 'secret-case-number' },
+          ],
+        }, {
+          url: 'https://example.org/fhir/StructureDefinition/ordinary-extension',
+          valueString: 'keep-me',
+        }],
+        presentedForm: [{
+          contentType: 'text/html',
+          title: 'NHI image viewer',
+          url: sensitiveUrl,
+        }],
+      }],
+    } as any
+
+    const scoped = scopeClinicalDataForAi(
+      imagingInput,
+      ALL_DATA_SELECTION,
+      ALL_DATA_FILTERS,
+      [],
+      NOW,
+    )
+
+    expect(scoped.diagnosticReports).toHaveLength(1)
+    expect(scoped.diagnosticReports?.[0].presentedForm?.[0]).toEqual({
+      contentType: 'text/html',
+      title: 'NHI image viewer',
+    })
+    expect(scoped.diagnosticReports?.[0].extension).toEqual([{
+      url: 'https://example.org/fhir/StructureDefinition/ordinary-extension',
+      valueString: 'keep-me',
+    }])
+    expect(JSON.stringify(scoped)).not.toContain('secret-payload')
+    expect(JSON.stringify(scoped)).not.toContain('secret-patient-hash')
+    expect(JSON.stringify(scoped)).not.toContain('secret-case-number')
+    // Scoping must not mutate the UI/source collection that still needs the
+    // direct user-activated link.
+    expect(imagingInput.diagnosticReports[0].presentedForm[0].url).toBe(sensitiveUrl)
+  })
 })

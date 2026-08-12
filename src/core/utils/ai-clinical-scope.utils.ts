@@ -20,6 +20,8 @@ import { expandObservationValues } from '@/src/core/utils/observation-value.util
 import { imagingStudyTitle } from '@/src/shared/utils/imaging-study.utils'
 
 const LAB_FALLBACK_SAMPLING_DAYS = 3
+const NHI_VIEWER_REQUEST_EXTENSION_URL =
+  'https://cloud-wildcatch.invalid/fhir/StructureDefinition/medcloud-nhi-viewer-request'
 
 function codeText(value: any): string {
   return value?.text || value?.coding?.[0]?.display || value?.coding?.[0]?.code || ''
@@ -71,6 +73,39 @@ function reportObservations(report: any, observationsById: Map<string, any>): an
     if (observation) found.set(observation.id || id, observation)
   }
   return [...found.values(), ...withoutId]
+}
+
+/**
+ * Viewer URLs can be bearer-style medical access capabilities, and the live
+ * request extension contains patient-bound transport data. Structured AI
+ * pipelines need report text and clinical metadata, never either capability,
+ * so remove both at the scope boundary before signatures, prompts, or tool data
+ * can consume the selected collection.
+ */
+function stripDiagnosticReportViewerCapabilities(report: any): any {
+  const hasAttachmentUrls = Array.isArray(report?.presentedForm)
+    && report.presentedForm.some((attachment: any) => attachment && 'url' in attachment)
+  const hasViewerRequest = Array.isArray(report?.extension)
+    && report.extension.some((extension: any) => extension?.url === NHI_VIEWER_REQUEST_EXTENSION_URL)
+  if (!hasAttachmentUrls && !hasViewerRequest) return report
+
+  const safeReport = { ...report }
+  if (hasAttachmentUrls) {
+    safeReport.presentedForm = report.presentedForm.map((attachment: any) => {
+      if (!attachment || typeof attachment !== 'object') return attachment
+      const safeAttachment = { ...attachment }
+      delete safeAttachment.url
+      return safeAttachment
+    })
+  }
+  if (hasViewerRequest) {
+    const safeExtensions = report.extension.filter(
+      (extension: any) => extension?.url !== NHI_VIEWER_REQUEST_EXTENSION_URL,
+    )
+    if (safeExtensions.length > 0) safeReport.extension = safeExtensions
+    else delete safeReport.extension
+  }
+  return safeReport
 }
 
 interface SelectedLabScope {
@@ -308,7 +343,8 @@ export function scopeClinicalDataForAi(
     conditions,
     observations,
     vitalSigns: selectedVitalSigns,
-    diagnosticReports: [...reportById.values(), ...reportsWithoutId],
+    diagnosticReports: [...reportById.values(), ...reportsWithoutId]
+      .map(stripDiagnosticReportViewerCapabilities),
     imagingStudies: selection.imagingReports
       ? (input.imagingStudies ?? []).filter((study) =>
           linkedImagingStudyIds.has(study.id) || standaloneImagingStudies.includes(study),

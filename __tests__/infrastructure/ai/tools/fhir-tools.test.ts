@@ -550,6 +550,11 @@ describe('createFhirTools (unified)', () => {
             presentedForm: [
               { title: 'Report text', contentType: 'text/plain', data: text },
               { title: 'X-ray image', contentType: 'image/jpeg', data: 'AA==' },
+              {
+                title: 'NHI image viewer',
+                contentType: 'text/html',
+                url: 'https://meddcmc.nhi.gov.tw/zfp/IMME/must-not-leak_123456',
+              },
             ],
           } as any],
           imagingStudies: [],
@@ -563,6 +568,8 @@ describe('createFhirTools (unified)', () => {
       expect(r.data[0].imageAttachmentCount).toBe(1)
       expect(r.data[0].attachments[0].text).toContain('未見急性病灶')
       expect(r.data[0].attachments[1]).not.toHaveProperty('data')
+      expect(JSON.stringify(r)).not.toContain('must-not-leak')
+      expect(r.data[0].attachments[2]).not.toHaveProperty('url')
     })
 
     it('bridges a Taiwan Chinese chest X-ray query to an English FHIR report name', async () => {

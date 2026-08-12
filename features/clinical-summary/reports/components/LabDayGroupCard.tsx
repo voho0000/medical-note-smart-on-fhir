@@ -20,7 +20,7 @@
 "use client"
 
 import { useMemo, useState } from 'react'
-import { AlertCircle, Building2, CalendarDays, ChevronDown } from 'lucide-react'
+import { AlertCircle, CalendarDays, ChevronDown } from 'lucide-react'
 import { cn } from '@/src/shared/utils/cn.utils'
 import { useLanguage } from '@/src/application/providers/language.provider'
 import { useAudience } from '@/src/application/providers/audience.provider'
@@ -29,6 +29,7 @@ import type { Row } from '../types'
 import { countAbnormalInRows } from '../utils/lab-day-grouping'
 import { ReportRow } from './ReportRow'
 import { useReportNameMode } from '../context/report-name-mode.context'
+import { ReportInstitutionLabel } from './ReportInstitutionLabel'
 
 interface LabDayGroupCardProps {
   row: Row
@@ -148,10 +149,7 @@ export function LabDayGroupCard({ row, defaultOpen, query }: LabDayGroupCardProp
           {categoryLabel}
         </span>
         {row.institution && (
-          <span className="inline-flex min-w-0 items-center gap-1 text-xs text-blue-600/80 dark:text-blue-400/80">
-            <Building2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">{row.institution}</span>
-          </span>
+          <ReportInstitutionLabel institution={row.institution} className="max-w-[14rem]" />
         )}
         <span className="shrink-0 text-xs text-muted-foreground">
           {(tr.labDayCount as string).replace('{n}', String(itemCount))}

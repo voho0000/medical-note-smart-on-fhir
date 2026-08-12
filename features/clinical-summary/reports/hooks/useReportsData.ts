@@ -1,6 +1,6 @@
 // Custom Hook: Reports Data Processing
 import { useMemo } from 'react'
-import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage } from '../types'
+import type { DiagnosticReport, ImagingStudy, Observation, Row, ReportImage, NhiViewerAction } from '../types'
 import { getCodeableConceptText, getConceptText } from '../utils/fhir-helpers'
 import { inferGroupFromDiagnosticReport } from '../utils/grouping-helpers'
 import {
@@ -26,6 +26,10 @@ import {
   imagingStudyInstitution,
   imagingStudyTitle,
 } from '@/src/shared/utils/imaging-study.utils'
+import {
+  getNhiViewerActions,
+  isTrustedLegacyNhiViewerAttachment,
+} from '../utils/nhi-viewer-request'
 
 function derivePerDrTitle(dr: DiagnosticReport): string {
   const text = (getCodeableConceptText(dr.code) || '').trim()
@@ -168,6 +172,11 @@ export function useReportsData(
     // row. Keep every original id (including ids of dropped duplicate copies)
     // so a medical-summary citation can still navigate to the rendered row.
     const diagnosticReportIdsByKey = new Map<string, string[]>()
+    // Report-text dedup is display-only. Viewer capabilities belong to their
+    // original DiagnosticReports and must survive even when identical/prefix
+    // narratives collapse into one row. Never dedup these by report content or
+    // ImagingStudy UID.
+    const viewerReportsByKey = new Map<string, DiagnosticReport[]>()
     const pushAsOwnGroup = (dr: DiagnosticReport) => {
       // Suffix with DR id so each split group gets a distinct key — keeps
       // the map insertion order stable and avoids accidental re-merging.
@@ -177,6 +186,7 @@ export function useReportsData(
       const key = `${text}|${date}|${inst}|${dr.id || Math.random().toString(36)}`
       groups.set(key, [dr])
       diagnosticReportIdsByKey.set(key, dr.id ? [dr.id] : [])
+      viewerReportsByKey.set(key, [dr])
       groupOrder.push(key)
     }
 
@@ -252,6 +262,7 @@ export function useReportsData(
       } else {
         const { drs: deduped, dupCount } = dedupGroupByNarrative(grp)
         groups.set(key, deduped)
+        viewerReportsByKey.set(key, grp)
         diagnosticReportIdsByKey.set(
           key,
           grp.flatMap((report) => report.id ? [report.id] : []),
@@ -295,6 +306,8 @@ export function useReportsData(
       const summaryParts: string[] = []
       const attachments: string[] = []
       const images: ReportImage[] = []
+      const viewerActions: NhiViewerAction[] = (viewerReportsByKey.get(key) ?? grp)
+        .flatMap((report) => getNhiViewerActions(report))
       const allObs: Observation[] = []
 
       for (const dr of grp) {
@@ -340,6 +353,12 @@ export function useReportsData(
 
         if (Array.isArray(dr.presentedForm)) {
           for (const form of dr.presentedForm) {
+            // NHI's Viewer URL is an access capability, not report content. Keep it
+            // solely as a validated, user-activated browser link; never decode,
+            // fetch, proxy, or fold it into narrative/attachment text.
+            if (isTrustedLegacyNhiViewerAttachment(form)) {
+              continue
+            }
             // Image (bridge v0.14.0+): hand it to the lazy viewer instead of
             // listing it as a text attachment. Decoding/rendering happens on
             // demand in the dialog. Two sources:
@@ -471,7 +490,7 @@ export function useReportsData(
       // indicator, so we create the summary obs with empty valueString — the
       // image button on the header carries the affordance, ReportRow renders no
       // empty expandable when there's no text.
-      if (summaryParts.length > 0 || attachments.length > 0 || images.length > 0) {
+      if (summaryParts.length > 0 || attachments.length > 0 || images.length > 0 || viewerActions.length > 0) {
         const summaryValue = summaryParts.join('\n\n')
         const summaryObservation: Observation = {
           resourceType: 'Observation',
@@ -641,6 +660,7 @@ export function useReportsData(
         institution,
         effectiveDate: rawDate,
         images: images.length > 0 ? images : undefined,
+        viewerActions: viewerActions.length > 0 ? viewerActions : undefined,
         // Bridge sent extra DRs we collapsed via strict-prefix dedup —
         // surface the count so the row can show a small badge. 0 → row
         // omits the field entirely.
